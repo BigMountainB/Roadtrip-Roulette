@@ -1,0 +1,3272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>DUI</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-title" content="DUI" />
+  <script>
+    // ── INLINE AUDIO UNLOCK ───────────────────────────────────────────
+    // Runs before any module imports.  iOS Chrome / Safari keep
+    // AudioContext suspended until a user gesture directly creates +
+    // resumes one.  This installs a one-shot capture-phase listener on
+    // the window so the very first tap, anywhere on the page, unlocks
+    // audio for the whole session.  Creates ONE throwaway AudioContext
+    // (iOS limits each page to ~6) and plays a 1-second silent buffer.
+    (function () {
+      window.__audioUnlockCount     = 0;
+      window.__audioUnlockedRunning = false;
+      window.__audioUnlockDiag      = '';
+      var _unlockCtx = null;
+      var UNLOCK_EVENTS = [
+        'touchstart','touchend','pointerdown','pointerup',
+        'mousedown','mouseup','click','keydown','keyup'
+      ];
+      function cleanup() {
+        UNLOCK_EVENTS.forEach(function (evt) {
+          window.removeEventListener(evt, prime, true);
+          document.removeEventListener(evt, prime, true);
+        });
+      }
+      function prime() {
+        window.__audioUnlockCount += 1;
+        if (window.__audioUnlockedRunning) { cleanup(); return; }
+        try {
+          var Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) { window.__audioUnlockDiag = 'noctx'; return; }
+          if (!_unlockCtx) {
+            try { _unlockCtx = new Ctx(); }
+            catch (e) { window.__audioUnlockDiag = 'newfail'; return; }
+            try {
+              var sr  = _unlockCtx.sampleRate || 22050;
+              var buf = _unlockCtx.createBuffer(1, sr, sr);
+              var src = _unlockCtx.createBufferSource();
+              src.buffer = buf;
+              src.connect(_unlockCtx.destination);
+              if (typeof src.start === 'function') src.start(0);
+              else if (typeof src.noteOn === 'function') src.noteOn(0);
+            } catch (e) { window.__audioUnlockDiag = 'buffail'; }
+          }
+          window.__audioUnlockDiag = 'res:' + (_unlockCtx.state && _unlockCtx.state[0]);
+          _unlockCtx.resume().then(function () {
+            window.__audioUnlockDiag = 'post:' + (_unlockCtx && _unlockCtx.state && _unlockCtx.state[0]);
+            if (_unlockCtx && _unlockCtx.state === 'running') {
+              window.__audioUnlockedRunning = true;
+              // Boot music IMMEDIATELY if the audio system has already
+              // been instantiated (main.js sets window.__audio during
+              // boot, before any user tap happens).  This means music
+              // starts on the first tap anywhere — no need to wait for
+              // the user to find and tap the START button.
+              if (window.__audio && !window.__audio._inited) {
+                try {
+                  window.__audio.init();
+                  window.__audio._inited = true;
+                } catch (e) {}
+              }
+              cleanup();
+            }
+          }).catch(function (e) {
+            window.__audioUnlockDiag = 'rej:' + (e && e.name ? e.name.slice(0, 8) : '?');
+          });
+        } catch (e) {
+          window.__audioUnlockDiag = 'thr:' + (e && e.name ? e.name.slice(0, 8) : '?');
+        }
+      }
+      UNLOCK_EVENTS.forEach(function (evt) {
+        window.addEventListener(evt, prime, { capture: true, passive: true });
+        document.addEventListener(evt, prime, { capture: true, passive: true });
+      });
+    })();
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #000;
+      position: fixed;
+      touch-action: none;
+    }
+    canvas { display: block; touch-action: none; }
+
+    /* Game canvas container — FULL-BLEED to the real screen edges so SCENERY
+       fills the entire display (under the notch / rounded corners / home
+       indicator) with no black margins.  The canvas was previously inset to
+       the safe-area, which shrank it (the "big black chunk" on phones).  The
+       HUD is kept clear of cutouts in-engine: it renders in a centered 800-wide
+       band (the UI camera), so on a wide phone the buttons sit well inboard of
+       the side notch.  viewport-fit=cover (meta tag) lets the page extend under
+       the insets. */
+    #game-root {
+      position: fixed;
+      top: 0; right: 0; bottom: 0; left: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    /* Phone-as-menu overlay — visible only in portrait.
+       Anchored to ALL FOUR EDGES so iOS extends the container under
+       both the status bar and the home indicator (with
+       viewport-fit=cover above).  100dvh used to leave a ~50-px black
+       strip below the dock when the home indicator's safe-area kicked
+       in.  Inset:0 + min-height:100svh covers every iOS shell mode. */
+    #phone-menu {
+      display: none;
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      min-height: 100svh;
+      /* Black so the width-fit art's bottom gap reads as letterbox, not the
+         old app's light-blue background showing through. */
+      background: #000;
+      z-index: 9999;
+      touch-action: none;
+      overflow: hidden;
+    }
+    #phone-menu img.bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center center;
+      /* CONTAIN: the WHOLE menu image is always visible (every button,
+         top to bottom), centered, with black letterbox filling any extra
+         space on wide/short screens (e.g. iPad).  Hit-zone math uses the
+         matching contain scale + centered offsets (see recomputeCover). */
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Invisible interactive hit zones over the PNG art.  Toggle with
+       `document.body.classList.add('debug')` to flash them red. */
+    .phone-hit {
+      position: absolute;
+      background: transparent;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      pointer-events: auto;
+      border-radius: 18%;
+    }
+    /* First-ever-play nudge — the Tutorial tile pulses a gold glow until the
+       player opens it (then `dui_tutorialSeen` is set and it never flashes
+       again).  Applied/removed in JS. */
+    @keyframes tutFlash {
+      0%, 100% { box-shadow: 0 0 0.6vmin 0.2vmin rgba(255, 205, 60, 0.45); }
+      50%      { box-shadow: 0 0 3.2vmin 1.1vmin rgba(255, 205, 60, 0.95); }
+    }
+    .phone-hit.tut-flash {
+      background: rgba(255, 205, 60, 0.12);
+      animation: tutFlash 1.05s ease-in-out infinite;
+    }
+    body.debug [data-px] { background: rgba(255,0,0,0.20); border: 1px dashed red; }
+    body.debug [data-px]::before {
+      content: attr(data-action);
+      position: absolute;
+      top: 2px;
+      left: 4px;
+      font: 10px/1 monospace;
+      color: #FFF;
+      background: rgba(0,0,0,0.78);
+      padding: 1px 4px;
+      border-radius: 3px;
+      pointer-events: none;
+    }
+
+    /* Muted-music indicator — when the audio system is muted, a small
+       🔇 badge appears in the centre of the music app tile.  Toggled
+       via long-hold of the music app icon. */
+    .phone-hit[data-action="music"].muted::after {
+      content: '🔇';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 8vmin;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+      pointer-events: none;
+    }
+
+    /* Selected steering ring — drawn as its own element so the visual
+       outline locks to the icon artwork (data-ring-px) while the tap
+       zone (data-px) stays generously padded.  Position is updated
+       from JS on selection change + layout. */
+    #phone-selection-ring {
+      position: absolute;
+      display: none;
+      pointer-events: none;
+      border-radius: 22%;
+      /* 4px black stroke pushed 3 px outside the orange tile rim.
+         outline + outline-offset follow border-radius on modern
+         iOS Safari, so the stroke stays rounded. */
+      outline: 4px solid #000000;
+      outline-offset: 3px;
+      /* z-index BELOW the modal overlays (z=2) so opening the Map /
+         Garage / Music / Achievements modal cleanly covers the
+         steering ring instead of punching it through on top. */
+      z-index: 1;
+    }
+
+    /* Trophy + lock + hand chips — positioned via data-px (same
+       PNG-pixel system as the other hit zones) so they track the
+       artwork on every device.  Background transparent so the white
+       tile from the PNG shows through; only the emoji renders. */
+    #phone-trophy,
+    #phone-lock,
+    #phone-hand {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+      font-size: 13vmin;
+      background: transparent;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      pointer-events: auto;
+      border-radius: 18%;
+    }
+    #phone-lock        { color: #222; }
+    #phone-lock.locked { color: #FF2244; }
+
+    /* Party-time clock — sits at the bottom of the dark Calendar widget,
+       overlaying the black area in WHITE so it reads cleanly on the
+       black background. */
+    /* Game clock — positioned via data-px (top-right corner of the weather
+       widget).  Shares the top bar with the location name (left) + the
+       temperature / weather symbol (just below, upper-right). */
+    #phone-clock {
+      position: absolute;
+      display: flex; align-items: center; justify-content: flex-end;
+      color: #FFFFFF;
+      font-family: -apple-system, "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 3.6vmin;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+    /* Location name (right of the GPS arrow). */
+    #phone-loc {
+      position: absolute;
+      display: flex; align-items: center;
+      color: #FFFFFF; font-family: -apple-system, "Helvetica Neue", sans-serif;
+      font-size: 4.2vmin; font-weight: 800; letter-spacing: 0.04em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      pointer-events: none; user-select: none; -webkit-user-select: none;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    }
+    /* Simulated temperature — sits under the location name, left-aligned,
+       ~2× the previous size. */
+    #phone-temp {
+      position: absolute;
+      display: flex; align-items: center; justify-content: flex-start;
+      color: #FFFFFF; font-family: -apple-system, "Helvetica Neue", sans-serif;
+      font-size: 11vmin; font-weight: 700;
+      pointer-events: none; user-select: none; -webkit-user-select: none;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.55);
+    }
+    /* Live weather symbol (upper-right). */
+    #phone-wx {
+      position: absolute;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 19.1vmin; line-height: 1;
+      pointer-events: none; user-select: none; -webkit-user-select: none;
+    }
+
+    /* Garage modal — opens when the Garage tile is tapped.  Shows
+       owned cars with their accessory loadout above each thumbnail. */
+    #phone-garage {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 25, 40, 0.96);
+      z-index: 2;
+      flex-direction: column;
+      padding: 6% 5% 5%;
+      overflow-y: auto;
+    }
+    #phone-garage.open { display: flex; }
+    #phone-garage .title {
+      color: #FFEE00;
+      font-family: "Impact", "Arial Black", sans-serif;
+      font-size: 6vmin;
+      text-align: center;
+      margin-bottom: 2vmin;
+    }
+    #phone-garage .list { flex: 1; display: flex; flex-direction: column; gap: 2vmin; }
+    #phone-garage .row {
+      display: flex; align-items: center;
+      background: #1E2C42;
+      border: 2px solid #4A6E8C;
+      border-radius: 8px;
+      padding: 2vmin;
+      cursor: pointer;
+    }
+    #phone-garage .row.current {
+      border-color: #FFEE00;
+      background: #1E5BB8;
+    }
+    #phone-garage .row .car-img {
+      width: 22%;
+      height: auto;
+      max-height: 12vmin;
+      object-fit: contain;
+      margin-right: 3vmin;
+    }
+    #phone-garage .row .info { flex: 1; color: #FFF; font-family: "Helvetica Neue", sans-serif; }
+    #phone-garage .row .name { font-size: 4vmin; font-weight: 700; }
+    #phone-garage .row .stats { font-size: 2.6vmin; color: #AAD0FF; }
+    #phone-garage .row .acc { font-size: 3.4vmin; margin-bottom: 0.5vmin; min-height: 4vmin; }
+    #phone-garage .row .acc .badge { margin-right: 1vmin; }
+    #phone-garage .close-btn {
+      align-self: center;
+      padding: 2vmin 6vmin;
+      background: #FFFFFF;
+      color: #1E5BB8;
+      border: 2px solid #000;
+      border-radius: 6px;
+      font-family: "Impact", sans-serif;
+      font-size: 4vmin;
+      cursor: pointer;
+      margin-top: 2vmin;
+    }
+
+    /* Music app modal — Spotify-style genre → songs picker. */
+    #phone-music {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, #0E1620 0%, #1B2336 100%);
+      z-index: 2;
+      flex-direction: column;
+      /* Pad the top by the iOS safe-area inset so the MUSIC title
+         clears the Dynamic Island / notch on modern iPhones. */
+      padding: calc(env(safe-area-inset-top, 0px) + 5vmin) 4% 4%;
+      /* No overflow on the container — the inner body owns scrolling
+         so the header + close button stay pinned. */
+      overflow: hidden;
+    }
+    /* Body owns the scroll — title/controls stay at top, close button
+       stays at bottom, the song list / genre grid scrolls inside. */
+    #phone-music-body {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      /* Room at the bottom so the last row clears the floating
+         CLOSE / BACK button. */
+      padding-bottom: 14vmin;
+    }
+    #phone-music.open { display: flex; }
+    #phone-music .title {
+      color: #39A8FF;
+      font-family: "Impact", "Arial Black", sans-serif;
+      font-size: 6vmin;
+      letter-spacing: 0.04em;
+      text-align: center;
+      margin-bottom: 1vmin;
+      text-shadow: 0 0 8px rgba(57,168,255,0.7), 0 2px 3px rgba(0,0,0,0.6);
+    }
+    #phone-music .controls { display: flex; gap: 2vmin; margin: 1vmin 0 2vmin; justify-content: center; }
+    #phone-music .controls button {
+      background: #11203a;
+      color: #CFE6FF;
+      border: 2px solid #39A8FF;
+      border-radius: 2vmin;
+      padding: 1.5vmin 3vmin;
+      font-family: "Impact", sans-serif;
+      font-size: 3.2vmin;
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(57,168,255,0.35);
+    }
+    #phone-music .controls button.active { background: #1E5BB8; color: #FFF; }
+    /* Now-playing scrubber (drag to seek). */
+    #phone-music-now { padding: 1vmin 1.5vmin 0; }
+    #phone-music-now .pmn-name { color:#CFE4FF; font-size:2.6vmin; text-align:center; margin-bottom:1.2vmin; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:Helvetica; }
+    #phone-music-now .pmn-bar { position:relative; height:1.6vmin; background:rgba(255,255,255,0.18); border-radius:1vmin; cursor:pointer; touch-action:none; }
+    #phone-music-now .pmn-fill { position:absolute; left:0; top:0; bottom:0; width:0%; background:#39A8FF; border-radius:1vmin; pointer-events:none; }
+    #phone-music-now .pmn-knob { position:absolute; top:50%; left:0%; width:3.4vmin; height:3.4vmin; margin-left:-1.7vmin; transform:translateY(-50%); background:#FFF; border:0.4vmin solid #39A8FF; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.6); pointer-events:none; }
+    #phone-music-now .pmn-times { display:flex; justify-content:space-between; font-size:2.2vmin; color:#88A; font-family:Helvetica; margin-top:0.7vmin; }
+    /* Neon close button to match the rest of the new menu chrome. */
+    #phone-music .close-btn {
+      align-self: center; margin-top: 2vmin;
+      padding: 1.8vmin 7vmin;
+      background: #11203a; color: #CFE6FF;
+      border: 2px solid #39A8FF; border-radius: 2.4vmin;
+      font-family: "Impact", sans-serif; font-size: 4vmin; cursor: pointer;
+      box-shadow: 0 0 8px rgba(57,168,255,0.4);
+    }
+    #phone-music .genre-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-auto-rows: 1fr;          /* every tile the same height */
+      gap: 2.4vmin;
+    }
+    /* Dark neon card (matches the rest of the menu) — the station color is
+       the accent (border + name glow), not a full fill. */
+    #phone-music .genre {
+      position: relative;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 24vmin;
+      padding: 4vmin 2vmin;
+      border-radius: 2.2vmin;
+      background: rgba(10, 18, 32, 0.92);
+      color: #CFE6FF;
+      font-family: "Impact", sans-serif;
+      text-align: center;
+      cursor: pointer;
+      border: 2px solid rgba(57,168,255,0.4);   /* station color set inline */
+      box-shadow: 0 0 8px rgba(0,0,0,0.5);
+    }
+    #phone-music .genre-name {
+      font-size: 4.2vmin; letter-spacing: 0.02em;
+      text-shadow: 0 0 9px currentColor, 0 1px 2px rgba(0,0,0,0.75);
+    }
+    #phone-music .genre-count { font-size: 2.6vmin; color: #9FC2E8; margin-top: 0.4vmin; }
+    #phone-music .genre.playing { box-shadow: 0 0 14px rgba(255,255,255,0.55), 0 0 8px rgba(0,0,0,0.5); }
+    /* Default-station star — top-LEFT of each tile (opposite the songs check). */
+    #phone-music .genre-default {
+      position: absolute;
+      top: 1.5vmin; left: 1.5vmin;
+      width: 6.5vmin; height: 6.5vmin;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.35);
+      border: 2px solid rgba(255,255,255,0.5);
+      border-radius: 6px;
+      color: #FFE066; font-size: 4vmin; line-height: 1;
+      cursor: pointer; padding: 0;
+      font-family: -apple-system, "Segoe UI Emoji", sans-serif;
+    }
+    #phone-music .genre-default.on {
+      background: #1E5BB8; border-color: #FFE066;
+      box-shadow: 0 0 9px rgba(255,224,102,0.85);
+    }
+    /* "DEFAULT" label — sits just below the star (top-left), out of flow so
+       it never changes the tile's height. */
+    #phone-music .genre-default-lbl {
+      position: absolute;
+      top: 9vmin; left: 1.5vmin;
+      font-size: 2.2vmin; font-weight: 800; letter-spacing: 0.08em;
+      color: #FFE066; font-family: "Impact", sans-serif;
+      text-shadow: 0 0 6px rgba(255,224,102,0.9), 0 1px 2px rgba(0,0,0,0.7);
+    }
+    /* Per-genre checkbox — top-right of each tile.  Toggles the
+       whole station's tracks in/out of the playlist in one tap. */
+    #phone-music .genre-check {
+      position: absolute;
+      top: 1.5vmin;
+      right: 1.5vmin;
+      width: 6.5vmin; height: 6.5vmin;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.35);
+      border: 2px solid rgba(255,255,255,0.6);
+      border-radius: 6px;
+      color: #FFEE00;
+      font-size: 4vmin;
+      cursor: pointer;
+      padding: 0;
+      font-family: -apple-system, "Segoe UI Emoji", sans-serif;
+    }
+    #phone-music .genre-check.checked { background: #1E5BB8; border-color: #FFEE00; }
+    #phone-music .genre-check.partial { background: rgba(30,91,184,0.4); border-color: #FFEE00; }
+    #phone-music .song-list {
+      flex: 1;
+      display: flex; flex-direction: column;
+      gap: 1.2vmin;
+    }
+    #phone-music .song {
+      padding: 2vmin;
+      border-radius: 6px;
+      color: #FFF;
+      background: #2A3C5C;
+      cursor: pointer;
+      font-family: "Helvetica Neue", sans-serif;
+      font-size: 3.3vmin;
+      display: flex; align-items: center;
+    }
+    #phone-music .song:hover { background: #3A4C6C; }
+    #phone-music .song.playing {
+      background: #1E5BB8;
+      color: #FFEE00;
+      box-shadow: inset 0 0 0 2px #FFEE00;
+    }
+    /* Pause button in the upper-right of the music modal — toggles
+       the radio's pause state without leaving the modal. */
+    #phone-music .pause-btn {
+      position: absolute;
+      top: calc(env(safe-area-inset-top, 0px) + 2vmin);
+      left: 4vmin;
+      width: 11vmin; height: 11vmin;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.55);
+      border: 2px solid #FFEE00;
+      border-radius: 8px;
+      color: #FFFFFF;
+      font-size: 6vmin;
+      cursor: pointer;
+      padding: 0;
+      z-index: 4;
+    }
+    #phone-music .pause-btn.paused { background: rgba(255, 238, 0, 0.85); color: #000; }
+    /* Shared corner close circle — identical on every menu (Garage, Maps,
+       Trophies, Music, Leaderboard/Stats/Settings/Help all use this look). */
+    .menu-x {
+      position: absolute;
+      top: calc(env(safe-area-inset-top, 0px) + 3.5vmin);
+      right: 5vmin;
+      z-index: 6;
+      display: flex; align-items: center; justify-content: center;
+      width: 10vmin; height: 10vmin; padding: 0;
+      background: rgba(6, 11, 22, 0.55);
+      border: 0.6vmin solid #39A8FF; color: #39A8FF;
+      border-radius: 50%; font-size: 4.5vmin; line-height: 1;
+      cursor: pointer;
+    }
+    #phone-music .song .num {
+      width: 6vmin; opacity: 0.6; font-variant-numeric: tabular-nums;
+    }
+    #phone-music .song .name { flex: 1; }
+    #phone-music .song-check {
+      width: 8vmin; height: 8vmin;
+      display: flex; align-items: center; justify-content: center;
+      background: transparent;
+      border: 2px solid #88AACC;
+      border-radius: 6px;
+      color: #FFEE00;
+      font-size: 4.5vmin;
+      font-family: -apple-system, "Segoe UI Emoji", sans-serif;
+      cursor: pointer;
+      margin-right: 2vmin;
+      flex-shrink: 0;
+      padding: 0;
+    }
+    #phone-music .song-check.checked { background: #1E5BB8; border-color: #FFEE00; }
+    /* Long-press drag — the row "lifts" while being dragged to a new
+       position.  Pointer capture keeps the row tracking the finger. */
+    #phone-music .song.dragging {
+      background: #1E5BB8;
+      border: 2px solid #FFEE00;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.55);
+      z-index: 100;
+      transition: none;
+    }
+    /* Up/down reorder arrows — only shown in the SELECTED view.
+       Stacked vertically on the left edge of each song row. */
+    #phone-music .reorder {
+      display: flex; flex-direction: column;
+      gap: 0.6vmin;
+      margin-right: 2vmin;
+    }
+    #phone-music .reorder-btn {
+      width: 7vmin; height: 4vmin;
+      display: flex; align-items: center; justify-content: center;
+      background: #2A3C5C;
+      border: 1px solid #4A6E8C;
+      border-radius: 4px;
+      color: #FFEE00;
+      font-size: 2.6vmin;
+      cursor: pointer;
+      padding: 0;
+      font-family: -apple-system, "Segoe UI Emoji", sans-serif;
+    }
+    #phone-music .reorder-btn:disabled { opacity: 0.3; cursor: default; }
+    /* Playlist bar — appears at the top of the music modal whenever
+       the player has tracks selected in the playlist set. */
+    #phone-music .playlist-bar {
+      display: flex; gap: 2vmin; align-items: center;
+      background: #2A3C5C;
+      border: 1px solid #FFEE00;
+      border-radius: 8px;
+      padding: 2vmin;
+      margin-bottom: 2vmin;
+    }
+    #phone-music .playlist-bar .count {
+      flex: 1;
+      color: #FFEE00;
+      font-family: "Impact", sans-serif;
+      font-size: 3.5vmin;
+    }
+    #phone-music .playlist-bar button {
+      padding: 1.5vmin 3vmin;
+      border: 1px solid #FFEE00;
+      border-radius: 6px;
+      background: #1E5BB8;
+      color: #FFFFFF;
+      font-family: "Impact", sans-serif;
+      font-size: 3.2vmin;
+      cursor: pointer;
+    }
+    #phone-music .playlist-bar button.clear { background: #CC2244; border-color: #FFCCDD; }
+    #phone-music .back-btn {
+      align-self: flex-start;
+      padding: 1.5vmin 4vmin;
+      background: #FFFFFF;
+      color: #1E5BB8;
+      border: 2px solid #000;
+      border-radius: 6px;
+      font-family: "Impact", sans-serif;
+      font-size: 3.4vmin;
+      cursor: pointer;
+      margin-bottom: 2vmin;
+    }
+    #phone-music .close-btn {
+      align-self: center;
+      padding: 2vmin 6vmin;
+      background: #FFFFFF;
+      color: #1E5BB8;
+      border: 2px solid #000;
+      border-radius: 6px;
+      font-family: "Impact", sans-serif;
+      font-size: 4vmin;
+      cursor: pointer;
+      margin-top: 2vmin;
+    }
+    #phone-music .vol-row {
+      display: flex;
+      align-items: center;
+      gap: 2vmin;
+      padding: 1.5vmin 2vmin;
+      margin-top: 1vmin;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+    }
+    #phone-music .vol-row .lbl {
+      color: #88CCFF;
+      font-family: "Impact", sans-serif;
+      font-size: 3.2vmin;
+      min-width: 12vmin;
+    }
+    #phone-music .vol-row input[type="range"] {
+      flex: 1;
+      height: 4vmin;
+      accent-color: #44CC88;
+    }
+
+    /* Steering-change confirmation — centered iOS-style alert.
+       Mimics the system UIAlertController look (rounded translucent
+       white card, blue button text, hairline divider). */
+    #phone-confirm {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      z-index: 5;
+      align-items: center;
+      justify-content: center;
+      padding: 8vmin;
+    }
+    #phone-confirm.open { display: flex; }
+    #phone-confirm .box {
+      width: 78vmin;
+      max-width: 90%;
+      background: rgba(245, 245, 245, 0.96);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      font-family: -apple-system, "Helvetica Neue", Helvetica, sans-serif;
+    }
+    #phone-confirm .msg {
+      color: #000;
+      text-align: center;
+      font-size: 4.2vmin;
+      line-height: 1.35;
+      padding: 6vmin 5vmin 5vmin;
+      font-weight: 500;
+    }
+    #phone-confirm .row {
+      display: flex;
+      border-top: 1px solid rgba(0,0,0,0.18);
+    }
+    #phone-confirm .row button {
+      flex: 1;
+      padding: 3.5vmin 0;
+      border: 0;
+      background: transparent;
+      color: #007AFF;
+      font-family: inherit;
+      font-size: 4.5vmin;
+      cursor: pointer;
+    }
+    #phone-confirm .row button + button {
+      border-left: 1px solid rgba(0,0,0,0.18);
+    }
+    #phone-confirm .row .ok { font-weight: 600; }
+
+    /* Vertical map modal — slides up when the player taps Maps icon. */
+    #phone-map {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 25, 40, 0.96);
+      z-index: 2;
+      flex-direction: column;
+      padding: 6% 5% 5%;
+    }
+    #phone-map.open { display: flex; }
+    #phone-map .title {
+      color: #FFEE00;
+      font-family: "Impact", "Arial Black", sans-serif;
+      font-size: 6vmin;
+      text-align: center;
+      margin-bottom: 1vmin;
+    }
+    #phone-map .sub {
+      color: #88CCFF;
+      font-size: 3vmin;
+      text-align: center;
+      margin-bottom: 3vmin;
+    }
+    #phone-map svg { flex: 1; width: 100%; height: 100%; }
+    /* "NEXT REST STOP" — vertical stack of business logos, right side of map. */
+    #phone-map-stops {
+      position: absolute;
+      top: 16%;
+      right: 4%;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.6vmin;
+      z-index: 3;
+      pointer-events: none;
+      max-width: 28%;
+    }
+    #phone-map-stops .np-title {
+      color: #FFFFFF;
+      font-family: "Impact", "Arial Black", sans-serif;
+      font-size: 2.8vmin;
+      text-decoration: underline;
+      text-align: center;
+      margin-bottom: 0.6vmin;
+      text-shadow: 0 1px 3px #000;
+    }
+    #phone-map-stops img {
+      width: 100%;
+      max-width: 24vmin;
+      height: auto;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,0.85));
+    }
+    #phone-map .close-btn {
+      align-self: center;
+      padding: 2vmin 6vmin;
+      background: #FFFFFF;
+      color: #1E5BB8;
+      border: 2px solid #000;
+      border-radius: 6px;
+      font-family: "Impact", sans-serif;
+      font-size: 4vmin;
+      cursor: pointer;
+      margin-top: 2vmin;
+    }
+
+    @media (orientation: portrait) {
+      #phone-menu { display: flex; }
+    }
+    /* Lock chip override — keep the menu visible regardless of
+       orientation while the player has locked the phone. */
+    body.menu-locked #phone-menu { display: flex !important; }
+
+    /* Brief tap-through lock — after any modal closes, the iOS
+       `click` event fires AFTER `pointerup` and would land on
+       whichever .phone-hit hit zone is now uncovered (commonly
+       START OVER below the music modal's CLOSE button).  Disabling
+       .phone-hit pointer events for ~350 ms after modal close
+       swallows that ghost click. */
+    body.modal-closing .phone-hit { pointer-events: none; }
+
+    /* CSS rotation fallback — iOS Safari's screen.orientation.lock()
+       isn't reliable outside PWA standalone mode, so when the device
+       physically rotates to landscape WHILE the menu is locked, we
+       counter-rotate the menu 90° so it stays visually portrait. */
+    @media (orientation: landscape) {
+      body.phone-locked #phone-menu {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        width: 100vh;
+        height: 100vw;
+        transform: translate(-50%, -50%) rotate(-90deg);
+        transform-origin: center center;
+      }
+    }
+
+    /* ── Desktop bridge (no device rotation) ─────────────────────────────
+       Desktop can't reach the iPhone menu by rotating, so the pause overlay's
+       "iPHONE MENU" button opens it via window.__phoneMenu.open() (adds
+       .menu-locked).  Render it as a centered, upright portrait "phone" frame
+       — the art is 853×1844 — with the game dimmed behind, instead of the
+       full-bleed width-fit used on real phones.  This rule outranks the
+       phone-locked landscape counter-rotate above, so the menu stays upright
+       on desktop even if phone-locked is also set.  Hit-zone math is relative
+       to #phone-menu, so framing it as this box keeps the icons aligned. */
+    body.is-desktop.menu-locked #phone-menu {
+      width: calc(100svh * 853 / 1844);
+      max-width: 100vw;
+      height: 100svh;
+      min-height: 0;
+      top: 0;
+      left: 50%;
+      right: auto;
+      bottom: auto;
+      transform: translateX(-50%);
+      box-shadow: 0 0 0 100vmax rgba(2, 6, 14, 0.72);
+    }
+
+    /* "Enter gameplay" button — desktop only.  Floats in the dim band beside
+       the phone frame; clicking it is the desktop stand-in for rotating the
+       phone back to landscape (window.__phoneMenu.close → resume).  Lives at
+       body level (a sibling of #phone-menu) so position:fixed is viewport-
+       relative, not trapped by the menu's transform. */
+    #phone-enter-gameplay { display: none; }
+    body.is-desktop.menu-locked #phone-enter-gameplay {
+      display: block;
+      position: fixed;
+      top: 50%;
+      right: 4vw;
+      transform: translateY(-50%);
+      z-index: 10001;
+      max-width: 26vw;
+      padding: 2.4vh 2.2vw;
+      background: linear-gradient(180deg, #0b1f3a, #061018);
+      color: #EAF3FF;
+      border: 0.5vh solid #39FF8A;
+      border-radius: 1.4vh;
+      font-family: "Impact", "Arial Black", sans-serif;
+      font-size: 2.5vh;
+      letter-spacing: 0.03em;
+      line-height: 1.25;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: 0 0 3vh rgba(57, 255, 138, 0.45);
+    }
+    body.is-desktop.menu-locked #phone-enter-gameplay:hover {
+      background: linear-gradient(180deg, #103a1f, #07140b);
+      box-shadow: 0 0 4vh rgba(57, 255, 138, 0.7);
+    }
+    #phone-enter-gameplay .peg-icon { display: block; font-size: 4vh; margin-bottom: 0.6vh; }
+
+    /* Achievements modal — opens when the trophy tile is tapped.
+       Header stays fixed; the list scrolls independently; BACK button
+       floats in the bottom-right corner. */
+    /* Generic app modal — Leaderboard / Stats / Settings / Help. */
+    #phone-app {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 11, 22, 0.975);
+      z-index: 3;
+      flex-direction: column;
+      padding: calc(env(safe-area-inset-top, 0px) + 4vmin) 6% 6%;
+      box-sizing: border-box;
+    }
+    #phone-app.open { display: flex; }
+    #phone-app .pa-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 3vmin; flex-shrink: 0;
+    }
+    #phone-app-title {
+      color: #39A8FF; font-family: "Impact", "Arial Black", sans-serif;
+      font-size: 6vmin; letter-spacing: 0.04em;
+    }
+    #phone-app .pa-close {
+      background: none; border: 0.6vmin solid #39A8FF; color: #39A8FF;
+      border-radius: 50%; width: 10vmin; height: 10vmin; font-size: 4.5vmin;
+      line-height: 1; cursor: pointer;
+    }
+    #phone-app .pa-body {
+      flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      color: #DCE8FF; font-family: "Helvetica Neue", Arial, sans-serif;
+      /* Slim scrollbar pinned to the far edge, with the row content padded
+         clear of it so right-aligned values never sit under the bar. */
+      padding-right: 3.5vmin;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(57,168,255,0.55) transparent;
+    }
+    #phone-app .pa-body::-webkit-scrollbar { width: 1.1vmin; }
+    #phone-app .pa-body::-webkit-scrollbar-track { background: transparent; }
+    #phone-app .pa-body::-webkit-scrollbar-thumb {
+      background: rgba(57,168,255,0.55); border-radius: 1vmin;
+    }
+    #phone-app .pa-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 3vmin; padding: 2.8vmin 0.5vmin;
+      border-bottom: 1px solid rgba(57, 168, 255, 0.18); font-size: 3.7vmin;
+    }
+    #phone-app .pa-row .k { color: #9FC2E8; }
+    #phone-app .pa-row .v { color: #FFFFFF; font-weight: 700; text-align: right; }
+    #phone-app .pa-link { color: #5FC8FF; text-decoration: none; font-weight: 700; }
+    #phone-app .pa-lead { color: #BFD6F2; font-size: 3.5vmin; line-height: 1.45; margin: 1vmin 0 2vmin; }
+    #phone-app .pa-note { color: #6E86A8; font-size: 2.8vmin; line-height: 1.4; margin-top: 4vmin; }
+    #phone-app .pa-section {
+      color: #39A8FF; font-weight: 800; font-size: 3.2vmin; letter-spacing: 0.08em;
+      text-transform: uppercase; margin: 4.5vmin 0 0.5vmin;
+      border-bottom: 2px solid rgba(57,168,255,0.4); padding-bottom: 1vmin;
+    }
+    #phone-app .pa-section:first-child { margin-top: 0; }
+    #phone-app .pa-dim { color: #6E86A8; }
+    /* House-leaderboard metric tabs (Score / Time / Miles). */
+    #phone-app .lb-tabs { display: flex; gap: 2vmin; margin: 2vmin 0 1vmin; }
+    #phone-app .lb-tab {
+      flex: 1; padding: 2vmin 0; border: 0.5vmin solid rgba(57,168,255,0.5);
+      background: none; color: #9FC2E8; border-radius: 2vmin; cursor: pointer;
+      font-family: inherit; font-weight: 800; font-size: 3vmin;
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    #phone-app .lb-tab.on { background: #39A8FF; color: #06121F; border-color: #39A8FF; }
+    /* Highlight the active player's own row in the house board. */
+    #phone-app .pa-row.lb-me { background: rgba(57,168,255,0.12); border-radius: 1.5vmin; }
+    #phone-app .pa-row.lb-me .k { color: #5FC8FF; font-weight: 800; }
+    #phone-app input[type=range] { width: 46%; accent-color: #39A8FF; }
+    #phone-app .pa-toggle {
+      min-width: 18vmin; padding: 1.6vmin 0; border-radius: 2vmin;
+      border: 0.5vmin solid #335; background: #16203a; color: #8aa;
+      font-weight: 800; font-size: 3.4vmin; cursor: pointer;
+    }
+    #phone-app .pa-toggle.on { border-color: #39A8FF; background: #1E5BB8; color: #FFF; }
+
+    /* Tutorial — FULL-BLEED swipeable slide carousel.  In tut-mode the app
+       chrome (header / padding) is stripped so each slide fills the whole
+       phone: top-pinned and width-fit to the phone edges (bottom clipped if
+       taller), exactly like the menu background. */
+    #phone-app.tut-mode { padding: 0; }
+    #phone-app.tut-mode .pa-head { display: none; }            /* hide "TUTORIAL" + default close */
+    #phone-app.tut-mode .pa-body { padding: 0; overflow: hidden; }
+    #phone-app .tut-wrap { position: relative; height: 100%; }
+    #phone-app .tut-track {
+      height: 100%; display: flex; overflow-x: auto; overflow-y: hidden;
+      scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; touch-action: pan-x;
+    }
+    #phone-app .tut-track::-webkit-scrollbar { display: none; }
+    #phone-app .tut-cell {
+      flex: 0 0 100%; width: 100%; height: 100%; position: relative;
+      scroll-snap-align: center; overflow: hidden; background: #000;
+    }
+    #phone-app .tut-slide {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: auto;     /* width-fit + top-pinned; bottom clipped if taller */
+      user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
+    }
+    #phone-app .tut-dots {
+      position: absolute; left: 0; right: 0; pointer-events: none;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5vmin);
+      display: flex; justify-content: center; gap: 2.4vmin;
+    }
+    #phone-app .tut-dot {
+      width: 2.4vmin; height: 2.4vmin; border-radius: 50%; cursor: pointer;
+      pointer-events: auto; background: rgba(255, 255, 255, 0.45);
+      box-shadow: 0 0 1vmin rgba(0, 0, 0, 0.6);
+      transition: background 0.2s, transform 0.2s;
+    }
+    #phone-app .tut-dot.on { background: #39A8FF; transform: scale(1.3); }
+    #phone-app .tut-close {
+      position: absolute; right: 3vmin;
+      top: calc(env(safe-area-inset-top, 0px) + 2.5vmin);
+      width: 9vmin; height: 9vmin; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(6, 11, 22, 0.55); border: 0.5vmin solid #39A8FF;
+      color: #FFF; font-size: 4.5vmin; line-height: 1; cursor: pointer;
+      -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+    }
+
+    #phone-achievements {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 18, 32, 0.96);
+      z-index: 2;
+      flex-direction: column;
+      /* Pad the top by the iOS safe-area inset so the TROPHIES title
+         clears the Dynamic Island / notch on modern iPhones. */
+      padding: calc(env(safe-area-inset-top, 0px) + 5vmin) 5% 5%;
+    }
+    #phone-achievements.open { display: flex; }
+    #phone-achievements .title {
+      color: #FFD700;
+      font-family: "Impact", "Arial Black", sans-serif;
+      font-size: 6vmin;
+      text-align: center;
+      margin-bottom: 1vmin;
+      flex-shrink: 0;
+    }
+    #phone-achievements .sub {
+      color: #88CCFF;
+      font-size: 3vmin;
+      text-align: center;
+      margin-bottom: 3vmin;
+      flex-shrink: 0;
+    }
+    #phone-achievements .list {
+      flex: 1;
+      display: flex; flex-direction: column;
+      gap: 1.5vmin;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      /* The parent #phone-menu sets touch-action:none so the page
+         doesn't pinch-zoom; we re-enable vertical pan inside the
+         list so iOS lets the player scroll. */
+      touch-action: pan-y;
+      /* Leave room at the bottom so the last row isn't covered by
+         the floating BACK button. */
+      padding-bottom: 14vmin;
+    }
+    #phone-achievements .row {
+      display: flex; align-items: center; gap: 2vmin;
+      background: #1A2238;
+      border: 2px solid #2E3F60;
+      border-radius: 8px;
+      padding: 2vmin;
+      flex-shrink: 0;
+    }
+    #phone-achievements .row.earned { border-color: var(--tier-color, #FFD700); }
+    #phone-achievements .row.locked { opacity: 0.5; }
+    #phone-achievements .row .icon {
+      font-size: 6vmin;
+      width: 9vmin; height: 9vmin;
+      display: flex; align-items: center; justify-content: center;
+      background: #0E1828;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    #phone-achievements .row .info { flex: 1; color: #FFF; font-family: "Helvetica Neue", sans-serif; }
+    #phone-achievements .row .name { font-size: 3.6vmin; font-weight: 700; }
+    #phone-achievements .row .desc { font-size: 2.6vmin; color: #AAD0FF; margin-top: 0.5vmin; }
+    #phone-achievements .row .badge {
+      font-size: 2.6vmin;
+      font-weight: 700;
+      padding: 0.5vmin 1.5vmin;
+      border-radius: 999px;
+      color: #000;
+      background: var(--tier-color, #555);
+      flex-shrink: 0;
+    }
+    #phone-achievements .close-btn {
+      position: absolute;
+      bottom: 4vmin;
+      right: 4vmin;
+      padding: 2vmin 5vmin;
+      background: #FFFFFF;
+      color: #1E5BB8;
+      border: 2px solid #000;
+      border-radius: 6px;
+      font-family: "Impact", sans-serif;
+      font-size: 4vmin;
+      cursor: pointer;
+      z-index: 3;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+  </style>
+</head>
+<body>
+  <!-- Game canvas mounts here (Phaser scale.parent = 'game-root').  The box is
+       inset to the device SAFE AREA so the FIT-scaled game — and its edge
+       buttons (top HUD cluster, bottom pedals) — always clear camera cutouts,
+       rounded corners, and the nav/gesture bar.  See the #game-root CSS. -->
+  <div id="game-root"></div>
+  <div id="phone-menu" aria-hidden="true">
+    <img class="bg" src="assets/ui/iphone_menu_bg_beater.png" alt="Phone menu" />
+
+    <!-- Legacy top-widget chips (trophy / lock / hand).  The 2026-06 menu
+         redesign moved Trophies to its own grid tile and dropped the lock +
+         handedness chips, so these are hidden.  Kept in the DOM (not deleted)
+         so the existing applyLock / applyHand / steering JS stays null-safe. -->
+    <div id="phone-trophy" role="button" data-action="trophy" aria-label="Trophies"  style="display:none">🏆</div>
+    <div id="phone-lock"   role="button" data-action="lock"   aria-label="Lock pause" style="display:none">🔓</div>
+    <div id="phone-hand"   role="button" data-action="hand"   aria-label="Handedness" style="display:none">✋</div>
+
+    <!-- Steering-mode selection ring.  Drawn on top of the active
+         steering icon; bounds are pulled from that button's
+         data-ring-px (the artwork rect, not the padded tap rect). -->
+    <div id="phone-selection-ring" aria-hidden="true"></div>
+
+    <!-- Achievements modal — opens when the trophy tile is tapped. -->
+    <div id="phone-achievements">
+      <div class="title">TROPHIES</div>
+      <div class="sub" id="phone-achievements-sub">— / —</div>
+      <div class="list" id="phone-achievements-list"></div>
+      <button class="menu-x" id="phone-achievements-close" aria-label="Close">✕</button>
+    </div>
+
+    <!-- Generic app modal — reused by Leaderboard / Stats / Settings / Help.
+         JS sets the title + body HTML, then adds .open. -->
+    <div id="phone-app" role="dialog" aria-modal="true">
+      <div class="pa-head">
+        <span id="phone-app-title">APP</span>
+        <button id="phone-app-close" class="pa-close" aria-label="Close">✕</button>
+      </div>
+      <div id="phone-app-body" class="pa-body"></div>
+    </div>
+
+    <!-- Steering-change confirmation — centered iOS-style alert. -->
+    <div id="phone-confirm" aria-hidden="true">
+      <div class="box">
+        <div class="msg">Modifying your steering controls will end your current game.</div>
+        <div class="row">
+          <button class="cancel" id="phone-confirm-cancel">Cancel</button>
+          <button class="ok"     id="phone-confirm-ok">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- In-world party-time clock over the Calendar's lower black band. -->
+    <!-- Top weather-widget readouts (data-px = PNG coords, auto-positioned).
+         Location name sits right of the GPS arrow; clock in the very top-right
+         corner; temperature + weather symbol upper-right.  Updated each second
+         by updateWeatherWidget() from window.__location. -->
+    <div id="phone-loc"   data-px="132 140 380 62">SEATTLE</div>
+    <div id="phone-clock" data-px="555 110 224 52">— : — PM</div>
+    <div id="phone-temp"  data-px="132 194 300 112">—°</div>
+    <div id="phone-wx"    data-px="657 185 110 110">☀️</div>
+
+    <!-- Hit zones — PNG-PIXEL coords for the 853×1844 iphone_menu_bg.png
+         (2026-06 redesign).  The script reads the image's natural size,
+         applies the width-fit/top-anchored transform, and positions each
+         zone in viewport px so they auto-track the artwork on every device.
+         data-px = "x y w h" in PNG pixels.  Coords below are best-fit to the
+         new 3-column grid — fine-tune any that are off by loading the page
+         with ?calibrate and tapping the icon (logs exact PNG x,y). -->
+    <!-- Row 1 -->
+    <button class="phone-hit" data-action="tutorial"    data-px="41 599 233 360"></button>
+    <button class="phone-hit" data-action="garage"      data-px="299 594 259 366"></button>
+    <button class="phone-hit" data-action="maps"        data-px="585 599 229 360"></button>
+    <!-- Row 2 -->
+    <button class="phone-hit" data-action="calendar"    data-px="41 1000 241 163"></button>
+    <button class="phone-hit" data-action="trophy"      data-px="307 1000 241 163"></button>
+    <button class="phone-hit" data-action="stats"       data-px="573 1000 241 163"></button>
+    <!-- Row 3 -->
+    <button class="phone-hit" data-action="messages"    data-px="41 1184 241 169"></button>
+    <button class="phone-hit" data-action="music"       data-px="307 1184 241 169"></button>
+    <button class="phone-hit" data-action="startover"   data-px="573 1184 241 169"></button>
+    <!-- Row 4 (replaces the old steering buttons) -->
+    <button class="phone-hit" data-action="leaderboard" data-px="41 1375 241 167"></button>
+    <button class="phone-hit" data-action="settings"    data-px="307 1375 241 167"></button>
+    <button class="phone-hit" data-action="addiction"   data-px="573 1375 241 167"></button>
+    <!-- Bottom MENU bar REMOVED (2026-06-19): the art there reads "ROTATE
+         PHONE TO ENTER GAME PLAY", but the hit zone returned to the title and
+         lost the run — confusing/dangerous.  Players rotate to landscape to
+         resume; desktop uses its own "enter gameplay" button. -->
+
+    <!-- Map modal — opens when Maps icon is tapped.  SVG content
+         populated by JS below. -->
+    <div id="phone-map">
+      <div class="title">SEATTLE → PULLMAN</div>
+      <div class="sub" id="phone-map-mile">Mile 0 / 293</div>
+      <svg id="phone-map-svg" viewBox="0 0 100 200" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="phone-map-stops"></div>
+      <button class="menu-x" id="phone-map-close" aria-label="Close">✕</button>
+    </div>
+
+    <!-- Garage modal — opens when Garage tile is tapped.  Populated by JS. -->
+    <div id="phone-garage">
+      <div class="title">GARAGE</div>
+      <div class="list" id="phone-garage-list"></div>
+      <button class="menu-x" id="phone-garage-close" aria-label="Close">✕</button>
+    </div>
+
+    <!-- Music app — Spotify-style picker; populated by JS. -->
+    <div id="phone-music">
+      <button id="phone-music-pause" class="pause-btn" aria-label="Pause music">⏸</button>
+      <button class="menu-x" id="phone-music-x" aria-label="Close">✕</button>
+      <div class="title" id="phone-music-title">MUSIC</div>
+      <div class="controls">
+        <button id="phone-music-shuffle">🔀 SHUFFLE ALL</button>
+        <button id="phone-music-shuffle-genre" style="display:none;">🔀 SHUFFLE GENRE</button>
+      </div>
+      <div id="phone-music-body"></div>
+      <div id="phone-music-now" style="display:none;">
+        <div id="pmn-name" class="pmn-name"></div>
+        <div id="pmn-bar" class="pmn-bar"><div id="pmn-fill" class="pmn-fill"></div><div id="pmn-knob" class="pmn-knob"></div></div>
+        <div class="pmn-times"><span id="pmn-cur">0:00</span><span id="pmn-dur">0:00</span></div>
+      </div>
+      <div class="vol-row">
+        <span class="lbl">🔊 Volume</span>
+        <input type="range" id="phone-music-vol" min="0" max="100" step="1" value="32" />
+        <span id="phone-music-vol-pct" class="lbl" style="min-width:6vmin;text-align:right;">32%</span>
+      </div>
+      <label class="vol-row" style="justify-content:flex-start;gap:2.2vmin;">
+        <input type="checkbox" id="phone-music-bg" checked />
+        <span class="lbl">Background radio</span>
+      </label>
+      <button class="close-btn" id="phone-music-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- Desktop-only "enter gameplay" button.  Sibling of #phone-menu (not a
+       child) so its fixed positioning isn't trapped by the menu's transform.
+       Hidden unless body.is-desktop.menu-locked.  Click → resume the run. -->
+  <button id="phone-enter-gameplay" type="button" aria-label="Enter gameplay">
+    <span class="peg-icon">🔄</span>Rotate phone to enter gameplay
+  </button>
+
+  <!-- License-plate name entry — shows once, on the first run (your handle). -->
+  <style>
+    /* Top-anchored (not centered): in landscape the iOS keyboard fills the
+       bottom half and would cover the OK button on a centered card, trapping
+       the player.  flex-start + overflow keeps the buttons reachable. */
+    #plate-modal { display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.82); align-items:flex-start; justify-content:center; overflow:auto; padding:max(10px,env(safe-area-inset-top)) 8px 8px; box-sizing:border-box; }
+    #plate-modal.open { display:flex; }
+    #plate-modal .plate-box { background:#0b1626; border:2px solid #39A8FF; border-radius:12px; padding:6vmin 5vmin; width:min(94vw,92vmin); text-align:center; box-shadow:0 0 30px rgba(0,0,0,0.7); }
+    #plate-modal .plate-h { font-family:"Impact","Arial Black",sans-serif; color:#F4F7FF; font-size:5.5vmin; letter-spacing:1px; }
+    #plate-modal .plate-sub { color:#88CCFF; font-size:3vmin; margin:1.4vmin 0 3vmin; font-family:Helvetica; }
+    #plate-modal .plate-frame { background:#FFCC00; border:3px solid #222; border-radius:8px; padding:3vmin 2.4vmin; margin-bottom:3.4vmin; box-shadow:inset 0 0 0 3px #FFF; }
+    #plate-modal input { width:100%; box-sizing:border-box; background:transparent; border:none; outline:none; text-align:center; font-family:"Impact","Arial Black",sans-serif; font-size:12vmin; letter-spacing:0.7vmin; color:#111; text-transform:uppercase; }
+    #plate-modal input::placeholder { color:#9a7c00; }
+    #plate-modal button { padding:2.2vmin 8vmin; background:#39A8FF; color:#02101f; border:2px solid #02101f; border-radius:8px; font-family:"Impact","Arial Black",sans-serif; font-size:4.6vmin; cursor:pointer; }
+    #plate-modal .plate-btns { display:flex; gap:3vmin; justify-content:center; }
+    #plate-modal .plate-btns button { flex:1; padding:2.2vmin 2vmin; }
+    #plate-modal button.secondary { background:#22344a; color:#cfe4ff; }
+    #plate-modal .plate-err { color:#FF7799; font-family:Helvetica,Arial,sans-serif; font-size:2.7vmin; min-height:3.4vmin; margin:-1.6vmin 0 2.2vmin; text-align:center; }
+    /* Press feedback so a tap is obviously registered (button vs. phone). */
+    #plate-modal button { transition:background .04s,color .04s,transform .04s; touch-action:manipulation; }
+    #plate-modal button:active { background:#F4F7FF; color:#02101f; transform:scale(0.97); }
+  </style>
+  <div id="plate-modal">
+    <div class="plate-box">
+      <div class="plate-h">DRIVER PLATE</div>
+      <div class="plate-sub">Your public username on the leaderboard — pick wisely.</div>
+      <div class="plate-frame"><input id="plate-input" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="DUI4LYF" /></div>
+      <div id="plate-err" class="plate-err"></div>
+      <div class="plate-btns">
+        <button id="plate-cancel" class="secondary">CANCEL</button>
+        <button id="plate-done">DONE</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const modal = document.getElementById('plate-modal');
+      const input = document.getElementById('plate-input');
+      const done  = document.getElementById('plate-done');
+      const cancel = document.getElementById('plate-cancel');
+      const errEl = document.getElementById('plate-err');
+      if (!modal || !input || !done) return;
+      let pendingDone = null;
+      const sanitize = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 8);
+      const showErr = (m) => { if (errEl) errEl.textContent = m || ''; };
+      const close = () => { modal.classList.remove('open'); pendingDone = null; showErr(''); };
+      input.addEventListener('input', () => { input.value = sanitize(input.value); showErr(''); });
+      let submitting = false;
+      const submit = async () => {
+        if (submitting) return;
+        // Local rules first (length / reserved / blocklist), shared with the
+        // slot-picker so they can't drift apart.
+        const local = (window.__plate && window.__plate.validate)
+          ? window.__plate.validate(input.value)
+          : (sanitize(input.value).trim() ? { ok: true, plate: sanitize(input.value).trim() } : { ok: false, reason: 'Enter a name.' });
+        if (!local.ok) { showErr(local.reason || 'Invalid name.'); input.focus(); return; }
+        // Server uniqueness (best-effort): blocks on a TAKEN name, allows it
+        // when the server is unreachable (offline / pre-deploy).
+        let res = local;
+        if (window.__plate && window.__plate.claim) {
+          submitting = true;
+          showErr('Checking…'); errEl && (errEl.style.color = '#88CCFF');
+          try { res = await window.__plate.claim(input.value); }
+          catch (_) { res = local; }
+          submitting = false;
+          errEl && (errEl.style.color = '');
+          if (!res.ok) { showErr(res.reason || 'That name is taken.'); input.focus(); return; }
+        }
+        const name = res.plate;
+        const cb = pendingDone;
+        pendingDone = null;
+        modal.classList.remove('open');
+        showErr('');
+        if (cb) cb(name);
+        else if (window.__plate && window.__plate.set) window.__plate.set(name);
+      };
+      done.addEventListener('click', submit);
+      if (cancel) cancel.addEventListener('click', close);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter')  { e.preventDefault(); submit(); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+      });
+      // Tapping the dark backdrop (outside the plate box) cancels.
+      modal.addEventListener('pointerdown', (e) => { if (e.target === modal) close(); });
+      // showPlateModal(opts?) — opts.current pre-fills the box; opts.onDone(name)
+      // receives the chosen plate (the title-screen slot picker uses this so the
+      // name lands in the right player slot).  No opts → sets the active plate.
+      window.showPlateModal = (opts) => {
+        opts = opts || {};
+        pendingDone = (typeof opts.onDone === 'function') ? opts.onDone : null;
+        const cur = (opts.current != null) ? opts.current
+                  : ((window.__plate && window.__plate.get) ? window.__plate.get() : '');
+        input.value = sanitize(cur || '');
+        showErr('');
+        modal.classList.add('open');
+        setTimeout(() => { try { input.focus(); } catch (_) {} }, 60);
+      };
+    })();
+  </script>
+
+  <script>
+    (function () {
+      // Append ?debug (or ?debug=1) to the URL to flash all hit zones —
+      // useful for verifying icon alignment without iOS dev tools.
+      if (/[?&]debug(=|&|$)/.test(location.search)) {
+        document.body.classList.add('debug');
+      }
+
+      // ── Calibration mode ─────────────────────────────────────────────
+      // Append ?calibrate to the URL.  Tap any spot on the menu and a
+      // floating chip prints the PNG-pixel coordinate of that point.
+      // Use it to map each icon's actual location in the artwork; send
+      // me the four coords (top-left + size) per icon and I plug them
+      // straight into data-px.  No dev tools needed.
+      if (/[?&]calibrate(=|&|$)/.test(location.search)) {
+        document.body.classList.add('debug');
+        const chip = document.createElement('div');
+        chip.style.cssText = 'position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:99999;background:rgba(0,0,0,0.85);color:#FFEE00;font:14px/1 monospace;padding:6px 10px;border-radius:6px;pointer-events:none;';
+        chip.textContent = 'CALIBRATE: tap any icon';
+        document.body.appendChild(chip);
+        document.addEventListener('pointerdown', (e) => {
+          const img = document.querySelector('#phone-menu img.bg');
+          if (!img?.naturalWidth) return;
+          const menu = document.getElementById('phone-menu');
+          const rect = menu.getBoundingClientRect();
+          const vw = menu.clientWidth;
+          const scale = vw / img.naturalWidth;   // width-fit, top-anchored
+          const offX = 0;
+          const offY = 0;
+          const pngX = Math.round((e.clientX - rect.left - offX) / scale);
+          const pngY = Math.round((e.clientY - rect.top  - offY) / scale);
+          chip.textContent = `PNG: ${pngX}, ${pngY}`;
+        }, { capture: true });
+      }
+
+      // ── Hit-zone auto-positioning ────────────────────────────────────
+      // Hit zones are declared with data-px="x y w h" in PNG pixel
+      // coordinates.  We compute the image's width-fit scale
+      // and offset against the live viewport, then translate every
+      // zone to viewport-pixel position so alignment tracks the
+      // artwork on every device (no per-aspect % retuning).
+      const bgImg = document.querySelector('#phone-menu img.bg');
+      let coverState = null;
+      const recomputeCover = () => {
+        if (!bgImg.naturalWidth || !bgImg.naturalHeight) return null;
+        const imgW = bgImg.naturalWidth, imgH = bgImg.naturalHeight;
+        const menu = document.getElementById('phone-menu');
+        const vw = menu.clientWidth, vh = menu.clientHeight;
+        if (!vw || !vh) return null;
+        // CONTAIN (matches img.bg object-fit:contain): fit the WHOLE image
+        // inside the viewport so every button is visible, then center it.
+        // Letterbox space (sides on iPad, or top/bottom) is black.  Overlays
+        // track the centered image via offX/offY.
+        const scale = Math.min(vw / imgW, vh / imgH);
+        const offX = (vw - imgW * scale) / 2;
+        const offY = (vh - imgH * scale) / 2;
+        coverState = { scale, offX, offY };
+        return coverState;
+      };
+      const placePngBox = (el, pngStr) => {
+        if (!coverState || !pngStr) return;
+        const [px, py, pw, ph] = pngStr.split(/\s+/).map(Number);
+        el.style.left   = (coverState.offX + px * coverState.scale) + 'px';
+        el.style.top    = (coverState.offY + py * coverState.scale) + 'px';
+        el.style.width  = (pw * coverState.scale) + 'px';
+        el.style.height = (ph * coverState.scale) + 'px';
+      };
+      const layoutHitZones = () => {
+        if (!recomputeCover()) return;
+        // Position every element with data-px — hit zones + trophy +
+        // lock + anything else we tag later.
+        document.querySelectorAll('[data-px]').forEach(btn => placePngBox(btn, btn.dataset.px));
+        // Re-position the selection ring (its source is whichever
+        // steering button is currently .selected).
+        positionSelectionRing();
+      };
+      // Move the steering ring onto the active steering button's
+      // ring-rect, or hide it if nothing is selected.  Pulled out
+      // so layout + applySteering can both call it.
+      const positionSelectionRing = () => {
+        const ring = document.getElementById('phone-selection-ring');
+        if (!ring) return;
+        const active = document.querySelector('.phone-hit.selected[data-ring-px]');
+        if (!active) { ring.style.display = 'none'; return; }
+        placePngBox(ring, active.dataset.ringPx);
+        ring.style.display = 'block';
+      };
+      // Run on load, on resize, on orientation change.
+      if (bgImg.complete) layoutHitZones();
+      else bgImg.addEventListener('load', layoutHitZones);
+      window.addEventListener('resize', layoutHitZones);
+      window.addEventListener('orientationchange', () => requestAnimationFrame(layoutHitZones));
+      // iOS Safari quirk — on cold launch the viewport reports the
+      // wrong height for a few hundred ms while the status bar / safe
+      // area settles.  Re-layout multiple times during the first
+      // second so the PNG cover-fit + hit-zone positions match the
+      // final viewport, not the transient cold-launch one.  Also
+      // listen to visualViewport.resize which fires when iOS finally
+      // commits to the real dimensions.
+      const settleLayout = () => {
+        // Force a reflow so cover-fit recomputes against current dims.
+        void document.documentElement.offsetHeight;
+        layoutHitZones();
+      };
+      window.addEventListener('load', () => {
+        [50, 200, 500, 1000].forEach(ms => setTimeout(settleLayout, ms));
+      });
+      window.visualViewport?.addEventListener?.('resize', settleLayout);
+
+      // ── Per-car phone-menu background ─────────────────────────────────
+      // Each owned vehicle has its own 853×1844 menu skin (same icon/dock
+      // layout, different art) at assets/ui/iphone_menu_bg_<carId>.png.
+      // Swapping the <img class="bg"> src re-skins the whole menu; the
+      // hit-zone math reads the image's naturalWidth on load, so the
+      // buttons stay aligned (all skins share the 853×1844 layout).  A car
+      // with no custom skin falls back to the shared default art.
+      // Default skin = the BEATER (starter car), not the generic art (which
+      // depicts a truck) — so a fresh/unchosen profile shows the sedan, never
+      // a truck the player doesn't own yet.
+      const PHONE_BG_DEFAULT = 'assets/ui/iphone_menu_bg_beater.png';
+      const phoneBgUrl = (id) => id ? `assets/ui/iphone_menu_bg_${id}.png` : PHONE_BG_DEFAULT;
+      const setPhoneMenuBg = (id) => {
+        if (!bgImg) return;
+        const url = phoneBgUrl(id);
+        if (bgImg.getAttribute('src') === url) return;   // already showing it
+        // Missing per-car skin → fall back to the shared default art.
+        bgImg.onerror = () => {
+          bgImg.onerror = null;
+          if (bgImg.getAttribute('src') !== PHONE_BG_DEFAULT) {
+            bgImg.addEventListener('load', layoutHitZones, { once: true });
+            bgImg.src = PHONE_BG_DEFAULT;
+          }
+        };
+        // Re-align the hit zones once the new art has loaded.
+        bgImg.addEventListener('load', layoutHitZones, { once: true });
+        bgImg.src = url;
+      };
+      // Sync the menu skin to whichever vehicle is currently being driven.
+      // __garage.current() reads the registry directly, so it covers cars a
+      // custom-mode run picked (which aren't in the OWNED list); fall back to
+      // the owned-list "current" flag if that accessor isn't present yet.
+      const syncMenuBg = () => {
+        try {
+          let cur = window.__garage?.current?.();
+          if (!cur) {
+            const cars = window.__garage?.list?.() ?? [];
+            cur = cars.find(c => c.current)?.id ?? cars[0]?.id ?? null;
+          }
+          if (cur) setPhoneMenuBg(cur);
+        } catch (_) {}
+      };
+      // Initial sync once the game/registry is up (best-effort retries —
+      // the inline script can run before main.js registers __garage).
+      [0, 300, 1000].forEach(ms => setTimeout(syncMenuBg, ms));
+      window.__syncMenuBg = syncMenuBg;   // let other handlers re-sync
+
+      // Modal-close helper — call this whenever a modal is dismissed.
+      // Briefly disables .phone-hit pointer events so the iOS-style
+      // ghost click that fires after pointerup can't trigger the
+      // hit-zone underneath the close button (e.g. closing the music
+      // modal would otherwise drop a click on START OVER below it).
+      const markModalClosing = () => {
+        document.body.classList.add('modal-closing');
+        setTimeout(() => document.body.classList.remove('modal-closing'), 500);
+        // Belt-and-suspenders for the iOS "ghost click": after a touch,
+        // Safari fires a synthetic `click` ~300 ms later at the same screen
+        // spot.  When a modal/confirm button is gone by then, that click
+        // lands on whatever menu hit-zone is now UNDERNEATH it — e.g.
+        // tapping Continue/Cancel on a confirm also fired the button behind
+        // it.  Swallow the very next click (capture phase, anywhere) so it
+        // can't reach any handler.  Real taps are unaffected — the menu
+        // acts on `pointerup`, which already fired before this click.
+        const cleanup = () => {
+          document.removeEventListener('click', swallow, true);
+          clearTimeout(t);
+        };
+        const swallow = (e) => { e.preventDefault(); e.stopPropagation(); cleanup(); };
+        const t = setTimeout(cleanup, 700);
+        document.addEventListener('click', swallow, true);
+      };
+
+      // ── Tap helper ────────────────────────────────────────────────────
+      // iOS Safari occasionally drops the synthetic `click` event for
+      // empty <button> elements inside touch-action: none containers.
+      // Attaching `pointerup` AND `click` (with a 350 ms debounce) makes
+      // every menu button work reliably on iPhone AND desktop.
+      const addTap = (el, handler) => {
+        if (!el) return;
+        let last = 0;
+        const wrap = (e) => {
+          e.preventDefault(); e.stopPropagation();
+          const now = Date.now();
+          if (now - last < 350) return;
+          last = now;
+          handler(e);
+        };
+        el.addEventListener('pointerup', wrap, { passive: false });
+        el.addEventListener('click',     wrap, { passive: false });
+      };
+
+      // Same idea as addTap but distinguishes a short tap from a
+      // long-press.  pointerdown starts a 500ms timer; if pointerup
+      // arrives before the timer fires, `onTap` runs.  If the timer
+      // fires first, `onHold` runs and the subsequent pointerup is
+      // swallowed so the tap handler doesn't also trigger.
+      const addLongTap = (el, onTap, onHold, holdMs = 500) => {
+        if (!el) return;
+        let holdTimer = null;
+        let holdFired = false;
+        let lastFire  = 0;
+        el.addEventListener('pointerdown', () => {
+          holdFired = false;
+          if (holdTimer) clearTimeout(holdTimer);
+          holdTimer = setTimeout(() => {
+            holdFired = true;
+            holdTimer = null;
+            if (onHold) onHold();
+          }, holdMs);
+        }, { passive: false });
+        const endHold = (e) => {
+          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+          e.preventDefault(); e.stopPropagation();
+          if (holdFired) { holdFired = false; return; }
+          const now = Date.now();
+          if (now - lastFire < 350) return;
+          lastFire = now;
+          if (onTap) onTap();
+        };
+        const cancel = () => {
+          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+          holdFired = false;
+        };
+        el.addEventListener('pointerup',     endHold, { passive: false });
+        el.addEventListener('pointercancel', cancel);
+        el.addEventListener('pointerleave',  cancel);
+      };
+
+      // ── Lock button ──────────────────────────────────────────────────
+      const lockBtn = document.getElementById('phone-lock');
+      const applyLock = () => {
+        const locked = !!(window.__phoneLock?.get?.());
+        lockBtn.classList.toggle('locked', locked);
+        lockBtn.textContent = locked ? '🔒' : '🔓';
+        lockBtn.setAttribute('aria-pressed', String(locked));
+        // Keep the portrait menu visible even in landscape while
+        // locked — body class overrides the orientation media query.
+        document.body.classList.toggle('menu-locked', locked);
+      };
+      addTap(lockBtn, () => {
+        const cur = !!(window.__phoneLock?.get?.());
+        window.__phoneLock?.set?.(!cur);
+        applyLock();
+      });
+
+      // ── Handedness toggle ────────────────────────────────────────────
+      // 👈 = left-handed (default, weapons on left edge);
+      // 👉 = right-handed (weapons on right edge).
+      const handBtn = document.getElementById('phone-hand');
+      const applyHand = () => {
+        const h = window.__handedness?.get?.() ?? 'left';
+        handBtn.textContent = (h === 'left') ? '👈' : '👉';
+        handBtn.setAttribute('aria-pressed', h === 'right' ? 'true' : 'false');
+      };
+      addTap(handBtn, () => {
+        window.__handedness?.toggle?.();
+        applyHand();
+      });
+
+      // ── Steering selection highlight ──────────────────────────────────
+      // 'flappy' (tap), 'tilt', 'classic' (L/R) — map to the matching
+      // .phone-hit.  The gameplay code calls the two-thumb mode
+      // "classic"; keeping "lr" here made the phone UI disagree with
+      // the scene/save mode names.
+      const STEER_BUTTONS = { tap: 'flappy', tilt: 'tilt', lr: 'classic' };
+      const applySteering = () => {
+        // Defensive sweep — wipe any stale .selected from EVERY hit
+        // zone first, then apply only to the active steering button.
+        // Prevents leftover state on Maps / Music / etc. from showing
+        // the black stroke.
+        document.querySelectorAll('.phone-hit.selected').forEach(b => b.classList.remove('selected'));
+        const cur = window.__steeringMode?.get?.() ?? 'flappy';
+        for (const [el, mode] of Object.entries(STEER_BUTTONS)) {
+          if (cur !== mode) continue;
+          const btn = document.querySelector(`.phone-hit[data-action="${el}"]`);
+          if (btn) btn.classList.add('selected');
+        }
+        // Move the visual ring onto the now-selected button's
+        // artwork rect (data-ring-px), independent of its tap zone.
+        positionSelectionRing();
+      };
+      // pointerup (not click) — iOS Safari sometimes drops synthetic
+      // click events on empty <button> elements inside touch-action:
+      // none containers.  pointerup fires reliably for both mouse +
+      // touch.  Guard against double-firing if a desktop click also
+      // arrives by checking a recent-fire timestamp.
+      let _lastSteerFire = 0;
+      // Promise wrapper around the centered confirm modal.  Resolves
+      // true on Continue, false on Cancel.  Listeners are attached per
+      // call and removed on close so the handler can't double-fire.
+      const confirmModal  = document.getElementById('phone-confirm');
+      const confirmMsg    = confirmModal?.querySelector('.msg');
+      const confirmOk     = document.getElementById('phone-confirm-ok');
+      const confirmCancel = document.getElementById('phone-confirm-cancel');
+      const showConfirm = (message) => new Promise(resolve => {
+        // Close any stale confirm still open first — prevents double-bound
+        // OK/Cancel listeners (which broke re-opening the controls editor after
+        // a Cancel, because the editor had opened behind a lingering popup).
+        if (window.__activeConfirmClose) { try { window.__activeConfirmClose(); } catch (_) {} }
+        if (confirmMsg && message) confirmMsg.textContent = message;
+        const close = (val) => {
+          confirmModal.classList.remove('open');
+          // Suppress the iOS ghost click — without this, pressing
+          // Continue on the Start Over confirm would also fire the
+          // Tilt Steer (or whichever) button underneath where the
+          // Continue button was.
+          markModalClosing();
+          confirmOk.removeEventListener('pointerup', okHandler);
+          confirmOk.removeEventListener('click',     okHandler);
+          confirmCancel.removeEventListener('pointerup', cancelHandler);
+          confirmCancel.removeEventListener('click',     cancelHandler);
+          window.__activeConfirmClose = null;
+          resolve(val);
+        };
+        const okHandler     = (e) => { e.preventDefault(); e.stopPropagation(); close(true);  };
+        const cancelHandler = (e) => { e.preventDefault(); e.stopPropagation(); close(false); };
+        confirmOk.addEventListener('pointerup', okHandler,     { passive: false });
+        confirmOk.addEventListener('click',     okHandler,     { passive: false });
+        confirmCancel.addEventListener('pointerup', cancelHandler, { passive: false });
+        confirmCancel.addEventListener('click',     cancelHandler, { passive: false });
+        // Programmatic dismissal (e.g. the controls editor opening on rotate)
+        // closes this confirm cleanly as if OK — so it never lingers over the
+        // editor or double-binds these listeners on the next open.
+        window.__activeConfirmClose = () => close(true);
+        confirmModal.classList.add('open');
+      });
+      const handleSteerSelect = (btn) => async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const now = Date.now();
+        if (now - _lastSteerFire < 350) return;
+        _lastSteerFire = now;
+        const mode = STEER_BUTTONS[btn.dataset.action];
+        const current = window.__steeringMode?.get?.() ?? 'flappy';
+        // No-op if tapping the already-selected non-tilt mode.  Tilt is
+        // allowed to run again because the registry can say "tilt" even
+        // when the orientation listener did not attach.
+        if (current === mode && mode !== 'tilt') return;
+        if (mode === 'tilt') {
+          window.__phaserGame?.registry?.set?.('titleThumbsPick', 'tilt');
+        }
+        // Centered iOS-style confirmation — set() will restart the
+        // Game scene, ending the active run.
+        const ok = await showConfirm('Modifying your steering controls will end your current game.');
+        if (!ok) {
+          if (mode === 'tilt') {
+            window.__phaserGame?.registry?.set?.('titleThumbsPick', current);
+          }
+          return;
+        }
+        // Update the visual FIRST — directly mark the clicked
+        // button.  Doesn't depend on the game-side get()
+        // returning the new value (scene.restart inside set()
+        // can interfere with that read on iOS).
+        document.querySelectorAll('.phone-hit.selected').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        positionSelectionRing();
+        // Then push to the game.
+        window.__steeringMode?.set?.(mode);
+      };
+      document.querySelectorAll('.phone-hit[data-action="tap"], .phone-hit[data-action="tilt"], .phone-hit[data-action="lr"]')
+        .forEach(btn => {
+          const h = handleSteerSelect(btn);
+          btn.addEventListener('pointerup', h, { passive: false });
+          btn.addEventListener('click',     h, { passive: false });
+        });
+
+      // ── In-world party-time clock over the Calendar ───────────────────
+      // The Phaser side ticks _partyClockSec (real-time countdown).  Map
+      // the elapsed fraction to 2 PM → 8 PM (6-hour span).
+      const clockEl = document.getElementById('phone-clock');
+      const formatPhoneTime = () => {
+        const game = window.__phaserGame;
+        const scene = game?.scene?.getScene?.('Game');
+        if (!scene) return '— : — PM';
+        const total = scene._partyClockTotalSec || (scene._partyClockSec ? null : null);
+        const remain = scene._partyClockSec ?? 0;
+        const partyTotal = total
+          ?? (typeof scene._partyClockSecMax !== 'undefined' ? scene._partyClockSecMax : 40 * 60);
+        // Find difficulty's total — fall back to detection from remain at start.
+        // 2:00 PM = 14:00.  8:00 PM = 20:00.  6h span = 360 min.
+        const elapsedFrac = Math.max(0, Math.min(1.5, 1 - (remain / partyTotal)));
+        const totalMin = elapsedFrac * 360;
+        const hour24   = 14 + Math.floor(totalMin / 60);
+        const min      = Math.floor(totalMin % 60);
+        const ampm     = (hour24 % 24) >= 12 ? 'PM' : 'AM';
+        const hour12   = ((hour24 % 12) === 0) ? 12 : (hour24 % 12);
+        const mm       = String(min).padStart(2, '0');
+        return `${hour12}:${mm} ${ampm}`;
+      };
+      // ── Top weather widget — location name + temp + weather symbol ────
+      const locEl  = document.getElementById('phone-loc');
+      const tempEl = document.getElementById('phone-temp');
+      const wxEl   = document.getElementById('phone-wx');
+      const WX_SYMBOL = { clear: '☀️', rain: '🌧️', snow: '❄️' };
+      const updateWeatherWidget = () => {
+        const L = window.__location?.get?.();
+        if (!L) return;
+        if (locEl)  locEl.textContent  = (L.name || '').toUpperCase();
+        if (tempEl) tempEl.textContent = `${L.tempF}°`;
+        if (wxEl)   wxEl.textContent   = WX_SYMBOL[L.weather] || '☀️';
+      };
+
+      const tickClock = () => {
+        clockEl.textContent = formatPhoneTime();
+        updateWeatherWidget();
+        // Sync the 🔇 badge on the music tile with whatever the game
+        // currently thinks audio.muted is, so the in-game pause-menu
+        // mute and the long-press mute stay visually linked.
+        if (typeof applyMusicMutedIndicator === 'function') applyMusicMutedIndicator();
+      };
+      setInterval(tickClock, 1000);
+      updateWeatherWidget();
+
+      // ── Map modal ─────────────────────────────────────────────────────
+      const mapModal   = document.getElementById('phone-map');
+      const mapSvg     = document.getElementById('phone-map-svg');
+      const mapMile    = document.getElementById('phone-map-mile');
+      const mapStops   = document.getElementById('phone-map-stops');
+      const mapClose   = document.getElementById('phone-map-close');
+      // Amenity → business logo PNG (west/east brand split, matching the
+      // rest-stop screens: CarGo/Huff's gas, Lord/SUCK dealer, etc.).
+      const BIZ_LOGO = (a, isWest) => ({
+        gas:     isWest ? 'cargo.png' : 'huffs.png',
+        hunting: 'cowbellas.png',
+        camp:    'aok.png',
+        dealer:  isWest ? 'lord.png' : 'suck.png',
+        drugs:   'pharmabros.png',
+        parkride: 'park-and-ride.png',
+      }[a] || null);
+      // I-90 → WA-26 → US-195 → WA-270 waypoints (mile, lat, lon).
+      const WAYPOINTS = [
+        [  0, 47.580, -122.390],
+        [  5, 47.598, -122.330],
+        [9.5, 47.570, -122.222],
+        [12.5,47.611, -122.180],
+        [ 18, 47.530, -122.033],
+        [ 25, 47.528, -121.825],
+        [ 32, 47.493, -121.789],
+        [ 53, 47.424, -121.413],
+        [ 70, 47.243, -121.187],
+        [ 84, 47.196, -120.937],
+        [101, 47.071, -120.661],
+        [109, 46.995, -120.547],
+        [137, 46.948, -119.978],
+        [158, 46.904, -119.629],
+        [184, 46.826, -119.176],
+        [205, 46.759, -118.825],
+        [228, 46.755, -118.310],
+        [253, 46.810, -117.873],
+        [274, 46.877, -117.364],
+        [289, 46.731, -117.180],
+      ];
+      const STOPS = [
+        { mile:   5, name: 'Seattle' },
+        { mile: 9.5, name: 'Mercer Island' },
+        { mile:12.5, name: 'Bellevue' },
+        { mile:  18, name: 'Issaquah' },
+        { mile:  25, name: 'Snoqualmie' },
+        { mile:  32, name: 'North Bend' },
+        { mile:  53, name: 'Snoqualmie Pass' },
+        { mile:  70, name: 'Easton' },
+        { mile:  84, name: 'Cle Elum' },
+        { mile: 101, name: 'Thorp' },
+        { mile: 109, name: 'Ellensburg' },
+        { mile: 137, name: 'Vantage' },
+        { mile: 158, name: 'Royal City' },
+        { mile: 184, name: 'Othello' },
+        { mile: 205, name: 'Hatton' },
+        { mile: 228, name: 'Washtucna' },
+        { mile: 253, name: 'La Crosse' },
+        { mile: 274, name: 'Colfax' },
+        { mile: 289, name: 'Pullman' },
+      ];
+      // Pre-compute lat/lon bounds.  The ~290-mile route runs mostly W→E,
+      // so we lay it out VERTICALLY on the tall portrait SVG to use the
+      // height: longitude → vertical axis (start at top, end at bottom),
+      // latitude → horizontal axis with NORTH facing RIGHT.  That's a
+      // 90°-clockwise rotation of a standard north-up map (north→right,
+      // east→down), which is geographically correct and gives the route
+      // far more room than cramming it across the narrow width.
+      let mapBounds = null;
+      const fitMap = () => {
+        let latMin = Infinity, latMax = -Infinity, lonMin = Infinity, lonMax = -Infinity;
+        for (const [, lat, lon] of WAYPOINTS) {
+          if (lat < latMin) latMin = lat;  if (lat > latMax) latMax = lat;
+          if (lon < lonMin) lonMin = lon;  if (lon > lonMax) lonMax = lon;
+        }
+        mapBounds = {
+          latMin, latMax, lonMin, lonMax,
+          latSpan: (latMax - latMin) || 0.001,
+          lonSpan: (lonMax - lonMin) || 0.001,
+        };
+      };
+      fitMap();
+      const project = (lat, lon) => {
+        // viewBox 100×200.  Single scale (no distortion) so the route keeps
+        // its true shape, just rotated 90° CW.
+        const padX = 16, padTop = 20, padBot = 14;
+        const innerW = 100 - padX * 2;
+        const innerH = 200 - padTop - padBot;
+        const s = Math.min(innerW / mapBounds.latSpan, innerH / mapBounds.lonSpan);
+        const latMid = (mapBounds.latMin + mapBounds.latMax) / 2;
+        const x = 50 + (lat - latMid) * s;                  // north (+lat) → right
+        const y = padTop + (lon - mapBounds.lonMin) * s;    // west→top, east→bottom
+        return [x, y];
+      };
+      const milePoint = (m) => {
+        // Linear interp between waypoint pairs.
+        for (let i = 0; i < WAYPOINTS.length - 1; i++) {
+          const [m0, la0, lo0] = WAYPOINTS[i];
+          const [m1, la1, lo1] = WAYPOINTS[i+1];
+          if (m >= m0 && m <= m1) {
+            const t = (m - m0) / Math.max(0.001, m1 - m0);
+            return project(la0 + (la1 - la0) * t, lo0 + (lo1 - lo0) * t);
+          }
+        }
+        return project(...WAYPOINTS[WAYPOINTS.length - 1].slice(1));
+      };
+      const renderMap = () => {
+        // Build the polyline + rest stop dots + player dot.
+        const pathPts = [];
+        for (let i = 0; i < WAYPOINTS.length - 1; i++) {
+          const [m0, la0, lo0] = WAYPOINTS[i];
+          const [m1, la1, lo1] = WAYPOINTS[i+1];
+          const span = m1 - m0;
+          const steps = Math.max(1, Math.ceil(span / 5));
+          for (let k = 0; k <= steps; k++) {
+            const t = k / steps;
+            pathPts.push(project(la0 + (la1 - la0) * t, lo0 + (lo1 - lo0) * t));
+          }
+        }
+        const d = pathPts.map(([x, y], i) => (i ? 'L' : 'M') + x.toFixed(2) + ' ' + y.toFixed(2)).join(' ');
+        const mileNow = ((window.__phaserGame?.scene?.getScene?.('Game')?._odometer) ?? 0);
+        const [px, py] = milePoint(mileNow);
+        // Greedy vertical de-confliction: tight clusters (the Seattle metro
+        // stops) would otherwise stack their labels on top of one another, so
+        // nudge each label below the previous one ON THE SAME SIDE and draw a
+        // faint leader back to its dot.  STOPS are in mile order = increasing
+        // y, so a single top-to-bottom pass per side suffices.
+        const lastLabelY = { start: -Infinity, end: -Infinity };
+        const LABEL_GAP = 3.0;
+        const stopsSvg = STOPS.map(s => {
+          const [sx, sy] = milePoint(s.mile);
+          // Dot on the left half → label to its right; right half → left,
+          // so names don't run off either edge of the narrow SVG.
+          const onLeft = sx <= 50;
+          const lx = onLeft ? sx + 2.5 : sx - 2.5;
+          const anchor = onLeft ? 'start' : 'end';
+          let ly = sy + 0.9;
+          if (ly - lastLabelY[anchor] < LABEL_GAP) ly = lastLabelY[anchor] + LABEL_GAP;
+          lastLabelY[anchor] = ly;
+          const leader = (ly - (sy + 0.9) > 0.4)
+            ? `<line x1="${sx.toFixed(2)}" y1="${sy.toFixed(2)}" x2="${lx.toFixed(2)}" y2="${(ly - 0.9).toFixed(2)}" stroke="#FFFFFF" stroke-width="0.25" opacity="0.4"/>`
+            : '';
+          // Transparent larger hit circle for easy tapping (Custom-only warp).
+          return `${leader}<circle class="map-warp-hit" data-mile="${s.mile}" cx="${sx.toFixed(2)}" cy="${sy.toFixed(2)}" r="3.4" fill="transparent" style="cursor:pointer"/>
+                  <circle cx="${sx.toFixed(2)}" cy="${sy.toFixed(2)}" r="1.4" fill="#FFE066" stroke="#000" stroke-width="0.4"/>
+                  <text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-size="2.6" fill="#FFFFFF" font-family="Helvetica" text-anchor="${anchor}">${s.name}</text>`;
+        }).join('');
+        // Compass needle (top-left) — north is to the RIGHT on this rotated
+        // map, so the RED (north) half points right, the pale half left, and
+        // the N is red like a real compass.
+        const compass = `
+          <g opacity="0.95">
+            <polygon points="12,11.7 18.4,13 12,14.3" fill="#FF2244"/>
+            <polygon points="12,11.7 5.6,13 12,14.3" fill="#E8ECF2"/>
+            <circle cx="12" cy="13" r="0.9" fill="#0a0f1a" stroke="#FFFFFF" stroke-width="0.3"/>
+            <text x="19.4" y="14.3" font-size="3.6" fill="#FF2244" font-family="Helvetica" font-weight="bold">N</text>
+          </g>`;
+        mapSvg.innerHTML = `
+          <path d="${d}" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+          ${stopsSvg}
+          ${compass}
+          <circle cx="${px}" cy="${py}" r="3" fill="#FF2244" stroke="#FFF" stroke-width="0.8">
+            <animate attributeName="r" values="3;4.2;3" dur="1s" repeatCount="indefinite"/>
+          </circle>
+          <text x="${px}" y="${(py - 5).toFixed(2)}" font-size="3" fill="#FF6688" stroke="#000" stroke-width="0.6" paint-order="stroke" font-family="Helvetica" font-weight="bold" text-anchor="middle">Mile ${Math.round(mileNow)}</text>
+        `;
+        mapMile.textContent = `Mile ${Math.round(mileNow)} / 293`;
+        // Next rest stop ahead — business logos stacked vertically on the
+        // right of the map under an underlined "NEXT REST STOP" title.
+        if (mapStops) {
+          const stops = (window.__restStops || []);
+          const next  = stops.find(s => (s.mileage ?? 0) > mileNow + 0.3);
+          const isWest = (next?.mileage ?? 0) < 100;
+          const logos = !next ? [] : (next.amenities || [])
+            .map(a => BIZ_LOGO(a, isWest)).filter(Boolean);
+          if (next && logos.length) {
+            mapStops.innerHTML = `<div class="np-title">NEXT REST STOP</div>`
+              + logos.map(f => `<img src="assets/businesses/${f}" alt="">`).join('');
+            mapStops.style.display = 'flex';
+          } else {
+            mapStops.innerHTML = '';
+            mapStops.style.display = 'none';
+          }
+        }
+      };
+      const openMap = () => { mapModal.classList.add('open'); renderMap(); };
+      const closeMap = () => { mapModal.classList.remove('open'); markModalClosing(); };
+      addTap(mapClose, closeMap);
+      addTap(document.querySelector('.phone-hit[data-action="maps"]'), openMap);
+      // Tap a stop on the map to teleport there (Custom mode only).  Delegated
+      // on the persistent SVG element (renderMap rewrites its innerHTML).
+      const mapWarpToast = (msg, good) => {
+        const t = document.createElement('div');
+        t.textContent = msg;
+        t.style.cssText = 'position:fixed;left:50%;bottom:14%;transform:translateX(-50%);z-index:100001;'
+          + 'background:#04101e;color:' + (good ? '#66FF99' : '#FFAA66') + ';border:2px solid '
+          + (good ? '#66FF99' : '#FFAA66') + ';border-radius:10px;padding:12px 22px;'
+          + 'font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;';
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 1800);
+      };
+      mapSvg.addEventListener('click', (ev) => {
+        const hit = ev.target?.closest?.('.map-warp-hit');
+        if (!hit) return;
+        const mile = Number(hit.getAttribute('data-mile'));
+        if (!Number.isFinite(mile)) return;
+        const res = window.__warpTo?.(mile);
+        if (res?.ok) { mapWarpToast('✓ Warped to mile ' + Math.round(mile), true); renderMap(); }
+        else if (res?.reason === 'not-custom') mapWarpToast('Teleport is Custom-mode only', false);
+        else mapWarpToast('No active run to warp', false);
+      });
+      // While the modal is open, re-render the player dot every 2 s so
+      // the dot tracks live mileage if the game is mid-pause.
+      setInterval(() => { if (mapModal.classList.contains('open')) renderMap(); }, 2000);
+
+      // ── Garage modal ──────────────────────────────────────────────────
+      const garageModal = document.getElementById('phone-garage');
+      const garageList  = document.getElementById('phone-garage-list');
+      const garageClose = document.getElementById('phone-garage-close');
+      const renderGarage = () => {
+        const cars = window.__garage?.list?.() ?? [];
+        garageList.innerHTML = cars.map(c => {
+          const accLabels = [];
+          if (c.accessories.bumper)   accLabels.push('<span class="badge">🛡 Bumper</span>');
+          if (c.accessories.nos > 0)  accLabels.push(`<span class="badge">⚡ NOS L${c.accessories.nos}</span>`);
+          if (c.accessories.traction) accLabels.push('<span class="badge">❄️ Traction</span>');
+          const accRow = accLabels.length ? accLabels.join('') : '<span style="color:#557;">— no accessories —</span>';
+          const imgHtml = c.imageUrl
+            ? `<img class="car-img" src="${c.imageUrl}" alt="${c.label}" onerror="this.style.display='none'"/>`
+            : `<div class="car-img" style="background:#${(c.tint).toString(16).padStart(6,'0')}; width:22%; height:8vmin; border-radius:4px;"></div>`;
+          return `<div class="row ${c.current ? 'current' : ''}" data-id="${c.id}">
+            <div style="display:flex; flex-direction:column; align-items:center; width:30%;">
+              <div class="acc">${accRow}</div>
+              ${imgHtml}
+            </div>
+            <div class="info">
+              <div class="name">${c.label}${c.current ? ' ★' : ''}</div>
+              <div class="stats">${c.hp} HP · ${c.rangeMi} mi · ${c.topMph} mph · ${c.drive} · ${c.fuel}</div>
+            </div>
+          </div>`;
+        }).join('');
+        garageList.querySelectorAll('.row').forEach(row => {
+          row.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const id = row.dataset.id;
+            window.__garage?.select?.(id);
+            setPhoneMenuBg(id);   // re-skin the phone menu to the new car
+            // Defer the re-paint a frame: renderGarage() rebuilds garageList
+            // via innerHTML, destroying THIS row mid-gesture — on iOS that
+            // strands the touch and kills game input after returning to play.
+            requestAnimationFrame(renderGarage);   // re-paint with new "current"
+          });
+        });
+      };
+      const openGarage  = () => { renderGarage(); syncMenuBg(); garageModal.classList.add('open'); };
+      const closeGarage = () => { garageModal.classList.remove('open'); markModalClosing(); };
+      addTap(garageClose, closeGarage);
+      addTap(document.querySelector('.phone-hit[data-action="garage"]'), openGarage);
+
+      // ── Checkpoint hit zone — warps to last-reached rest stop ─────────
+      addTap(document.querySelector('.phone-hit[data-action="checkpoint"]'), () => {
+        const ok = window.__checkpoint?.warpToLast?.();
+        if (!ok) {
+          // Visual feedback when there is no checkpoint to warp to.
+          const btn = document.querySelector('.phone-hit[data-action="checkpoint"]');
+          if (btn) {
+            btn.classList.add('selected');
+            setTimeout(() => btn.classList.remove('selected'), 600);
+          }
+        }
+      });
+
+      // ── Start Over hit zone — restart the run from mile 0 with the
+      //    same vehicle.  Confirmation popup first so the player can't
+      //    accidentally lose progress.  Game stays paused in portrait;
+      //    rotating to landscape arms tap-to-resume the fresh run.
+      // Repurposed to SAVE the current run in place (no reset, stay in game).
+      // NOTE: the tile ART still reads "START OVER" — it's baked into the menu
+      // skin PNGs (iphone_menu_bg_*.png); relabel the art to "SAVE" later.
+      addTap(document.querySelector('.phone-hit[data-action="startover"]'), () => {
+        const res = window.__saveRun?.();
+        const ok = !!(res && res.ok);
+        const t = document.createElement('div');
+        t.textContent = ok ? '✓ Game saved' : 'No active run to save';
+        t.style.cssText = 'position:fixed;left:50%;bottom:14%;transform:translateX(-50%);z-index:100001;'
+          + 'background:#04101e;color:' + (ok ? '#66FF99' : '#FFAA66') + ';border:2px solid '
+          + (ok ? '#66FF99' : '#FFAA66') + ';border-radius:10px;padding:12px 22px;'
+          + 'font:bold 16px Arial,Helvetica,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.5);'
+          + 'pointer-events:none;opacity:0;transition:opacity .15s;';
+        document.body.appendChild(t);
+        requestAnimationFrame(() => { t.style.opacity = '1'; });
+        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, 1400);
+      });
+
+      // ── Main Menu hit zone REMOVED (2026-06-19) — the bottom bar reads
+      //    "ROTATE PHONE TO ENTER GAME PLAY"; a hit zone there that returned to
+      //    the title (losing the run) was confusing.  window.__mainMenu still
+      //    exists for any other caller.
+
+      // ── Desktop "enter gameplay" button — the click stand-in for rotating
+      //    the phone back to landscape.  Hides the iPhone menu and resumes
+      //    the run (window.__phoneMenu.close).  Desktop-only via CSS.
+      const enterGameplayBtn = document.getElementById('phone-enter-gameplay');
+      if (enterGameplayBtn) {
+        enterGameplayBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.__phoneMenu?.close?.();
+        });
+      }
+
+      // ── Music app modal ───────────────────────────────────────────────
+      const musicModal     = document.getElementById('phone-music');
+      const musicTitle     = document.getElementById('phone-music-title');
+      const musicBody      = document.getElementById('phone-music-body');
+      const musicShuffle   = document.getElementById('phone-music-shuffle');
+      const musicShuffleG  = document.getElementById('phone-music-shuffle-genre');
+      const musicClose     = document.getElementById('phone-music-close');
+      let musicGenreIdx = null;        // null = list view; integer = song view
+
+      // ── Now-playing scrubber — live progress + drag-to-seek ───────────
+      const pmnNow  = document.getElementById('phone-music-now');
+      const pmnName = document.getElementById('pmn-name');
+      const pmnBar  = document.getElementById('pmn-bar');
+      const pmnFill = document.getElementById('pmn-fill');
+      const pmnKnob = document.getElementById('pmn-knob');
+      const pmnCur  = document.getElementById('pmn-cur');
+      const pmnDur  = document.getElementById('pmn-dur');
+      const fmtMS   = (s) => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+      let pmnDragging = false;
+      const pmnSetPct = (pct) => { pct = Math.max(0, Math.min(100, pct)); pmnFill.style.width = pct + '%'; pmnKnob.style.left = pct + '%'; };
+      const pmnFrac = (e) => { const r = pmnBar.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / Math.max(1, r.width))); };
+      const pmnTick = () => {
+        if (!musicModal.classList.contains('open')) return;
+        const p = window.__music?.progress?.();
+        if (p && p.duration > 0) {
+          pmnNow.style.display = 'block';
+          pmnName.textContent = p.name || '♪ Now Playing';
+          pmnDur.textContent = fmtMS(p.duration);
+          if (!pmnDragging) { pmnSetPct((p.time / p.duration) * 100); pmnCur.textContent = fmtMS(p.time); }
+        } else {
+          pmnNow.style.display = 'none';
+        }
+      };
+      setInterval(pmnTick, 250);
+      const pmnPreview = (e) => {
+        const f = pmnFrac(e); pmnSetPct(f * 100);
+        const p = window.__music?.progress?.(); if (p) pmnCur.textContent = fmtMS(f * p.duration);
+      };
+      pmnBar.addEventListener('pointerdown', (e) => { pmnDragging = true; try { pmnBar.setPointerCapture(e.pointerId); } catch (_) {} pmnPreview(e); });
+      window.addEventListener('pointermove', (e) => { if (pmnDragging) pmnPreview(e); });
+      window.addEventListener('pointerup', (e) => { if (!pmnDragging) return; pmnDragging = false; window.__music?.seek?.(pmnFrac(e)); pmnTick(); });
+
+      const prettyTrack = (url) => {
+        // 'assets/music/country/blue_lights.mp3' → 'Blue Lights'
+        const f = url.split('/').pop().replace(/\.mp3$/i, '');
+        return f.replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      };
+      // Cross-genre playlist — ORDERED array of selected track URLs.
+      // Pre-filled with EVERY track across every station the first
+      // time the music app opens.  Order matters for the Selected
+      // view's reorder controls and the PLAY button (plays in
+      // playlist order).  `playlistHas` / Add / Remove keep the API
+      // close to the old Set so the rest of the renderer didn't
+      // change much.
+      const playlist = [];
+      const playlistHas    = (url) => playlist.indexOf(url) !== -1;
+      const playlistAdd    = (url) => { if (!playlistHas(url)) playlist.push(url); };
+      const playlistRemove = (url) => { const i = playlist.indexOf(url); if (i !== -1) playlist.splice(i, 1); };
+      const playlistMove   = (url, dir) => {
+        const i = playlist.indexOf(url);
+        if (i === -1) return;
+        const j = i + dir;
+        if (j < 0 || j >= playlist.length) return;
+        [playlist[i], playlist[j]] = [playlist[j], playlist[i]];
+      };
+      let _playlistInitialized = false;
+      const ensurePlaylistDefaults = () => {
+        if (_playlistInitialized) return;
+        const stations = window.__music?.list?.() ?? [];
+        if (!stations.length) return;            // music API not ready yet
+        for (const s of stations) for (const t of (s.tracks ?? [])) playlistAdd(t);
+        _playlistInitialized = true;
+      };
+      // View mode — 'main' (genre grid / song list) or 'selected'
+      // (flat ordered list of the playlist with reorder arrows).
+      let musicView = 'main';
+      const _renderMusicNow = () => {
+        const stations = window.__music?.list?.() ?? [];
+        // If the audio system hasn't registered with the Phaser registry
+        // yet (cold-load race between BootScene boot + the player
+        // opening the music app), show a loading message and re-render
+        // shortly.  After 3 seconds of failed polls we offer a manual
+        // retry button — covers the case where Phaser boot stalled
+        // (failed module fetch, 404'd asset, etc.) and never finishes.
+        if (!stations.length) {
+          renderMusic._loadingSince = renderMusic._loadingSince || Date.now();
+          const stuckMs = Date.now() - renderMusic._loadingSince;
+          musicTitle.textContent = 'MUSIC';
+          musicShuffle.style.display    = 'none';
+          musicShuffleG.style.display   = 'none';
+          musicClose.textContent        = 'CLOSE';
+          musicBody.className = '';
+          if (stuckMs > 3000) {
+            musicBody.innerHTML = `
+              <div style="color:#88A; text-align:center; padding:8vmin; font-family:Helvetica;">
+                <div style="margin-bottom:3vmin;">Music is taking longer than usual to load.</div>
+                <button id="phone-music-retry" style="padding:2vmin 5vmin; background:#FFFFFF; color:#1E5BB8; border:2px solid #000; border-radius:6px; font-family:Impact,sans-serif; font-size:4vmin; cursor:pointer;">RETRY</button>
+              </div>`;
+            const retryBtn = musicBody.querySelector('#phone-music-retry');
+            if (retryBtn) addTap(retryBtn, () => {
+              window.__music?.warmup?.();
+              renderMusic._loadingSince = 0;
+              renderMusic();
+            });
+          } else {
+            musicBody.innerHTML = `<div style="color:#88A; text-align:center; padding:8vmin; font-family:Helvetica;">Loading songs…</div>`;
+          }
+          clearTimeout(renderMusic._retryTimer);
+          renderMusic._retryTimer = setTimeout(() => {
+            if (musicModal.classList.contains('open')) renderMusic();
+          }, 250);
+          return;
+        }
+        // Audio is ready — clear the "stuck since" marker so future
+        // empty renders (which shouldn't happen) get fresh treatment.
+        renderMusic._loadingSince = 0;
+        const cur      = window.__music?.current?.();
+        // Lazy first-open population of the cross-genre playlist set.
+        ensurePlaylistDefaults();
+        // Bottom button reads CLOSE on the genre grid, BACK in a song
+        // list OR the selected view (both pop one level up to the
+        // genre grid).
+        // Top level (genre grid) → the corner ✕ closes the app, so hide the
+        // bottom button.  In a sub-view it becomes a "← BACK" nav button.
+        if (musicGenreIdx == null && musicView !== 'selected') {
+          musicClose.style.display = 'none';
+        } else {
+          musicClose.style.display = '';
+          musicClose.textContent = '← BACK';
+        }
+        // Visible scope — Play / Clear only operate on songs the
+        // player can currently see.
+        let visibleTracks;
+        if (musicView === 'selected') {
+          visibleTracks = playlist.slice();
+        } else if (musicGenreIdx == null) {
+          visibleTracks = stations.flatMap(s => s.tracks ?? []);
+        } else {
+          visibleTracks = stations[musicGenreIdx]?.tracks ?? [];
+        }
+        const visibleSelected = visibleTracks.filter(t => playlistHas(t));
+        // Playlist bar — always shown when there's at least one
+        // selection.  Adds a VIEW toggle so the player can flip to a
+        // flat ordered list of just their selected songs.
+        const plCount = visibleSelected.length;
+        const viewLbl = (musicView === 'selected') ? 'GENRES' : 'SELECTED';
+        const playlistBar = (plCount > 0 || musicView === 'selected')
+          ? `<div class="playlist-bar">
+               <div class="count">▶ Playlist: ${playlist.length} song${playlist.length === 1 ? '' : 's'}</div>
+               <button id="phone-music-pl-view">${viewLbl}</button>
+               <button id="phone-music-pl-play">PLAY</button>
+               <button id="phone-music-pl-clear" class="clear">CLEAR</button>
+             </div>`
+          : '';
+        if (musicView === 'selected') {
+          // Flat ordered list of selected songs with reorder + remove.
+          musicTitle.textContent = 'PLAYLIST';
+          musicShuffle.style.display = 'none';
+          musicShuffleG.style.display = 'none';
+          const tracks = playlist.slice();
+          const trackRows = tracks.length
+            ? `<div class="song-list">` + tracks.map((url, i) => {
+                const stIdx = stations.findIndex(s => (s.tracks ?? []).includes(url));
+                const stName = stIdx !== -1 ? (stations[stIdx]?.name ?? '') : '';
+                return `<div class="song" data-url="${url}">
+                  <div class="reorder">
+                    <button class="reorder-btn up"   data-url="${url}" aria-label="Move up"   ${i === 0 ? 'disabled' : ''}>▲</button>
+                    <button class="reorder-btn down" data-url="${url}" aria-label="Move down" ${i === tracks.length - 1 ? 'disabled' : ''}>▼</button>
+                  </div>
+                  <span class="num">${i + 1}</span>
+                  <span class="name">${prettyTrack(url)}${stName ? ` <span style="opacity:0.55;font-size:2.4vmin;">· ${stName}</span>` : ''}</span>
+                  <button class="song-check checked" data-url="${url}" aria-label="Remove from playlist">✓</button>
+                </div>`;
+              }).join('') + `</div>`
+            : `<div style="color:#88A; text-align:center; padding:6vmin;">No songs in the playlist.  Tap GENRES to add some.</div>`;
+          musicBody.className = '';
+          musicBody.innerHTML = playlistBar + trackRows;
+          musicBody.querySelectorAll('.song').forEach(row => {
+            const url = row.dataset.url;
+            // Tap the name area → play this track.
+            const nameEl = row.querySelector('.name');
+            if (nameEl) addTap(nameEl, () => {
+              window.__music?.playTrack?.(url);
+              renderMusic();
+            });
+            // Up / down arrows reorder within the playlist.
+            const up   = row.querySelector('.reorder-btn.up');
+            const down = row.querySelector('.reorder-btn.down');
+            if (up   && !up.disabled)   addTap(up,   () => { playlistMove(url, -1); renderMusic(); });
+            if (down && !down.disabled) addTap(down, () => { playlistMove(url, +1); renderMusic(); });
+            // Checkbox in selected view = "remove from playlist".
+            const cb = row.querySelector('.song-check');
+            if (cb) addTap(cb, () => { playlistRemove(url); renderMusic(); });
+
+            // Long-press drag-to-reorder.  500ms hold without moving
+            // > 8 px arms drag mode; while dragging the row follows
+            // the finger Y, swapping with whichever sibling it
+            // overlaps.  Pointerup commits + re-renders.
+            let holdTimer = null;
+            let dragging  = false;
+            let startY    = 0;
+            let baselineY = 0;
+            let lastDragEnd = 0;
+            const cancelHold = () => {
+              if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+            };
+            // Eat the click that iOS fires AFTER pointerup whenever
+            // a drag just finished, so the song-name's addTap doesn't
+            // play the (now-relocated) song.
+            row.addEventListener('click', (e) => {
+              if (Date.now() - lastDragEnd < 350) {
+                e.stopPropagation();
+                e.preventDefault();
+              }
+            }, { capture: true });
+            row.addEventListener('pointerdown', (e) => {
+              // Skip ONLY the buttons that need their own short-tap
+              // handlers (up/down arrows + checkbox).  The song name
+              // is the main grab-handle for the long-press drag, so
+              // it's included here.  If the user releases under 500
+              // ms, no drag starts and the name's addTap can still
+              // fire to play the track.
+              if (e.target.closest('.reorder-btn') || e.target.closest('.song-check')) return;
+              startY    = e.clientY;
+              baselineY = e.clientY;
+              holdTimer = setTimeout(() => {
+                dragging = true;
+                row.classList.add('dragging');
+                // Once drag is active, take the gesture away from
+                // iOS native pan-y scroll so pointermove fires into
+                // our handler instead of becoming list scroll.
+                row.style.touchAction = 'none';
+                try { row.setPointerCapture?.(e.pointerId); } catch (_) {}
+              }, 500);
+            }, { passive: false });
+            row.addEventListener('pointermove', (e) => {
+              // Cancel pending long-press if the user starts moving
+              // before the 500ms tick.
+              if (!dragging) {
+                if (Math.abs(e.clientY - startY) > 8) cancelHold();
+                return;
+              }
+              e.preventDefault();
+              const delta = e.clientY - baselineY;
+              row.style.transform = `translateY(${delta}px)`;
+              // Find any sibling whose vertical centre is now under
+              // the dragged row's centre — swap them in playlist + DOM.
+              const myRect = row.getBoundingClientRect();
+              const myMid  = myRect.top + myRect.height / 2;
+              const siblings = [...row.parentElement.querySelectorAll('.song:not(.dragging)')];
+              for (const sib of siblings) {
+                const sRect = sib.getBoundingClientRect();
+                if (myMid > sRect.top && myMid < sRect.bottom) {
+                  const myIdx  = playlist.indexOf(url);
+                  const sibUrl = sib.dataset.url;
+                  const sibIdx = playlist.indexOf(sibUrl);
+                  if (myIdx === -1 || sibIdx === -1) break;
+                  // Swap in the playlist array.
+                  [playlist[myIdx], playlist[sibIdx]] = [playlist[sibIdx], playlist[myIdx]];
+                  // Move in DOM so visual order matches; reset
+                  // baseline so transform stays anchored to the new
+                  // resting position.
+                  if (sibIdx > myIdx) sib.after(row);
+                  else                sib.before(row);
+                  const newRect = row.getBoundingClientRect();
+                  baselineY = e.clientY - (newRect.top - sRect.top);
+                  row.style.transform = `translateY(${e.clientY - baselineY}px)`;
+                  break;
+                }
+              }
+            }, { passive: false });
+            const finishDrag = (e) => {
+              cancelHold();
+              if (!dragging) return;
+              // Eat the pointerup so the song-name's addTap doesn't
+              // also fire (which would play the track AND re-render,
+              // wiping the dragged row mid-finish).
+              if (e) {
+                try { e.stopPropagation(); } catch (_) {}
+                try { e.preventDefault();  } catch (_) {}
+              }
+              dragging = false;
+              row.classList.remove('dragging');
+              row.style.transform = '';
+              // Restore native list scrolling on this row.
+              row.style.touchAction = '';
+              lastDragEnd = Date.now();
+              renderMusic();
+            };
+            // Capture-phase so the row's pointerup runs BEFORE the
+            // name's bubble-phase addTap and can stopPropagation when
+            // a drag is finishing.
+            row.addEventListener('pointerup',     finishDrag, { capture: true, passive: false });
+            row.addEventListener('pointercancel', finishDrag, { capture: true });
+          });
+        } else if (musicGenreIdx == null) {
+          // Genre grid view
+          musicTitle.textContent = 'MUSIC';
+          musicShuffle.style.display = '';
+          musicShuffleG.style.display = 'none';
+          musicBody.className = '';
+          musicBody.innerHTML = playlistBar + `<div class="genre-grid">` + stations.map((s) => {
+            const tracks      = s.tracks ?? [];
+            const tracksCount = tracks.length;
+            const playing     = cur && cur.index === s.index;
+            const checkedCnt  = tracks.reduce((n, t) => n + (playlistHas(t) ? 1 : 0), 0);
+            const allChecked  = tracksCount > 0 && checkedCnt === tracksCount;
+            const someChecked = checkedCnt > 0 && !allChecked;
+            const checkGlyph  = allChecked ? '✓' : (someChecked ? '–' : '');
+            const checkClass  = allChecked ? 'checked' : (someChecked ? 'partial' : '');
+            const isDefault   = (window.__music?.getDefaultStation?.() ?? 0) === s.index;
+            return `<div class="genre ${playing ? 'playing' : ''}" data-idx="${s.index}" style="border-color:${s.color};">
+              <button class="genre-check ${checkClass}" data-idx="${s.index}" aria-label="Toggle ${s.name} songs">${checkGlyph}</button>
+              <button class="genre-default ${isDefault ? 'on' : ''}" data-idx="${s.index}" aria-label="Set ${s.name} as default station">${isDefault ? '★' : '☆'}</button>
+              ${isDefault ? '<span class="genre-default-lbl">DEFAULT</span>' : ''}
+              <span class="genre-name" style="color:${s.color};">${s.name}</span><br/><span class="genre-count">${tracksCount} song${tracksCount === 1 ? '' : 's'}</span>
+            </div>`;
+          }).join('') + `</div>`;
+          musicBody.querySelectorAll('.genre').forEach(el => {
+            addTap(el, () => {
+              musicGenreIdx = parseInt(el.dataset.idx, 10);
+              renderMusic();
+            });
+            const cb = el.querySelector('.genre-check');
+            if (cb) addTap(cb, () => {
+              const idx = parseInt(cb.dataset.idx, 10);
+              const st  = stations[idx];
+              const ts  = st?.tracks ?? [];
+              if (!ts.length) return;
+              const allIn = ts.every(t => playlistHas(t));
+              if (allIn) ts.forEach(t => playlistRemove(t));
+              else       ts.forEach(t => playlistAdd(t));
+              renderMusic();
+            });
+            // Default-station star — persists settings.radio (boot default).
+            const def = el.querySelector('.genre-default');
+            if (def) addTap(def, () => {
+              window.__music?.setDefaultStation?.(parseInt(def.dataset.idx, 10));
+              renderMusic();
+            });
+          });
+        } else {
+          // Song list view for selected genre
+          const st = stations[musicGenreIdx];
+          musicTitle.textContent = st?.name ?? 'MUSIC';
+          musicShuffle.style.display = 'none';
+          musicShuffleG.style.display = (st?.tracks?.length ?? 0) > 1 ? '' : 'none';
+          const tracks = st?.tracks ?? [];
+          const backRow = `<button class="back-btn" id="phone-music-back">← GENRES</button>`;
+          const playingUrl = window.__music?.nowPlayingUrl?.() ?? '';
+          const trackRows = tracks.length
+            ? `<div class="song-list">` + tracks.map((url, i) => {
+                const checked = playlistHas(url);
+                const isPlaying = playingUrl && playingUrl.endsWith(url);
+                return `<div class="song${isPlaying ? ' playing' : ''}" data-url="${url}">
+                  <button class="song-check ${checked ? 'checked' : ''}" data-url="${url}" aria-label="Add to playlist">${checked ? '✓' : ''}</button>
+                  <span class="num">${i + 1}</span>
+                  <span class="name">${prettyTrack(url)}</span>
+                </div>`;
+              }).join('') + `</div>`
+            : `<div style="color:#88A; text-align:center; padding:6vmin;">This station is procedural — no individual tracks.</div>`;
+          musicBody.className = '';
+          musicBody.innerHTML = playlistBar + backRow + trackRows;
+          addTap(musicBody.querySelector('#phone-music-back'), () => {
+            musicGenreIdx = null;
+            renderMusic();
+          });
+          musicBody.querySelectorAll('.song').forEach(row => {
+            addTap(row, () => {
+              window.__music?.playTrack?.(row.dataset.url);
+              renderMusic();
+            });
+            const cb = row.querySelector('.song-check');
+            if (cb) addTap(cb, () => {
+              const url = cb.dataset.url;
+              if (playlistHas(url)) playlistRemove(url);
+              else                  playlistAdd(url);
+              renderMusic();
+            });
+          });
+        }
+        // Playlist-bar buttons — wired after every render since the
+        // HTML is rebuilt.  Both Play / Clear operate on visible
+        // scope; View flips between main + selected modes.
+        const plView  = musicBody.querySelector('#phone-music-pl-view');
+        const plPlay  = musicBody.querySelector('#phone-music-pl-play');
+        const plClear = musicBody.querySelector('#phone-music-pl-clear');
+        if (plView)  addTap(plView, () => {
+          musicView = (musicView === 'selected') ? 'main' : 'selected';
+          renderMusic();
+        });
+        if (plPlay)  addTap(plPlay, () => {
+          if (!visibleSelected.length) return;
+          window.__music?.playPlaylist?.(visibleSelected);
+        });
+        if (plClear) addTap(plClear, () => {
+          for (const t of visibleTracks) playlistRemove(t);
+          renderMusic();
+        });
+      };
+      // Defer every music re-render one frame.  renderMusic() rebuilds
+      // musicBody via innerHTML, which would destroy whatever track / genre /
+      // playlist button the player just tapped (or dragged) mid-touchend — on
+      // iOS that strands the touch and kills game input after returning to
+      // gameplay (same class as the Crush / Leaderboard bug).  Each handler's
+      // audio action (playTrack / shuffleAll / playStation) runs synchronously
+      // BEFORE this wrapper, so playback isn't delayed; only the DOM rebuild
+      // waits for the gesture to finish.  Internal retry/loading calls also
+      // route through here harmlessly.
+      const renderMusic = () => requestAnimationFrame(_renderMusicNow);
+      // Music-modal pause button — toggles audio.paused via the
+      // bridge.  Visual state updates from the audio system every
+      // render so it stays in sync if pause comes from somewhere else.
+      const musicPauseBtn = document.getElementById('phone-music-pause');
+      const applyMusicPauseBtn = () => {
+        // Reflect the real MUSIC paused state (holds until unpaused), not
+        // the game-pause volume duck.
+        const paused = !!window.__music?.isMusicPaused?.();
+        musicPauseBtn?.classList.toggle('paused', paused);
+        if (musicPauseBtn) musicPauseBtn.textContent = paused ? '▶' : '⏸';
+      };
+      if (musicPauseBtn) {
+        addTap(musicPauseBtn, () => {
+          window.__music?.toggleMusicPaused?.();
+          applyMusicPauseBtn();
+        });
+      }
+
+      // Volume slider — drives audio.volume directly through __music.
+      // Initialised once when the music modal first opens (when the
+      // game-side audio is sure to exist).
+      const volSlider = document.getElementById('phone-music-vol');
+      const volPct    = document.getElementById('phone-music-vol-pct');
+      const syncVolFromGame = () => {
+        const v = window.__music?.getVolume?.() ?? 0.32;
+        const pct = Math.round(v * 100);
+        if (volSlider) volSlider.value = String(pct);
+        if (volPct)    volPct.textContent = `${pct}%`;
+      };
+      const applyVolFromSlider = () => {
+        const pct = parseInt(volSlider?.value ?? '32', 10) || 0;
+        window.__music?.setVolume?.(pct / 100);
+        if (volPct) volPct.textContent = `${pct}%`;
+      };
+      if (volSlider) {
+        volSlider.addEventListener('input',  applyVolFromSlider, { passive: true });
+        volSlider.addEventListener('change', applyVolFromSlider, { passive: true });
+      }
+      const bgRadioToggle = document.getElementById('phone-music-bg');
+      const syncBgRadioFromGame = () => {
+        if (bgRadioToggle) bgRadioToggle.checked = !!window.__music?.isBackgroundRadioEnabled?.();
+      };
+      if (bgRadioToggle) {
+        bgRadioToggle.addEventListener('change', () => {
+          window.__music?.setBackgroundRadioEnabled?.(bgRadioToggle.checked);
+        }, { passive: true });
+      }
+
+      addTap(musicShuffle, () => {
+        window.__music?.shuffleAll?.();
+        renderMusic();
+      });
+      addTap(musicShuffleG, () => {
+        if (musicGenreIdx != null) window.__music?.playStation?.(musicGenreIdx);
+        renderMusic();
+      });
+      // Bottom button behavior — CLOSE on the genre grid (closes the
+      // whole music app, returns to the iPhone menu); BACK on the
+      // song-list view (returns to the genre grid).
+      addTap(musicClose, () => {
+        // SELECTED view → BACK to the genre grid.
+        if (musicView === 'selected') {
+          musicView = 'main';
+          musicGenreIdx = null;
+          renderMusic();
+          return;
+        }
+        // SONG list view → BACK to the genre grid.
+        if (musicGenreIdx != null) {
+          musicGenreIdx = null;
+          renderMusic();
+          return;
+        }
+        // GENRE grid view → CLOSE the music app.
+        musicModal.classList.remove('open');
+        releaseWakeLock();
+        markModalClosing();
+      });
+      // Corner ✕ — always fully closes the music app (matches every other menu).
+      addTap(document.getElementById('phone-music-x'), () => {
+        musicModal.classList.remove('open');
+        releaseWakeLock();
+        markModalClosing();
+      });
+      // Music app — short tap opens the modal; long-hold toggles mute
+      // without opening anything.  Visual indicator added below.
+      const musicHit = document.querySelector('.phone-hit[data-action="music"]');
+      const applyMusicMutedIndicator = () => {
+        const muted = !!window.__music?.isMuted?.();
+        musicHit?.classList.toggle('muted', muted);
+      };
+      // Screen wake lock — prevents iOS from sleeping the screen
+      // while the music modal is up.  When the screen sleeps, iOS
+      // suspends the AudioContext and the track silently dies a few
+      // seconds later (the "song crashes after ~30s" report).
+      let _wakeLock = null;
+      const requestWakeLock = async () => {
+        try {
+          if ('wakeLock' in navigator) {
+            _wakeLock = await navigator.wakeLock.request('screen');
+            _wakeLock.addEventListener?.('release', () => { _wakeLock = null; });
+          }
+        } catch (_) { /* unsupported / denied — silently fall through */ }
+      };
+      const releaseWakeLock = () => {
+        try { _wakeLock?.release?.(); } catch (_) {}
+        _wakeLock = null;
+      };
+      // Re-acquire the lock when the document becomes visible again
+      // (iOS auto-releases on tab switch).
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && musicModal.classList.contains('open')) {
+          requestWakeLock();
+        }
+      });
+      // When the player rotates to landscape, fully close the music
+      // modal — its state (wake lock, lingering pointer captures
+      // from a half-finished long-press, etc.) can otherwise block
+      // taps on the game canvas.  The song keeps playing; the modal
+      // just hides cleanly instead of staying "open" but invisible.
+      const closeMusicForGameplay = () => {
+        if (!musicModal.classList.contains('open')) return;     // nothing to clean up
+        musicModal.classList.remove('open');
+        releaseWakeLock();
+        // Reset any in-progress drag visuals on song rows so the
+        // next portrait open starts clean.
+        musicBody.querySelectorAll('.song.dragging').forEach(r => {
+          r.classList.remove('dragging');
+          r.style.transform = '';
+          r.style.touchAction = '';
+        });
+        // Belt-and-suspenders for iOS: if a song row had pointer
+        // capture during a scroll/tap near the bottom of the list,
+        // dropping the class alone may leave the just-finished gesture
+        // in a weird target state.  Rebuilding clears transient row
+        // listeners/capture targets while preserving playlist state.
+        musicBody.innerHTML = '';
+      };
+      const onMusicOrientationChange = () => {
+        const attempt = () => {
+          if (window.innerHeight > window.innerWidth) return;   // still portrait
+          closeMusicForGameplay();
+        };
+        // iOS reports old dimensions for the first orientation event
+        // surprisingly often, so try again after layout settles.
+        requestAnimationFrame(attempt);
+        setTimeout(attempt, 80);
+        setTimeout(attempt, 250);
+      };
+      window.addEventListener('resize',            onMusicOrientationChange);
+      window.addEventListener('orientationchange', onMusicOrientationChange);
+
+      addLongTap(musicHit, () => {
+        // tap → open music modal
+        musicGenreIdx = null;
+        musicModal.classList.add('open');
+        renderMusic();
+        syncVolFromGame();
+        syncBgRadioFromGame();
+        applyMusicPauseBtn();
+        requestWakeLock();
+        // Build the AudioContext + node graph NOW (using the user
+        // gesture that just opened the modal) so the first song tap
+        // only has to wait on the MP3 download, not the synth setup.
+        window.__music?.warmup?.();
+      }, () => {
+        // long-hold → toggle mute
+        window.__music?.toggleMute?.();
+        applyMusicMutedIndicator();
+      });
+
+      // ── Achievements modal ───────────────────────────────────────────
+      const achModal = document.getElementById('phone-achievements');
+      const achList  = document.getElementById('phone-achievements-list');
+      const achSub   = document.getElementById('phone-achievements-sub');
+      const achClose = document.getElementById('phone-achievements-close');
+      const TIER_COLORS = { bronze: '#CD7F32', silver: '#C0C0C0', gold: '#FFD700' };
+      const renderAchievements = () => {
+        const data = window.__achievements?.list?.() ?? null;
+        if (!data) {
+          achList.innerHTML = `<div style="color:#88A; text-align:center; padding:6vmin;">Achievements load after the first game starts.</div>`;
+          achSub.textContent = '0 / 0 unlocked';
+          return;
+        }
+        const total  = data.length;
+        const earned = data.filter(a => a.tier).length;
+        achSub.textContent = `${earned} / ${total} unlocked`;
+        achList.innerHTML = data.map(a => {
+          const tier = a.tier;
+          const tierColor = tier ? TIER_COLORS[tier] : '#FFD700';
+          const rowClass  = tier ? 'earned' : 'locked';
+          const badge     = tier
+            ? `<div class="badge" style="--tier-color:${tierColor}">${tier.toUpperCase()}</div>`
+            : '';
+          return `<div class="row ${rowClass}" style="--tier-color:${tierColor}">
+            <div class="icon">${a.icon || '🏆'}</div>
+            <div class="info">
+              <div class="name">${a.label}</div>
+              <div class="desc">${a.desc || ''}</div>
+            </div>
+            ${badge}
+          </div>`;
+        }).join('');
+      };
+      addTap(achClose, () => { achModal.classList.remove('open'); markModalClosing(); });
+      addTap(document.querySelector('.phone-hit[data-action="trophy"]'), () => {
+        renderAchievements();
+        achModal.classList.add('open');
+      });
+      addTap(document.getElementById('phone-trophy'), () => {
+        renderAchievements();
+        achModal.classList.add('open');
+      });
+
+      // ── Generic app modal: Leaderboard / Stats / Settings / Help ──────
+      const appModal = document.getElementById('phone-app');
+      const appTitle = document.getElementById('phone-app-title');
+      const appBody  = document.getElementById('phone-app-body');
+      const qhit     = (a) => document.querySelector(`.phone-hit[data-action="${a}"]`);
+      const openApp  = (title, html) => {
+        appTitle.textContent = title;
+        appBody.innerHTML = html;
+        appModal.classList.remove('tut-mode');   // reset chrome; tutorial re-adds it
+        appModal.classList.add('open');
+      };
+      addTap(document.getElementById('phone-app-close'), () => {
+        appModal.classList.remove('open', 'tut-mode'); markModalClosing();
+      });
+      const fmtClock = (s) => (s == null) ? '—'
+        : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+      const fmtTime  = (s) => {
+        s = Math.max(0, Math.round(s || 0));
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+        return h > 0 ? `${h}h ${m}m` : `${m}m`;
+      };
+
+      // ── Shared stat-row formatting helpers ────────────────────────────
+      const sRow   = (k, v) => `<div class="pa-row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+      const sSec   = (t) => `<div class="pa-section">${t}</div>`;
+      const sMoney = (n) => '$' + Math.round(n || 0).toLocaleString();
+      const sNum   = (n) => Math.round(n || 0).toLocaleString();
+      const sCap   = (k) => String(k).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const sEmpty = `<div class="pa-row"><span class="k pa-dim">— none yet —</span><span class="v"></span></div>`;
+      const sMap   = (obj, fmt) => {
+        const e = Object.entries(obj || {});
+        return e.length ? e.map(([k, v]) => sRow(sCap(k), fmt(v))).join('') : sEmpty;
+      };
+
+      // Leaderboard — Personal Best + Your Runs + House Leaderboard (the three
+      // player profiles on this device, ranked, with switchable metric tabs).
+      addTap(qhit('leaderboard'), () => {
+        const r    = window.__stats?.get?.()?.records ?? {};
+        const runs = window.__stats?.runs?.() ?? [];
+        const fmtRunDate = (ts) => { try { const d = new Date(ts); return (d.getMonth() + 1) + '/' + d.getDate(); } catch (_) { return ''; } };
+        const yourRuns = runs.length
+          ? runs.slice(0, 10).map((run, i) =>
+              sRow(`#${i + 1}${run.completed ? ' 🏁' : ''}`,
+                   `${sMoney(run.score)} · ${sNum(run.miles)} mi`
+                   + (run.ts ? ` <span class="pa-dim">${fmtRunDate(run.ts)}</span>` : ''))).join('')
+          : `<p class="pa-note">No runs recorded yet — finish a run (or wreck / get busted) and it'll rank here so you can compare.</p>`;
+
+        // House board: one row per player profile, re-ranked by the active tab.
+        const house = window.__stats?.house?.() ?? [];
+        const METRICS = {
+          score: { label: 'Score', has: p => p.bestScore > 0,            val: p => sMoney(p.bestScore),
+                   sort: (a, b) => (b.bestScore || 0) - (a.bestScore || 0) },
+          time:  { label: 'Time',  has: p => p.fastestCompletionSec > 0, val: p => fmtClock(p.fastestCompletionSec),
+                   sort: (a, b) => (a.fastestCompletionSec || 0) - (b.fastestCompletionSec || 0) },
+          miles: { label: 'Miles', has: p => p.mostMilesRun > 0,         val: p => sNum(p.mostMilesRun) + ' mi',
+                   sort: (a, b) => (b.mostMilesRun || 0) - (a.mostMilesRun || 0) },
+        };
+        const hRow = (rank, p, valStr, dim) => {
+          const name = (p.plate && p.plate !== '—') ? p.plate : 'YOU';
+          const tag  = (p.active && p.plate && p.plate !== '—') ? ' <span class="pa-dim">(you)</span>' : '';
+          const rk   = rank ? `#${rank} ` : '';
+          return `<div class="pa-row${p.active ? ' lb-me' : ''}">`
+               + `<span class="k">${rk}${name}${tag}</span>`
+               + `<span class="v${dim ? ' pa-dim' : ''}">${valStr}</span></div>`;
+        };
+
+        const renderLB = (metric) => {
+          const m = METRICS[metric] || METRICS.score;
+          const ranked   = house.filter(m.has).sort(m.sort);
+          const unranked = house.filter(p => !m.has(p));
+          const tabs = Object.keys(METRICS).map(k =>
+            `<button class="lb-tab${k === metric ? ' on' : ''}" data-lbtab="${k}">${METRICS[k].label}</button>`).join('');
+          const houseBody = (ranked.length || unranked.length)
+            ? `<div class="lb-tabs">${tabs}</div>`
+              + ranked.map((p, i) => hRow(i + 1, p, m.val(p), false)).join('')
+              + unranked.map(p => hRow(0, p, '—', true)).join('')
+            : `<p class="pa-note">No other drivers yet — create more players on the title screen and their best runs rank here.</p>`;
+          openApp('LEADERBOARD',
+            sSec('Personal Best') +
+            sRow('🏁 Best Score',         sMoney(r.bestScore) + (runs.length ? ` <span class="pa-dim">#1 of ${runs.length}</span>` : '')) +
+            sRow('⏱ Fastest Trip',        fmtClock(r.fastestCompletionSec)) +
+            sRow('🛣 Most Miles (one run)', sNum(r.mostMilesRun) + ' mi') +
+            sRow('✨ Longest No-Damage',    sNum(r.longestNoDamageStreakMiles) + ' mi') +
+            sRow('⚡ Top Speed',           sNum(r.topSpeed) + ' mph') +
+            sSec('Your Runs') +
+            yourRuns +
+            sSec('House Leaderboard') +
+            houseBody +
+            sSec('🌐 World') +
+            `<div id="lb-world"><p class="pa-note">Loading world rankings…</p></div>`);
+          // Re-bind the metric tabs (innerHTML rebuilds them every render).
+          // Defer the re-render one frame so the tapped tab isn't destroyed
+          // mid-touchend (iOS strands the touch → dead game input on resume).
+          document.querySelectorAll('#phone-app-body [data-lbtab]').forEach(btn =>
+            addTap(btn, () => { const k = btn.getAttribute('data-lbtab'); requestAnimationFrame(() => renderLB(k)); }));
+          // World board — async fetch from the cloud (best-effort).  The active
+          // metric tab mirrors the house board; fill #lb-world when it returns,
+          // but only if that metric is STILL the active tab (the user may have
+          // switched while the request was in flight).
+          const myId = (window.__plate && window.__plate.playerId) ? window.__plate.playerId() : '';
+          const wVal = (e) => metric === 'score' ? sMoney(e.score)
+                            : metric === 'time'  ? fmtClock(e.timeSec)
+                            : sNum(e.miles) + ' mi';
+          const wRow = (e) => {
+            const me = !!e.playerId && e.playerId === myId;
+            const name = (e.plate && String(e.plate).trim()) ? e.plate : '—';
+            return `<div class="pa-row${me ? ' lb-me' : ''}">`
+                 + `<span class="k">#${e.rank} ${name}${me ? ' <span class="pa-dim">(you)</span>' : ''}</span>`
+                 + `<span class="v">${wVal(e)}</span></div>`;
+          };
+          if (window.__leaderboard && window.__leaderboard.world) {
+            window.__leaderboard.world(metric, 20).then((entries) => {
+              const el = document.getElementById('lb-world');
+              if (!el) return;
+              const active = document.querySelector('#phone-app-body [data-lbtab].on');
+              if (active && active.getAttribute('data-lbtab') !== metric) return;  // tab changed
+              el.innerHTML = (entries && entries.length)
+                ? entries.map(wRow).join('')
+                : `<p class="pa-note">No world runs yet — finish a run to be the first! (Or you're offline.)</p>`;
+            }).catch(() => {});
+          }
+        };
+        renderLB('score');
+      });
+
+      // Stats — This Trip + Lifetime + Records + full breakdowns.
+      addTap(qhit('stats'), () => {
+        const s   = window.__stats?.get?.() ?? {};
+        const L   = s.lifetime ?? {};
+        const ses = window.__stats?.session?.() ?? {};
+        const r   = s.records ?? {};
+        const sp  = s.spent ?? {};
+        openApp('STATS',
+          sSec('This Trip') +
+          sRow('Miles',               sNum(ses.miles) + ' mi') +
+          sRow('Drive time',          fmtTime(ses.tripTimeSec)) +
+          sRow('Earned',              sMoney(ses.earnedThisTrip)) +
+          sRow('Spent',               sMoney(ses.spentThisTrip)) +
+          sRow('NPC cars hit',        sNum(ses.npcHits)) +
+          sRow('Damage taken',        sNum(ses.damageTaken)) +
+          sRow('Drugs collected',     sNum(ses.drugsCollected)) +
+          sRow('Weapons collected',   sNum(ses.weaponsCollected)) +
+          sRow('Hitchhikers (good/bad)', `${sNum(ses.hitchhikersGood)} / ${sNum(ses.hitchhikersBad)}`) +
+          sRow('Sex workers (bribes)',   `${sNum(ses.sexWorkers)} (${sNum(ses.sexWorkerBribes)})`) +
+          sRow('Times robbed',        `${sNum(ses.robberies)} · ${sMoney(ses.robbedAmount)}`) +
+          sRow('Top speed',           sNum(ses.topSpeed) + ' mph') +
+          sRow('Pitstop time',        fmtTime(ses.pitstopSec)) +
+
+          sSec('Lifetime') +
+          sRow('Trips completed',     `${sNum(L.tripsCompleted)} / ${sNum(L.tripsStarted)}`) +
+          sRow('Miles',               sNum(L.miles) + ' mi') +
+          sRow('Drive time',          fmtTime(L.driveTimeSec)) +
+          sRow('Total time in game',  fmtTime(s.totalGameplaySec)) +
+          sRow('Total pitstop time',  fmtTime(s.totalPitstopSec)) +
+          sRow('NPC cars hit',        sNum(L.npcHits)) +
+          sRow('Wrecks',              sNum(L.wrecks)) +
+          sRow('Damage taken',        sNum(L.damageTaken)) +
+          sRow('Drugs collected',     sNum(L.drugsCollectedTotal)) +
+          sRow('Weapons collected',   sNum(L.weaponsCollectedTotal)) +
+          sRow('Total earned',        sMoney(L.earnedGross)) +
+          sRow('Total spent',         sMoney(L.spentTotal)) +
+          sRow('Hitchhikers (good/bad)', `${sNum(s.hitchhikers?.good)} / ${sNum(s.hitchhikers?.bad)}`) +
+          sRow('Sex workers (bribes)',   `${sNum(s.sexWorkers?.total)} (${sNum(s.sexWorkers?.bribes)})`) +
+          sRow('Times robbed',        `${sNum(s.robberies?.count)} · ${sMoney(s.robberies?.amount)}`) +
+          sRow('Speeding tickets',    `${sNum(s.police?.tickets)}`) +
+          sRow('DUIs',                `${sNum(s.police?.duis)}`) +
+          sRow('Fines paid',          sMoney(s.police?.finesPaid)) +
+          sRow('Times busted (stops)',`${sNum(s.police?.busts)}`) +
+
+          sSec('Records') +
+          sRow('Best score',          sMoney(r.bestScore)) +
+          sRow('Fastest trip',        fmtClock(r.fastestCompletionSec)) +
+          sRow('Most miles (one run)', sNum(r.mostMilesRun) + ' mi') +
+          sRow('Longest no-damage',   sNum(r.longestNoDamageStreakMiles) + ' mi') +
+          sRow('Top speed',           sNum(r.topSpeed) + ' mph') +
+
+          sSec('Earnings by source') +
+          sMap(s.earned?.bySource, sMoney) +
+          sRow('From score multiplier', sMoney(s.earned?.fromMultiplier)) +
+
+          sSec('Spending') +
+          sRow('Drugs',       sMoney(sp.drugsTotal)) +
+          sRow('Weapons',     sMoney(sp.weaponsTotal)) +
+          sRow('Vehicles',    sMoney(sp.vehicles)) +
+          sRow('Accessories', sMoney(sp.accessories)) +
+          sRow('Services',    sMoney(sp.services)) +
+
+          sSec('Drugs collected (by type)') +
+          sMap(s.drugs?.collected, sNum) +
+
+          sSec('Weapons collected (by type)') +
+          sMap(s.weapons?.collected, sNum) +
+
+          sSec('Per vehicle') +
+          (Object.entries(s.perVehicle || {}).length
+            ? Object.entries(s.perVehicle).map(([id, v]) =>
+                sRow(sCap(id), `${sNum(v.miles)} mi · ${sNum(v.npcHits)} hits`)).join('')
+            : sEmpty) +
+
+          sSec('Rest stops') +
+          (Object.entries(s.restStops || {}).length
+            ? Object.entries(s.restStops).map(([id, v]) =>
+                sRow(sCap(id), `${sNum(v.visits)}× · ${fmtTime(v.totalTimeSec)}`)).join('')
+            : sEmpty));
+      });
+
+      // Settings — volume / mute / haptics.  Works from the start menu.
+      addTap(qhit('settings'), () => {
+        const g = window.__settings?.get?.() ?? { muted: false, volume: 0.32, haptics: true };
+        const kmh   = (window.__settings?.getUnits?.() ?? 'mph') === 'kmh';
+        const shkPct = Math.round((window.__settings?.getShake?.() ?? 1) * 100);
+        const hudOn = window.__settings?.getHud?.() ?? true;
+        const cbOn  = window.__settings?.getColorblind?.() ?? false;
+        const curPlate = (window.__plate?.get?.() ?? '').trim();
+        // App-icon switch is iOS-only (uses native alternate icons).
+        const isIOS     = window.Capacitor?.getPlatform?.() === 'ios';
+        const altIconOn = (localStorage.getItem('dui_appIcon') || '') === 'AltIcon';
+        openApp('SETTINGS',
+          sSec('Profile') +
+          `<div class="pa-row"><span class="k">🪪 Driver plate</span><button id="set-plate" class="pa-toggle on">${curPlate ? curPlate : 'SET'}</button></div>` +
+          `<p class="pa-note">Your public username on the leaderboard.</p>` +
+          sSec('Audio') +
+          `<div class="pa-row"><span class="k">🔊 Volume</span><input id="set-vol" type="range" min="0" max="100" value="${Math.round((g.volume || 0) * 100)}"></div>` +
+          `<div class="pa-row"><span class="k">🔇 Mute sound</span><button id="set-mute" class="pa-toggle ${g.muted ? 'on' : ''}">${g.muted ? 'ON' : 'OFF'}</button></div>` +
+          sSec('Gameplay') +
+          `<div class="pa-row"><span class="k">📏 Units</span><button id="set-units" class="pa-toggle on">${kmh ? 'KM/H' : 'MPH'}</button></div>` +
+          `<div class="pa-row"><span class="k">📳 Screen shake</span><input id="set-shake" type="range" min="0" max="100" value="${shkPct}"></div>` +
+          `<div class="pa-row"><span class="k">🎮 Customize controls</span><button id="set-customize" class="pa-toggle on">EDIT</button></div>` +
+          sSec('Accessibility') +
+          `<div class="pa-row"><span class="k">👁 Colorblind mode</span><button id="set-cb" class="pa-toggle ${cbOn ? 'on' : ''}">${cbOn ? 'ON' : 'OFF'}</button></div>` +
+          `<div class="pa-row"><span class="k">📳 Haptics</span><button id="set-hap" class="pa-toggle ${g.haptics ? 'on' : ''}">${g.haptics ? 'ON' : 'OFF'}</button></div>` +
+          (isIOS
+            ? sSec('Appearance') +
+              `<div class="pa-row"><span class="k">🎨 App icon</span><button id="set-icon" class="pa-toggle ${altIconOn ? 'on' : ''}">${altIconOn ? 'ALT' : 'DEFAULT'}</button></div>` +
+              `<p class="pa-note">Switch your home-screen icon between the two DUI designs.</p>`
+            : '') +
+          sSec('Data') +
+          `<div class="pa-row"><span class="k">♻️ Reset player</span><button id="set-reset" class="pa-toggle" style="border-color:#FF4466;color:#FF7799;background:#2a1118;">RESET</button></div>` +
+          `<p class="pa-note">Reset clears money, vehicles, drugs &amp; checkpoints. Your lifetime stats, records and trophies are KEPT. Volume + mute apply instantly here on the start menu — no run needed.</p>`);
+        const plateBtn = document.getElementById('set-plate');
+        addTap(plateBtn, () => {
+          // Edit the ACTIVE player's plate from Settings (not just first launch).
+          window.showPlateModal?.({
+            current: window.__plate?.get?.() ?? '',
+            onDone: (name) => {
+              const res = window.__plate?.set?.(name);
+              if (res?.ok && plateBtn) plateBtn.textContent = res.plate;
+            },
+          });
+        });
+        const vol = document.getElementById('set-vol');
+        vol?.addEventListener('input', () => window.__settings?.setVolume?.(vol.value / 100));
+        const shk = document.getElementById('set-shake');
+        shk?.addEventListener('input', () => window.__settings?.setShake?.(shk.value / 100));
+        const mute = document.getElementById('set-mute');
+        addTap(mute, () => {
+          const on = !mute.classList.contains('on');
+          window.__settings?.setMuted?.(on);
+          mute.classList.toggle('on', on); mute.textContent = on ? 'ON' : 'OFF';
+        });
+        const hap = document.getElementById('set-hap');
+        addTap(hap, () => {
+          const on = !hap.classList.contains('on');
+          window.__settings?.setHaptics?.(on);
+          hap.classList.toggle('on', on); hap.textContent = on ? 'ON' : 'OFF';
+        });
+        const customize = document.getElementById('set-customize');
+        addTap(customize, () => {
+          // Arm the editor IMMEDIATELY so rotating to landscape enters it even
+          // with the popup still up (no need to press OK).  The popup is just a
+          // reminder to rotate; tapping Cancel un-arms it.  Desktop is already
+          // landscape, so it opens right away with no popup.
+          window.__customizeControls?.start?.();
+          if (!window.__isDesktop) {
+            showConfirm('📱 Rotate your phone to landscape to customize your controls — drag any item, then tap DONE.')
+              .then(ok => { if (!ok) window.__customizeControls?.cancel?.(); });
+          }
+        });
+        const cb = document.getElementById('set-cb');
+        addTap(cb, () => {
+          const on = !cb.classList.contains('on');
+          window.__settings?.setColorblind?.(on);
+          cb.classList.toggle('on', on); cb.textContent = on ? 'ON' : 'OFF';
+        });
+        // App-icon switch (iOS native alternate icons).  Only present on iOS.
+        const iconBtn = document.getElementById('set-icon');
+        if (iconBtn) addTap(iconBtn, () => {
+          const toAlt = iconBtn.textContent === 'DEFAULT';
+          const name  = toAlt ? 'AltIcon' : '';   // '' = primary icon
+          const plugin = window.Capacitor?.registerPlugin?.('AppIcon');
+          if (!plugin?.setIcon) { showConfirm?.('Icon switching needs the latest app build.'); return; }
+          plugin.setIcon({ name })
+            .then(() => {
+              localStorage.setItem('dui_appIcon', name);
+              iconBtn.classList.toggle('on', toAlt);
+              iconBtn.textContent = toAlt ? 'ALT' : 'DEFAULT';
+            })
+            .catch((e) => showConfirm?.('Could not change icon: ' + (e?.message || e)));
+        });
+        const unitsBtn = document.getElementById('set-units');
+        addTap(unitsBtn, () => {
+          const toKmh = unitsBtn.textContent === 'MPH';
+          window.__settings?.setUnits?.(toKmh ? 'kmh' : 'mph');
+          unitsBtn.textContent = toKmh ? 'KM/H' : 'MPH';
+        });
+        const reset = document.getElementById('set-reset');
+        addTap(reset, async () => {
+          const ok = await showConfirm('Reset this player?  Their plate name, lifetime stats, records, trophies, money, vehicles and progress will all be ERASED.  Your other players are untouched.  This frees the plate so it can be renamed.');
+          if (!ok) return;
+          // Close this Settings modal first — resetProgress soft-restarts the
+          // Game scene into a fresh title (no page reload), so the modal would
+          // otherwise linger on top of it.
+          appModal.classList.remove('open'); markModalClosing();
+          window.__settings?.resetProgress?.();
+        });
+      });
+
+      // Addiction Help — sincere, real resources + a donate link.  (DUI is
+      // dark satire; this screen is played straight.)  Verify numbers/links
+      // are current before shipping; US-based — add regional ones if localized.
+      const ADDICTION_HTML = `
+        <p class="pa-lead">Struggling with substance use, or worried about someone? Help is free, confidential, and available 24/7.</p>
+        <div class="pa-row"><span class="k">SAMHSA National Helpline</span><a class="pa-link" href="tel:18006624357">1-800-662-4357</a></div>
+        <div class="pa-row"><span class="k">Suicide &amp; Crisis Lifeline</span><a class="pa-link" href="tel:988">988</a></div>
+        <div class="pa-row"><span class="k">Crisis Text Line</span><span class="v">Text HOME to 741741</span></div>
+        <div class="pa-row"><span class="k">Find treatment</span><a class="pa-link" href="https://findtreatment.gov" target="_blank" rel="noopener">findtreatment.gov</a></div>
+        <p class="pa-lead" style="margin-top:5vmin;">Support recovery &amp; safer roads:</p>
+        <div class="pa-row"><span class="k">❤️ MADD</span><a class="pa-link" href="https://madd.org/donate" target="_blank" rel="noopener">madd.org</a></div>
+        <div class="pa-row"><span class="k">❤️ SAMHSA</span><a class="pa-link" href="https://www.samhsa.gov" target="_blank" rel="noopener">samhsa.gov</a></div>
+        <p class="pa-note">This game is fiction and dark comedy. Never drive impaired. Resources are US-based — confirm current details before relying on them.</p>`;
+      addTap(qhit('addiction'), () => openApp('GET HELP', ADDICTION_HTML));
+
+      // Contacts — a tappable contact LIST; pick a person to see their
+      // info + action.  The Lawyer is a phone CALL (retainer); The Dealer
+      // takes an order delivered to the next rest stop.
+      addTap(qhit('messages'), () => {
+        const backBtn = '<button id="msg-back" class="pa-toggle" style="margin-bottom:1.4vmin">‹ Contacts</button>';
+
+        const renderList = () => {
+          const st = window.__lawyer?.status?.() ?? { retained: false };
+          const g  = window.__girl?.status?.() ?? { gone: false, responded: false, everTexted: false };
+          const tx = window.__buddytexts?.threads?.() ?? {};
+          const lastOf = (id) => {
+            const t = tx[id];
+            if (!t || !t.length) return 'No messages yet';
+            const s = t[t.length - 1].text;
+            return s.length > 36 ? s.slice(0, 35) + '…' : s;
+          };
+          const rows = [
+            { id: 'girl',   name: '💕 The Crush',  sub: g.gone ? 'Found someone else 💔' : (g.everTexted ? (g.responded ? 'Replied 😘 — text them each town' : '… they\'re going quiet') : 'Invited you to the party!') },
+            { id: 'lawyer', name: '⚖️ The Lawyer', sub: st.retained ? 'On retainer ✓' : 'Better Phone Saul' },
+            { id: 'dealer', name: '🔌 The Plug',   sub: 'Delivers to the next rest stop' },
+            { id: 'friend',  name: '🚨 The Friend',  sub: lastOf('friend') },
+            { id: 'ex',      name: '🖤 The Ex',      sub: lastOf('ex') },
+            { id: 'mom',     name: '👜 The Mom',     sub: lastOf('mom') },
+            { id: 'boss',    name: '💼 The Boss',    sub: lastOf('boss') },
+            { id: 'unknown', name: '❓ The Unknown', sub: lastOf('unknown') },
+            { id: 'spam',    name: '🚫 The Spam',    sub: lastOf('spam') },
+          ];
+          openApp('CONTACTS',
+            `<p class="pa-note">Tap a contact to view their info.</p>` +
+            rows.map(c =>
+              `<div class="pa-row contact-row" data-cid="${c.id}" style="cursor:pointer">
+                 <span class="k">${c.name}<br><span class="pa-dim" style="font-size:0.82em">${c.sub}</span></span>
+                 <span class="v">›</span>
+               </div>`).join(''));
+          appBody.querySelectorAll('.contact-row').forEach(row =>
+            addTap(row, () => requestAnimationFrame(() => renderContact(row.dataset.cid))));
+        };
+
+        const renderLawyer = () => {
+          const st = window.__lawyer?.status?.() ?? { retained: false, cash: 0, cost: 15000 };
+          const afford = st.cash >= st.cost;
+          const lawyerBtn = st.retained
+            ? `<button class="pa-toggle on" disabled>✓ ON RETAINER</button>`
+            : `<button id="msg-lawyer-call" class="pa-toggle ${afford ? 'on' : ''}">📞 CALL · $${st.cost.toLocaleString()}</button>`;
+          openApp('CONTACTS',
+            backBtn +
+            sSec('⚖️ The Lawyer') +
+            `<p class="pa-lead">"Better Phone Saul." Put me on retainer and I'll cut every future <b>BUSTED</b> fine in half — one-time fee, good for the rest of your life.</p>` +
+            sRow('Status', st.retained ? '<span style="color:#44FF88;font-weight:800;">On retainer ✓</span>' : '<span class="pa-dim">Not retained</span>') +
+            sRow('Your cash', '$' + st.cash.toLocaleString()) +
+            `<div class="pa-row"><span class="k">Retainer</span>${lawyerBtn}</div>` +
+            (st.retained
+              ? '<p class="pa-note">Every busted fine is now halved. Drive however you like.</p>'
+              : (afford ? '' : `<p class="pa-note">Need $${(st.cost - st.cash).toLocaleString()} more — earn it on the road, then call back.</p>`)));
+          addTap(document.getElementById('msg-back'), () => requestAnimationFrame(renderList));
+          if (!st.retained && afford) {
+            const call = document.getElementById('msg-lawyer-call');
+            if (call) addTap(call, () => { const r = window.__lawyer?.retain?.(); if (r?.ok) requestAnimationFrame(renderLawyer); });
+          }
+        };
+
+        const renderDealer = () => {
+          const cash = window.__lawyer?.status?.()?.cash ?? 0;
+          const dl = window.__dealer?.status?.() ?? { cash, orders: [], drugs: [] };
+          const pending = dl.orders.length
+            ? dl.orders.map(id => window.__dealer?.label?.(id) ?? id).join(', ')
+            : '<span class="pa-dim">none</span>';
+          const drugRows = dl.drugs.length
+            ? dl.drugs.map(d =>
+                `<div class="pa-row"><span class="k">${d.label}</span><button class="msg-order pa-toggle ${dl.cash >= d.price ? 'on' : ''}" data-drug="${d.id}" ${dl.cash < d.price ? 'disabled' : ''}>$${d.price.toLocaleString()}</button></div>`
+              ).join('')
+            : `<div class="pa-row"><span class="k pa-dim">No drugs unlocked yet — pick some up on the road first.</span><span class="v"></span></div>`;
+          openApp('CONTACTS',
+            backBtn +
+            sSec('🔌 The Plug') +
+            `<p class="pa-lead">Call ahead and your order's waiting <b>FREE</b> at the next rest stop. You pay now — pickup or not.</p>` +
+            sRow('Pending pickup', pending) +
+            drugRows);
+          addTap(document.getElementById('msg-back'), () => requestAnimationFrame(renderList));
+          appBody.querySelectorAll('.msg-order').forEach(b => {
+            if (b.disabled) return;
+            addTap(b, () => { const r = window.__dealer?.order?.(b.dataset.drug); if (r?.ok) requestAnimationFrame(renderDealer); });
+          });
+        };
+
+        const renderGirl = () => {
+          const g = window.__girl?.status?.() ?? { gone: false, responded: false, sent: 0, everTexted: false, canText: false, skipsLeft: 4, thread: [] };
+          const cooling = g.everTexted && !g.responded && !g.gone;
+          let statusLine, actionBtn, note;
+          if (g.gone) {
+            statusLine = '<span style="color:#FF6688;font-weight:800;">💔 Found someone else</span>';
+            actionBtn  = `<button class="pa-toggle" disabled>They're done with you</button>`;
+            note = 'You went too many towns without texting. They found someone else to go to a party with.';
+          } else {
+            statusLine = !g.everTexted ? '<span class="pa-dim">Hasn\'t heard back</span>'
+                       : g.responded   ? '<span style="color:#FF88CC;font-weight:800;">Replied 😘</span>'
+                       :                 '<span style="color:#FFC04D;font-weight:800;">… going quiet</span>';
+            if (g.canText) {
+              const label = !g.everTexted ? '💬 Text them back'
+                          : cooling        ? '📱 Text them — win them back'
+                          :                  '📱 Text them';
+              actionBtn = `<button id="msg-girl-text" class="pa-toggle on">${label}</button>`;
+            } else {
+              actionBtn = `<button class="pa-toggle" disabled>✓ Texted this town — again next town</button>`;
+            }
+            note = `Text them once every town to keep them warm — it's free. Skip too many towns (${g.skipsLeft} left) and they'll find someone else. Reach the Pullman party still together for a bonus.`;
+          }
+          // Their incoming texts this run (annoyed → angry → silent "…" → gone,
+          // plus a miss-you reply when you text 3 towns in a row).
+          const thread = (g.thread ?? []);
+          const convo = thread.length
+            ? thread.map(m => `<div class="pa-row"><span class="k">${m.text}<br><span class="pa-dim" style="font-size:0.78em">~mile ${m.mile}</span></span></div>`).join('')
+            : '';
+          openApp('CONTACTS',
+            backBtn +
+            sSec('💕 The Crush') +
+            `<p class="pa-lead">"Heyyy 🥰 you still coming to the party in Pullman?? text me every town so I know you care 💕"</p>` +
+            sRow('Status', statusLine) +
+            sRow('Texts sent', g.sent) +
+            `<div class="pa-row"><span class="k">Keep them warm</span>${actionBtn}</div>` +
+            (convo ? `<div class="pa-section">Their texts</div>${convo}` : '') +
+            `<p class="pa-note">${note}</p>`);
+          addTap(document.getElementById('msg-back'), () => requestAnimationFrame(renderList));
+          const txt = document.getElementById('msg-girl-text');
+          // Defer the re-render one frame: renderGirl() replaces appBody via
+          // innerHTML, which destroys THIS button mid-touchend — on iOS that
+          // strands the touch and the game canvas stops receiving taps after
+          // you rotate back to gameplay.  The save write (__girl.text) stays
+          // synchronous; only the DOM swap waits for the gesture to finish.
+          if (txt) addTap(txt, () => { const r = window.__girl?.text?.(); if (r?.ok) requestAnimationFrame(renderGirl); });
+        };
+
+        // Pure-flavor texters (The Ex / Mom / The Boss / The Unknown) — read
+        // their per-run thread; no actions, just the conversation.
+        const BUDDY_NAMES = { friend: '🚨 The Friend', ex: '🖤 The Ex', mom: '👜 The Mom', boss: '💼 The Boss', unknown: '❓ The Unknown', spam: '🚫 The Spam' };
+        const renderBuddy = (cid) => {
+          const tx   = window.__buddytexts?.threads?.() ?? {};
+          const msgs = tx[cid] ?? [];
+          const body = msgs.length
+            ? msgs.map(m => {
+                const sender = (cid === 'spam' && m.from) ? `<b>${m.from}:</b> ` : '';
+                return `<div class="pa-row"><span class="k">${sender}${m.text}<br><span class="pa-dim" style="font-size:0.78em">~mile ${m.mile}</span></span></div>`;
+              }).join('')
+            : `<div class="pa-row"><span class="k pa-dim">No messages yet — they'll text you on the road.</span></div>`;
+          openApp('CONTACTS', backBtn + sSec(BUDDY_NAMES[cid] ?? cid) + body);
+          addTap(document.getElementById('msg-back'), () => requestAnimationFrame(renderList));
+        };
+
+        const renderContact = (cid) => {
+          if (cid === 'lawyer') renderLawyer();
+          else if (cid === 'dealer') renderDealer();
+          else if (cid === 'girl') renderGirl();
+          else if (BUDDY_NAMES[cid]) renderBuddy(cid);
+        };
+        renderList();
+      });
+
+      // Tiles without a feature yet — graceful placeholder so no dead taps.
+      // Tutorial — swipe-through carousel of the V2 with-text slides.  JPGs
+      // (≈1 MB each) keep the load light; swipe horizontally or tap a dot.
+      const TUT_BASE = 'assets/ui/tutorial_slides/JPG/';
+      const TUT_SLIDES = [
+        'tutorial_slide_01_run_bankroll.jpg',
+        'tutorial_slide_02_high_limit_multiplier.jpg',
+        'tutorial_slide_03_heat_law.jpg',
+        'tutorial_slide_04_road_survival.jpg',
+        'tutorial_slide_05_phone_mission_control.jpg',
+      ];
+      // First-ever-play nudge: the Tutorial tile pulses until the player opens
+      // it the first time, then never again (persisted in localStorage).
+      const TUT_SEEN_KEY = 'dui_tutorialSeen';
+      const markTutorialSeen = () => {
+        try { localStorage.setItem(TUT_SEEN_KEY, '1'); } catch (_) {}
+        qhit('tutorial')?.classList.remove('tut-flash');
+      };
+      try {
+        if (!localStorage.getItem(TUT_SEEN_KEY)) qhit('tutorial')?.classList.add('tut-flash');
+      } catch (_) {}
+
+      addTap(qhit('tutorial'), () => {
+        markTutorialSeen();
+        const cells = TUT_SLIDES.map((f, i) =>
+          `<div class="tut-cell"><img class="tut-slide" src="${TUT_BASE}${f}" alt="Tutorial slide ${i + 1}" draggable="false"></div>`).join('');
+        const dots = TUT_SLIDES.map((_, i) =>
+          `<span class="tut-dot${i === 0 ? ' on' : ''}" data-i="${i}"></span>`).join('');
+        openApp('', `<div class="tut-wrap">`
+          + `<div class="tut-track">${cells}</div>`
+          + `<div class="tut-dots">${dots}</div>`
+          + `<button class="tut-close" aria-label="Close">✕</button>`
+          + `</div>`);
+        appModal.classList.add('tut-mode');   // full-bleed: strip chrome, hide title
+        addTap(appBody.querySelector('.tut-close'), () => {
+          appModal.classList.remove('open', 'tut-mode'); markModalClosing();
+        });
+        const track  = appBody.querySelector('.tut-track');
+        const dotEls = [...appBody.querySelectorAll('.tut-dot')];
+        if (track) {
+          const sync = () => {
+            const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+            dotEls.forEach((d, k) => d.classList.toggle('on', k === i));
+          };
+          track.addEventListener('scroll', sync, { passive: true });
+          dotEls.forEach((d, i) => addTap(d, () =>
+            track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' })));
+        }
+      });
+
+      // Calendar — Daily Challenge ("Run of the Day"). Read-only preview for
+      // now; Play activates once the stage runner is wired (__daily.playable).
+      addTap(qhit('calendar'), () => {
+        const D = window.__daily;
+        const today = D?.today?.() ?? null;
+        const week  = D?.week?.()  ?? [];
+        let html = sSec("Today's Run");
+        if (today) {
+          html += `<div class="pa-row"><span class="k" style="font-size:3.6vmin;font-weight:800;color:#FFD23D;">${today.name}</span></div>`;
+          html += `<p class="pa-note" style="margin-top:0.5vmin;color:#CFE0F5;">${today.blurb}</p>`;
+          html += sRow('Route', `${today.from} → ${today.to}`);
+          html += sRow('First-try reward', '$5,000');
+          if (D?.playable) {
+            html += `<div style="text-align:center;margin-top:2.5vmin;"><button id="daily-play" style="font-family:inherit;font-weight:800;font-size:3.4vmin;color:#08110b;background:#39FF8A;border:none;border-radius:1.6vmin;padding:1.8vmin 6vmin;cursor:pointer;">▶ PLAY</button></div>`;
+          } else {
+            html += `<p class="pa-note" style="text-align:center;margin-top:2.5vmin;color:#7FA8D8;border:1px dashed #33506f;border-radius:1.5vmin;padding:2vmin;">▶ Play unlocks in the next update — runner wiring in progress.</p>`;
+          }
+        } else {
+          html += `<p class="pa-note" style="text-align:center;margin-top:3vmin;">No run today — dailies are Mon–Fri. Check back Monday.</p>`;
+        }
+        const done = week.filter(w => w.done).length;
+        html += sSec(`This Week — ${done}/5 · all 5 = +$5,000`);
+        week.forEach(w => {
+          html += sRow(`${w.dow}  ${w.name ?? '—'}`, w.done ? `✓ $${(w.payout || 0).toLocaleString()}` : '—');
+        });
+        html += sSec('How it works');
+        html += '<p class="pa-note">Short 2–5 stop runs, each with one goal. Unlimited tries — but the payout drops $1,000 every attempt ($5,000 → $0 by try 6, and it still counts as done). Clear all five weekday runs for a +$5,000 bonus.</p>';
+        // DEV: launch ANY challenge regardless of the weekday. Remove before
+        // release alongside __daily.all() in main.js.
+        const allRuns = D?.all?.() ?? [];
+        if (allRuns.length) {
+          html += sSec('▶ Test any run (dev)');
+          allRuns.forEach(c => {
+            html += `<div class="pa-row"><span class="k">${c.name}</span><span class="v"><button class="daily-test" data-id="${c.id}" style="font-family:inherit;font-weight:700;font-size:2.6vmin;color:#08110b;background:#39A8FF;border:none;border-radius:1vmin;padding:0.7vmin 2.6vmin;cursor:pointer;">PLAY</button></span></div>`;
+          });
+        }
+        openApp('CALENDAR', html);
+        if (today && D?.playable) {
+          const pb = appBody.querySelector('#daily-play');
+          if (pb) addTap(pb, () => { appModal.classList.remove('open'); D.start(today.id); });
+        }
+        appBody.querySelectorAll('.daily-test').forEach(b => addTap(b, () => {
+          appModal.classList.remove('open'); D.start(b.getAttribute('data-id'));
+        }));
+      });
+
+      // ── Boot — pull initial state from the Phaser game once it wires
+      //    up the globals.  Retry every 100 ms until __phoneLock exists. -
+      const bootTimer = setInterval(() => {
+        if (window.__phoneLock) {
+          applyLock();
+          applySteering();
+          if (window.__handedness) applyHand();
+          if (window.__music) applyMusicMutedIndicator();
+          clearInterval(bootTimer);
+        }
+      }, 100);
+    })();
+  </script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

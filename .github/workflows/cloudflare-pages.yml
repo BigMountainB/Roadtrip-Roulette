@@ -1,0 +1,25 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Build site
+        run: npm run build
+      # Plain wrangler invocation — the EXACT command that deploys from the
+      # terminal. The cloudflare/pages-action@v1 (10000 on cfut_ tokens) and
+      # cloudflare/wrangler-action@v3 (didn't forward CLOUDFLARE_API_TOKEN to
+      # the wrangler child) both failed; a `run:` step with env: is reliable.
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: npx --yes wrangler@3 pages deploy dist --project-name=dui --branch=main
