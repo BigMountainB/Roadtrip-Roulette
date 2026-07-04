@@ -356,7 +356,7 @@ export const ASSET_MANIFEST = {
     { key: 'ui_phone_menu_bg',   path: 'assets/ui/iphone_menu_bg.png' },
     // Full-frame neon/rain title treatment. Runtime copy is sized to the
     // 800x450 game viewport; the authored full-size PNG stays in Images/.
-    { key: 'ui_title_screen',     path: 'assets/ui/title_screen.webp' },
+    { key: 'ui_title_screen',     path: 'assets/ui/title_screen.png?v=rtr-1' },
     // (Removed ui_title_d / ui_title_u / ui_title_i — the old per-letter intro
     //  art was deleted in the title overhaul; the manifest entries pointed at
     //  missing files and threw "Failed to process file" + a WebGL texImage2D
