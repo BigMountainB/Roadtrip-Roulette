@@ -130,6 +130,16 @@ export const ASSET_MANIFEST = {
     { key: 'powerup_steroid', path: 'assets/drugs/steroids.png?v=badge-refresh-3' },
     { key: 'powerup_narcan',  path: 'assets/drugs/narcan.png?v=badge-refresh-3' },
   ],
+  // NPC portraits for the rest-stop encounter cards.  Missing files fall back
+  // to the procedural colored-bust placeholder (BootScene._makeNpcPlaceholder),
+  // so the game runs before the art exists.  Drop real art into public/assets/npc/.
+  npc: [
+    { key: 'npc_street_weirdo',  path: 'assets/npc/street_weirdo.png' },
+    { key: 'npc_chain_guy',      path: 'assets/npc/chain_guy.png' },
+    { key: 'npc_ski_bum',        path: 'assets/npc/ski_bum.png' },
+    { key: 'npc_long_haul_mike', path: 'assets/npc/long_haul_mike.png' },
+    { key: 'npc_farm_worker',    path: 'assets/npc/farm_worker.png' },
+  ],
   buildings: [
     { key: 'space_needle', path: 'assets/buildings/codex/space_needle_landmark.png' },
     // Codex real-reference scenery pass — transparent cutout candidates

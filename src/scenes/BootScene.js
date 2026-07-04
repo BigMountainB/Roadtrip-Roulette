@@ -233,7 +233,27 @@ export class BootScene extends Phaser.Scene {
     if (key.startsWith('cop_'))    return this._makeCopPlaceholder(key);
     if (key.startsWith('ui_'))     return this._makeUIPlaceholder(key);
     if (key.startsWith('powerup_')) return this._makePowerupPlaceholder(key);
+    if (key.startsWith('npc_'))     return this._makeNpcPlaceholder(key);
     this._makeBlank(key, 32, 32, 0xFF00FF);
+  }
+
+  /** Colored-bust placeholder for a rest-stop NPC portrait, so encounters are
+   *  playable before real art exists.  Tint is derived from the key so each
+   *  character reads as distinct. */
+  _makeNpcPlaceholder(key) {
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) & 0xFFFFFF;
+    const tint = (h | 0x404040) & 0xBFBFBF;   // keep it mid-toned, never too dark/bright
+    const w = 200, ht = 220;
+    const g = this.make.graphics({ x: 0, y: 0, add: false });
+    g.fillStyle(0x0A0F1A, 1); g.fillRoundedRect(0, 0, w, ht, 10);
+    g.fillStyle(tint, 1);
+    g.fillCircle(w / 2, ht * 0.36, 46);
+    g.fillEllipse(w / 2, ht * 1.02, 150, 120);
+    g.fillStyle(0xFFFFFF, 0.14); g.fillCircle(w / 2 - 16, ht * 0.30, 12);
+    g.lineStyle(4, 0x39A8FF, 0.7); g.strokeRoundedRect(2, 2, w - 4, ht - 4, 10);
+    g.generateTexture(key, w, ht);
+    g.destroy();
   }
 
   /** Procedural placeholder for power-up pickups, distinct from the circular
