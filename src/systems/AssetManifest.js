@@ -337,7 +337,7 @@ export const ASSET_MANIFEST = {
   ui: [
     // Loaded first by BootScene so the remaining asset fetches have a
     // title-quality neon splash behind the live progress bar.
-    { key: 'ui_loading_screen',   path: 'assets/ui/loading_screen.webp' },
+    { key: 'ui_loading_screen',   path: 'assets/ui/loading_screen.png?v=rtr-1' },
     { key: 'ui_end_crashed_neon', path: 'assets/ui/end_crashed_neon.webp' },
     { key: 'ui_end_overdose_neon', path: 'assets/ui/end_overdose_neon.webp' },
     { key: 'ui_end_busted_screen', path: 'assets/ui/end_busted_screen.webp' },
