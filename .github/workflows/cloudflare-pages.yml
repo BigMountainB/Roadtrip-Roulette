@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:   # lets you re-run manually after adding the secrets
 
 jobs:
   deploy:
@@ -14,12 +15,19 @@ jobs:
         run: npm ci
       - name: Build site
         run: npm run build
+      # First run creates the Pages project; `|| true` makes it a no-op on
+      # every run after that (project already exists).
+      - name: Ensure Pages project exists
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: npx --yes wrangler@3 pages project create roadtrip-roulette --production-branch=main || true
       # Plain wrangler invocation — the EXACT command that deploys from the
-      # terminal. The cloudflare/pages-action@v1 (10000 on cfut_ tokens) and
-      # cloudflare/wrangler-action@v3 (didn't forward CLOUDFLARE_API_TOKEN to
-      # the wrangler child) both failed; a `run:` step with env: is reliable.
+      # terminal. The cloudflare/pages-action@v1 and cloudflare/wrangler-action@v3
+      # both failed to forward CLOUDFLARE_API_TOKEN; a `run:` step with env: is
+      # reliable. (Proven on the DUI project's deploy.)
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_PAGES_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-        run: npx --yes wrangler@3 pages deploy dist --project-name=dui --branch=main
+        run: npx --yes wrangler@3 pages deploy dist --project-name=roadtrip-roulette --branch=main
