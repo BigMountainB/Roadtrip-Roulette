@@ -1956,7 +1956,7 @@
       const garageClose = document.getElementById('phone-garage-close');
       const renderGarage = () => {
         const cars = window.__garage?.list?.() ?? [];
-        garageList.innerHTML = cars.map(c => {
+        const carsHtml = cars.map(c => {
           const accLabels = [];
           if (c.accessories.bumper)   accLabels.push('<span class="badge">🛡 Bumper</span>');
           if (c.accessories.nos > 0)  accLabels.push(`<span class="badge">⚡ NOS L${c.accessories.nos}</span>`);
@@ -1976,6 +1976,47 @@
             </div>
           </div>`;
         }).join('');
+
+        // ── Upgrades + player-facing stats panel for the CURRENT car ──────
+        const curId = cars.find(c => c.current)?.id ?? cars[0]?.id;
+        let panelHtml = '';
+        if (curId && window.__upgrades) {
+          const cash  = window.__upgrades.cash();
+          const stats = window.__upgrades.stats(curId);
+          const slots = window.__upgrades.slots(curId);
+          const ORDER = ['grip','steering','stability','braking','durability','cooling','visibility','range'];
+          const bar = (n) => `<span style="letter-spacing:1px;color:#39D9FF">${'▮'.repeat(n)}</span>`
+                            + `<span style="letter-spacing:1px;color:#26384a">${'▮'.repeat(5-n)}</span>`;
+          const statsHtml = ORDER.map(k => `<div style="display:flex;justify-content:space-between;gap:6px;font-size:2.3vmin;">`
+            + `<span style="color:#9fb7d6;text-transform:capitalize;">${k}</span><span>${bar(stats[k]?.bars ?? 0)}</span></div>`).join('');
+          const slotsHtml = slots.map(s => {
+            const owned = s.installedLabel
+              ? `<span style="color:#66FF99">L${s.installedLevel} · ${s.installedLabel}</span>`
+              : `<span style="color:#5b6b82">stock</span>`;
+            let action;
+            if (!s.next) action = `<span style="color:#66FF99;font-size:2.1vmin;">MAX</span>`;
+            else {
+              const afford = cash >= s.next.cost;
+              action = `<button class="up-buy pa-toggle ${afford?'on':''}" data-veh="${curId}" data-up="${s.next.id}" `
+                     + `${afford?'':'disabled'}>$${s.next.cost.toLocaleString()}</button>`;
+            }
+            return `<div style="padding:1.1vmin 0;border-top:1px solid #16283a;">`
+              + `<div style="display:flex;justify-content:space-between;align-items:center;">`
+              + `<span style="color:#F4F7FF;font-size:2.5vmin;">${s.slotLabel}</span>${action}</div>`
+              + `<div style="font-size:2.0vmin;">${owned}${s.next?` <span style="color:#5b6b82">→ ${s.next.label}</span>`:''}</div>`
+              + (s.next && s.next.tradeoff ? `<div style="font-size:1.9vmin;color:#d9a15a;">⚠ ${s.next.tradeoff}</div>` : '')
+              + `</div>`;
+          }).join('');
+          panelHtml = `<div id="garage-upgrades" style="margin-top:2vmin;padding:2vmin;background:#080c16;`
+            + `border:2px solid #163550;border-radius:2vmin;">`
+            + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1vmin;">`
+            + `<span style="color:#39D9FF;font-weight:bold;font-size:2.8vmin;">UPGRADES</span>`
+            + `<span style="color:#FFD23D;font-size:2.6vmin;">$${cash.toLocaleString()}</span></div>`
+            + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4vmin;margin-bottom:1.5vmin;">${statsHtml}</div>`
+            + slotsHtml + `</div>`;
+        }
+        garageList.innerHTML = carsHtml + panelHtml;
+
         garageList.querySelectorAll('.row').forEach(row => {
           row.addEventListener('click', (e) => {
             e.preventDefault(); e.stopPropagation();
@@ -1986,6 +2027,14 @@
             // via innerHTML, destroying THIS row mid-gesture — on iOS that
             // strands the touch and kills game input after returning to play.
             requestAnimationFrame(renderGarage);   // re-paint with new "current"
+          });
+        });
+        // Buy-upgrade buttons — deduct cash, install, re-render.
+        garageList.querySelectorAll('.up-buy').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            window.__upgrades?.buy?.(btn.dataset.veh, btn.dataset.up);
+            requestAnimationFrame(renderGarage);
           });
         });
       };

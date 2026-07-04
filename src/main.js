@@ -7,6 +7,13 @@ import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, DRUGS
 import { Weather } from './world/Weather.js';
 import { DRUG_PRICE } from './scenes/RestStopScene.js';
 import { AchievementSystem } from './systems/AchievementSystem.js';
+import { getVehicleDisplayStats } from './systems/VehicleStats.js';
+import {
+  getInstalled, getUpgradeEffects, buyUpgrade as installUpgrade,
+} from './systems/UpgradeSystem.js';
+import {
+  UPGRADE_SLOTS, SLOT_LABELS, getSlotTiers, getUpgradeById,
+} from './data/upgrades.js';
 import { AudioSystem }       from './systems/AudioSystem.js';
 import { CloudSave }         from './systems/CloudSave.js';
 import { challengeForDate, weekDailies, DAILY_WEEKLY_BONUS, stageConfigFor, challengeById, DAILY_CHALLENGES } from './systems/DailyChallenges.js';
@@ -494,6 +501,58 @@ const _boot = () => {
       if (!VEHICLES[id]) return;
       game.registry.set('vehicleId', id);
       try { game.scene.getScene('Game')?.scene?.restart(); } catch (e) {}
+    },
+  };
+
+  // Part-upgrade + player-facing-stats bridge for the phone-menu garage.
+  // cash lives on the live GameScene (score); upgrades persist in the save.
+  window.__upgrades = {
+    cash: () => Math.max(0, Math.round(game.scene.getScene('Game')?.score ?? 0)),
+
+    // 8 player-facing stats as { key: {bars, note} } for the current build.
+    stats: (vehicleId) => {
+      const save = game.registry.get('save');
+      return getVehicleDisplayStats(vehicleId, {
+        accessories:    save?.get?.('accessories', {}) ?? {},
+        upgradeEffects: getUpgradeEffects(save, vehicleId),
+      });
+    },
+
+    // Per-slot install state + the next purchasable tier (or null if maxed).
+    slots: (vehicleId) => {
+      const save = game.registry.get('save');
+      const installed = getInstalled(save, vehicleId);
+      return UPGRADE_SLOTS.map(slot => {
+        const tiers   = getSlotTiers(slot);
+        const curId   = installed[slot];
+        const curUp   = curId ? tiers.find(t => t.id === curId) : null;
+        const curLvl  = curUp?.level ?? 0;
+        const next    = tiers.find(t => t.level === curLvl + 1) ?? null;
+        return {
+          slot,
+          slotLabel:      SLOT_LABELS[slot] ?? slot,
+          installedLabel: curUp?.label ?? null,
+          installedLevel: curLvl,
+          maxLevel:       tiers.length,
+          next: next ? {
+            id: next.id, label: next.label, cost: next.cost,
+            tradeoff: next.tradeoff ?? '', desc: next.desc ?? '',
+          } : null,
+        };
+      });
+    },
+
+    // Buy → deduct live cash, install into the save.  Returns { ok, reason, cash }.
+    buy: (vehicleId, upgradeId) => {
+      const scene = game.scene.getScene('Game');
+      const save  = game.registry.get('save');
+      const up    = getUpgradeById(upgradeId);
+      if (!up)    return { ok: false, reason: 'unknown-upgrade', cash: Math.round(scene?.score ?? 0) };
+      const cash  = Math.round(scene?.score ?? 0);
+      if (cash < up.cost) return { ok: false, reason: 'insufficient', cash };
+      if (scene) scene.score -= up.cost;
+      const res = installUpgrade(save, vehicleId, upgradeId);
+      return { ok: res.ok, reason: res.reason, cash: Math.max(0, Math.round(scene?.score ?? 0)) };
     },
   };
 
