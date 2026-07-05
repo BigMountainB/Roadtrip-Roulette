@@ -112,23 +112,23 @@ export const ASSET_MANIFEST = {
   ],
   // (hookers section removed — HookerSystem was vestigial / deleted.)
   drugs: [
-    { key: 'drug_beer',     path: 'assets/drugs/beer.png?v=badge-refresh-3' },
-    { key: 'drug_weed',     path: 'assets/drugs/weed.png?v=badge-refresh-3' },
-    { key: 'drug_cocaine',  path: 'assets/drugs/cocaine.webp?v=badge-refresh-3' },
-    { key: 'drug_shrooms',  path: 'assets/drugs/shrooms.png?v=badge-refresh-3' },
-    { key: 'drug_lsd',      path: 'assets/drugs/lsd.png?v=badge-refresh-3' },
-    { key: 'drug_heroin',   path: 'assets/drugs/heroin.png?v=badge-refresh-3' },
-    { key: 'drug_rx',       path: 'assets/drugs/rx.png?v=badge-refresh-3' },
-    { key: 'drug_fentanyl', path: 'assets/drugs/fentanyl.png?v=badge-refresh-3' },
-    { key: 'drug_ketamine', path: 'assets/drugs/ketamine.png?v=badge-refresh-3' },
-    { key: 'drug_meth',     path: 'assets/drugs/meth.png?v=badge-refresh-3' },
+    { key: 'drug_beer',     path: 'assets/drugs/beer.png?v=reskin-1' },
+    { key: 'drug_weed',     path: 'assets/drugs/weed.png?v=reskin-1' },
+    { key: 'drug_cocaine',  path: 'assets/drugs/cocaine.png?v=reskin-1' },
+    { key: 'drug_shrooms',  path: 'assets/drugs/shrooms.png?v=reskin-1' },
+    { key: 'drug_lsd',      path: 'assets/drugs/lsd.png?v=reskin-1' },
+    { key: 'drug_heroin',   path: 'assets/drugs/heroin.png?v=reskin-1' },
+    { key: 'drug_rx',       path: 'assets/drugs/rx.png?v=reskin-1' },
+    { key: 'drug_fentanyl', path: 'assets/drugs/fentanyl.png?v=reskin-1' },
+    { key: 'drug_ketamine', path: 'assets/drugs/ketamine.png?v=reskin-1' },
+    { key: 'drug_meth',     path: 'assets/drugs/meth.png?v=reskin-1' },
   ],
   // Power-ups (Mario-style buffs).  Real art now lives alongside the drug
   // pickups under assets/drugs/; the procedural placeholders in BootScene
   // remain as a fallback if a file is ever missing.
   powerups: [
-    { key: 'powerup_steroid', path: 'assets/drugs/steroids.png?v=badge-refresh-3' },
-    { key: 'powerup_narcan',  path: 'assets/drugs/narcan.png?v=badge-refresh-3' },
+    { key: 'powerup_steroid', path: 'assets/drugs/steroids.png?v=reskin-1' },
+    { key: 'powerup_narcan',  path: 'assets/drugs/narcan.png?v=reskin-1' },
   ],
   // NPC portraits for the rest-stop encounter cards.  Missing files fall back
   // to the procedural colored-bust placeholder (BootScene._makeNpcPlaceholder),
