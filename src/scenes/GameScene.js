@@ -37,6 +37,8 @@ import { DamageModel }   from '../car/DamageModel.js';
 import { CloudSave }     from '../systems/CloudSave.js';
 import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
 import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '../utils/Colors.js';
+import { getUpgradeEffects } from '../systems/UpgradeSystem.js';
+import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
 
 const CAM_DEPTH = 0.84;
 const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
@@ -679,9 +681,15 @@ export class GameScene extends Phaser.Scene {
     const _savedVehId = this.registry.get('vehicleId');
     this.player.vehicleId = (_savedVehId && VEHICLES[_savedVehId]) ? _savedVehId : 'beater';
     const _veh = VEHICLES[this.player.vehicleId];
-    // Gas tank: full on each new run.  Decrements per mile in update().
-    this.player.gasMi    = _veh.rangeMi;
-    this.player.gasMaxMi = _veh.rangeMi;
+    // Active per-run buffs (from encounter choices, restored on resume below).
+    this._activeBuffs = [];
+    // Aggregate installed part-upgrade effects for this vehicle so the drive
+    // physics (top speed, grip, steering, stability, range) reflect them.
+    this._recomputeUpgradeFx();
+    // Gas tank: full on each new run (+ fuel-system upgrade range).
+    const _rangeUp = this._upgradeFx?.rangeMi ?? 0;
+    this.player.gasMi    = _veh.rangeMi + _rangeUp;
+    this.player.gasMaxMi = _veh.rangeMi + _rangeUp;
 
     // ── New overhaul systems ──────────────────────────────────────────
     // HP cap pulls from the chosen vehicle's spec so a Truck can soak
@@ -1998,6 +2006,12 @@ export class GameScene extends Phaser.Scene {
           }
           if (typeof buys.addPartyClockSec === 'number') {
             this._partyClockSec = Math.max(0, (this._partyClockSec ?? 0) + buys.addPartyClockSec);
+          }
+          // Encounter buffs (chains, wind-ready, tow insurance…) — carry into
+          // the run and refresh the merged handling modifiers.
+          if (Array.isArray(buys.encounterBuffs) && buys.encounterBuffs.length) {
+            this._activeBuffs = [...(this._activeBuffs ?? []), ...buys.encounterBuffs];
+            this._recomputeUpgradeFx();
           }
           if (Array.isArray(buys.boughtVehicles) && buys.boughtVehicles.length) {
             const owned = new Set(this.registry.get('ownedVehicles') ?? ['beater']);
@@ -4452,8 +4466,9 @@ export class GameScene extends Phaser.Scene {
     const methBonus = this.drugs.getMethSpeedBonusMPH?.() ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
     const nosBonus  = nosTier * 5;
-    const cruiseMph = _vehSpec.topMph + cokeBonus + methBonus + nosBonus;
-    const boostMph  = _vehSpec.topMph + (_vehSpec.boostMph ?? 20) + cokeBonus + methBonus + nosBonus;
+    const upMph     = this._upgradeFx?.topMph ?? 0;   // engine/tire upgrades + buffs
+    const cruiseMph = _vehSpec.topMph + cokeBonus + methBonus + nosBonus + upMph;
+    const boostMph  = _vehSpec.topMph + (_vehSpec.boostMph ?? 20) + cokeBonus + methBonus + nosBonus + upMph;
     const slowMph   = 60;
     const mphToUnits = (mph) => MAX_SPEED * (mph / 120);
 
@@ -4808,7 +4823,11 @@ export class GameScene extends Phaser.Scene {
     }
     const _is4x4   = VEHICLES[this.player.vehicleId]?.drive === '4x4';
     const _hasTrac = !!(this._vehicleAccessories?.().traction);
-    const penReduction = Math.min(1, (_is4x4 ? 0.60 : 0) + (_hasTrac ? 0.40 : 0));
+    // Weather-contextual grip from part upgrades + buffs: snow tires / chains
+    // in snow, good all-seasons in rain.  Adds to the 4x4 + traction relief.
+    const _wCtxGrip = wState === 'snow' ? (this._upgradeFx?.snowGrip ?? 0)
+                    : wState === 'rain' ? (this._upgradeFx?.rainGrip ?? 0) : 0;
+    const penReduction = Math.min(1, (_is4x4 ? 0.60 : 0) + (_hasTrac ? 0.40 : 0) + _wCtxGrip);
     const weatherGrip = 1 - weatherSlide * (1 - penReduction);
 
     // TERRAIN grip — based on how far off the painted road the car is.
@@ -4819,7 +4838,7 @@ export class GameScene extends Phaser.Scene {
     // (1.25) handles grass much better than a Sports Car (0.65).
     // On-road (≤1.0) is unaffected — vehicle.grip handles dry-pavement.
     const _ax = Math.abs(this.player.x);
-    const _orGrip = _vehSpec.offroadGrip ?? 1.0;
+    const _orGrip = (_vehSpec.offroadGrip ?? 1.0) + (this._upgradeFx?.offroad ?? 0);
     let terrainGrip;
     if      (_ax <= 1.00) terrainGrip = 1.00;
     else if (_ax <= 1.06) terrainGrip = 0.92 * _orGrip;   // rumble strip
@@ -4860,9 +4879,12 @@ export class GameScene extends Phaser.Scene {
     // every field.  Sports cars have high grip + sharp turnRate but
     // poor stability and terrible offroad.  Trucks lower grip + slow
     // turnRate but high stability + great offroad.  See VEHICLES table.
-    const vehicleGrip      = _vehSpec.grip      ?? 1.0;
-    const vehicleTurnRate  = _vehSpec.turnRate  ?? 1.0;
-    const vehicleStability = _vehSpec.stability ?? 1.0;
+    // Base handling + installed part-upgrade/buff deltas (tires→grip,
+    // suspension/steering→turnRate, suspension/brakes→stability).
+    const _fx = this._upgradeFx ?? {};
+    const vehicleGrip      = (_vehSpec.grip      ?? 1.0) + (_fx.grip      ?? 0);
+    const vehicleTurnRate  = (_vehSpec.turnRate  ?? 1.0) + (_fx.steer     ?? 0);
+    const vehicleStability = (_vehSpec.stability ?? 1.0) + (_fx.stability ?? 0);
 
     const grip = vehicleGrip * surfaceGrip * speedGripPen * brakeInTurnPen;
 
@@ -18307,6 +18329,21 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  /** Recompute the merged handling modifiers (installed part upgrades + active
+   *  run buffs) for the current vehicle into `this._upgradeFx`.  Called on run
+   *  start, after a garage purchase, and after a vehicle swap.  Keys: topMph,
+   *  grip, steer, stability, offroad, rangeMi, snowGrip, rainGrip, cooling. */
+  _recomputeUpgradeFx() {
+    const save = this.registry.get('save');
+    const vehId = this.player?.vehicleId ?? this.registry.get('vehicleId') ?? 'beater';
+    const up   = getUpgradeEffects(save, vehId) ?? {};
+    const buff = aggregateBuffEffects(this._activeBuffs ?? []);
+    const merged = { ...up };
+    for (const [k, v] of Object.entries(buff)) merged[k] = (merged[k] ?? 0) + v;
+    this._upgradeFx = merged;
+    return merged;
+  }
+
   // Top speed in internal units, accounting for cocaine + meth pickup boosts + NOS.
   _maxSpeedWithBoost() {
     const cokeBonus = this.drugs.getCocaineSpeedBonusMPH?.() ?? 0;
@@ -18352,6 +18389,8 @@ export class GameScene extends Phaser.Scene {
     let   lost        = Math.floor(earnedSince / 2);
     // Lawyer on retainer → busted fine cut in half.
     if (this.registry.get('save')?.get?.('lawyerRetained')) lost = Math.floor(lost * 0.5);
+    // Tow-insurance buff (from the Washtucna tow driver) cushions the loss too.
+    if (hasSpecialBuff(this._activeBuffs ?? [], 'cheaper_wreck')) lost = Math.floor(lost * 0.5);
     this.score       -= lost;
 
     // EASY mode — a bust doesn't end the run; you keep the cash dock but get

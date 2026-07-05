@@ -552,6 +552,9 @@ const _boot = () => {
       if (cash < up.cost) return { ok: false, reason: 'insufficient', cash };
       if (scene) scene.score -= up.cost;
       const res = installUpgrade(save, vehicleId, upgradeId);
+      // Refresh the live handling modifiers so the upgrade affects the drive
+      // immediately (not just the stat bars).
+      try { scene?._recomputeUpgradeFx?.(); } catch (_) {}
       return { ok: res.ok, reason: res.reason, cash: Math.max(0, Math.round(scene?.score ?? 0)) };
     },
   };
