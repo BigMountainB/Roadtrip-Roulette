@@ -139,6 +139,12 @@ export const ASSET_MANIFEST = {
     { key: 'npc_ski_bum',        path: 'assets/npc/ski_bum.png' },
     { key: 'npc_long_haul_mike', path: 'assets/npc/long_haul_mike.png' },
     { key: 'npc_farm_worker',    path: 'assets/npc/farm_worker.png' },
+    { key: 'npc_biz_founder',    path: 'assets/npc/biz_founder.png' },
+    { key: 'npc_hiker_woman',    path: 'assets/npc/hiker_woman.png' },
+    { key: 'npc_park_ranger',    path: 'assets/npc/park_ranger.png' },
+    { key: 'npc_diner_waitress', path: 'assets/npc/diner_waitress.png' },
+    { key: 'npc_grandma',        path: 'assets/npc/grandma.png' },
+    { key: 'npc_tow_driver',     path: 'assets/npc/tow_driver.png' },
   ],
   buildings: [
     { key: 'space_needle', path: 'assets/buildings/codex/space_needle_landmark.png' },

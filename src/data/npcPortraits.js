@@ -21,6 +21,13 @@ export const NPC_PORTRAITS = {
   hiker_one_boot:  { texture: 'npc_hiker_one_boot',  name: 'Hiker (One Boot)',     placeholderTint: 0x6E8B3D },
   farm_worker:     { texture: 'npc_farm_worker',     name: 'Farm Worker',          placeholderTint: 0x9A6B2E },
   desert_oddball:  { texture: 'npc_desert_oddball',  name: 'Desert Oddball',       placeholderTint: 0xB5462E },
+  // Women of the road.
+  biz_founder:     { texture: 'npc_biz_founder',     name: 'App Founder',          placeholderTint: 0x4AC3B0 },
+  hiker_woman:     { texture: 'npc_hiker_woman',     name: 'Hitchhiker',           placeholderTint: 0x7FA05A },
+  park_ranger:     { texture: 'npc_park_ranger',     name: 'Park Ranger',          placeholderTint: 0x3E7D4F },
+  diner_waitress:  { texture: 'npc_diner_waitress',  name: 'Diner Waitress',       placeholderTint: 0xD46A8A },
+  grandma:         { texture: 'npc_grandma',         name: 'Roadside Grandma',     placeholderTint: 0xB59AC4 },
+  tow_driver:      { texture: 'npc_tow_driver',      name: 'Tow Driver',           placeholderTint: 0xC98A3A },
 };
 
 /** Resolve a portrait descriptor by key, falling back to a generic card. */

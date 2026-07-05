@@ -126,6 +126,109 @@ export const REST_STOP_ENCOUNTERS = [
       { label: "Risk it on empty", effects: {} },
     ],
   },
+
+  // ── Bellevue (B) — tech-money hustle ────────────────────────────────────
+  {
+    id: 'bellevue_traffic_app',
+    stopId: 'B', weight: 2,
+    portrait: 'biz_founder', speaker: 'App Founder',
+    line: "Our app reroutes you around every speed trap to Pullman. Freemium. The free part is the disappointment.",
+    fact: "Bellevue grew from a quiet suburb into a glass-tower tech hub in barely two decades.",
+    choices: [
+      {
+        label: "Buy premium ($60)",
+        cost: 60,
+        chance: [
+          { p: 0.7, effects: { heatStars: -1, timeSec: +30, dialogue: "It actually works — you glide past two traps. She's already pitching a Series B." } },
+          { p: 0.3, effects: { dialogue: "\"Servers are scaling,\" she says, as the app crashes. So does your $60." } },
+        ],
+      },
+      { label: "Ask for the free version", effects: { revealHazard: 'speed_trap' } },
+      { label: "Keep your data", effects: {} },
+    ],
+  },
+
+  // ── Issaquah (I) — hitchhiker toward the pass ───────────────────────────
+  {
+    id: 'issaquah_hitcher',
+    stopId: 'I', weight: 2,
+    portrait: 'hiker_woman', speaker: 'Hitchhiker',
+    line: "I need a lift toward the pass. Gas money up front, zero small talk. Best offer you'll get today.",
+    fact: "Issaquah sits at the foot of the Cascades, where the suburbs finally give up.",
+    choices: [
+      {
+        label: "Pick her up",
+        chance: [
+          { p: 0.6, effects: { cash: +40, dialogue: "She pays, navigates the curves better than your GPS, and vanishes at the summit. Ideal passenger." } },
+          { p: 0.4, effects: { heatStars: +1, dialogue: "Turns out she's on a list. Now you're adjacent to it." } },
+        ],
+      },
+      { label: "Take gas money, no ride", effects: { cash: +20, dialogue: "\"Cold. Respect.\" She hands you a twenty and walks on." } },
+      { label: "Drive on", effects: {} },
+    ],
+  },
+
+  // ── Cle Elum (C) — elk country ranger ───────────────────────────────────
+  {
+    id: 'cleelum_ranger',
+    stopId: 'C', weight: 2,
+    portrait: 'park_ranger', speaker: 'Park Ranger',
+    line: "Elk move at dusk through here, and they do not check their blind spots. Neither do you, apparently.",
+    fact: "The forested Cle Elum stretch is prime elk country in the Cascade foothills.",
+    choices: [
+      { label: "Heed the warning", effects: { buff: 'elk_ready', revealHazard: 'elk', dialogue: "\"Slow at the tree lines. They're bigger than your car's opinions.\"" } },
+      { label: "Point her at a 'lost hiker' up the road", effects: { heatStars: -1, dialogue: "She radios it in, distracted. Your record breathes a little easier." } },
+      { label: "Nod and leave", effects: {} },
+    ],
+  },
+
+  // ── Ellensburg (E) — rodeo-town diner ───────────────────────────────────
+  {
+    id: 'ellensburg_diner',
+    stopId: 'E', weight: 3,
+    portrait: 'diner_waitress', speaker: 'Diner Waitress',
+    line: "Rodeo's in town so the coffee's fresh and the regulars are feral. You look like you're running from something. Pie?",
+    fact: "Ellensburg is Kittitas County's rodeo-and-college town, roughly halfway across the state.",
+    choices: [
+      { label: "Coffee & pie ($12)", cost: 12, effects: { hp: +4, timeSec: +15, dialogue: "Best decision you've made all trip. Low bar, but still." } },
+      { label: "Ask what's ahead", effects: { revealHazard: 'wind', dialogue: "\"Wind past Vantage'll part your hair through the windshield.\"" } },
+      { label: "Just the check", effects: {} },
+    ],
+  },
+
+  // ── Hatton (H) — the loneliest rest stop ────────────────────────────────
+  {
+    id: 'hatton_grandma',
+    stopId: 'H', weight: 3,
+    portrait: 'grandma', speaker: 'Roadside Grandma',
+    line: "Not many stop in Hatton, dear. I keep gas for the ones who do. And cookies. The gas is safer.",
+    fact: "Hatton is a tiny spot on WA-26, in the sparse country between Othello and Washtucna.",
+    choices: [
+      { label: "Buy her gas ($35)", cost: 35, effects: { fuelMi: +50, dialogue: "\"Drive safe. Or don't. I'll hear about it either way.\"" } },
+      {
+        label: "Take a cookie",
+        chance: [
+          { p: 0.7, effects: { hp: +3, dialogue: "Weirdly restorative. You feel watched, but nourished." } },
+          { p: 0.3, effects: { timeSec: -20, dialogue: "You blink and twenty minutes are gone. Really good cookie." } },
+        ],
+      },
+      { label: "Politely flee", effects: {} },
+    ],
+  },
+
+  // ── Washtucna (W) — the tow driver who's seen things ────────────────────
+  {
+    id: 'washtucna_tow',
+    stopId: 'W', weight: 2,
+    portrait: 'tow_driver', speaker: 'Tow Driver',
+    line: "I pull three wrecks a week off this stretch. Business is good, which should worry you.",
+    fact: "The Washtucna area is sparse wheat-country highway — long gaps between help.",
+    choices: [
+      { label: "Prepay a tow discount ($50)", cost: 50, effects: { buff: 'tow_insurance', dialogue: "\"Crash and I'll only judge you a little.\"" } },
+      { label: "Have her bang out a dent ($40)", cost: 40, effects: { hp: +12, dialogue: "A mallet, a grunt, and your car is marginally less sad." } },
+      { label: "Wave her off", effects: {} },
+    ],
+  },
 ];
 
 /** Deterministic-ish weighted pick without Math.random (pass an rng()->[0,1)).
