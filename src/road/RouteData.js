@@ -3066,7 +3066,7 @@ function pickF12(rng) {
 }
 
 function pickCollectible(rng, routeProgress) {
-  if (routeProgress < 0.25) return rng.bool(0.7) ? 'beer' : 'weed';
-  if (routeProgress < 0.45) return rng.pick(['beer', 'beer', 'weed', 'cocaine']);
-  return rng.pick(['beer', 'weed', 'cocaine', 'beer', 'weed']);
+  if (routeProgress < 0.25) return rng.bool(0.7) ? 'sushi' : 'burrito';
+  if (routeProgress < 0.45) return rng.pick(['sushi', 'sushi', 'burrito', 'energy']);
+  return rng.pick(['sushi', 'burrito', 'energy', 'sushi', 'burrito']);
 }

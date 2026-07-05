@@ -108,7 +108,7 @@ export class BootScene extends Phaser.Scene {
     // so downstream code can reference manifest keys safely.
     this._fillMissingPlaceholders();
 
-    // (Removed: drug_cocaine procedural override.  The user is shipping a
+    // (Removed: vice_energy procedural override.  The user is shipping a
     // real cocaine sprite under public/assets/drugs/cocaine.webp now and
     // the override was clobbering it on every boot.)
 
@@ -229,7 +229,7 @@ export class BootScene extends Phaser.Scene {
   _makePlaceholder(key) {
     if (key.startsWith('car_'))    return this._makeCarPlaceholder(key);
     if (key.startsWith('hooker_')) return this._makeHookerPlaceholder(key);
-    if (key.startsWith('drug_'))   return this._makeDrugPlaceholder(key);
+    if (key.startsWith('vice_'))   return this._makeDrugPlaceholder(key);
     if (key.startsWith('cop_'))    return this._makeCopPlaceholder(key);
     if (key.startsWith('ui_'))     return this._makeUIPlaceholder(key);
     if (key.startsWith('powerup_')) return this._makePowerupPlaceholder(key);
@@ -261,20 +261,17 @@ export class BootScene extends Phaser.Scene {
    *  blue rescue vial with a white medical cross.  Replaced by real art when
    *  the .webp is added. */
   _makePowerupPlaceholder(key) {
-    if (key === 'powerup_narcan') return this._makeNarcanSprite(key);
+    if (key === 'powerup_espresso') return this._makeNarcanSprite(key);
+    // Redneck Rage placeholder — a red energy CAN (no drug-styled art), shown
+    // until redneck_rage.png is dropped into public/assets/vices/.
     const size = 56;
     const g = this.make.graphics({ x: 0, y: 0, add: false });
-    // Red roundel backdrop with a soft shadow.
     g.fillStyle(0x000000, 0.35); g.fillCircle(size / 2 + 2, size / 2 + 2, size / 2 - 2);
     g.fillStyle(0xCC1133, 1);    g.fillCircle(size / 2,     size / 2,     size / 2 - 4);
-    g.fillStyle(0xFF3355, 1);    g.fillCircle(size / 2,     size / 2,     size / 2 - 9);
-    // Diagonal gold syringe across the roundel.
-    g.lineStyle(5, 0xFFD23D, 1);
-    g.beginPath(); g.moveTo(14, 42); g.lineTo(40, 16); g.strokePath();
-    // Plunger barrel + needle tip.
-    g.fillStyle(0xFFE680, 1); g.fillRect(34, 10, 12, 12);
-    g.lineStyle(3, 0xCCCCCC, 1);
-    g.beginPath(); g.moveTo(12, 44); g.lineTo(8, 48); g.strokePath();
+    // Can body.
+    g.fillStyle(0xB0202A, 1); g.fillRoundedRect(20, 12, 16, 32, 3);
+    g.fillStyle(0x7A1620, 1); g.fillRect(20, 16, 16, 4);   // top band
+    g.fillStyle(0xFFD23D, 1); g.fillRect(22, 24, 12, 4);   // label stripe
     g.generateTexture(key, size, size);
     g.destroy();
   }
@@ -331,20 +328,20 @@ export class BootScene extends Phaser.Scene {
   }
 
   _makeDrugPlaceholder(key) {
-    // Cocaine gets a custom baggie sprite — readable from a distance and
-    // immediately recognisable as a drug pickup, not a generic white pill.
-    if (key === 'drug_cocaine') return this._makeCocaineSprite(key);
-
+    // Neutral colored-disc placeholder per vice, shown until the real art is
+    // dropped into public/assets/vices/.  (No drug-styled art — food/fatigue
+    // theme; colors mirror DRUG_CONFIG.)
     const palette = {
-      drug_beer:     0xF5A623,
-      drug_weed:     0x4CAF50,
-      drug_shrooms:  0xBB44FF,
-      drug_lsd:      0xFF44AA,
-      drug_heroin:   0x8B4513,
-      drug_rx:       0x00BCD4,
-      drug_fentanyl: 0xFF2222,
-      drug_ketamine: 0x44EEFF,
-      drug_meth:     0xCCFFCC,
+      vice_sushi:     0x9ACD32,
+      vice_burrito:   0xC8862B,
+      vice_energy:    0x3AC8FF,
+      vice_gummies:   0xFF5FA2,
+      vice_hotdog:    0xD2691E,
+      vice_combo:     0xE8A33D,
+      vice_coldbrew:  0x8B5A2B,
+      vice_coma:      0xB0303A,
+      vice_slushie:   0x3AA0FF,
+      vice_caffeine:  0xE8E8E8,
     };
     const color = palette[key] ?? 0xFFFFFF;
     const size = 48;

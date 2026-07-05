@@ -84,16 +84,16 @@ export class EffectsSystem {
     const d = drugs;
     const mile = ctx.mile ?? 0;
 
-    const alc  = d.get(DRUGS.ALCOHOL);
-    const weed = d.get(DRUGS.WEED);
-    const coke = d.get(DRUGS.COCAINE);
-    const shrooms = d.get(DRUGS.SHROOMS);
-    const lsd  = d.get(DRUGS.LSD);
-    const hero = d.get(DRUGS.HEROIN);
-    const rx   = d.get(DRUGS.RX);
-    const fent = d.get(DRUGS.FENTANYL);
-    const ket  = d.get(DRUGS.KETAMINE);
-    const meth = d.get(DRUGS.METH);
+    const alc  = d.get(DRUGS.SUSHI);
+    const weed = d.get(DRUGS.BURRITO);
+    const coke = d.get(DRUGS.ENERGY);
+    const shrooms = d.get(DRUGS.GUMMIES);
+    const lsd  = d.get(DRUGS.HOTDOG);
+    const hero = d.get(DRUGS.COMBO);
+    const rx   = d.get(DRUGS.COLDBREW);
+    const fent = d.get(DRUGS.COMA);
+    const ket  = d.get(DRUGS.SLUSHIE);
+    const meth = d.get(DRUGS.CAFFEINE);
 
     // High-dose mushrooms: smoothly feed a visual-only liquid-world warp
     // into Road.render(). Keeping this in the projection pass bends pavement,
@@ -207,7 +207,7 @@ export class EffectsSystem {
       // Alpha bumped 0.32 → 0.55 + a baseline term keyed off the bar
       // itself so saturation reads even on the first pickup.
       if (shrooms > 0.05) {
-        const shroomPickups = d.pickupCounts?.[DRUGS.SHROOMS] ?? 0;
+        const shroomPickups = d.pickupCounts?.[DRUGS.GUMMIES] ?? 0;
         const satBoost = Math.min(1, shroomPickups * 0.08);
         const hue1 = Math.sin(t * 0.4)         * 0.5 + 0.5;
         const hue2 = Math.sin(t * 0.4 + 2.094) * 0.5 + 0.5;
@@ -262,7 +262,7 @@ export class EffectsSystem {
       // at higher levels.  Above 90% the screen flips to a heavy grey
       // wash, reading as "everything's gone B&W".
       if (lsd > 0.05) {
-        const lsdPickups = d.pickupCounts?.[DRUGS.LSD] ?? 0;
+        const lsdPickups = d.pickupCounts?.[DRUGS.HOTDOG] ?? 0;
         const brightness = Math.min(1, lsdPickups * 0.08);
         // Flat white wash for the brightness lift.
         this.overlay.fillStyle(0xFFFFFF, brightness * 0.30);
@@ -1100,16 +1100,16 @@ export class EffectsSystem {
 
   /** Physics modifiers returned as plain object for Player to read */
   getPhysics(drugs) {
-    const alc   = drugs.get(DRUGS.ALCOHOL);
-    const weed  = drugs.get(DRUGS.WEED);
-    const coke  = drugs.get(DRUGS.COCAINE);
-    const shrooms = drugs.get(DRUGS.SHROOMS);
-    const lsd   = drugs.get(DRUGS.LSD);
-    const hero  = drugs.get(DRUGS.HEROIN);
-    const fent  = drugs.get(DRUGS.FENTANYL);
-    const ket   = drugs.get(DRUGS.KETAMINE);
-    const rx    = drugs.get(DRUGS.RX);
-    const meth  = drugs.get(DRUGS.METH);
+    const alc   = drugs.get(DRUGS.SUSHI);
+    const weed  = drugs.get(DRUGS.BURRITO);
+    const coke  = drugs.get(DRUGS.ENERGY);
+    const shrooms = drugs.get(DRUGS.GUMMIES);
+    const lsd   = drugs.get(DRUGS.HOTDOG);
+    const hero  = drugs.get(DRUGS.COMBO);
+    const fent  = drugs.get(DRUGS.COMA);
+    const ket   = drugs.get(DRUGS.SLUSHIE);
+    const rx    = drugs.get(DRUGS.COLDBREW);
+    const meth  = drugs.get(DRUGS.CAFFEINE);
 
     const t = this.time;
 

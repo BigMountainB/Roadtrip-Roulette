@@ -3795,7 +3795,7 @@ export class Road {
         g.fillRect(x - w * 0.18, y + h * 0.34, w * 0.36, h * 0.13);
         break;
       }
-      case 'beer': {
+      case 'sushi': {
         // Shadow
         g.fillStyle(0x000000, 0.2);
         g.fillEllipse(x + w * 0.08, y + h, w * 0.55, h * 0.09);
@@ -3819,7 +3819,7 @@ export class Road {
         g.fillRect(x - w * 0.08, y + h * 0.35, w * 0.1, h * 0.55);
         break;
       }
-      case 'weed': {
+      case 'burrito': {
         // Shadow
         g.fillStyle(0x000000, 0.18);
         g.fillEllipse(x + w * 0.1, y + h, w * 0.7, h * 0.1);
@@ -3839,7 +3839,7 @@ export class Road {
         g.fillCircle(x - w * 0.1, y + h * 0.35, w * 0.15);
         break;
       }
-      case 'cocaine': {
+      case 'energy': {
         // Dark surface
         g.fillStyle(0x111122, 1);
         g.fillRect(x - w * 0.44, y + h * 0.3, w * 0.88, h * 0.45);

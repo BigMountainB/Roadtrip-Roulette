@@ -22,18 +22,18 @@ import { Difficulty } from './Difficulty.js';
 // wildly by drug: 14 beers vs 2 fentanyl, etc.  Many drugs also trigger
 // cross-drug or per-pickup effects (see DrugSystem.pickup + GameScene).
 const PICKUP_AMOUNTS = {
-  alcohol:  0.18,    // 18% — bigger sips so a beer line spikes a real buzz that
+  sushi:  0.18,    // 18% — bigger sips so a beer line spikes a real buzz that
                      // survives the realistic ~65s decay (raised from 7% 2026-06-22)
-  weed:     0.125,   // 12.5% base; tolerance kicks in past 60%
-  cocaine:  0.10,    // 10% per line → 10 lines fills the bar, 11th ODs (per
+  burrito:     0.125,   // 12.5% base; tolerance kicks in past 60%
+  energy:  0.10,    // 10% per line → 10 lines fills the bar, 11th ODs (per
                      // user 2026-07-01: "10 lines OD, each hit is 10%")
-  shrooms:  0.20,    // 20% — fastest visual ramp
-  lsd:      0.25,    // 25% — fastest of all
-  heroin:   0.30,    // 30%
-  rx:       0.18,    // 18% — one pill is a real dose (raised from 8.5% 2026-06-23)
-  fentanyl: 0.55,    // 55% — 2 hits OD at ≥1.00
-  ketamine: 0.15,    // 15% — dissociative, scales with redosing (was 10%)
-  meth:     0.25,    // 25% — most potent + longest stimulant high (was 10%)
+  gummies:  0.20,    // 20% — fastest visual ramp
+  hotdog:      0.25,    // 25% — fastest of all
+  combo:   0.30,    // 30%
+  coldbrew:       0.18,    // 18% — one pill is a real dose (raised from 8.5% 2026-06-23)
+  coma: 0.55,    // 55% — 2 hits OD at ≥1.00
+  slushie: 0.15,    // 15% — dissociative, scales with redosing (was 10%)
+  caffeine:     0.25,    // 25% — most potent + longest stimulant high (was 10%)
 };
 
 export class DrugSystem {
@@ -89,8 +89,8 @@ export class DrugSystem {
     if (!saved || typeof saved !== 'object') return;
     if (saved.methPhase1) this._methPhase1 = true;
     if (typeof saved.cocainePeak === 'number') {
-      this.maxReached[DRUGS.COCAINE] = Math.max(
-        this.maxReached[DRUGS.COCAINE] ?? 0, saved.cocainePeak);
+      this.maxReached[DRUGS.ENERGY] = Math.max(
+        this.maxReached[DRUGS.ENERGY] ?? 0, saved.cocainePeak);
     }
   }
 
@@ -98,7 +98,7 @@ export class DrugSystem {
   snapshotProgress() {
     return {
       methPhase1:  !!this._methPhase1,
-      cocainePeak: this.maxReached[DRUGS.COCAINE] ?? 0,
+      cocainePeak: this.maxReached[DRUGS.ENERGY] ?? 0,
     };
   }
 
@@ -120,7 +120,7 @@ export class DrugSystem {
 
   update(dt) {
     let anyActive = false;
-    const cokeLevel = this.levels[DRUGS.COCAINE] ?? 0;
+    const cokeLevel = this.levels[DRUGS.ENERGY] ?? 0;
     // Custom mode — drug levels are user-set sandbox values, so they
     // hold steady (no decay).  Still tally maxReached + anyActive so
     // bar rendering and combo detection work normally.
@@ -131,7 +131,7 @@ export class DrugSystem {
     // `notePermastonedTick`, which runs AFTER `update()` — so on the
     // first frame at 100% the decay would shave the bar back below 1.0
     // before the timer could even start.  Gate purely on the bar level.
-    const weedPermastonedActive = (this.levels[DRUGS.WEED] ?? 0) >= 1.0
+    const weedPermastonedActive = (this.levels[DRUGS.BURRITO] ?? 0) >= 1.0
       && !this._weedPermastonedLocked;
 
     for (const id of Object.values(DRUGS)) {
@@ -145,14 +145,14 @@ export class DrugSystem {
         if (noDecay) continue;
         // Weed bar holds at 100% during the Permastoned window — no decay
         // until the 10-mi mark trips and the bar is force-reset to 0.
-        if (id === DRUGS.WEED && weedPermastonedActive) continue;
+        if (id === DRUGS.BURRITO && weedPermastonedActive) continue;
         let decay = cfg.decayRate;
         // Alcohol asymmetric decay — first 50 % of the bar sticks around
         // (decay ×0.6) so it's easy to stay tipsy; above 50 % the body
         // burns it off faster (decay ramps up to ×2.5 at full bar) so
         // extreme drunkenness wears off quickly.  Net: easier to reach
         // and maintain a buzz, harder to stay maxed.
-        if (id === DRUGS.ALCOHOL) {
+        if (id === DRUGS.SUSHI) {
           if (level <= 0.5) {
             decay *= 0.6;
           } else {
@@ -161,7 +161,7 @@ export class DrugSystem {
           }
         }
         // Cocaine speeds up alcohol metabolism (~2× faster at full coke bar)
-        if (id === DRUGS.ALCOHOL && cokeLevel > 0.1) {
+        if (id === DRUGS.SUSHI && cokeLevel > 0.1) {
           decay *= 1 + cokeLevel * 1.2;
         }
         this.levels[id] = Math.max(0, level - decay * dt);
@@ -169,7 +169,7 @@ export class DrugSystem {
     }
 
     // Drunk-time tracking (for cocaine unlock)
-    if (this.levels[DRUGS.ALCOHOL] > 0.3) {
+    if (this.levels[DRUGS.SUSHI] > 0.3) {
       this.totalDrunkTime += dt;
     }
 
@@ -188,7 +188,7 @@ export class DrugSystem {
    *  to miles without importing constants. */
   notePermastonedTick(playerPos, posUnitsPerMile) {
     if (this._weedPermastonedLocked) return null;
-    const weed = this.levels[DRUGS.WEED] ?? 0;
+    const weed = this.levels[DRUGS.BURRITO] ?? 0;
     if (weed < 1.0) {
       this._weedAt100StartPos = null;
       return null;
@@ -200,7 +200,7 @@ export class DrugSystem {
     const milesAt100 = (playerPos - this._weedAt100StartPos) / posUnitsPerMile;
     if (milesAt100 >= 10) {
       this._weedPermastonedLocked = true;
-      this.levels[DRUGS.WEED]     = 0;
+      this.levels[DRUGS.BURRITO]     = 0;
       this._weedAt100StartPos     = null;
       return { permastoned: true };
     }
@@ -243,54 +243,54 @@ export class DrugSystem {
   _checkUnlocks(dt = 0) {
     const u = this.unlocked;
 
-    if (!u[DRUGS.COCAINE] && this.totalDrunkTime > 30) {
-      this._unlock(DRUGS.COCAINE);
+    if (!u[DRUGS.ENERGY] && this.totalDrunkTime > 30) {
+      this._unlock(DRUGS.ENERGY);
     }
 
     // Shrooms unlock once both beer AND weed bars are ≥ 30% AT THE SAME
     // TIME (not just historically ingested) — the player has to be drunk
     // and stoned simultaneously, not stage them separately.
-    if (!u[DRUGS.SHROOMS]
-      && (this.levels[DRUGS.ALCOHOL] ?? 0) >= 0.30
-      && (this.levels[DRUGS.WEED]    ?? 0) >= 0.30) {
-      this._unlock(DRUGS.SHROOMS);
+    if (!u[DRUGS.GUMMIES]
+      && (this.levels[DRUGS.SUSHI] ?? 0) >= 0.30
+      && (this.levels[DRUGS.BURRITO]    ?? 0) >= 0.30) {
+      this._unlock(DRUGS.GUMMIES);
     }
 
-    if (!u[DRUGS.LSD] && this.maxReached[DRUGS.SHROOMS] >= 0.50) {
-      this._unlock(DRUGS.LSD);
+    if (!u[DRUGS.HOTDOG] && this.maxReached[DRUGS.GUMMIES] >= 0.50) {
+      this._unlock(DRUGS.HOTDOG);
     }
 
-    if (!u[DRUGS.HEROIN] && this.routeProgress >= 0.20) {
-      this._unlock(DRUGS.HEROIN);
+    if (!u[DRUGS.COMBO] && this.routeProgress >= 0.20) {
+      this._unlock(DRUGS.COMBO);
     }
 
     // Rx unlocks once the player has bumped 50+ NPC cars (the player is
     // generating their own legal mess that begs prescription painkillers).
     // GameScene tracks `npcCrashesTotal` on the registry-shared drugs
     // instance via `recordNpcCrash`.
-    if (!u[DRUGS.RX] && (this.npcCrashesTotal ?? 0) >= 50) {
-      this._unlock(DRUGS.RX);
+    if (!u[DRUGS.COLDBREW] && (this.npcCrashesTotal ?? 0) >= 50) {
+      this._unlock(DRUGS.COLDBREW);
     }
 
-    if (!u[DRUGS.FENTANYL] && this.maxReached[DRUGS.HEROIN] >= 0.50) {
-      this._unlock(DRUGS.FENTANYL);
+    if (!u[DRUGS.COMA] && this.maxReached[DRUGS.COMBO] >= 0.50) {
+      this._unlock(DRUGS.COMA);
     }
 
-    if (!u[DRUGS.KETAMINE] && this.maxReached[DRUGS.LSD] >= 0.40) {
-      this._unlock(DRUGS.KETAMINE);
+    if (!u[DRUGS.SLUSHIE] && this.maxReached[DRUGS.HOTDOG] >= 0.40) {
+      this._unlock(DRUGS.SLUSHIE);
     }
 
     // Meth — special two-phase gate.  Phase 1 fires once cocaine bar
     // peaks ≥ 0.40.  Phase 2 then waits for the player to clean out
     // (cocaine = 0) and stay clean for 30 sustained seconds.
-    if (!u[DRUGS.METH]) {
-      if (this.maxReached[DRUGS.COCAINE] >= 0.40) {
+    if (!u[DRUGS.CAFFEINE]) {
+      if (this.maxReached[DRUGS.ENERGY] >= 0.40) {
         this._methPhase1 = true;
       }
       if (this._methPhase1) {
-        if ((this.levels[DRUGS.COCAINE] ?? 0) <= 0.0001) {
+        if ((this.levels[DRUGS.ENERGY] ?? 0) <= 0.0001) {
           this._methCleanTime = (this._methCleanTime ?? 0) + dt;
-          if (this._methCleanTime >= 30) this._unlock(DRUGS.METH);
+          if (this._methCleanTime >= 30) this._unlock(DRUGS.CAFFEINE);
         } else {
           this._methCleanTime = 0;       // reset if any coke shows up again
         }
@@ -332,7 +332,7 @@ export class DrugSystem {
     // Permastoned lockout — once weed has been Permastoned-locked, the
     // road suppresses weed pickups so this should rarely fire, but the
     // double-check keeps any stray pickup honest.
-    if (id === DRUGS.WEED && this._weedPermastonedLocked) return false;
+    if (id === DRUGS.BURRITO && this._weedPermastonedLocked) return false;
 
     const cfg    = DRUG_CONFIG[id];
     let amount   = PICKUP_AMOUNTS[id] ?? 0.12;
@@ -341,7 +341,7 @@ export class DrugSystem {
     // 5% per hit (per user spec).  Below 60% lets the player ramp up
     // quickly; above 60% it takes ~8 more hits to reach the Permastoned
     // 100% lock-in point.
-    if (id === DRUGS.WEED) {
+    if (id === DRUGS.BURRITO) {
       amount = this.levels[id] < 0.60 ? 0.125 : 0.05;
     }
 
@@ -357,18 +357,18 @@ export class DrugSystem {
     const dropBy = (other, delta) => {
       this.levels[other] = Math.max(0, (this.levels[other] ?? 0) - delta);
     };
-    if (id === DRUGS.ALCOHOL) {
+    if (id === DRUGS.SUSHI) {
       for (const otherId of Object.values(DRUGS)) {
-        if (otherId === DRUGS.ALCOHOL) continue;
+        if (otherId === DRUGS.SUSHI) continue;
         if ((this.levels[otherId] ?? 0) > 0.45) dropBy(otherId, 0.05);
       }
     }
-    if (id === DRUGS.COCAINE) {
-      dropBy(DRUGS.ALCOHOL, 0.07);
+    if (id === DRUGS.ENERGY) {
+      dropBy(DRUGS.SUSHI, 0.07);
     }
-    if (id === DRUGS.RX) {
+    if (id === DRUGS.COLDBREW) {
       for (const otherId of Object.values(DRUGS)) {
-        if (otherId === DRUGS.RX) continue;
+        if (otherId === DRUGS.COLDBREW) continue;
         this.levels[otherId] = Math.max(0, (this.levels[otherId] ?? 0) * 0.9);
       }
     }
@@ -376,7 +376,7 @@ export class DrugSystem {
     // Per-pickup permanent stat counters — read by GameScene for cumulative
     // top-speed bonuses (+4 mph / cocaine bag, +4 mph / meth pickup) and
     // for Rx-driven NPC traffic-speed shifts (+/-7 mph / Rx pickup).
-    if (id === DRUGS.COCAINE) this.cocainePickupCount += 1;
+    if (id === DRUGS.ENERGY) this.cocainePickupCount += 1;
     this.pickupCounts[id] = (this.pickupCounts[id] ?? 0) + 1;
 
     // Immediate OD check (2026-06-20) — every OD-capable drug now uses
@@ -397,20 +397,20 @@ export class DrugSystem {
    *  drug leaves your system (effect is tied to the active high, not lifetime
    *  count). */
   getCocaineSpeedBonusMPH() {
-    return this.cocainePickupCount * 4 * (this.levels[DRUGS.COCAINE] ?? 0);
+    return this.cocainePickupCount * 4 * (this.levels[DRUGS.ENERGY] ?? 0);
   }
 
   /** Meth speed boost in MPH (+4 mph per pickup), scaled by the current meth
    *  bar so it dissipates as the bar empties. */
   getMethSpeedBonusMPH() {
-    return (this.pickupCounts[DRUGS.METH] ?? 0) * 4 * (this.levels[DRUGS.METH] ?? 0);
+    return (this.pickupCounts[DRUGS.CAFFEINE] ?? 0) * 4 * (this.levels[DRUGS.CAFFEINE] ?? 0);
   }
 
   /** Rx-driven NPC traffic-speed offset in MPH (±7 mph per pickup), scaled by
    *  the current Rx bar so traffic returns to normal as the Rx wears off.
    *  Read by GameScene._updateTraffic. */
   getRxNpcSpeedShiftMPH() {
-    return (this.pickupCounts[DRUGS.RX] ?? 0) * 7 * (this.levels[DRUGS.RX] ?? 0);
+    return (this.pickupCounts[DRUGS.COLDBREW] ?? 0) * 7 * (this.levels[DRUGS.COLDBREW] ?? 0);
   }
 
   /** Weighted-random pick of an UNLOCKED drug, biased by lifetime pickups
@@ -418,12 +418,12 @@ export class DrugSystem {
    *  Maps internal IDs back to RouteData/_mapPickupType pickup names. */
   chooseAddictedDrug(routeProgress = 0) {
     const ID_TO_PICKUP = {
-      alcohol: 'beer', weed: 'weed', cocaine: 'cocaine', shrooms: 'shrooms',
-      lsd: 'lsd', heroin: 'heroin', rx: 'rx', fentanyl: 'fentanyl',
-      ketamine: 'ketamine', meth: 'meth',
+      sushi: 'sushi', burrito: 'burrito', energy: 'energy', gummies: 'gummies',
+      hotdog: 'hotdog', combo: 'combo', coldbrew: 'coldbrew', coma: 'coma',
+      slushie: 'slushie', caffeine: 'caffeine',
     };
-    const UPPERS  = new Set(['cocaine', 'meth', 'rx']);
-    const DOWNERS = new Set(['alcohol', 'weed', 'heroin', 'fentanyl', 'ketamine']);
+    const UPPERS  = new Set(['energy', 'caffeine', 'coldbrew']);
+    const DOWNERS = new Set(['sushi', 'burrito', 'combo', 'coma', 'slushie']);
 
     // Cross-tolerance ratio
     let upTotal = 0, dnTotal = 0;
@@ -440,7 +440,7 @@ export class DrugSystem {
     for (const id of Object.values(DRUGS)) {
       if (!this.unlocked[id]) continue;
       // Permastoned lock — no weed pickups for the rest of the run.
-      if (id === DRUGS.WEED && this._weedPermastonedLocked) continue;
+      if (id === DRUGS.BURRITO && this._weedPermastonedLocked) continue;
       const count = this.pickupCounts[id] ?? 0;
       // Base weight 1 + addiction kicker.  Switched from linear (count×0.4)
       // to sqrt-scaled (sqrt(count)×1.6) so addiction still strongly biases
@@ -454,34 +454,34 @@ export class DrugSystem {
       // Fentanyl is RARE — single hit = 50%, two = OD.  Knock its weight
       // way down so it shows up only occasionally even when the player
       // has piled up an opioid pickup history.
-      if (id === DRUGS.FENTANYL) w *= 0.08;
+      if (id === DRUGS.COMA) w *= 0.08;
       // Shrooms population reduced 20% per player request — they were
       // showing up too often on the road.
-      if (id === DRUGS.SHROOMS)  w *= 0.8;
+      if (id === DRUGS.GUMMIES)  w *= 0.8;
       candidates.push({ id, w });
       totalW += w;
     }
-    if (!candidates.length) return 'beer';
+    if (!candidates.length) return 'sushi';
 
     let r = Math.random() * totalW;
     for (const c of candidates) {
-      if ((r -= c.w) <= 0) return ID_TO_PICKUP[c.id] ?? 'beer';
+      if ((r -= c.w) <= 0) return ID_TO_PICKUP[c.id] ?? 'sushi';
     }
-    return ID_TO_PICKUP[candidates[candidates.length - 1].id] ?? 'beer';
+    return ID_TO_PICKUP[candidates[candidates.length - 1].id] ?? 'sushi';
   }
 
   _mapPickupType(type) {
     const map = {
-      beer:        DRUGS.ALCOHOL,
-      weed:        DRUGS.WEED,
-      cocaine:     DRUGS.COCAINE,
-      shrooms:     DRUGS.SHROOMS,
-      lsd:         DRUGS.LSD,
-      heroin:      DRUGS.HEROIN,
-      rx:          DRUGS.RX,
-      fentanyl:    DRUGS.FENTANYL,
-      ketamine:    DRUGS.KETAMINE,
-      meth:        DRUGS.METH,
+      sushi:        DRUGS.SUSHI,
+      burrito:        DRUGS.BURRITO,
+      energy:     DRUGS.ENERGY,
+      gummies:     DRUGS.GUMMIES,
+      hotdog:         DRUGS.HOTDOG,
+      combo:      DRUGS.COMBO,
+      coldbrew:          DRUGS.COLDBREW,
+      coma:    DRUGS.COMA,
+      slushie:    DRUGS.SLUSHIE,
+      caffeine:        DRUGS.CAFFEINE,
     };
     return map[type] ?? null;
   }
@@ -505,15 +505,15 @@ export class DrugSystem {
   /** Total intoxication 0–1 (weighted sum, capped) */
   get totalIntox() {
     const weights = {
-      alcohol:  1.0,
-      weed:     0.5,
-      cocaine:  0.8,
-      shrooms:  1.1,
-      lsd:      1.3,
-      heroin:   1.4,
-      rx:       0.6,
-      fentanyl: 2.0,
-      ketamine: 1.2,
+      sushi:  1.0,
+      burrito:     0.5,
+      energy:  0.8,
+      gummies:  1.1,
+      hotdog:      1.3,
+      combo:   1.4,
+      coldbrew:       0.6,
+      coma: 2.0,
+      slushie: 1.2,
     };
     let total = 0;
     for (const id of Object.values(DRUGS)) {

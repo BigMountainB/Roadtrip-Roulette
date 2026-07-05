@@ -1127,10 +1127,10 @@ export class AudioSystem {
       if (lvl < TH) return 0;
       return (lvl - TH) / (1 - TH);
     };
-    const alc = get('alcohol'), weed = get('weed'), coke = get('cocaine');
-    const lsd = get('lsd'),     shr  = get('shrooms');
-    const her = get('heroin'),  fnt  = get('fentanyl');
-    const ket = get('ketamine'), mth = get('meth'), rx = get('rx');
+    const alc = get('sushi'), weed = get('burrito'), coke = get('energy');
+    const lsd = get('hotdog'),     shr  = get('gummies');
+    const her = get('combo'),  fnt  = get('coma');
+    const ket = get('slushie'), mth = get('caffeine'), rx = get('coldbrew');
 
     // Lowpass — depressants progressively close the top end.
     // Alcohol intentionally excluded: the music shouldn't dull just from

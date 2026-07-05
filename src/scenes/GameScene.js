@@ -1069,7 +1069,7 @@ export class GameScene extends Phaser.Scene {
     // Drug sprite pool — Phaser Images for the road-side drug pickups.
     this._drugSpritePool = [];
     for (let i = 0; i < 24; i++) {
-      const s = this.add.image(0, 0, 'drug_beer')
+      const s = this.add.image(0, 0, 'vice_sushi')
         .setOrigin(0.5, 1).setDepth(8.5).setVisible(false);
       this._drugSpritePool.push(s);
     }
@@ -1090,7 +1090,7 @@ export class GameScene extends Phaser.Scene {
     }
     this._drugGhostPool = [];
     for (let i = 0; i < 24; i++) {
-      this._drugGhostPool.push(this.add.image(0, 0, 'drug_beer')
+      this._drugGhostPool.push(this.add.image(0, 0, 'vice_sushi')
         .setOrigin(0.5, 1).setDepth(8.5).setVisible(false));
     }
     // Scenery double-vision ghost pool — CAPPED at 40 (vs the 1900-strong
@@ -3011,7 +3011,7 @@ export class GameScene extends Phaser.Scene {
   _isRight() { return this._delayedSteer().right; }
 
   _delayedSteer() {
-    const alc = this.drugs?.get?.(DRUGS.ALCOHOL) ?? 0;
+    const alc = this.drugs?.get?.(DRUGS.SUSHI) ?? 0;
     const raw = { left: this._isLeftRaw(), right: this._isRightRaw() };
     if (alc <= 0.75) {
       // Below threshold — reset scheduling so a brief sober dip doesn't
@@ -3932,9 +3932,9 @@ export class GameScene extends Phaser.Scene {
     // After the first star, all further star changes are STATIC additions
     // from collision events (see _onCopCollision and friends).  No heat trickle.
     if (this.cops.stars < 1) {
-      const drunk    = (this.drugs.get?.(DRUGS.ALCOHOL) ?? 0) >= (1 / 3);
-      const stoned   = (this.drugs.get?.(DRUGS.WEED)    ?? 0) >= 0.5;
-      const everDrunk = (this.drugs.maxReached?.[DRUGS.ALCOHOL] ?? 0) > 0.05;
+      const drunk    = (this.drugs.get?.(DRUGS.SUSHI) ?? 0) >= (1 / 3);
+      const stoned   = (this.drugs.get?.(DRUGS.BURRITO)    ?? 0) >= 0.5;
+      const everDrunk = (this.drugs.maxReached?.[DRUGS.SUSHI] ?? 0) > 0.05;
       this._npcCrashesPostDrink ??= 0;
       this._drugBumpCount       ??= 0;
 
@@ -3955,17 +3955,17 @@ export class GameScene extends Phaser.Scene {
     this._beerLineTimer = (this._beerLineTimer ?? 90) - rawDt;
     if (this._beerLineTimer <= 0) {
       this._beerLineTimer = 80 + Math.random() * 20;       // 80–100 sec
-      const pool = ['beer', 'weed'];
-      if (this.drugs.isUnlocked(DRUGS.COCAINE))  pool.push('cocaine');
-      if (this.drugs.isUnlocked(DRUGS.SHROOMS))  pool.push('shrooms');
-      if (this.drugs.isUnlocked(DRUGS.LSD))      pool.push('lsd');
-      if (this.drugs.isUnlocked(DRUGS.HEROIN))   pool.push('heroin');
-      if (this.drugs.isUnlocked(DRUGS.RX))       pool.push('rx');
-      if (this.drugs.isUnlocked(DRUGS.FENTANYL)) pool.push('fentanyl');
-      if (this.drugs.isUnlocked(DRUGS.KETAMINE)) pool.push('ketamine');
-      if (this.drugs.isUnlocked(DRUGS.METH))     pool.push('meth');
+      const pool = ['sushi', 'burrito'];
+      if (this.drugs.isUnlocked(DRUGS.ENERGY))  pool.push('energy');
+      if (this.drugs.isUnlocked(DRUGS.GUMMIES))  pool.push('gummies');
+      if (this.drugs.isUnlocked(DRUGS.HOTDOG))      pool.push('hotdog');
+      if (this.drugs.isUnlocked(DRUGS.COMBO))   pool.push('combo');
+      if (this.drugs.isUnlocked(DRUGS.COLDBREW))       pool.push('coldbrew');
+      if (this.drugs.isUnlocked(DRUGS.COMA)) pool.push('coma');
+      if (this.drugs.isUnlocked(DRUGS.SLUSHIE)) pool.push('slushie');
+      if (this.drugs.isUnlocked(DRUGS.CAFFEINE))     pool.push('caffeine');
       // Bias toward beer so it stays the dominant line type.
-      pool.push('beer', 'beer');
+      pool.push('sushi', 'sushi');
       const drugType = pool[(Math.random() * pool.length) | 0];
       this._injectDrugLine({
         types:  [drugType, drugType, drugType, drugType],
@@ -3980,11 +3980,11 @@ export class GameScene extends Phaser.Scene {
         && milesNow !== this._lastMixedLineMile) {
       this._lastMixedLineMile = milesNow;
       // Mix is biased to drugs the player has unlocked.
-      const pool = ['beer', 'weed'];
-      if (this.drugs.isUnlocked(DRUGS.COCAINE)) pool.push('cocaine');
-      if (this.drugs.isUnlocked(DRUGS.SHROOMS)) pool.push('shrooms');
-      if (this.drugs.isUnlocked(DRUGS.LSD))     pool.push('lsd');
-      if (this.drugs.isUnlocked(DRUGS.RX))      pool.push('rx');
+      const pool = ['sushi', 'burrito'];
+      if (this.drugs.isUnlocked(DRUGS.ENERGY)) pool.push('energy');
+      if (this.drugs.isUnlocked(DRUGS.GUMMIES)) pool.push('gummies');
+      if (this.drugs.isUnlocked(DRUGS.HOTDOG))     pool.push('hotdog');
+      if (this.drugs.isUnlocked(DRUGS.COLDBREW))      pool.push('coldbrew');
       const mixed = [];
       for (let i = 0; i < 7; i++) mixed.push(pool[(Math.random() * pool.length) | 0]);
       this._injectDrugLine({
@@ -4053,10 +4053,10 @@ export class GameScene extends Phaser.Scene {
       // Fentanyl: while in your system the car is hard-capped at 30%
       // speed.  Penalising the player for that drop is double-jeopardy,
       // so suppress the slowness penalty entirely until it clears.
-      const fentActive = (this.drugs?.get?.(DRUGS.FENTANYL) ?? 0) > 0.05;
+      const fentActive = (this.drugs?.get?.(DRUGS.COMA) ?? 0) > 0.05;
       // Weed ≥ 60% — "hot-boxed" mode: no slow-driving penalty at all,
       // and off-road penalty cut in half (per user spec).
-      const weedHigh  = (this.drugs?.get?.(DRUGS.WEED) ?? 0) >= 0.60;
+      const weedHigh  = (this.drugs?.get?.(DRUGS.BURRITO) ?? 0) >= 0.60;
       // Any drug dragging max speed below baseline (heroin, fent, weed-
       // alone, ketamine, rx) suppresses the slowness penalty — getting
       // docked $ for a slowdown the drug is forcing on you is double-
@@ -5339,7 +5339,7 @@ export class GameScene extends Phaser.Scene {
     // beatable: a player holding the opposite steer (TURN_SPEED 2.8) can
     // overpower the pull when sober-leaning hard.  Scans ~80 segments
     // forward so the pull engages early enough to feel.
-    const alcLvl = this.drugs?.levels?.[DRUGS.ALCOHOL] ?? 0;
+    const alcLvl = this.drugs?.levels?.[DRUGS.SUSHI] ?? 0;
     if (alcLvl >= 0.80) {
       const segs     = this.road.segments;
       const segCount = segs.length;
@@ -5350,7 +5350,7 @@ export class GameScene extends Phaser.Scene {
         if (!seg?.sprites) continue;
         for (const sp of seg.sprites) {
           if (sp.collected || !sp.isCollectible) continue;
-          if (sp.type === 'beer') { beerOffset = sp.offset; break; }
+          if (sp.type === 'sushi') { beerOffset = sp.offset; break; }
         }
       }
       if (beerOffset !== null) {
@@ -5409,7 +5409,7 @@ export class GameScene extends Phaser.Scene {
     // LSD ≥ 90% — distance multiplier ×1.25.  The world rolls past 25%
     // faster than your actual speed, on top of the LSD-60% display cap.
     // Combined effect: read 60 mph, cover ground as if at 150 mph.
-    const lsdLvl = this.drugs?.get?.(DRUGS.LSD) ?? 0;
+    const lsdLvl = this.drugs?.get?.(DRUGS.HOTDOG) ?? 0;
     const distMul = lsdLvl >= 0.90 ? 1.25 : 1.0;
     // Crash i-frame handling.  Three cases:
     //  (a) Short-blink hits (e.g. the 200 ms bush nudge) freeze the
@@ -5704,7 +5704,7 @@ export class GameScene extends Phaser.Scene {
     // car random phase.  The road "breathes" as one.  Reads as the
     // player's depth perception playing tricks rather than chaotic
     // traffic.  Period 0.75 s, ±10 mph at full ramp.
-    const shroomLvl = this.drugs?.get?.(DRUGS.SHROOMS) ?? 0;
+    const shroomLvl = this.drugs?.get?.(DRUGS.GUMMIES) ?? 0;
     const shroomActive = shroomLvl >= 0.45;
     this._shroomTime = (this._shroomTime ?? 0) + (shroomActive ? dt : 0);
     let shroomPulseUnits = 0;
@@ -7318,13 +7318,13 @@ export class GameScene extends Phaser.Scene {
 
     const drugLevels = {};
     const drugKeys = {
-      alcohol: 'drug_beer', weed: 'drug_weed', cocaine: 'drug_cocaine',
-      shrooms: 'drug_shrooms', lsd: 'drug_lsd', heroin: 'drug_heroin',
-      rx: 'drug_rx', fentanyl: 'drug_fentanyl', ketamine: 'drug_ketamine', meth: 'drug_meth',
+      sushi: 'vice_sushi', burrito: 'vice_burrito', energy: 'vice_energy',
+      gummies: 'vice_gummies', hotdog: 'vice_hotdog', combo: 'vice_combo',
+      coldbrew: 'vice_coldbrew', coma: 'vice_coma', slushie: 'vice_slushie', caffeine: 'vice_caffeine',
     };
     const shortLabels = {
-      alcohol: 'BEER', weed: 'WEED', cocaine: 'COKE', shrooms: 'SHROOMS', lsd: 'ACID',
-      heroin: 'HEROIN', rx: 'RX', fentanyl: 'FENTANYL', ketamine: 'KETAMINE', meth: 'METH',
+      sushi: 'SUSHI', burrito: 'BURRITO', energy: 'ENERGY', gummies: 'GUMMIES', hotdog: 'HOT DOG',
+      combo: 'COMBO', coldbrew: 'COLD BREW', coma: 'BUFFET', slushie: 'SLUSHIE', caffeine: 'CAFFEINE',
     };
     const trackX = leftX + 111, trackW = 171, trackH = 10;
     const rowTop = panelY + 70, rowH = 34;
@@ -8175,9 +8175,9 @@ export class GameScene extends Phaser.Scene {
     // gets its asymmetric-bulb tint from the vehicle profile.)
 
     if (isCollision) {
-      const fent = drugs?.get?.(DRUGS.FENTANYL) ?? 0;
+      const fent = drugs?.get?.(DRUGS.COMA) ?? 0;
       if (fent >= 0.25) return 0;
-      const alc = drugs?.get?.(DRUGS.ALCOHOL) ?? 0;
+      const alc = drugs?.get?.(DRUGS.SUSHI) ?? 0;
       if (alc >= 1.0 && /sideswipe|corner/i.test(source) && Math.random() < 0.5) return 0;
     }
 
@@ -8194,9 +8194,9 @@ export class GameScene extends Phaser.Scene {
         || source.endsWith('_rail')    // bridge_rail, fence_rail
         || source === 'water_shoulder'
         || source === 'tunnel_wall';
-      const meth = drugs?.get?.(DRUGS.METH) ?? 0;
+      const meth = drugs?.get?.(DRUGS.CAFFEINE) ?? 0;
       if (meth > 0.05 && !isContinuousScrape) adj += 1;
-      const hero = drugs?.get?.(DRUGS.HEROIN) ?? 0;
+      const hero = drugs?.get?.(DRUGS.COMBO) ?? 0;
       if (hero >= 0.15 && adj >= 1) adj = Math.max(0, adj - 2);
     }
 
@@ -8344,7 +8344,7 @@ export class GameScene extends Phaser.Scene {
       if (this.drugs) this.drugs.npcCrashesTotal = (this.drugs.npcCrashesTotal ?? 0) + 1;
       this.stats?.recordNpcHit();          // lifetime + this-trip + per-vehicle
       if (this._dailyTracker) this._dailyTracker.carsHit++;   // hit_cars / no_collisions
-      const everDrunk = (this.drugs.maxReached?.[DRUGS.ALCOHOL] ?? 0) > 0.05;
+      const everDrunk = (this.drugs.maxReached?.[DRUGS.SUSHI] ?? 0) > 0.05;
       if (everDrunk) {
         this._npcCrashesPostDrink = (this._npcCrashesPostDrink ?? 0) + 1;
       }
@@ -8830,7 +8830,7 @@ export class GameScene extends Phaser.Scene {
       // Mario-star invincibility for 1 mile of road (distance-based).
       this._steroidUntilMile = (this._odometer ?? 0) + 1.0;
       this._steroidWasActive = true;
-      this._showPopup?.('💪 STEROIDS!\nINVINCIBLE — 1 MILE', '#FFD23D');
+      this._showPopup?.('🤬 REDNECK RAGE!\nUNSTOPPABLE — 1 MILE', '#FFD23D');
       this.effects?.triggerShake?.(120, 0.006);
       return;
     }
@@ -8839,7 +8839,7 @@ export class GameScene extends Phaser.Scene {
       // Pick up into inventory (max 3) — auto-used on an opioid OD.
       if ((this._narcanCount ?? 0) >= 3) { sprite.collected = false; return; }
       this._narcanCount = (this._narcanCount ?? 0) + 1;
-      this._showPopup?.(`💉 NARCAN ×${this._narcanCount}\nSaves an opioid OD`, '#42A5F5');
+      this._showPopup?.(`☕ ESPRESSO ×${this._narcanCount}\nSaves you from passing out`, '#42A5F5');
       return;
     }
 
@@ -8996,7 +8996,7 @@ export class GameScene extends Phaser.Scene {
     }
     // ── 14% — party favor: random non-OD drug bar filled to 90% + cash ──
     if (r < 0.70) {
-      const safeDrugs = [DRUGS.ALCOHOL, DRUGS.WEED, DRUGS.SHROOMS, DRUGS.LSD]
+      const safeDrugs = [DRUGS.SUSHI, DRUGS.BURRITO, DRUGS.GUMMIES, DRUGS.HOTDOG]
         .filter(id => this.drugs.isUnlocked?.(id));
       // Cash bonus is mixed in regardless — the favor isn't just chemical.
       const bonus = Math.round(PTS_HITCH * this._scoreMult() * 0.5);
@@ -10121,7 +10121,7 @@ export class GameScene extends Phaser.Scene {
       palette, {
         doubleVision: _dbgClean ? 0 : this.effects.doubleVision,
         currentStars: this.cops.starDisplay,
-        shroomsBar:   this.drugs?.get?.(DRUGS.SHROOMS) ?? 0,
+        shroomsBar:   this.drugs?.get?.(DRUGS.GUMMIES) ?? 0,
         shroomMelt:   _dbgClean ? 0 : (this.effects.shroomMelt ?? 0),
         shroomPhase:  this.effects.time ?? 0,
       },
@@ -13025,7 +13025,7 @@ export class GameScene extends Phaser.Scene {
     // Drunk-only sign-text drift: at full alcohol bar (1.0), text starts
     // wandering off the sign as a "you can't read it anymore" gag.  Below
     // 100 % the text is rock-solid anchored.
-    const alc = this.drugs?.get?.(DRUGS.ALCOHOL) ?? 0;
+    const alc = this.drugs?.get?.(DRUGS.SUSHI) ?? 0;
     const drunkDrift = alc >= 1.0 ? 1.0 : 0;
     const tNow       = (this.gameTime ?? 0);
 
@@ -13379,7 +13379,7 @@ export class GameScene extends Phaser.Scene {
         // Pick texture: drugs use drug_<type>, F12 tokens have texKey already.
         let texKey;
         if (sp.collectibleType === 'drug') {
-          texKey = `drug_${sp.type}`;
+          texKey = `vice_${sp.type}`;
         } else if (sp.collectibleType === 'f12') {
           // Hide weapon pickups when player is maxed (3-per-type cap).
           // Maps the route's 'f12_*' to the inventory's normalised name.
@@ -13387,7 +13387,7 @@ export class GameScene extends Phaser.Scene {
           if (invType && !this.cops.canCarryMore(invType)) continue;
           texKey = sp.texKey;
         } else if (sp.collectibleType === 'steroid' || sp.collectibleType === 'narcan') {
-          texKey = sp.texKey;          // 'powerup_steroid' / 'powerup_narcan'
+          texKey = sp.texKey;          // 'powerup_rage' / 'powerup_espresso'
         } else {
           continue;
         }
@@ -15749,24 +15749,24 @@ export class GameScene extends Phaser.Scene {
    *  hit zones so the player can tap an icon to set its level. */
   _drawDrugIcons() {
     const g = this.hudGfx;
-    // Texture name map — alcohol uses the 'beer' art.
+    // Texture name map — alcohol uses the 'sushi' art.
     const TEX = {
-      alcohol:  'drug_beer',
-      weed:     'drug_weed',
-      cocaine:  'drug_cocaine',
-      shrooms:  'drug_shrooms',
-      lsd:      'drug_lsd',
-      heroin:   'drug_heroin',
-      rx:       'drug_rx',
-      fentanyl: 'drug_fentanyl',
-      ketamine: 'drug_ketamine',
-      meth:     'drug_meth',
+      sushi:  'vice_sushi',
+      burrito:     'vice_burrito',
+      energy:  'vice_energy',
+      gummies:  'vice_gummies',
+      hotdog:      'vice_hotdog',
+      combo:   'vice_combo',
+      coldbrew:       'vice_coldbrew',
+      coma: 'vice_coma',
+      slushie: 'vice_slushie',
+      caffeine:     'vice_caffeine',
     };
     // Colorblind: recolor the confusable bar-fill pairs (weed↔meth both greenish,
     // lsd reddish — fentanyl keeps its lethal red) and stamp an authoritative
     // one-letter badge on each card so the drug is read by LETTER, not hue.
-    const CB_FILL   = { weed: 0x3A9BFF, meth: 0xFF9A3D, lsd: 0xFFD23D, fentanyl: 0xFF2222 };
-    const CB_LETTER = { alcohol: 'B', weed: 'W', cocaine: 'C', shrooms: 'S', lsd: 'L', heroin: 'H', rx: 'R', fentanyl: 'F', ketamine: 'K', meth: 'M' };
+    const CB_FILL   = { burrito: 0x3A9BFF, caffeine: 0xFF9A3D, hotdog: 0xFFD23D, coma: 0xFF2222 };
+    const CB_LETTER = { sushi: 'S', burrito: 'B', energy: 'E', gummies: 'G', hotdog: 'H', combo: 'C', coldbrew: 'K', coma: 'X', slushie: 'Z', caffeine: 'F' };
     if (!this._drugBadges) this._drugBadges = {};
     // 2-column grid of square-ish icons.  All 10 drugs ALWAYS show (5 rows ×
     // 2 cols) above the pedal stack — undiscovered/empty drugs render as a
@@ -15815,7 +15815,7 @@ export class GameScene extends Phaser.Scene {
       const baseX = col === 0 ? baseXOuter : baseXInner;
       const baseY = baseYTop + row * (baseIconH + baseRowGap);
       // Per-drug custom offset+scale.
-      const o     = this._ctrlOff('drug_' + id);
+      const o     = this._ctrlOff('vice_' + id);
       const iconW = baseIconW * o.s, iconH = baseIconH * o.s;
       const x     = baseX + o.dx, y = baseY + o.dy;
 
@@ -16496,16 +16496,16 @@ export class GameScene extends Phaser.Scene {
    *  generic mixed banner below. */
   _drugLineLabel(drugType) {
     const labels = {
-      beer:     '🍻 BEER RUN!',
-      weed:     '🌿 CHAIN SMOKING!',
-      cocaine:  '❄️ RAIL RUN!',
-      shrooms:  '🍄 MUSHROOM HUNTING!',
-      lsd:      '💊 TAB RUN!',
-      heroin:   '💉 TRACK MARKS!',
-      rx:       '📜 SCRIPT ROLL!',
-      fentanyl: '☠️ RUSSIAN ROULETTE!',
-      ketamine: '🐴 K-HOLE!',
-      meth:     '⚡ TWEAKER TRAIL!',
+      sushi:     '🍻 BEER RUN!',
+      burrito:     '🌿 CHAIN SMOKING!',
+      energy:  '❄️ RAIL RUN!',
+      gummies:  '🍄 MUSHROOM HUNTING!',
+      hotdog:      '💊 TAB RUN!',
+      combo:   '💉 TRACK MARKS!',
+      coldbrew:       '📜 SCRIPT ROLL!',
+      coma: '☠️ RUSSIAN ROULETTE!',
+      slushie: '🐴 K-HOLE!',
+      caffeine:     '⚡ TWEAKER TRAIL!',
     };
     return labels[drugType] ?? '💊 STREET STASH!';
   }
@@ -16523,7 +16523,7 @@ export class GameScene extends Phaser.Scene {
     // Centre the line in a SAME-direction lane (offset 0.0 to +0.45) so the
     // player doesn't have to swerve hard across traffic to grab it.
     const offset = 0.05 + Math.random() * 0.40;
-    const types  = o$.types  ?? ['beer', 'beer', 'beer'];
+    const types  = o$.types  ?? ['sushi', 'sushi', 'sushi'];
     const spread = o$.spread ?? 14;        // segments between cans
     let placed = 0;
     for (let i = 0; i < types.length; i++) {
@@ -17276,7 +17276,7 @@ export class GameScene extends Phaser.Scene {
       if (id === 'disguise')   return this._disguiseHitBounds;
       if (id === 'wiper')      return this._wiperLiveBounds;
       if (id.startsWith('weapon_')) return this._weaponCellBounds?.[id.slice(7)];
-      if (id.startsWith('drug_'))   return this._drugCellBounds?.[id.slice(5)];
+      if (id.startsWith('vice_'))   return this._drugCellBounds?.[id.slice(5)];
       return null;
     };
     for (const px of this._ctrlProxies) {
@@ -18237,13 +18237,13 @@ export class GameScene extends Phaser.Scene {
     // rampage doesn't bury you in heat the instant it wears off.
     if (active && this.cops) this.cops._starGainMul = 0;
     if (!active && this._steroidWasActive) {
-      this._showPopup?.('💪 STEROID WORN OFF', '#FFAA33');
+      this._showPopup?.('🤬 RAGE WORN OFF', '#FFAA33');
     }
     this._steroidWasActive = active;
     if (this.hudSteroid) {
       if (active) {
         const left = Math.max(0, this._steroidUntilMile - (this._odometer ?? 0));
-        this.hudSteroid.setText(`💪 ROID RAGE — ${left.toFixed(2)} mi`).setVisible(true);
+        this.hudSteroid.setText(`🤬 RAGE — ${left.toFixed(2)} mi`).setVisible(true);
       } else {
         this.hudSteroid.setVisible(false);
       }
@@ -18267,7 +18267,7 @@ export class GameScene extends Phaser.Scene {
     if (!seg) return;
     seg.sprites.push({
       type:            'steroid',
-      texKey:          'powerup_steroid',
+      texKey:          'powerup_rage',
       offset:          0.05 + Math.random() * 0.40,
       baseW: 720, baseH: 880,
       collected:       false,
@@ -18275,14 +18275,14 @@ export class GameScene extends Phaser.Scene {
       collectibleType: 'steroid',
       _bonus:          true,
     });
-    this._showPopup?.('💪 STEROIDS AHEAD!', '#FFD23D');
+    this._showPopup?.('🤬 REDNECK RAGE AHEAD!', '#FFD23D');
   }
 
   /** Narcan upkeep: HUD readout + rare standalone spawn timer. */
   _updateNarcan(rawDt) {
     if (this.hudNarcan) {
       const n = this._narcanCount ?? 0;
-      if (n > 0) this.hudNarcan.setText(`💉 NARCAN ×${n}`).setVisible(true);
+      if (n > 0) this.hudNarcan.setText(`☕ ESPRESSO ×${n}`).setVisible(true);
       else this.hudNarcan.setVisible(false);
     }
     if (this._awaitingStart) return;
@@ -18303,7 +18303,7 @@ export class GameScene extends Phaser.Scene {
     if (!seg) return;
     seg.sprites.push({
       type:            'narcan',
-      texKey:          'powerup_narcan',
+      texKey:          'powerup_espresso',
       offset:          0.05 + Math.random() * 0.40,
       baseW: 720, baseH: 880,
       collected:       false,
@@ -18311,20 +18311,20 @@ export class GameScene extends Phaser.Scene {
       collectibleType: 'narcan',
       _bonus:          true,
     });
-    this._showPopup?.('💉 NARCAN AHEAD!', '#42A5F5');
+    this._showPopup?.('☕ EMERGENCY ESPRESSO AHEAD!', '#42A5F5');
   }
 
   /** If an OPIOID overdose (fentanyl/heroin/rx) is about to kill the player
    *  and a Narcan is in inventory, consume it: flash the screen red, flush
    *  all opioid bars, and cancel the OD.  Returns true if the OD was saved. */
   _tryNarcan(drugId) {
-    const OPIOIDS = [DRUGS.FENTANYL, DRUGS.HEROIN, DRUGS.RX];
+    const OPIOIDS = [DRUGS.COMA, DRUGS.COMBO, DRUGS.COLDBREW];
     if (!OPIOIDS.includes(drugId)) return false;   // Narcan only reverses opioids
     if ((this._narcanCount ?? 0) <= 0) return false;
     this._narcanCount -= 1;
     for (const id of OPIOIDS) this.drugs.levels[id] = 0;   // flush the opioids
     this.cameras?.main?.flash?.(450, 220, 20, 20);          // red rescue flash
-    this._showPopup?.('💉 NARCAN USED', '#FF5555');
+    this._showPopup?.('☕ ESPRESSO — SNAPPED AWAKE', '#FF5555');
     this.effects?.triggerShake?.(120, 0.005);
     return true;
   }
@@ -18365,7 +18365,7 @@ export class GameScene extends Phaser.Scene {
     // LSD ≥ 60% — time distortion: world keeps scrolling at the player's
     // real speed, but the speedometer pegs at 60 mph for the trippy
     // "I'm crawling but everything's flying past" feel.
-    const lsd = this.drugs?.get?.(DRUGS.LSD) ?? 0;
+    const lsd = this.drugs?.get?.(DRUGS.HOTDOG) ?? 0;
     if (lsd >= 0.60) return Math.min(60, trueMph);
     return trueMph;
   }
@@ -18413,7 +18413,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this._endGame('busted', { charge: 'DUI', losses: lost });
+    this._endGame('busted', { charge: 'RECKLESS DRIVING', losses: lost });
   }
 
   /** Speed-trap traffic stop (Stage 3) — assess the offense from the drug bars
@@ -18422,8 +18422,8 @@ export class GameScene extends Phaser.Scene {
   _assessTrafficStop() {
     const ids = Object.values(DRUGS);
     const lvl = (id) => this.drugs?.get?.(id) ?? 0;
-    const singleOver = lvl(DRUGS.ALCOHOL) >= COP_DUI_ALCOHOL_LIMIT
-      || ids.some(id => id !== DRUGS.ALCOHOL && lvl(id) >= COP_DUI_DRUG_LIMIT);
+    const singleOver = lvl(DRUGS.SUSHI) >= COP_DUI_ALCOHOL_LIMIT
+      || ids.some(id => id !== DRUGS.SUSHI && lvl(id) >= COP_DUI_DRUG_LIMIT);
     const multiOverCount = ids.reduce((n, id) => n + (lvl(id) >= COP_DUI_MULTI_LIMIT ? 1 : 0), 0);
     const dui = singleOver || multiOverCount >= COP_DUI_MULTI_COUNT;
     return { dui };
@@ -18472,7 +18472,7 @@ export class GameScene extends Phaser.Scene {
     if (t.dui) {
       this._duiEarnPenaltyMi = (this._odometer ?? 0) + COP_DUI_EARN_MI;
       this._showPopup(
-        (fine > 0 ? `🚔 DUI — −$${fine.toLocaleString()}` : '🚔 DUI — ⚖️ fine waived') +
+        (fine > 0 ? `🚔 RECKLESS — −$${fine.toLocaleString()}` : '🚔 RECKLESS — ⚖️ fine waived') +
         `\nEarnings ×${COP_DUI_EARN_MULT} for ${COP_DUI_EARN_MI} mi`,
         '#FF5C7A');
     } else {
@@ -18514,7 +18514,7 @@ export class GameScene extends Phaser.Scene {
       : this.add.rectangle(0, 0, SCREEN_W, SCREEN_H, 0x330000, 0.94)
           .setOrigin(0).setDepth(3000);
     const label = this.add.text(SCREEN_W / 2, SCREEN_H * 0.84,
-      'BUSTED — SUSPENDED LICENSE\nBack to the start…', {
+      'BUSTED — TOO RECKLESS\nBack to the start…', {
         fontSize: '22px', fontFamily: IMPACT, color: '#FF5C7A',
         stroke: '#000000', strokeThickness: 5, align: 'center',
       }).setOrigin(0.5).setDepth(3001);

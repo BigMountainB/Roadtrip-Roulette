@@ -110,25 +110,25 @@ export const ASSET_MANIFEST = {
     { key: 'car_left_police',  path: 'assets/cars/car_left_police.png' },
     { key: 'car_right_police', path: 'assets/cars/car_right_police.png' },
   ],
-  // (hookers section removed — HookerSystem was vestigial / deleted.)
-  drugs: [
-    { key: 'drug_beer',     path: 'assets/drugs/beer.png?v=reskin-1' },
-    { key: 'drug_weed',     path: 'assets/drugs/weed.png?v=reskin-1' },
-    { key: 'drug_cocaine',  path: 'assets/drugs/cocaine.png?v=reskin-1' },
-    { key: 'drug_shrooms',  path: 'assets/drugs/shrooms.png?v=reskin-1' },
-    { key: 'drug_lsd',      path: 'assets/drugs/lsd.png?v=reskin-1' },
-    { key: 'drug_heroin',   path: 'assets/drugs/heroin.png?v=reskin-1' },
-    { key: 'drug_rx',       path: 'assets/drugs/rx.png?v=reskin-1' },
-    { key: 'drug_fentanyl', path: 'assets/drugs/fentanyl.png?v=reskin-1' },
-    { key: 'drug_ketamine', path: 'assets/drugs/ketamine.png?v=reskin-1' },
-    { key: 'drug_meth',     path: 'assets/drugs/meth.png?v=reskin-1' },
+  // Road-trip "vices" — junk-food / fatigue pickups (reskinned from drugs).
+  // Art lives in public/assets/vices/; procedural placeholders fill in until
+  // each PNG is dropped there.
+  vices: [
+    { key: 'vice_sushi',    path: 'assets/vices/sushi.png?v=reskin-2' },
+    { key: 'vice_burrito',  path: 'assets/vices/burrito.png?v=reskin-2' },
+    { key: 'vice_energy',   path: 'assets/vices/energy_shot.png?v=reskin-2' },
+    { key: 'vice_gummies',  path: 'assets/vices/gummies.png?v=reskin-2' },
+    { key: 'vice_hotdog',   path: 'assets/vices/hotdog.png?v=reskin-2' },
+    { key: 'vice_combo',    path: 'assets/vices/combo_meal.png?v=reskin-2' },
+    { key: 'vice_coldbrew', path: 'assets/vices/cold_brew.png?v=reskin-2' },
+    { key: 'vice_coma',     path: 'assets/vices/food_coma.png?v=reskin-2' },
+    { key: 'vice_slushie',  path: 'assets/vices/slushie.png?v=reskin-2' },
+    { key: 'vice_caffeine', path: 'assets/vices/caffeine_pills.png?v=reskin-2' },
   ],
-  // Power-ups (Mario-style buffs).  Real art now lives alongside the drug
-  // pickups under assets/drugs/; the procedural placeholders in BootScene
-  // remain as a fallback if a file is ever missing.
+  // Power-ups: Redneck Rage (invincible rampage) + Emergency Espresso (OD save).
   powerups: [
-    { key: 'powerup_steroid', path: 'assets/drugs/steroids.png?v=reskin-1' },
-    { key: 'powerup_narcan',  path: 'assets/drugs/narcan.png?v=reskin-1' },
+    { key: 'powerup_rage',     path: 'assets/vices/redneck_rage.png?v=reskin-2' },
+    { key: 'powerup_espresso', path: 'assets/vices/emergency_espresso.png?v=reskin-2' },
   ],
   // NPC portraits for the rest-stop encounter cards.  Missing files fall back
   // to the procedural colored-bust placeholder (BootScene._makeNpcPlaceholder),

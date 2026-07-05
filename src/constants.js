@@ -154,35 +154,39 @@ export const DRUG_MULT    = 0.5;
 // so risky drugs (fent, heroin) pay disproportionately more for
 // keeping their bar topped off.
 export const DRUG_PTS = {
-  beer:     { base:  5, full:  20 },
-  weed:     { base:  5, full:  20 },
-  cocaine:  { base: 40, full: 100 },
-  shrooms:  { base: 15, full:  40 },
-  lsd:      { base: 10, full:  50 },
-  heroin:   { base: 15, full: 100 },
-  rx:       { base: 10, full:  80 },
-  fentanyl: { base: 25, full: 500 },
-  ketamine: { base: 15, full:  90 },
-  meth:     { base: 15, full:  80 },
+  sushi:    { base:  5, full:  20 },
+  burrito:  { base:  5, full:  20 },
+  energy:   { base: 40, full: 100 },
+  gummies:  { base: 15, full:  40 },
+  hotdog:   { base: 10, full:  50 },
+  combo:    { base: 15, full: 100 },
+  coldbrew: { base: 10, full:  80 },
+  coma:     { base: 25, full: 500 },
+  slushie:  { base: 15, full:  90 },
+  caffeine: { base: 15, full:  80 },
 };
 // Bar percentage at which a pickup awards the full-bar bonus instead
 // of the base payout.  Lowered from 0.95 → 0.80 so the bonus is more
 // reachable (less precision-driven, more strategic).
 export const FULL_BAR_THRESHOLD = 0.80;
 
-// Drug IDs
-export const DRUGS = {
-  ALCOHOL:  'alcohol',
-  WEED:     'weed',
-  COCAINE:  'cocaine',
-  SHROOMS:  'shrooms',
-  LSD:      'lsd',
-  HEROIN:   'heroin',
-  RX:       'rx',
-  FENTANYL: 'fentanyl',
-  KETAMINE: 'ketamine',
-  METH:     'meth',
+// Vice IDs — road-trip junk-food / fatigue items (reskinned from the original
+// drug set for App-Store safety; same mechanics, legal-flavored inputs).
+export const VICES = {
+  SUSHI:    'sushi',     // was alcohol — gas-station sushi (food-poisoning woozy)
+  BURRITO:  'burrito',   // was weed — greasy burrito (food coma)
+  ENERGY:   'energy',    // was cocaine — energy shot (jittery rush)
+  GUMMIES:  'gummies',   // was shrooms — sugar gummies (color trip)
+  HOTDOG:   'hotdog',    // was lsd — roller-grill hot dog (fever dream)
+  COMBO:    'combo',     // was heroin — combo meal (heavy food coma)
+  COLDBREW: 'coldbrew',  // was rx — cold brew (steady caffeine)
+  COMA:     'coma',      // was fentanyl — 3AM buffet coma (lethal 2-hit)
+  SLUSHIE:  'slushie',   // was ketamine — brain-freeze slushie (dizzy)
+  CAFFEINE: 'caffeine',  // was meth — caffeine pills (wired for hours)
 };
+// Back-compat alias during the rest of the reskin refactor (removed once all
+// call sites use VICES).
+export const DRUGS = VICES;
 
 // Drug config — decayRate (per second, linear) tuned 2026-06-20 to match the
 // REAL relative duration-of-effects ordering, compressed to a ~30s–4min game
@@ -192,16 +196,16 @@ export const DRUGS = {
 //   full-life ≈ 1/decayRate sec:  coke 30s, ket 36s, fent 42s, weed/beer 65s,
 //   heroin 112s, shrooms 123s, rx 135s, meth 205s, lsd 240s.
 export const DRUG_CONFIG = {
-  alcohol:  { label: '🍺 Beer',    color: 0xF5A623, hexCss: '#F5A623', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
-  weed:     { label: '🌿 Weed',    color: 0x4CAF50, hexCss: '#4CAF50', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
-  cocaine:  { label: '❄️ Coke',    color: 0xFFFFFF, hexCss: '#FFFFFF', decayRate: 0.0333, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  shrooms:  { label: '🍄 Shrooms', color: 0xBB44FF, hexCss: '#BB44FF', decayRate: 0.0081, odThreshold: 1.0,    canOD: false, unlocked: false },
-  lsd:      { label: '💊 Acid',    color: 0xFF44AA, hexCss: '#FF44AA', decayRate: 0.0042, odThreshold: 1.0,    canOD: false, unlocked: false },
-  heroin:   { label: '💉 Heroin',  color: 0x8B4513, hexCss: '#8B4513', decayRate: 0.0089, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  rx:       { label: '💊 Rx',      color: 0x00BCD4, hexCss: '#00BCD4', decayRate: 0.0074, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  fentanyl: { label: '☠️ Fent',    color: 0xFF2222, hexCss: '#FF2222', decayRate: 0.0238, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  ketamine: { label: '🐴 Ket',     color: 0x44EEFF, hexCss: '#44EEFF', decayRate: 0.0278, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  meth:     { label: '⚡ Meth',    color: 0xCCFFCC, hexCss: '#CCFFCC', decayRate: 0.0049, odThreshold: 1.0001, canOD: true,  unlocked: false },
+  sushi:    { label: '🍣 Sushi',     color: 0x9ACD32, hexCss: '#9ACD32', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
+  burrito:  { label: '🌯 Burrito',   color: 0xC8862B, hexCss: '#C8862B', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
+  energy:   { label: '⚡ Energy',    color: 0x3AC8FF, hexCss: '#3AC8FF', decayRate: 0.0333, odThreshold: 1.0001, canOD: true,  unlocked: false },
+  gummies:  { label: '🐻 Gummies',   color: 0xFF5FA2, hexCss: '#FF5FA2', decayRate: 0.0081, odThreshold: 1.0,    canOD: false, unlocked: false },
+  hotdog:   { label: '🌭 Hot Dog',   color: 0xD2691E, hexCss: '#D2691E', decayRate: 0.0042, odThreshold: 1.0,    canOD: false, unlocked: false },
+  combo:    { label: '🍔 Combo',     color: 0xE8A33D, hexCss: '#E8A33D', decayRate: 0.0089, odThreshold: 1.0001, canOD: true,  unlocked: false },
+  coldbrew: { label: '🧋 Cold Brew', color: 0x8B5A2B, hexCss: '#8B5A2B', decayRate: 0.0074, odThreshold: 1.0001, canOD: true,  unlocked: false },
+  coma:     { label: '💀 Buffet',    color: 0xB0303A, hexCss: '#B0303A', decayRate: 0.0238, odThreshold: 1.0001, canOD: true,  unlocked: false },
+  slushie:  { label: '🥤 Slushie',   color: 0x3AA0FF, hexCss: '#3AA0FF', decayRate: 0.0278, odThreshold: 1.0001, canOD: true,  unlocked: false },
+  caffeine: { label: '💊 Caffeine',  color: 0xE8E8E8, hexCss: '#E8E8E8', decayRate: 0.0049, odThreshold: 1.0001, canOD: true,  unlocked: false },
 };
 
 // Named drug combos — every constituent drug's bar must be ≥ threshold for
@@ -214,30 +218,30 @@ export const DRUG_CONFIG = {
 // in the HUD; nothing else changes.  Non-score side-effects (slow-mo on
 // near-miss, off-road immunity, etc.) still apply where defined.
 export const DRUG_COMBOS = {
-  snow_cone:    { drugs: ['cocaine', 'alcohol'],  threshold: 0.10, label: 'SNOW-CONE',   color: '#FFCC44' },
-  psychedelic:  { drugs: ['shrooms', 'lsd'],      threshold: 0.10, label: 'PSYCHEDELIC', color: '#FF44FF' },
-  croak:        { drugs: ['cocaine', 'meth'],     threshold: 0.10, label: 'CROAK',       color: '#88FFFF' },
-  tranq:        { drugs: ['heroin',  'ketamine'], threshold: 0.10, label: 'TRANQ',       color: '#8B44FF' },
-  dirty_joint:  { drugs: ['cocaine', 'weed'],     threshold: 0.10, label: 'DIRTY JOINT', color: '#88FF88' },
-  crossfaded:   { drugs: ['alcohol', 'weed'],     threshold: 0.10, label: 'CROSS-FADED', color: '#FFEE88' },
-  a_bomb:       { drugs: ['heroin',  'weed'],     threshold: 0.10, label: 'A-BOMB',      color: '#AA66CC' },
+  snow_cone:    { drugs: ['energy', 'sushi'],    threshold: 0.10, label: 'GAS STATION SPECIAL', color: '#FFCC44' },
+  psychedelic:  { drugs: ['gummies', 'hotdog'],  threshold: 0.10, label: 'FEVER DREAM',   color: '#FF44FF' },
+  croak:        { drugs: ['energy', 'caffeine'], threshold: 0.10, label: 'FULLY WIRED',   color: '#88FFFF' },
+  tranq:        { drugs: ['combo',  'slushie'],  threshold: 0.10, label: 'FOOD COMA',     color: '#8B44FF' },
+  dirty_joint:  { drugs: ['energy', 'burrito'],  threshold: 0.10, label: 'BURRITO BLAST', color: '#88FF88' },
+  crossfaded:   { drugs: ['sushi', 'burrito'],   threshold: 0.10, label: 'GUT BOMB',      color: '#FFEE88' },
+  a_bomb:       { drugs: ['combo',  'burrito'],  threshold: 0.10, label: 'CARB LOAD',     color: '#AA66CC' },
 
-  // ── 2-drug additions ────────────────────────────────────────────────
-  cali_sober:       { drugs: ['weed', 'shrooms'],                          threshold: 0.10, label: 'CALIFORNIA SOBER', color: '#88DD66' },
+  // ── 2-item additions ────────────────────────────────────────────────
+  cali_sober:       { drugs: ['burrito', 'gummies'],                       threshold: 0.10, label: 'SNACK ATTACK',    color: '#88DD66' },
 
-  // ── 3-drug stacks ──────────────────────────────────────────────────
-  wizard_flip:      { drugs: ['lsd', 'shrooms', 'alcohol'],                threshold: 0.10, label: 'WIZARD FLIPPING',  color: '#CC99FF' },
-  frisco_speedball: { drugs: ['cocaine', 'heroin', 'lsd'],                 threshold: 0.10, label: 'FRISCO SPEEDBALL', color: '#FFAA66' },
-  el_diablo:        { drugs: ['cocaine', 'weed', 'heroin'],                threshold: 0.10, label: 'EL DIABLO',        color: '#CC4422' },
-  pharm_run:        { drugs: ['rx', 'cocaine', 'alcohol'],                 threshold: 0.10, label: 'PHARM RUN',        color: '#22CCEE' },
-  trifecta:         { drugs: ['alcohol', 'weed', 'cocaine'],               threshold: 0.10, label: 'TRIFECTA',         color: '#EEDD66' },
+  // ── 3-item stacks ──────────────────────────────────────────────────
+  wizard_flip:      { drugs: ['hotdog', 'gummies', 'sushi'],               threshold: 0.10, label: 'ROLLER GRILL ROULETTE', color: '#CC99FF' },
+  frisco_speedball: { drugs: ['energy', 'combo', 'hotdog'],                threshold: 0.10, label: 'TRUCK STOP TRIFECTA',   color: '#FFAA66' },
+  el_diablo:        { drugs: ['energy', 'burrito', 'combo'],               threshold: 0.10, label: 'HEARTBURN',       color: '#CC4422' },
+  pharm_run:        { drugs: ['coldbrew', 'energy', 'sushi'],              threshold: 0.10, label: 'GAS STATION RUN',  color: '#22CCEE' },
+  trifecta:         { drugs: ['sushi', 'burrito', 'energy'],               threshold: 0.10, label: 'COMBO DEAL',       color: '#EEDD66' },
 
-  // ── 4-drug chaos (PCP substituted with meth per player spec) ────────
-  el_diablito:      { drugs: ['cocaine', 'weed', 'heroin', 'meth'],        threshold: 0.10, label: 'EL DIABLITO',      color: '#FF3322' },
-  apocalypse:       { drugs: ['heroin', 'meth', 'alcohol', 'weed'],        threshold: 0.10, label: 'APOCALYPSE',       color: '#FF6600' },
+  // ── 4-item chaos ────────────────────────────────────────────────────
+  el_diablito:      { drugs: ['energy', 'burrito', 'combo', 'caffeine'],   threshold: 0.10, label: 'THE WORKS',        color: '#FF3322' },
+  apocalypse:       { drugs: ['combo', 'caffeine', 'sushi', 'burrito'],    threshold: 0.10, label: 'FOOD APOCALYPSE',  color: '#FF6600' },
 
-  // ── 5-drug max (Rohypnol substituted with rx per player spec) ───────
-  five_way:         { drugs: ['heroin', 'cocaine', 'meth', 'alcohol', 'rx'], threshold: 0.10, label: 'FIVE-WAY',       color: '#FF00AA' },
+  // ── 5-item max ──────────────────────────────────────────────────────
+  five_way:         { drugs: ['combo', 'energy', 'caffeine', 'sushi', 'coldbrew'], threshold: 0.10, label: 'THE EVERYTHING', color: '#FF00AA' },
 };
 
 // Vehicle physical bounds in world space — used by the AABB collision

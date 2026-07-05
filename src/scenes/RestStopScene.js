@@ -14,9 +14,9 @@ import { getPortrait } from '../data/npcPortraits.js';
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 
-// Drug texture key — alcohol's pickup asset is named drug_beer; everything
+// Drug texture key — alcohol's pickup asset is named vice_sushi; everything
 // else maps directly.
-const DRUG_TEX = (id) => (id === 'alcohol' ? 'drug_beer' : `drug_${id}`);
+const DRUG_TEX = (id) => (id === 'sushi' ? 'vice_sushi' : `vice_${id}`);
 
 // Per-drug rest-stop pricing — each click adds +10 % to that bar, capped
 // at 80 %.  Prices scaled so 8 clicks (0 → 80 %) costs roughly the same
@@ -26,9 +26,9 @@ const DRUG_TEX = (id) => (id === 'alcohol' ? 'drug_beer' : `drug_${id}`);
 // pre-rebalance numbers per the cost ladder so dealer trips are
 // tempting but pharmacy is the budget option.
 export const DRUG_PRICE = {
-  alcohol:  5,   weed:   5,    cocaine: 40,   shrooms: 15,
-  lsd:     10,   heroin: 15,   rx:      10,   fentanyl: 25,
-  ketamine:15,   meth:   15,
+  sushi:  5,   burrito:   5,    energy: 40,   gummies: 15,
+  hotdog:     10,   combo: 15,   coldbrew:      10,   coma: 25,
+  slushie:15,   caffeine:   15,
 };
 
 const DRUG_DISPLAY = (id) => DRUG_CONFIG[id]?.label?.replace(/^[^A-Za-z]+/, '').trim() ?? id;
@@ -43,7 +43,7 @@ const drugItems = (unlocks /* { id: bool } | Set<id> | null */) => {
       cost: 300, desc: 'Every unlocked bar to ≥50 %', payload: { topAllTo: 0.5 } },
   ];
   // Drug unlocks are stored in the registry by DrugSystem.snapshotUnlocks
-  // as a PLAIN OBJECT { alcohol: true, weed: true, shrooms: true, ... },
+  // as a PLAIN OBJECT { sushi: true, burrito: true, gummies: true, ... },
   // not a Set.  Accept either form so the filter works regardless.
   const isUnlocked = (id) => {
     if (unlocks instanceof Set) return unlocks.has(id);
@@ -53,7 +53,7 @@ const drugItems = (unlocks /* { id: bool } | Set<id> | null */) => {
   for (const id of Object.values(DRUGS)) {
     if (!isUnlocked(id)) continue;
     items.push({
-      id:    `drug_${id}`,
+      id:    `vice_${id}`,
       label: DRUG_DISPLAY(id).toUpperCase(),
       icon:  DRUG_TEX(id),
       cost:  DRUG_PRICE[id] ?? 200,
@@ -73,11 +73,11 @@ const drugItems = (unlocks /* { id: bool } | Set<id> | null */) => {
 // PharmaBros at the rest-stop drug tab keeps the full menu (the
 // pharmacy is the dedicated drug shop and isn't gated by exposure).
 const SHOP_DRUGS = {
-  gas:     ['alcohol', 'weed'],                       // Beer + weed at the pump
-  hunting: ['alcohol'],                               // Beer at the gun store
-  charge:  ['shrooms', 'lsd', 'weed'],                // Hippie EV crowd
-  camp:    ['fentanyl', 'ketamine', 'meth'],          // Sketchy back-country
-  dealer:  ['cocaine'],                               // Dealership = blow
+  gas:     ['sushi', 'burrito'],                       // Beer + weed at the pump
+  hunting: ['sushi'],                               // Beer at the gun store
+  charge:  ['gummies', 'hotdog', 'burrito'],                // Hippie EV crowd
+  camp:    ['coma', 'slushie', 'caffeine'],          // Sketchy back-country
+  dealer:  ['energy'],                               // Dealership = blow
 };
 // Camp + charging + dealer charge a 2.5× markup over PharmaBros.
 const SHOP_DRUG_MARKUP = 2.5;
@@ -90,7 +90,7 @@ function shopDrugItems(shopKey, pickupCounts) {
     const base = DRUG_PRICE[id] ?? 200;
     const cost = Math.round(base * SHOP_DRUG_MARKUP);
     out.push({
-      id:    `shopdrug_${id}`,
+      id:    `shopvice_${id}`,
       label: DRUG_DISPLAY(id).toUpperCase(),
       icon:  DRUG_TEX(id),
       cost,

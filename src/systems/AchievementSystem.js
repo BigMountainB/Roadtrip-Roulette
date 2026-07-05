@@ -23,70 +23,70 @@ import { DRUGS } from '../constants.js';
 // drug is earned (collected).  `unlockHint` is shown before earning so
 // the player knows how to find the drug in the first place.
 const DRUG_INFO = {
-  [DRUGS.ALCOHOL]: {
+  [DRUGS.SUSHI]: {
     id:    'liquid_courage',
     label: 'LIQUID COURAGE',
     icon:  '🍺',
     unlockHint: 'Available from the start — pick a beer up off the road.',
     desc:  '7% per beer. Builds double vision & swerves. Lowers each other drug bar above 45% by 5% per pickup. At 100%, sideswipes/corner clips sometimes don\'t damage you.',
   },
-  [DRUGS.WEED]: {
+  [DRUGS.BURRITO]: {
     id:    'lifted',
     label: 'LIFTED',
     icon:  '🌿',
     unlockHint: 'Available from the start — pick a joint up off the road.',
     desc:  '12.5% per hit. Tolerance kicks in at 60%, plus the haze and no slow-driving penalty. Hold 100% for 10 mi → Permastoned.',
   },
-  [DRUGS.COCAINE]: {
+  [DRUGS.ENERGY]: {
     id:    'white_line_fever',
     label: 'WHITE LINE FEVER',
     icon:  '❄️',
     unlockHint: 'Stay drunk (alcohol > 30%) for 30 seconds total to unlock the dealer.',
     desc:  '10% per bag. +4 mph top speed each pickup. Burns 7% off your alcohol. OD at 100% — don\'t grab another at 90%+.',
   },
-  [DRUGS.SHROOMS]: {
+  [DRUGS.GUMMIES]: {
     id:    'tripping',
     label: 'TRIPPING',
     icon:  '🍄',
     unlockHint: 'Be drunk AND stoned at the same time (alcohol & weed both ≥ 30%).',
     desc:  '20% per dose. +8% saturation each hit. At 45% NPC traffic pulses in sync (±10 mph). At 65% a rainbow appears.',
   },
-  [DRUGS.LSD]: {
+  [DRUGS.HOTDOG]: {
     id:    'acid_trip',
     label: 'ACID TRIP',
     icon:  '💊',
     unlockHint: 'Push your shrooms bar past 50% to unlock acid.',
     desc:  '25% per tab. +8% brightness each hit. At 60% your speedo caps at 60 mph but you keep gaining miles. At 90%+ B&W + 1.25× distance.',
   },
-  [DRUGS.HEROIN]: {
+  [DRUGS.COMBO]: {
     id:    'nodding_off',
     label: 'NODDING OFF',
     icon:  '💉',
     unlockHint: 'Drive at least 20% of the route (~mile 60) to find a needle.',
     desc:  '30% per shot. Tunnel vision deepens with each hit. At 15%+ every crash deducts 2 fewer HP.',
   },
-  [DRUGS.RX]: {
+  [DRUGS.COLDBREW]: {
     id:    'pill_mill',
     label: 'PILL MILL',
     icon:  '💊',
     unlockHint: 'Crash into 50 NPC cars total — you\'ll need pain pills after that.',
     desc:  '8.5% per bottle. Each pickup multiplies every drug bar by 0.9. ±7 mph per pickup on NPC traffic (slows oncoming, speeds same-direction).',
   },
-  [DRUGS.FENTANYL]: {
+  [DRUGS.COMA]: {
     id:    'deaths_door',
     label: 'DEATH\'S DOOR',
     icon:  '☠️',
     unlockHint: 'Push your heroin bar past 50% to find the bad batch.',
     desc:  '55% per hit — two and you OD. At 25%+ you phase through cars (no damage), but capped at 30% top speed.',
   },
-  [DRUGS.KETAMINE]: {
+  [DRUGS.SLUSHIE]: {
     id:    'k_hole',
     label: 'K-HOLE',
     icon:  '🐴',
     unlockHint: 'Push your acid bar past 40% to unlock the horse stash.',
     desc:  '10% per hit. At 40%+ the camera tilts 5° per pickup. At 82%+ TV static buries the road.',
   },
-  [DRUGS.METH]: {
+  [DRUGS.CAFFEINE]: {
     id:    'tweaker',
     label: 'TWEAKER',
     icon:  '⚡',

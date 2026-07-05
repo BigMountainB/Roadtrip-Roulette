@@ -46,7 +46,7 @@ export const DAILY_CHALLENGES = [
     id: 'comedown', name: 'Sober by the Line', group: 1,
     from: 'Issaquah', to: 'North Bend',
     blurb: 'You start lit. Roll in stone-cold sober.',
-    mods: { startDrugLevels: { [DRUGS.ALCOHOL]: 0.95 } },
+    mods: { startDrugLevels: { [DRUGS.SUSHI]: 0.95 } },
     objective: { type: 'all_meters_zero_at_end' },
   },
   {

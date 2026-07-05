@@ -4,19 +4,19 @@ import { SCREEN_W, SCREEN_H, DRUG_CONFIG, DRUGS, HUD_OFFSET_X } from '../constan
 // Per-drug unlock hints shown for any drug the player hasn't unlocked yet.
 // Order here drives the row order on the run-summary panel.
 const DRUG_ORDER = [
-  DRUGS.ALCOHOL, DRUGS.WEED, DRUGS.COCAINE, DRUGS.SHROOMS, DRUGS.LSD,
-  DRUGS.HEROIN,  DRUGS.RX,   DRUGS.FENTANYL, DRUGS.KETAMINE, DRUGS.METH,
+  DRUGS.SUSHI, DRUGS.BURRITO, DRUGS.ENERGY, DRUGS.GUMMIES, DRUGS.HOTDOG,
+  DRUGS.COMBO,  DRUGS.COLDBREW,   DRUGS.COMA, DRUGS.SLUSHIE, DRUGS.CAFFEINE,
 ];
 
 const UNLOCK_HINTS = {
-  [DRUGS.COCAINE]:  'Stay drunk for 30 seconds.',
-  [DRUGS.SHROOMS]:  'Be drunk and stoned at the same time (both bars ≥ 30%).',
-  [DRUGS.LSD]:      'Get the shrooms bar to 50%.',
-  [DRUGS.HEROIN]:   'Drive past 20% of the route.',
-  [DRUGS.RX]:       'Crash into 50 NPC cars across your runs.',
-  [DRUGS.FENTANYL]: 'Get the heroin bar to 50%.',
-  [DRUGS.KETAMINE]: 'Get the LSD bar to 40%.',
-  [DRUGS.METH]:     'Hit 40% cocaine, then stay clean from coke for 30 sec.',
+  [DRUGS.ENERGY]:  'Stay drunk for 30 seconds.',
+  [DRUGS.GUMMIES]:  'Be drunk and stoned at the same time (both bars ≥ 30%).',
+  [DRUGS.HOTDOG]:      'Get the shrooms bar to 50%.',
+  [DRUGS.COMBO]:   'Drive past 20% of the route.',
+  [DRUGS.COLDBREW]:       'Crash into 50 NPC cars across your runs.',
+  [DRUGS.COMA]: 'Get the heroin bar to 50%.',
+  [DRUGS.SLUSHIE]: 'Get the LSD bar to 40%.',
+  [DRUGS.CAFFEINE]:     'Hit 40% cocaine, then stay clean from coke for 30 sec.',
 };
 
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
