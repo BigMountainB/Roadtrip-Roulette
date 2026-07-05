@@ -2804,6 +2804,25 @@ export class Road {
     // the segment lands inside the LANE_DASH_LEN window of the cycle.
     const dashCycle = LANE_DASH_LEN + LANE_DASH_GAP;
     let   dashOn    = (seg.index % dashCycle) < LANE_DASH_LEN;
+
+    // ── Asphalt realism: stable per-segment procedural noise (cached once
+    // per segment so it never shimmers frame-to-frame).  _sn* ∈ [0,1). ──
+    if (seg._sn === undefined) {
+      const hash = (k) => {
+        const x = Math.sin((seg.index * 7.13 + k * 91.7) * 12.9898) * 43758.5453;
+        return x - Math.floor(x);
+      };
+      seg._sn  = hash(1);   // base tone jitter
+      seg._sn2 = hash(2);   // patch roll
+      seg._sn3 = hash(3);   // wear roll
+    }
+    // Tone jitter: nudge the asphalt ±5% lighter/darker per segment so the
+    // surface reads as real pavement, not a flat painted sheet.
+    road = lerpColor(road, seg._sn > 0.5 ? 0xFFFFFF : 0x000000, Math.abs(seg._sn - 0.5) * 0.10);
+    // Rare darker repair patch spanning a short run of segments (the
+    // "they filled a pothole" look) — gated so it's occasional.
+    const _isPatch = seg._sn2 < 0.05;
+    if (_isPatch) road = lerpColor(road, 0x000000, 0.16);
     // ── Snow blanket: dissolve the road / rumble / grass toward white
     // and suppress lane markings entirely.  Intensity ramps with the
     // weather envelope so the transition into / out of the snow zone is
@@ -3274,6 +3293,28 @@ export class Road {
       x2 - w2, fy, x2 + w2, fy,
       x1 + w1, ny, x1 - w1, ny);
 
+    // ── Asphalt detail (near land segments only, so far road stays clean
+    // and cheap): polished wheel-path bands + transverse tar seams. ──────
+    if (!isGhost && w2 > 8 && !seg.tunnel && !seg.water && !seg.bridge && !_isPatch) {
+      const wheelCol = lerpColor(road, 0x000000, 0.12);   // tire-polished, darker
+      // Two wheel-track bands per carriageway (±0.42w center, ~0.10w wide).
+      for (const s of (segLanes >= 2 ? [-0.42, 0.42] : [0])) {
+        const bw2 = w2 * 0.10, bw1 = w1 * 0.10;
+        const bc2 = x2 + s * w2, bc1 = x1 + s * w1;
+        fillTrap(surfaceG, wheelCol,
+          bc2 - bw2, fy, bc2 + bw2, fy,
+          bc1 + bw1, ny, bc1 - bw1, ny);
+      }
+      // Transverse expansion joint every ~10 segments — a thin dark seam
+      // across the full road at the segment's near edge.
+      if (seg.index % 10 === 0) {
+        const seamH = Math.max(1, Math.min(3, segH * 0.5));
+        fillTrap(surfaceG, lerpColor(road, 0x000000, 0.35),
+          x1 - w1, ny - seamH, x1 + w1, ny - seamH,
+          x1 + w1, ny, x1 - w1, ny);
+      }
+    }
+
     // ── Exit ramp diverging right ─────────────────────────────────────
     // RouteData.js tags segments leading into a rest stop with
     // `rampStrength` ∈ (0,1].  We paint a paved trapezoid that grows
@@ -3380,27 +3421,41 @@ export class Road {
     // the white dashes were showing through the gap between the two
     // yellow lines.
     if (dashOn) {
+      // Per-DASH paint wear (stable across the segments that make up one
+      // dash): faded brightness, width jitter, and the odd near-gone dash —
+      // so lane paint reads as real striping, not a uniform digital strip.
+      const _fr    = (x) => x - Math.floor(x);
+      const dashId = Math.floor(seg.index / dashCycle);
+      const dw     = _fr(Math.sin(dashId * 78.233) * 43758.5453);   // [0,1) per dash
+      const gone   = dw > 0.94;                                     // ~6% missing/scuffed
+      // Fade fresh cream toward a grimy, sun-bleached grey by up to ~50%.
+      const wornLane = lerpColor(laneCol, 0x8C8778, dw * 0.5);
+      const jw2 = lw2 * (0.82 + dw * 0.32);
+      const jw1 = lw1 * (0.82 + dw * 0.32);
       const skipLane = (segLanes % 2 === 0) ? segLanes / 2 : -1;
-      for (let lane = 1; lane < segLanes; lane++) {
+      if (!gone) for (let lane = 1; lane < segLanes; lane++) {
         if (lane === skipLane) continue;
         const lx1 = x1 + (lane / segLanes) * 2 * w1 - w1;
         const lx2 = x2 + (lane / segLanes) * 2 * w2 - w2;
-        fillTrap(surfaceG, laneCol,
-          lx2 - lw2, fy, lx2 + lw2, fy,
-          lx1 + lw1, ny, lx1 - lw1, ny);
+        fillTrap(surfaceG, wornLane,
+          lx2 - jw2, fy, lx2 + jw2, fy,
+          lx1 + jw1, ny, lx1 - jw1, ny);
       }
     }
 
-    // Double solid yellow center line — only on multi-lane roads
+    // Double solid yellow center line — only on multi-lane roads.  Worn
+    // per-segment toward a duller, sun-faded yellow so it isn't a flat
+    // fluorescent stripe.
     if (segLanes >= 2) {
       const clw1 = Math.max(1, Math.round(lw1 * 0.55));
       const clw2 = Math.max(1, Math.round(lw2 * 0.55));
       const gap1 = lw1 * 1.1;
       const gap2 = lw2 * 1.1;
-      fillTrap(surfaceG, 0xFFEE00,
+      const wornYellow = lerpColor(0xFFEE00, 0xB8A63A, (seg._sn3 ?? 0) * 0.45);
+      fillTrap(surfaceG, wornYellow,
         x2 - gap2 - clw2, fy, x2 - gap2,       fy,
         x1 - gap1,        ny, x1 - gap1 - clw1, ny);
-      fillTrap(surfaceG, 0xFFEE00,
+      fillTrap(surfaceG, wornYellow,
         x2 + gap2,        fy, x2 + gap2 + clw2, fy,
         x1 + gap1 + clw1, ny, x1 + gap1,        ny);
     }
