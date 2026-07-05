@@ -1,5 +1,5 @@
 /**
- * EffectsSystem — translates drug levels into visual + physics distortions.
+ * EffectsSystem — translates vice levels into visual + physics distortions.
  *
  * Visual effects (no shader required):
  *   - Screen sway / scrollX drift  (alcohol)
@@ -20,7 +20,7 @@
  *   - extraCurve     – adds phantom curve to road
  *   - inputDelay     – ms delay on steering (ketamine)
  */
-import { DRUGS, CAM } from '../constants.js';
+import { VICES, CAM } from '../constants.js';
 import { clamp, lerp } from '../utils/Helpers.js';
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
@@ -78,22 +78,22 @@ export class EffectsSystem {
     this.hudFlash    = hudFlash;
   }
 
-  update(dt, drugs, camera, ctx = {}) {
+  update(dt, vices, camera, ctx = {}) {
     this.time += dt;
     const t = this.time;
-    const d = drugs;
+    const d = vices;
     const mile = ctx.mile ?? 0;
 
-    const alc  = d.get(DRUGS.SUSHI);
-    const weed = d.get(DRUGS.BURRITO);
-    const coke = d.get(DRUGS.ENERGY);
-    const shrooms = d.get(DRUGS.GUMMIES);
-    const lsd  = d.get(DRUGS.HOTDOG);
-    const hero = d.get(DRUGS.COMBO);
-    const rx   = d.get(DRUGS.COLDBREW);
-    const fent = d.get(DRUGS.COMA);
-    const ket  = d.get(DRUGS.SLUSHIE);
-    const meth = d.get(DRUGS.CAFFEINE);
+    const alc  = d.get(VICES.SUSHI);
+    const weed = d.get(VICES.BURRITO);
+    const coke = d.get(VICES.ENERGY);
+    const shrooms = d.get(VICES.GUMMIES);
+    const lsd  = d.get(VICES.HOTDOG);
+    const hero = d.get(VICES.COMBO);
+    const rx   = d.get(VICES.COLDBREW);
+    const fent = d.get(VICES.COMA);
+    const ket  = d.get(VICES.SLUSHIE);
+    const meth = d.get(VICES.CAFFEINE);
 
     // High-dose mushrooms: smoothly feed a visual-only liquid-world warp
     // into Road.render(). Keeping this in the projection pass bends pavement,
@@ -207,7 +207,7 @@ export class EffectsSystem {
       // Alpha bumped 0.32 → 0.55 + a baseline term keyed off the bar
       // itself so saturation reads even on the first pickup.
       if (shrooms > 0.05) {
-        const shroomPickups = d.pickupCounts?.[DRUGS.GUMMIES] ?? 0;
+        const shroomPickups = d.pickupCounts?.[VICES.GUMMIES] ?? 0;
         const satBoost = Math.min(1, shroomPickups * 0.08);
         const hue1 = Math.sin(t * 0.4)         * 0.5 + 0.5;
         const hue2 = Math.sin(t * 0.4 + 2.094) * 0.5 + 0.5;
@@ -262,7 +262,7 @@ export class EffectsSystem {
       // at higher levels.  Above 90% the screen flips to a heavy grey
       // wash, reading as "everything's gone B&W".
       if (lsd > 0.05) {
-        const lsdPickups = d.pickupCounts?.[DRUGS.HOTDOG] ?? 0;
+        const lsdPickups = d.pickupCounts?.[VICES.HOTDOG] ?? 0;
         const brightness = Math.min(1, lsdPickups * 0.08);
         // Flat white wash for the brightness lift.
         this.overlay.fillStyle(0xFFFFFF, brightness * 0.30);
@@ -427,7 +427,7 @@ export class EffectsSystem {
 
       // ── World darkness (TimeOfDay) ─────────────────────────────────
       // Drawn LAST in the overlay so it dims everything underneath: road,
-      // scenery, NPCs, even the drug-effect washes.  HUD lives on the UI
+      // scenery, NPCs, even the vice-effect washes.  HUD lives on the UI
       // camera so this doesn't dim it.  Easy mode only dims the sky;
       // Normal+ runs a full-world dim (TimeOfDay handles that gating).
       const darkness = TimeOfDay.darkness(mile);
@@ -766,7 +766,7 @@ export class EffectsSystem {
 
       // ── Apocalypse combo: red-border flash — REMOVED per user (2026-06-20).
       // Previously a pulsing red (CB: amber + hazard-triangle) screen border
-      // when 4+ drugs were active above 30%.  Brendan found it intrusive, so
+      // when 4+ vices were active above 30%.  Brendan found it intrusive, so
       // the over-stack warning is no longer drawn.  `_comboApocalypse` is still
       // computed (reported in getState) in case a quieter cue is wanted later.
     }
@@ -1099,17 +1099,17 @@ export class EffectsSystem {
   }
 
   /** Physics modifiers returned as plain object for Player to read */
-  getPhysics(drugs) {
-    const alc   = drugs.get(DRUGS.SUSHI);
-    const weed  = drugs.get(DRUGS.BURRITO);
-    const coke  = drugs.get(DRUGS.ENERGY);
-    const shrooms = drugs.get(DRUGS.GUMMIES);
-    const lsd   = drugs.get(DRUGS.HOTDOG);
-    const hero  = drugs.get(DRUGS.COMBO);
-    const fent  = drugs.get(DRUGS.COMA);
-    const ket   = drugs.get(DRUGS.SLUSHIE);
-    const rx    = drugs.get(DRUGS.COLDBREW);
-    const meth  = drugs.get(DRUGS.CAFFEINE);
+  getPhysics(vices) {
+    const alc   = vices.get(VICES.SUSHI);
+    const weed  = vices.get(VICES.BURRITO);
+    const coke  = vices.get(VICES.ENERGY);
+    const shrooms = vices.get(VICES.GUMMIES);
+    const lsd   = vices.get(VICES.HOTDOG);
+    const hero  = vices.get(VICES.COMBO);
+    const fent  = vices.get(VICES.COMA);
+    const ket   = vices.get(VICES.SLUSHIE);
+    const rx    = vices.get(VICES.COLDBREW);
+    const meth  = vices.get(VICES.CAFFEINE);
 
     const t = this.time;
 
@@ -1122,7 +1122,7 @@ export class EffectsSystem {
     // a full bar drifts gentler than before.
     const alcDriftAmt = Math.max(0, alcCokeNet - 0.10) * (1 / 0.90) * (2 / 3);
 
-    // Weed only slows the car when it's the ONLY drug active
+    // Weed only slows the car when it's the ONLY vice active
     const weedAlone  = weed > 0.05
       && alc < 0.05 && coke < 0.05 && hero < 0.05 && fent < 0.05
       && shrooms < 0.05 && lsd < 0.05 && rx < 0.05 && ket < 0.05 && meth < 0.05;

@@ -3265,7 +3265,7 @@ export class Road {
     // For bridge segments, route the road surface + markings to the
     // front-overlay layer (bridgeFrontGfx, depth 4) so the asphalt
     // paints OVER cranes (depth 2) — they can't be seen "through" the
-    // road — while NPCs / cops / drugs / signs (depth ≥ 7) still paint
+    // road — while NPCs / cops / vices / signs (depth ≥ 7) still paint
     // on top of the road as expected.
     const surfaceG = (seg.bridge && this._frontG) ? this._frontG : g;
 
@@ -3458,9 +3458,9 @@ export class Road {
       // "thing yet" so we hide them entirely (and GameScene also skips the
       // collision in _onCollect).
       if (sp.type === 'cop_roadblock' && (this._currentStars ?? 0) < 3) continue;
-      // Drug sprites that haven't been resolved to a real drug type yet
+      // Vice sprites that haven't been resolved to a real vice type yet
       // (out of GameScene's lazy-assign window) — skip until typed.
-      if (sp.type === 'drug-pending') continue;
+      if (sp.type === 'vice-pending') continue;
       // Signs are rendered EXCLUSIVELY by renderSignOverlay (high-depth
       // signGfx layer) so they paint on top of trees / buildings.  Drawing
       // them here too produced a stacked second copy at low depth, which
@@ -3508,9 +3508,9 @@ export class Road {
   }
 
   _drawSpriteShape(g, type, x, y, w, h, collected, sp, isGhost = false) {
-    // Drug pickups and F12 weapon tokens are rendered by GameScene's
+    // Vice pickups and F12 weapon tokens are rendered by GameScene's
     // sprite pool (using the player's images). Skip procedural drawing.
-    if (sp?.collectibleType === 'drug' || sp?.collectibleType === 'f12') return;
+    if (sp?.collectibleType === 'vice' || sp?.collectibleType === 'f12') return;
     // Buildings / trees that have an image texture are rendered by
     // GameScene._renderSceneSprites using Phaser Images.
     if (sp?.texKey) return;
@@ -4213,7 +4213,7 @@ export class Road {
   /**
    *  Canonical road-surface query — every system that needs to know
    *  "where is the drivable pavement on screen at this depth?" should
-   *  go through this one function.  Player car, NPC cars, drug pickups,
+   *  go through this one function.  Player car, NPC cars, vice pickups,
    *  cops, shadows, signage — all consume sampleSurface() so the road
    *  owns its own surface position and nothing else has to invent one.
    *

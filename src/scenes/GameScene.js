@@ -2,15 +2,15 @@ import Phaser from 'phaser';
 import {
   SCREEN_W, SCREEN_H, SEG_LENGTH, ROUTE_SEGS, ROAD_WIDTH, DRAW_DIST,
   MAX_SPEED, ACCEL, BRAKE, DECEL, TURN_SPEED, OFFROAD_SLOW, CENTRIFUGAL,
-  PTS_DIST, PTS_CRASH, PTS_HITCH, DRUG_MULT, DRUG_PTS, FULL_BAR_THRESHOLD,
-  DRUGS, DRUG_CONFIG, DRUG_COMBOS, CHECKPOINTS, TOTAL_ROUTE_MILES, REST_STOPS, PASS_THROUGH_CITIES,
+  PTS_DIST, PTS_CRASH, PTS_HITCH, VICE_MULT, VICE_PTS, FULL_BAR_THRESHOLD,
+  VICES, VICE_CONFIG, VICE_COMBOS, CHECKPOINTS, TOTAL_ROUTE_MILES, REST_STOPS, PASS_THROUGH_CITIES,
   getLocationName,
   getLastSignTown,
   CAR_LEN_Z, CAR_WIDTH_LANES, PLAYER_VIRTUAL_Z,
   VEHICLES, GAS_LIGHT_AT_MI,
   setCameraMode, CAM, COP_TRAP_SPEED_MPH,
   COP_TRAP_COMPLY_SEC, COP_TRAP_PULLOVER_MPH, COP_TRAP_SHOULDER_X, COP_TRAP_ABORT_X, COP_TRAP_HOLD_SEC,
-  COP_DUI_ALCOHOL_LIMIT, COP_DUI_DRUG_LIMIT, COP_DUI_MULTI_COUNT, COP_DUI_MULTI_LIMIT,
+  COP_DUI_ALCOHOL_LIMIT, COP_DUI_VICE_LIMIT, COP_DUI_MULTI_COUNT, COP_DUI_MULTI_LIMIT,
   COP_TICKET_SPEEDING_FRAC, COP_TICKET_SPEEDING_CAP, COP_TICKET_DUI_FRAC, COP_TICKET_DUI_CAP,
   COP_DUI_EARN_MULT, COP_DUI_EARN_MI,
   COP_DUI_BUST_COUNT, COP_DUI_BUST_COUNT_LAWYER, COP_DUI_WINDOW_MI,
@@ -25,7 +25,7 @@ import * as C from '../constants.js';
 import { clamp, lerp } from '../utils/Helpers.js';
 import { Road }          from '../road/Road.js';
 import geoData           from '../road/routeGeo.json';
-import { DrugSystem }    from '../systems/DrugSystem.js';
+import { ViceSystem }    from '../systems/ViceSystem.js';
 import { EffectsSystem } from '../systems/EffectsSystem.js';
 import { CopSystem }     from '../systems/CopSystem.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
@@ -343,9 +343,9 @@ export class GameScene extends Phaser.Scene {
     // player reaches GameOver, so their checkpoint retry preserves that
     // post-bail total instead of applying the crash half-cash penalty too.
     this._checkpointRestartScore = data?.checkpointRestartScore ?? null;
-    // Slider-restart drug levels (technical-loss / custom-mode flow) —
+    // Slider-restart vice levels (technical-loss / custom-mode flow) —
     // applied once after the scene reaches gameplay.
-    this._customStartLevels  = data?.startDrugLevels ?? null;
+    this._customStartLevels  = data?.startViceLevels ?? null;
     // Daily Challenge ("Run of the Day") stage config — when present this run
     // is a short start-city→end-city stage with spawn modifiers + an
     // objective (see DailyChallenges.js + PROJECT_OVERVIEW §8).  Null on every
@@ -357,7 +357,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Auto-resume a LIVE run after an unexpected reload ───────────────
     // iOS discards a backgrounded heavy-WebGL tab under memory pressure and
-    // reloads it — which used to nuke the in-progress run (all money/drugs/
+    // reloads it — which used to nuke the in-progress run (all money/vices/
     // position).  _autosaveRun() persists a `liveRun` snapshot every few
     // seconds + on pagehide/visibilitychange; on a FRESH boot (no explicit
     // resume/skip/daily/mission data) we pick it back up.  Start Over / Main
@@ -409,7 +409,7 @@ export class GameScene extends Phaser.Scene {
     // destroyed Text, which crashes with "Cannot read properties of null
     // (reading 'drawImage')" inside Phaser's canvas pipeline.
     this._f12Texts     = null;
-    this._drugLabels   = null;
+    this._viceLabels   = null;
     this._signTextPool  = null;      // sign-label overlay pool (same scene-restart issue)
     this._signDecalPool = null;      // hwy-shield + sign-face image pool
     // Pause-button refs from the previous scene's _buildHUD point at
@@ -449,8 +449,8 @@ export class GameScene extends Phaser.Scene {
     // straight into the frozen busted-screen state.
     this._bustingToStart     = false;
     this._npcCrashesPostDrink = 0;
-    this._drugBumpCount       = 0;
-    this._drugBumpFired       = false;
+    this._viceBumpCount       = 0;
+    this._viceBumpFired       = false;
     this._playerCopCrashes    = 0;
     this._copCrashCount       = 0;
     this._lastMixedLineMile   = 0;
@@ -533,14 +533,14 @@ export class GameScene extends Phaser.Scene {
     // boost auto-disables; refills passively whenever boost is off.
     // Bar lives under the gas HUD readout (see _renderHUD).
     this._accelCharge = 100;
-    // HUD drug-bar drag handler — same reuse issue.  The Phaser input
+    // HUD vice-bar drag handler — same reuse issue.  The Phaser input
     // system tears down its listeners on scene shutdown, but our
-    // `_drugBarDragWired` flag persisted into the next run so the
+    // `_viceBarDragWired` flag persisted into the next run so the
     // re-attach was skipped and the bars stopped responding.  Clearing
-    // the flag here lets _ensureDrugBarDragHandler re-register cleanly.
-    this._drugBarDragWired = false;
-    this._draggingDrugId   = null;
-    this._drugBarHits      = null;
+    // the flag here lets _ensureViceBarDragHandler re-register cleanly.
+    this._viceBarDragWired = false;
+    this._draggingViceId   = null;
+    this._viceBarHits      = null;
     // Maxed-out + full-tank per-run gates — clear so each new run can
     // award them fresh.
     this._maxedFired       = null;
@@ -592,7 +592,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x000000);
 
     // Handedness — DEFAULT is left-handed (weapon/HP/gas/speed column
-    // on the LEFT, drug bars on the RIGHT) per the new game baseline.
+    // on the LEFT, vice bars on the RIGHT) per the new game baseline.
     // Persisted in the global settings slot; toggled from the
     // phone-menu (future) or the Shift+L debug keybind below.
     const _save = this.registry.get('save');
@@ -602,13 +602,13 @@ export class GameScene extends Phaser.Scene {
     // vs the HUD (must remain perfectly static on a separate UI camera).
     this._worldObjects = [];
     this._hudObjects   = [];
-    // Drug status-bar icon cache. MUST reset on every (re)create: Phaser
+    // Vice status-bar icon cache. MUST reset on every (re)create: Phaser
     // reuses this scene instance across scene.start('Game') (rest-stop
     // continue — including after buying a car), which destroys all
-    // GameObjects but leaves this._drugIcons pointing at the dead ones.
-    // The lazy-create guard in _drawDrugIcons would then treat them as
+    // GameObjects but leaves this._viceIcons pointing at the dead ones.
+    // The lazy-create guard in _drawViceIcons would then treat them as
     // "already created" and never rebuild them, so the icons vanish.
-    this._drugIcons    = {};
+    this._viceIcons    = {};
 
     // ── Core systems ──────────────────────────────────────────────────
     // Difficulty needs to be hydrated FIRST — its flags gate weather,
@@ -652,14 +652,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.road    = new Road();
-    this.drugs   = new DrugSystem();
-    // Hydrate persistent drug unlocks from the Phaser registry — survives
-    // arrest/death/respawn within the same play session.  See "drugUnlocks"
-    // writes after _drugUpdate (below).
-    this.drugs.hydrateUnlocks?.(this.registry.get('drugUnlocks'));
+    this.vices   = new ViceSystem();
+    // Hydrate persistent vice unlocks from the Phaser registry — survives
+    // arrest/death/respawn within the same play session.  See "viceUnlocks"
+    // writes after _viceUpdate (below).
+    this.vices.hydrateUnlocks?.(this.registry.get('viceUnlocks'));
     // Also restore partial-unlock progress (e.g. meth Phase 1) so a rest
     // stop or arrest doesn't wipe the cocaine-peak flag the gate depends on.
-    this.drugs.hydrateProgress?.(this.registry.get('drugProgress'));
+    this.vices.hydrateProgress?.(this.registry.get('viceProgress'));
     this.effects = new EffectsSystem(this);
     this.cops    = new CopSystem();
     this.haptics = new HapticSystem();
@@ -818,7 +818,7 @@ export class GameScene extends Phaser.Scene {
     // re-paint layer for bridge segments.  Road.js routes bridge-segment
     // asphalt + lane markings + rumbles + guardrails here, so the
     // bridge deck paints OVER cranes (renderDepth 2) but stays UNDER
-    // NPCs / cops / drugs / signs (depth ≥ 7) which still appear on
+    // NPCs / cops / vices / signs (depth ≥ 7) which still appear on
     // top of the road as expected.
     this.bridgeFrontGfx = this.add.graphics().setDepth(4);
     // Tunnel entrance facade — depth is set DYNAMICALLY per frame by
@@ -876,7 +876,7 @@ export class GameScene extends Phaser.Scene {
     {
       const _origTriggerShake = this.effects.triggerShake.bind(this.effects);
       this.effects.triggerShake = (durationMs, intensity) => {
-        const _phys = this.effects.getPhysics?.(this.drugs);
+        const _phys = this.effects.getPhysics?.(this.vices);
         const damp  = _phys?.collisionShakeDamp ?? 0;
         _origTriggerShake(durationMs, intensity * (1 - damp) * (this._shakeMult ?? 1));
       };
@@ -1066,31 +1066,31 @@ export class GameScene extends Phaser.Scene {
     // milked out by it.  Drawn per-frame in _renderVehicles, fog zone only.
     this._fogGlowGfx = this.add.graphics().setDepth(10.02);
 
-    // Drug sprite pool — Phaser Images for the road-side drug pickups.
-    this._drugSpritePool = [];
+    // Vice sprite pool — Phaser Images for the road-side vice pickups.
+    this._viceSpritePool = [];
     for (let i = 0; i < 24; i++) {
       const s = this.add.image(0, 0, 'vice_sushi')
         .setOrigin(0.5, 1).setDepth(8.5).setVisible(false);
-      this._drugSpritePool.push(s);
+      this._viceSpritePool.push(s);
     }
     // Pickup glow halo — a soft gold/amber aura painted UNDER every
-    // collectible (drugs, weapons, steroid) so pickups read as "grab me"
+    // collectible (vices, weapons, steroid) so pickups read as "grab me"
     // and never get mistaken for traffic.  Depth 6.9 sits below the
     // minimum z-banded pickup depth (~7.0) so the glow is always behind
     // its pickup regardless of distance.
-    this._drugHaloGfx = this.add.graphics().setDepth(6.9);
+    this._viceHaloGfx = this.add.graphics().setDepth(6.9);
 
-    // Double-vision ghost pools — mirror the car + drug pools at reduced
-    // alpha and a lateral pixel offset.  Sized at 24 each (drug pool size)
+    // Double-vision ghost pools — mirror the car + vice pools at reduced
+    // alpha and a lateral pixel offset.  Sized at 24 each (vice pool size)
     // since traffic count and visible pickups stay in that range.
     this._carGhostPool = [];
     for (let i = 0; i < 24; i++) {
       this._carGhostPool.push(this.add.image(0, 0, 'npc_car_white')
         .setOrigin(0.5, 1).setDepth(8).setVisible(false));
     }
-    this._drugGhostPool = [];
+    this._viceGhostPool = [];
     for (let i = 0; i < 24; i++) {
-      this._drugGhostPool.push(this.add.image(0, 0, 'vice_sushi')
+      this._viceGhostPool.push(this.add.image(0, 0, 'vice_sushi')
         .setOrigin(0.5, 1).setDepth(8.5).setVisible(false));
     }
     // Scenery double-vision ghost pool — CAPPED at 40 (vs the 1900-strong
@@ -1404,7 +1404,7 @@ export class GameScene extends Phaser.Scene {
     // Start at Seattle with no score yet
     this._lastCheckpoint = { name: 'Seattle, WA', position: 0, scoreAtCP: 0 };
     this._passedCheckpoints = new Set(['Seattle, WA']);
-    this._probationTimer = 0;  // seconds remaining where drug use = +2 stars
+    this._probationTimer = 0;  // seconds remaining where vice use = +2 stars
     this._gameFinished   = false;
     // Finish cinematic — set when crossing mile-289; the car parks in front
     // of the Pullman Party House (input locked) before Game Over.  `_finishCause`
@@ -1461,12 +1461,12 @@ export class GameScene extends Phaser.Scene {
         // Phaser-rendered modal that's reliable on every platform.
         this._buildConfirmPopup(
           'CONFIRM START OVER?',
-          'This wipes your drug unlocks and sends you back to West Seattle.',
+          'This wipes your vice unlocks and sends you back to West Seattle.',
           () => {
             this._paused = false;
             this.audio?.setPaused?.(false);
-            this.registry?.remove?.('drugUnlocks');
-            this.registry?.remove?.('drugProgress');
+            this.registry?.remove?.('viceUnlocks');
+            this.registry?.remove?.('viceProgress');
             // Hardening: explicitly null out every "where were we?"
             // pointer so the next scene.start CANNOT accidentally
             // resume from a stale checkpoint snapshot.
@@ -1679,7 +1679,7 @@ export class GameScene extends Phaser.Scene {
     if (this._resumeLive) {
       // ── Auto-resume the live run after a reload ──────────────────────
       // Drop the player back exactly where they were — full state restored
-      // (money, HP, gas, drugs, weapons, stars, vehicle), car coasting
+      // (money, HP, gas, vices, weapons, stars, vehicle), car coasting
       // straight until the first steer tap.  A "sorry, we lost you…" modal
       // (built at the end of create) holds the world frozen until OK.
       const lr = this._resumeLive;
@@ -1714,7 +1714,7 @@ export class GameScene extends Phaser.Scene {
       // A short start-city→end-city run.  Forced to "normal" rules so
       // weather/cops/overdose behave predictably.  Spawn at the start city;
       // the stage completes at the target city (see the checkpoint loop).
-      // Easy mods (start ★, drug pre-load) applied here; density / OD-filter
+      // Easy mods (start ★, vice pre-load) applied here; density / OD-filter
       // / traps land in the next increment.  Whole branch only runs when a
       // dailyStage config was passed, so normal/custom runs never reach it.
       Difficulty.set?.('normal', this.registry);
@@ -1737,23 +1737,23 @@ export class GameScene extends Phaser.Scene {
       if (ds.startingStars && this.cops) {
         this.cops.stars = ds.startingStars; this.cops.starTimer = 4;
       }
-      if (ds.startDrugLevels && this.drugs?.levels) {
-        for (const [id, lvl] of Object.entries(ds.startDrugLevels)) {
-          this.drugs.levels[id] = lvl;
-          if (lvl > 0 && this.drugs.unlocked) this.drugs.unlocked[id] = true;
+      if (ds.startViceLevels && this.vices?.levels) {
+        for (const [id, lvl] of Object.entries(ds.startViceLevels)) {
+          this.vices.levels[id] = lvl;
+          if (lvl > 0 && this.vices.unlocked) this.vices.unlocked[id] = true;
         }
       }
       // ── Objective tracker ────────────────────────────────────────────
-      // One bag of telemetry the gameplay hooks feed (drug pickups, car
+      // One bag of telemetry the gameplay hooks feed (vice pickups, car
       // hits, OD, stars, combo continuity, barrier/off-road scrapes).
       // _gradeDailyObjective() reads it at the end city.  Only ever created
       // in daily-stage mode, so the hooks below no-op on normal/custom runs.
       this._dailyTracker = {
         obj:             ds.objective ?? null,
         carsHit:         0,
-        drugTypes:       new Set(),   // distinct drug ids collected
-        drugCount:       0,           // total drug pickups
-        peakDrug:        0,           // highest any single bar reached
+        viceTypes:       new Set(),   // distinct vice ids collected
+        viceCount:       0,           // total vice pickups
+        peakVice:        0,           // highest any single bar reached
         odd:             false,       // overdosed at any point
         maxStars:        0,           // peak wanted level
         comboEverActive: false,       // a combo was lit at least once
@@ -1768,7 +1768,7 @@ export class GameScene extends Phaser.Scene {
     } else if (this._resumeFromPosition != null) {
       // Death-respawn at last checkpoint — per user spec, the crash
       // costs HALF of pre-crash money and the player respawns at 50 %
-      // HP (which they have to refill at rest stops).  Stars + drugs
+      // HP (which they have to refill at rest stops).  Stars + vices
       // still zero so the chase / chemical state genuinely resets.
       this.player.position = this._resumeFromPosition;
       this.score           = this._checkpointRestartScore != null
@@ -1780,15 +1780,15 @@ export class GameScene extends Phaser.Scene {
       this.cops.rearBumpCount = 0;
       this.cops.headOnCount   = 0;
       this.cops.pitCount      = 0;
-      if (this.drugs?.levels) {
-        for (const id of Object.keys(this.drugs.levels)) this.drugs.levels[id] = 0;
+      if (this.vices?.levels) {
+        for (const id of Object.keys(this.vices.levels)) this.vices.levels[id] = 0;
       }
-      // Apply slider-chosen drug levels after the zero-out so the
+      // Apply slider-chosen vice levels after the zero-out so the
       // technical-loss restart actually reflects the player's choices.
       if (this._customStartLevels) {
         for (const [id, lvl] of Object.entries(this._customStartLevels)) {
-          this.drugs.levels[id] = lvl;
-          if (lvl > 0 && this.drugs.unlocked) this.drugs.unlocked[id] = true;
+          this.vices.levels[id] = lvl;
+          if (lvl > 0 && this.vices.unlocked) this.vices.unlocked[id] = true;
         }
         this._customStartLevels = null;
       }
@@ -1849,7 +1849,7 @@ export class GameScene extends Phaser.Scene {
         this.cops.pitCount      = 0;
         this.cops.cops          = [];
         // Portable-save resume (entered a code / loaded a saved snapshot):
-        // restore the FULL run — money, HP, gas, drugs, weapons, vehicle,
+        // restore the FULL run — money, HP, gas, vices, weapons, vehicle,
         // accessories, owned set.  Live rest-stop exits use the `buys` path
         // below instead (mutually exclusive: no snapshot is passed then).
         if (this._resumeSnapshot) this._applyResumeSnapshot(this._resumeSnapshot);
@@ -1889,43 +1889,43 @@ export class GameScene extends Phaser.Scene {
             this.damage.setMax(_curMax + buys.bonusHp);
             this.damage.setDurability(_curDur + buys.bonusHp);
           }
-          // Restore drug levels from the rest-stop snapshot FIRST — drug
+          // Restore vice levels from the rest-stop snapshot FIRST — vice
           // status is paused during the menu, so the player resumes at the
-          // bar levels they walked in with.  The new DrugSystem otherwise
+          // bar levels they walked in with.  The new ViceSystem otherwise
           // starts every bar at zero, silently wiping the player's high.
-          if (buys.drugLevelsOnResume && this.drugs?.levels) {
-            for (const [id, lvl] of Object.entries(buys.drugLevelsOnResume)) {
-              this.drugs.levels[id] = Math.max(0, Math.min(1, lvl));
+          if (buys.viceLevelsOnResume && this.vices?.levels) {
+            for (const [id, lvl] of Object.entries(buys.viceLevelsOnResume)) {
+              this.vices.levels[id] = Math.max(0, Math.min(1, lvl));
             }
           }
-          if (buys.restock && this.drugs?.refillAll) this.drugs.refillAll();
-          // Coffee / Snooze — multiplier applied to ALL drug bars FIRST so
+          if (buys.restock && this.vices?.refillAll) this.vices.refillAll();
+          // Coffee / Snooze — multiplier applied to ALL vice bars FIRST so
           // any subsequent top-ups (beers, weed, etc.) win on top of the
           // sobered baseline.  Coffee = ×0.5, Snooze = ×0, stackable.
-          if (typeof buys.reduceDrugs === 'number' && this.drugs?.levels) {
-            for (const id of Object.keys(this.drugs.levels)) {
-              this.drugs.levels[id] = (this.drugs.levels[id] ?? 0) * buys.reduceDrugs;
+          if (typeof buys.reduceVices === 'number' && this.vices?.levels) {
+            for (const id of Object.keys(this.vices.levels)) {
+              this.vices.levels[id] = (this.vices.levels[id] ?? 0) * buys.reduceVices;
             }
           }
-          // Per-drug top-ups — set each named drug's bar to >= the stored
+          // Per-vice top-ups — set each named vice's bar to >= the stored
           // amount.  Lets players buy weed alone without restocking everything.
-          if (buys.drugTopUps && this.drugs?.levels) {
-            for (const [drugId, amount] of Object.entries(buys.drugTopUps)) {
-              const cur = this.drugs.levels[drugId] ?? 0;
-              this.drugs.levels[drugId] = Math.max(cur, Math.min(1, amount));
+          if (buys.viceTopUps && this.vices?.levels) {
+            for (const [viceId, amount] of Object.entries(buys.viceTopUps)) {
+              const cur = this.vices.levels[viceId] ?? 0;
+              this.vices.levels[viceId] = Math.max(cur, Math.min(1, amount));
             }
           }
           // "Top all to N" — every UNLOCKED bar lifts to >= N.  Use
-          // this.drugs.unlocked (already hydrated from registry above)
+          // this.vices.unlocked (already hydrated from registry above)
           // as the authoritative source — the previous version read the
           // registry directly and checked `instanceof Set`, but the
           // registry stores unlocks as a plain object, so the check
-          // always fell through to DRUG_CONFIG which only marks
+          // always fell through to VICE_CONFIG which only marks
           // alcohol/weed as default-unlocked.  Result: nothing topped up.
-          if (buys.topAllTo && this.drugs?.levels) {
-            for (const id of Object.keys(this.drugs.levels)) {
-              if (!this.drugs.unlocked?.[id]) continue;
-              this.drugs.levels[id] = Math.max(this.drugs.levels[id] ?? 0, buys.topAllTo);
+          if (buys.topAllTo && this.vices?.levels) {
+            for (const id of Object.keys(this.vices.levels)) {
+              if (!this.vices.unlocked?.[id]) continue;
+              this.vices.levels[id] = Math.max(this.vices.levels[id] ?? 0, buys.topAllTo);
             }
           }
           // Sex-worker dirt-on-a-politician buff — caps cops at 2★ for
@@ -2113,15 +2113,15 @@ export class GameScene extends Phaser.Scene {
         // and headlight beams doubled.  They belong to the world camera only.
         this._tireShadowGfx, this.headlightGfx, this.headlightFixtureGfx,
         ...this._carSpritePool,
-        ...this._drugSpritePool,
-        this._drugHaloGfx,
+        ...this._viceSpritePool,
+        this._viceHaloGfx,
         ...this._sceneSpritePool,
         ...this._fencePostPool,
         ...this._utilityPolePool,
         ...(this._strip3dPool ?? []),
         this._horizonStripL, this._horizonStripR,
         ...(this._carGhostPool ?? []),
-        ...(this._drugGhostPool ?? []),
+        ...(this._viceGhostPool ?? []),
         ...(this._sceneGhostPool ?? []),
       ].filter(Boolean),
     );
@@ -2194,10 +2194,10 @@ export class GameScene extends Phaser.Scene {
   // ─── Input ───────────────────────────────────────────────────────────
   _setupTouch() {
     // Helper — true if the pointer is currently over a draggable HUD
-    // drug bar.  Used to suppress the touch-steer latch so adjusting
+    // vice bar.  Used to suppress the touch-steer latch so adjusting
     // bars in custom mode doesn't also steer the car.
-    const overDrugBar = (p) => {
-      const hits = this._drugBarHits;
+    const overViceBar = (p) => {
+      const hits = this._viceBarHits;
       if (!hits || !hits.length) return false;
       const px = p.x - C.HUD_OFFSET_X;   // canvas → HUD/scene space (decoupled width)
       for (const h of hits) {
@@ -2247,9 +2247,9 @@ export class GameScene extends Phaser.Scene {
       // anywhere else on screen, so the player isn't accidentally
       // starting the run by tapping near a difficulty button.
       if (this._awaitingStart) return;
-      // HUD drug bars (custom mode) — let the bar drag handler own
+      // HUD vice bars (custom mode) — let the bar drag handler own
       // this pointer without also veering the car.
-      if (overDrugBar(p)) return;
+      if (overViceBar(p)) return;
       // Top-row UI band + weapon stack — initial tap must NOT
       // start on these zones (so buttons work), but once a valid
       // steer-tap has started, the player can drag across them.
@@ -2349,8 +2349,8 @@ export class GameScene extends Phaser.Scene {
         this._touchLeft = this._touchRight = false;
         return;
       }
-      // While dragging a drug bar, never steer.
-      if (this._draggingDrugId) {
+      // While dragging a vice bar, never steer.
+      if (this._draggingViceId) {
         this._touchLeft = this._touchRight = false;
         return;
       }
@@ -3011,7 +3011,7 @@ export class GameScene extends Phaser.Scene {
   _isRight() { return this._delayedSteer().right; }
 
   _delayedSteer() {
-    const alc = this.drugs?.get?.(DRUGS.SUSHI) ?? 0;
+    const alc = this.vices?.get?.(VICES.SUSHI) ?? 0;
     const raw = { left: this._isLeftRaw(), right: this._isRightRaw() };
     if (alc <= 0.75) {
       // Below threshold — reset scheduling so a brief sober dip doesn't
@@ -3254,11 +3254,11 @@ export class GameScene extends Phaser.Scene {
     // tilt mode the ACCEL slot stays hidden even when the rest of the
     // HUD is shown.
     if (v) this._applyPedalModeUI?.(true);
-    // Hide drug bar labels + weapon icons when on title.  Bars + icon
+    // Hide vice bar labels + weapon icons when on title.  Bars + icon
     // graphics are skipped by their drawers below when _awaitingStart.
-    if (this._drugLabels) {
-      for (const id of Object.keys(this._drugLabels)) {
-        this._drugLabels[id]?.setVisible(v);
+    if (this._viceLabels) {
+      for (const id of Object.keys(this._viceLabels)) {
+        this._viceLabels[id]?.setVisible(v);
       }
     }
     if (this._f12Texts) {
@@ -3296,8 +3296,8 @@ export class GameScene extends Phaser.Scene {
     if (this._ctrlEditMode) {
       this._renderFrame();
       this._renderHUD();
-      this._drawDrugBars?.();        // these draw later in update() — call them
-      this._drawF12Inventory?.();    // here too so drugs + weapons show while editing
+      this._drawViceBars?.();        // these draw later in update() — call them
+      this._drawF12Inventory?.();    // here too so vices + weapons show while editing
       this._updateControlsEditor?.(rawDt);
       this._syncControlProxies?.();  // keep each handle glued to its control's live box
       return;
@@ -3434,7 +3434,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (this._paused) return;
 
-    const phys  = this.effects.getPhysics(this.drugs);
+    const phys  = this.effects.getPhysics(this.vices);
     const dt    = rawDt * phys.dtMultiplier;
     // Cocaine accelerates wanted-level gain — stamp the multiplier on
     // CopSystem so addStar(amount) reads it without touching call sites.
@@ -3524,34 +3524,34 @@ export class GameScene extends Phaser.Scene {
     // ── Physics ───────────────────────────────────────────────────────
     this._updatePlayer(dt, phys);
     this._updateTraffic(dt);
-    // Easy-mode only: drug pickups creep FORWARD toward the player at a
+    // Easy-mode only: vice pickups creep FORWARD toward the player at a
     // steady ~20 mph relative.  Safe accumulator rewrite — re-homes each
-    // drug sprite between seg.sprites arrays (drug sprites have NO
+    // vice sprite between seg.sprites arrays (vice sprites have NO
     // position field), so it can never NaN the way the v1 sp.position
     // hack did.  See PROJECT_OVERVIEW §8 2026-06-12.
-    this._updateDrugDrift(rawDt);
+    this._updateViceDrift(rawDt);
     this._updateRadar(rawDt);
 
     // ── Systems ───────────────────────────────────────────────────────
-    this.drugs.update(rawDt);
-    // Guaranteed first taste — when a drug crosses its unlock gate this frame,
+    this.vices.update(rawDt);
+    // Guaranteed first taste — when a vice crosses its unlock gate this frame,
     // drop just 1–2 sprites a short way ahead (reachable within ~15s) so the
     // player gets to try what they just earned without a full celebratory line.
-    for (const newId of this.drugs.drainFirstLineQueue?.() ?? []) {
+    for (const newId of this.vices.drainFirstLineQueue?.() ?? []) {
       const n = 1 + ((Math.random() * 2) | 0);   // 1 or 2 sprites
-      this._injectDrugLine({
+      this._injectViceLine({
         types:  Array(n).fill(newId),
         spread: 18,
-        label:  `🔓 UNLOCKED — ${this._drugLineLabel(newId)}`,
+        label:  `🔓 UNLOCKED — ${this._viceLineLabel(newId)}`,
       });
     }
-    this.drugs.routeProgress = this.player.position / (ROUTE_SEGS * SEG_LENGTH);
+    this.vices.routeProgress = this.player.position / (ROUTE_SEGS * SEG_LENGTH);
     // Weed Permastoned tracker — bar at 100% for 10 in-game miles fires
     // the Permastoned achievement, force-resets the weed bar to 0, and
     // suppresses any future weed pickups for the rest of the run.
     {
       const posPerMile = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
-      const r = this.drugs.notePermastonedTick?.(this.player.position, posPerMile);
+      const r = this.vices.notePermastonedTick?.(this.player.position, posPerMile);
       if (r?.permastoned) {
         this._showPopup('🌿 PERMASTONED!\nWeed bar locked.', '#88FF88');
         AchievementSystem.award('permastoned', this.registry);
@@ -3644,7 +3644,7 @@ export class GameScene extends Phaser.Scene {
       const wiperSweepPulse = !!this._wiperSweepPulse;
       this._wiperSweepPulse = false;   // one-shot
       if (!this._perf?.noEffects) {
-        this.effects.update(rawDt, this.drugs, this.cameras.main, { mile, wiperActive, wiperSweepPulse });
+        this.effects.update(rawDt, this.vices, this.cameras.main, { mile, wiperActive, wiperSweepPulse });
       }
       // Weather / wiper indicator — visible during BOTH rain AND snow.
       // Icon is the custom wiper-blade drawing in drawWiper() above;
@@ -3692,21 +3692,21 @@ export class GameScene extends Phaser.Scene {
     if (this.cops.starCapMax != null && this.cops.stars > this.cops.starCapMax) {
       this.cops.stars = this.cops.starCapMax;
     }
-    // Real-time drug → music coupling.  Cheap call (just sets filter
+    // Real-time vice → music coupling.  Cheap call (just sets filter
     // targets), runs every frame so the mix continuously breathes with
-    // bar levels.  See AudioSystem.setDrugInfluence for the mapping.
-    this.audio?.setDrugInfluence?.(this.drugs.levels);
+    // bar levels.  See AudioSystem.setViceInfluence for the mapping.
+    this.audio?.setViceInfluence?.(this.vices.levels);
 
     // ── Collisions ────────────────────────────────────────────────────
-    this._assignPendingDrugTypes();
+    this._assignPendingViceTypes();
     this._checkCollisions();
     this._updateVehicleCrashes();   // NPC↔NPC and cop↔NPC crashes (no more phasing through)
 
     // ── OD / Arrested ─────────────────────────────────────────────────
     // Custom mode never ODs, so skip the frame-level safety check too.
     if (Difficulty.mode?.() !== 'custom') {
-      const odDrug = this.drugs.checkOD();
-      if (odDrug && !this._tryNarcan(odDrug)) { this._onOverdose(odDrug); return; }
+      const odVice = this.vices.checkOD();
+      if (odVice && !this._tryNarcan(odVice)) { this._onOverdose(odVice); return; }
     }
     if (this.cops.arrestPending) { this._onArrested(); return; }
 
@@ -3751,8 +3751,8 @@ export class GameScene extends Phaser.Scene {
     //   Path A:  (alcohol ≥ ⅓  OR  weed ≥ ½)
     //            AND   3 NPC crashes since first drink
     //
-    //   Path B:  20 NPC-car bumps while at least one drug bar ≥ 30%
-    //            (one-shot gate — `_drugBumpFired` flag prevents re-trigger)
+    //   Path B:  20 NPC-car bumps while at least one vice bar ≥ 30%
+    //            (one-shot gate — `_viceBumpFired` flag prevents re-trigger)
     //
     // ── Speed traps ───────────────────────────────────────────────────
     // Roadside troopers (copEncounter sprites) are SPEED TRAPS.  The only
@@ -3851,7 +3851,7 @@ export class GameScene extends Phaser.Scene {
         this._trapStopHoldTimer = COP_TRAP_HOLD_SEC;
         this._trapStopHeldX     = this.player.x;             // freeze steering here for the stop
         this._trapCopArrive     = 0;                         // cruiser pull-up animation 0→1
-        // Snapshot the offense NOW (drug bars at the moment of the stop) so the
+        // Snapshot the offense NOW (vice bars at the moment of the stop) so the
         // 30s of metabolizing can't change the charge.  Resolved at hold-end.
         this._trapTicket        = this._assessTrafficStop();
         this.cops.parkTrapPursuit?.(this.player.position);   // trooper pulls up behind you
@@ -3932,65 +3932,65 @@ export class GameScene extends Phaser.Scene {
     // After the first star, all further star changes are STATIC additions
     // from collision events (see _onCopCollision and friends).  No heat trickle.
     if (this.cops.stars < 1) {
-      const drunk    = (this.drugs.get?.(DRUGS.SUSHI) ?? 0) >= (1 / 3);
-      const stoned   = (this.drugs.get?.(DRUGS.BURRITO)    ?? 0) >= 0.5;
-      const everDrunk = (this.drugs.maxReached?.[DRUGS.SUSHI] ?? 0) > 0.05;
+      const drunk    = (this.vices.get?.(VICES.SUSHI) ?? 0) >= (1 / 3);
+      const stoned   = (this.vices.get?.(VICES.BURRITO)    ?? 0) >= 0.5;
+      const everDrunk = (this.vices.maxReached?.[VICES.SUSHI] ?? 0) > 0.05;
       this._npcCrashesPostDrink ??= 0;
-      this._drugBumpCount       ??= 0;
+      this._viceBumpCount       ??= 0;
 
       const pathA = everDrunk && (drunk || stoned) && this._npcCrashesPostDrink >= 3;
-      const pathB = !this._drugBumpFired && this._drugBumpCount >= 20;
+      const pathB = !this._viceBumpFired && this._viceBumpCount >= 20;
       if (pathA || pathB) {
         this.cops.addStar(1, 3);
         this._showPopup('★ WANTED LEVEL ACTIVATED!\nCops dispatched.', '#FF4444');
         this._npcCrashesPostDrink = 0;
-        this._drugBumpFired        = true;     // path B is one-shot
+        this._viceBumpFired        = true;     // path B is one-shot
       }
     }
 
-    // ── Drug-line drops ───────────────────────────────────────────────
-    // Every ~90 sec a 4-pickup line appears.  Drug type is picked from the
-    // player's unlocked pool so they get variety as more drugs come online
+    // ── Vice-line drops ───────────────────────────────────────────────
+    // Every ~90 sec a 4-pickup line appears.  Vice type is picked from the
+    // player's unlocked pool so they get variety as more vices come online
     // (Beer Run, Chain Smoking, Rail Run, Mushroom Hunting, Tab Run, …).
     this._beerLineTimer = (this._beerLineTimer ?? 90) - rawDt;
     if (this._beerLineTimer <= 0) {
       this._beerLineTimer = 80 + Math.random() * 20;       // 80–100 sec
       const pool = ['sushi', 'burrito'];
-      if (this.drugs.isUnlocked(DRUGS.ENERGY))  pool.push('energy');
-      if (this.drugs.isUnlocked(DRUGS.GUMMIES))  pool.push('gummies');
-      if (this.drugs.isUnlocked(DRUGS.HOTDOG))      pool.push('hotdog');
-      if (this.drugs.isUnlocked(DRUGS.COMBO))   pool.push('combo');
-      if (this.drugs.isUnlocked(DRUGS.COLDBREW))       pool.push('coldbrew');
-      if (this.drugs.isUnlocked(DRUGS.COMA)) pool.push('coma');
-      if (this.drugs.isUnlocked(DRUGS.SLUSHIE)) pool.push('slushie');
-      if (this.drugs.isUnlocked(DRUGS.CAFFEINE))     pool.push('caffeine');
+      if (this.vices.isUnlocked(VICES.ENERGY))  pool.push('energy');
+      if (this.vices.isUnlocked(VICES.GUMMIES))  pool.push('gummies');
+      if (this.vices.isUnlocked(VICES.HOTDOG))      pool.push('hotdog');
+      if (this.vices.isUnlocked(VICES.COMBO))   pool.push('combo');
+      if (this.vices.isUnlocked(VICES.COLDBREW))       pool.push('coldbrew');
+      if (this.vices.isUnlocked(VICES.COMA)) pool.push('coma');
+      if (this.vices.isUnlocked(VICES.SLUSHIE)) pool.push('slushie');
+      if (this.vices.isUnlocked(VICES.CAFFEINE))     pool.push('caffeine');
       // Bias toward beer so it stays the dominant line type.
       pool.push('sushi', 'sushi');
-      const drugType = pool[(Math.random() * pool.length) | 0];
-      this._injectDrugLine({
-        types:  [drugType, drugType, drugType, drugType],
+      const viceType = pool[(Math.random() * pool.length) | 0];
+      this._injectViceLine({
+        types:  [viceType, viceType, viceType, viceType],
         spread: 14,
-        label:  this._drugLineLabel(drugType),
+        label:  this._viceLineLabel(viceType),
       });
     }
-    // Every ~100 in-game miles a longer mixed-drug line spawns. Tracked
+    // Every ~100 in-game miles a longer mixed-vice line spawns. Tracked
     // by integer odometer mile so it triggers exactly once per crossing.
     const milesNow = Math.floor(this._odometer ?? 0);
     if (milesNow > 0 && milesNow % 100 === 0
         && milesNow !== this._lastMixedLineMile) {
       this._lastMixedLineMile = milesNow;
-      // Mix is biased to drugs the player has unlocked.
+      // Mix is biased to vices the player has unlocked.
       const pool = ['sushi', 'burrito'];
-      if (this.drugs.isUnlocked(DRUGS.ENERGY)) pool.push('energy');
-      if (this.drugs.isUnlocked(DRUGS.GUMMIES)) pool.push('gummies');
-      if (this.drugs.isUnlocked(DRUGS.HOTDOG))     pool.push('hotdog');
-      if (this.drugs.isUnlocked(DRUGS.COLDBREW))      pool.push('coldbrew');
+      if (this.vices.isUnlocked(VICES.ENERGY)) pool.push('energy');
+      if (this.vices.isUnlocked(VICES.GUMMIES)) pool.push('gummies');
+      if (this.vices.isUnlocked(VICES.HOTDOG))     pool.push('hotdog');
+      if (this.vices.isUnlocked(VICES.COLDBREW))      pool.push('coldbrew');
       const mixed = [];
       for (let i = 0; i < 7; i++) mixed.push(pool[(Math.random() * pool.length) | 0]);
-      this._injectDrugLine({
+      this._injectViceLine({
         types:  mixed,
         spread: 16,
-        label:  `🎉 MIXED DRUG LINE — MILE ${milesNow}!`,
+        label:  `🎉 MIXED VICE LINE — MILE ${milesNow}!`,
       });
     }
 
@@ -4045,7 +4045,7 @@ export class GameScene extends Phaser.Scene {
     }
     // Penalties: slowing to 80 mph or below and driving off-road both bleed
     // score.  80 is "slow" for EVERY vehicle (the slowest tops out at 110), so
-    // no car is perpetually taxed for its top speed.  Scale with the drug
+    // no car is perpetually taxed for its top speed.  Scale with the vice
     // multiplier so highs don't trivially cancel the penalties.
     {
       const dispMph = this._displayMPH();
@@ -4053,16 +4053,16 @@ export class GameScene extends Phaser.Scene {
       // Fentanyl: while in your system the car is hard-capped at 30%
       // speed.  Penalising the player for that drop is double-jeopardy,
       // so suppress the slowness penalty entirely until it clears.
-      const fentActive = (this.drugs?.get?.(DRUGS.COMA) ?? 0) > 0.05;
+      const fentActive = (this.vices?.get?.(VICES.COMA) ?? 0) > 0.05;
       // Weed ≥ 60% — "hot-boxed" mode: no slow-driving penalty at all,
       // and off-road penalty cut in half (per user spec).
-      const weedHigh  = (this.drugs?.get?.(DRUGS.BURRITO) ?? 0) >= 0.60;
-      // Any drug dragging max speed below baseline (heroin, fent, weed-
+      const weedHigh  = (this.vices?.get?.(VICES.BURRITO) ?? 0) >= 0.60;
+      // Any vice dragging max speed below baseline (heroin, fent, weed-
       // alone, ketamine, rx) suppresses the slowness penalty — getting
-      // docked $ for a slowdown the drug is forcing on you is double-
+      // docked $ for a slowdown the vice is forcing on you is double-
       // jeopardy.  speedMult < 1 means SOMETHING is slowing the car;
       // the player can't help it, so don't drain their wallet for it.
-      const drugSlowing = (phys?.speedMult ?? 1) < 0.99;
+      const viceSlowing = (phys?.speedMult ?? 1) < 0.99;
       // Speed-trap traffic stop: the game is FORCING you to slow down and pull
       // to the right shoulder (off-road), so charging the slow-driving AND the
       // off-road penalty during the stop is double-jeopardy — suppress both for
@@ -4070,7 +4070,7 @@ export class GameScene extends Phaser.Scene {
       const trafficStop = this._trapPursuitActive || this._trapStopping || this._trapStopHeld;
       let penalty   = 0;
 
-      if (dispMph < 80 && !fentActive && !weedHigh && !drugSlowing && !trafficStop) {
+      if (dispMph < 80 && !fentActive && !weedHigh && !viceSlowing && !trafficStop) {
         // 80 mph and below = "slow".  -$5/sec floor at 20 mph, linear up to 0
         // at 80 mph (same penalty slope as before, just the threshold moved).
         const slowness = Math.min(1, (80 - dispMph) / 60);
@@ -4105,21 +4105,21 @@ export class GameScene extends Phaser.Scene {
     const _isHard = (Difficulty.mode?.() === 'hard');
     const progress = this.player.position / (ROUTE_SEGS * SEG_LENGTH);
     // ── Daily objective: per-frame telemetry ─────────────────────────
-    // Sampled continuously so peak-drug / max-stars / combo-continuity
+    // Sampled continuously so peak-vice / max-stars / combo-continuity
     // objectives have the data they need at the end city.  Guarded to
     // daily-stage mode + before the one-shot completion fires.
     if (this._dailyStage && this._dailyTracker && !this._dailyDone) {
       const t = this._dailyTracker;
-      const levels = this.drugs?.levels;
+      const levels = this.vices?.levels;
       if (levels) {
         for (const id in levels) {
           const v = levels[id] ?? 0;
-          if (v > t.peakDrug) t.peakDrug = v;
+          if (v > t.peakVice) t.peakVice = v;
         }
       }
       const st = this.cops?.stars ?? 0;
       if (st > t.maxStars) t.maxStars = st;
-      const combos = this.drugs?.getActiveCombos?.() ?? [];
+      const combos = this.vices?.getActiveCombos?.() ?? [];
       if (combos.length > 0) t.comboEverActive = true;
       else if (t.comboEverActive) t.comboBroken = true;
     }
@@ -4187,7 +4187,7 @@ export class GameScene extends Phaser.Scene {
             finishColor = '#FF6622';
           }
           // ── Pullman-finish achievements ───────────────────────────
-          const sober      = !Object.values(this.drugs.pickupCounts ?? {}).some(c => (c ?? 0) > 0);
+          const sober      = !Object.values(this.vices.pickupCounts ?? {}).some(c => (c ?? 0) > 0);
           const cleanRun   = !this._everHitStars;
           const noStops    = !this._everUsedRestStop;
           const noDamage   = (this.damage?.getDurability?.() ?? 0) >= 100
@@ -4310,23 +4310,23 @@ export class GameScene extends Phaser.Scene {
     // ── Popup timer ───────────────────────────────────────────────────
     if (this.popupTimer > 0) this.popupTimer -= rawDt;
 
-    // ── Drug unlock announcements ─────────────────────────────────────
+    // ── Vice unlock announcements ─────────────────────────────────────
     let newUnlock = false;
-    for (const id of Object.values(DRUGS)) {
-      if (this.drugs.isUnlocked(id) && !DRUG_CONFIG[id].unlocked && !this._announcedUnlocks[id]) {
+    for (const id of Object.values(VICES)) {
+      if (this.vices.isUnlocked(id) && !VICE_CONFIG[id].unlocked && !this._announcedUnlocks[id]) {
         this._announcedUnlocks[id] = true;
         newUnlock = true;
-        this._showPopup(`UNLOCKED:\n${DRUG_CONFIG[id].label}!`, '#FF44FF');
+        this._showPopup(`UNLOCKED:\n${VICE_CONFIG[id].label}!`, '#FF44FF');
       }
     }
     // Persist unlock state across arrests/respawns within this play session
     // (Phaser registry survives scene restarts).  Cleared by a fresh "new
     // game" from the menu — see MenuScene.
-    if (newUnlock) this.registry.set('drugUnlocks', this.drugs.snapshotUnlocks?.());
+    if (newUnlock) this.registry.set('viceUnlocks', this.vices.snapshotUnlocks?.());
     // Persist partial-unlock progress every frame — cheap, and ensures
     // meth Phase 1 survives a rest stop / arrest mid-gate.
-    if (this.drugs.snapshotProgress) {
-      this.registry.set('drugProgress', this.drugs.snapshotProgress());
+    if (this.vices.snapshotProgress) {
+      this.registry.set('viceProgress', this.vices.snapshotProgress());
     }
 
     // ── Accel pedal charge ────────────────────────────────────────────
@@ -4462,8 +4462,8 @@ export class GameScene extends Phaser.Scene {
     // Pass-3 change: cruise / boost are now PER-VEHICLE instead of
     // hardcoded 120 / 140 — sports cars cruise faster, trucks slower.
     const _vehSpec  = VEHICLES[this.player.vehicleId] ?? VEHICLES.beater;
-    const cokeBonus = this.drugs.getCocaineSpeedBonusMPH?.() ?? 0;
-    const methBonus = this.drugs.getMethSpeedBonusMPH?.() ?? 0;
+    const cokeBonus = this.vices.getCocaineSpeedBonusMPH?.() ?? 0;
+    const methBonus = this.vices.getMethSpeedBonusMPH?.() ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
     const nosBonus  = nosTier * 5;
     const upMph     = this._upgradeFx?.topMph ?? 0;   // engine/tire upgrades + buffs
@@ -4764,11 +4764,11 @@ export class GameScene extends Phaser.Scene {
     // Replaces the old "lerp steerVelocity toward target then add it to
     // x" snap with a tire-grip simulation:
     //
-    //   1. Steering input + drugs produce a DESIRED lateral velocity
+    //   1. Steering input + vices produce a DESIRED lateral velocity
     //      (where the driver wants the car to go).
     //   2. Tire grip pulls the car's ACTUAL lateral velocity toward
     //      the desired, at a rate proportional to grip.
-    //   3. Curve push, drug drift, microsleep all add to lateral
+    //   3. Curve push, vice drift, microsleep all add to lateral
     //      velocity directly (impulses) — grip then drags those back.
     //   4. Position integrates from lateral velocity.
     //
@@ -4923,7 +4923,7 @@ export class GameScene extends Phaser.Scene {
     // ~0.3s to fully swing) felt like a ~half-second delay in Vantage, where
     // the crosswind already pulls left so a rightward tap has a big gap to
     // cross.  Tap gets a higher base settle so it responds almost immediately;
-    // classic/tilt keep the weightier 8.  Drug lag (lagScale) + per-vehicle
+    // classic/tilt keep the weightier 8.  Vice lag (lagScale) + per-vehicle
     // stability still apply on top.
     const _baseSettle = (_mode === 'flappy') ? 14 : 8;
     const settleRate = _baseSettle * lagScale * releaseScale * vehicleStability;
@@ -4963,7 +4963,7 @@ export class GameScene extends Phaser.Scene {
     const curvePush   = curveAmount * p.speed * CENTRIFUGAL * 0.001 / vehicleStability;
     p.steerVelocity += curvePush * dt * slipMul;
 
-    // Drug drift (alcohol) + drug-induced extra curve flow through
+    // Vice drift (alcohol) + vice-induced extra curve flow through
     // lateral velocity as impulses — grip drags them back toward zero
     // over time, so a steady drunk drift becomes a fight against the
     // wheel rather than an instant lane jump.
@@ -5090,7 +5090,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Roadside barriers (poles → fences → outer treeline) ───────────
     // Past mile 14 the road has long stretches where only trees border
-    // the shoulder.  Without a hard outer wall a drug-blinking or
+    // the shoulder.  Without a hard outer wall a vice-blinking or
     // i-framed player could drift far off-road and stay there safely
     // (no NPCs / no cops out there).  Three concentric barriers, in
     // order of inner-to-outer:
@@ -5339,7 +5339,7 @@ export class GameScene extends Phaser.Scene {
     // beatable: a player holding the opposite steer (TURN_SPEED 2.8) can
     // overpower the pull when sober-leaning hard.  Scans ~80 segments
     // forward so the pull engages early enough to feel.
-    const alcLvl = this.drugs?.levels?.[DRUGS.SUSHI] ?? 0;
+    const alcLvl = this.vices?.levels?.[VICES.SUSHI] ?? 0;
     if (alcLvl >= 0.80) {
       const segs     = this.road.segments;
       const segCount = segs.length;
@@ -5409,7 +5409,7 @@ export class GameScene extends Phaser.Scene {
     // LSD ≥ 90% — distance multiplier ×1.25.  The world rolls past 25%
     // faster than your actual speed, on top of the LSD-60% display cap.
     // Combined effect: read 60 mph, cover ground as if at 150 mph.
-    const lsdLvl = this.drugs?.get?.(DRUGS.HOTDOG) ?? 0;
+    const lsdLvl = this.vices?.get?.(VICES.HOTDOG) ?? 0;
     const distMul = lsdLvl >= 0.90 ? 1.25 : 1.0;
     // Crash i-frame handling.  Three cases:
     //  (a) Short-blink hits (e.g. the 200 ms bush nudge) freeze the
@@ -5441,7 +5441,7 @@ export class GameScene extends Phaser.Scene {
     // Pass 1, steerVelocity IS the lateral velocity).  Clamp at ±1.4
     // so a huge slide leans the car expressively without throwing it
     // off-screen.  Slight smoothing on the angle so fast lateral-vel
-    // oscillations (snow ice patches, drug drift) don't jitter the
+    // oscillations (snow ice patches, vice drift) don't jitter the
     // sprite frame-to-frame.
     const rawLean = p.steerVelocity / (TURN_SPEED || 1);
     const leanDir = Math.max(-1.4, Math.min(1.4, rawLean));
@@ -5489,22 +5489,22 @@ export class GameScene extends Phaser.Scene {
     return progress < 0.043 || progress > 0.95;
   }
 
-  /** EASY MODE only — make road DRUG (and weapon) pickups DRIFT so they move
+  /** EASY MODE only — make road VICE (and weapon) pickups DRIFT so they move
    *  at ~20 mph RELATIVE to the player: you gently close on / overtake them
    *  at 20 mph instead of blowing past at full speed, so they hang near you
    *  and are easy to line up and grab.  (relUnits = the 20 mph RELATIVE drift
    *  rate, NOT an absolute speed — the sprite's ground speed is playerSpeed −
-   *  20, so the gap to you closes at a steady 20 mph.)  Drugs are static
+   *  20, so the gap to you closes at a steady 20 mph.)  Vices are static
    *  segment sprites positioned purely by WHICH SEGMENT they sit in — both
-   *  _renderDrugSprites and the pickup-collision project from the segment
-   *  index, NOT from any sp.position field (drugs don't even have one) — so
-   *  "moving" a drug means RE-HOMING it into a nearer segment.  Each frame we
+   *  _renderViceSprites and the pickup-collision project from the segment
+   *  index, NOT from any sp.position field (vices don't even have one) — so
+   *  "moving" a vice means RE-HOMING it into a nearer segment.  Each frame we
    *  add (playerSpeed − 20 mph) of travel to a per-sprite accumulator and HOP
    *  the sprite forward whole segments as it fills.  Only the near-ahead
-   *  window is touched (drugs past draw distance aren't visible yet).  Pending
-   *  AND real drugs drift (so the type-conversion doesn't jump them).  Weapon
+   *  window is touched (vices past draw distance aren't visible yet).  Pending
+   *  AND real vices drift (so the type-conversion doesn't jump them).  Weapon
    *  (f12) pickups drift too; hazards + roadside NPCs stay static. */
-  _updateDrugDrift(rawDt) {
+  _updateViceDrift(rawDt) {
     if (Difficulty.mode?.() !== 'easy') return;
     const segs = this.road?.segments;
     if (!segs?.length) return;
@@ -5524,11 +5524,11 @@ export class GameScene extends Phaser.Scene {
       const seg = segs[fromIdx];
       if (!seg?.sprites?.length) continue;
       for (const sp of seg.sprites) {
-        // Drift DRUG pickups AND weapon (f12) pickups — both are segment-
+        // Drift VICE pickups AND weapon (f12) pickups — both are segment-
         // homed with no sp.position, so the same re-home logic is safe for
         // both.  Hazards (cop_roadblock) + roadside NPCs (hitchhiker) stay
         // static.
-        if ((sp.collectibleType !== 'drug' && sp.collectibleType !== 'f12') || sp.collected) continue;
+        if ((sp.collectibleType !== 'vice' && sp.collectibleType !== 'f12') || sp.collected) continue;
         sp._driftAccum = (sp._driftAccum ?? 0) + advance;
         if (sp._driftAccum >= SEG_LENGTH) {
           const hop = Math.floor(sp._driftAccum / SEG_LENGTH);
@@ -5704,7 +5704,7 @@ export class GameScene extends Phaser.Scene {
     // car random phase.  The road "breathes" as one.  Reads as the
     // player's depth perception playing tricks rather than chaotic
     // traffic.  Period 0.75 s, ±10 mph at full ramp.
-    const shroomLvl = this.drugs?.get?.(DRUGS.GUMMIES) ?? 0;
+    const shroomLvl = this.vices?.get?.(VICES.GUMMIES) ?? 0;
     const shroomActive = shroomLvl >= 0.45;
     this._shroomTime = (this._shroomTime ?? 0) + (shroomActive ? dt : 0);
     let shroomPulseUnits = 0;
@@ -5719,7 +5719,7 @@ export class GameScene extends Phaser.Scene {
     // up, without ever flipping a car's direction.  Without the sign
     // clamp, ≥ 15 Rx pickups (~+105 mph shift) would push slow oncoming
     // cars past zero into positive (reverse-direction) territory.
-    const rxShiftUnits = MAX_SPEED * (this.drugs?.getRxNpcSpeedShiftMPH?.() ?? 0) / 120;
+    const rxShiftUnits = MAX_SPEED * (this.vices?.getRxNpcSpeedShiftMPH?.() ?? 0) / 120;
 
     for (const t of this.traffic) {
       if (t.crashed) {
@@ -6167,13 +6167,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─── Collisions ───────────────────────────────────────────────────────
-  /** Sweep upcoming visible segments and replace any 'drug-pending' sprite
-   *  with an addiction-weighted real drug type so the on-screen sprite
+  /** Sweep upcoming visible segments and replace any 'vice-pending' sprite
+   *  with an addiction-weighted real vice type so the on-screen sprite
    *  matches what you'd pick up.
    *
-   *  Range covers the full draw distance (DRAW_DIST = 380 segments) so drugs
+   *  Range covers the full draw distance (DRAW_DIST = 380 segments) so vices
    *  appear at the horizon, not pop into existence mid-distance. */
-  _assignPendingDrugTypes() {
+  _assignPendingViceTypes() {
     const segs = this.road.segments;
     if (!segs?.length) return;
     const segIdx = Math.floor(this.player.position / SEG_LENGTH) % segs.length;
@@ -6182,8 +6182,8 @@ export class GameScene extends Phaser.Scene {
       const seg = segs[(segIdx + di + segs.length) % segs.length];
       if (!seg?.sprites) continue;
       for (const sp of seg.sprites) {
-        if (sp.type !== 'drug-pending') continue;
-        sp.type = this.drugs.chooseAddictedDrug(routeT);
+        if (sp.type !== 'vice-pending') continue;
+        sp.type = this.vices.chooseAddictedVice(routeT);
       }
     }
   }
@@ -6225,7 +6225,7 @@ export class GameScene extends Phaser.Scene {
       if (!seg?.sprites) continue;
       for (const sp of seg.sprites) {
         if (sp.collected || !sp.isCollectible) continue;
-        if (customMode && sp.collectibleType === 'drug') continue;
+        if (customMode && sp.collectibleType === 'vice') continue;
         // Lateral overlap (~half a lane) — required for visual touch.
         const dX = Math.abs(sp.offset * ROAD_WIDTH - p.x * ROAD_WIDTH);
         if (dX >= 700) continue;
@@ -6831,7 +6831,7 @@ export class GameScene extends Phaser.Scene {
     for (let k = cops.length - 1; k >= 0; k--) if (!cops[k].alive) cops.splice(k, 1);
   }
 
-  /** Wrapper around DamageModel.takeDamage that bakes in every drug-driven
+  /** Wrapper around DamageModel.takeDamage that bakes in every vice-driven
    *  damage modifier plus the difficulty multiplier:
    *    • Fentanyl ≥ 25%  → phase: collision deals zero damage.
    *    • Beer    ≥ 100% → 50% chance to no-op on glancing hits (sideswipes,
@@ -6842,7 +6842,7 @@ export class GameScene extends Phaser.Scene {
    *                        older 50%/85% numbness rules per user spec).
    *  Continuous offroad bleed (source 'offroad_bleed', amount < 1) skips
    *  the collision-only rules so it still trickles through normally. */
-  /** Reusable drug-slider modal.  10 horizontal sliders (one per drug),
+  /** Reusable vice-slider modal.  10 horizontal sliders (one per vice),
    *  click+drag to set 0..1.  Modes:
    *    'custom'  — title-screen Custom Mode start.  Includes the neon
    *                route, driving-type, police and damage controls.
@@ -6850,10 +6850,10 @@ export class GameScene extends Phaser.Scene {
    *                bar levels; on confirm, writes them back without
    *                restarting the scene.
    *    'restart' — technical-loss flow.  Adds checkpoint picker row.
-   *  `initialLevels` (optional) — object keyed by drug id, values 0..1.
-   *  `onConfirm({ drugLevels, checkpointPos, noNpcDamage, noPolice })`
+   *  `initialLevels` (optional) — object keyed by vice id, values 0..1.
+   *  `onConfirm({ viceLevels, checkpointPos, noNpcDamage, noPolice })`
    *  fires when the player taps START. */
-  _buildDrugSliderModal({ mode = 'custom', onConfirm, onClose, initialLevels = null } = {}) {
+  _buildViceSliderModal({ mode = 'custom', onConfirm, onClose, initialLevels = null } = {}) {
     if (mode === 'custom') {
       this._buildCustomModeModal({ onConfirm, onClose, initialLevels });
       return;
@@ -6886,7 +6886,7 @@ export class GameScene extends Phaser.Scene {
     objs.push(panel);
 
     const titleStr = mode === 'restart' ? 'RESTART AT CHECKPOINT'
-                   : mode === 'live'    ? 'ADJUST DRUG LEVELS'
+                   : mode === 'live'    ? 'ADJUST VICE LEVELS'
                    :                       'CUSTOM MODE';
     const title = this.add.text(SCREEN_W / 2, panelY + 8, titleStr, {
       fontSize: '15px', fontFamily: 'Impact, "Arial Black", sans-serif',
@@ -6894,11 +6894,11 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(D + 2);
     objs.push(title);
 
-    // Selected state — drug levels (pre-filled from initialLevels if
+    // Selected state — vice levels (pre-filled from initialLevels if
     // provided, else 0) + chosen checkpoint pos + custom-start flags.
-    const drugLevels = {};
-    for (const id of Object.values(DRUGS)) {
-      drugLevels[id] = initialLevels?.[id] ?? 0;
+    const viceLevels = {};
+    for (const id of Object.values(VICES)) {
+      viceLevels[id] = initialLevels?.[id] ?? 0;
     }
     let checkpointPos = this.player?.position ?? 0;
     let checkpointLabel = 'Current';
@@ -6914,7 +6914,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Sub-difficulty picker (custom mode only) ──────────────────
     // Three small buttons "EASY / NORMAL / HARD" tucked between the
-    // title and the drug sliders.  Picking one updates the modal's
+    // title and the vice sliders.  Picking one updates the modal's
     // local `customSub` state; the choice is committed on START.
     if (mode === 'custom') {
       const subBtnW = 86, subBtnH = 22, subGap = 8;
@@ -7019,17 +7019,17 @@ export class GameScene extends Phaser.Scene {
       checkpointLabel = cpStops[0].label;
     }
 
-    // ── Drug-level sliders ───────────────────────────────────────
-    const drugList = Object.values(DRUGS);
-    const drugCfgList = drugList.map(id => ({ id, cfg: DRUG_CONFIG[id] }));
+    // ── Vice-level sliders ───────────────────────────────────────
+    const viceList = Object.values(VICES);
+    const viceCfgList = viceList.map(id => ({ id, cfg: VICE_CONFIG[id] }));
     const sliderRowH  = 22;
     const trackX      = panelX + 110;
     const trackW      = panelW - 110 - 60;
     const trackH      = 12;
     const sliderRefs = [];
 
-    for (let i = 0; i < drugCfgList.length; i++) {
-      const { id, cfg } = drugCfgList[i];
+    for (let i = 0; i < viceCfgList.length; i++) {
+      const { id, cfg } = viceCfgList[i];
       const y = yCursor + i * sliderRowH;
       const lbl = this.add.text(panelX + 12, y, cfg.label ?? id, {
         fontSize: '11px', fontFamily: 'Arial, sans-serif',
@@ -7062,13 +7062,13 @@ export class GameScene extends Phaser.Scene {
         fill.fillRoundedRect(trackX + 1, y + 2, Math.max(0, (trackW - 2) * level), trackH - 2, 5);
         valTxt.setText(`${Math.round(level * 100)}%`);
       };
-      drawFill(drugLevels[id] ?? 0);   // pre-fill from initialLevels (if any)
+      drawFill(viceLevels[id] ?? 0);   // pre-fill from initialLevels (if any)
 
       let dragging = false;
       const updateFromPointer = (ptr) => {
         const lx = ptr.x - trackX;
         const lvl = Math.max(0, Math.min(1, lx / trackW));
-        drugLevels[id] = lvl;
+        viceLevels[id] = lvl;
         drawFill(lvl);
       };
       track.on('pointerdown', (ptr) => {
@@ -7258,7 +7258,7 @@ export class GameScene extends Phaser.Scene {
       ptr.event?.stopPropagation?.();
       close();
       onConfirm?.({
-        drugLevels: { ...drugLevels },
+        viceLevels: { ...viceLevels },
         checkpointPos, checkpointLabel,
         noNpcDamage, noPolice,
         startStars,
@@ -7316,8 +7316,8 @@ export class GameScene extends Phaser.Scene {
       fontSize: '15px', fontFamily: IMPACT, color: '#39D9FF',
     }).setDepth(D + 4));
 
-    const drugLevels = {};
-    const drugKeys = {
+    const viceLevels = {};
+    const viceKeys = {
       sushi: 'vice_sushi', burrito: 'vice_burrito', energy: 'vice_energy',
       gummies: 'vice_gummies', hotdog: 'vice_hotdog', combo: 'vice_combo',
       coldbrew: 'vice_coldbrew', coma: 'vice_coma', slushie: 'vice_slushie', caffeine: 'vice_caffeine',
@@ -7328,11 +7328,11 @@ export class GameScene extends Phaser.Scene {
     };
     const trackX = leftX + 111, trackW = 171, trackH = 10;
     const rowTop = panelY + 70, rowH = 34;
-    Object.values(DRUGS).forEach((id, i) => {
-      drugLevels[id] = initialLevels?.[id] ?? 0;
-      const cfg = DRUG_CONFIG[id];
+    Object.values(VICES).forEach((id, i) => {
+      viceLevels[id] = initialLevels?.[id] ?? 0;
+      const cfg = VICE_CONFIG[id];
       const y = rowTop + i * rowH;
-      const textureKey = drugKeys[id];
+      const textureKey = viceKeys[id];
       if (this.textures.exists(textureKey)) {
         add(this.add.image(leftX + 13, y + 12, textureKey).setDisplaySize(27, 27).setDepth(D + 5));
       }
@@ -7359,11 +7359,11 @@ export class GameScene extends Phaser.Scene {
         fill.fillRoundedRect(trackX + 1, y + 9, width, trackH - 2, 4);
         pct.setText(`${Math.round(value * 100)}%`);
       };
-      drawFill(drugLevels[id]);
+      drawFill(viceLevels[id]);
       let dragging = false;
       const update = ptr => {
-        drugLevels[id] = Math.max(0, Math.min(1, (ptr.x - trackX) / trackW));
-        drawFill(drugLevels[id]);
+        viceLevels[id] = Math.max(0, Math.min(1, (ptr.x - trackX) / trackW));
+        drawFill(viceLevels[id]);
       };
       track.on('pointerdown', ptr => { ptr.event?.stopPropagation?.(); dragging = true; update(ptr); });
       track.on('pointermove', ptr => { if (dragging) update(ptr); });
@@ -7651,7 +7651,7 @@ export class GameScene extends Phaser.Scene {
     const start = makeToggleButton(rightX + 20, actionY, 144, 34, 'START', 0xFF39AF, true, () => {
       close();
       onConfirm?.({
-        drugLevels: { ...drugLevels }, checkpointPos, checkpointLabel,
+        viceLevels: { ...viceLevels }, checkpointPos, checkpointLabel,
         noNpcDamage, noPolice, startStars, customSub, drivingType,
         vehicleId, accessories: { bumper, traction, nos }, radar,
       });
@@ -7879,7 +7879,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Build a scrollable Achievements page modal — full grid showing
-   *  every drug-info + run-state achievement with the highest tier
+   *  every vice-info + run-state achievement with the highest tier
    *  earned (or greyed-out lock).  Description text shown here only. */
   _buildAchievementsModal() {
     if (this._achievementsModalOpen) return;
@@ -7917,17 +7917,17 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(1, 0).setDepth(D + 3).setInteractive({ useHandCursor: true });
     objs.push(closeBtn);
 
-    // Build the row list.  Drug achievements first (10) then run-state.
+    // Build the row list.  Vice achievements first (10) then run-state.
     const earned   = AchievementSystem.earned(this.registry);
-    const drugDefs = AchievementSystem.drugDefs();
+    const viceDefs = AchievementSystem.viceDefs();
     const runDefs  = AchievementSystem.runDefs();
     const rows = [
-      ...Object.entries(drugDefs).map(([_, def]) => def),
+      ...Object.entries(viceDefs).map(([_, def]) => def),
       ...Object.entries(runDefs).map(([id, def]) => ({ ...def, id })),
     ];
 
     // Strip the "X% per <unit>" prefix (plus its trailing punctuation /
-    // em-dash / comma) from drug descriptions — user wants players to
+    // em-dash / comma) from vice descriptions — user wants players to
     // discover pickup percentages on their own; only the in-game
     // effects belong on this page.
     const stripPickupPct = (s) => {
@@ -7970,9 +7970,9 @@ export class GameScene extends Phaser.Scene {
       const descCol   = tier ? '#AAAAAA' : '#888888';
 
       // Pre-earn we surface `unlockHint` (how to find/unlock) — the
-      // actual drug-effect text in `desc` is hidden so the player has
+      // actual vice-effect text in `desc` is hidden so the player has
       // to discover those mechanics by playing.  Run-state achievements
-      // (no drug to "find") just fall through to `desc` for both states
+      // (no vice to "find") just fall through to `desc` for both states
       // since their criteria ARE the description.
       const rawBody = tier
         ? (def.desc ?? '')
@@ -8150,7 +8150,7 @@ export class GameScene extends Phaser.Scene {
     // car can still be physically stopped/sunk by walls/water; those systems
     // own the blocking behaviour, this only zeroes the HP loss.
     if (this._steroidActive?.()) return 0;
-    const drugs = this.drugs;
+    const vices = this.vices;
     const isCollision = source && source !== 'offroad_bleed';
 
     // Daily objective: classify the damage source for no_barrier_scrape.
@@ -8175,9 +8175,9 @@ export class GameScene extends Phaser.Scene {
     // gets its asymmetric-bulb tint from the vehicle profile.)
 
     if (isCollision) {
-      const fent = drugs?.get?.(DRUGS.COMA) ?? 0;
+      const fent = vices?.get?.(VICES.COMA) ?? 0;
       if (fent >= 0.25) return 0;
-      const alc = drugs?.get?.(DRUGS.SUSHI) ?? 0;
+      const alc = vices?.get?.(VICES.SUSHI) ?? 0;
       if (alc >= 1.0 && /sideswipe|corner/i.test(source) && Math.random() < 0.5) return 0;
     }
 
@@ -8194,9 +8194,9 @@ export class GameScene extends Phaser.Scene {
         || source.endsWith('_rail')    // bridge_rail, fence_rail
         || source === 'water_shoulder'
         || source === 'tunnel_wall';
-      const meth = drugs?.get?.(DRUGS.CAFFEINE) ?? 0;
+      const meth = vices?.get?.(VICES.CAFFEINE) ?? 0;
       if (meth > 0.05 && !isContinuousScrape) adj += 1;
-      const hero = drugs?.get?.(DRUGS.COMBO) ?? 0;
+      const hero = vices?.get?.(VICES.COMBO) ?? 0;
       if (hero >= 0.15 && adj >= 1) adj = Math.max(0, adj - 2);
     }
 
@@ -8214,7 +8214,7 @@ export class GameScene extends Phaser.Scene {
       this._noDamageTimer = 0;
       this._noDamageFlags = { '1m': false, '2m': false, '3m': false, '5m': false };
     }
-    // Return the effective damage (after difficulty / drug / bumper
+    // Return the effective damage (after difficulty / vice / bumper
     // modifiers) so crash sites can score `$5 × damage received`.
     return adj;
   }
@@ -8341,22 +8341,22 @@ export class GameScene extends Phaser.Scene {
     // first drink — feeds the first-star activation gate in update().
     if (!car.isCop) {
       // Lifetime NPC-crash tally — gates rx unlock at 50.
-      if (this.drugs) this.drugs.npcCrashesTotal = (this.drugs.npcCrashesTotal ?? 0) + 1;
+      if (this.vices) this.vices.npcCrashesTotal = (this.vices.npcCrashesTotal ?? 0) + 1;
       this.stats?.recordNpcHit();          // lifetime + this-trip + per-vehicle
       if (this._dailyTracker) this._dailyTracker.carsHit++;   // hit_cars / no_collisions
-      const everDrunk = (this.drugs.maxReached?.[DRUGS.SUSHI] ?? 0) > 0.05;
+      const everDrunk = (this.vices.maxReached?.[VICES.SUSHI] ?? 0) > 0.05;
       if (everDrunk) {
         this._npcCrashesPostDrink = (this._npcCrashesPostDrink ?? 0) + 1;
       }
-      // Drug-influenced bump counter — separate one-shot gate.  If any
-      // drug bar is ≥ 30% at the moment of impact, the bump counts.
+      // Vice-influenced bump counter — separate one-shot gate.  If any
+      // vice bar is ≥ 30% at the moment of impact, the bump counts.
       // Once it hits 20, the player is awarded their first star (one
-      // time only — see _drugBumpFired flag in the gate logic).
-      if (!this._drugBumpFired) {
-        const anyHigh = Object.values(DRUGS).some(id =>
-          (this.drugs.get?.(id) ?? 0) >= 0.30);
+      // time only — see _viceBumpFired flag in the gate logic).
+      if (!this._viceBumpFired) {
+        const anyHigh = Object.values(VICES).some(id =>
+          (this.vices.get?.(id) ?? 0) >= 0.30);
         if (anyHigh) {
-          this._drugBumpCount = (this._drugBumpCount ?? 0) + 1;
+          this._viceBumpCount = (this._viceBumpCount ?? 0) + 1;
         }
       }
     }
@@ -8418,7 +8418,7 @@ export class GameScene extends Phaser.Scene {
                   :              'REAR-END!';
       this._showPopup(label, isHeadOn ? '#FF2222' : '#FF8800');
       // Score is $5 × damage received × _scoreMult().  Computed from the
-      // _applyDamage return value so bumper / drug / difficulty mods are
+      // _applyDamage return value so bumper / vice / difficulty mods are
       // reflected — protected cars get less score, but also take less.
       const dmg = this._applyDamage((isHeadOn ? 3 + impact.severity * 3 : 1 + impact.severity * 2) * classDmgMul, isHeadOn ? 'head_on' : 'traffic');
       const _earnRE = Math.round(5 * dmg * this._scoreMult());
@@ -8816,22 +8816,26 @@ export class GameScene extends Phaser.Scene {
   _onCollect(sprite) {
     const type = sprite.collectibleType;
 
-    // Difficulty-tiered HP top-up on DRUG pickups only — Easy +1,
+    // Difficulty-tiered HP top-up on VICE pickups only — Easy +1,
     // Normal +0.5, Hard/Custom 0.  Weapons (F12), hitchhikers, and
     // cop-roadblocks are excluded so the heal stays tied to the
     // "indulgence rewards" loop, not every roadside collectible.
-    if (type === 'drug') {
+    if (type === 'vice') {
       const mode = Difficulty.mode?.();
       const hpBonus = mode === 'easy' ? 1 : mode === 'normal' ? 0.5 : 0;
       if (hpBonus > 0) this.damage?.repair?.(hpBonus);
     }
 
     if (type === 'steroid') {
-      // Mario-star invincibility for 1 mile of road (distance-based).
+      // REDNECK RAGE — invincible battering-ram for 1 mile, with a whole-screen
+      // spectacle: red flash, hard shake, blaring horn, and a pulsing red rage
+      // vignette (maintained in _updateSteroid while active).
       this._steroidUntilMile = (this._odometer ?? 0) + 1.0;
       this._steroidWasActive = true;
-      this._showPopup?.('🤬 REDNECK RAGE!\nUNSTOPPABLE — 1 MILE', '#FFD23D');
-      this.effects?.triggerShake?.(120, 0.006);
+      this._showPopup?.('🤬 REDNECK RAGE!\nUNSTOPPABLE — 1 MILE', '#FF3322');
+      this.cameras?.main?.flash?.(500, 220, 20, 20);   // red rage flash
+      this.effects?.triggerShake?.(260, 0.012);
+      try { this.audio?.playHorn?.(); } catch (_) {}    // no-op if cue absent
       return;
     }
 
@@ -8894,73 +8898,73 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (type === 'drug') {
-      // 4★+ drug pickup suppression — match the renderer; the sprite is
+    if (type === 'vice') {
+      // 4★+ vice pickup suppression — match the renderer; the sprite is
       // visually invisible and shouldn't grant pickup either.
       if (this.cops.starDisplay >= 4 && (sprite.lootSeed ?? 1) < 0.40) {
         sprite.collected = true;       // mark as gone but don't grant
         return;
       }
-      // Probation: first 60s after arrest = any drug use adds 2 stars
+      // Probation: first 60s after arrest = any vice use adds 2 stars
       if (this._probationTimer > 0) {
-        this.cops.addStar(1.0, 3);                // drug pickup during probation
+        this.cops.addStar(1.0, 3);                // vice pickup during probation
         this._showPopup('PROBATION!\n+1 STAR!', '#FF4444');
       }
-      const result = this.drugs.pickup(sprite.type);
+      const result = this.vices.pickup(sprite.type);
       if (!result) return;
-      this.stats?.recordDrugCollected(result.drug);   // road sprite collected
-      if (this._dailyTracker) {                         // no_drugs / one_drug_only / collector
-        this._dailyTracker.drugTypes.add(result.drug);
-        this._dailyTracker.drugCount++;
+      this.stats?.recordViceCollected(result.vice);   // road sprite collected
+      if (this._dailyTracker) {                         // no_vices / one_vice_only / collector
+        this._dailyTracker.viceTypes.add(result.vice);
+        this._dailyTracker.viceCount++;
       }
       // First-pickup achievement — fire on the very first hit of each
-      // drug, with the toast text describing the mechanic.
-      if (this.drugs.pickupCounts?.[result.drug] === 1) {
-        AchievementSystem.firstPickup(result.drug, this.registry);
+      // vice, with the toast text describing the mechanic.
+      if (this.vices.pickupCounts?.[result.vice] === 1) {
+        AchievementSystem.firstPickup(result.vice, this.registry);
       }
-      // Full Tank: bar this drug to 99% (without OD'ing — OD is checked
+      // Full Tank: bar this vice to 99% (without OD'ing — OD is checked
       // below).  Fires once per run on first crossing.
-      if (this.drugs.get(result.drug) >= 0.99 && !this._fullTankFired?.[result.drug]) {
+      if (this.vices.get(result.vice) >= 0.99 && !this._fullTankFired?.[result.vice]) {
         this._fullTankFired = this._fullTankFired ?? {};
-        this._fullTankFired[result.drug] = true;
+        this._fullTankFired[result.vice] = true;
         AchievementSystem.award('full_tank', this.registry);
       }
-      // Maxed-out: per-drug achievement for canOD drugs reaching 99%+
+      // Maxed-out: per-vice achievement for canOD vices reaching 99%+
       // without overdosing.  Threshold is 0.99 (not 1.0) because hitting
       // exactly 100% sits at the OD edge — 99% reads as "maxed out" in
       // the same dramatic sense without forcing the player to a brink
       // where they're one pickup from dying.
-      const _drugCfg = DRUG_CONFIG[result.drug];
-      if (_drugCfg?.canOD
-          && this.drugs.get(result.drug) >= 0.99
-          && !this._maxedFired?.[result.drug]) {
+      const _viceCfg = VICE_CONFIG[result.vice];
+      if (_viceCfg?.canOD
+          && this.vices.get(result.vice) >= 0.99
+          && !this._maxedFired?.[result.vice]) {
         this._maxedFired = this._maxedFired ?? {};
-        this._maxedFired[result.drug] = true;
-        AchievementSystem.award(`maxed_${result.drug}`, this.registry);
+        this._maxedFired[result.vice] = true;
+        AchievementSystem.award(`maxed_${result.vice}`, this.registry);
       }
       // Custom mode: never OD — the slider-driven HUD already lets the
       // player set bars wherever they want, and OD'ing yourself there
       // is just a frustrating restart.  Treat it as a no-op.
       const _customMode = Difficulty.mode?.() === 'custom';
-      if (result.overdose && !_customMode && !this._tryNarcan(result.drug)) { this._onOverdose(result.drug); return; }
-      // Per-drug { base, full } payout table (constants.js) — full-bar
+      if (result.overdose && !_customMode && !this._tryNarcan(result.vice)) { this._onOverdose(result.vice); return; }
+      // Per-vice { base, full } payout table (constants.js) — full-bar
       // bonus kicks in at FULL_BAR_THRESHOLD (0.80) instead of 0.95.
-      const drugPay  = DRUG_PTS[result.drug] ?? { base: 10, full: 20 };
-      const isFull   = this.drugs.get(result.drug) >= FULL_BAR_THRESHOLD;
-      const basePts  = isFull ? drugPay.full : drugPay.base;
+      const vicePay  = VICE_PTS[result.vice] ?? { base: 10, full: 20 };
+      const isFull   = this.vices.get(result.vice) >= FULL_BAR_THRESHOLD;
+      const basePts  = isFull ? vicePay.full : vicePay.base;
       const earned   = Math.round(basePts * this._scoreMult());
       this.score    += earned;
       this.stats?.recordEarn(earned, 'pickup', basePts);
-      const label    = DRUG_CONFIG[result.drug]?.label ?? sprite.type;
+      const label    = VICE_CONFIG[result.vice]?.label ?? sprite.type;
       const suffix   = isFull ? `\n★ FULL BAR  +$${earned}!` : `  +$${earned}`;
       this._showPopup(`${label}${suffix}`, isFull ? '#FF8800' : '#FFFF44');
       this.effects.triggerShake(55, 0.002);
     }
   }
 
-  /** On-road hitchhiker pickup — risk/reward.  70 % positive (drugs
+  /** On-road hitchhiker pickup — risk/reward.  70 % positive (vices
    *  recovery / score bonus / free weapon), 30 % negative (robbed of
-   *  score, drugs, or a weapon).  Be careful who you pick up. */
+   *  score, vices, or a weapon).  Be careful who you pick up. */
   _hitchhikerPickup() {
     this.effects.triggerShake(80, 0.002);
     const r = Math.random();
@@ -8987,34 +8991,34 @@ export class GameScene extends Phaser.Scene {
     }
     // ── 14% — sober up + bonus $ ─────────────────────────────────────
     if (r < 0.56) {
-      this.drugs.applyRecovery(0.20);
+      this.vices.applyRecovery(0.20);
       const bonus = Math.round(PTS_HITCH * this._scoreMult());
       this.score += bonus;
       this.stats?.recordEarn(bonus, 'hitchhiker', PTS_HITCH);
       this._showPopup(`🤝 NICE FOLKS!\n+$${bonus}, sobered up`, '#88FFCC');
       return;
     }
-    // ── 14% — party favor: random non-OD drug bar filled to 90% + cash ──
+    // ── 14% — party favor: random non-OD vice bar filled to 90% + cash ──
     if (r < 0.70) {
-      const safeDrugs = [DRUGS.SUSHI, DRUGS.BURRITO, DRUGS.GUMMIES, DRUGS.HOTDOG]
-        .filter(id => this.drugs.isUnlocked?.(id));
+      const safeVices = [VICES.SUSHI, VICES.BURRITO, VICES.GUMMIES, VICES.HOTDOG]
+        .filter(id => this.vices.isUnlocked?.(id));
       // Cash bonus is mixed in regardless — the favor isn't just chemical.
       const bonus = Math.round(PTS_HITCH * this._scoreMult() * 0.5);
       this.score += bonus;
       this.stats?.recordEarn(bonus, 'hitchhiker', PTS_HITCH * 0.5);
-      if (safeDrugs.length) {
-        const drug = safeDrugs[(Math.random() * safeDrugs.length) | 0];
+      if (safeVices.length) {
+        const vice = safeVices[(Math.random() * safeVices.length) | 0];
         // Set level directly (90 % skips the 12 %-per-hit ramp), but also
         // bump maxReached + pickupCounts so the unlock gates and addiction
         // tracking fire as if the player had pickup()'d up to it.  Without
         // these the favor was silently inert for downstream unlocks.
-        this.drugs.levels[drug] = 0.90;
-        if ((this.drugs.maxReached?.[drug] ?? 0) < 0.90) {
-          this.drugs.maxReached[drug] = 0.90;
+        this.vices.levels[vice] = 0.90;
+        if ((this.vices.maxReached?.[vice] ?? 0) < 0.90) {
+          this.vices.maxReached[vice] = 0.90;
         }
-        this.drugs.pickupCounts[drug] = (this.drugs.pickupCounts[drug] ?? 0) + 1;
-        this.drugs._checkUnlocks?.(0);
-        const label = DRUG_CONFIG?.[drug]?.label ?? drug.toUpperCase();
+        this.vices.pickupCounts[vice] = (this.vices.pickupCounts[vice] ?? 0) + 1;
+        this.vices._checkUnlocks?.(0);
+        const label = VICE_CONFIG?.[vice]?.label ?? vice.toUpperCase();
         this._showPopup(`🤝 PARTY FAVOR!\n${label} → 90%, +$${bonus}`, '#88FFCC');
       } else {
         // Nothing unlocked yet — cash-only fallback.
@@ -9052,13 +9056,13 @@ export class GameScene extends Phaser.Scene {
       );
       return;
     }
-    // ── 5% — wipe a random drug bar (junkie nicked your stash) ────────
-    const bars = Object.values(DRUGS).filter(id =>
-      this.drugs.isUnlocked(id) && this.drugs.get(id) > 0.05,
+    // ── 5% — wipe a random vice bar (junkie nicked your stash) ────────
+    const bars = Object.values(VICES).filter(id =>
+      this.vices.isUnlocked(id) && this.vices.get(id) > 0.05,
     );
     if (bars.length) {
       const target = bars[(Math.random() * bars.length) | 0];
-      this.drugs.levels[target] = 0;
+      this.vices.levels[target] = 0;
       this._showPopup(`💀 JUNKIE STOLE\nYOUR ${target.toUpperCase()}!`, '#FF4444');
     } else {
       this._showPopup('💀 SKETCHY HITCH\n— close call', '#FFCC44');
@@ -9112,7 +9116,7 @@ export class GameScene extends Phaser.Scene {
    *  forward by CAM.eyeForwardZ (3000) so the viewpoint sits at the
    *  driver seat.  In chase mode this returns the raw physics position.
    *  Sprite render functions (`_renderSceneSprites`, `_renderVehicles`,
-   *  `_renderDrugSprites`, etc.) use this for `relZ = sprite.position -
+   *  `_renderViceSprites`, etc.) use this for `relZ = sprite.position -
    *  cameraZ` so the world projects relative to the right viewpoint. */
   _renderCamPos() {
     return this.player.position + (CAM.eyeForwardZ ?? 0);
@@ -10121,7 +10125,7 @@ export class GameScene extends Phaser.Scene {
       palette, {
         doubleVision: _dbgClean ? 0 : this.effects.doubleVision,
         currentStars: this.cops.starDisplay,
-        shroomsBar:   this.drugs?.get?.(DRUGS.GUMMIES) ?? 0,
+        shroomsBar:   this.vices?.get?.(VICES.GUMMIES) ?? 0,
         shroomMelt:   _dbgClean ? 0 : (this.effects.shroomMelt ?? 0),
         shroomPhase:  this.effects.time ?? 0,
       },
@@ -10137,7 +10141,7 @@ export class GameScene extends Phaser.Scene {
     }
     this._renderTumbleweeds();      // Vantage crosswind props (wind zone only)
     this._renderVehicles();
-    this._renderDrugSprites();
+    this._renderViceSprites();
     this.road.renderTunnelFacade(this.tunnelFacadeGfx);
     // Update the tunnel interior mask BEFORE rendering the interior.
     // The facade pass (above) publishes road._tunnelMouthRect.
@@ -11700,7 +11704,7 @@ export class GameScene extends Phaser.Scene {
       const s = pool[used++];
       if (s.texture.key !== useTex) s.setTexture(useTex);
       // Unified world-space depth — all roadside sprites (buildings, trees,
-      // cars, drugs) share the 7.0–9.5 band, mapped from z-distance so that
+      // cars, vices) share the 7.0–9.5 band, mapped from z-distance so that
       // a *closer* sprite always paints over a *farther* one regardless of
       // type. Without this, cars (formerly depth 9) painted through any
       // building (depth 7.5) sitting between them and the camera.
@@ -11864,7 +11868,7 @@ export class GameScene extends Phaser.Scene {
       const PH = this.playerSprite.displayHeight || 49;
       const shW = PW * 0.82;
       const shH = Math.max(2, PH * 0.18);
-      const phys2 = this.effects?.getPhysics?.(this.drugs);
+      const phys2 = this.effects?.getPhysics?.(this.vices);
       const drift = phys2?.kRetinalDrift ?? 0;
       // Shadow tilts subtly OPPOSITE the car's lean — "body leans into
       // the turn, wheels stay planted" cue.  Applies in all steering
@@ -12436,7 +12440,7 @@ export class GameScene extends Phaser.Scene {
         }
         if (!copTexKey && !sp.texKey) continue;
         if (sp.collected) continue;
-        // Pickups (drugs, F12, etc.) are rendered by _renderDrugSprites at a
+        // Pickups (vices, F12, etc.) are rendered by _renderViceSprites at a
         // smaller pickup size — skip them here so they don't double-render
         // at building/tree size.
         if (sp.isCollectible) continue;
@@ -13025,7 +13029,7 @@ export class GameScene extends Phaser.Scene {
     // Drunk-only sign-text drift: at full alcohol bar (1.0), text starts
     // wandering off the sign as a "you can't read it anymore" gag.  Below
     // 100 % the text is rock-solid anchored.
-    const alc = this.drugs?.get?.(DRUGS.SUSHI) ?? 0;
+    const alc = this.vices?.get?.(VICES.SUSHI) ?? 0;
     const drunkDrift = alc >= 1.0 ? 1.0 : 0;
     const tNow       = (this.gameTime ?? 0);
 
@@ -13339,16 +13343,16 @@ export class GameScene extends Phaser.Scene {
     for (let i = used; i < pool.length; i++) pool[i].setVisible(false);
   }
 
-  _renderDrugSprites() {
-    const pool = this._drugSpritePool;
+  _renderViceSprites() {
+    const pool = this._viceSpritePool;
     if (!pool?.length) return;
     const segs = this.road.segments;
     if (!segs?.length) return;
     // Cockpit forward-bias — same as _renderSceneSprites.
     const playerPos = this._renderCamPos();
     const startSeg  = Math.floor(playerPos / SEG_LENGTH);
-    const ghostPool = this._drugGhostPool;
-    // Debug mode suppresses the alcohol ghost on drug/weapon pickups
+    const ghostPool = this._viceGhostPool;
+    // Debug mode suppresses the alcohol ghost on vice/weapon pickups
     // so their true world position is visible under the debug boxes.
     const dv = this._debugOn ? 0 : (this.effects?.doubleVision ?? 0);
     const ghostOffsetBase = dv > 0.01 ? dv * 38 : 0;
@@ -13356,9 +13360,9 @@ export class GameScene extends Phaser.Scene {
     let used = 0;
     let ghostUsed = 0;
     // Reset halo gfx — repainted per-frame for ketamine + fentanyl pickups.
-    this._drugHaloGfx?.clear();
+    this._viceHaloGfx?.clear();
 
-    // Walk visible segments far→near. Render BOTH drug pickups and F12
+    // Walk visible segments far→near. Render BOTH vice pickups and F12
     // weapon tokens through this pool — same depth, same sizing rules.
     const customMode = Difficulty.mode() === 'custom';
     for (let n = 380; n >= 0 && used < pool.length; n--) {
@@ -13366,19 +13370,19 @@ export class GameScene extends Phaser.Scene {
       if (!seg?.sprites) continue;
       for (const sp of seg.sprites) {
         if (!sp.isCollectible || sp.collected) continue;
-        if (sp.type === 'drug-pending') continue;
-        // Custom mode — no drug pickups on the road (player chose
+        if (sp.type === 'vice-pending') continue;
+        // Custom mode — no vice pickups on the road (player chose
         // starting bar levels via slider, can adjust mid-run).  Weapons
         // still render so the player has tools.
-        if (customMode && sp.collectibleType === 'drug') continue;
-        // 4★+ drug pickup suppression — ~40% of drugs simply don't render
+        if (customMode && sp.collectibleType === 'vice') continue;
+        // 4★+ vice pickup suppression — ~40% of vices simply don't render
         // (they're "gone" — narcs swept the area).  Stable per-sprite roll.
-        if (sp.collectibleType === 'drug'
+        if (sp.collectibleType === 'vice'
             && this.cops.starDisplay >= 4
             && (sp.lootSeed ?? 1) < 0.40) continue;
-        // Pick texture: drugs use drug_<type>, F12 tokens have texKey already.
+        // Pick texture: vices use vice_<type>, F12 tokens have texKey already.
         let texKey;
-        if (sp.collectibleType === 'drug') {
+        if (sp.collectibleType === 'vice') {
           texKey = `vice_${sp.type}`;
         } else if (sp.collectibleType === 'f12') {
           // Hide weapon pickups when player is maxed (3-per-type cap).
@@ -13409,7 +13413,7 @@ export class GameScene extends Phaser.Scene {
         if (baseW >= baseH) { dispW = targetMax; dispH = targetMax * (baseH / baseW); }
         else                { dispH = targetMax; dispW = targetMax * (baseW / baseH); }
         // Unified depth scheme — pickups share the same z-banded depth as
-        // buildings/cars, so a car between you and a drug pickup occludes it.
+        // buildings/cars, so a car between you and a vice pickup occludes it.
         // (Reuses relZ from above — was computed twice unnecessarily.)
         const depth = 9.5 - Math.max(0, Math.min(1, relZ / 76000)) * 2.5;
         // Bob + tilt — pickups gently hover and rock so they read as game
@@ -13429,7 +13433,7 @@ export class GameScene extends Phaser.Scene {
         // Gold/amber glow halo behind the pickup — faked with concentric
         // translucent circles, pulsing so it shimmers.  Centre on the
         // pickup's visual middle (origin is bottom-centre).
-        const _hg = this._drugHaloGfx;
+        const _hg = this._viceHaloGfx;
         if (_hg) {
           const _hy    = _cy - dispH * 0.5;
           const _pulse = 0.6 + 0.3 * Math.sin(_t * 3.0 + _phase);   // 0.30–0.90
@@ -13625,7 +13629,7 @@ export class GameScene extends Phaser.Scene {
 
     // Handedness helpers — when `_leftHanded`, mirror x-coordinates and
     // origin-x anchors so the right-side stack (HP, gas, speed,
-    // weapons) lands on the left and the drug bars land on the right.
+    // weapons) lands on the left and the vice bars land on the right.
     // Music controls, score/clock/dist, and centre HUD stay put.
     const lh  = !!this._leftHanded;
     const mx  = (x) => lh ? (SCREEN_W - x) : x;
@@ -13969,8 +13973,8 @@ export class GameScene extends Phaser.Scene {
     // NOT registered with _topRowButtons — this belongs beside BRAKE and
     // follows pedal handedness through _layoutWiperButton().
 
-    // Custom-mode drug-slider button removed — drug levels are now set
-    // by clicking/dragging the actual HUD drug bars directly when in
+    // Custom-mode vice-slider button removed — vice levels are now set
+    // by clicking/dragging the actual HUD vice bars directly when in
     // custom mode (see drag handler registered in create()).
 
     // ── Rear-view mirror ───────────────────────────────────────────
@@ -14086,7 +14090,7 @@ export class GameScene extends Phaser.Scene {
     this.hudWeaponSel = null;
 
     // ── BOTTOM-CENTER: Popup ────────────────────────────────────────────
-    // Toasts (crashes, checkpoints, drug unlocks, phone texts, etc.) sit
+    // Toasts (crashes, checkpoints, vice unlocks, phone texts, etc.) sit
     // bottom-centre, just ABOVE the mile/town location line (moved here from
     // below the rear-view mirror per user).  Bottom-anchored (origin 0.5,1)
     // so multi-line toasts grow UP and never run off the bottom edge.  The
@@ -14591,9 +14595,9 @@ export class GameScene extends Phaser.Scene {
       }
       const cur = this._wheelCursor ?? Difficulty.mode();
       if (cur === 'custom') {
-        this._buildDrugSliderModal({
+        this._buildViceSliderModal({
           mode: 'custom',
-          onConfirm: ({ drugLevels, checkpointPos, noNpcDamage, noPolice, startStars, customSub, drivingType, vehicleId, accessories, radar }) => {
+          onConfirm: ({ viceLevels, checkpointPos, noNpcDamage, noPolice, startStars, customSub, drivingType, vehicleId, accessories, radar }) => {
             Difficulty.set('custom', this.registry);
             if (customSub) Difficulty.setCustomSub(customSub, this.registry);
             if (drivingType) {
@@ -14612,7 +14616,7 @@ export class GameScene extends Phaser.Scene {
             // Custom sandbox: the RADAR toggle is authoritative for this run
             // (overrides global ownership) and does NOT persist to the save.
             this._hasRadar = !!radar;
-            this._customStartLevels = drugLevels;
+            this._customStartLevels = viceLevels;
             this._customFlags = { noNpcDamage: !!noNpcDamage, noPolice: !!noPolice };
             // Persist the sandbox loadout so a rest-stop exit / crash respawn
             // (which re-runs init() with NO modal to re-apply choices) can
@@ -14761,7 +14765,7 @@ export class GameScene extends Phaser.Scene {
     // Fentanyl fades the readouts down ("screen shutting down"); meth +
     // LSD jitter the alpha each frame for the wired/glitchy feel.
     {
-      const _phys  = this.effects?.getPhysics?.(this.drugs);
+      const _phys  = this.effects?.getPhysics?.(this.vices);
       const _fade  = _phys?.hudAlphaMul ?? 1;
       const _flick = _phys?.hudFlicker  ?? 0;
       const _alpha = Math.max(0, _fade * (_flick > 0 ? 1 - _flick * Math.random() : 1));
@@ -14895,11 +14899,11 @@ export class GameScene extends Phaser.Scene {
     // name.  Combos still drive the score multiplier underneath and
     // still feed the Connoisseur achievement.
     const mult   = this._scoreMult();
-    const combos = this.drugs.getActiveCombos?.() ?? [];
+    const combos = this.vices.getActiveCombos?.() ?? [];
     if (combos.length) {
       this._combosFiredThisRun = this._combosFiredThisRun ?? new Set();
       for (const c of combos) this._combosFiredThisRun.add(c.key);
-      const total = Object.keys(DRUG_COMBOS).length;
+      const total = Object.keys(VICE_COMBOS).length;
       if (this._combosFiredThisRun.size >= total && !this._connoisseurFired) {
         this._connoisseurFired = true;
         AchievementSystem.award('connoisseur', this.registry);
@@ -15639,7 +15643,7 @@ export class GameScene extends Phaser.Scene {
       this.hudRearCop.setVisible(false);
     }
 
-    this._drawDrugBars();
+    this._drawViceBars();
     this._drawF12Inventory();
 
     // Popup position depends on view mode.  Chase view: bottom-centre, just
@@ -15731,23 +15735,23 @@ export class GameScene extends Phaser.Scene {
     this._applyControlLayout();  // …then the non-readout controls (buttons/pedals/mirror)
   }
 
-  _drawDrugBars() {
+  _drawViceBars() {
     const g = this.hudGfx;
     g.clear();
     // Title screen — bars graphics stay cleared and the label nodes
     // are hidden by _setHudVisible(false).  Exception: the controls editor
     // shows them (even from the title) so empty slots can be repositioned.
     if (this._awaitingStart && !this._ctrlEditMode) return;
-    this._drawDrugIcons();
+    this._drawViceIcons();
     return;
   }
 
-  /** New drug-icon HUD — mirrors the weapon-icon stack on the
-   *  OPPOSITE side of the screen.  Each drug shows a translucent
+  /** New vice-icon HUD — mirrors the weapon-icon stack on the
+   *  OPPOSITE side of the screen.  Each vice shows a translucent
    *  icon whose alpha = bar level (so a 55%-filled bar = 55%-opaque
    *  icon).  No text labels.  Custom mode keeps the drag-to-set
    *  hit zones so the player can tap an icon to set its level. */
-  _drawDrugIcons() {
+  _drawViceIcons() {
     const g = this.hudGfx;
     // Texture name map — alcohol uses the 'sushi' art.
     const TEX = {
@@ -15764,35 +15768,35 @@ export class GameScene extends Phaser.Scene {
     };
     // Colorblind: recolor the confusable bar-fill pairs (weed↔meth both greenish,
     // lsd reddish — fentanyl keeps its lethal red) and stamp an authoritative
-    // one-letter badge on each card so the drug is read by LETTER, not hue.
+    // one-letter badge on each card so the vice is read by LETTER, not hue.
     const CB_FILL   = { burrito: 0x3A9BFF, caffeine: 0xFF9A3D, hotdog: 0xFFD23D, coma: 0xFF2222 };
     const CB_LETTER = { sushi: 'S', burrito: 'B', energy: 'E', gummies: 'G', hotdog: 'H', combo: 'C', coldbrew: 'K', coma: 'X', slushie: 'Z', caffeine: 'F' };
-    if (!this._drugBadges) this._drugBadges = {};
-    // 2-column grid of square-ish icons.  All 10 drugs ALWAYS show (5 rows ×
-    // 2 cols) above the pedal stack — undiscovered/empty drugs render as a
-    // black semi-translucent block.  Each drug is INDEPENDENTLY movable+scalable
-    // (id `drug_<id>`): its default slot is the grid cell, then its own
+    if (!this._viceBadges) this._viceBadges = {};
+    // 2-column grid of square-ish icons.  All 10 vices ALWAYS show (5 rows ×
+    // 2 cols) above the pedal stack — undiscovered/empty vices render as a
+    // black semi-translucent block.  Each vice is INDEPENDENTLY movable+scalable
+    // (id `vice_<id>`): its default slot is the grid cell, then its own
     // offset/scale applies on top.  Base (unscaled) grid geometry:
     const baseIconW = 46, baseIconH = 42, baseRowGap = 4, baseColGap = 4;
     const baseYTop  = 65;
-    const drugsOnRight = !!this._leftHanded;
+    const vicesOnRight = !!this._leftHanded;
     const baseXLeft  = 10;
     const baseXRight = SCREEN_W - 10;
     // Inner column is closest to screen center; outer column hugs the edge.
-    const baseXOuter = drugsOnRight ? (baseXRight - baseIconW)                  : baseXLeft;
-    const baseXInner = drugsOnRight ? (baseXRight - baseIconW * 2 - baseColGap) : (baseXLeft + baseIconW + baseColGap);
+    const baseXOuter = vicesOnRight ? (baseXRight - baseIconW)                  : baseXLeft;
+    const baseXInner = vicesOnRight ? (baseXRight - baseIconW * 2 - baseColGap) : (baseXLeft + baseIconW + baseColGap);
 
-    if (!this._drugIcons) this._drugIcons = {};
-    const showAllDrugs = Difficulty.mode?.() === 'custom';
+    if (!this._viceIcons) this._viceIcons = {};
+    const showAllVices = Difficulty.mode?.() === 'custom';
     const used = new Set();
-    if (!this._drugBarHits) this._drugBarHits = [];
-    this._drugBarHits.length = 0;
-    this._ensureDrugBarDragHandler();
+    if (!this._viceBarHits) this._viceBarHits = [];
+    this._viceBarHits.length = 0;
+    this._ensureViceBarDragHandler();
 
-    // Build the real logo image for a drug, fit to the BASE cell (46×42).  The
-    // per-drug pinch scale is applied each frame in the loop (cached display
+    // Build the real logo image for a vice, fit to the BASE cell (46×42).  The
+    // per-vice pinch scale is applied each frame in the loop (cached display
     // size in _cellBaseW/H), so this just creates it at 1×.
-    const buildDrugImage = (texKey, cx, cy) => {
+    const buildViceImage = (texKey, cx, cy) => {
       const tex   = this.textures.get(texKey)?.source?.[0];
       const baseW = tex?.width  || 46;
       const baseH = tex?.height || 42;
@@ -15803,46 +15807,46 @@ export class GameScene extends Phaser.Scene {
       return img;
     };
 
-    this._drugCellBounds = {};
+    this._viceCellBounds = {};
     let slotIdx = 0;
-    for (const id of Object.values(DRUGS)) {
-      const unlocked = showAllDrugs || this.drugs.isUnlocked(id);
-      const level = Math.max(0, Math.min(1, this.drugs.get(id)));
-      const cfg   = DRUG_CONFIG[id];
+    for (const id of Object.values(VICES)) {
+      const unlocked = showAllVices || this.vices.isUnlocked(id);
+      const level = Math.max(0, Math.min(1, this.vices.get(id)));
+      const cfg   = VICE_CONFIG[id];
       // 2-column fill order: alternate (0,0), (1,0), (0,1), (1,1), …
       const col   = slotIdx % 2;
       const row   = Math.floor(slotIdx / 2);
       const baseX = col === 0 ? baseXOuter : baseXInner;
       const baseY = baseYTop + row * (baseIconH + baseRowGap);
-      // Per-drug custom offset+scale.
+      // Per-vice custom offset+scale.
       const o     = this._ctrlOff('vice_' + id);
       const iconW = baseIconW * o.s, iconH = baseIconH * o.s;
       const x     = baseX + o.dx, y = baseY + o.dy;
 
       // ── Lazy create the icon + interactive hit zone ──────────────
       const texKey = TEX[id];
-      if (!this._drugIcons[id]) {
+      if (!this._viceIcons[id]) {
         const hasImg = texKey && this.textures.exists(texKey);
         // Use the real logo if its texture is ready; otherwise a temporary
         // dot fallback that gets UPGRADED below once the texture loads.
         const icon = hasImg
-          ? buildDrugImage(texKey, x + iconW / 2, y + iconH / 2)
+          ? buildViceImage(texKey, x + iconW / 2, y + iconH / 2)
           : this.add.text(x + iconW / 2, y + iconH / 2, '•', {
               fontSize: '32px', color: cfg.hexCss,
             }).setOrigin(0.5).setDepth(25);
         const hit = this.add.rectangle(
           x + iconW / 2, y + iconH / 2, baseIconW, baseIconH, 0x000000, 0,
         ).setDepth(24).setInteractive({ useHandCursor: true });   // BASE size; scaled via setScale (setSize won't resize the hit area)
-        this._drugIcons[id] = { icon, hit, isImage: hasImg };
+        this._viceIcons[id] = { icon, hit, isImage: hasImg };
         if (this._hudObjects) {
           this._hudObjects.push(icon, hit);
           this.cameras.main.ignore?.([icon, hit]);
         }
       }
-      const slot = this._drugIcons[id];
+      const slot = this._viceIcons[id];
       // Upgrade a placeholder dot to the real logo the moment its texture
       // finishes loading — fixes icons drawn before the asset loader caught
-      // up (intermittent missing drug logos on slow/cold phone loads).
+      // up (intermittent missing vice logos on slow/cold phone loads).
       if (!slot.isImage && texKey && this.textures.exists(texKey)) {
         const oldIcon = slot.icon;
         if (this._hudObjects) {
@@ -15850,7 +15854,7 @@ export class GameScene extends Phaser.Scene {
           if (oi >= 0) this._hudObjects.splice(oi, 1);
         }
         oldIcon.destroy();
-        slot.icon = buildDrugImage(texKey, x + iconW / 2, y + iconH / 2);
+        slot.icon = buildViceImage(texKey, x + iconW / 2, y + iconH / 2);
         slot.isImage = true;
         if (this._hudObjects) {
           this._hudObjects.push(slot.icon);
@@ -15858,7 +15862,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
       slot.icon.setPosition(x + iconW / 2, y + iconH / 2);
-      // Re-apply the per-drug pinch scale each frame (cached icons would
+      // Re-apply the per-vice pinch scale each frame (cached icons would
       // otherwise keep their creation-time size).
       if (slot.isImage && slot.icon._cellBaseW != null) {
         slot.icon.setDisplaySize(slot.icon._cellBaseW * o.s, slot.icon._cellBaseH * o.s);
@@ -15869,26 +15873,26 @@ export class GameScene extends Phaser.Scene {
       slot.hit.setScale?.(o.s);   // scales the hit AREA (transform), unlike setSize
       // UNDISCOVERED/uncollected → hide the icon (the black block below stands
       // in for it).  Unlocked → icon opacity tracks level (0.25 floor so an
-      // empty unlocked drug still reads).
+      // empty unlocked vice still reads).
       slot.icon.setVisible(unlocked);
       if (unlocked) slot.icon.setAlpha(0.25 + 0.75 * level);
       used.add(id);
-      this._drugCellBounds[id] = { x, y, w: iconW, h: iconH };
+      this._viceCellBounds[id] = { x, y, w: iconW, h: iconH };
 
-      // ── Colorblind letter badge — authoritative drug ID, top-left (unlocked only) ──
+      // ── Colorblind letter badge — authoritative vice ID, top-left (unlocked only) ──
       if (this._colorblind && unlocked) {
-        let badge = this._drugBadges[id];
+        let badge = this._viceBadges[id];
         if (!badge) {
           badge = this.add.text(0, 0, CB_LETTER[id] ?? '?', {
             fontSize: '13px', fontFamily: IMPACT, color: '#FFFFFF',
             stroke: '#000000', strokeThickness: 3,
           }).setOrigin(0, 0).setDepth(26);
-          this._drugBadges[id] = badge;
+          this._viceBadges[id] = badge;
           if (this._hudObjects) { this._hudObjects.push(badge); this.cameras.main.ignore?.([badge]); }
         }
         badge.setPosition(x + 2, y + 1).setVisible(true);
-      } else if (this._drugBadges[id]) {
-        this._drugBadges[id].setVisible(false);
+      } else if (this._viceBadges[id]) {
+        this._viceBadges[id].setVisible(false);
       }
 
       // ── Card visuals ────────────────────────────────────────────
@@ -15898,7 +15902,7 @@ export class GameScene extends Phaser.Scene {
         g.fillRoundedRect(x, y, iconW, iconH, 4);
         g.lineStyle(1, 0xFFFFFF, 0.10);
         g.strokeRoundedRect(x, y, iconW, iconH, 4);
-        this._drugBarHits.push({ id, x, y, w: iconW, h: iconH });
+        this._viceBarHits.push({ id, x, y, w: iconW, h: iconH });
         slotIdx++;
         continue;
       }
@@ -15906,7 +15910,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0x000000, 0.45);
       g.fillRoundedRect(x, y, iconW, iconH, 4);
       // Level-proportional colored FILL rising from the BOTTOM —
-      // unambiguous "bar fills up as drug accumulates" cue.
+      // unambiguous "bar fills up as vice accumulates" cue.
       if (level > 0.01) {
         const fillH = Math.max(2, Math.floor((iconH - 2) * level));
         const fillY = y + (iconH - 1) - fillH;
@@ -15935,34 +15939,34 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Drag-to-set hit rect for Custom mode (full cell).
-      this._drugBarHits.push({ id, x, y, w: iconW, h: iconH });
+      this._viceBarHits.push({ id, x, y, w: iconW, h: iconH });
       slotIdx++;
     }
 
-    // (Per-drug bounds for the editor proxies are published in _drugCellBounds
-    // inside the loop above — all 10 drugs always render now.)
+    // (Per-vice bounds for the editor proxies are published in _viceCellBounds
+    // inside the loop above — all 10 vices always render now.)
 
-    // Hide any drugs we didn't render this frame (rest stop, etc.).
-    for (const id of Object.keys(this._drugIcons)) {
+    // Hide any vices we didn't render this frame (rest stop, etc.).
+    for (const id of Object.keys(this._viceIcons)) {
       if (!used.has(id)) {
-        this._drugIcons[id].icon.setVisible(false);
-        this._drugBadges?.[id]?.setVisible(false);
+        this._viceIcons[id].icon.setVisible(false);
+        this._viceBadges?.[id]?.setVisible(false);
       }
     }
     // Old text labels — hide them all (legacy code path).
-    if (this._drugLabels) {
-      for (const id of Object.keys(this._drugLabels)) {
-        this._drugLabels[id].setVisible(false);
+    if (this._viceLabels) {
+      for (const id of Object.keys(this._viceLabels)) {
+        this._viceLabels[id].setVisible(false);
       }
     }
   }
 
-  _drawDrugBarsOld_disabled() {
+  _drawViceBarsOld_disabled() {
     const g = this.hudGfx;
 
     // Stack of "[NAME] [BAR]" rows.  Right-handed (default) anchors at
     // the left edge; left-handed mirrors the whole block to the right
-    // edge so the drug bars sit on the opposite side from the weapon
+    // edge so the vice bars sit on the opposite side from the weapon
     // stack.  Internal label-then-bar layout is preserved either way —
     // the player still reads left-to-right.
     const barW   = 110, barH = 15, rowH = 22;
@@ -15970,44 +15974,44 @@ export class GameScene extends Phaser.Scene {
     const x      = this._leftHanded ? (SCREEN_W - 10 - labelW - barW) : 10;
     const yTop   = 85;
 
-    if (!this._drugLabels) this._drugLabels = {};
+    if (!this._viceLabels) this._viceLabels = {};
     const labelsUsed = new Set();
     // Hit-rect array consumed by the pointer drag handler.  Rebuilt
-    // every frame so it tracks the live unlocked-drug list and any
+    // every frame so it tracks the live unlocked-vice list and any
     // future re-layout.  In custom mode, dragging on these rects sets
-    // the corresponding drug level directly (replaces the old slider
+    // the corresponding vice level directly (replaces the old slider
     // modal that the 🎚 button used to open).
-    if (!this._drugBarHits) this._drugBarHits = [];
-    this._drugBarHits.length = 0;
+    if (!this._viceBarHits) this._viceBarHits = [];
+    this._viceBarHits.length = 0;
     // Lazy register the global pointer drag handler once.
-    this._ensureDrugBarDragHandler();
+    this._ensureViceBarDragHandler();
 
-    // Custom mode shows ALL drugs (locked included) so the player can
+    // Custom mode shows ALL vices (locked included) so the player can
     // drag any bar to set its level — the full menu is the slider UI.
-    const showAllDrugs = Difficulty.mode?.() === 'custom';
+    const showAllVices = Difficulty.mode?.() === 'custom';
     let row = 0;
-    for (const id of Object.values(DRUGS)) {
-      if (!showAllDrugs && !this.drugs.isUnlocked(id)) continue;
-      const level = this.drugs.get(id);
-      const cfg   = DRUG_CONFIG[id];
+    for (const id of Object.values(VICES)) {
+      if (!showAllVices && !this.vices.isUnlocked(id)) continue;
+      const level = this.vices.get(id);
+      const cfg   = VICE_CONFIG[id];
       const y     = yTop + row * rowH;
 
       // Stripped label (drop emoji prefix; pull the word).
       const cleanName = (cfg.label || id).replace(/^[^A-Za-z]+/, '').trim().toUpperCase();
 
-      if (!this._drugLabels[id]) {
-        this._drugLabels[id] = this.add.text(x, y, cleanName, {
+      if (!this._viceLabels[id]) {
+        this._viceLabels[id] = this.add.text(x, y, cleanName, {
           fontSize: '11px',
           fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
           color: cfg.hexCss,
           stroke: '#000000', strokeThickness: 3,
         }).setDepth(20);
         if (this._hudObjects) {
-          this._hudObjects.push(this._drugLabels[id]);
-          this.cameras.main.ignore(this._drugLabels[id]);
+          this._hudObjects.push(this._viceLabels[id]);
+          this.cameras.main.ignore(this._viceLabels[id]);
         }
       }
-      const txt = this._drugLabels[id];
+      const txt = this._viceLabels[id];
       txt.setPosition(x, y + 1).setVisible(true);   // +1 vertical-align with taller bar
       labelsUsed.add(id);
 
@@ -16019,7 +16023,7 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1, 0x444444, 0.55);
       g.strokeRect(bx - 2, y - 2, barW + 4, barH + 4);
 
-      // Fill — drug colour at 0.78 alpha (was fully opaque) so the road
+      // Fill — vice colour at 0.78 alpha (was fully opaque) so the road
       // showing through the HUD reads softer.
       g.fillStyle(cfg.color, 0.78);
       g.fillRect(bx, y, Math.round(barW * level), barH);
@@ -16038,44 +16042,44 @@ export class GameScene extends Phaser.Scene {
 
       // Register hit-rect for drag-to-set.  Slightly enlarged top/bottom
       // so it's comfortable to grab on touch.
-      this._drugBarHits.push({
+      this._viceBarHits.push({
         id, x: bx, y: y - 3, w: barW, h: barH + 6,
       });
       row++;
     }
 
-    for (const id of Object.keys(this._drugLabels)) {
-      if (!labelsUsed.has(id)) this._drugLabels[id].setVisible(false);
+    for (const id of Object.keys(this._viceLabels)) {
+      if (!labelsUsed.has(id)) this._viceLabels[id].setVisible(false);
     }
   }
 
-  /** Wire up the click/drag handler for the HUD drug bars.  Idempotent
+  /** Wire up the click/drag handler for the HUD vice bars.  Idempotent
    *  — only attaches once.  Active only in custom mode.  The bars fill
    *  vertically (bottom = empty, top = full), so dragging tracks the
    *  pointer's VERTICAL position within the cell.  Tap-to-set lands the
    *  level wherever the player tapped on first contact, then the drag
    *  follows; once a cell is grabbed, the pointer can leave the cell
    *  and the level still tracks (clamped 0..1). */
-  _ensureDrugBarDragHandler() {
-    if (this._drugBarDragWired) return;
-    this._drugBarDragWired = true;
-    this._draggingDrugId = null;
+  _ensureViceBarDragHandler() {
+    if (this._viceBarDragWired) return;
+    this._viceBarDragWired = true;
+    this._draggingViceId = null;
 
     const setLevelFromPointer = (py) => {
-      const id = this._draggingDrugId;
+      const id = this._draggingViceId;
       if (!id) return;
-      const hits = this._drugBarHits;
+      const hits = this._viceBarHits;
       const hit  = hits && hits.find(h => h.id === id);
       if (!hit) return;
       // Vertical map: top of cell → 1.0, bottom of cell → 0.0.
       const frac = Math.max(0, Math.min(1, 1 - (py - hit.y) / hit.h));
-      if (this.drugs?.levels) this.drugs.levels[id] = frac;
+      if (this.vices?.levels) this.vices.levels[id] = frac;
       // Mark unlocked so the bar keeps rendering even if the player
       // pulled it from 0 (otherwise unlocked-only filter hides it next
       // frame and the drag breaks).
-      if (this.drugs?.unlocked && frac > 0) this.drugs.unlocked[id] = true;
-      if (this.drugs?.snapshotUnlocks) {
-        this.registry.set('drugUnlocks', this.drugs.snapshotUnlocks());
+      if (this.vices?.unlocked && frac > 0) this.vices.unlocked[id] = true;
+      if (this.vices?.snapshotUnlocks) {
+        this.registry.set('viceUnlocks', this.vices.snapshotUnlocks());
       }
     };
 
@@ -16088,29 +16092,29 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (ptr) => {
       if (!isCustom()) return;
-      const hits = this._drugBarHits;
+      const hits = this._viceBarHits;
       if (!hits) return;
       // CRITICAL: the pointer is in CANVAS space (0…WORLD_W) but the hit zones
       // are in 800-wide HUD/scene space.  On a decoupled (wide) screen they
       // differ by HUD_OFFSET_X — without this conversion the boost zones sit
-      // sideways from the icons, so steering taps boost drugs.  (overDrugBar
+      // sideways from the icons, so steering taps boost vices.  (overViceBar
       // already does this; the drag handler was missing it.)
       const px = ptr.x - (C.HUD_OFFSET_X || 0), py = ptr.y;
       for (const h of hits) {
         if (px >= h.x - TOUCH_PAD && px <= h.x + h.w + TOUCH_PAD
          && py >= h.y - TOUCH_PAD && py <= h.y + h.h + TOUCH_PAD) {
-          this._draggingDrugId = h.id;
+          this._draggingViceId = h.id;
           setLevelFromPointer(py);
           break;
         }
       }
     });
     this.input.on('pointermove', (ptr) => {
-      if (!this._draggingDrugId) return;
-      if (!isCustom()) { this._draggingDrugId = null; return; }
+      if (!this._draggingViceId) return;
+      if (!isCustom()) { this._draggingViceId = null; return; }
       setLevelFromPointer(ptr.y);
     });
-    const endDrag = () => { this._draggingDrugId = null; };
+    const endDrag = () => { this._draggingViceId = null; };
     this.input.on('pointerup',     endDrag);
     this.input.on('pointerupoutside', endDrag);
   }
@@ -16279,7 +16283,7 @@ export class GameScene extends Phaser.Scene {
     this.popupTimer = isPhoneText ? 5.2 : holdSec;
     // Phone-text popups (📱) buzz twice like an incoming-text notification —
     // active on iOS once Capacitor Haptics is wrapped in; a clean no-op
-    // elsewhere.  Non-text popups (★ WANTED, crashes, drug lines) don't buzz.
+    // elsewhere.  Non-text popups (★ WANTED, crashes, vice lines) don't buzz.
     if (isPhoneText) {
       this.haptics?.notify?.();
     }
@@ -16472,8 +16476,8 @@ export class GameScene extends Phaser.Scene {
    *  increment.  Combos are cosmetic labels only; no score bonus comes
    *  from them.  Components:
    *    • base                                  → 1.0
-   *    • each drug ≥ 5%   ≤ 50%                → +0.5
-   *    • each drug > 50%                        → +0.5 more (i.e. +1.0 total)
+   *    • each vice ≥ 5%   ≤ 50%                → +0.5
+   *    • each vice > 50%                        → +0.5 more (i.e. +1.0 total)
    *    • each cop star                          → +1.0
    *  Example (beer 50% + weed 25% + Cross-Faded label active):
    *    1 + 0.5 (beer) + 0.5 (weed) = 2.0×  ✓
@@ -16482,7 +16486,7 @@ export class GameScene extends Phaser.Scene {
     // Custom mode awards zero score — multiplier collapses to 0 so every
     // additive `this.score += pts * _scoreMult()` callsite no-ops.
     if (Difficulty.noScore?.()) return 0;
-    const mult = this.drugs.scoreMultiplier + (this.cops.starDisplay ?? 0);
+    const mult = this.vices.scoreMultiplier + (this.cops.starDisplay ?? 0);
     let m = Math.round(mult * 2) / 2;
     // DUI penalty — a recent intoxicated traffic stop throttles ALL earnings
     // to ×COP_DUI_EARN_MULT until the odometer passes the penalty mile.
@@ -16490,11 +16494,11 @@ export class GameScene extends Phaser.Scene {
     return m;
   }
 
-  /** Punchy display labels for each drug-line type — used by the spawner
+  /** Punchy display labels for each vice-line type — used by the spawner
    *  to flash a themed banner ("🍻 BEER RUN!", "🧙 MUSHROOM HUNTING!", …)
-   *  when a line drops on the road.  Mixed-drug lines fall back to the
+   *  when a line drops on the road.  Mixed-vice lines fall back to the
    *  generic mixed banner below. */
-  _drugLineLabel(drugType) {
+  _viceLineLabel(viceType) {
     const labels = {
       sushi:     '🍻 BEER RUN!',
       burrito:     '🌿 CHAIN SMOKING!',
@@ -16507,15 +16511,15 @@ export class GameScene extends Phaser.Scene {
       slushie: '🐴 K-HOLE!',
       caffeine:     '⚡ TWEAKER TRAIL!',
     };
-    return labels[drugType] ?? '💊 STREET STASH!';
+    return labels[viceType] ?? '💊 STREET STASH!';
   }
 
-  /** Inject a long line of drug pickups onto consecutive segments ahead.
+  /** Inject a long line of vice pickups onto consecutive segments ahead.
    *  Each pickup adds the standard 0.17 to the alcohol bar, so 3 cans nets
    *  roughly +50% — i.e. a 3-can line is enough to half-fill the player's
    *  beer status.  Lines spawn periodically (every ~1.5 min) and a longer
    *  mixed line spawns every ~100 in-game miles. */
-  _injectDrugLine(o$ = {}) {
+  _injectViceLine(o$ = {}) {
     const segs = this.road?.segments;
     if (!segs?.length) return;
     const startSeg = Math.floor(this.player.position / SEG_LENGTH);
@@ -16531,12 +16535,12 @@ export class GameScene extends Phaser.Scene {
       const seg    = segs[segIdx];
       if (!seg) continue;
       seg.sprites.push({
-        type:            types[i],            // resolved drug type, NOT 'drug-pending'
+        type:            types[i],            // resolved vice type, NOT 'vice-pending'
         offset,
         baseW: 720, baseH: 880,
         collected:       false,
         isCollectible:   true,
-        collectibleType: 'drug',
+        collectibleType: 'vice',
         lootSeed:        Math.random(),
         _bonusLine:      true,
       });
@@ -16577,7 +16581,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Snapshot EVERYTHING needed to resume the run identically — money,
-   *  stars, HP(+max), gas, drug levels + unlocks, weapons, vehicle +
+   *  stars, HP(+max), gas, vice levels + unlocks, weapons, vehicle +
    *  accessories + owned set, stop, difficulty.  Stored locally (reliable
    *  same-device) AND encoded into the portable code so it restores the full
    *  run on ANY device. */
@@ -16589,10 +16593,10 @@ export class GameScene extends Phaser.Scene {
     const frac  = this.damage?.getDurabilityFraction?.() ?? 1;
     const dur   = this.damage?.getDurability?.() ?? 0;
     const hpMax = (frac > 0 ? Math.round(dur / frac) : (VEHICLES[vid]?.hp ?? 100));
-    const drugs = {}, unlocked = {};
-    for (const id of Object.values(DRUGS)) {
-      drugs[id]    = this.drugs?.levels?.[id] ?? 0;
-      unlocked[id] = !!this.drugs?.unlocked?.[id];
+    const vices = {}, unlocked = {};
+    for (const id of Object.values(VICES)) {
+      vices[id]    = this.vices?.levels?.[id] ?? 0;
+      unlocked[id] = !!this.vices?.unlocked?.[id];
     }
     const f12 = this.cops?.f12Tokens ?? [];
     const cnt = (t) => f12.reduce((n, x) => n + (x === t ? 1 : 0), 0);
@@ -16624,7 +16628,7 @@ export class GameScene extends Phaser.Scene {
       vehicleId: vid,
       accessories: { bumper: !!acc.bumper, traction: !!acc.traction, nos: Math.max(0, Math.min(3, acc.nos ?? 0)) },
       owned: (this.registry?.get?.('ownedVehicles') ?? ['beater']),
-      drugs, unlocked,
+      vices, unlocked,
       weapons: { gun: this.cops?.gunAmmo ?? 0, spike: cnt('spike_strip'), donut: cnt('paint_bomb'), rocket: cnt('rocket'), disguise: cnt('disguise') ? 1 : 0 },
       radar: !!this._hasRadar,
       position: this.player?.position ?? 0,
@@ -16679,12 +16683,12 @@ export class GameScene extends Phaser.Scene {
    *  (6 bits/char).  Field ORDER + WIDTH must match _decodeSnapshot exactly. */
   _encodeSnapshot(s) {
     const vehKeys = Object.keys(VEHICLES);
-    const drugIds = Object.values(DRUGS);
+    const viceIds = Object.values(VICES);
     const stopIdx = REST_STOPS.findIndex(r => r.id === s.id);
     const diffIdx = ['easy', 'normal', 'hard', 'custom'].indexOf(s.difficulty);
     const subIdx  = ['easy', 'normal', 'hard'].indexOf(s.customSub ?? 'normal');
     let ownedBits = 0; vehKeys.forEach((k, i) => { if (s.owned?.includes(k)) ownedBits |= (1 << i); });
-    let unlkBits  = 0; drugIds.forEach((id, i) => { if (s.unlocked?.[id]) unlkBits |= (1 << i); });
+    let unlkBits  = 0; viceIds.forEach((id, i) => { if (s.unlocked?.[id]) unlkBits |= (1 << i); });
     const accPack = (s.accessories?.bumper ? 1 : 0) | (s.accessories?.traction ? 2 : 0) | ((Math.min(3, s.accessories?.nos || 0)) << 2);
 
     const bits = [];
@@ -16704,13 +16708,13 @@ export class GameScene extends Phaser.Scene {
     put(Math.max(0, vehKeys.indexOf(s.vehicleId)), 4);
     put(accPack, 4);
     put(ownedBits, vehKeys.length);                     // dynamic — grows with the roster
-    put(unlkBits, drugIds.length);
+    put(unlkBits, viceIds.length);
     put(s.weapons?.gun, 8);
     put(s.weapons?.spike, 7);
     put(s.weapons?.donut, 7);
     put(s.weapons?.rocket, 7);
     put(s.weapons?.disguise, 5);
-    for (const id of drugIds) put(Math.round((s.drugs?.[id] || 0) * 31), 5);   // 0-1 → 0-31
+    for (const id of viceIds) put(Math.round((s.vices?.[id] || 0) * 31), 5);   // 0-1 → 0-31
     put(s.radar ? 1 : 0, 1);                            // v2: radar detector owned
 
     put(this._bitChecksum(bits), 12);                   // checksum over the data bits
@@ -16741,7 +16745,7 @@ export class GameScene extends Phaser.Scene {
       let pos = 0;
       const get = (w) => { let v = 0; for (let i = 0; i < w; i++) v = (v << 1) | (bits[pos++] ?? 0); return v; };
       const vehKeys = Object.keys(VEHICLES);
-      const drugIds = Object.values(DRUGS);
+      const viceIds = Object.values(VICES);
 
       const ver = get(4);                                // format version
       if (ver !== 1 && ver !== 2) return null;
@@ -16756,14 +16760,14 @@ export class GameScene extends Phaser.Scene {
       const vehIdx  = get(4);
       const accPack = get(4);
       const ownedBits = get(vehKeys.length);
-      const unlkBits  = get(drugIds.length);
+      const unlkBits  = get(viceIds.length);
       const gun     = get(8);
       const spike   = get(7);
       const donut   = get(7);
       const rocket  = get(7);
       const disguise = get(5);
-      const drugVals = [];
-      for (let i = 0; i < drugIds.length; i++) drugVals.push(get(5));
+      const viceVals = [];
+      for (let i = 0; i < viceIds.length; i++) viceVals.push(get(5));
       const radar   = (ver >= 2) ? get(1) : 0;           // v2: radar detector owned
       const dataEnd = pos;
       const csum    = get(12);
@@ -16771,9 +16775,9 @@ export class GameScene extends Phaser.Scene {
 
       const stop = REST_STOPS[stopIdx];
       if (!stop) return null;
-      const drugs = {}, unlocked = {};
-      drugIds.forEach((id, i) => {
-        drugs[id]    = (drugVals[i] || 0) / 31;
+      const vices = {}, unlocked = {};
+      viceIds.forEach((id, i) => {
+        vices[id]    = (viceVals[i] || 0) / 31;
         unlocked[id] = !!(unlkBits & (1 << i));
       });
       const owned = vehKeys.filter((k, i) => ownedBits & (1 << i));
@@ -16785,7 +16789,7 @@ export class GameScene extends Phaser.Scene {
         vehicleId: vehKeys[vehIdx] ?? 'beater',
         accessories: { bumper: !!(accPack & 1), traction: !!(accPack & 2), nos: (accPack >> 2) & 3 },
         owned: owned.length ? owned : ['beater'],
-        drugs, unlocked,
+        vices, unlocked,
         weapons: { gun, spike, donut, rocket, disguise },
         radar: !!radar,
       };
@@ -16874,13 +16878,13 @@ export class GameScene extends Phaser.Scene {
         this.player.gasMaxMi = maxMi;
         this.player.gasMi = Math.max(0, Math.min(maxMi, s.gas));
       }
-      if (this.drugs && s.drugs) {
-        for (const id of Object.values(DRUGS)) {
-          if (id in s.drugs) this.drugs.levels[id] = Math.max(0, Math.min(1, s.drugs[id]));
+      if (this.vices && s.vices) {
+        for (const id of Object.values(VICES)) {
+          if (id in s.vices) this.vices.levels[id] = Math.max(0, Math.min(1, s.vices[id]));
           if (s.unlocked && id in s.unlocked) {
-            this.drugs.unlocked[id] = !!s.unlocked[id];
-            if (this.drugs.pickupCounts && s.unlocked[id]) {
-              this.drugs.pickupCounts[id] = Math.max(1, this.drugs.pickupCounts[id] || 0);
+            this.vices.unlocked[id] = !!s.unlocked[id];
+            if (this.vices.pickupCounts && s.unlocked[id]) {
+              this.vices.pickupCounts[id] = Math.max(1, this.vices.pickupCounts[id] || 0);
             }
           }
         }
@@ -16938,11 +16942,11 @@ export class GameScene extends Phaser.Scene {
         stars:    this.cops.starDisplay ?? 0,
         position: this.player.position,
         odometer: this._odometer,
-        // Full drug-bar snapshot — drug status pauses at the rest stop and
+        // Full vice-bar snapshot — vice status pauses at the rest stop and
         // resumes from these levels (no decay during the menu, no silent
         // wipe of unlocked bars).  COFFEE / SNOOZE buys mutate this on
-        // resume via the reduceDrugs multiplier.
-        drugLevelsAtEntry: { ...(this.drugs?.levels ?? {}) },
+        // resume via the reduceVices multiplier.
+        viceLevelsAtEntry: { ...(this.vices?.levels ?? {}) },
         // Car durability also carries through — without this, the new
         // DamageModel built in the next GameScene starts at 100%, silently
         // healing the car for free.  REPAIR CAR explicitly resets to 100.
@@ -16952,10 +16956,10 @@ export class GameScene extends Phaser.Scene {
         gasMi:          this.player.gasMi,
         gasMaxMi:       this.player.gasMaxMi,
         ownedVehicles:  this.registry.get('ownedVehicles') ?? ['beater'],
-        // Per-drug exposure history — gates per-shop drug menus.  Camp
+        // Per-vice exposure history — gates per-shop vice menus.  Camp
         // sells fent/ket/meth ONLY if the player has sampled them on
         // the road first.
-        drugPickupCounts: { ...(this.drugs?.pickupCounts ?? {}) },
+        vicePickupCounts: { ...(this.vices?.pickupCounts ?? {}) },
         weaponsAtEntry:   { ...(snap.weapons ?? {}) },
         runStateAtEntry: snap.runState,
         messageStateAtEntry: snap.messageState,
@@ -16972,7 +16976,7 @@ export class GameScene extends Phaser.Scene {
     try {
       const save = this.registry.get('save');
       if (!save) return;
-      // Store the FULL snapshot (money, HP, gas, drugs, weapons, vehicle,
+      // Store the FULL snapshot (money, HP, gas, vices, weapons, vehicle,
       // accessories, owned, stars…) so a same-device resume restores
       // everything reliably — the encoded `code` carries the same data
       // cross-device.  Falls back to a minimal snapshot if none was passed.
@@ -17089,7 +17093,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Custom offset+scale for a non-readout control id (top buttons, pedals,
-   *  mirror, weapons, drugs).  Returns the saved {dx,dy,s} or the identity.
+   *  mirror, weapons, vices).  Returns the saved {dx,dy,s} or the identity.
    *  These controls aren't static text objects, so they read their offset HERE
    *  and bake it into their own native positioning/draw — that keeps each
    *  control's hit-zone glued to its visual (the zones derive from the same
@@ -17208,7 +17212,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Build the transparent draggable handles for every non-readout control
-   *  (top buttons, pedals, mirror, weapons, drugs, disguise).  Each proxy sits
+   *  (top buttons, pedals, mirror, weapons, vices, disguise).  Each proxy sits
    *  over the control's CURRENT box; dragging/pinching it updates _hudLayout[id]
    *  and the native draw applies it.  Bounds are refreshed first so the handles
    *  land on the live positions. */
@@ -17216,9 +17220,9 @@ export class GameScene extends Phaser.Scene {
     this._destroyControlProxies();
     this._ctrlProxies = [];
     // Refresh live bounds (these publish btn._lx/_ly/_lsz, _pedalHitZones,
-    // _mirrorBaseBounds, _weaponCellBounds, _drugCellBounds).
+    // _mirrorBaseBounds, _weaponCellBounds, _viceCellBounds).
     try { this._applyControlLayout(); } catch (_) {}
-    try { this._drawDrugBars(); }      catch (_) {}
+    try { this._drawViceBars(); }      catch (_) {}
     try { this._drawF12Inventory(); }  catch (_) {}
 
     const mk = (id, b) => {
@@ -17253,9 +17257,9 @@ export class GameScene extends Phaser.Scene {
     mk('mirror',   this._mirrorBaseBounds);
     mk('disguise', this._disguiseHitBounds);
     mk('wiper',    this._wiperLiveBounds);
-    // Each weapon + each drug is its OWN independent handle.
+    // Each weapon + each vice is its OWN independent handle.
     for (const wid in (this._weaponCellBounds || {})) mk('weapon_' + wid, this._weaponCellBounds[wid]);
-    for (const did in (this._drugCellBounds   || {})) mk('drug_'   + did, this._drugCellBounds[did]);
+    for (const did in (this._viceCellBounds   || {})) mk('vice_'   + did, this._viceCellBounds[did]);
   }
 
   /** Glue every control proxy to its control's LIVE bounds (position + size)
@@ -17276,7 +17280,7 @@ export class GameScene extends Phaser.Scene {
       if (id === 'disguise')   return this._disguiseHitBounds;
       if (id === 'wiper')      return this._wiperLiveBounds;
       if (id.startsWith('weapon_')) return this._weaponCellBounds?.[id.slice(7)];
-      if (id.startsWith('vice_'))   return this._drugCellBounds?.[id.slice(5)];
+      if (id.startsWith('vice_'))   return this._viceCellBounds?.[id.slice(5)];
       return null;
     };
     for (const px of this._ctrlProxies) {
@@ -17418,7 +17422,7 @@ export class GameScene extends Phaser.Scene {
     // intercepting drags — that's why the party clock wouldn't grab (the
     // top-row buttons sit over it).  Toggling input.enabled preserves each
     // object's hit area for clean restore on DONE.  (Steer / pedals / weapons /
-    // drug-bars go through the main touch handler, gated by _ctrlEditMode.)
+    // vice-bars go through the main touch handler, gated by _ctrlEditMode.)
     this._editorDisabledInputs = [];
     for (const o of this._hudObjects || []) {           // HUD buttons only (depth-raise keeps draggables on top)
       if (!o || !o.input) continue;
@@ -17427,7 +17431,7 @@ export class GameScene extends Phaser.Scene {
       if (o.input.enabled) { o.input.enabled = false; this._editorDisabledInputs.push(o); }
     }
     // Build the draggable proxy handles for the non-readout controls (top
-    // buttons, pedals, mirror, weapons, drugs, disguise).  Done last so the
+    // buttons, pedals, mirror, weapons, vices, disguise).  Done last so the
     // live bounds are fresh.
     this._buildControlProxies();
   }
@@ -17801,7 +17805,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Persist the in-progress run so an unexpected reload resumes here.
-   *  Reuses the rest-stop snapshot shape (money/HP/gas/drugs/weapons/vehicle/
+   *  Reuses the rest-stop snapshot shape (money/HP/gas/vices/weapons/vehicle/
    *  stars + position + odometer) under the per-profile `liveRun` key.  No-op
    *  unless the player is actually mid-drive. */
   _autosaveRun() {
@@ -18076,15 +18080,15 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.once('keydown-ENTER', fireFirstTap);
     });
     // Custom mode — apply the slider levels chosen on the title screen.
-    // Also unlock every drug at level > 0 so the bar renders properly.
-    if (this._customStartLevels && this.drugs?.levels) {
+    // Also unlock every vice at level > 0 so the bar renders properly.
+    if (this._customStartLevels && this.vices?.levels) {
       for (const [id, lvl] of Object.entries(this._customStartLevels)) {
-        this.drugs.levels[id] = lvl;
-        if (lvl > 0 && this.drugs.unlocked) this.drugs.unlocked[id] = true;
+        this.vices.levels[id] = lvl;
+        if (lvl > 0 && this.vices.unlocked) this.vices.unlocked[id] = true;
       }
       // Refresh the registry-stored unlock map so the HUD redraws bars.
-      if (this.drugs.snapshotUnlocks) {
-        this.registry.set('drugUnlocks', this.drugs.snapshotUnlocks());
+      if (this.vices.snapshotUnlocks) {
+        this.registry.set('viceUnlocks', this.vices.snapshotUnlocks());
       }
       this._customStartLevels = null;
     }
@@ -18198,7 +18202,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Teleport the live run to a given route mile, keeping run state (score,
-   *  gas, drug bars, vehicle) but clearing traffic/cops/wanted/trap state so
+   *  gas, vice bars, vehicle) but clearing traffic/cops/wanted/trap state so
    *  the jump doesn't instantly crash or bust the player.  Shared by the
    *  dev-warp digit keys AND the in-game iPhone-map teleport (`__warpTo`). */
   _warpToMile(mile, label = null) {
@@ -18247,6 +18251,18 @@ export class GameScene extends Phaser.Scene {
       } else {
         this.hudSteroid.setVisible(false);
       }
+    }
+    // Pulsing red rage vignette — a full-screen red overlay that throbs while
+    // Redneck Rage is active, so the whole screen "sees red."  Lazily created.
+    if (!this._rageTint) {
+      this._rageTint = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 2, SCREEN_H * 2, 0xFF0000)
+        .setScrollFactor(0).setDepth(45).setVisible(false).setBlendMode(Phaser.BlendModes.ADD);
+    }
+    if (active) {
+      const pulse = 0.12 + 0.10 * Math.sin((this.gameTime ?? 0) * 8);
+      this._rageTint.setVisible(true).setAlpha(pulse);
+    } else if (this._rageTint.visible) {
+      this._rageTint.setVisible(false);
     }
     // Rare standalone drop — no spawning on the title/pre-start screen.
     if (this._awaitingStart) return;
@@ -18317,12 +18333,12 @@ export class GameScene extends Phaser.Scene {
   /** If an OPIOID overdose (fentanyl/heroin/rx) is about to kill the player
    *  and a Narcan is in inventory, consume it: flash the screen red, flush
    *  all opioid bars, and cancel the OD.  Returns true if the OD was saved. */
-  _tryNarcan(drugId) {
-    const OPIOIDS = [DRUGS.COMA, DRUGS.COMBO, DRUGS.COLDBREW];
-    if (!OPIOIDS.includes(drugId)) return false;   // Narcan only reverses opioids
+  _tryNarcan(viceId) {
+    const OPIOIDS = [VICES.COMA, VICES.COMBO, VICES.COLDBREW];
+    if (!OPIOIDS.includes(viceId)) return false;   // Narcan only reverses opioids
     if ((this._narcanCount ?? 0) <= 0) return false;
     this._narcanCount -= 1;
-    for (const id of OPIOIDS) this.drugs.levels[id] = 0;   // flush the opioids
+    for (const id of OPIOIDS) this.vices.levels[id] = 0;   // flush the opioids
     this.cameras?.main?.flash?.(450, 220, 20, 20);          // red rescue flash
     this._showPopup?.('☕ ESPRESSO — SNAPPED AWAKE', '#FF5555');
     this.effects?.triggerShake?.(120, 0.005);
@@ -18346,8 +18362,8 @@ export class GameScene extends Phaser.Scene {
 
   // Top speed in internal units, accounting for cocaine + meth pickup boosts + NOS.
   _maxSpeedWithBoost() {
-    const cokeBonus = this.drugs.getCocaineSpeedBonusMPH?.() ?? 0;
-    const methBonus = this.drugs.getMethSpeedBonusMPH?.()    ?? 0;
+    const cokeBonus = this.vices.getCocaineSpeedBonusMPH?.() ?? 0;
+    const methBonus = this.vices.getMethSpeedBonusMPH?.()    ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
     const topMph    = 120 + cokeBonus + methBonus + nosTier * 5;
     return MAX_SPEED * (topMph / 120);
@@ -18356,8 +18372,8 @@ export class GameScene extends Phaser.Scene {
   // Displayed MPH = (current speed / current top-speed) × top-MPH.
   _displayMPH() {
     // +4 mph per coke bag, +4 mph per meth pickup, +5 mph per NOS tier.
-    const cokeBonus = this.drugs?.getCocaineSpeedBonusMPH?.() ?? 0;
-    const methBonus = this.drugs?.getMethSpeedBonusMPH?.()    ?? 0;
+    const cokeBonus = this.vices?.getCocaineSpeedBonusMPH?.() ?? 0;
+    const methBonus = this.vices?.getMethSpeedBonusMPH?.()    ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
     const topMph   = 120 + cokeBonus + methBonus + nosTier * 5;
     const topUnits = MAX_SPEED * (topMph / 120);
@@ -18365,7 +18381,7 @@ export class GameScene extends Phaser.Scene {
     // LSD ≥ 60% — time distortion: world keeps scrolling at the player's
     // real speed, but the speedometer pegs at 60 mph for the trippy
     // "I'm crawling but everything's flying past" feel.
-    const lsd = this.drugs?.get?.(DRUGS.HOTDOG) ?? 0;
+    const lsd = this.vices?.get?.(VICES.HOTDOG) ?? 0;
     if (lsd >= 0.60) return Math.min(60, trueMph);
     return trueMph;
   }
@@ -18416,14 +18432,14 @@ export class GameScene extends Phaser.Scene {
     this._endGame('busted', { charge: 'RECKLESS DRIVING', losses: lost });
   }
 
-  /** Speed-trap traffic stop (Stage 3) — assess the offense from the drug bars
+  /** Speed-trap traffic stop (Stage 3) — assess the offense from the vice bars
    *  AT THE TIME OF THE STOP.  Returns { dui }: `dui` = over the legal limit.
    *  Threshold: any one bar at 50%+, or at least two bars at 30%+. */
   _assessTrafficStop() {
-    const ids = Object.values(DRUGS);
-    const lvl = (id) => this.drugs?.get?.(id) ?? 0;
-    const singleOver = lvl(DRUGS.SUSHI) >= COP_DUI_ALCOHOL_LIMIT
-      || ids.some(id => id !== DRUGS.SUSHI && lvl(id) >= COP_DUI_DRUG_LIMIT);
+    const ids = Object.values(VICES);
+    const lvl = (id) => this.vices?.get?.(id) ?? 0;
+    const singleOver = lvl(VICES.SUSHI) >= COP_DUI_ALCOHOL_LIMIT
+      || ids.some(id => id !== VICES.SUSHI && lvl(id) >= COP_DUI_VICE_LIMIT);
     const multiOverCount = ids.reduce((n, id) => n + (lvl(id) >= COP_DUI_MULTI_LIMIT ? 1 : 0), 0);
     const dui = singleOver || multiOverCount >= COP_DUI_MULTI_COUNT;
     return { dui };
@@ -18537,17 +18553,17 @@ export class GameScene extends Phaser.Scene {
     const t = this._dailyTracker;
     const o = t?.obj;
     if (!o) return { pass: true, reason: '' };
-    const levels = this.drugs?.levels ?? {};
+    const levels = this.vices?.levels ?? {};
     const allMetersZero = () =>
       Object.values(levels).every(v => (v ?? 0) <= 0.02);
     const pct = (v) => `${Math.round((v ?? 0) * 100)}%`;
     switch (o.type) {
-      case 'peak_drug': {
-        if (o.noOD && t.odd) return { pass: false, reason: 'You overdosed' };
+      case 'peak_vice': {
+        if (o.noOD && t.odd) return { pass: false, reason: 'You passed out at the wheel' };
         const need = o.threshold ?? 0.90;
-        return t.peakDrug >= need
-          ? { pass: true,  reason: `Peaked at ${pct(t.peakDrug)}` }
-          : { pass: false, reason: `Only reached ${pct(t.peakDrug)}` };
+        return t.peakVice >= need
+          ? { pass: true,  reason: `Peaked at ${pct(t.peakVice)}` }
+          : { pass: false, reason: `Only reached ${pct(t.peakVice)}` };
       }
       case 'all_meters_zero_at_end':
         return allMetersZero()
@@ -18574,21 +18590,21 @@ export class GameScene extends Phaser.Scene {
           ? { pass: true,  reason: `Hit ${t.maxStars}★` }
           : { pass: false, reason: `Only reached ${t.maxStars}★` };
       }
-      case 'no_drugs':
-        return t.drugCount === 0
+      case 'no_vices':
+        return t.viceCount === 0
           ? { pass: true,  reason: 'Clean the whole way' }
-          : { pass: false, reason: 'You used a drug' };
+          : { pass: false, reason: 'You used a vice' };
       case 'no_collisions':
         return t.carsHit === 0
           ? { pass: true,  reason: 'Not a scratch' }
           : { pass: false, reason: `Hit ${t.carsHit} car(s)` };
-      case 'one_drug_only': {
-        if (t.drugTypes.size === 0) return { pass: false, reason: 'No drug used' };
-        if (t.drugTypes.size > 1)   return { pass: false, reason: 'More than one drug' };
+      case 'one_vice_only': {
+        if (t.viceTypes.size === 0) return { pass: false, reason: 'No vice used' };
+        if (t.viceTypes.size > 1)   return { pass: false, reason: 'More than one vice' };
         const need = o.minCount ?? 5;
-        return t.drugCount >= need
-          ? { pass: true,  reason: `${t.drugCount}× one drug` }
-          : { pass: false, reason: `Only ${t.drugCount} of it` };
+        return t.viceCount >= need
+          ? { pass: true,  reason: `${t.viceCount}× one vice` }
+          : { pass: false, reason: `Only ${t.viceCount} of it` };
       }
       case 'no_barrier_scrape':
         if (t.barrierScrape)        return { pass: false, reason: 'Scraped a barrier' };
@@ -18604,10 +18620,10 @@ export class GameScene extends Phaser.Scene {
       // wired yet (death ends the run before this branch is hit).
       case 'survive_cities':
         return { pass: true, reason: 'Survived the gauntlet' };
-      case 'all_available_drugs':
-        return t.drugTypes.size >= 1
-          ? { pass: true,  reason: `Collected ${t.drugTypes.size} kinds` }
-          : { pass: false, reason: 'Missed every drug' };
+      case 'all_available_vices':
+        return t.viceTypes.size >= 1
+          ? { pass: true,  reason: `Collected ${t.viceTypes.size} kinds` }
+          : { pass: false, reason: 'Missed every vice' };
       // Not yet implemented — pass through so the stage is still completable.
       case 'crush_quarrel':
       default:
@@ -18615,7 +18631,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  _onOverdose(drugId) {
+  _onOverdose(viceId) {
     if (this._odEnding) return;
     this._odEnding = true;
     this.audio?.setPaused?.(true);
@@ -18634,7 +18650,7 @@ export class GameScene extends Phaser.Scene {
       alpha: 1,
       duration: 1100,
       ease: 'Sine.In',
-      onComplete: () => this._endGame('overdose', { drug: drugId }),
+      onComplete: () => this._endGame('overdose', { vice: viceId }),
     });
   }
 
@@ -18647,7 +18663,7 @@ export class GameScene extends Phaser.Scene {
     this.audio?.setPaused?.(true);
 
     // ── Technical-loss path (TOO LATE + 5★) ─────────────────────────
-    // Open the slider modal: pick a checkpoint + drug levels, restart
+    // Open the slider modal: pick a checkpoint + vice levels, restart
     // the run from there.  No GameOverScene transition.  Cash penalty
     // is applied (50% of post-checkpoint score) before the restart.
     if (cause === 'busted_late' && !this._restartModalOpen) {
@@ -18661,16 +18677,16 @@ export class GameScene extends Phaser.Scene {
       this._showPopup(`💀 Cash penalty: −$${lost.toLocaleString()}`, '#FF4444');
       // Open slider modal in restart mode after a brief beat.
       this.time.delayedCall(900, () => {
-        this._buildDrugSliderModal({
+        this._buildViceSliderModal({
           mode: 'restart',
-          onConfirm: ({ drugLevels, checkpointPos, checkpointLabel }) => {
-            // Re-launch GameScene with the chosen checkpoint + drug levels.
+          onConfirm: ({ viceLevels, checkpointPos, checkpointLabel }) => {
+            // Re-launch GameScene with the chosen checkpoint + vice levels.
             this.audio?.setPaused?.(false);
-            this._customStartLevels = drugLevels;
+            this._customStartLevels = viceLevels;
             this.scene.restart({
               resumeFromPosition: checkpointPos,
               resumeFromLabel:    checkpointLabel,
-              startDrugLevels:    drugLevels,
+              startViceLevels:    viceLevels,
             });
           },
         });
@@ -18678,14 +18694,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Run-summary snapshot for the GameOver "Drug Log" panel — what they
+    // Run-summary snapshot for the GameOver "Vice Log" panel — what they
     // unlocked, what they picked up, and what they never saw.
-    const drugSummary = {};
-    for (const id of Object.values(DRUGS)) {
-      drugSummary[id] = {
-        unlocked:    !!this.drugs.unlocked?.[id],
-        maxReached:  this.drugs.maxReached?.[id] ?? 0,
-        pickupCount: this.drugs.pickupCounts?.[id] ?? 0,
+    const viceSummary = {};
+    for (const id of Object.values(VICES)) {
+      viceSummary[id] = {
+        unlocked:    !!this.vices.unlocked?.[id],
+        maxReached:  this.vices.maxReached?.[id] ?? 0,
+        pickupCount: this.vices.pickupCounts?.[id] ?? 0,
       };
     }
 
@@ -18730,11 +18746,11 @@ export class GameScene extends Phaser.Scene {
       distanceMi:      this._odometer ?? 0,
       runTimeSec:      Math.floor(this.gameTime ?? 0),
       cause,
-      drug:            extra.drug ?? null,
+      vice:            extra.vice ?? null,
       charge:          extra.charge ?? null,
       losses:          Math.round(extra.losses ?? 0),
       checkpointCode:  this.registry.get('save')?.get?.('lastRestStop')?.code ?? null,
-      drugSummary,
+      viceSummary,
       lastCheckpoint:  this._lastCheckpoint
         ? {
             name:     this._lastCheckpoint.name,

@@ -109,7 +109,7 @@ export class BootScene extends Phaser.Scene {
     this._fillMissingPlaceholders();
 
     // (Removed: vice_energy procedural override.  The user is shipping a
-    // real cocaine sprite under public/assets/drugs/cocaine.webp now and
+    // real cocaine sprite under public/assets/vices/cocaine.webp now and
     // the override was clobbering it on every boot.)
 
     // Shared singletons live on the registry.  (Garage / UpgradeShop /
@@ -229,7 +229,7 @@ export class BootScene extends Phaser.Scene {
   _makePlaceholder(key) {
     if (key.startsWith('car_'))    return this._makeCarPlaceholder(key);
     if (key.startsWith('hooker_')) return this._makeHookerPlaceholder(key);
-    if (key.startsWith('vice_'))   return this._makeDrugPlaceholder(key);
+    if (key.startsWith('vice_'))   return this._makeVicePlaceholder(key);
     if (key.startsWith('cop_'))    return this._makeCopPlaceholder(key);
     if (key.startsWith('ui_'))     return this._makeUIPlaceholder(key);
     if (key.startsWith('powerup_')) return this._makePowerupPlaceholder(key);
@@ -257,12 +257,12 @@ export class BootScene extends Phaser.Scene {
   }
 
   /** Procedural placeholder for power-up pickups, distinct from the circular
-   *  drug baggies.  Steroid = gold syringe on a red roundel; Narcan = a
+   *  vice baggies.  Steroid = gold syringe on a red roundel; Narcan = a
    *  blue rescue vial with a white medical cross.  Replaced by real art when
    *  the .webp is added. */
   _makePowerupPlaceholder(key) {
     if (key === 'powerup_espresso') return this._makeNarcanSprite(key);
-    // Redneck Rage placeholder — a red energy CAN (no drug-styled art), shown
+    // Redneck Rage placeholder — a red energy CAN (no vice-styled art), shown
     // until redneck_rage.png is dropped into public/assets/vices/.
     const size = 56;
     const g = this.make.graphics({ x: 0, y: 0, add: false });
@@ -277,7 +277,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   /** Narcan rescue kit — a blue roundel + white nasal-spray vial with a red
-   *  medical cross, reading clearly as "emergency medicine", not a drug. */
+   *  medical cross, reading clearly as "emergency medicine", not a vice. */
   _makeNarcanSprite(key) {
     const size = 56;
     const g = this.make.graphics({ x: 0, y: 0, add: false });
@@ -327,10 +327,10 @@ export class BootScene extends Phaser.Scene {
     g.destroy();
   }
 
-  _makeDrugPlaceholder(key) {
+  _makeVicePlaceholder(key) {
     // Neutral colored-disc placeholder per vice, shown until the real art is
-    // dropped into public/assets/vices/.  (No drug-styled art — food/fatigue
-    // theme; colors mirror DRUG_CONFIG.)
+    // dropped into public/assets/vices/.  (No vice-styled art — food/fatigue
+    // theme; colors mirror VICE_CONFIG.)
     const palette = {
       vice_sushi:     0x9ACD32,
       vice_burrito:   0xC8862B,
@@ -354,7 +354,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   /** Custom cocaine sprite — clear plastic baggie of white powder with a
-   *  pinched red zip-tie at the top. Far more "drug pickup" than the plain
+   *  pinched red zip-tie at the top. Far more "vice pickup" than the plain
    *  white circle the procedural fallback was producing. */
   _makeCocaineSprite(key) {
     const w = 64, h = 64;

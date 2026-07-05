@@ -31,7 +31,7 @@ const REGION_TRAITS = {
     scenery:  ['tree'],
     sceneryDensity: 0.02, buildings: true, buildingDensity: 0.05,
     buildingStyle: 'home',
-    drugDensity: 0.005,
+    viceDensity: 0.005,
   },
   downtown_seattle: {
     // I-5 / I-90 interchange downtown — towers spaced so each is readable.
@@ -39,7 +39,7 @@ const REGION_TRAITS = {
     scenery:  ['tree'],
     sceneryDensity: 0.005, buildings: true, buildingDensity: 0.08,
     buildingStyle: 'tower',
-    drugDensity: 0.004,
+    viceDensity: 0.004,
   },
   lake_washington: {
     // Floating bridge — almost dead straight, NO scenery either side, hard
@@ -49,7 +49,7 @@ const REGION_TRAITS = {
     curveMax: 0.002, hillMax: 5, roadScale: 1.05, lanes: 4,
     scenery:  [],
     sceneryDensity: 0.0, buildings: false,
-    drugDensity: 0.003,
+    viceDensity: 0.003,
     water: true,
   },
   mercer_island: {
@@ -59,7 +59,7 @@ const REGION_TRAITS = {
     scenery:  ['tree', 'tree'],
     sceneryDensity: 0.06, buildings: true, buildingDensity: 0.18,
     buildingStyle: 'home',
-    drugDensity: 0.004,
+    viceDensity: 0.004,
   },
   eastside_urban: {
     // Bellevue downtown — 2 mi after the East Channel bridge.  Mid-rise
@@ -68,7 +68,7 @@ const REGION_TRAITS = {
     scenery: ['tree'],
     sceneryDensity: 0.02, buildings: true, buildingDensity: 0.18,
     buildingStyle: 'tower',
-    drugDensity: 0.005,
+    viceDensity: 0.005,
   },
   eastside: {
     // Mercer Is → Bellevue → Issaquah → North Bend. Forested suburbs,
@@ -76,7 +76,7 @@ const REGION_TRAITS = {
     curveMax: 0.012, hillMax: 100, roadScale: 1.00, lanes: 4,
     scenery:  ['tree', 'tree'],
     sceneryDensity: 0.07, buildings: true, buildingDensity: 0.30,
-    drugDensity: 0.005,
+    viceDensity: 0.005,
   },
   cascades: {
     // North Bend → Snoqualmie Pass summit (3,022 ft) → Cle Elum.
@@ -84,7 +84,7 @@ const REGION_TRAITS = {
     curveMax: 0.024, hillMax: 360, roadScale: 0.85, lanes: 4,
     scenery:  ['tree', 'tree', 'tree'],
     sceneryDensity: 0.10, buildings: false,
-    drugDensity: 0.004,
+    viceDensity: 0.004,
   },
   east_cascades: {
     // Cle Elum → Ellensburg → Vantage. Drier evergreens, descending into
@@ -92,7 +92,7 @@ const REGION_TRAITS = {
     curveMax: 0.014, hillMax: 200, roadScale: 1.00, lanes: 4,
     scenery:  ['tree'],
     sceneryDensity: 0.05, buildings: false,
-    drugDensity: 0.005,
+    viceDensity: 0.005,
   },
   columbia_basin: {
     // Vantage → Moses Lake → Ritzville. High desert, sagebrush, mostly
@@ -102,7 +102,7 @@ const REGION_TRAITS = {
     curveMax: 0.005, hillMax: 60, roadScale: 1.20, lanes: 4,
     scenery:  ['shrub', 'shrub', 'shrub', 'tree'],
     sceneryDensity: 0.03, buildings: false,
-    drugDensity: 0.006,
+    viceDensity: 0.006,
   },
   palouse: {
     // Ritzville → Colfax → WSU. Rolling Palouse wheat country with
@@ -111,7 +111,7 @@ const REGION_TRAITS = {
     scenery:  ['tree'],
     sceneryDensity: 0.012, buildings: true, buildingDensity: 0.02,
     buildingStyle: 'home',
-    drugDensity: 0.005,
+    viceDensity: 0.005,
   },
   late_palouse: {
     // Same geography / road feel as the Palouse — only the palette
@@ -122,7 +122,7 @@ const REGION_TRAITS = {
     scenery:  ['tree'],
     sceneryDensity: 0.012, buildings: true, buildingDensity: 0.02,
     buildingStyle: 'home',
-    drugDensity: 0.005,
+    viceDensity: 0.005,
   },
 };
 
@@ -1011,7 +1011,7 @@ export function buildRoute(count = ROUTE_SEGS) {
         // clamped codex skyline to CITY_BUILDING_SETBACK (5.35), which
         // overrode the spawn-time decision; removed so fog-line wins.
         offset,
-        // Per user: everything but weapons/drugs should be collidable.
+        // Per user: everything but weapons/vices should be collidable.
         // (Default undefined → solid obstacle in the scenery collision
         // check at GameScene.js:2914.  Pickups aren't in SCENERY_TYPES
         // so they're unaffected and still pick up normally.)
@@ -2001,20 +2001,20 @@ export function buildRoute(count = ROUTE_SEGS) {
       }
     }
 
-    // ── Drug collectibles (density varies by region) ─────────────────
-    // type starts as 'drug-pending' so the actual drug is chosen at runtime
-    // by DrugSystem.chooseAddictedDrug(...) when the sprite enters the visible
-    // window. That lets per-player addiction skew which drug actually shows up.
-    if (rng.bool(traits.drugDensity ?? 0.020)) {
+    // ── Vice collectibles (density varies by region) ─────────────────
+    // type starts as 'vice-pending' so the actual vice is chosen at runtime
+    // by ViceSystem.chooseAddictedVice(...) when the sprite enters the visible
+    // window. That lets per-player addiction skew which vice actually shows up.
+    if (rng.bool(traits.viceDensity ?? 0.020)) {
       sprites.push({
-        type:            'drug-pending',
+        type:            'vice-pending',
         defaultType:     pickCollectible(rng, t),
         offset:          rng.range(-0.55, 0.55),
         baseW: 720, baseH: 880,   // 2× per request — much easier to spot
         collected:       false,
         isCollectible:   true,
-        collectibleType: 'drug',
-        // Stable per-sprite roll so 4★+ suppression (~40% of drugs disappear)
+        collectibleType: 'vice',
+        // Stable per-sprite roll so 4★+ suppression (~40% of vices disappear)
         // is deterministic — same spot suppressed every time the player
         // re-enters that segment at high heat.
         lootSeed:        rng.next(),
@@ -2036,7 +2036,7 @@ export function buildRoute(count = ROUTE_SEGS) {
         type:            f12Type,
         texKey:          f12TexMap[f12Type],
         offset:          rng.range(-0.45, 0.45),
-        baseW: 720, baseH: 880,   // same as drug pickups so they appear similar size
+        baseW: 720, baseH: 880,   // same as vice pickups so they appear similar size
         collected:       false,
         isCollectible:   true,
         collectibleType: 'f12',
@@ -2527,9 +2527,9 @@ export function buildRoute(count = ROUTE_SEGS) {
     if (segIdx < 0 || segIdx >= count) continue;
     segIdx = beforeTunnel(segIdx);
     // (Removed: stand-alone `mileage_sign` — green town/exit/mileage
-    //  marker carried no drug info, so per UX direction it's now
+    //  marker carried no vice info, so per UX direction it's now
     //  suppressed.  The exit_sign_green at rest stops still carries
-    //  the route info AND drug bars.)
+    //  the route info AND vice bars.)
     // segments[segIdx].sprites.push({ type: 'mileage_sign', ... });
   }
 
@@ -2617,10 +2617,10 @@ export function buildRoute(count = ROUTE_SEGS) {
   for (const [rsIdx, rs] of REST_STOPS.entries()) {
     const segAt = (mi) => Math.floor((mi / TOTAL_ROUTE_MILES) * count) % count;
     // (Removed: stand-alone `rest_sign` placards — both the −5mi
-    //  "REST AREA AHEAD" sign and the "EXIT" sign carried no drug
+    //  "REST AREA AHEAD" sign and the "EXIT" sign carried no vice
     //  info, so per UX direction they're suppressed.  The
     //  exit_sign_green spawned 1 mile out still announces the stop
-    //  AND carries the drug bars.)
+    //  AND carries the vice bars.)
     const placeSign = (_centerSeg, _sub) => {};
     placeSign(segAt(rs.mileage - 5), '5mi');
     placeSign(segAt(rs.mileage),     'exit');

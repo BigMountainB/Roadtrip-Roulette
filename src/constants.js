@@ -135,7 +135,7 @@ export const TURN_SPEED   = 2.8;
 export const OFFROAD_SLOW = 0.6;
 export const CENTRIFUGAL  = 0.3;
 
-// Scoring — baseline goal is 25 pts per mile of normal driving (no drugs,
+// Scoring — baseline goal is 25 pts per mile of normal driving (no vices,
 // no stars).  PTS_DIST is multiplied by `_scoreMult()` (≥1) and accumulated
 // per-segment.  ROUTE_SEGS / TOTAL_ROUTE_MILES = 1632 segs/mi → 25/1632 ≈ 0.0153.
 export const PTS_DIST     = 0.0153;
@@ -145,15 +145,15 @@ export const PTS_CRASH    = 500;
 // Hitchhiker NICE FOLKS payout.  PARTY FAVOR is half this (per the
 // existing 0.5× multiplier in the hitchhiker handler).
 export const PTS_HITCH    = 500;
-export const DRUG_MULT    = 0.5;
+export const VICE_MULT    = 0.5;
 
-// Per-drug pickup points (doubled when that bar is full)
-// Per-drug pickup payouts: { base } when the bar is below the
+// Per-vice pickup points (doubled when that bar is full)
+// Per-vice pickup payouts: { base } when the bar is below the
 // FULL_BAR_THRESHOLD, { full } when the bar is at/above it.  The
-// full-bar bonus is per-drug (used to be a flat 2× across the board)
-// so risky drugs (fent, heroin) pay disproportionately more for
+// full-bar bonus is per-vice (used to be a flat 2× across the board)
+// so risky vices (fent, heroin) pay disproportionately more for
 // keeping their bar topped off.
-export const DRUG_PTS = {
+export const VICE_PTS = {
   sushi:    { base:  5, full:  20 },
   burrito:  { base:  5, full:  20 },
   energy:   { base: 40, full: 100 },
@@ -171,7 +171,7 @@ export const DRUG_PTS = {
 export const FULL_BAR_THRESHOLD = 0.80;
 
 // Vice IDs — road-trip junk-food / fatigue items (reskinned from the original
-// drug set for App-Store safety; same mechanics, legal-flavored inputs).
+// vice set for App-Store safety; same mechanics, legal-flavored inputs).
 export const VICES = {
   SUSHI:    'sushi',     // was alcohol — gas-station sushi (food-poisoning woozy)
   BURRITO:  'burrito',   // was weed — greasy burrito (food coma)
@@ -184,18 +184,15 @@ export const VICES = {
   SLUSHIE:  'slushie',   // was ketamine — brain-freeze slushie (dizzy)
   CAFFEINE: 'caffeine',  // was meth — caffeine pills (wired for hours)
 };
-// Back-compat alias during the rest of the reskin refactor (removed once all
-// call sites use VICES).
-export const DRUGS = VICES;
 
-// Drug config — decayRate (per second, linear) tuned 2026-06-20 to match the
+// Vice config — decayRate (per second, linear) tuned 2026-06-20 to match the
 // REAL relative duration-of-effects ordering, compressed to a ~30s–4min game
 // range (cocaine shortest → LSD longest).  odThreshold 1.0001 on every OD-capable
-// drug means OD fires only when a pickup OVERFILLS a maxed bar (the pickup OD
-// check compares the uncapped prev+dose).  Non-OD drugs keep canOD:false.
+// vice means OD fires only when a pickup OVERFILLS a maxed bar (the pickup OD
+// check compares the uncapped prev+dose).  Non-OD vices keep canOD:false.
 //   full-life ≈ 1/decayRate sec:  coke 30s, ket 36s, fent 42s, weed/beer 65s,
 //   heroin 112s, shrooms 123s, rx 135s, meth 205s, lsd 240s.
-export const DRUG_CONFIG = {
+export const VICE_CONFIG = {
   sushi:    { label: '🍣 Sushi',     color: 0x9ACD32, hexCss: '#9ACD32', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
   burrito:  { label: '🌯 Burrito',   color: 0xC8862B, hexCss: '#C8862B', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
   energy:   { label: '⚡ Energy',    color: 0x3AC8FF, hexCss: '#3AC8FF', decayRate: 0.0333, odThreshold: 1.0001, canOD: true,  unlocked: false },
@@ -208,40 +205,40 @@ export const DRUG_CONFIG = {
   caffeine: { label: '💊 Caffeine',  color: 0xE8E8E8, hexCss: '#E8E8E8', decayRate: 0.0049, odThreshold: 1.0001, canOD: true,  unlocked: false },
 };
 
-// Named drug combos — every constituent drug's bar must be ≥ threshold for
+// Named vice combos — every constituent vice's bar must be ≥ threshold for
 // the combo to fire.  Threshold of 0.10 lights combos up as soon as the
-// drugs are visibly active.
+// vices are visibly active.
 //
-// Combos are PURELY COSMETIC labels — each drug already grants its own
+// Combos are PURELY COSMETIC labels — each vice already grants its own
 // +0.5 / +1.0 multiplier ladder, so the combo doesn't add a separate
 // bonus.  When active, the combo's `label` shows next to the multiplier
 // in the HUD; nothing else changes.  Non-score side-effects (slow-mo on
 // near-miss, off-road immunity, etc.) still apply where defined.
-export const DRUG_COMBOS = {
-  snow_cone:    { drugs: ['energy', 'sushi'],    threshold: 0.10, label: 'GAS STATION SPECIAL', color: '#FFCC44' },
-  psychedelic:  { drugs: ['gummies', 'hotdog'],  threshold: 0.10, label: 'FEVER DREAM',   color: '#FF44FF' },
-  croak:        { drugs: ['energy', 'caffeine'], threshold: 0.10, label: 'FULLY WIRED',   color: '#88FFFF' },
-  tranq:        { drugs: ['combo',  'slushie'],  threshold: 0.10, label: 'FOOD COMA',     color: '#8B44FF' },
-  dirty_joint:  { drugs: ['energy', 'burrito'],  threshold: 0.10, label: 'BURRITO BLAST', color: '#88FF88' },
-  crossfaded:   { drugs: ['sushi', 'burrito'],   threshold: 0.10, label: 'GUT BOMB',      color: '#FFEE88' },
-  a_bomb:       { drugs: ['combo',  'burrito'],  threshold: 0.10, label: 'CARB LOAD',     color: '#AA66CC' },
+export const VICE_COMBOS = {
+  snow_cone:    { vices: ['energy', 'sushi'],    threshold: 0.10, label: 'GAS STATION SPECIAL', color: '#FFCC44' },
+  psychedelic:  { vices: ['gummies', 'hotdog'],  threshold: 0.10, label: 'FEVER DREAM',   color: '#FF44FF' },
+  croak:        { vices: ['energy', 'caffeine'], threshold: 0.10, label: 'FULLY WIRED',   color: '#88FFFF' },
+  tranq:        { vices: ['combo',  'slushie'],  threshold: 0.10, label: 'FOOD COMA',     color: '#8B44FF' },
+  dirty_joint:  { vices: ['energy', 'burrito'],  threshold: 0.10, label: 'BURRITO BLAST', color: '#88FF88' },
+  crossfaded:   { vices: ['sushi', 'burrito'],   threshold: 0.10, label: 'GUT BOMB',      color: '#FFEE88' },
+  a_bomb:       { vices: ['combo',  'burrito'],  threshold: 0.10, label: 'CARB LOAD',     color: '#AA66CC' },
 
   // ── 2-item additions ────────────────────────────────────────────────
-  cali_sober:       { drugs: ['burrito', 'gummies'],                       threshold: 0.10, label: 'SNACK ATTACK',    color: '#88DD66' },
+  cali_sober:       { vices: ['burrito', 'gummies'],                       threshold: 0.10, label: 'SNACK ATTACK',    color: '#88DD66' },
 
   // ── 3-item stacks ──────────────────────────────────────────────────
-  wizard_flip:      { drugs: ['hotdog', 'gummies', 'sushi'],               threshold: 0.10, label: 'ROLLER GRILL ROULETTE', color: '#CC99FF' },
-  frisco_speedball: { drugs: ['energy', 'combo', 'hotdog'],                threshold: 0.10, label: 'TRUCK STOP TRIFECTA',   color: '#FFAA66' },
-  el_diablo:        { drugs: ['energy', 'burrito', 'combo'],               threshold: 0.10, label: 'HEARTBURN',       color: '#CC4422' },
-  pharm_run:        { drugs: ['coldbrew', 'energy', 'sushi'],              threshold: 0.10, label: 'GAS STATION RUN',  color: '#22CCEE' },
-  trifecta:         { drugs: ['sushi', 'burrito', 'energy'],               threshold: 0.10, label: 'COMBO DEAL',       color: '#EEDD66' },
+  wizard_flip:      { vices: ['hotdog', 'gummies', 'sushi'],               threshold: 0.10, label: 'ROLLER GRILL ROULETTE', color: '#CC99FF' },
+  frisco_speedball: { vices: ['energy', 'combo', 'hotdog'],                threshold: 0.10, label: 'TRUCK STOP TRIFECTA',   color: '#FFAA66' },
+  el_diablo:        { vices: ['energy', 'burrito', 'combo'],               threshold: 0.10, label: 'HEARTBURN',       color: '#CC4422' },
+  pharm_run:        { vices: ['coldbrew', 'energy', 'sushi'],              threshold: 0.10, label: 'GAS STATION RUN',  color: '#22CCEE' },
+  trifecta:         { vices: ['sushi', 'burrito', 'energy'],               threshold: 0.10, label: 'COMBO DEAL',       color: '#EEDD66' },
 
   // ── 4-item chaos ────────────────────────────────────────────────────
-  el_diablito:      { drugs: ['energy', 'burrito', 'combo', 'caffeine'],   threshold: 0.10, label: 'THE WORKS',        color: '#FF3322' },
-  apocalypse:       { drugs: ['combo', 'caffeine', 'sushi', 'burrito'],    threshold: 0.10, label: 'FOOD APOCALYPSE',  color: '#FF6600' },
+  el_diablito:      { vices: ['energy', 'burrito', 'combo', 'caffeine'],   threshold: 0.10, label: 'THE WORKS',        color: '#FF3322' },
+  apocalypse:       { vices: ['combo', 'caffeine', 'sushi', 'burrito'],    threshold: 0.10, label: 'FOOD APOCALYPSE',  color: '#FF6600' },
 
   // ── 5-item max ──────────────────────────────────────────────────────
-  five_way:         { drugs: ['combo', 'energy', 'caffeine', 'sushi', 'coldbrew'], threshold: 0.10, label: 'THE EVERYTHING', color: '#FF00AA' },
+  five_way:         { vices: ['combo', 'energy', 'caffeine', 'sushi', 'coldbrew'], threshold: 0.10, label: 'THE EVERYTHING', color: '#FF00AA' },
 };
 
 // Vehicle physical bounds in world space — used by the AABB collision
@@ -290,12 +287,12 @@ export const COP_TRAP_ABORT_X      = 0.9;
 export const COP_TRAP_HOLD_SEC     = 15;
 // ── Stage 3: the ticket (money / DUI / bust) ─────────────────────────────
 // When the held stop ends the trooper writes the ticket.  The offense is
-// assessed from the drug bars AT THE MOMENT YOU PULLED OVER (not after the hold
+// assessed from the vice bars AT THE MOMENT YOU PULLED OVER (not after the hold
 // metabolizes).  "Under the limit" → a plain speeding ticket; "over" → a DUI.
-//   DUI threshold: any single drug/alcohol bar ≥ 50%, OR at least two bars
+//   DUI threshold: any single vice/alcohol bar ≥ 50%, OR at least two bars
 //   are ≥ 30% at the same time.
 export const COP_DUI_ALCOHOL_LIMIT = 0.50;   // alcohol bar ≥ this → intoxicated
-export const COP_DUI_DRUG_LIMIT    = 0.50;   // any other drug bar ≥ this → intoxicated
+export const COP_DUI_VICE_LIMIT    = 0.50;   // any other vice bar ≥ this → intoxicated
 export const COP_DUI_MULTI_COUNT   = 2;      // this many bars over multi limit…
 export const COP_DUI_MULTI_LIMIT   = 0.30;   // …also counts as DUI
 // Fines (subtract from score, since money == persisted score).  A FRACTION of
@@ -444,7 +441,7 @@ export function getLastSignTown(currentMile) {
 
 // Rest stops — placed at the towns the player flagged with an asterisk in
 // the mileage table.  Each gets advance signs at −5 mi and −1 mi, an exit
-// ramp, a sectioned menu (drugs/weapons + garage + sex workers + road),
+// ramp, a sectioned menu (vices/weapons + garage + sex workers + road),
 // and acts as a save checkpoint with a 4-digit alphanumeric code.  ID is
 // the first letter of the town name so codes are stable + readable.
 // Rest stops use the START of each location's mileage range (the exit is
@@ -458,7 +455,7 @@ export function getLastSignTown(currentMile) {
 // is now the displayed sign label (real-world WA highway exit numbers).
 //
 // `amenities` is an array of brand keys present at this stop:
-//   gas | hunting | camp | dealer | drugs
+//   gas | hunting | camp | dealer | vices
 // The rest-stop scene's landing screen filters tiles to this list, so
 // a camp-only stop only shows the Camp tile.
 //
@@ -468,7 +465,7 @@ export function getLastSignTown(currentMile) {
 // at Colfax, and finishes on WA-270 into Pullman (we reuse hwy_wa270 for
 // WA-271 since the same green WA-state badge fits visually).
 const _REST_STOP_DEF = [
-  { id: 'S',  name: 'Seattle, WA',         mileage:    4, exit: 'Exit 4',     hwy: 'hwy_i90',   amenities: ['gas', 'drugs', 'dealer'] },
+  { id: 'S',  name: 'Seattle, WA',         mileage:    4, exit: 'Exit 4',     hwy: 'hwy_i90',   amenities: ['gas', 'vices', 'dealer'] },
   // Mercer Island sits between the Mercer Island Lid Tunnel (8.5–9.0)
   // and the East Channel Bridge (10–11.5).  Mile 9.5 keeps the entire
   // 1-mi ramp window (8.5–9.5) on dry road only after the player exits
@@ -477,10 +474,10 @@ const _REST_STOP_DEF = [
   // Bellevue moved 1 mi past the East Channel Bridge end (mile 11.5) so
   // the ramp window (11.5–12.5) lands on dry Bellevue shoreline rather
   // than half-on the floating bridge.
-  { id: 'B',  name: 'Bellevue, WA',        mileage: 12.5, exit: 'Exit 10',    hwy: 'hwy_i90',   amenities: ['dealer', 'drugs'] },
+  { id: 'B',  name: 'Bellevue, WA',        mileage: 12.5, exit: 'Exit 10',    hwy: 'hwy_i90',   amenities: ['dealer', 'vices'] },
   { id: 'I',  name: 'Issaquah, WA',        mileage:   18, exit: 'Exit 18',    hwy: 'hwy_i90',   amenities: ['hunting', 'camp'] },
   { id: 'SQ', name: 'Snoqualmie, WA',      mileage:   25, exit: 'Exit 25',    hwy: 'hwy_i90',   amenities: ['dealer'] },
-  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'drugs', 'parkride'] },
+  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'vices', 'parkride'] },
   { id: 'SP', name: 'Snoqualmie Pass, WA', mileage:   53, exit: 'Exit 53',    hwy: 'hwy_i90',   amenities: ['camp', 'gas'] },
   { id: 'EA', name: 'Easton, WA',          mileage:   70, exit: 'Exit 70',    hwy: 'hwy_i90',   amenities: ['camp'] },
   { id: 'C',  name: 'Cle Elum, WA',        mileage:   84, exit: 'Exit 84',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting'] },
@@ -494,12 +491,12 @@ const _REST_STOP_DEF = [
   // real WSDOT exit numbers ("Exit 4", "Exit 7B", etc.) since those
   // ARE numeric and don't echo the I-90 shield.
   { id: 'Y',  name: 'Royal City, WA',      mileage:  158, exit: 'Exit 158',   hwy: 'hwy_wa26',  amenities: ['hunting'] },
-  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['drugs', 'gas', 'parkride'] },
+  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['vices', 'gas', 'parkride'] },
   { id: 'H',  name: 'Hatton, WA',          mileage:  205, exit: 'Exit 205',   hwy: 'hwy_wa26',  amenities: ['camp', 'gas'] },
   { id: 'W',  name: 'Washtucna, WA',       mileage:  228, exit: 'Exit 228',   hwy: 'hwy_wa26',  amenities: ['gas'] },
   { id: 'L',  name: 'La Crosse, WA',       mileage:  253, exit: 'Exit 253',   hwy: 'hwy_us195', amenities: ['camp'] },
   { id: 'CO', name: 'Colfax, WA',          mileage:  274, exit: 'Exit 274',   hwy: 'hwy_us195', amenities: ['dealer', 'gas', 'parkride'] },
-  { id: 'P',  name: 'Pullman, WA',         mileage:  289, exit: 'Exit 289',   hwy: 'hwy_wa270', amenities: ['gas', 'hunting', 'camp', 'dealer', 'drugs', 'parkride'] },
+  { id: 'P',  name: 'Pullman, WA',         mileage:  289, exit: 'Exit 289',   hwy: 'hwy_wa270', amenities: ['gas', 'hunting', 'camp', 'dealer', 'vices', 'parkride'] },
 ];
 export const REST_STOPS = _REST_STOP_DEF.map(rs => ({
   ...rs, t: rs.mileage / TOTAL_ROUTE_MILES,

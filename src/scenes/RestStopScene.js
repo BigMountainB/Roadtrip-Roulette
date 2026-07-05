@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import {
-  SCREEN_W, SCREEN_H, DRUGS, DRUG_CONFIG,
+  SCREEN_W, SCREEN_H, VICES, VICE_CONFIG,
   VEHICLES, REST_STOPS,
   GAS_USD_PER_MI, CHARGE_COST_FACTOR, GAS_ROBBERY_CHANCE, GAS_ROBBERY_FRAC,
   HUD_OFFSET_X,
@@ -14,65 +14,65 @@ import { getPortrait } from '../data/npcPortraits.js';
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 
-// Drug texture key — alcohol's pickup asset is named vice_sushi; everything
+// Vice texture key — alcohol's pickup asset is named vice_sushi; everything
 // else maps directly.
-const DRUG_TEX = (id) => (id === 'sushi' ? 'vice_sushi' : `vice_${id}`);
+const VICE_TEX = (id) => (id === 'sushi' ? 'vice_sushi' : `vice_${id}`);
 
-// Per-drug rest-stop pricing — each click adds +10 % to that bar, capped
+// Per-vice rest-stop pricing — each click adds +10 % to that bar, capped
 // at 80 %.  Prices scaled so 8 clicks (0 → 80 %) costs roughly the same
 // as the old single +50 % click did.
-// Per-drug pharmacy base prices.  Camp / dealer / charge / hunting
-// apply SHOP_DRUG_MARKUP (2.5×) on top.  Cut ~70-90 % from the
+// Per-vice pharmacy base prices.  Camp / dealer / charge / hunting
+// apply SHOP_VICE_MARKUP (2.5×) on top.  Cut ~70-90 % from the
 // pre-rebalance numbers per the cost ladder so dealer trips are
 // tempting but pharmacy is the budget option.
-export const DRUG_PRICE = {
+export const VICE_PRICE = {
   sushi:  5,   burrito:   5,    energy: 40,   gummies: 15,
   hotdog:     10,   combo: 15,   coldbrew:      10,   coma: 25,
   slushie:15,   caffeine:   15,
 };
 
-const DRUG_DISPLAY = (id) => DRUG_CONFIG[id]?.label?.replace(/^[^A-Za-z]+/, '').trim() ?? id;
+const VICE_DISPLAY = (id) => VICE_CONFIG[id]?.label?.replace(/^[^A-Za-z]+/, '').trim() ?? id;
 
-const drugItems = (unlocks /* { id: bool } | Set<id> | null */) => {
+const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
   const items = [
     { id: 'coffee',     label: 'COFFEE',           emoji: '☕',
-      cost: 7, desc: '−1% on every drug', payload: { reduceDrugs: 0.99 } },
+      cost: 7, desc: '−1% on every vice', payload: { reduceVices: 0.99 } },
     { id: 'snooze',     label: 'TAKE A SNOOZE',    emoji: '😴',
-      cost: 150, desc: 'Wipes all drug bars (instant — no ad watch)', payload: { reduceDrugs: 0 } },
+      cost: 150, desc: 'Wipes all vice bars (instant — no ad watch)', payload: { reduceVices: 0 } },
     { id: 'top_all_50', label: 'TOP UP ALL TO 50%', emoji: '⬆️',
       cost: 300, desc: 'Every unlocked bar to ≥50 %', payload: { topAllTo: 0.5 } },
   ];
-  // Drug unlocks are stored in the registry by DrugSystem.snapshotUnlocks
+  // Vice unlocks are stored in the registry by ViceSystem.snapshotUnlocks
   // as a PLAIN OBJECT { sushi: true, burrito: true, gummies: true, ... },
   // not a Set.  Accept either form so the filter works regardless.
   const isUnlocked = (id) => {
     if (unlocks instanceof Set) return unlocks.has(id);
     if (unlocks && typeof unlocks === 'object') return !!unlocks[id];
-    return !!DRUG_CONFIG[id]?.unlocked;
+    return !!VICE_CONFIG[id]?.unlocked;
   };
-  for (const id of Object.values(DRUGS)) {
+  for (const id of Object.values(VICES)) {
     if (!isUnlocked(id)) continue;
     items.push({
       id:    `vice_${id}`,
-      label: DRUG_DISPLAY(id).toUpperCase(),
-      icon:  DRUG_TEX(id),
-      cost:  DRUG_PRICE[id] ?? 200,
+      label: VICE_DISPLAY(id).toUpperCase(),
+      icon:  VICE_TEX(id),
+      cost:  VICE_PRICE[id] ?? 200,
       desc:  '+10 % to this bar (cap 80 %)',
-      payload: { drugTopUp: id, amount: 0.10 },
+      payload: { viceTopUp: id, amount: 0.10 },
     });
   }
   return items;
 };
 
-// Per-shop drug allow-lists.  Each shop sells a small subset; the item
-// only appears if the player has ALREADY sampled the drug at least
-// once (pickupCounts[drug] > 0).  Camp / charging / gas / hunting /
+// Per-shop vice allow-lists.  Each shop sells a small subset; the item
+// only appears if the player has ALREADY sampled the vice at least
+// once (pickupCounts[vice] > 0).  Camp / charging / gas / hunting /
 // dealer each have their own personality (sketchy back-country deals,
 // EV-station hippie shrooms, dive-bar beer at gas pumps, etc.).
 //
-// PharmaBros at the rest-stop drug tab keeps the full menu (the
-// pharmacy is the dedicated drug shop and isn't gated by exposure).
-const SHOP_DRUGS = {
+// PharmaBros at the rest-stop vice tab keeps the full menu (the
+// pharmacy is the dedicated vice shop and isn't gated by exposure).
+const SHOP_VICES = {
   gas:     ['sushi', 'burrito'],                       // Beer + weed at the pump
   hunting: ['sushi'],                               // Beer at the gun store
   charge:  ['gummies', 'hotdog', 'burrito'],                // Hippie EV crowd
@@ -80,22 +80,22 @@ const SHOP_DRUGS = {
   dealer:  ['energy'],                               // Dealership = blow
 };
 // Camp + charging + dealer charge a 2.5× markup over PharmaBros.
-const SHOP_DRUG_MARKUP = 2.5;
+const SHOP_VICE_MARKUP = 2.5;
 
-function shopDrugItems(shopKey, pickupCounts) {
-  const allow = SHOP_DRUGS[shopKey] ?? [];
+function shopViceItems(shopKey, pickupCounts) {
+  const allow = SHOP_VICES[shopKey] ?? [];
   const out = [];
   for (const id of allow) {
     if (!pickupCounts || (pickupCounts[id] ?? 0) <= 0) continue;
-    const base = DRUG_PRICE[id] ?? 200;
-    const cost = Math.round(base * SHOP_DRUG_MARKUP);
+    const base = VICE_PRICE[id] ?? 200;
+    const cost = Math.round(base * SHOP_VICE_MARKUP);
     out.push({
       id:    `shopvice_${id}`,
-      label: DRUG_DISPLAY(id).toUpperCase(),
-      icon:  DRUG_TEX(id),
+      label: VICE_DISPLAY(id).toUpperCase(),
+      icon:  VICE_TEX(id),
       cost,
       desc:  '+10% to this bar (markup vs PharmaBros)',
-      payload: { drugTopUp: id, amount: 0.10 },
+      payload: { viceTopUp: id, amount: 0.10 },
     });
   }
   return out;
@@ -122,12 +122,12 @@ function dealerVehicleItems(fuelFilter = null) {
 }
 
 const SECTIONS = {
-  // Existing drug menu — kept as a 5th tab; not part of the 4 sign panels
+  // Existing vice menu — kept as a 5th tab; not part of the 4 sign panels
   // but it's been at rest stops since launch and the player still buys
-  // drugs from inside the brown sign.
-  drugs: {
-    label: '💊  DRUGS',
-    items: drugItems(null),
+  // vices from inside the brown sign.
+  vices: {
+    label: '💊  VICES',
+    items: viceItems(null),
   },
   // ── 4-panel highway-services sections (match the rest stop sign) ──
   gas: {
@@ -152,8 +152,8 @@ const SECTIONS = {
     label: '🏕  CAMP',
     items: [
       { id: 'hitch',    label: '🧍  PICK UP HITCHHIKER',  cost:   0, desc: 'Free — but it\'s a gamble',                              payload: { hitchhike: true } },
-      { id: 'sleep',    label: '😴  NAP IT OFF',          cost:   0, desc: 'Watch ad (5s); −25% on every drug; party-clock penalty', payload: { sleep: true,  reduceDrugs: 0.75 } },
-      { id: 'coffee',   label: '☕  COFFEE',                cost:   7, desc: '−1% on every drug',                                     payload: { coffee: true, reduceDrugs: 0.99 } },
+      { id: 'sleep',    label: '😴  NAP IT OFF',          cost:   0, desc: 'Watch ad (5s); −25% on every vice; party-clock penalty', payload: { sleep: true,  reduceVices: 0.75 } },
+      { id: 'coffee',   label: '☕  COFFEE',                cost:   7, desc: '−1% on every vice',                                     payload: { coffee: true, reduceVices: 0.99 } },
       { id: 'campfix',  label: '🔧  CAMP REPAIR',          cost: 400, desc: 'Repair up to 65% HP (cheaper than dealership)',          payload: { campRepair: true } },
       // Sex Worker now grants a stacking +10 HP "bonus" (extra over max)
       // PLUS rolls 10 % for the existing dirt-on-a-politician outcome.
@@ -179,7 +179,7 @@ const SECTIONS = {
     items: [],   // populated dynamically per-stop in create()
   },
   // Park & Ride — only at stops whose amenities include 'parkride'.  Where
-  // the (drug) Dealer meets you: pre-paid phone orders are picked up here
+  // the (vice) Dealer meets you: pre-paid phone orders are picked up here
   // FREE.  Items populated dynamically in create() from save.dealerOrders.
   parkride: {
     label: '🅿️  PARK & RIDE',
@@ -189,8 +189,8 @@ const SECTIONS = {
 
 // Landing tab order (brand placards).  dealer_acc / dealer_cars are
 // reached via the Dealer chooser, not the landing.
-const TAB_ORDER = ['gas', 'hunting', 'camp', 'dealer', 'parkride', 'drugs'];
-const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'parkride', 'drugs'];
+const TAB_ORDER = ['gas', 'hunting', 'camp', 'dealer', 'parkride', 'vices'];
+const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'parkride', 'vices'];
 
 // Charger availability — west-side rest stops carry the CarGo brand
 // which sells both gas AND charging.  East-side stops are Huff's,
@@ -217,7 +217,7 @@ function brandsForStop(stop) {
     dealer:  isWest
       ? { name: 'Lord Motors',          logo: 'biz_lord', carFuel: 'electric' }
       : { name: "Sam's Used Car Kingdom", logo: 'biz_suck', carFuel: 'gas' },
-    drugs:   { name: 'PharmaBros', logo: 'biz_pharmabros' },
+    vices:   { name: 'Gas-N-Sip', logo: 'biz_pharmabros' },
     parkride:{ name: 'Metro Park & Ride', logo: 'biz_parkride' },
   };
 }
@@ -298,13 +298,13 @@ export class RestStopScene extends Phaser.Scene {
     // recorded on exit (see the continue handler).
     this._stats = this.registry?.get?.('stats');
     this._stats?.restStopEnter(this._stop.id);
-    // Pre-paid Dealer orders — drugs already paid for via the phone, redeemed
-    // FREE in the drug menu here (claimed on purchase).
+    // Pre-paid Dealer orders — vices already paid for via the phone, redeemed
+    // FREE in the vice menu here (claimed on purchase).
     this._dealerOrders = (this.registry?.get?.('save')?.get?.('dealerOrders', []) || []).slice();
-    // Drug-bar snapshot — drug status pauses at the rest stop and resumes
-    // from these levels.  COFFEE / SNOOZE multiply, drug top-ups stack on
+    // Vice-bar snapshot — vice status pauses at the rest stop and resumes
+    // from these levels.  COFFEE / SNOOZE multiply, vice top-ups stack on
     // top.  Just stopping doesn't change anything anymore.
-    this._drugLevelsAtEntry = data?.drugLevelsAtEntry ?? {};
+    this._viceLevelsAtEntry = data?.viceLevelsAtEntry ?? {};
     this._weaponsAtEntry = data?.weaponsAtEntry ?? {};
     this._runStateAtEntry = data?.runStateAtEntry ?? null;
     this._messageStateAtEntry = data?.messageStateAtEntry ?? null;
@@ -315,8 +315,8 @@ export class RestStopScene extends Phaser.Scene {
     this._purchases = {
       repair: false, restock: false, clearStars: false,
       scoreBonus: 0, upgrade: [], f12: [],
-      // Default preserves the entry drug levels verbatim.
-      drugLevelsOnResume: { ...this._drugLevelsAtEntry },
+      // Default preserves the entry vice levels verbatim.
+      viceLevelsOnResume: { ...this._viceLevelsAtEntry },
       // Default preserves carried weapons verbatim; purchases/hitchhiker
       // rewards layer on top via f12 below.
       weaponsOnResume: { ...this._weaponsAtEntry },
@@ -335,7 +335,7 @@ export class RestStopScene extends Phaser.Scene {
     this._gasMi        = data?.gasMi        ?? 0;
     this._gasMaxMi     = data?.gasMaxMi     ?? 250;
     this._ownedVehicles = data?.ownedVehicles ?? ['beater'];
-    this._drugPickupCounts = data?.drugPickupCounts ?? {};
+    this._vicePickupCounts = data?.vicePickupCounts ?? {};
     this._activeTab     = 'gas';
     this._activeSection = null;
     this._screenStack   = ['landing'];
@@ -371,10 +371,10 @@ export class RestStopScene extends Phaser.Scene {
     this.scale.on('resize', _applyVP, this);
     this.events.once('shutdown', () => this.scale.off('resize', _applyVP, this));
 
-    // Rebuild the drugs section using THIS player's unlock state — the
-    // module-level SECTIONS.drugs.items was computed at import time
-    // before the registry existed, so it would show every drug.
-    SECTIONS.drugs.items = drugItems(this.registry?.get?.('drugUnlocks'));
+    // Rebuild the vices section using THIS player's unlock state — the
+    // module-level SECTIONS.vices.items was computed at import time
+    // before the registry existed, so it would show every vice.
+    SECTIONS.vices.items = viceItems(this.registry?.get?.('viceUnlocks'));
 
     // ── GAS section: dynamic pricing ─────────────────────────────────
     // Refuel cost = missing miles × $0.333.  Charge cost = 35% of that
@@ -443,16 +443,16 @@ export class RestStopScene extends Phaser.Scene {
 
     SECTIONS.gas.items = gasItems;
 
-    // ── PARK & RIDE: the (drug) Dealer hands over pre-paid phone orders ──
-    // One free pickup item per drug ordered (phone → Messages → Dealer).
-    // Buying it grants the drug for free and consumes that order.
+    // ── PARK & RIDE: the (vice) Dealer hands over pre-paid phone orders ──
+    // One free pickup item per vice ordered (phone → Messages → Dealer).
+    // Buying it grants the vice for free and consumes that order.
     SECTIONS.parkride.items = (this._dealerOrders || []).map((id, i) => ({
       id:    `pickup_${id}_${i}`,
-      label: `${DRUG_DISPLAY(id).toUpperCase()}  ·  PRE-PAID`,
-      icon:  DRUG_TEX(id),
+      label: `${VICE_DISPLAY(id).toUpperCase()}  ·  PRE-PAID`,
+      icon:  VICE_TEX(id),
       cost:  0,
       desc:  'Pre-paid via the dealer — +10 % to this bar (cap 80 %)',
-      payload: { drugTopUp: id, amount: 0.10, dealerClaim: id },
+      payload: { viceTopUp: id, amount: 0.10, dealerClaim: id },
     }));
     if (!SECTIONS.parkride.items.length) {
       SECTIONS.parkride.items = [{
@@ -535,13 +535,13 @@ export class RestStopScene extends Phaser.Scene {
     }
     SECTIONS.dealer_acc.items = accItems;
 
-    // ── Per-shop drug menus (gated by pickupCounts on registry) ────
-    // Each shop keeps its base items + appends the drugs it sells (only
-    // for drugs the player has already sampled on the road).
-    const _pickupCounts = this.registry.get('drugPickupCounts')
-      ?? this._drugPickupCounts ?? {};
-    SECTIONS.gas.items     = [...SECTIONS.gas.items,     ...shopDrugItems('gas',     _pickupCounts)];
-    SECTIONS.hunting.items = [...SECTIONS.hunting.items, ...shopDrugItems('hunting', _pickupCounts)];
+    // ── Per-shop vice menus (gated by pickupCounts on registry) ────
+    // Each shop keeps its base items + appends the vices it sells (only
+    // for vices the player has already sampled on the road).
+    const _pickupCounts = this.registry.get('vicePickupCounts')
+      ?? this._vicePickupCounts ?? {};
+    SECTIONS.gas.items     = [...SECTIONS.gas.items,     ...shopViceItems('gas',     _pickupCounts)];
+    SECTIONS.hunting.items = [...SECTIONS.hunting.items, ...shopViceItems('hunting', _pickupCounts)];
     // Camp repair guard — if the player's HP is already higher than
     // 65 % of this vehicle's max, the "repair to 65 %" purchase would
     // DOWN-tier their HP.  Mark it disabled so it shows "N/A" and the
@@ -562,16 +562,16 @@ export class RestStopScene extends Phaser.Scene {
         return it;
       });
     }
-    SECTIONS.camp.items    = [...SECTIONS.camp.items,    ...shopDrugItems('camp',    _pickupCounts)];
-    SECTIONS.dealer_acc.items = [...SECTIONS.dealer_acc.items, ...shopDrugItems('dealer', _pickupCounts)];
-    // Charging-station drugs only appear if the stop actually has a
+    SECTIONS.camp.items    = [...SECTIONS.camp.items,    ...shopViceItems('camp',    _pickupCounts)];
+    SECTIONS.dealer_acc.items = [...SECTIONS.dealer_acc.items, ...shopViceItems('dealer', _pickupCounts)];
+    // Charging-station vices only appear if the stop actually has a
     // charger (CarGo west-side stops); add to the gas tab so they
     // sit alongside refuel/charge.
     if (_isCharger) {
-      // Dedupe against gas shop's own drugs — weed overlaps both pools
+      // Dedupe against gas shop's own vices — weed overlaps both pools
       // and the user was seeing it listed twice at chargers.
       const _alreadyListed = new Set(SECTIONS.gas.items.map(it => it.id));
-      const _chargeExtras  = shopDrugItems('charge', _pickupCounts)
+      const _chargeExtras  = shopViceItems('charge', _pickupCounts)
         .filter(it => !_alreadyListed.has(it.id));
       SECTIONS.gas.items = [...SECTIONS.gas.items, ..._chargeExtras];
     }
@@ -802,7 +802,7 @@ export class RestStopScene extends Phaser.Scene {
         img.setDisplaySize(baseW * k, baseH * k);
         this._landingObjs.push(img);
       } else {
-        const accentFor = { gas: 0xFFCC22, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, drugs: 0x9A36CC, parkride: 0x1E5BB8 };
+        const accentFor = { gas: 0xFFCC22, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, vices: 0x9A36CC, parkride: 0x1E5BB8 };
         const accent = accentFor[key] ?? 0x888888;
         const strip = this.add.rectangle(logoArea.x, logoArea.y, logoArea.w, logoArea.h, accent, 1)
           .setOrigin(0, 0);
@@ -857,7 +857,7 @@ export class RestStopScene extends Phaser.Scene {
       this._sectionContainers[key] = container;
       this._sectionScroll[key]     = 0;
       const itemCount = SECTIONS[key].items.length;
-      const colsK = key === 'drugs' ? 2 : 1;
+      const colsK = key === 'vices' ? 2 : 1;
       const rowsK = Math.ceil(itemCount / colsK);
       const itemH = Math.min(56, Math.max(30, (this._contentH - (rowsK - 1) * 6) / rowsK));
       this._sectionContentH[key] = rowsK * (itemH + 6) - 6;
@@ -1201,8 +1201,8 @@ export class RestStopScene extends Phaser.Scene {
 
   _buildTabContent(key, x, y, w, h) {
     const items = SECTIONS[key].items;
-    // Drugs section needs 2 columns to fit 12 entries; others stay 1-col.
-    const cols  = key === 'drugs' ? 2 : 1;
+    // Vices section needs 2 columns to fit 12 entries; others stay 1-col.
+    const cols  = key === 'vices' ? 2 : 1;
     const rows  = Math.ceil(items.length / cols);
     const cellW = (w - (cols - 1) * 6) / cols;
     const cellH = Math.min(56, Math.max(30, (h - (rows - 1) * 6) / rows));
@@ -1227,7 +1227,7 @@ export class RestStopScene extends Phaser.Scene {
     const created = [bg];
     let textX = x + 12;
 
-    // Icon image (drug or weapon texture).  Falls back to the emoji prefix
+    // Icon image (vice or weapon texture).  Falls back to the emoji prefix
     // if the texture isn't loaded.
     const iconSize = Math.min(h - 10, 36);
     if (item.icon && this.textures.exists(item.icon)) {
@@ -1258,7 +1258,7 @@ export class RestStopScene extends Phaser.Scene {
       fontSize: compact ? '9px' : '10px', fontFamily: 'Arial', color: '#CCBB88',
     }).setOrigin(0, 0);
     // Custom mode runs noScore=true and gives every shop item for FREE
-    // (the player chose their starting drug levels via the slider, so
+    // (the player chose their starting vice levels via the slider, so
     // there's no $ to spend and the shop shouldn't gate them out).
     const freeMode = Difficulty.noScore?.() === true;
     const effectiveCost = freeMode ? 0 : item.cost;
@@ -1348,7 +1348,7 @@ export class RestStopScene extends Phaser.Scene {
     }
     if (r < 0.55) {
       this._purchases.restock = true;
-      return { message: '🤝 Old hippie — RESTOCKED your drugs!' };
+      return { message: '🤝 Old hippie — RESTOCKED your vices!' };
     }
     if (r < 0.75) {
       const loss = Math.min(this._score, 600);
@@ -1368,13 +1368,13 @@ export class RestStopScene extends Phaser.Scene {
     return { message: '😐 Hitchhiker bailed at the next exit. Nothing happened.' };
   }
 
-  /** Map a shop item to its stats spend bucket.  Drug top-ups and weapon
+  /** Map a shop item to its stats spend bucket.  Vice top-ups and weapon
    *  (f12) buys carry a sub-id for the per-item breakdown; vehicles and
    *  accessories roll up to their category total; everything else (repair,
    *  refuel, coffee, sleep, sex worker, clear-stars, …) is a service. */
   _statsSpendInfo(item) {
     const p = item?.payload ?? {};
-    if (p.drugTopUp)        return { category: 'drugs',       subId: p.drugTopUp };
+    if (p.viceTopUp)        return { category: 'vices',       subId: p.viceTopUp };
     if (p.f12)              return { category: 'weapons',     subId: p.f12 };
     if (p.buyVehicle)       return { category: 'vehicles',    subId: p.buyVehicle };
     if (p.vehicleAccessory) return { category: 'accessories', subId: p.vehicleAccessory };
@@ -1479,9 +1479,9 @@ export class RestStopScene extends Phaser.Scene {
       this._purchases.boughtVehicles = this._purchases.boughtVehicles ?? [];
       this._purchases.boughtVehicles.push(p.buyVehicle);
     }
-    if (p.reduceDrugs && (p.coffee || p.sleep)) {
-      // Multiplicative drug reduction handled below in the existing
-      // reduceDrugs branch — leave as-is so the math composes.
+    if (p.reduceVices && (p.coffee || p.sleep)) {
+      // Multiplicative vice reduction handled below in the existing
+      // reduceVices branch — leave as-is so the math composes.
     }
     if (p.sexworker) {
       // ALWAYS grants +10 bonus HP — extra above the vehicle's max,
@@ -1511,24 +1511,24 @@ export class RestStopScene extends Phaser.Scene {
       for (let _i = 0; _i < _f12N; _i++) this._purchases.f12.push(p.f12);
     }
     if (p.upgrade)    this._purchases.upgrade.push(p.upgrade);
-    if (p.drugTopUp) {
-      // Per-drug top-up: each click ADDS p.amount (+10%) up to a cap of
+    if (p.viceTopUp) {
+      // Per-vice top-up: each click ADDS p.amount (+10%) up to a cap of
       // 0.80.  Multiple clicks accumulate — the GameScene reads the
       // final amount on resume and bumps the bar to that level.
-      this._purchases.drugTopUps = this._purchases.drugTopUps || {};
-      const cur = this._purchases.drugTopUps[p.drugTopUp] ?? 0;
-      this._purchases.drugTopUps[p.drugTopUp] = Math.min(0.80, cur + (p.amount ?? 0.10));
+      this._purchases.viceTopUps = this._purchases.viceTopUps || {};
+      const cur = this._purchases.viceTopUps[p.viceTopUp] ?? 0;
+      this._purchases.viceTopUps[p.viceTopUp] = Math.min(0.80, cur + (p.amount ?? 0.10));
     }
     if (p.topAllTo) {
       // "Top all to N" — every unlocked bar lifts to >= this threshold.
       this._purchases.topAllTo = Math.max(this._purchases.topAllTo ?? 0, p.topAllTo);
     }
-    if (typeof p.reduceDrugs === 'number') {
-      // Multiplier on every drug bar at resume.  Multiple buys multiply
+    if (typeof p.reduceVices === 'number') {
+      // Multiplier on every vice bar at resume.  Multiple buys multiply
       // (so 2× coffee = ×0.25; coffee + snooze = ×0).  Lowest multiplier
       // wins effectively because they multiply.
-      const cur = this._purchases.reduceDrugs ?? 1;
-      this._purchases.reduceDrugs = cur * p.reduceDrugs;
+      const cur = this._purchases.reduceVices ?? 1;
+      this._purchases.reduceVices = cur * p.reduceVices;
     }
     // hitchhike outcome handled in _purchaseConfirmation → _rollHitchhiker
   }

@@ -9,7 +9,7 @@
 // $5k, floored at $0 (try 6+ still completes).  Complete all 5 weekday dailies
 // → +$5k weekly bonus.  Per-profile.  Even $0 completions count toward weekly.
 
-import { DRUGS } from '../constants.js';
+import { VICES } from '../constants.js';
 
 export const DAILY_BASE_REWARD = 5000;
 export const DAILY_REWARD_STEP = 1000;
@@ -28,8 +28,8 @@ export function rewardForAttempt(attempt) {
 //                           stage spawns at `from` and completes at `to`
 //   group                 — 1 (build first) | 2 (the rest)
 //   mods                  — dailyStage spawn overrides (null-safe in GameScene):
-//                           onlyODDrugs, pickupDensityMult, npcDensityMult,
-//                           startDrugLevels{id:0..1}, startingStars, startHP,
+//                           onlyODVices, pickupDensityMult, npcDensityMult,
+//                           startViceLevels{id:0..1}, startingStars, startHP,
 //                           trapCount, trapsRotate
 //   objective             — detection spec interpreted by GameScene:
 //                           { type, ...params }
@@ -38,21 +38,21 @@ export const DAILY_CHALLENGES = [
   {
     id: 'threshold', name: 'Threshold', group: 1,
     from: 'Cle Elum', to: 'Ellensburg',
-    blurb: "Push a drug to the edge — and don't fall off.",
-    mods: { onlyODDrugs: true },
-    objective: { type: 'peak_drug', threshold: 0.90, noOD: true },
+    blurb: "Push a vice to the edge — and don't fall off.",
+    mods: { onlyODVices: true },
+    objective: { type: 'peak_vice', threshold: 0.90, noOD: true },
   },
   {
     id: 'comedown', name: 'Sober by the Line', group: 1,
     from: 'Issaquah', to: 'North Bend',
     blurb: 'You start lit. Roll in stone-cold sober.',
-    mods: { startDrugLevels: { [DRUGS.SUSHI]: 0.95 } },
+    mods: { startViceLevels: { [VICES.SUSHI]: 0.95 } },
     objective: { type: 'all_meters_zero_at_end' },
   },
   {
     id: 'cocktail', name: 'Cocktail', group: 1,
     from: 'Othello', to: 'Hatton',
-    blurb: 'Keep a two-drug combo lit the whole way.',
+    blurb: 'Keep a two-vice combo lit the whole way.',
     mods: { pickupDensityMult: 1.3 },
     objective: { type: 'combo_whole_segment' },
   },
@@ -99,7 +99,7 @@ export const DAILY_CHALLENGES = [
     id: 'teetotaler', name: 'Teetotaler', group: 2,
     from: 'La Crosse', to: 'Colfax',
     blurb: 'Reach the end without touching a thing.',
-    mods: {}, objective: { type: 'no_drugs' },
+    mods: {}, objective: { type: 'no_vices' },
   },
   {
     id: 'defensive', name: 'Defensive Driver', group: 2,
@@ -111,13 +111,13 @@ export const DAILY_CHALLENGES = [
     id: 'collector', name: 'Collector', group: 2,
     from: 'Snoqualmie Pass', to: 'Cle Elum',
     blurb: 'Grab one of everything on offer.',
-    mods: { pickupDensityMult: 0.8 }, objective: { type: 'all_available_drugs' },
+    mods: { pickupDensityMult: 0.8 }, objective: { type: 'all_available_vices' },
   },
   {
     id: 'purist', name: 'Purist', group: 2,
     from: 'Royal City', to: 'Othello',
-    blurb: 'One drug — and at least five of it. Nothing else.',
-    mods: { pickupDensityMult: 1.3 }, objective: { type: 'one_drug_only', minCount: 5 },
+    blurb: 'One vice — and at least five of it. Nothing else.',
+    mods: { pickupDensityMult: 1.3 }, objective: { type: 'one_vice_only', minCount: 5 },
   },
   {
     id: 'most_wanted', name: 'Most Wanted', group: 2,

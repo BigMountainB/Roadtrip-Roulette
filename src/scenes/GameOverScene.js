@@ -1,22 +1,22 @@
 import Phaser from 'phaser';
-import { SCREEN_W, SCREEN_H, DRUG_CONFIG, DRUGS, HUD_OFFSET_X } from '../constants.js';
+import { SCREEN_W, SCREEN_H, VICE_CONFIG, VICES, HUD_OFFSET_X } from '../constants.js';
 
-// Per-drug unlock hints shown for any drug the player hasn't unlocked yet.
+// Per-vice unlock hints shown for any vice the player hasn't unlocked yet.
 // Order here drives the row order on the run-summary panel.
-const DRUG_ORDER = [
-  DRUGS.SUSHI, DRUGS.BURRITO, DRUGS.ENERGY, DRUGS.GUMMIES, DRUGS.HOTDOG,
-  DRUGS.COMBO,  DRUGS.COLDBREW,   DRUGS.COMA, DRUGS.SLUSHIE, DRUGS.CAFFEINE,
+const VICE_ORDER = [
+  VICES.SUSHI, VICES.BURRITO, VICES.ENERGY, VICES.GUMMIES, VICES.HOTDOG,
+  VICES.COMBO,  VICES.COLDBREW,   VICES.COMA, VICES.SLUSHIE, VICES.CAFFEINE,
 ];
 
 const UNLOCK_HINTS = {
-  [DRUGS.ENERGY]:  'Stay drunk for 30 seconds.',
-  [DRUGS.GUMMIES]:  'Be drunk and stoned at the same time (both bars ≥ 30%).',
-  [DRUGS.HOTDOG]:      'Get the shrooms bar to 50%.',
-  [DRUGS.COMBO]:   'Drive past 20% of the route.',
-  [DRUGS.COLDBREW]:       'Crash into 50 NPC cars across your runs.',
-  [DRUGS.COMA]: 'Get the heroin bar to 50%.',
-  [DRUGS.SLUSHIE]: 'Get the LSD bar to 40%.',
-  [DRUGS.CAFFEINE]:     'Hit 40% cocaine, then stay clean from coke for 30 sec.',
+  [VICES.ENERGY]:  'Stay drunk for 30 seconds.',
+  [VICES.GUMMIES]:  'Be drunk and stoned at the same time (both bars ≥ 30%).',
+  [VICES.HOTDOG]:      'Get the shrooms bar to 50%.',
+  [VICES.COMBO]:   'Drive past 20% of the route.',
+  [VICES.COLDBREW]:       'Crash into 50 NPC cars across your runs.',
+  [VICES.COMA]: 'Get the heroin bar to 50%.',
+  [VICES.SLUSHIE]: 'Get the LSD bar to 40%.',
+  [VICES.CAFFEINE]:     'Hit 40% cocaine, then stay clean from coke for 30 sec.',
 };
 
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
@@ -31,7 +31,7 @@ const CAUSE = {
     image:    'ui_end_busted_screen',
   },
   overdose: {
-    headline: 'OVERDOSED',
+    headline: 'PASSED OUT',
     color:    '#FF3BAF',
     subtitle: 'ONE DECISION. A LIFETIME OF CONSEQUENCES.',
     image:    'ui_end_overdose_neon',
@@ -58,13 +58,13 @@ export class GameOverScene extends Phaser.Scene {
     // GameScene now passes mileage already converted to miles.
     this.finalMiles     = data?.distanceMi ?? 0;
     this.cause          = data?.cause      ?? 'busted';
-    this.deathDrug      = data?.drug       ?? null;
+    this.deathVice      = data?.vice       ?? null;
     this.charge         = data?.charge     ?? 'DUI';
     this.losses         = data?.losses     ?? 0;
     this.runTimeSec     = data?.runTimeSec ?? 0;
     this.checkpointCode = data?.checkpointCode ?? null;
     this.lastCheckpoint = data?.lastCheckpoint ?? null;
-    this.drugSummary    = data?.drugSummary ?? null;
+    this.viceSummary    = data?.viceSummary ?? null;
   }
 
   create() {
@@ -120,8 +120,8 @@ export class GameOverScene extends Phaser.Scene {
 
     // ── Subtitle / "why they died" ─────────────────────────────────────
     let subtitle = meta.subtitle;
-    if (this.cause === 'overdose' && this.deathDrug) {
-      const label = DRUG_CONFIG[this.deathDrug]?.label ?? this.deathDrug;
+    if (this.cause === 'overdose' && this.deathVice) {
+      const label = VICE_CONFIG[this.deathVice]?.label ?? this.deathVice;
       subtitle = `${label} got you. ${meta.subtitle}`;
     }
     this.add.text(CX, 86, subtitle, {
@@ -166,22 +166,22 @@ export class GameOverScene extends Phaser.Scene {
     // (Main Menu link removed — MenuScene was vestigial and never reached
     // at runtime, so the link target no longer exists.)
 
-    // Drug-log toggle in the top-right.  Pops a full-screen panel listing
-    // every drug — what you peaked, what you ignored, and hints for the
+    // Vice-log toggle in the top-right.  Pops a full-screen panel listing
+    // every vice — what you peaked, what you ignored, and hints for the
     // ones still locked.
-    if (this.drugSummary) {
+    if (this.viceSummary) {
       this._makeButton(
         SCREEN_W - 70, 24, 120, 28,
-        '📋 DRUG LOG',
+        '📋 VICE LOG',
         0x222244, 0xFFFFFF,
-        () => this._openDrugLog(),
+        () => this._openViceLog(),
       );
     }
 
     // Keyboard shortcuts.
     this.input.keyboard?.once('keydown-SPACE', () => this._retrySameSettings());
     this.input.keyboard?.once('keydown-ENTER', () => this._startOver());
-    this.input.keyboard?.on('keydown-L', () => this._openDrugLog());
+    this.input.keyboard?.on('keydown-L', () => this._openViceLog());
   }
 
   _createBakedButtonEnding(meta) {
@@ -316,7 +316,7 @@ export class GameOverScene extends Phaser.Scene {
       letterSpacing: 2,
     });
 
-    const drugLabel = DRUG_CONFIG[this.deathDrug]?.label ?? null;
+    const viceLabel = VICE_CONFIG[this.deathVice]?.label ?? null;
     const rows = isBust
       ? [
           ['CHARGE', this.charge || 'DUI'],
@@ -325,7 +325,7 @@ export class GameOverScene extends Phaser.Scene {
           ['CHECKPOINT CODE', this.checkpointCode ?? 'NONE SAVED'],
         ]
       : [
-          ['CAUSE', drugLabel ? `${drugLabel} OVERDOSE` : 'OVERDOSE'],
+          ['CAUSE', viceLabel ? `${viceLabel} BLACKOUT` : 'PASSED OUT'],
           ['DISTANCE / TIME', `${this.finalMiles.toFixed(2)} MI   ${this._formatRunTime()}`],
           ['CASH', `$${this.finalScore.toLocaleString()}`],
           ['CHECKPOINT CODE', this.checkpointCode ?? 'NONE SAVED'],
@@ -365,12 +365,12 @@ export class GameOverScene extends Phaser.Scene {
       letterSpacing: 1,
     }).setOrigin(0.5);
 
-    if (this.drugSummary) {
-      this._makeNeonButton(SCREEN_W - 68, 20, 114, 25, 'DRUG LOG', accent, () => this._openDrugLog());
+    if (this.viceSummary) {
+      this._makeNeonButton(SCREEN_W - 68, 20, 114, 25, 'VICE LOG', accent, () => this._openViceLog());
     }
     this.input.keyboard?.once('keydown-SPACE', () => this._retrySameSettings());
     this.input.keyboard?.once('keydown-ENTER', () => this._startOver());
-    this.input.keyboard?.on('keydown-L', () => this._openDrugLog());
+    this.input.keyboard?.on('keydown-L', () => this._openViceLog());
   }
 
   _formatRunTime() {
@@ -418,10 +418,10 @@ export class GameOverScene extends Phaser.Scene {
     }
   }
 
-  /** Pop a modal overlay listing every drug's run status + unlock hints. */
-  _openDrugLog() {
-    if (this._drugLogOpen) return;
-    this._drugLogOpen = true;
+  /** Pop a modal overlay listing every vice's run status + unlock hints. */
+  _openViceLog() {
+    if (this._viceLogOpen) return;
+    this._viceLogOpen = true;
 
     const layer = this.add.container(0, 0).setDepth(100);
 
@@ -431,13 +431,13 @@ export class GameOverScene extends Phaser.Scene {
     layer.add(scrim);
 
     // Title
-    const title = this.add.text(CX, 22, 'DRUG LOG — THIS RUN', {
+    const title = this.add.text(CX, 22, 'VICE LOG — THIS RUN', {
       fontSize: '20px', fontFamily: IMPACT,
       color: '#FFCC44', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5, 0);
     layer.add(title);
 
-    // Two-column rows — ONLY unlocked drugs are listed.  Locked ones are
+    // Two-column rows — ONLY unlocked vices are listed.  Locked ones are
     // hidden entirely so which (and how many) remain is a surprise (per
     // user); their unlock method is revealed only AFTER they're unlocked.
     const COL_X    = [SCREEN_W * 0.04, SCREEN_W * 0.52];
@@ -445,23 +445,23 @@ export class GameOverScene extends Phaser.Scene {
     const ROW_H    = 60;
     const TOP_Y    = 60;
 
-    const unlockedDrugs = DRUG_ORDER.filter(id => !!(this.drugSummary[id]?.unlocked));
+    const unlockedVices = VICE_ORDER.filter(id => !!(this.viceSummary[id]?.unlocked));
 
-    unlockedDrugs.forEach((id, fIdx) => {
+    unlockedVices.forEach((id, fIdx) => {
       const col = fIdx % 2;
       const row = (fIdx / 2) | 0;
       const x   = COL_X[col];
       const y   = TOP_Y + row * ROW_H;
 
-      const cfg     = DRUG_CONFIG[id] ?? {};
-      const summary = this.drugSummary[id] ?? {};
+      const cfg     = VICE_CONFIG[id] ?? {};
+      const summary = this.viceSummary[id] ?? {};
       const peakPct = Math.round((summary.maxReached ?? 0) * 100);
       const picks   = summary.pickupCount ?? 0;
 
       // Status string + colour.  "Used" includes any path that left a
       // detectable footprint on the bar — pickups, rest-stop restocks,
       // and dealer buys all push maxReached above 0.  Counting just
-      // pickupCount missed restock-bought drugs (rest-stop RESTOCK refills
+      // pickupCount missed restock-bought vices (rest-stop RESTOCK refills
       // every unlocked bar to 60% without incrementing pickupCount).
       const usedAny = picks > 0 || peakPct > 0;
       let status, statusColor;
@@ -485,7 +485,7 @@ export class GameOverScene extends Phaser.Scene {
       layer.add([label, stat]);
 
       // How it was unlocked — revealed now that it IS unlocked.  Starter
-      // drugs (alcohol / weed) have no unlock method, so the line is omitted.
+      // vices (alcohol / weed) have no unlock method, so the line is omitted.
       if (UNLOCK_HINTS[id]) {
         const how = this.add.text(x, y + 34, `🔓 ${UNLOCK_HINTS[id]}`, {
           fontSize: '10px', fontFamily: 'Arial',
@@ -496,10 +496,10 @@ export class GameOverScene extends Phaser.Scene {
       }
     });
 
-    // Count-free teaser when undiscovered drugs remain — signals there's
+    // Count-free teaser when undiscovered vices remain — signals there's
     // more to find WITHOUT revealing which or how many (keeps the surprise).
-    if (unlockedDrugs.length < DRUG_ORDER.length) {
-      const gridRows = Math.ceil(unlockedDrugs.length / 2);
+    if (unlockedVices.length < VICE_ORDER.length) {
+      const gridRows = Math.ceil(unlockedVices.length / 2);
       const teaseY = TOP_Y + gridRows * ROW_H + 4;
       const tease = this.add.text(CX, teaseY, '🔒 More to discover — keep driving…', {
         fontSize: '12px', fontFamily: IMPACT,
@@ -513,20 +513,20 @@ export class GameOverScene extends Phaser.Scene {
       CX, SCREEN_H - 30, 160, 36,
       'CLOSE  (Esc)',
       0x884444, 0xFFFFFF,
-      () => this._closeDrugLog(layer),
+      () => this._closeViceLog(layer),
     );
     layer.add([closeBtn.bg, closeBtn.txt]);
-    scrim.on('pointerdown', () => this._closeDrugLog(layer));
-    this.input.keyboard?.once('keydown-ESC', () => this._closeDrugLog(layer));
+    scrim.on('pointerdown', () => this._closeViceLog(layer));
+    this.input.keyboard?.once('keydown-ESC', () => this._closeViceLog(layer));
 
-    this._drugLogLayer = layer;
+    this._viceLogLayer = layer;
   }
 
-  _closeDrugLog(layer) {
-    if (!this._drugLogOpen) return;
-    this._drugLogOpen = false;
+  _closeViceLog(layer) {
+    if (!this._viceLogOpen) return;
+    this._viceLogOpen = false;
     layer?.destroy();
-    this._drugLogLayer = null;
+    this._viceLogLayer = null;
   }
 
   _makeNeonButton(cx, cy, w, h, label, neonColor, onClick) {
@@ -602,7 +602,7 @@ export class GameOverScene extends Phaser.Scene {
 
   /** Build a clean rectangle button with crisply-rendered text on top.
    *  Bumped depth to 50 so it sits above any later-added overlays (e.g.
-   *  the drug-log scrim) and listens to BOTH pointerdown and pointerup
+   *  the vice-log scrim) and listens to BOTH pointerdown and pointerup
    *  so a touch that lifts on the button still counts as a click. */
   _makeButton(cx, cy, w, h, label, fillColor, textColor, onClick) {
     const bg = this.add.rectangle(cx, cy, w, h, fillColor, 1)
@@ -638,7 +638,7 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   /** Retry the run with the same difficulty + steering settings —
-   *  skip the title screen, preserve drug unlocks/progress, just drop
+   *  skip the title screen, preserve vice unlocks/progress, just drop
    *  the player straight into a fresh Seattle start.  Used by the
    *  RETRY button on the Crashed / Busted plate. */
   _retrySameSettings() {
@@ -646,16 +646,16 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   _startOver() {
-    // Mirror the pause-menu Start Over wipe: clear persistent drug
-    // unlocks, drug-progress, last-rest-stop pointer, and any leftover
+    // Mirror the pause-menu Start Over wipe: clear persistent vice
+    // unlocks, vice-progress, last-rest-stop pointer, and any leftover
     // Custom-mode opt-ins so a Custom run can't bleed `noPolice` /
     // `noNpcDamage` / starting stars into the fresh launch.  Without
     // this wipe, this scene's "START OVER" was semantically a "From
     // Checkpoint stripped of stars" — same persisted state, just zeroed
     // score.  GameScene.init() rebuilds scene-instance state from
     // registry, so wiping registry + save is enough here.
-    this.registry?.remove?.('drugUnlocks');
-    this.registry?.remove?.('drugProgress');
+    this.registry?.remove?.('viceUnlocks');
+    this.registry?.remove?.('viceProgress');
     const save = this.registry?.get?.('save');
     save?.set?.('lastRestStop', null);
     this.scene.start('Game', {});

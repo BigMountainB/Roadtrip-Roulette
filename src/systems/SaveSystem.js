@@ -5,7 +5,7 @@ const SCHEMA_VERSION = 3;
 
 // Number of player profile slots shown on the title screen.  Each slot is a
 // FULLY independent save (its own plate, stats, leaderboard, money, cars,
-// drugs, checkpoints, achievements) — switching plate = switching players.
+// vices, checkpoints, achievements) — switching plate = switching players.
 const SLOT_COUNT = 3;
 
 // Keys whose first segment routes to the cross-mode GLOBAL section of the
@@ -15,7 +15,7 @@ const SLOT_COUNT = 3;
 // tiers (highest-difficulty reached per rest stop, for the route-map
 // tier colors) are also global so the map shows lifetime progress.
 // Everything else (money, restStopSaves, lastRestStop, missionProgress,
-// drug inventory, owned cars) lives in the per-mode profile.
+// vice inventory, owned cars) lives in the per-mode profile.
 // stats + leaderboard are lifetime/cross-mode, so they live in GLOBAL too:
 // a per-mode "start over" must NOT wipe career totals or the high-score
 // board.  StatsTracker owns the canonical `stats` shape and deep-merges
@@ -86,7 +86,7 @@ const DEFAULT_PROFILE = {
   money:           0,
   ownedCars:       ['beater'],
   currentCar:      'beater',
-  drugInventory:   {},
+  viceInventory:   {},
   missionProgress: 0,
   lastRestStop:    null,
   restStopSaves:   {},
@@ -98,8 +98,8 @@ const DEFAULT_PROFILE = {
   // One-time $15k retainer (phone → Messages → The Lawyer).  Halves every
   // future "busted" fine.  Per-profile progress, so Reset Progress clears it.
   lawyerRetained:  false,
-  // Pre-paid Dealer orders (phone → Messages → The Dealer): a list of drug
-  // ids paid for up front, redeemed FREE at the next rest stop's drug menu.
+  // Pre-paid Dealer orders (phone → Messages → The Dealer): a list of vice
+  // ids paid for up front, redeemed FREE at the next rest stop's vice menu.
   dealerOrders:    [],
   // Per-vehicle accessory state.  Shape:
   //   accessories: { [vehicleId]: { bumper: bool, traction: bool, nos: 0|1|2|3 } }
@@ -380,7 +380,7 @@ export class SaveSystem {
     p.currentCar = (typeof src.currentCar === 'string' && p.ownedCars.includes(src.currentCar))
       ? src.currentCar
       : p.ownedCars[0];
-    p.drugInventory = this._sanitizeNumberMap(src.drugInventory, 0, 999);
+    p.viceInventory = this._sanitizeNumberMap(src.viceInventory, 0, 999);
     p.missionProgress = finiteNum(src.missionProgress, 0, 0);
     p.lastRestStop = this._sanitizeRestStopSnapshot(src.lastRestStop);
     p.restStopSaves = this._sanitizeRestStopSaves(src.restStopSaves);
@@ -545,7 +545,7 @@ export class SaveSystem {
       money:           finiteInt(v1?.money, 0, 0),
       ownedCars:       Array.isArray(v1?.ownedCars) ? v1.ownedCars.filter(v => typeof v === 'string') : ['beater'],
       currentCar:      typeof v1?.currentCar === 'string' ? v1.currentCar : 'beater',
-      drugInventory:   this._sanitizeNumberMap(v1?.drugInventory, 0, 999),
+      viceInventory:   this._sanitizeNumberMap(v1?.viceInventory, 0, 999),
       missionProgress: finiteNum(v1?.missionProgress, 0, 0),
       lastRestStop:    this._sanitizeRestStopSnapshot(v1?.lastRestStop),
       restStopSaves:   this._sanitizeRestStopSaves(v1?.restStopSaves),

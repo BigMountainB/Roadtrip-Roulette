@@ -110,7 +110,7 @@ export const ASSET_MANIFEST = {
     { key: 'car_left_police',  path: 'assets/cars/car_left_police.png' },
     { key: 'car_right_police', path: 'assets/cars/car_right_police.png' },
   ],
-  // Road-trip "vices" — junk-food / fatigue pickups (reskinned from drugs).
+  // Road-trip "vices" — junk-food / fatigue pickups (reskinned from vices).
   // Art lives in public/assets/vices/; procedural placeholders fill in until
   // each PNG is dropped there.
   vices: [
@@ -250,7 +250,7 @@ export const ASSET_MANIFEST = {
     { key: 'biz_aok',        path: 'assets/businesses/aok.png' },          // Camp
     { key: 'biz_lord',       path: 'assets/businesses/lord.png' },         // Dealer — Lord Motors (EV)
     { key: 'biz_suck',       path: 'assets/businesses/suck.png' },         // Dealer — Sam's Used Car Kingdom (gas)
-    { key: 'biz_pharmabros', path: 'assets/businesses/pharmabros.png' },   // Drugs — PharmaBros pharmacy
+    { key: 'biz_pharmabros', path: 'assets/businesses/pharmabros.png' },   // Vices — PharmaBros pharmacy
     { key: 'biz_parkride',   path: 'assets/businesses/park-and-ride.png' }, // Park & Ride — Metro Park & Ride
     // Highway shield badges — composited onto green exit signs.
     { key: 'hwy_i90',   path: 'assets/businesses/hwy_i90.svg' },

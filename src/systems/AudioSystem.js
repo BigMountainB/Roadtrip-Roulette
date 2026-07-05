@@ -545,9 +545,9 @@ export class AudioSystem {
       this._bus.attack.value    = 0.003;
       this._bus.release.value   = 0.12;
 
-      // Drug filter chain — sits between compressor bus and master so
-      // setDrugInfluence() can muffle / brighten the whole mix in real
-      // time as drug levels change.  Default cutoffs are wide-open (no
+      // Vice filter chain — sits between compressor bus and master so
+      // setViceInfluence() can muffle / brighten the whole mix in real
+      // time as vice levels change.  Default cutoffs are wide-open (no
       // audible effect) until something updates them.
       this._lowpass = this._ctx.createBiquadFilter();
       this._lowpass.type            = 'lowpass';
@@ -1104,7 +1104,7 @@ export class AudioSystem {
   get currentName()  { return STATIONS[this.currentStation].name; }
   get currentColor() { return STATIONS[this.currentStation].color; }
 
-  /** Update master filter chain + tempo multiplier from current drug levels.
+  /** Update master filter chain + tempo multiplier from current vice levels.
    *  Called every frame from GameScene so the mix reacts in real time as
    *  bars rise / decay.  Effects:
    *    Depressants (alc / weed / her / fent / ket / rx) — drop the lowpass
@@ -1114,12 +1114,12 @@ export class AudioSystem {
    *      and nudge tempo faster.  Tinny + jittery feel.
    *    Psychedelics (lsd / shrooms) — push the reverb wet send so the
    *      whole mix washes into a long tail. */
-  setDrugInfluence(levels) {
+  setViceInfluence(levels) {
     if (!this.ready || !this._lowpass || !this._highpass) return;
-    // Each drug only colours the music once its bar is ≥ 35 %.  Below
-    // that threshold the drug contributes nothing; above it, the level
+    // Each vice only colours the music once its bar is ≥ 35 %.  Below
+    // that threshold the vice contributes nothing; above it, the level
     // is rescaled so 0.35 → 0 and 1.00 → 1.  Avoids subtle wash from
-    // background-trace drugs and gives each effect a clear "kicks in"
+    // background-trace vices and gives each effect a clear "kicks in"
     // moment as the bar climbs past the threshold.
     const TH = 0.35;
     const get = (k) => {
@@ -1173,7 +1173,7 @@ export class AudioSystem {
     this._lowpass.frequency.setTargetAtTime(lp, now, T);
     this._highpass.frequency.setTargetAtTime(hp, now, T);
     if (this._reverbWet) this._reverbWet.gain.setTargetAtTime(wet, now, T);
-    this._drugTempoFactor = tempoMul;
+    this._viceTempoFactor = tempoMul;
   }
 
   destroy() {
@@ -1289,10 +1289,10 @@ export class AudioSystem {
     const st      = STATIONS[this.currentStation];
     // Apply per-bar tempo nudge so the groove doesn't lock to a perfect
     // metronome.  _tempoFactor is rolled fresh each bar in _rollVariation.
-    // _drugTempoFactor layers on top so depressants slow / uppers speed
+    // _viceTempoFactor layers on top so depressants slow / uppers speed
     // the entire mix in real time.
     const baseStepDur = 60 / st.bpm / 4;
-    const tempoMul    = (this._tempoFactor || 1) * (this._drugTempoFactor || 1);
+    const tempoMul    = (this._tempoFactor || 1) * (this._viceTempoFactor || 1);
     const stepDur     = baseStepDur / tempoMul;
     const ahead       = 0.15;
     while (this._nextStepTime < this._ctx.currentTime + ahead) {

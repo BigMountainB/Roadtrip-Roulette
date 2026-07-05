@@ -3,7 +3,7 @@
  *   Each tick: const result = physics.update(dt, { throttle, steer, brake, offRoad, curve, speedMultipliers })
  *   dt is seconds (Phaser delta / 1000). steer is -1..1, throttle/brake are 0..1.
  *   curve is the current road segment's curve value (signed float). offRoad is bool.
- *   speedMultipliers = { top: 1.0, accel: 1.0 } (drug modifiers). Returns { speed, lateralVel,
+ *   speedMultipliers = { top: 1.0, accel: 1.0 } (vice modifiers). Returns { speed, lateralVel,
  *   steerAngle, drifting, lean, slipAngle } — speed/lateralVel in game units/s.
  */
 
@@ -33,12 +33,12 @@ export class CarPhysics {
     this._steerVel     = 0       // momentum-smoothed steer value
     this._steerAngle   = 0       // smoothed visual steer angle (rad)
     this._drifting     = false
-    this._maxSpeedMult = 1.0     // external override (drug boost)
+    this._maxSpeedMult = 1.0     // external override (vice boost)
   }
 
   // ── External controls ────────────────────────────────────────────────────
 
-  /** Drugs that boost top speed call this (e.g. cocaine) */
+  /** Vices that boost top speed call this (e.g. cocaine) */
   setMaxSpeedMultiplier(m) {
     this._maxSpeedMult = m
   }

@@ -1749,7 +1749,7 @@
         hunting: 'cowbellas.png',
         camp:    'aok.png',
         dealer:  isWest ? 'lord.png' : 'suck.png',
-        drugs:   'pharmabros.png',
+        vices:   'pharmabros.png',
         parkride: 'park-and-ride.png',
       }[a] || null);
       // I-90 → WA-26 → US-195 → WA-270 waypoints (mile, lat, lon).
@@ -2858,7 +2858,7 @@
           sRow('Spent',               sMoney(ses.spentThisTrip)) +
           sRow('NPC cars hit',        sNum(ses.npcHits)) +
           sRow('Damage taken',        sNum(ses.damageTaken)) +
-          sRow('Drugs collected',     sNum(ses.drugsCollected)) +
+          sRow('Vices collected',     sNum(ses.vicesCollected)) +
           sRow('Weapons collected',   sNum(ses.weaponsCollected)) +
           sRow('Hitchhikers (good/bad)', `${sNum(ses.hitchhikersGood)} / ${sNum(ses.hitchhikersBad)}`) +
           sRow('Sex workers (bribes)',   `${sNum(ses.sexWorkers)} (${sNum(ses.sexWorkerBribes)})`) +
@@ -2875,7 +2875,7 @@
           sRow('NPC cars hit',        sNum(L.npcHits)) +
           sRow('Wrecks',              sNum(L.wrecks)) +
           sRow('Damage taken',        sNum(L.damageTaken)) +
-          sRow('Drugs collected',     sNum(L.drugsCollectedTotal)) +
+          sRow('Vices collected',     sNum(L.vicesCollectedTotal)) +
           sRow('Weapons collected',   sNum(L.weaponsCollectedTotal)) +
           sRow('Total earned',        sMoney(L.earnedGross)) +
           sRow('Total spent',         sMoney(L.spentTotal)) +
@@ -2899,14 +2899,14 @@
           sRow('From score multiplier', sMoney(s.earned?.fromMultiplier)) +
 
           sSec('Spending') +
-          sRow('Drugs',       sMoney(sp.drugsTotal)) +
+          sRow('Vices',       sMoney(sp.vicesTotal)) +
           sRow('Weapons',     sMoney(sp.weaponsTotal)) +
           sRow('Vehicles',    sMoney(sp.vehicles)) +
           sRow('Accessories', sMoney(sp.accessories)) +
           sRow('Services',    sMoney(sp.services)) +
 
-          sSec('Drugs collected (by type)') +
-          sMap(s.drugs?.collected, sNum) +
+          sSec('Vices collected (by type)') +
+          sMap(s.vices?.collected, sNum) +
 
           sSec('Weapons collected (by type)') +
           sMap(s.weapons?.collected, sNum) +
@@ -2956,7 +2956,7 @@
             : '') +
           sSec('Data') +
           `<div class="pa-row"><span class="k">♻️ Reset player</span><button id="set-reset" class="pa-toggle" style="border-color:#FF4466;color:#FF7799;background:#2a1118;">RESET</button></div>` +
-          `<p class="pa-note">Reset clears money, vehicles, drugs &amp; checkpoints. Your lifetime stats, records and trophies are KEPT. Volume + mute apply instantly here on the start menu — no run needed.</p>`);
+          `<p class="pa-note">Reset clears money, vehicles, vices &amp; checkpoints. Your lifetime stats, records and trophies are KEPT. Volume + mute apply instantly here on the start menu — no run needed.</p>`);
         const plateBtn = document.getElementById('set-plate');
         addTap(plateBtn, () => {
           // Edit the ACTIVE player's plate from Settings (not just first launch).
@@ -3113,25 +3113,25 @@
 
         const renderDealer = () => {
           const cash = window.__lawyer?.status?.()?.cash ?? 0;
-          const dl = window.__dealer?.status?.() ?? { cash, orders: [], drugs: [] };
+          const dl = window.__dealer?.status?.() ?? { cash, orders: [], vices: [] };
           const pending = dl.orders.length
             ? dl.orders.map(id => window.__dealer?.label?.(id) ?? id).join(', ')
             : '<span class="pa-dim">none</span>';
-          const drugRows = dl.drugs.length
-            ? dl.drugs.map(d =>
-                `<div class="pa-row"><span class="k">${d.label}</span><button class="msg-order pa-toggle ${dl.cash >= d.price ? 'on' : ''}" data-drug="${d.id}" ${dl.cash < d.price ? 'disabled' : ''}>$${d.price.toLocaleString()}</button></div>`
+          const viceRows = dl.vices.length
+            ? dl.vices.map(d =>
+                `<div class="pa-row"><span class="k">${d.label}</span><button class="msg-order pa-toggle ${dl.cash >= d.price ? 'on' : ''}" data-vice="${d.id}" ${dl.cash < d.price ? 'disabled' : ''}>$${d.price.toLocaleString()}</button></div>`
               ).join('')
-            : `<div class="pa-row"><span class="k pa-dim">No drugs unlocked yet — pick some up on the road first.</span><span class="v"></span></div>`;
+            : `<div class="pa-row"><span class="k pa-dim">No vices unlocked yet — pick some up on the road first.</span><span class="v"></span></div>`;
           openApp('CONTACTS',
             backBtn +
             sSec('🔌 The Plug') +
             `<p class="pa-lead">Call ahead and your order's waiting <b>FREE</b> at the next rest stop. You pay now — pickup or not.</p>` +
             sRow('Pending pickup', pending) +
-            drugRows);
+            viceRows);
           addTap(document.getElementById('msg-back'), () => requestAnimationFrame(renderList));
           appBody.querySelectorAll('.msg-order').forEach(b => {
             if (b.disabled) return;
-            addTap(b, () => { const r = window.__dealer?.order?.(b.dataset.drug); if (r?.ok) requestAnimationFrame(renderDealer); });
+            addTap(b, () => { const r = window.__dealer?.order?.(b.dataset.vice); if (r?.ok) requestAnimationFrame(renderDealer); });
           });
         };
 

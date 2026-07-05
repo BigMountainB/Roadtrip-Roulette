@@ -144,7 +144,7 @@ export const Difficulty = {
   noScore()          { return !!this.current().noScore; },
 
   /** All modes for the selector UI.  Custom is a 4th option that opens
-   *  the drug-slider modal. */
+   *  the vice-slider modal. */
   allModes() { return [MODES.easy, MODES.normal, MODES.hard]; },
   customMode() { return MODES.custom; },
 };

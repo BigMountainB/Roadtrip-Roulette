@@ -3,9 +3,9 @@ import { BootScene }    from './scenes/BootScene.js';
 import { GameScene }    from './scenes/GameScene.js';
 import { RestStopScene } from './scenes/RestStopScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
-import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, DRUGS, DRUG_CONFIG, REST_STOPS, setWorldWidth } from './constants.js';
+import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, VICES, VICE_CONFIG, REST_STOPS, setWorldWidth } from './constants.js';
 import { Weather } from './world/Weather.js';
-import { DRUG_PRICE } from './scenes/RestStopScene.js';
+import { VICE_PRICE } from './scenes/RestStopScene.js';
 import { AchievementSystem } from './systems/AchievementSystem.js';
 import { getVehicleDisplayStats } from './systems/VehicleStats.js';
 import {
@@ -412,13 +412,13 @@ const _boot = () => {
   // if not yet unlocked) for the trophy modal in the phone menu.
   window.__achievements = {
     list: () => {
-      const drugDefs = AchievementSystem.drugDefs();
+      const viceDefs = AchievementSystem.viceDefs();
       const runDefs  = AchievementSystem.runDefs();
       const earned   = AchievementSystem.earned(game.registry);
       const rows = [];
-      // Per-drug "first-hit" achievements.
-      for (const drugKey of Object.keys(drugDefs)) {
-        const d = drugDefs[drugKey];
+      // Per-vice "first-hit" achievements.
+      for (const viceKey of Object.keys(viceDefs)) {
+        const d = viceDefs[viceKey];
         rows.push({
           id:    d.id,
           label: d.label,
@@ -599,7 +599,7 @@ const _boot = () => {
   };
 
   // Start Over — restart the run from mile 0 with the same vehicle,
-  // fresh HP / drugs / party clock.  Phaser scene.restart() re-runs
+  // fresh HP / vices / party clock.  Phaser scene.restart() re-runs
   // init+create with no carry-over data; the vehicleId lives on the
   // registry so it survives the restart.  Scene is then re-paused so
   // the car waits at mile 0 until the player rotates to landscape.
@@ -672,7 +672,7 @@ const _boot = () => {
   // Career stats snapshot for the phone-menu Leaderboard + Stats apps.
   // Returns a plain-object copy so the menu can't mutate live state.
   window.__stats = {
-    // Lifetime/persisted career stats (records, earned/spent, drugs, etc.).
+    // Lifetime/persisted career stats (records, earned/spent, vices, etc.).
     get: () => {
       const stats = game.registry.get('stats');
       if (!stats?.stats) return null;
@@ -895,21 +895,21 @@ const _boot = () => {
     },
   };
 
-  // The Dealer (phone → Messages).  Order a drug, pay now from the run's
-  // cash (score); it's waiting FREE at the next rest stop's drug menu.
-  const _dealerLabel = (id) => (DRUG_CONFIG[id]?.label ?? id).replace(/^[^A-Za-z]+/, '').trim();
+  // The Dealer (phone → Messages).  Order a vice, pay now from the run's
+  // cash (score); it's waiting FREE at the next rest stop's vice menu.
+  const _dealerLabel = (id) => (VICE_CONFIG[id]?.label ?? id).replace(/^[^A-Za-z]+/, '').trim();
   window.__dealer = {
     status: () => {
       const save    = game.registry.get('save');
       const scene   = game.scene.getScene('Game');
-      const unlocks = game.registry.get('drugUnlocks');
+      const unlocks = game.registry.get('viceUnlocks');
       const isUnlocked = (id) => (unlocks && typeof unlocks === 'object')
-        ? !!unlocks[id] : !!DRUG_CONFIG[id]?.unlocked;
+        ? !!unlocks[id] : !!VICE_CONFIG[id]?.unlocked;
       return {
         cash:   Math.max(0, Math.round(scene?.score ?? 0)),
         orders: (save?.get?.('dealerOrders', []) || []).slice(),
-        drugs:  Object.values(DRUGS).filter(isUnlocked).map(id => ({
-          id, label: _dealerLabel(id), price: DRUG_PRICE[id] ?? 200,
+        vices:  Object.values(VICES).filter(isUnlocked).map(id => ({
+          id, label: _dealerLabel(id), price: VICE_PRICE[id] ?? 200,
         })),
       };
     },
@@ -917,7 +917,7 @@ const _boot = () => {
     order: (id) => {
       const save  = game.registry.get('save');
       const scene = game.scene.getScene('Game');
-      const price = DRUG_PRICE[id];
+      const price = VICE_PRICE[id];
       if (price == null) return { ok: false, reason: 'badid' };
       const cash = Math.round(scene?.score ?? 0);
       if (cash < price) return { ok: false, reason: 'funds', need: price - cash };

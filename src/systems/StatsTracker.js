@@ -16,9 +16,9 @@
 //   sandbox time contributes to is total-time-in-game).  Every other method
 //   early-returns when the session is unranked.
 //
-//   Lazy sub-records: per-drug / per-weapon / per-vehicle / per-rest-stop
+//   Lazy sub-records: per-vice / per-weapon / per-vehicle / per-rest-stop
 //   entries are created on first event, so this never hardcodes the rosters
-//   and won't drift when a drug/vehicle/stop is added or renamed.
+//   and won't drift when a vice/vehicle/stop is added or renamed.
 
 const SCHEMA_VERSION = 2;
 
@@ -38,7 +38,7 @@ function defaultStats() {
       wrecks:               0,   // times the car was totaled
       earnedGross:          0,   // every dollar ever earned (score credits)
       spentTotal:           0,   // every dollar ever spent
-      drugsCollectedTotal:  0,
+      vicesCollectedTotal:  0,
       weaponsCollectedTotal:0,
     },
 
@@ -51,8 +51,8 @@ function defaultStats() {
 
     // How each dollar was spent, by category.
     spent: {
-      drugs:       {},   // { <drugId>: $ }
-      drugsTotal:  0,
+      vices:       {},   // { <viceId>: $ }
+      vicesTotal:  0,
       weapons:     {},   // { <weaponType>: $ }
       weaponsTotal:0,
       vehicles:    0,
@@ -60,7 +60,7 @@ function defaultStats() {
       services:    0,    // repair, coffee, snooze, sex worker, etc.
     },
 
-    drugs:   { collected: {} },   // { <drugId>: count }
+    vices:   { collected: {} },   // { <viceId>: count }
     weapons: { collected: {} },   // { <weaponType>: count }
 
     perVehicle: {},   // { <vehicleId>: { miles, driveTimeSec, npcHits, wrecks } }
@@ -104,7 +104,7 @@ function emptySession() {
     damageTaken:         0,
     earnedThisTrip:      0,
     spentThisTrip:       0,
-    drugsCollected:      0,
+    vicesCollected:      0,
     weaponsCollected:    0,
     miles:               0,
     tripTimeSec:         0,
@@ -251,7 +251,7 @@ export class StatsTracker {
       damageTaken:      this.session.damageTaken,
       earned:           this.session.earnedThisTrip,
       spent:            this.session.spentThisTrip,
-      drugsCollected:   this.session.drugsCollected,
+      vicesCollected:   this.session.vicesCollected,
       weaponsCollected: this.session.weaponsCollected,
       miles:            this.session.miles,
       driveTimeSec:     this.session.tripTimeSec,
@@ -292,11 +292,11 @@ export class StatsTracker {
 
   // ── Collectibles ──────────────────────────────────────────────────────────
 
-  recordDrugCollected(drugId, n = 1) {
+  recordViceCollected(viceId, n = 1) {
     if (!this.ranked) return;
-    this._bump(this.stats.drugs.collected, drugId, n);
-    this._bump(this.stats.lifetime, 'drugsCollectedTotal', n);
-    this._bump(this.session, 'drugsCollected', n);
+    this._bump(this.stats.vices.collected, viceId, n);
+    this._bump(this.stats.lifetime, 'vicesCollectedTotal', n);
+    this._bump(this.session, 'vicesCollected', n);
   }
 
   recordWeaponCollected(type, n = 1) {
@@ -364,17 +364,17 @@ export class StatsTracker {
     }
   }
 
-  /** A cash debit.  category ∈ drugs|weapons|vehicles|accessories|services.
-   *  subId is the drug/weapon id for the per-item breakdown. */
+  /** A cash debit.  category ∈ vices|weapons|vehicles|accessories|services.
+   *  subId is the vice/weapon id for the per-item breakdown. */
   recordSpend(amount, category, subId = null) {
     if (!this.ranked || !(amount > 0)) return;
     this._bump(this.stats.lifetime, 'spentTotal', amount);
     this._bump(this.session, 'spentThisTrip', amount);
     const sp = this.stats.spent;
     switch (category) {
-      case 'drugs':
-        if (subId) this._bump(sp.drugs, subId, amount);
-        this._bump(sp, 'drugsTotal', amount);
+      case 'vices':
+        if (subId) this._bump(sp.vices, subId, amount);
+        this._bump(sp, 'vicesTotal', amount);
         break;
       case 'weapons':
         if (subId) this._bump(sp.weapons, subId, amount);
