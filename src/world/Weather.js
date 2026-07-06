@@ -46,7 +46,7 @@ export const Weather = {
       // TIME-based (Weather._fogLiftMul, ramped 1→0 over 5 s by GameScene
       // once the player crosses 23.6), so it masks the Preston pop-in.
       const f = (mile < 17) ? (mile - 14) / 3 : 1;   // ease in over 3 mi, else full
-      return f * (this._fogLiftMul ?? 1);
+      return f * (this._fogLiftMul ?? 1) * this.fogPatch(mile);
     }
     if (mile >= 30 && mile < 40) {
       if (mile < 32) return (mile - 30) / 2;   // ease in over the first 2 mi
@@ -89,6 +89,28 @@ export const Weather = {
    *  applies before this kicks in. */
   trafficMul(mile) {
     return this.state(mile) === 'snow' ? 0.70 : 1;
+  },
+
+  /** Intermittent-fog multiplier (0..1) applied to fog intensity so the bank
+   *  rolls in and out along the road instead of sitting thick the whole zone.
+   *  Smooth value-noise keyed on MILE (deterministic → no per-frame flicker,
+   *  banks ~0.45 mi long), mapped to roughly: 70% full (1.0), 15% partial
+   *  (~0.5), 15% clear (0).  Per user 2026-07-05. */
+  fogPatch(mile) {
+    const cell = mile / 0.45;                     // ~0.45-mi fog cells
+    const i    = Math.floor(cell);
+    const fr   = cell - i;
+    const hash = (k) => { const x = Math.sin(k * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+    const a = hash(i), b = hash(i + 1);
+    const u = fr * fr * (3 - 2 * fr);             // smoothstep interpolation
+    const n = a + (b - a) * u;                    // smooth noise in [0,1)
+    const t  = 0.04;
+    const c01 = (x) => Math.max(0, Math.min(1, x));
+    const ss  = (lo, hi, x) => { const v = c01((x - lo) / (hi - lo)); return v * v * (3 - 2 * v); };
+    // n<0.15 → clear; 0.15–0.30 → partial; >0.30 → full (short smooth ramps).
+    const partial = ss(0.15 - t, 0.15 + t, n);
+    const full    = ss(0.30 - t, 0.30 + t, n);
+    return 0.5 * partial + 0.5 * full;
   },
 
   isRain(mile) { return this.state(mile) === 'rain'; },
