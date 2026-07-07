@@ -791,7 +791,7 @@ export class RestStopScene extends Phaser.Scene {
       // Brand LOGO image — fills most of the placard, leaving room
       // below for the category label.  Falls back to a colored accent
       // strip + brand-name text when the logo asset isn't loaded.
-      const logoArea = { x: cx + 6, y: cy + 6, w: cellW - 12, h: Math.round(cellH * 0.62) };
+      const logoArea = { x: cx + 3, y: cy + 3, w: cellW - 6, h: Math.round(cellH * 0.80) };
       if (brand.logo && this.textures.exists(brand.logo)) {
         const img = this.add.image(logoArea.x + logoArea.w / 2, logoArea.y + logoArea.h / 2, brand.logo)
           .setOrigin(0.5);
