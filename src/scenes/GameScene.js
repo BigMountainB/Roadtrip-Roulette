@@ -1888,7 +1888,7 @@ export class GameScene extends Phaser.Scene {
           }
           this._applyRunState(buys.runStateOnResume);
           this._applyMessageState(buys.messageStateOnResume);
-          // Sex Worker bonus HP — extra above the vehicle's max, granted
+          // Hot Springs bonus HP — extra above the vehicle's max, granted
           // immediately on resume.  Implemented by bumping the cap and
           // adding HP both, so the player visibly sees "60/60" instead
           // of "50/50 (+10)".  Damage naturally consumes it first since
@@ -2076,7 +2076,7 @@ export class GameScene extends Phaser.Scene {
           if (adMs > 0) {
             this._showAdScreen?.(adMs);
           }
-          // Score bonus from hitchhiker / hooker — already merged into
+          // Score bonus from hitchhiker / encounters — already merged into
           // resumeScore by RestStopScene._continue, but re-add here just in
           // case a tip path missed it.
           if (buys.scoreBonus && (this.score ?? 0) < this._resumeScore + buys.scoreBonus) {

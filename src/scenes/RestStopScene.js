@@ -172,11 +172,9 @@ const SECTIONS = {
       { id: 'sleep',    label: '😴  NAP IT OFF',          cost:   0, desc: 'Watch ad (5s); −25% on every vice; party-clock penalty', payload: { sleep: true,  reduceVices: 0.75 } },
       { id: 'coffee',   label: '☕  COFFEE',                cost:   7, desc: '−1% on every vice',                                     payload: { coffee: true, reduceVices: 0.99 } },
       { id: 'campfix',  label: '🔧  CAMP REPAIR',          cost: 400, desc: 'Repair up to 65% HP (cheaper than dealership)',          payload: { campRepair: true } },
-      // Sex Worker now grants a stacking +10 HP "bonus" (extra over max)
-      // PLUS rolls 10 % for the existing dirt-on-a-politician outcome.
-      // Bonus HP carries into gameplay and is consumed by crash damage
-      // before regular HP.
-      { id: 'sexworker',label: '💋  PAY A SEX WORKER FOR HER TIME', cost: 500, desc: '+10 bonus HP (above max, until used). 10 % chance: no >2★ for 100 mi', payload: { sexworker: true, bonusHp: 10 } },
+      // Hot Springs soak — a stacking +10 HP "bonus" (extra over max) that
+      // carries into gameplay and is consumed by crash damage before regular HP.
+      { id: 'hotsprings', label: '♨️  HOT SPRINGS SOAK', cost: 500, desc: '+10 bonus HP (above max, until used).', payload: { restHp: true, bonusHp: 10 } },
     ],
   },
   // DEALER's landing tile opens a chooser screen (see _showDealerChooser)
@@ -1324,7 +1322,7 @@ export class RestStopScene extends Phaser.Scene {
   /** Map a shop item to its stats spend bucket.  Vice top-ups and weapon
    *  (f12) buys carry a sub-id for the per-item breakdown; vehicles and
    *  accessories roll up to their category total; everything else (repair,
-   *  refuel, coffee, sleep, sex worker, clear-stars, …) is a service. */
+   *  refuel, coffee, sleep, hot springs, clear-stars, …) is a service. */
   _statsSpendInfo(item) {
     const p = item?.payload ?? {};
     if (p.viceTopUp)        return { category: 'vices',       subId: p.viceTopUp };
@@ -1447,23 +1445,12 @@ export class RestStopScene extends Phaser.Scene {
       // Multiplicative vice reduction handled below in the existing
       // reduceVices branch — leave as-is so the math composes.
     }
-    if (p.sexworker) {
-      // ALWAYS grants +10 bonus HP — extra above the vehicle's max,
-      // consumed by crash damage before regular HP (see DamageModel
-      // takeDamage).  Stacks if the player visits multiple sex workers
-      // across rest stops.  10 % roll on top adds the dirt-on-politician
-      // star-cap buff for 100 mi.
-      this._purchases.sexworker = true;
-      this._purchases.bonusHp   = (this._purchases.bonusHp ?? 0) + (p.bonusHp ?? 10);
-      const _bribed = Math.random() < 0.10;
-      if (_bribed) {
-        this._purchases.starCapMiles = (this._purchases.starCapMiles ?? 0) + 100;
-        this._purchases.starCapMax   = 2;
-        this._setStatus?.(`🗞  SHE HAD DIRT! Cops capped at 2★ for 100 mi. +${p.bonusHp ?? 10} bonus HP.`, '#88FFCC');
-      } else {
-        this._setStatus?.(`+${p.bonusHp ?? 10} bonus HP. She had a nice time.`, '#FFFFFF');
-      }
-      this._stats?.recordSexWorker(_bribed);
+    if (p.restHp) {
+      // Grants +10 bonus HP — extra above the vehicle's max, consumed by crash
+      // damage before regular HP (see DamageModel takeDamage).  Stacks across
+      // multiple soaks.
+      this._purchases.bonusHp = (this._purchases.bonusHp ?? 0) + (p.bonusHp ?? 10);
+      this._setStatus?.(`+${p.bonusHp ?? 10} bonus HP. Relaxed and refreshed.`, '#88FFCC');
     }
     if (p.restock)    this._purchases.restock = true;
     if (p.clearStars) this._purchases.clearStars = true;

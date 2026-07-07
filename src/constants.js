@@ -426,9 +426,9 @@ export function getLastSignTown(currentMile) {
 
 // Rest stops — placed at the towns the player flagged with an asterisk in
 // the mileage table.  Each gets advance signs at −5 mi and −1 mi, an exit
-// ramp, a sectioned menu (vices/weapons + garage + sex workers + road),
-// and acts as a save checkpoint with a 4-digit alphanumeric code.  ID is
-// the first letter of the town name so codes are stable + readable.
+// ramp, a sectioned menu (snacks/weapons + garage + camp services + road),
+// and acts as a local save checkpoint.  ID is the first letter of the town
+// name.
 // Rest stops use the START of each location's mileage range (the exit is
 // "into town").  Save-code IDs are stable A–Z letters keyed off the first
 // letter of the town, with single-letter conflicts resolved by the next

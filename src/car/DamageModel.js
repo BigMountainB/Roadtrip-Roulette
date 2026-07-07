@@ -1,6 +1,6 @@
 // INTEGRATION CONTRACT:
 //   collision (_onVehicleCollision / _onCopCollision) → damageModel.takeDamage(amount, source)
-//   hooker sprite collected / BodyShop partial heal   → damageModel.repair(amount)
+//   rest-stop heal (Hot Springs) / BodyShop partial heal → damageModel.repair(amount)
 //   respawn / BodyShop full repair                    → damageModel.reset()
 
 // Stage thresholds (inclusive lower bound)

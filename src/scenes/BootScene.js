@@ -228,7 +228,6 @@ export class BootScene extends Phaser.Scene {
 
   _makePlaceholder(key) {
     if (key.startsWith('car_'))    return this._makeCarPlaceholder(key);
-    if (key.startsWith('hooker_')) return this._makeHookerPlaceholder(key);
     if (key.startsWith('vice_'))   return this._makeVicePlaceholder(key);
     if (key.startsWith('cop_'))    return this._makeCopPlaceholder(key);
     if (key.startsWith('ui_'))     return this._makeUIPlaceholder(key);
@@ -307,24 +306,6 @@ export class BootScene extends Phaser.Scene {
     };
     const [body, roof] = palette[key] ?? [0x888888, 0x555555];
     this._makeCarTexture(key, body, roof);
-  }
-
-  _makeHookerPlaceholder(key) {
-    const palette = {
-      hooker_kimono:     [0xFF66AA, 0xFFCCDD],
-      hooker_schoolgirl: [0x4488FF, 0xFFFFFF],
-      hooker_club:       [0xFF2244, 0x222222],
-      hooker_street:     [0xCC44FF, 0x441166],
-    };
-    const [primary, secondary] = palette[key] ?? [0xFF66AA, 0xFFCCDD];
-    const w = 28, h = 64;
-    const g = this.make.graphics({ x: 0, y: 0, add: false });
-    g.fillStyle(0xFFCC99); g.fillCircle(w / 2, 8, 6);
-    g.fillStyle(primary);  g.fillRect(8, 14, w - 16, 28);
-    g.fillStyle(secondary); g.fillRect(10, 38, w - 20, 18);
-    g.fillStyle(0x111111); g.fillRect(11, 56, 4, 8); g.fillRect(w - 15, 56, 4, 8);
-    g.generateTexture(key, w, h);
-    g.destroy();
   }
 
   _makeVicePlaceholder(key) {
