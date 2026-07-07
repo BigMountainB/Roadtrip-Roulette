@@ -66,16 +66,16 @@ a kept dependence system, not a "crash".)
 
 | Item | Category | Tiredness | Hydration | Fullness | Notes |
 |---|---|---|---|---|---|
-| **Water** | hydration | −5 | **+25** | — | overshoot → bladder |
-| **Cold Brew** | caffeine (mild) | **−18** | −8 (diuretic) | — | **no addiction** — the safe starter |
+| **Water** | hydration | −5 | **+25** | **+7** | overshoot → bladder |
+| **Cold Brew** | caffeine (mild) | **−18** | −8 (diuretic) | **+10** | **no addiction** — the safe starter |
 | **Caffeine Pills** | caffeine (strong) | **−30** | −12 (diuretic) | — | **builds addiction** (§4) |
 | **Slushie** | sugar drink | **−10** | **+15** | **+10** | no crash |
 | **Gummies** | sugar snack | **−6** | — | **+4** | **1/20 = "Odd Gas Station Gummies"** → max shroom trip (wavy road + rainbow); otherwise a tiny sugar pep |
 | **Sushi** | food (risky) | **+5** | — | **+10** | ~**1/12 "bad fish"** → Bladder → ~90 + nausea. **No other effects** (no double-vision/drift) |
 | **Burrito** | food (heavy) | **+20** | — | **+20** | **No other effects** (no permastoned lock) |
 | **Dramamine** | medicine | **+25** (drowsy) | — | — | **cures Nausea AND sushi sickness** |
-| **Quad Shot** | power-up | **→ 0** (clears bar) | — | — | inventory item (was Emergency Espresso) |
-| **Redneck Rage** | power-up | — | — | — | 1-mi invincible bulldoze + red spectacle (unchanged) |
+| **Quad Shot** | power-up | **→ 0** (clears bar) | **−15** (diuretic) | **+10** | inventory item (was Emergency Espresso) |
+| **Redneck Rage** | power-up (energy drink) | — | **+10** | **+10** | 1-mi invincible bulldoze + red spectacle |
 | **Sleep** (rest-stop nap) | action | **→ 0** | — | — | costs party-clock time (~3–8 min) |
 
 **Design contrast:** Caffeine = alertness + dehydration (+ addiction on Pills) ·
