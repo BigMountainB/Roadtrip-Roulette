@@ -1,7 +1,7 @@
 {
-  "name": "DUI",
-  "short_name": "DUI",
-  "description": "Drive from Seattle to Pullman. Don't get caught.",
+  "name": "Road Trip Roulette",
+  "short_name": "Road Trip",
+  "description": "Survive the road trip from Seattle to Pullman.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
