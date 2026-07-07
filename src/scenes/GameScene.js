@@ -15830,10 +15830,16 @@ export class GameScene extends Phaser.Scene {
       }
     }
     const mx = (x) => x + (C.HUD_OFFSET_X ?? 0);
-    const bw = 92, bh = 8, gap = 15;
+    // 2× the original bar block (92/8/15 → 184/16/26), and INDEPENDENTLY
+    // movable+scalable in the controls editor (id `survbars`).
+    const o  = this._ctrlOff('survbars');
+    const sc = o.s;
+    const BW = 184, BH = 16, GAP = 26;
+    const bw = BW * sc, bh = BH * sc, gap = GAP * sc;
     // Upper-RIGHT (clear of the top-left pause/music cluster that was hiding them).
-    const bx = mx(SCREEN_W - bw - 16);
-    let by = 92;
+    const bx = mx(SCREEN_W - BW - 16) + o.dx;
+    const by = 92 + o.dy;
+    const fontPx = Math.max(9, Math.round(18 * sc));
     const rows = [
       { key: 'Awake',  v: 100 - s.tiredness, col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x6A7AE0, dual: false, danger: s.tiredness >= 70 },
       { key: 'Hunger', v: s.fullness,        col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
@@ -15841,19 +15847,25 @@ export class GameScene extends Phaser.Scene {
     ];
     rows.forEach((r, i) => {
       const y = by + i * gap;
-      g.fillStyle(0x0A0F1A, 0.8); g.fillRoundedRect(bx, y, bw, bh, 2);
+      g.fillStyle(0x0A0F1A, 0.8); g.fillRoundedRect(bx, y, bw, bh, 3);
       const w = Math.max(0, Math.min(1, r.v / 100)) * (bw - 2);
-      g.fillStyle(r.col, 1); g.fillRoundedRect(bx + 1, y + 1, w, bh - 2, 2);
+      g.fillStyle(r.col, 1); g.fillRoundedRect(bx + 1, y + 1, w, bh - 2, 3);
       if (r.dual) {   // sweet-zone ticks at 25 and 75
         g.fillStyle(0x66FF99, 0.7);
-        g.fillRect(bx + 1 + 0.25 * (bw - 2), y, 1, bh);
-        g.fillRect(bx + 1 + 0.75 * (bw - 2), y, 1, bh);
+        g.fillRect(bx + 1 + 0.25 * (bw - 2), y, 2, bh);
+        g.fillRect(bx + 1 + 0.75 * (bw - 2), y, 2, bh);
       }
-      g.lineStyle(1, 0x315173, 1); g.strokeRoundedRect(bx, y, bw, bh, 2);
+      g.lineStyle(1.5, 0x315173, 1); g.strokeRoundedRect(bx, y, bw, bh, 3);
       const lbl = this._survLabels[i];
-      lbl.setText(r.key).setPosition(bx - 6, y - 1).setVisible(true);   // left of the bar
+      lbl.setText(r.key).setFontSize(fontPx).setPosition(bx - 8 * sc, y - 1).setVisible(true);   // left of the bar
       if (r.danger) lbl.setColor('#FF6A5C'); else lbl.setColor('#9FB7D6');
     });
+    // Publish live bounds so the controls editor can place a drag handle over
+    // the whole 3-bar block (labels sit to the LEFT of bx).
+    this._survBarsBounds = {
+      x: bx - 78 * sc, y: by - 3,
+      w: bw + 78 * sc, h: 2 * gap + bh + 6,
+    };
     this._drawSurvivalFx();
   }
 
@@ -17386,7 +17398,7 @@ export class GameScene extends Phaser.Scene {
     try { this._drawViceBars(); }      catch (_) {}
     try { this._drawF12Inventory(); }  catch (_) {}
 
-    const mk = (id, b) => {
+    const mk = (id, b, depth = 64) => {
       if (!b || !(b.w > 0) || !(b.h > 0)) return;
       const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
       const w  = Math.max(24, b.w), h = Math.max(24, b.h);
@@ -17394,7 +17406,7 @@ export class GameScene extends Phaser.Scene {
       // _syncControlProxies lights up ONLY the handle being dragged so the
       // editor isn't a wall of boxes (per Brendan).
       const proxy = this.add.rectangle(cx, cy, w, h, 0x39A8FF, 0.0)
-        .setDepth(64)
+        .setDepth(depth)
         .setStrokeStyle(2.5, 0x39A8FF, 0)
         .setInteractive({ useHandCursor: true, draggable: true });
       proxy._ctrlProxy  = true;
@@ -17421,6 +17433,21 @@ export class GameScene extends Phaser.Scene {
     // Each weapon + each vice is its OWN independent handle.
     for (const wid in (this._weaponCellBounds || {})) mk('weapon_' + wid, this._weaponCellBounds[wid]);
     for (const did in (this._viceCellBounds   || {})) mk('vice_'   + did, this._viceCellBounds[did]);
+    // Survival bars + the clock/multiplier text: give them their own handles at
+    // a HIGHER depth than the draggable text (65) so they reliably grab even
+    // where the top-center buttons/mirror sit over the small readouts.
+    try { this._drawSurvivalBars(); } catch (_) {}
+    mk('survbars', this._survBarsBounds, 66);
+    mk('clock', this._boundsOfTextObj(this.hudPartyClock), 66);
+    mk('mult',  this._boundsOfTextObj(this.hudMult),       66);
+  }
+
+  /** World-space bounds box for a HUD text object, or null if absent/empty. */
+  _boundsOfTextObj(obj) {
+    if (!obj || !obj.visible) return null;
+    const b = obj.getBounds?.();
+    if (!b || !(b.width > 0) || !(b.height > 0)) return null;
+    return { x: b.x, y: b.y, w: b.width, h: b.height };
   }
 
   /** Glue every control proxy to its control's LIVE bounds (position + size)
@@ -17442,6 +17469,9 @@ export class GameScene extends Phaser.Scene {
       if (id === 'wiper')      return this._wiperLiveBounds;
       if (id.startsWith('weapon_')) return this._weaponCellBounds?.[id.slice(7)];
       if (id.startsWith('vice_'))   return this._viceCellBounds?.[id.slice(5)];
+      if (id === 'survbars') return this._survBarsBounds;
+      if (id === 'clock')    return this._boundsOfTextObj(this.hudPartyClock);
+      if (id === 'mult')     return this._boundsOfTextObj(this.hudMult);
       return null;
     };
     for (const px of this._ctrlProxies) {
