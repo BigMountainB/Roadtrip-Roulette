@@ -307,7 +307,6 @@ export class RestStopScene extends Phaser.Scene {
 
   init(data) {
     this._stop     = data?.stop     ?? { id: '?', name: 'Rest Stop' };
-    this._code     = data?.code     ?? '????';
     this._score    = data?.score    ?? 0;
     this._stars    = data?.stars    ?? 0;
     this._position = data?.position ?? 0;
@@ -643,110 +642,8 @@ export class RestStopScene extends Phaser.Scene {
       color: '#FFEEAA', stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5, 0);
 
-    // ── Save code ─────────────────────────────────────────────────────────
-    // The portable save code is now a long (~58-char) string, so it must
-    // wrap instead of overflowing.  Tap the code to copy it to the clipboard
-    // for transfer to another device.
-    // (Save code hidden from the rest-stop sign per design — the underlying
-    // save/transfer still works; it's just no longer shown on-screen.)
-    const codeLabel = this.add.text(40, 56, 'SAVE CODE — TAP TO COPY', {
-      fontSize: '10px', fontFamily: 'Arial', color: '#FFCC66',
-    }).setOrigin(0, 0).setVisible(false);
-    const codeText = this.add.text(40, 67, this._code, {
-      fontSize: '13px', fontFamily: 'Courier New, monospace',
-      color: '#FFEE00', stroke: '#000', strokeThickness: 3,
-      wordWrap: { width: SCREEN_W - 80, useAdvancedWrap: true },
-    }).setOrigin(0, 0).setVisible(false);
-
-    // Tap-to-copy — clipboard with a graceful fallback, plus a brief
-    // "COPIED!" confirmation flashed in place of the label.
-    const done = () => {
-      this.tweens.killTweensOf(codeText);
-      codeText.setAlpha(1);
-      codeLabel.setText('COPIED!').setColor('#66FF99');
-      this.time.delayedCall(1200, () => {
-        if (codeLabel.active) codeLabel.setText('SAVE CODE — TAP TO COPY').setColor('#FFCC66');
-      });
-    };
-    // execCommand copy, done the way iOS actually accepts: a real on-DOM
-    // selection range (off-screen opacity:0 + bare .select() silently fails on
-    // iOS).  Returns whether the copy truly succeeded — NO more fake "COPIED!".
-    const tryExecCopy = (text) => {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.contentEditable = 'true';
-        ta.readOnly = false;
-        ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;';
-        document.body.appendChild(ta);
-        const range = document.createRange();
-        range.selectNodeContents(ta);
-        const sel = window.getSelection();
-        sel.removeAllRanges(); sel.addRange(range);
-        ta.setSelectionRange(0, text.length);
-        const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        return !!ok;
-      } catch (e) { return false; }
-    };
-    // Manual-copy sheet — when programmatic copy isn't allowed (HTTP dev server
-    // / iOS), show the code in a SELECTABLE, pre-selected field so the player
-    // can long-press → Copy.  #dui-copy is touch-exempt (see main.js).
-    const manualCopySheet = (text) => {
-      const old = document.getElementById('dui-copy'); if (old) old.remove();
-      const wrap = document.createElement('div');
-      wrap.id = 'dui-copy';
-      wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:max(10px,env(safe-area-inset-top)) 12px 12px;box-sizing:border-box;background:rgba(0,0,0,0.66);font-family:Arial,Helvetica,sans-serif;';
-      const card = document.createElement('div');
-      card.style.cssText = 'background:#020611;border:2px solid #39A8FF;border-radius:10px;padding:16px 18px;width:min(92vw,520px);box-shadow:0 12px 34px rgba(0,0,0,.6);';
-      const ttl = document.createElement('div');
-      ttl.textContent = 'SAVE CODE';
-      ttl.style.cssText = 'color:#F4F7FF;font-weight:bold;font-size:15px;letter-spacing:1px;text-align:center;margin-bottom:6px;';
-      const sub = document.createElement('div');
-      sub.textContent = 'Press COPY, or tap-and-hold the code → Copy.';
-      sub.style.cssText = 'color:#9fc4ff;font-size:12px;text-align:center;margin-bottom:10px;';
-      const fld = document.createElement('textarea');
-      fld.value = text; fld.readOnly = true; fld.rows = 3;
-      fld.style.cssText = 'width:100%;box-sizing:border-box;padding:10px;font-size:14px;font-family:monospace;text-align:center;border:1px solid #39A8FF;border-radius:6px;background:#00030A;color:#FFEE00;resize:none;';
-      const status = document.createElement('div');
-      status.style.cssText = 'color:#66FF99;font-size:13px;text-align:center;min-height:16px;margin-top:8px;';
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;gap:10px;margin-top:10px;';
-      const mkBtn = (label, color, fn) => {
-        const b = document.createElement('button');
-        b.textContent = label;
-        b.style.cssText = `flex:1;padding:12px;font-size:15px;font-weight:bold;border:2px solid ${color};border-radius:6px;background:#050812;color:#F4F7FF;cursor:pointer;transition:background .04s,color .04s;touch-action:manipulation;`;
-        b.addEventListener('pointerdown', () => { b.style.background = color; b.style.color = '#02101f'; });
-        ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => { b.style.background = '#050812'; b.style.color = '#F4F7FF'; }));
-        b.addEventListener('click', (e) => { e.preventDefault(); fn(); });
-        return b;
-      };
-      const close = () => wrap.remove();
-      row.appendChild(mkBtn('COPY', '#FF39AF', () => {
-        fld.focus(); fld.setSelectionRange(0, text.length);
-        if (tryExecCopy(text)) { status.textContent = 'Copied!'; this.time?.delayedCall?.(900, close); }
-        else { status.style.color = '#FF8888'; status.textContent = 'Tap-and-hold the code, then Copy.'; }
-      }));
-      row.appendChild(mkBtn('CLOSE', '#39A8FF', close));
-      card.appendChild(ttl); card.appendChild(sub); card.appendChild(fld); card.appendChild(status); card.appendChild(row);
-      wrap.appendChild(card); document.body.appendChild(wrap);
-      setTimeout(() => { try { fld.focus(); fld.setSelectionRange(0, text.length); } catch (e) {} }, 60);
-    };
-    const copyCode = () => {
-      const text = this._code;
-      // Modern API first (works on the HTTPS production site).
-      if (navigator?.clipboard?.writeText && window.isSecureContext) {
-        navigator.clipboard.writeText(text).then(done).catch(() => manualCopySheet(text));
-        return;
-      }
-      // Insecure context (HTTP dev server) / no API → try execCommand, and if
-      // that's blocked, open the selectable sheet so copy ALWAYS succeeds.
-      if (tryExecCopy(text)) done();
-      else manualCopySheet(text);
-    };
-    // (Code tap zone disabled — the save code is hidden from the sign.)
-    const codeHit = this.add.rectangle(40, 56, 1, 1, 0xffffff, 0).setOrigin(0, 0).setVisible(false);
-    void copyCode; void codeHit;
+    // (Portable save codes removed — same-device LAST/SAVED resume still works;
+    // cross-device transfer will come from a future account login.)
 
     // ── Score header ─────────────────────────────────────────────────────
     this._scoreText = this.add.text(SCREEN_W - 30, 60, '', {

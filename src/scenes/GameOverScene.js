@@ -62,7 +62,6 @@ export class GameOverScene extends Phaser.Scene {
     this.charge         = data?.charge     ?? 'DUI';
     this.losses         = data?.losses     ?? 0;
     this.runTimeSec     = data?.runTimeSec ?? 0;
-    this.checkpointCode = data?.checkpointCode ?? null;
     this.lastCheckpoint = data?.lastCheckpoint ?? null;
     this.viceSummary    = data?.viceSummary ?? null;
   }
@@ -193,22 +192,8 @@ export class GameOverScene extends Phaser.Scene {
         .setDisplaySize(SCREEN_W, SCREEN_H);
     }
 
-    // Keep the authored plate intact, but surface the useful resume code
-    // in the open strip above its baked-in action buttons.
-    const code = this.checkpointCode ?? this.lastCheckpoint?.code ?? 'NONE PASSED';
-    const codePanel = this.add.graphics().setDepth(40);
-    codePanel.fillStyle(0x040711, 0.84);
-    codePanel.fillRoundedRect(CX - 106, 329, 212, 23, 4);
-    codePanel.lineStyle(1, 0x39A8FF, 0.92);
-    codePanel.strokeRoundedRect(CX - 106, 329, 212, 23, 4);
-    this.add.text(CX, 340, `CHECKPOINT CODE: ${code}`, {
-      fontSize: '11px',
-      fontFamily: IMPACT,
-      color: '#EEF5FF',
-      stroke: '#071224',
-      strokeThickness: 2,
-      letterSpacing: 1,
-    }).setOrigin(0.5).setDepth(41);
+    // (Portable checkpoint codes removed — LOAD SAVE resumes the local
+    // checkpoint on this device; cross-device transfer awaits account login.)
 
     // The authored Crashed and Busted plates already contain their full
     // typography and button faces (RETRY / LOAD SAVE / MAIN MENU).
@@ -322,13 +307,11 @@ export class GameOverScene extends Phaser.Scene {
           ['CHARGE', this.charge || 'DUI'],
           ['DISTANCE / TIME', `${this.finalMiles.toFixed(2)} MI   ${this._formatRunTime()}`],
           ['BAIL LOSSES', `-$${Math.max(0, this.losses).toLocaleString()}`],
-          ['CHECKPOINT CODE', this.checkpointCode ?? 'NONE SAVED'],
         ]
       : [
           ['CAUSE', viceLabel ? `${viceLabel} BLACKOUT` : 'PASSED OUT'],
           ['DISTANCE / TIME', `${this.finalMiles.toFixed(2)} MI   ${this._formatRunTime()}`],
           ['CASH', `$${this.finalScore.toLocaleString()}`],
-          ['CHECKPOINT CODE', this.checkpointCode ?? 'NONE SAVED'],
         ];
     rows.forEach(([label, value], idx) => {
       const y = panelY + 38 + idx * 17;

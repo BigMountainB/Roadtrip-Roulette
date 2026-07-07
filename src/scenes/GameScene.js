@@ -16848,138 +16848,6 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  // base64url alphabet — case-SENSITIVE, but the save flow is copy/paste
-  // (case-preserving), so that's fine and it buys 6 bits/char (vs base36's
-  // ~5.17), which is what gets the self-contained code down to ~30 chars.
-  static get _SAVE_B64() { return 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'; }
-
-  /** Deterministic 12-bit checksum over the payload bits — same on every
-   *  device (anti-tamper / anti-typo: a garbled code fails it, ~1/4096). */
-  _bitChecksum(bits) {
-    let h = 0x9E3;
-    for (const bit of bits) h = ((h << 1) ^ bit ^ (h >>> 11)) & 0xFFF;
-    return h & 0xFFF;
-  }
-
-  /** Encode a snapshot into a self-contained, copy-pasteable code: every stat
-   *  is bit-packed into a tight buffer (fixed field widths, MSB-first), a
-   *  12-bit checksum is appended, and the whole thing is base64url-encoded
-   *  (6 bits/char).  Field ORDER + WIDTH must match _decodeSnapshot exactly. */
-  _encodeSnapshot(s) {
-    const vehKeys = Object.keys(VEHICLES);
-    const viceIds = Object.values(VICES);
-    const stopIdx = REST_STOPS.findIndex(r => r.id === s.id);
-    const diffIdx = ['easy', 'normal', 'hard', 'custom'].indexOf(s.difficulty);
-    const subIdx  = ['easy', 'normal', 'hard'].indexOf(s.customSub ?? 'normal');
-    let ownedBits = 0; vehKeys.forEach((k, i) => { if (s.owned?.includes(k)) ownedBits |= (1 << i); });
-    let unlkBits  = 0; viceIds.forEach((id, i) => { if (s.unlocked?.[id]) unlkBits |= (1 << i); });
-    const accPack = (s.accessories?.bumper ? 1 : 0) | (s.accessories?.traction ? 2 : 0) | ((Math.min(3, s.accessories?.nos || 0)) << 2);
-
-    const bits = [];
-    const put = (val, w) => {
-      const v = Math.max(0, Math.min((2 ** w) - 1, Math.round(Number(val) || 0)));   // clamp to field
-      for (let b = w - 1; b >= 0; b--) bits.push((v >> b) & 1);
-    };
-    put(2, 4);                                          // format version (v2 adds the radar bit)
-    put(stopIdx < 0 ? 0 : stopIdx, 6);
-    put(diffIdx < 0 ? 1 : diffIdx, 2);
-    put(subIdx  < 0 ? 1 : subIdx, 2);
-    put(s.score, 24);
-    put(s.stars, 3);
-    put(s.hp, 9);
-    put(s.hpMax, 9);
-    put(s.gas, 10);
-    put(Math.max(0, vehKeys.indexOf(s.vehicleId)), 4);
-    put(accPack, 4);
-    put(ownedBits, vehKeys.length);                     // dynamic — grows with the roster
-    put(unlkBits, viceIds.length);
-    put(s.weapons?.gun, 8);
-    put(s.weapons?.spike, 7);
-    put(s.weapons?.donut, 7);
-    put(s.weapons?.rocket, 7);
-    put(s.weapons?.disguise, 5);
-    for (const id of viceIds) put(Math.round((s.vices?.[id] || 0) * 31), 5);   // 0-1 → 0-31
-    put(s.radar ? 1 : 0, 1);                            // v2: radar detector owned
-
-    put(this._bitChecksum(bits), 12);                   // checksum over the data bits
-
-    while (bits.length % 6 !== 0) bits.push(0);         // pad to a base64 group
-    const A = GameScene._SAVE_B64;
-    let out = '';
-    for (let i = 0; i < bits.length; i += 6) {
-      let v = 0; for (let b = 0; b < 6; b++) v = (v << 1) | bits[i + b];
-      out += A[v];
-    }
-    return out;
-  }
-
-  /** Decode a portable code → snapshot, or null if malformed / checksum
-   *  mismatch (the anti-guess gate).  Mirrors _encodeSnapshot's field order. */
-  _decodeSnapshot(code) {
-    try {
-      const A = GameScene._SAVE_B64;
-      const str = (code || '').trim();
-      if (!str) return null;
-      const bits = [];
-      for (const ch of str) {
-        const v = A.indexOf(ch);
-        if (v < 0) return null;                          // illegal char → reject
-        for (let b = 5; b >= 0; b--) bits.push((v >> b) & 1);
-      }
-      let pos = 0;
-      const get = (w) => { let v = 0; for (let i = 0; i < w; i++) v = (v << 1) | (bits[pos++] ?? 0); return v; };
-      const vehKeys = Object.keys(VEHICLES);
-      const viceIds = Object.values(VICES);
-
-      const ver = get(4);                                // format version
-      if (ver !== 1 && ver !== 2) return null;
-      const stopIdx = get(6);
-      const diffIdx = get(2);
-      const subIdx  = get(2);
-      const score   = get(24);
-      const stars   = get(3);
-      const hp      = get(9);
-      const hpMax   = get(9);
-      const gas     = get(10);
-      const vehIdx  = get(4);
-      const accPack = get(4);
-      const ownedBits = get(vehKeys.length);
-      const unlkBits  = get(viceIds.length);
-      const gun     = get(8);
-      const spike   = get(7);
-      const donut   = get(7);
-      const rocket  = get(7);
-      const disguise = get(5);
-      const viceVals = [];
-      for (let i = 0; i < viceIds.length; i++) viceVals.push(get(5));
-      const radar   = (ver >= 2) ? get(1) : 0;           // v2: radar detector owned
-      const dataEnd = pos;
-      const csum    = get(12);
-      if (this._bitChecksum(bits.slice(0, dataEnd)) !== csum) return null;   // anti-tamper gate
-
-      const stop = REST_STOPS[stopIdx];
-      if (!stop) return null;
-      const vices = {}, unlocked = {};
-      viceIds.forEach((id, i) => {
-        vices[id]    = (viceVals[i] || 0) / 31;
-        unlocked[id] = !!(unlkBits & (1 << i));
-      });
-      const owned = vehKeys.filter((k, i) => ownedBits & (1 << i));
-      return {
-        v: ver, id: stop.id,
-        difficulty: ['easy', 'normal', 'hard', 'custom'][diffIdx] ?? 'normal',
-        customSub:  ['easy', 'normal', 'hard'][subIdx] ?? 'normal',
-        score, stars, hp, hpMax, gas,
-        vehicleId: vehKeys[vehIdx] ?? 'beater',
-        accessories: { bumper: !!(accPack & 1), traction: !!(accPack & 2), nos: (accPack >> 2) & 3 },
-        owned: owned.length ? owned : ['beater'],
-        vices, unlocked,
-        weapons: { gun, spike, donut, rocket, disguise },
-        radar: !!radar,
-      };
-    } catch (e) { return null; }
-  }
-
   _applyMessageState(m) {
     if (!m || typeof m !== 'object') return;
     const cleanThread = (arr) => (Array.isArray(arr) ? arr : [])
@@ -17106,8 +16974,7 @@ export class GameScene extends Phaser.Scene {
     this._passedRestStops.add(rs.id);
     this._everUsedRestStop = true;
     const snap = this._collectSaveSnapshot(rs.id);
-    const code = this._encodeSnapshot(snap);
-    this._saveRestStop(rs.id, code, snap);
+    this._saveRestStop(rs.id, snap);
     this._lastCheckpoint = { name: rs.name, position: this.player.position, scoreAtCP: this.score };
 
     // Music keeps playing in the rest stop — only the mute button (M key /
@@ -17121,7 +16988,6 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.once('camerafadeoutcomplete', () => {
       this.scene.start('RestStop', {
         stop:     rs,
-        code,
         score:    Math.round(this.score),
         stars:    this.cops.starDisplay ?? 0,
         position: this.player.position,
@@ -17152,26 +17018,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Persist rest-stop checkpoint to localStorage so the game can resume
-   *  from that position next session via the save code. We keep two records:
-   *  `lastRestStop` (most recent, for quick "Resume" UI) and a code-keyed
-   *  `restStopSaves[code]` map so the player can enter any code they wrote
-   *  down from this device and pick up there. */
-  _saveRestStop(stopId, code, snap) {
+   *  from that position next session (SAVED).  Stores `lastRestStop` — the
+   *  most-recent full snapshot — used by the title-screen SAVED resume. */
+  _saveRestStop(stopId, snap) {
     try {
       const save = this.registry.get('save');
       if (!save) return;
       // Store the FULL snapshot (money, HP, gas, vices, weapons, vehicle,
       // accessories, owned, stars…) so a same-device resume restores
-      // everything reliably — the encoded `code` carries the same data
-      // cross-device.  Falls back to a minimal snapshot if none was passed.
+      // everything reliably.  Falls back to a minimal snapshot if none passed.
       const snapshot = {
         ...(snap ?? this._collectSaveSnapshot(stopId)),
-        code,
         ts: Date.now(),
       };
       save.set('lastRestStop', snapshot);
+      // Keep the per-stop snapshot map (now keyed by STOP ID, not a code) so the
+      // route-map tap-to-warp still works — just without any portable codes.
       const all = save.get('restStopSaves') ?? {};
-      all[code] = snapshot;
+      all[stopId] = snapshot;
       save.set('restStopSaves', all);
       // Bump the cross-mode tier for this checkpoint: Easy→bronze,
       // Normal→silver, Hard→gold.  Keeps the highest-ever reached so
@@ -17884,8 +17748,8 @@ export class GameScene extends Phaser.Scene {
     if (liveSnap)  lines.push(`LAST — ${locLine(liveSnap)}`);
     if (savedSnap) lines.push(`SAVED — ${locLine(savedSnap)}`);
     const lead = liveSnap
-      ? 'Tap RESUME for LAST — or type SAVED / a code:'
-      : 'Type SAVED or paste a code:';
+      ? 'Tap RESUME for LAST — or type SAVED:'
+      : 'Type SAVED to load your checkpoint:';
     const resumeHint = lines.length ? `${lead}\n${lines.join('\n')}` : '';
     this._buildCodeEntryPopup((liveSnap || savedSnap) ? '' : defaultCode, (raw) => {
       const code = (raw || '').trim();   // case-SENSITIVE — base64url codes
@@ -17904,16 +17768,8 @@ export class GameScene extends Phaser.Scene {
         if (savedSnap) { this._resumeFromSavedSnapshot(savedSnap); return { ok: true }; }
         return { ok: false, error: 'No saved checkpoint found.' };
       }
-      const all  = save?.get?.('restStopSaves') ?? {};
-      // Prefer the locally-stored full snapshot (this device); otherwise
-      // DECODE the self-contained portable code (cross-device).  The decode
-      // verifies a checksum, so a typed-gibberish code fails the lookup.
-      // Return {ok:false} on a miss so the modal STAYS OPEN with an inline
-      // error for re-entry (no bounce back to the title).
-      const snap = all[code] || this._decodeSnapshot(code);
-      if (!snap) return { ok: false, error: 'Code not found — check it and try again.' };
-      this._resumeFromSavedSnapshot(snap);
-      return { ok: true };
+      // Portable codes removed — only the local LAST / SAVED keywords resume.
+      return { ok: false, error: 'Type LAST or SAVED.' };
     }, undefined, resumeHint);
   }
 
@@ -18151,7 +18007,7 @@ export class GameScene extends Phaser.Scene {
     const card = document.createElement('div');
     card.style.cssText = 'background:#020611;border:2px solid #39A8FF;border-radius:10px;padding:14px 20px;width:min(88vw,520px);box-shadow:0 12px 34px rgba(0,0,0,.55);';
     const ttl = document.createElement('div');
-    ttl.textContent = resumeHint ? 'LOAD: LAST, SAVED, OR A CODE?' : 'ENTER / PASTE SAVE CODE';
+    ttl.textContent = resumeHint ? 'LOAD: LAST OR SAVED?' : 'LOAD SAVED GAME';
     ttl.style.cssText = 'color:#F4F7FF;font-weight:bold;font-size:16px;letter-spacing:1px;text-align:center;margin-bottom:12px;';
     const input = document.createElement('input');
     // Save codes are base64url = CASE-SENSITIVE, so DON'T auto-capitalize or
@@ -18161,7 +18017,7 @@ export class GameScene extends Phaser.Scene {
     input.setAttribute('autocapitalize', 'off');
     input.setAttribute('autocorrect', 'off');
     input.value = String(defaultCode || '');
-    if (resumeHint) input.placeholder = 'blank = LAST · or type SAVED / a code';
+    if (resumeHint) input.placeholder = 'blank = LAST · or type SAVED';
     input.style.cssText = 'width:100%;box-sizing:border-box;padding:11px;font-size:15px;font-family:monospace;letter-spacing:1px;text-align:center;border:1px solid #39A8FF;border-radius:6px;background:#00030A;color:#FFEE00;';
     // "Previous location" line — only when a clean-quit run is resumable.
     const hint = document.createElement('div');
@@ -18951,7 +18807,6 @@ export class GameScene extends Phaser.Scene {
       vice:            extra.vice ?? null,
       charge:          extra.charge ?? null,
       losses:          Math.round(extra.losses ?? 0),
-      checkpointCode:  this.registry.get('save')?.get?.('lastRestStop')?.code ?? null,
       viceSummary,
       lastCheckpoint:  this._lastCheckpoint
         ? {
