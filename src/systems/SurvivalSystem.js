@@ -43,8 +43,8 @@ export class SurvivalSystem {
 
   reset() {
     this.tiredness = 0;
-    this.fullness  = 62;    // start comfortably fed
-    this.hydration = 68;    // start hydrated
+    this.fullness  = 0;     // start empty — fill up on the road
+    this.hydration = 0;     // start empty — fill up on the road
     this.nausea    = 0;
     this.caffeineDep    = 0;   // hidden dependence 0–100
     this.caffeineActive = 0;   // miles of caffeine still "in system"
