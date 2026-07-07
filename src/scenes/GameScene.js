@@ -15806,9 +15806,9 @@ export class GameScene extends Phaser.Scene {
     const bx = mx(SCREEN_W - bw - 16);
     let by = 92;
     const rows = [
-      { key: 'TIRED', v: s.tiredness,  col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x6A7AE0, dual: false, danger: s.tiredness >= 70 },
-      { key: 'FED',   v: s.fullness,   col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
-      { key: 'HYDR',  v: s.hydration,  col: s.hydrationTier() !== 'ok'    ? 0xE0483C : 0x39C0D9, dual: true,  danger: s.hydrationTier() !== 'ok' },
+      { key: 'Awake',  v: 100 - s.tiredness, col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x6A7AE0, dual: false, danger: s.tiredness >= 70 },
+      { key: 'Hunger', v: s.fullness,        col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
+      { key: 'Thirst', v: s.hydration,       col: s.hydrationTier() !== 'ok'    ? 0xE0483C : 0x39C0D9, dual: true,  danger: s.hydrationTier() !== 'ok' },
     ];
     rows.forEach((r, i) => {
       const y = by + i * gap;
