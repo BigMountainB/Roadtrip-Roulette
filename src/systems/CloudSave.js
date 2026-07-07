@@ -12,21 +12,21 @@
 
 // The cloud API is a standalone Cloudflare Worker (deployed via the dashboard,
 // since wrangler hangs on this setup).  Set this to the Worker's URL after you
-// create it (e.g. https://dui-api.<your-subdomain>.workers.dev).  A runtime
-// override (window.__DUI_API_BASE) lets you point at it for testing without a
+// create it (e.g. https://roadtrip-api.<your-subdomain>.workers.dev).  A runtime
+// override (window.__RTR_API_BASE) lets you point at it for testing without a
 // rebuild.  Until it's set, all calls fail fast and the game falls back to the
-// on-device save + manual code (no errors).
+// on-device save (no errors).
 const _w = (typeof window !== 'undefined') ? window : null;
-const _explicit = !!(_w && _w.__DUI_API_BASE);
-const API_BASE = _explicit ? _w.__DUI_API_BASE
-  : 'https://dui-api.brendanbaughn.workers.dev';
+const _explicit = !!(_w && _w.__RTR_API_BASE);
+const API_BASE = _explicit ? _w.__RTR_API_BASE
+  : 'https://roadtrip-api.brendanbaughn.workers.dev';
 const TIMEOUT_MS = 6000;
 
 // Local-dev guard — don't let localhost/LAN playtests write REAL cloud saves
 // and leaderboard entries.  The iOS app also loads from "capacitor://localhost",
 // but that's production, so we key off the PROTOCOL (http/https = a browser dev
 // server) and a private host, never bare "localhost".  Setting
-// window.__DUI_API_BASE is an explicit opt-in that re-enables cloud anywhere.
+// window.__RTR_API_BASE is an explicit opt-in that re-enables cloud anywhere.
 function _isDevOrigin() {
   const loc = _w?.location;
   if (!loc) return false;
@@ -38,7 +38,7 @@ function _isDevOrigin() {
 }
 const _CLOUD_ENABLED = _explicit || !_isDevOrigin();
 if (_w && !_CLOUD_ENABLED) {
-  console.info('[CloudSave] local dev origin — cloud writes DISABLED (set window.__DUI_API_BASE to override).');
+  console.info('[CloudSave] local dev origin — cloud writes DISABLED (set window.__RTR_API_BASE to override).');
 }
 
 async function _fetch(path, opts = {}) {

@@ -340,9 +340,9 @@ export class StatsTracker {
     }
   }
 
-  /** Speed-trap traffic stop resolved (Stage 3).  `dui` = intoxicated stop
-   *  vs a plain speeding ticket; `amountPaid` = fine subtracted from score;
-   *  `busted` = the stop ended the run (suspended license / couldn't pay). */
+  /** Speed-trap traffic stop resolved (Stage 3) — a speeding ticket.
+   *  `amountPaid` = fine subtracted from score.  (`dui`/`busted` kept for
+   *  back-compat with old callers but no longer produced.) */
   recordTrafficStop({ dui = false, amountPaid = 0, busted = false } = {}) {
     if (!this.ranked) return;
     this._bump(this.stats.police, dui ? 'duis' : 'tickets');

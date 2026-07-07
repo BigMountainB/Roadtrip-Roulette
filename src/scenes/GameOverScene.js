@@ -9,14 +9,14 @@ const VICE_ORDER = [
 ];
 
 const UNLOCK_HINTS = {
-  [VICES.ENERGY]:  'Stay drunk for 30 seconds.',
-  [VICES.GUMMIES]:  'Be drunk and stoned at the same time (both bars ≥ 30%).',
-  [VICES.HOTDOG]:      'Get the shrooms bar to 50%.',
+  [VICES.ENERGY]:  'Drive 100 total miles.',
+  [VICES.GUMMIES]:  'Reach Cle Elum (mile 84).',
+  [VICES.HOTDOG]:      'Reach Ellensburg (mile 109).',
   [VICES.COMBO]:   'Drive past 20% of the route.',
   [VICES.COLDBREW]:       'Crash into 50 NPC cars across your runs.',
-  [VICES.COMA]: 'Get the heroin bar to 50%.',
-  [VICES.SLUSHIE]: 'Get the LSD bar to 40%.',
-  [VICES.CAFFEINE]:     'Hit 40% cocaine, then stay clean from coke for 30 sec.',
+  [VICES.COMA]: 'Clear Snoqualmie Pass once.',
+  [VICES.SLUSHIE]: 'Drink 40 Cold Brews across your runs.',
+  [VICES.CAFFEINE]:     'Wreck 50 cars across your runs.',
 };
 
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
@@ -59,7 +59,7 @@ export class GameOverScene extends Phaser.Scene {
     this.finalMiles     = data?.distanceMi ?? 0;
     this.cause          = data?.cause      ?? 'busted';
     this.deathVice      = data?.vice       ?? null;
-    this.charge         = data?.charge     ?? 'DUI';
+    this.charge         = data?.charge     ?? 'RECKLESS DRIVING';
     this.losses         = data?.losses     ?? 0;
     this.runTimeSec     = data?.runTimeSec ?? 0;
     this.lastCheckpoint = data?.lastCheckpoint ?? null;
@@ -304,7 +304,7 @@ export class GameOverScene extends Phaser.Scene {
     const viceLabel = VICE_CONFIG[this.deathVice]?.label ?? null;
     const rows = isBust
       ? [
-          ['CHARGE', this.charge || 'DUI'],
+          ['CHARGE', this.charge || 'RECKLESS DRIVING'],
           ['DISTANCE / TIME', `${this.finalMiles.toFixed(2)} MI   ${this._formatRunTime()}`],
           ['BAIL LOSSES', `-$${Math.max(0, this.losses).toLocaleString()}`],
         ]

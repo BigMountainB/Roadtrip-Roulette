@@ -287,31 +287,14 @@ export const COP_TRAP_ABORT_X      = 0.9;
 // trooper "writes you up" (the ticket math lands in Stage 3).  The party clock
 // keeps ticking through it.  Then the car is released and drives off.
 export const COP_TRAP_HOLD_SEC     = 15;
-// ── Stage 3: the ticket (money / DUI / bust) ─────────────────────────────
-// When the held stop ends the trooper writes the ticket.  The offense is
-// assessed from the vice bars AT THE MOMENT YOU PULLED OVER (not after the hold
-// metabolizes).  "Under the limit" → a plain speeding ticket; "over" → a DUI.
-//   DUI threshold: any single vice/alcohol bar ≥ 50%, OR at least two bars
-//   are ≥ 30% at the same time.
-export const COP_DUI_ALCOHOL_LIMIT = 0.50;   // alcohol bar ≥ this → intoxicated
-export const COP_DUI_VICE_LIMIT    = 0.50;   // any other vice bar ≥ this → intoxicated
-export const COP_DUI_MULTI_COUNT   = 2;      // this many bars over multi limit…
-export const COP_DUI_MULTI_LIMIT   = 0.30;   // …also counts as DUI
+// ── Stage 3: the ticket (speeding fine) ──────────────────────────────────
+// When the held stop ends the trooper writes a speeding ticket.  (No sobriety
+// check — this is a road-trip speeding stop.)
 // Fines (subtract from score, since money == persisted score).  A FRACTION of
 // current cash, capped at a dollar ceiling — scales with wealth, never busts a
 // broke early-game player, and can't drain a rich player infinitely.
 export const COP_TICKET_SPEEDING_FRAC   = 0.50;     // speeding = 50% of cash…
 export const COP_TICKET_SPEEDING_CAP    = 300;      // …capped at $300 max
-export const COP_TICKET_DUI_FRAC        = 1.00;     // DUI = 100% of cash…
-export const COP_TICKET_DUI_CAP         = 10000;    // …capped at $10,000 max
-// A DUI also debuffs earnings ×MULT for the next PENALTY_MI miles.
-export const COP_DUI_EARN_MULT     = 0.75;
-export const COP_DUI_EARN_MI       = 50;
-// Suspended-license bust: this many DUIs inside a rolling WINDOW_MI window →
-// busted (sober speeding tickets don't count).  A lawyer raises the count.
-export const COP_DUI_BUST_COUNT        = 2;
-export const COP_DUI_BUST_COUNT_LAWYER = 3;
-export const COP_DUI_WINDOW_MI         = 50;
 
 // ── Finish cinematic (park in front of the Pullman Party House) ───────────
 // On crossing the mile-289 finish, input locks, the car eases to a stop over

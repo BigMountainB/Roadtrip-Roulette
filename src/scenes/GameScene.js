@@ -10,10 +10,7 @@ import {
   VEHICLES, GAS_LIGHT_AT_MI,
   setCameraMode, CAM, COP_TRAP_SPEED_MPH,
   COP_TRAP_COMPLY_SEC, COP_TRAP_PULLOVER_MPH, COP_TRAP_SHOULDER_X, COP_TRAP_ABORT_X, COP_TRAP_HOLD_SEC,
-  COP_DUI_ALCOHOL_LIMIT, COP_DUI_VICE_LIMIT, COP_DUI_MULTI_COUNT, COP_DUI_MULTI_LIMIT,
-  COP_TICKET_SPEEDING_FRAC, COP_TICKET_SPEEDING_CAP, COP_TICKET_DUI_FRAC, COP_TICKET_DUI_CAP,
-  COP_DUI_EARN_MULT, COP_DUI_EARN_MI,
-  COP_DUI_BUST_COUNT, COP_DUI_BUST_COUNT_LAWYER, COP_DUI_WINDOW_MI,
+  COP_TICKET_SPEEDING_FRAC, COP_TICKET_SPEEDING_CAP,
   FINISH_PARK_SEC, FINISH_PARK_X, FINISH_PARK_LERP,
   GIRL_MAX_SKIPS, GIRL_PARTY_BONUS,
 } from '../constants.js';
@@ -382,7 +379,7 @@ export class GameScene extends Phaser.Scene {
         // fires those; a deliberate swipe-up quit / background / iOS discard
         // does NOT.  One-shot: read + clear here regardless of outcome.
         let crashed = false;
-        try { crashed = localStorage.getItem('dui_crashed') === '1'; localStorage.removeItem('dui_crashed'); } catch (_) {}
+        try { crashed = localStorage.getItem('rtr_crashed') === '1'; localStorage.removeItem('rtr_crashed'); } catch (_) {}
         if (lr && typeof lr === 'object' && lr.snap
             && typeof lr.snap.position === 'number' && lr.snap.position > 50
             && (Date.now() - (lr.ts || 0)) < 12 * 3600 * 1000) {
@@ -449,7 +446,7 @@ export class GameScene extends Phaser.Scene {
     // Cleared so a fresh run (incl. the DUI bust-to-start restart) doesn't boot
     // straight into the frozen busted-screen state.
     this._bustingToStart     = false;
-    this._npcCrashesPostDrink = 0;
+    this._npcCrashesReckless  = 0;
     this._viceBumpCount       = 0;
     this._viceBumpFired       = false;
     this._playerCopCrashes    = 0;
@@ -466,15 +463,9 @@ export class GameScene extends Phaser.Scene {
     this._trapStopping        = false;   // auto-stop assist engaged
     this._trapStopHeld        = false;   // held at a full stop for the traffic stop
     this._trapStopHoldTimer   = 0;
-    // Stage 3 — the ticket.  `_trapTicket` snapshots the offense (sober vs DUI
-    // + base fine) at the MOMENT of pulling over; it's resolved when the hold
-    // ends.  `_duiStopMiles` is the rolling list of odometer-miles where an
-    // intoxicated stop happened (suspended-license bust = too many inside
-    // COP_DUI_WINDOW_MI).  `_duiEarnPenaltyMi` is the odometer mile through
-    // which a DUI's ×COP_DUI_EARN_MULT earnings debuff stays in effect.
+    // Stage 3 — the ticket.  `_trapTicket` snapshots the speeding offense at the
+    // MOMENT of pulling over; it's resolved when the hold ends.
     this._trapTicket          = null;
-    this._duiStopMiles        = [];
-    this._duiEarnPenaltyMi    = -1;
     this._trapWarnSent        = new Set();   // trap miles a friend has already texted about
     // Flavor contacts (The Ex / Mom / The Boss / The Unknown) text you on the
     // road — pure tone, no gameplay effect.  Per-run threads + a cadence timer.
@@ -3029,52 +3020,9 @@ export class GameScene extends Phaser.Scene {
   _isRight() { return this._delayedSteer().right; }
 
   _delayedSteer() {
-    const alc = this.vices?.get?.(VICES.SUSHI) ?? 0;
-    const raw = { left: this._isLeftRaw(), right: this._isRightRaw() };
-    if (alc <= 0.75) {
-      // Below threshold — reset scheduling so a brief sober dip doesn't
-      // carry over a queued lurch.
-      this._drunkLurchUntil = 0;
-      this._drunkLurchNext  = 0;
-      return raw;
-    }
-
-    const now = this.gameTime ?? 0;
-
-    // First frame above threshold — arm the next lurch 5-10 s out.
-    if (!this._drunkLurchNext) {
-      this._drunkLurchNext = now + 5 + Math.random() * 5;
-    }
-
-    // Always feed the history ring while drunk so a lurch can sample
-    // from past input the moment it kicks in.
-    if (!this._steerHistory) this._steerHistory = [];
-    this._steerHistory.push({ t: now, ...raw });
-    while (this._steerHistory.length > 0 && now - this._steerHistory[0].t > 1.0) {
-      this._steerHistory.shift();
-    }
-
-    const inLurch = now < (this._drunkLurchUntil ?? 0);
-
-    // No active lurch but cooldown elapsed → start a new one.
-    if (!inLurch && now >= this._drunkLurchNext) {
-      const lurchDur = 0.6 + Math.random() * 0.6;            // 0.6-1.2 s
-      this._drunkLurchUntil = now + lurchDur;
-      this._drunkLurchNext  = this._drunkLurchUntil + 5 + Math.random() * 5; // 5-10 s gap
-    }
-
-    // Outside the lurch window → input passes through cleanly.
-    if (now >= (this._drunkLurchUntil ?? 0)) return raw;
-
-    // Inside a lurch — pull from a stale frame.  Stronger than before:
-    // 350 ms at exactly 75 %, scaling to 600 ms at a full bar.
-    const delaySec = 0.35 + Math.min(1, (alc - 0.75) / 0.25) * 0.25;
-    const target   = now - delaySec;
-    let chosen = this._steerHistory[0];
-    for (const e of this._steerHistory) {
-      if (e.t <= target) chosen = e; else break;
-    }
-    return { left: !!chosen?.left, right: !!chosen?.right };
+    // Road-trip model has no alcohol/drunk-driving — steering input always
+    // passes through cleanly (the old drunk input-delay lurch is retired).
+    return { left: this._isLeftRaw(), right: this._isRightRaw() };
   }
   _isBrake() { return this._touchBrake || !!this.cursors?.down.isDown || !!this.wasd?.down.isDown; }
   _isBoost() {
@@ -4004,19 +3952,17 @@ export class GameScene extends Phaser.Scene {
     // After the first star, all further star changes are STATIC additions
     // from collision events (see _onCopCollision and friends).  No heat trickle.
     if (this.cops.stars < 1) {
-      const drunk    = (this.vices.get?.(VICES.SUSHI) ?? 0) >= (1 / 3);
-      const stoned   = (this.vices.get?.(VICES.BURRITO)    ?? 0) >= 0.5;
-      const everDrunk = (this.vices.maxReached?.[VICES.SUSHI] ?? 0) > 0.05;
-      this._npcCrashesPostDrink ??= 0;
-      this._viceBumpCount       ??= 0;
-
-      const pathA = everDrunk && (drunk || stoned) && this._npcCrashesPostDrink >= 3;
+      this._npcCrashesReckless ??= 0;
+      this._viceBumpCount      ??= 0;
+      // Reckless driving draws heat: 3 NPC wrecks (pathA), or a longer tally of
+      // rough bumps over the run (pathB, one-shot).
+      const pathA = this._npcCrashesReckless >= 3;
       const pathB = !this._viceBumpFired && this._viceBumpCount >= 20;
       if (pathA || pathB) {
         this.cops.addStar(1, 3);
         this._showPopup('★ WANTED LEVEL ACTIVATED!\nCops dispatched.', '#FF4444');
-        this._npcCrashesPostDrink = 0;
-        this._viceBumpFired        = true;     // path B is one-shot
+        this._npcCrashesReckless = 0;
+        this._viceBumpFired      = true;       // path B is one-shot
       }
     }
 
@@ -8442,27 +8388,18 @@ export class GameScene extends Phaser.Scene {
     const isSemi = car.vClass === 'semi';
     const SEMI_BOUNCE_SPEED = MAX_SPEED * 0.5;   // 60 mph (MAX_SPEED reads 120)
 
-    // Count NPC-car crashes that happen after the player has had their
-    // first drink — feeds the first-star activation gate in update().
+    // Count NPC-car crashes (reckless driving) — feeds the first-star
+    // activation gate in update().
     if (!car.isCop) {
-      // Lifetime NPC-crash tally — gates rx unlock at 50.
+      // Lifetime NPC-crash tally.
       if (this.vices) this.vices.npcCrashesTotal = (this.vices.npcCrashesTotal ?? 0) + 1;
       this.stats?.recordNpcHit();          // lifetime + this-trip + per-vehicle
       if (this._dailyTracker) this._dailyTracker.carsHit++;   // hit_cars / no_collisions
-      const everDrunk = (this.vices.maxReached?.[VICES.SUSHI] ?? 0) > 0.05;
-      if (everDrunk) {
-        this._npcCrashesPostDrink = (this._npcCrashesPostDrink ?? 0) + 1;
-      }
-      // Vice-influenced bump counter — separate one-shot gate.  If any
-      // vice bar is ≥ 30% at the moment of impact, the bump counts.
-      // Once it hits 20, the player is awarded their first star (one
-      // time only — see _viceBumpFired flag in the gate logic).
+      // Reckless-driving tally — every NPC wreck feeds the first-star gate.
+      this._npcCrashesReckless = (this._npcCrashesReckless ?? 0) + 1;
+      // Separate one-shot gate: enough rough bumps over the run → first star.
       if (!this._viceBumpFired) {
-        const anyHigh = Object.values(VICES).some(id =>
-          (this.vices.get?.(id) ?? 0) >= 0.30);
-        if (anyHigh) {
-          this._viceBumpCount = (this._viceBumpCount ?? 0) + 1;
-        }
+        this._viceBumpCount = (this._viceBumpCount ?? 0) + 1;
       }
     }
 
@@ -16671,10 +16608,7 @@ export class GameScene extends Phaser.Scene {
     // additive `this.score += pts * _scoreMult()` callsite no-ops.
     if (Difficulty.noScore?.()) return 0;
     const mult = this.vices.scoreMultiplier + (this.cops.starDisplay ?? 0);
-    let m = Math.round(mult * 2) / 2;
-    // DUI penalty — a recent intoxicated traffic stop throttles ALL earnings
-    // to ×COP_DUI_EARN_MULT until the odometer passes the penalty mile.
-    if ((this._odometer ?? 0) < (this._duiEarnPenaltyMi ?? -1)) m *= COP_DUI_EARN_MULT;
+    const m = Math.round(mult * 2) / 2;
     return m;
   }
 
@@ -16823,8 +16757,6 @@ export class GameScene extends Phaser.Scene {
       partyClockSec: this._partyClockSec ?? null,
       gameTime:      this.gameTime ?? 0,
       runState: {
-        duiStopMiles: Array.isArray(this._duiStopMiles) ? this._duiStopMiles.slice(-8) : [],
-        duiEarnPenaltyMi: Number.isFinite(this._duiEarnPenaltyMi) ? this._duiEarnPenaltyMi : -1,
         flatTireTimer: Math.max(0, Number(this._flatTireTimer) || 0),
         probationTimer: Math.max(0, Number(this._probationTimer) || 0),
         noDamageTimer: Math.max(0, Number(this._noDamageTimer) || 0),
@@ -16876,13 +16808,6 @@ export class GameScene extends Phaser.Scene {
 
   _applyRunState(r) {
     if (!r || typeof r !== 'object') return;
-    if (Array.isArray(r.duiStopMiles)) {
-      this._duiStopMiles = r.duiStopMiles
-        .filter(v => Number.isFinite(v))
-        .map(v => Math.max(0, v))
-        .slice(-8);
-    }
-    if (Number.isFinite(r.duiEarnPenaltyMi)) this._duiEarnPenaltyMi = r.duiEarnPenaltyMi;
     if (Number.isFinite(r.flatTireTimer)) this._flatTireTimer = Math.max(0, r.flatTireTimer);
     if (Number.isFinite(r.probationTimer)) this._probationTimer = Math.max(0, r.probationTimer);
     if (Number.isFinite(r.noDamageTimer)) this._noDamageTimer = Math.max(0, r.noDamageTimer);
@@ -17993,10 +17918,10 @@ export class GameScene extends Phaser.Scene {
     // code on one phone, paste it on another.  Centred fixed overlay,
     // independent of the canvas scale.  (Same-device players rarely type it
     // at all — the title screen auto-fills their last code.)
-    const existing = document.getElementById('dui-code-entry');
+    const existing = document.getElementById('rtr-load');
     if (existing) existing.remove();
     const wrap = document.createElement('div');
-    wrap.id = 'dui-code-entry';
+    wrap.id = 'rtr-load';
     // Anchor the card to the TOP (not centered): in landscape the iOS
     // keyboard fills the bottom half, and a centered card put its CANCEL /
     // RESUME buttons UNDER the keyboard — untappable, trapping the player
@@ -18051,9 +17976,9 @@ export class GameScene extends Phaser.Scene {
       b.addEventListener('click', (e) => { e.preventDefault(); fn(); });
       return b;
     };
-    // Tap-to-dismiss alert layered ABOVE the code card (inside #dui-code-entry
+    // Tap-to-dismiss alert layered ABOVE the load card (inside #rtr-load
     // so it stays touch-exempt).  OK removes it and refocuses the input — the
-    // code modal underneath stays open for a re-entry.
+    // load modal underneath stays open for a re-entry.
     const showAlert = (msg) => {
       const al = document.createElement('div');
       al.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,0.6);';
@@ -18490,115 +18415,34 @@ export class GameScene extends Phaser.Scene {
     this._endGame('busted', { charge: 'RECKLESS DRIVING', losses: lost });
   }
 
-  /** Speed-trap traffic stop (Stage 3) — assess the offense from the vice bars
-   *  AT THE TIME OF THE STOP.  Returns { dui }: `dui` = over the legal limit.
-   *  Threshold: any one bar at 50%+, or at least two bars at 30%+. */
+  /** Speed-trap traffic stop (Stage 3).  This is a road-trip speeding stop —
+   *  there's no sobriety/impairment check anymore.  Kept as a hook in case
+   *  future offense types are added. */
   _assessTrafficStop() {
-    const ids = Object.values(VICES);
-    const lvl = (id) => this.vices?.get?.(id) ?? 0;
-    const singleOver = lvl(VICES.SUSHI) >= COP_DUI_ALCOHOL_LIMIT
-      || ids.some(id => id !== VICES.SUSHI && lvl(id) >= COP_DUI_VICE_LIMIT);
-    const multiOverCount = ids.reduce((n, id) => n + (lvl(id) >= COP_DUI_MULTI_LIMIT ? 1 : 0), 0);
-    const dui = singleOver || multiOverCount >= COP_DUI_MULTI_COUNT;
-    return { dui };
+    return { speeding: true };
   }
 
-  /** Resolve the held traffic stop (Stage 3): apply the lawyer discount, run
-   *  the bust checks, charge the fine, set the DUI earnings debuff, record the
-   *  stats, and surface the result.  A bust routes to GameOver; otherwise the
-   *  player pays up and drives off.  (Money == persisted score, so fines
-   *  subtract from score.) */
+  /** Resolve the held traffic stop (Stage 3): a plain speeding ticket — apply
+   *  the lawyer discount, charge the fine, record the stat, and drive off.
+   *  (Money == persisted score, so fines subtract from score.) */
   _issueTrafficTicket() {
     const t = this._trapTicket;
     this._trapTicket = null;
     if (!t) { this._showPopup('✅ Ticket issued. Drive safe.', '#88FF88'); return; }
 
     const hasLawyer = this.registry.get('save')?.get?.('lawyerRetained') === true;
-    // Fine = a fraction of current cash, capped at a dollar ceiling:
-    //   speeding = 50% of cash, max $300.   DUI = 100% of cash, max $10,000.
-    // Lawyer on retainer waives speeding and halves the DUI fine.  (The lawyer
-    // also halves arrest bail elsewhere — unchanged.)
-    const frac = t.dui ? COP_TICKET_DUI_FRAC : COP_TICKET_SPEEDING_FRAC;
-    const cap  = t.dui ? COP_TICKET_DUI_CAP  : COP_TICKET_SPEEDING_CAP;
-    let fine   = Math.min(cap, Math.round(Math.max(0, this.score) * frac));
-    if (hasLawyer) fine = t.dui ? Math.round(fine * 0.5) : 0;
+    // Fine = a fraction of current cash, capped at a dollar ceiling (speeding =
+    // 50% of cash, max $300).  Lawyer on retainer gets it dropped.
+    let fine = Math.min(COP_TICKET_SPEEDING_CAP,
+      Math.round(Math.max(0, this.score) * COP_TICKET_SPEEDING_FRAC));
+    if (hasLawyer) fine = 0;
 
-    // ── Bust: repeat-DUI suspended license. ────────────────────────────────
-    // Only intoxicated stops count toward the rolling COP_DUI_WINDOW_MI window;
-    // sober speeding tickets never suspend the license.  A DUI bust no longer
-    // ENDS the game — it sends the player back to the start (see
-    // _bustBackToStart).  The restart wipes the run, so no fine is charged here.
-    if (t.dui) {
-      const mi = this._odometer ?? 0;
-      this._duiStopMiles = (this._duiStopMiles ?? []).filter(m => m > mi - COP_DUI_WINDOW_MI);
-      this._duiStopMiles.push(mi);
-      const limit = hasLawyer ? COP_DUI_BUST_COUNT_LAWYER : COP_DUI_BUST_COUNT;
-      if (this._duiStopMiles.length >= limit) {
-        this.stats?.recordTrafficStop({ dui: true, amountPaid: 0, busted: true });
-        this._bustBackToStart();
-        return;
-      }
-    }
-
-    // ── No bust: pay the fine, set the DUI earnings debuff, drive off. ──────
     this.score = Math.max(0, this.score - fine);
-    this.stats?.recordTrafficStop({ dui: t.dui, amountPaid: fine, busted: false });
-    if (t.dui) {
-      this._duiEarnPenaltyMi = (this._odometer ?? 0) + COP_DUI_EARN_MI;
-      this._showPopup(
-        (fine > 0 ? `🚔 RECKLESS — −$${fine.toLocaleString()}` : '🚔 RECKLESS — ⚖️ fine waived') +
-        `\nEarnings ×${COP_DUI_EARN_MULT} for ${COP_DUI_EARN_MI} mi`,
-        '#FF5C7A');
-    } else {
-      this._showPopup(
-        fine > 0 ? `🎫 Speeding ticket — −$${fine.toLocaleString()}\nDrive safe.`
-                 : '⚖️ Lawyer got the speeding ticket dropped.\nDrive safe.',
-        fine > 0 ? '#FFDD44' : '#88FF88');
-    }
-  }
-
-  /** DUI suspended-license outcome — NO LONGER a game-over.  Freeze the run,
-   *  show the BUSTED screen for 5 seconds, then restart from the very beginning
-   *  with the car already rolling (skipTitle).  The fresh run resets cash, HP,
-   *  and mileage to mile 0 — losing the run is the penalty, but the game keeps
-   *  going rather than dropping to the Game Over panel. */
-  _bustBackToStart() {
-    if (this._bustingToStart) return;
-    // EASY — a suspended-license DUI bust doesn't wipe the run.  Respawn at
-    // the last checkpoint/rest stop (Seattle/start if none), clear the rolling
-    // DUI-stop window so it doesn't instantly re-bust, and carry on — mirrors
-    // the cop-ram bust's Easy respawn (_onArrested).
-    if (Difficulty.mode?.() === 'easy') {
-      const pos  = this._lastCheckpoint?.position ?? 0;
-      const mile = (pos / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
-      const name = this._lastCheckpoint?.name ?? 'the start';
-      this._duiStopMiles = [];              // fresh slate — window cleared
-      this._warpToMile(mile, name);
-      this.damage?.reset?.();               // full repair
-      this._showPopup?.(`🚔 DUI BUST — back to ${name}`, '#FF5C7A');
-      return;
-    }
-    this._bustingToStart = true;            // update() freezes the world while shown
-    try { this.audio?.setPaused?.(true); } catch (_) {}
-    // Full-screen BUSTED screen (image if present, else a red wash) on the UI
-    // camera so world shake/sway can't move it.
-    const overlay = this.textures.exists('ui_end_busted_screen')
-      ? this.add.image(SCREEN_W / 2, SCREEN_H / 2, 'ui_end_busted_screen')
-          .setDisplaySize(SCREEN_W, SCREEN_H).setDepth(3000)
-      : this.add.rectangle(0, 0, SCREEN_W, SCREEN_H, 0x330000, 0.94)
-          .setOrigin(0).setDepth(3000);
-    const label = this.add.text(SCREEN_W / 2, SCREEN_H * 0.84,
-      'BUSTED — TOO RECKLESS\nBack to the start…', {
-        fontSize: '22px', fontFamily: IMPACT, color: '#FF5C7A',
-        stroke: '#000000', strokeThickness: 5, align: 'center',
-      }).setOrigin(0.5).setDepth(3001);
-    this._hudObjects?.push(overlay, label);
-    this.cameras.main?.ignore?.([overlay, label]);
-    // 5-second hold, then a fresh rolling run from mile 0.
-    this.time.delayedCall(5000, () => {
-      try { this.audio?.setPaused?.(false); } catch (_) {}
-      this.scene.start('Game', { skipTitle: true });
-    });
+    this.stats?.recordTrafficStop({ dui: false, amountPaid: fine, busted: false });
+    this._showPopup(
+      fine > 0 ? `🎫 Speeding ticket — −$${fine.toLocaleString()}\nDrive safe.`
+               : '⚖️ Lawyer got the speeding ticket dropped.\nDrive safe.',
+      fine > 0 ? '#FFDD44' : '#88FF88');
   }
 
   /** Overdose handler — freezes the last frame and fades into the

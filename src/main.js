@@ -54,7 +54,7 @@ try {
   // discard — only a real exception fires these handlers.  GameScene reads +
   // clears it: crash → auto-resume + "we lost you"; clean exit → title + a
   // RESUME button instead.
-  const markCrash = () => { try { localStorage.setItem('dui_crashed', '1'); } catch (_) {} };
+  const markCrash = () => { try { localStorage.setItem('rtr_crashed', '1'); } catch (_) {} };
   window.addEventListener('error', (e) => { if (e.error) { markCrash(); show('Uncaught error', e.error); } });
   window.addEventListener('unhandledrejection', (e) => { markCrash(); show('Unhandled rejection', e.reason); });
 })();
@@ -170,11 +170,11 @@ const _boot = () => {
     // #plate-modal exemption the plate input never focused (no keyboard,
     // so "can't change the name") and the DONE/CANCEL taps were swallowed
     // — the whole picker looked frozen.
-    // #dui-code-entry (the save-code "load game" modal) needs the same
-    // exemption as #plate-modal — without it the input never focuses (no
-    // keyboard) and the CANCEL/RESUME taps are swallowed (buttons invert on
-    // touch but their click never fires), which looked frozen from the title.
-    if (e.target?.closest?.('#phone-menu, #plate-modal, #dui-code-entry, #dui-copy')) return;
+    // #rtr-load (the "load game" modal) needs the same exemption as
+    // #plate-modal — without it the input never focuses (no keyboard) and the
+    // CANCEL/RESUME taps are swallowed (buttons invert on touch but their click
+    // never fires), which looked frozen from the title.
+    if (e.target?.closest?.('#phone-menu, #plate-modal, #rtr-load')) return;
     e.preventDefault();
   };
   document.addEventListener('touchstart', _blockGameTouch, { passive: false });
@@ -310,8 +310,8 @@ const _boot = () => {
   const _sanitizePlate = (v) =>
     String(v || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim().slice(0, 8);
   // Normalized form for collision / blocklist checks — strip spaces so
-  // "DUI 4 LYF", "DUI4LYF" and "dui4lyf" all compare equal (mirrors the
-  // future server's plate_name_norm column; see project_dui_plate_username).
+  // "ROAD TRIP", "ROADTRIP" and "roadtrip" all compare equal (mirrors the
+  // future server's plate_name_norm column).
   const _normPlate = (s) => _sanitizePlate(s).replace(/\s+/g, '');
   // Names that can't be claimed (impersonation / confusion).  The AUTHORITATIVE
   // filter lives server-side in Phase 2 (Worker + D1); this is the local
