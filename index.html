@@ -160,7 +160,7 @@
       border-radius: 18%;
     }
     /* First-ever-play nudge — the Tutorial tile pulses a gold glow until the
-       player opens it (then `dui_tutorialSeen` is set and it never flashes
+       player opens it (then `rtr_tutorialSeen` is set and it never flashes
        again).  Applied/removed in JS. */
     @keyframes tutFlash {
       0%, 100% { box-shadow: 0 0 0.6vmin 0.2vmin rgba(255, 205, 60, 0.45); }
@@ -2933,7 +2933,7 @@
         const curPlate = (window.__plate?.get?.() ?? '').trim();
         // App-icon switch is iOS-only (uses native alternate icons).
         const isIOS     = window.Capacitor?.getPlatform?.() === 'ios';
-        const altIconOn = (localStorage.getItem('dui_appIcon') || '') === 'AltIcon';
+        const altIconOn = ((localStorage.getItem('rtr_appIcon') ?? localStorage.getItem('dui_appIcon')) || '') === 'AltIcon';
         openApp('SETTINGS',
           sSec('Profile') +
           `<div class="pa-row"><span class="k">🪪 Driver plate</span><button id="set-plate" class="pa-toggle on">${curPlate ? curPlate : 'SET'}</button></div>` +
@@ -3010,7 +3010,7 @@
           if (!plugin?.setIcon) { showConfirm?.('Icon switching needs the latest app build.'); return; }
           plugin.setIcon({ name })
             .then(() => {
-              localStorage.setItem('dui_appIcon', name);
+              localStorage.setItem('rtr_appIcon', name);
               iconBtn.classList.toggle('on', toAlt);
               iconBtn.textContent = toAlt ? 'ALT' : 'DEFAULT';
             })
@@ -3219,13 +3219,16 @@
       ];
       // First-ever-play nudge: the Tutorial tile pulses until the player opens
       // it the first time, then never again (persisted in localStorage).
-      const TUT_SEEN_KEY = 'dui_tutorialSeen';
+      const TUT_SEEN_KEY = 'rtr_tutorialSeen';
       const markTutorialSeen = () => {
         try { localStorage.setItem(TUT_SEEN_KEY, '1'); } catch (_) {}
         qhit('tutorial')?.classList.remove('tut-flash');
       };
       try {
-        if (!localStorage.getItem(TUT_SEEN_KEY)) qhit('tutorial')?.classList.add('tut-flash');
+        // Treat the legacy dui_tutorialSeen flag as already-seen (migration).
+        if (!localStorage.getItem(TUT_SEEN_KEY) && !localStorage.getItem('dui_tutorialSeen')) {
+          qhit('tutorial')?.classList.add('tut-flash');
+        }
       } catch (_) {}
 
       addTap(qhit('tutorial'), () => {

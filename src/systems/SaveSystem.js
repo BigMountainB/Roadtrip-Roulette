@@ -1,4 +1,7 @@
-const STORAGE_KEY    = 'dui.save.v3';
+const STORAGE_KEY    = 'rtr.save.v3';
+// Legacy key from the DUI-branded builds — same v3 schema, just the old name.
+// Read once and promoted to STORAGE_KEY on the next save so progress migrates.
+const LEGACY_DUI_V3  = 'dui.save.v3';
 const LEGACY_V2_KEY  = 'dui.save.v2';
 const LEGACY_V1_KEY  = 'dui.save.v1';
 const SCHEMA_VERSION = 3;
@@ -295,7 +298,7 @@ export class SaveSystem {
 
   _load() {
     try {
-      const rawV3 = localStorage.getItem(STORAGE_KEY);
+      const rawV3 = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_DUI_V3);
       if (rawV3) return this._migrate(JSON.parse(rawV3));
       // v2 (mode-split, single player) — promote it to slot 0.
       const rawV2 = localStorage.getItem(LEGACY_V2_KEY);
@@ -587,6 +590,7 @@ export class SaveSystem {
 
   hasSave() {
     return localStorage.getItem(STORAGE_KEY)   !== null
+        || localStorage.getItem(LEGACY_DUI_V3) !== null
         || localStorage.getItem(LEGACY_V2_KEY) !== null
         || localStorage.getItem(LEGACY_V1_KEY) !== null;
   }

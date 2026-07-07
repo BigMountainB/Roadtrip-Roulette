@@ -456,7 +456,9 @@ export class AudioSystem {
     // the duiAudio bridge emitted below.
     this.backgroundRadio = true;
     try {
-      const bg = window.localStorage?.getItem?.('dui.backgroundRadio');
+      // rtr.backgroundRadio, falling back to the legacy dui.backgroundRadio key.
+      const bg = window.localStorage?.getItem?.('rtr.backgroundRadio')
+              ?? window.localStorage?.getItem?.('dui.backgroundRadio');
       if (bg != null) this.backgroundRadio = bg === '1';
     } catch (_) {}
 
@@ -674,7 +676,7 @@ export class AudioSystem {
   }
   setBackgroundRadioEnabled(v) {
     this.backgroundRadio = !!v;
-    try { window.localStorage?.setItem?.('dui.backgroundRadio', this.backgroundRadio ? '1' : '0'); } catch (_) {}
+    try { window.localStorage?.setItem?.('rtr.backgroundRadio', this.backgroundRadio ? '1' : '0'); } catch (_) {}
     this._emitNativeAudioState(this.backgroundRadio ? 'background-radio-on' : 'background-radio-off');
     if (document.hidden) this._handleVisibilityChange();
   }
