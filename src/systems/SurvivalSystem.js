@@ -16,7 +16,7 @@ const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
 // Baseline per-mile drift (tuned so an untended run survives ~90–110 mi and
 // you top up every ~35–40 mi — a real threat over 293 mi, not constant chores).
-const DRIFT = { tiredness: +0.7, fullness: -0.45, hydration: -0.5 };
+const DRIFT = { tiredness: +0.7, fullness: -0.9, hydration: -1.0 };
 
 // Item → { t, h, f } bar deltas (per spec §3).  Specials handled in applyItem.
 const ITEM_FX = {

@@ -15866,6 +15866,15 @@ export class GameScene extends Phaser.Scene {
       const a = 0.05 + 0.06 * Math.abs(Math.sin(t * 3));
       g.fillStyle(0x8B0000, a); g.fillRect(ox, 0, W, 80); g.fillRect(ox, H - 80, W, 80);
     }
+    // Food coma → over-stuffed (Fullness ≥ 75): heavy sluggish dim + drooping
+    // top/bottom vignette that deepens toward 100.  Negative, drowsy read.
+    if (s.fullness >= 75) {
+      const fc = (s.fullness - 75) / 25;                 // 0 at 75 → 1 at 100
+      const band = 30 + fc * 90, a = 0.12 + fc * 0.32;
+      g.fillStyle(0x2A1A05, a);
+      g.fillRect(ox, 0, W, band); g.fillRect(ox, H - band, W, band);
+      g.fillStyle(0x000000, 0.06 + fc * 0.12); g.fillRect(ox, 0, W, H);   // overall heavy dim
+    }
     // Bladder → "gotta go" nag.
     if (s.hydration >= 75) {
       const urgent = s.hydration >= 90;
