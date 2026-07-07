@@ -26,6 +26,7 @@ import { clamp, lerp } from '../utils/Helpers.js';
 import { Road }          from '../road/Road.js';
 import geoData           from '../road/routeGeo.json';
 import { ViceSystem }    from '../systems/ViceSystem.js';
+import { SurvivalSystem } from '../systems/SurvivalSystem.js';
 import { EffectsSystem } from '../systems/EffectsSystem.js';
 import { CopSystem }     from '../systems/CopSystem.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
@@ -653,6 +654,13 @@ export class GameScene extends Phaser.Scene {
 
     this.road    = new Road();
     this.vices   = new ViceSystem();
+    this.survival = new SurvivalSystem();   // road-trip survival bars (see SURVIVAL_SYSTEM_SPEC.md)
+    this._asleepHandled = false;
+    // Restore persisted survival state on a rest-stop resume (fresh runs start clean).
+    if (this._resumeFromStop || this._resumeFromPosition != null) {
+      const _ss = this.registry.get('save')?.get?.('survivalState');
+      if (_ss) this.survival.restore(_ss);
+    }
     // Hydrate persistent vice unlocks from the Phaser registry — survives
     // arrest/death/respawn within the same play session.  See "viceUnlocks"
     // writes after _viceUpdate (below).
@@ -3534,17 +3542,47 @@ export class GameScene extends Phaser.Scene {
 
     // ── Systems ───────────────────────────────────────────────────────
     this.vices.update(rawDt);
+    // Survival bars advance by DISTANCE (odometer miles), accelerated by the
+    // current road's curviness (nausea) — see SurvivalSystem.
+    if (this.survival && !this._awaitingStart) {
+      const _seg = this.road.getSegment?.(this.player.position);
+      const _curv = Math.min(1, Math.abs(_seg?.curve ?? 0) * 220);
+      this.survival.update(this._odometer ?? 0, { curvature: _curv });
+      this._checkViceUnlocks();
+
+      // ── Effect bridge: drive the legacy EffectsSystem visuals from survival
+      // tiers by writing synthetic vice levels (the real bars are empty now).
+      // Reuses all the existing double-vision / saturation / geometry / time-
+      // warp / tremor code without rewriting EffectsSystem. ────────────────
+      const _t = this.survival.tiredness, _hyd = this.survival.hydration, _ful = this.survival.fullness;
+      const _L = this.vices.levels;
+      const _oddGummy = (this._oddGummyUntil ?? 0) > (this._odometer ?? 0);
+      // Drowsy → double vision (reuse SUSHI/alcohol): ramps in from 50→100.
+      _L[VICES.SUSHI]   = _t >= 50 ? Math.min(1, 0.7 + (_t - 50) / 50 * 0.3) : 0;
+      // Highway hypnosis → hallucination: saturation/rainbow (GUMMIES) +
+      // geometry/time-warp (HOTDOG) from tiredness ≥70, OR the odd-gummy trip.
+      const _hyp = _t >= 70 ? Math.min(1, (_t - 70) / 25) : 0;
+      _L[VICES.GUMMIES] = _oddGummy ? 1 : _hyp;
+      _L[VICES.HOTDOG]  = _oddGummy ? 1 : (_t >= 70 ? 0.6 + _hyp * 0.4 : 0);
+      // Hangry tremor (reuse ENERGY/cocaine jitter) when Fullness < 25.
+      _L[VICES.ENERGY]  = _ful < 25 ? Math.min(1, (25 - _ful) / 25) : 0;
+      // Dehydration darkening (reuse COMBO/heroin nod vignette lightly) < 25.
+      _L[VICES.COMBO]   = _hyd < 25 ? Math.min(0.6, (25 - _hyd) / 25 * 0.6) : 0;
+
+      // Terminal: asleep at the wheel → run ends.
+      if (this.survival.isAsleep() && !this._asleepHandled) {
+        this._asleepHandled = true;
+        this._showPopup?.('😴 YOU FELL ASLEEP AT THE WHEEL', '#FF5C7A');
+        this._endGame?.('overdose', { charge: 'FATIGUE' });
+      }
+    }
     // Guaranteed first taste — when a vice crosses its unlock gate this frame,
     // drop just 1–2 sprites a short way ahead (reachable within ~15s) so the
     // player gets to try what they just earned without a full celebratory line.
-    for (const newId of this.vices.drainFirstLineQueue?.() ?? []) {
-      const n = 1 + ((Math.random() * 2) | 0);   // 1 or 2 sprites
-      this._injectViceLine({
-        types:  Array(n).fill(newId),
-        spread: 18,
-        label:  `🔓 UNLOCKED — ${this._viceLineLabel(newId)}`,
-      });
-    }
+    // (Retired: legacy vice-unlock first-line spawns. The survival model uses
+    // its own save-persisted unlock ladder (_checkViceUnlocks); draining the
+    // old queue here would respawn retired items like Energy. Drain to clear.)
+    this.vices.drainFirstLineQueue?.();
     this.vices.routeProgress = this.player.position / (ROUTE_SEGS * SEG_LENGTH);
     // Weed Permastoned tracker — bar at 100% for 10 in-game miles fires
     // the Permastoned achievement, force-resets the weed bar to 0, and
@@ -3702,12 +3740,10 @@ export class GameScene extends Phaser.Scene {
     this._checkCollisions();
     this._updateVehicleCrashes();   // NPC↔NPC and cop↔NPC crashes (no more phasing through)
 
-    // ── OD / Arrested ─────────────────────────────────────────────────
-    // Custom mode never ODs, so skip the frame-level safety check too.
-    if (Difficulty.mode?.() !== 'custom') {
-      const odVice = this.vices.checkOD();
-      if (odVice && !this._tryNarcan(odVice)) { this._onOverdose(odVice); return; }
-    }
+    // ── Arrested ──────────────────────────────────────────────────────
+    // (OD retired — the survival model's only terminal is "fell asleep at the
+    // wheel" at max Tiredness, handled in the survival update block. The old
+    // frame-level checkOD is skipped so synthetic effect-levels can't trip it.)
     if (this.cops.arrestPending) { this._onArrested(); return; }
 
     // ── Probation timer ───────────────────────────────────────────────
@@ -3955,17 +3991,7 @@ export class GameScene extends Phaser.Scene {
     this._beerLineTimer = (this._beerLineTimer ?? 90) - rawDt;
     if (this._beerLineTimer <= 0) {
       this._beerLineTimer = 80 + Math.random() * 20;       // 80–100 sec
-      const pool = ['sushi', 'burrito'];
-      if (this.vices.isUnlocked(VICES.ENERGY))  pool.push('energy');
-      if (this.vices.isUnlocked(VICES.GUMMIES))  pool.push('gummies');
-      if (this.vices.isUnlocked(VICES.HOTDOG))      pool.push('hotdog');
-      if (this.vices.isUnlocked(VICES.COMBO))   pool.push('combo');
-      if (this.vices.isUnlocked(VICES.COLDBREW))       pool.push('coldbrew');
-      if (this.vices.isUnlocked(VICES.COMA)) pool.push('coma');
-      if (this.vices.isUnlocked(VICES.SLUSHIE)) pool.push('slushie');
-      if (this.vices.isUnlocked(VICES.CAFFEINE))     pool.push('caffeine');
-      // Bias toward beer so it stays the dominant line type.
-      pool.push('sushi', 'sushi');
+      const pool = this._availableVices();
       const viceType = pool[(Math.random() * pool.length) | 0];
       this._injectViceLine({
         types:  [viceType, viceType, viceType, viceType],
@@ -3979,12 +4005,8 @@ export class GameScene extends Phaser.Scene {
     if (milesNow > 0 && milesNow % 100 === 0
         && milesNow !== this._lastMixedLineMile) {
       this._lastMixedLineMile = milesNow;
-      // Mix is biased to vices the player has unlocked.
-      const pool = ['sushi', 'burrito'];
-      if (this.vices.isUnlocked(VICES.ENERGY)) pool.push('energy');
-      if (this.vices.isUnlocked(VICES.GUMMIES)) pool.push('gummies');
-      if (this.vices.isUnlocked(VICES.HOTDOG))     pool.push('hotdog');
-      if (this.vices.isUnlocked(VICES.COLDBREW))      pool.push('coldbrew');
+      // Mix is drawn from the currently-available (unlocked) vices.
+      const pool = this._availableVices();
       const mixed = [];
       for (let i = 0; i < 7; i++) mixed.push(pool[(Math.random() * pool.length) | 0]);
       this._injectViceLine({
@@ -6167,6 +6189,45 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─── Collisions ───────────────────────────────────────────────────────
+  // ── Survival roster + meta-unlock ladder (see SURVIVAL_SYSTEM_SPEC.md §5) ──
+  /** Items currently available to spawn (start kit + unlocked). */
+  _availableVices() {
+    const pool = ['water', 'burrito', 'coldbrew'];   // start kit
+    for (const id of ['gummies', 'sushi', 'slushie', 'caffeine', 'dramamine']) {
+      if (this._isViceUnlocked(id)) pool.push(id);
+    }
+    return pool;
+  }
+  _isViceUnlocked(id) {
+    if (id === 'water' || id === 'burrito' || id === 'coldbrew') return true;
+    const set = this.registry.get('save')?.get?.('vicesUnlocked', []) ?? [];
+    return set.includes(id);
+  }
+  _unlockVice(id, label) {
+    const save = this.registry.get('save');
+    const set = new Set(save?.get?.('vicesUnlocked', []) ?? []);
+    if (set.has(id)) return;
+    set.add(id); save?.set?.('vicesUnlocked', [...set]);
+    this._showPopup?.(`🔓 UNLOCKED: ${label}`, '#FFD23D');
+  }
+  /** Cold Brew consumption → Caffeine Pills unlock at 40 lifetime. */
+  _recordViceUnlockProgress(id) {
+    if (id !== 'coldbrew') return;
+    const save = this.registry.get('save');
+    const n = (save?.get?.('coldBrewCount', 0) ?? 0) + 1;
+    save?.set?.('coldBrewCount', n);
+    if (n >= 40) this._unlockVice('caffeine', 'Caffeine Pills');
+  }
+  /** Per-frame (cheap) distance/landmark unlock checks. */
+  _checkViceUnlocks() {
+    if (this._awaitingStart) return;
+    const mile = this._odometer ?? 0;
+    if (!this._isViceUnlocked('gummies')  && mile >= 100) this._unlockVice('gummies', 'Gummies');
+    if (!this._isViceUnlocked('sushi')    && mile >= 84)  this._unlockVice('sushi', 'Sushi');
+    if (!this._isViceUnlocked('slushie')  && mile >= 109) this._unlockVice('slushie', 'Slushie');
+    if (!this._isViceUnlocked('dramamine') && mile >= 55) this._unlockVice('dramamine', 'Dramamine');   // cleared the Pass
+  }
+
   /** Sweep upcoming visible segments and replace any 'vice-pending' sprite
    *  with an addiction-weighted real vice type so the on-screen sprite
    *  matches what you'd pick up.
@@ -6183,7 +6244,8 @@ export class GameScene extends Phaser.Scene {
       if (!seg?.sprites) continue;
       for (const sp of seg.sprites) {
         if (sp.type !== 'vice-pending') continue;
-        sp.type = this.vices.chooseAddictedVice(routeT);
+        const _avail = this._availableVices();
+        sp.type = _avail[(Math.random() * _avail.length) | 0];
       }
     }
   }
@@ -8835,15 +8897,16 @@ export class GameScene extends Phaser.Scene {
       this._showPopup?.('🤬 REDNECK RAGE!\nUNSTOPPABLE — 1 MILE', '#FF3322');
       this.cameras?.main?.flash?.(500, 220, 20, 20);   // red rage flash
       this.effects?.triggerShake?.(260, 0.012);
+      this.survival?.applyItem('rage');                 // energy-drink: +hydration/+fullness
       try { this.audio?.playHorn?.(); } catch (_) {}    // no-op if cue absent
       return;
     }
 
     if (type === 'narcan') {
-      // Pick up into inventory (max 3) — auto-used on an opioid OD.
-      if ((this._narcanCount ?? 0) >= 3) { sprite.collected = false; return; }
-      this._narcanCount = (this._narcanCount ?? 0) + 1;
-      this._showPopup?.(`☕ ESPRESSO ×${this._narcanCount}\nSaves you from passing out`, '#42A5F5');
+      // QUAD SHOT — instantly clears the Tiredness bar (the panic button).
+      this.survival?.applyItem('quadshot');
+      this._showPopup?.('☕ QUAD SHOT!\nWIDE AWAKE — tiredness cleared', '#42A5F5');
+      this.cameras?.main?.flash?.(300, 120, 90, 40);
       return;
     }
 
@@ -8910,55 +8973,26 @@ export class GameScene extends Phaser.Scene {
         this.cops.addStar(1.0, 3);                // vice pickup during probation
         this._showPopup('PROBATION!\n+1 STAR!', '#FF4444');
       }
-      const result = this.vices.pickup(sprite.type);
-      if (!result) return;
-      this.stats?.recordViceCollected(result.vice);   // road sprite collected
-      if (this._dailyTracker) {                         // no_vices / one_vice_only / collector
-        this._dailyTracker.viceTypes.add(result.vice);
+      // ── Survival model: apply the item to the survival bars. ──────────
+      const itemId = sprite.type;
+      const ev = this.survival.applyItem(itemId);
+      this.stats?.recordViceCollected(itemId);
+      if (this._dailyTracker) {
+        this._dailyTracker.viceTypes.add(itemId);
         this._dailyTracker.viceCount++;
       }
-      // First-pickup achievement — fire on the very first hit of each
-      // vice, with the toast text describing the mechanic.
-      if (this.vices.pickupCounts?.[result.vice] === 1) {
-        AchievementSystem.firstPickup(result.vice, this.registry);
-      }
-      // Full Tank: bar this vice to 99% (without OD'ing — OD is checked
-      // below).  Fires once per run on first crossing.
-      if (this.vices.get(result.vice) >= 0.99 && !this._fullTankFired?.[result.vice]) {
-        this._fullTankFired = this._fullTankFired ?? {};
-        this._fullTankFired[result.vice] = true;
-        AchievementSystem.award('full_tank', this.registry);
-      }
-      // Maxed-out: per-vice achievement for canOD vices reaching 99%+
-      // without overdosing.  Threshold is 0.99 (not 1.0) because hitting
-      // exactly 100% sits at the OD edge — 99% reads as "maxed out" in
-      // the same dramatic sense without forcing the player to a brink
-      // where they're one pickup from dying.
-      const _viceCfg = VICE_CONFIG[result.vice];
-      if (_viceCfg?.canOD
-          && this.vices.get(result.vice) >= 0.99
-          && !this._maxedFired?.[result.vice]) {
-        this._maxedFired = this._maxedFired ?? {};
-        this._maxedFired[result.vice] = true;
-        AchievementSystem.award(`maxed_${result.vice}`, this.registry);
-      }
-      // Custom mode: never OD — the slider-driven HUD already lets the
-      // player set bars wherever they want, and OD'ing yourself there
-      // is just a frustrating restart.  Treat it as a no-op.
-      const _customMode = Difficulty.mode?.() === 'custom';
-      if (result.overdose && !_customMode && !this._tryNarcan(result.vice)) { this._onOverdose(result.vice); return; }
-      // Per-vice { base, full } payout table (constants.js) — full-bar
-      // bonus kicks in at FULL_BAR_THRESHOLD (0.80) instead of 0.95.
-      const vicePay  = VICE_PTS[result.vice] ?? { base: 10, full: 20 };
-      const isFull   = this.vices.get(result.vice) >= FULL_BAR_THRESHOLD;
-      const basePts  = isFull ? vicePay.full : vicePay.base;
-      const earned   = Math.round(basePts * this._scoreMult());
-      this.score    += earned;
-      this.stats?.recordEarn(earned, 'pickup', basePts);
-      const label    = VICE_CONFIG[result.vice]?.label ?? sprite.type;
-      const suffix   = isFull ? `\n★ FULL BAR  +$${earned}!` : `  +$${earned}`;
-      this._showPopup(`${label}${suffix}`, isFull ? '#FF8800' : '#FFFF44');
+      // Meta-unlock accounting (Cold Brew count → Caffeine Pills).
+      this._recordViceUnlockProgress?.(itemId);
+      const earned = Math.round(10 * this._scoreMult());
+      this.score  += earned;
+      this.stats?.recordEarn(earned, 'pickup', 10);
+      const label  = VICE_CONFIG[itemId]?.label ?? itemId;
+      this._showPopup(`${label}  +$${earned}`, '#FFFF44');
       this.effects.triggerShake(55, 0.002);
+      // Special events from the item.
+      if (ev.badFish)  this._showPopup('🤢 BAD FISH!\nGotta GO — hit a rest stop!', '#9AE66E');
+      if (ev.oddGummy) { this._showPopup('🌈 ODD GAS STATION GUMMIES…', '#FF44FF'); this._oddGummyUntil = (this._odometer ?? 0) + 0.6; }
+      if (ev.curedNausea) this._showPopup('💊 Stomach settled', '#88CCFF');
     }
   }
 
@@ -15741,9 +15775,51 @@ export class GameScene extends Phaser.Scene {
     // Title screen — bars graphics stay cleared and the label nodes
     // are hidden by _setHudVisible(false).  Exception: the controls editor
     // shows them (even from the title) so empty slots can be repositioned.
-    if (this._awaitingStart && !this._ctrlEditMode) return;
-    this._drawViceIcons();
+    if (this._awaitingStart && !this._ctrlEditMode) { this._survLabels?.forEach(l => l.setVisible(false)); return; }
+    this._drawSurvivalBars();
     return;
+  }
+
+  /** Survival HUD — three stacked bars (Tiredness / Hunger / Thirst) top-left.
+   *  Each fill is the raw bar value; a green "sweet-zone" tick marks 25–75 on
+   *  the dual-sided bars, and the fill flashes red when the bar is in a bad
+   *  tier (drowsy+, starving/coma, dehydrated/bladder). */
+  _drawSurvivalBars() {
+    const s = this.survival;
+    if (!s) return;
+    const g = this.hudGfx;
+    if (!this._survLabels) {
+      this._survLabels = [];
+      for (let i = 0; i < 3; i++) {
+        this._survLabels.push(this.add.text(0, 0, '', {
+          fontSize: '9px', fontFamily: IMPACT, color: '#EAF2FF', stroke: '#000', strokeThickness: 2,
+        }).setDepth(21));
+        this._hudObjects?.push(this._survLabels[this._survLabels.length - 1]);
+      }
+    }
+    const mx = (x) => x + (HUD_OFFSET_X ?? 0);
+    const bx = mx(12), bw = 96, bh = 8, gap = 15;
+    let by = 32;
+    const rows = [
+      { key: 'TIRED', v: s.tiredness,  col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x6A7AE0, dual: false, danger: s.tiredness >= 70 },
+      { key: 'FED',   v: s.fullness,   col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
+      { key: 'HYDR',  v: s.hydration,  col: s.hydrationTier() !== 'ok'    ? 0xE0483C : 0x39C0D9, dual: true,  danger: s.hydrationTier() !== 'ok' },
+    ];
+    rows.forEach((r, i) => {
+      const y = by + i * gap;
+      g.fillStyle(0x0A0F1A, 0.8); g.fillRoundedRect(bx, y, bw, bh, 2);
+      const w = Math.max(0, Math.min(1, r.v / 100)) * (bw - 2);
+      g.fillStyle(r.col, 1); g.fillRoundedRect(bx + 1, y + 1, w, bh - 2, 2);
+      if (r.dual) {   // sweet-zone ticks at 25 and 75
+        g.fillStyle(0x66FF99, 0.7);
+        g.fillRect(bx + 1 + 0.25 * (bw - 2), y, 1, bh);
+        g.fillRect(bx + 1 + 0.75 * (bw - 2), y, 1, bh);
+      }
+      g.lineStyle(1, 0x315173, 1); g.strokeRoundedRect(bx, y, bw, bh, 2);
+      const lbl = this._survLabels[i];
+      lbl.setText(r.key).setPosition(bx + bw + 5, y - 1).setVisible(true);
+      if (r.danger) lbl.setColor('#FF6A5C'); else lbl.setColor('#9FB7D6');
+    });
   }
 
   /** New vice-icon HUD — mirrors the weapon-icon stack on the

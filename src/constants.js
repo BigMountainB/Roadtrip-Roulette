@@ -203,6 +203,8 @@ export const VICE_CONFIG = {
   coma:     { label: '💀 Buffet',    color: 0xB0303A, hexCss: '#B0303A', decayRate: 0.0238, odThreshold: 1.0001, canOD: true,  unlocked: false },
   slushie:  { label: '🥤 Slushie',   color: 0x3AA0FF, hexCss: '#3AA0FF', decayRate: 0.0278, odThreshold: 1.0001, canOD: true,  unlocked: false },
   caffeine: { label: '💊 Caffeine',  color: 0xE8E8E8, hexCss: '#E8E8E8', decayRate: 0.0049, odThreshold: 1.0001, canOD: true,  unlocked: false },
+  water:     { label: '💧 Water',     color: 0x4FC3F7, hexCss: '#4FC3F7', decayRate: 0.0154, odThreshold: 1.0, canOD: false, unlocked: true  },
+  dramamine: { label: '💊 Dramamine', color: 0xBA68C8, hexCss: '#BA68C8', decayRate: 0.0154, odThreshold: 1.0, canOD: false, unlocked: false },
 };
 
 // Named vice combos — every constituent vice's bar must be ≥ threshold for

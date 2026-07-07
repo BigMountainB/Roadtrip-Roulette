@@ -124,6 +124,8 @@ export const ASSET_MANIFEST = {
     { key: 'vice_coma',     path: 'assets/vices/food_coma.png?v=reskin-2' },
     { key: 'vice_slushie',  path: 'assets/vices/slushie.png?v=reskin-2' },
     { key: 'vice_caffeine', path: 'assets/vices/caffeine_pills.png?v=reskin-2' },
+    { key: 'vice_water',     path: 'assets/vices/water.png?v=reskin-2' },
+    { key: 'vice_dramamine', path: 'assets/vices/dramamine.png?v=reskin-2' },
   ],
   // Power-ups: Redneck Rage (invincible rampage) + Emergency Espresso (OD save).
   powerups: [
