@@ -63,7 +63,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Pass is getting ugly. Chains now are cheaper than learning physics in a ditch.",
     fact: "Snoqualmie Pass weather can change fast between North Bend and the summit.",
     choices: [
-      { label: "Buy chains ($80)", cost: 80, effects: { buff: 'snow_chains', revealHazard: 'snow' } },
+      { label: "Buy chains ($80)", cost: 80, effects: { buff: 'snow_chains', revealHazard: 'snow', generous: true } },
       {
         label: "Haggle him down",
         cost: 55,
@@ -84,7 +84,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Summit's whiteout past the tunnel. Slow is smooth, smooth is not-dead.",
     fact: "The Snoqualmie Pass summit sits at 3,015 ft — the lowest major I-90 crossing of the Cascades.",
     choices: [
-      { label: "Buy his thermos ($15)", cost: 15, effects: { buff: 'warm', timeSec: +10, tiredness: -18, dialogue: "Coffee that could strip paint. You feel alert." } },
+      { label: "Buy his thermos ($15)", cost: 15, effects: { buff: 'warm', timeSec: +10, tiredness: -18, generous: true, dialogue: "Coffee that could strip paint. You feel alert." } },
       { label: "Ask the safe line", effects: { revealHazard: 'whiteout' } },
       { label: "Wave and go", effects: {} },
     ],
@@ -102,6 +102,7 @@ export const REST_STOP_ENCOUNTERS = [
       {
         label: "Split his fuel run ($30)",
         cost: 30,
+        effects: { generous: true },
         chance: [
           { p: 0.7, effects: { fuelMi: +40 } },
           { p: 0.3, effects: { fuelMi: +15, dialogue: "Half the diesel he promised. Trucker math." } },
@@ -122,6 +123,7 @@ export const REST_STOP_ENCOUNTERS = [
       {
         label: "Buy the can ($40)",
         cost: 40,
+        effects: { generous: true },
         chance: [
           { p: 0.8, effects: { fuelMi: +55 } },
           { p: 0.2, effects: { fuelMi: +25, hp: -3, dialogue: "That was NOT just gas. The engine coughs." } },
@@ -143,6 +145,7 @@ export const REST_STOP_ENCOUNTERS = [
       {
         label: "Buy premium ($60)",
         cost: 60,
+        effects: { generous: true },
         chance: [
           { p: 0.7, effects: { heatStars: -1, timeSec: +30, dialogue: "It actually works — you glide past two traps. She's already pitching a Series B." } },
           { p: 0.3, effects: { dialogue: "\"Servers are scaling,\" she says, as the app crashes. So does your $60." } },
@@ -163,6 +166,7 @@ export const REST_STOP_ENCOUNTERS = [
     choices: [
       {
         label: "Pick her up",
+        effects: { generous: true },
         chance: [
           { p: 0.6, effects: { cash: +40, dialogue: "She pays, navigates the curves better than your GPS, and vanishes at the summit. Ideal passenger." } },
           { p: 0.4, effects: { heatStars: +1, dialogue: "Turns out she's on a list. Now you're adjacent to it." } },
@@ -181,7 +185,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Elk move at dusk through here, and they do not check their blind spots. Neither do you, apparently.",
     fact: "The forested Cle Elum stretch is prime elk country in the Cascade foothills.",
     choices: [
-      { label: "Heed the warning", effects: { buff: 'elk_ready', revealHazard: 'elk', dialogue: "\"Slow at the tree lines. They're bigger than your car's opinions.\"" } },
+      { label: "Heed the warning", effects: { buff: 'elk_ready', revealHazard: 'elk', generous: true, dialogue: "\"Slow at the tree lines. They're bigger than your car's opinions.\"" } },
       { label: "Point her at a 'lost hiker' up the road", effects: { heatStars: -1, dialogue: "She radios it in, distracted. Your record breathes a little easier." } },
       { label: "Nod and leave", effects: {} },
     ],
@@ -195,7 +199,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Rodeo's in town so the coffee's fresh and the regulars are feral. You look like you're running from something. Pie?",
     fact: "Ellensburg is Kittitas County's rodeo-and-college town, roughly halfway across the state.",
     choices: [
-      { label: "Coffee & pie ($12)", cost: 12, effects: { hp: +4, timeSec: +15, fullness: +16, tiredness: -12, dialogue: "Best decision you've made all trip. Low bar, but still." } },
+      { label: "Coffee & pie ($12)", cost: 12, effects: { hp: +4, timeSec: +15, fullness: +16, tiredness: -12, generous: true, dialogue: "Best decision you've made all trip. Low bar, but still." } },
       { label: "Ask what's ahead", effects: { revealHazard: 'wind', dialogue: "\"Wind past Vantage'll part your hair through the windshield.\"" } },
       { label: "Just the check", effects: {} },
     ],
@@ -209,7 +213,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Not many stop in Hatton, dear. I keep gas for the ones who do. And cookies. The gas is safer.",
     fact: "Hatton is a tiny spot on WA-26, in the sparse country between Othello and Washtucna.",
     choices: [
-      { label: "Buy her gas ($35)", cost: 35, effects: { fuelMi: +50, dialogue: "\"Drive safe. Or don't. I'll hear about it either way.\"" } },
+      { label: "Buy her gas ($35)", cost: 35, effects: { fuelMi: +50, generous: true, dialogue: "\"Drive safe. Or don't. I'll hear about it either way.\"" } },
       {
         label: "Take a cookie",
         chance: [
@@ -229,7 +233,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "I pull three wrecks a week off this stretch. Business is good, which should worry you.",
     fact: "The Washtucna area is sparse wheat-country highway — long gaps between help.",
     choices: [
-      { label: "Prepay a tow discount ($50)", cost: 50, effects: { buff: 'tow_insurance', dialogue: "\"Crash and I'll only judge you a little.\"" } },
+      { label: "Prepay a tow discount ($50)", cost: 50, effects: { buff: 'tow_insurance', generous: true, dialogue: "\"Crash and I'll only judge you a little.\"" } },
       { label: "Have her bang out a dent ($40)", cost: 40, effects: { hp: +12, dialogue: "A mallet, a grunt, and your car is marginally less sad." } },
       { label: "Wave her off", effects: {} },
     ],
@@ -243,7 +247,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Heading into the Basin? Top off your coolant here. That temp gauge climbs quick once the shade runs out past Vantage.",
     fact: "East of the Cascades the road drops into high desert — long, hot, and shadeless across the Columbia Basin.",
     choices: [
-      { label: "Top off the coolant ($25)", cost: 25, effects: { coolEngine: 55, dialogue: "He tops the radiator and checks the fan. \"That'll hold — probably.\"" } },
+      { label: "Top off the coolant ($25)", cost: 25, effects: { coolEngine: 55, generous: true, dialogue: "He tops the radiator and checks the fan. \"That'll hold — probably.\"" } },
       { label: "Fill your jug from his hose", effects: { hydration: +15, dialogue: "Warm hose water, but it's wet. He waves off the coins." } },
       { label: "I'll risk it", effects: {} },
     ],
