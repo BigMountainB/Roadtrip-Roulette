@@ -610,3 +610,22 @@ export const GAS_LIGHT_AT_MI        = 30;          // warning threshold
 export const GAS_ROBBERY_CHANCE     = 0.20;        // 20% chance per gas fillup
 export const GAS_ROBBERY_FRAC       = 0.20;        // loses 20% of cash if robbed
 export const CHARGE_AD_SECONDS      = 90;          // 1.5 min ad timer (game time)
+
+// ── Aggressive fuel economy ──────────────────────────────────────────────
+// Fuel drains FASTER than 1 tank-mile per mile driven; climbs, boosting, and
+// an overheating engine all guzzle more.  The Fuel-System upgrades enlarge the
+// tank (rangeMi), which is how the player buys the range back.
+export const FUEL_BURN_BASE   = 1.5;   // tank-miles burned per mile driven (base)
+export const FUEL_BURN_CLIMB  = 8.0;   // + per unit of positive gradePct (0.06 → +0.48)
+export const FUEL_BURN_BOOST  = 0.35;  // + while boosting
+export const FUEL_BURN_HOT    = 0.35;  // + while the engine is in limp/overheat
+
+// ── Engine heat / overheating ────────────────────────────────────────────
+// engineTemp 0–100 lerps toward a target set by ambient heat (eastern desert),
+// climbs, and speed; the Cooling stat lowers the target and speeds recovery.
+export const ENGINE_TEMP_START  = 35;
+export const ENGINE_WARN_TEMP   = 80;   // gauge warns + steam wisps
+export const ENGINE_LIMP_TEMP   = 92;   // top speed capped (limp mode)
+export const ENGINE_LIMP_CLEAR  = 78;   // must cool below this to exit limp
+export const ENGINE_LIMP_MULT   = 0.60; // top-speed multiplier while limping
+export const ENGINE_HP_DPS      = 3.0;  // HP/sec lost while redlining (Normal/Hard)

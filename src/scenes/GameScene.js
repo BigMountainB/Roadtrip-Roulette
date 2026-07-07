@@ -8,6 +8,9 @@ import {
   getLastSignTown,
   CAR_LEN_Z, CAR_WIDTH_LANES, PLAYER_VIRTUAL_Z,
   VEHICLES, GAS_LIGHT_AT_MI,
+  FUEL_BURN_BASE, FUEL_BURN_CLIMB, FUEL_BURN_BOOST, FUEL_BURN_HOT,
+  ENGINE_TEMP_START, ENGINE_WARN_TEMP, ENGINE_LIMP_TEMP, ENGINE_LIMP_CLEAR,
+  ENGINE_LIMP_MULT, ENGINE_HP_DPS,
   setCameraMode, CAM, COP_TRAP_SPEED_MPH,
   COP_TRAP_COMPLY_SEC, COP_TRAP_PULLOVER_MPH, COP_TRAP_SHOULDER_X, COP_TRAP_ABORT_X, COP_TRAP_HOLD_SEC,
   COP_TICKET_SPEEDING_FRAC, COP_TICKET_SPEEDING_CAP,
@@ -449,6 +452,11 @@ export class GameScene extends Phaser.Scene {
     this._npcCrashesReckless  = 0;
     this._viceBumpCount       = 0;
     this._viceBumpFired       = false;
+    // Engine heat — 0–100.  Rises with desert heat / climbs / speed, mitigated
+    // by the Cooling stat; >92 = limp mode (see _updatePlayer).
+    this._engineTemp          = ENGINE_TEMP_START;
+    this._engineLimp          = false;
+    this._curGrade            = 0;
     this._playerCopCrashes    = 0;
     this._copCrashCount       = 0;
     this._lastMixedLineMile   = 0;
@@ -3008,14 +3016,24 @@ export class GameScene extends Phaser.Scene {
     onDone?.('granted');
   }
 
-  /** Steering input with optional drunk-delay buffer.  When alcohol is
-   *  above 75 %, the player gets occasional "lurches" — random windows
-   *  (every 5-10 s) lasting 0.6-1.2 s during which their steering input
-   *  is read from a stale frame (350-600 ms ago).  Outside a lurch the
-   *  input passes through unchanged.  Below 75 % alcohol there's no
-   *  effect at all.
-   *
-   */
+  /** Ambient engine-heat factor 0..1 by route mile: cold at the Cascade
+   *  summit (~mi 50), mild in the western lowlands, and HOT across the eastern
+   *  Columbia Basin / Palouse desert (~mi 137–255).  Rain/snow cool it down. */
+  _ambientHeat01(mile) {
+    // Desert ramp: rises mi 120→160, holds through 245, eases off by 270.
+    const desert = mile < 120 ? 0
+      : mile < 160 ? (mile - 120) / 40
+      : mile < 245 ? 1
+      : Math.max(0, 1 - (mile - 245) / 25);
+    const passCold = Math.max(0, 1 - Math.abs(mile - 50) / 42);   // 1 at the pass
+    let h = 0.32 + desert * 0.55 - passCold * 0.34;
+    try {
+      if (Weather.isSnow?.(mile)) h *= 0.35;
+      else if (Weather.isRain?.(mile)) h *= 0.7;
+    } catch (_) {}
+    return Math.max(0, Math.min(1, h));
+  }
+
   _isLeft()  { return this._delayedSteer().left; }
   _isRight() { return this._delayedSteer().right; }
 
@@ -4028,7 +4046,14 @@ export class GameScene extends Phaser.Scene {
     // a legit frame covers ~0.005 mi, so anything ≥ 1 mi is a teleport.
     if (_odoDelta > 0 && _odoDelta < 1) this.stats?.addMiles(_odoDelta);
     if (!_isCustom && _odoDelta > 0 && this.player.gasMi > 0) {
-      this.player.gasMi = Math.max(0, this.player.gasMi - _odoDelta);
+      // Aggressive economy: burn > 1 tank-mile per mile, worse on climbs, while
+      // boosting, and while the engine is overheating.  (Fuel-System upgrades
+      // enlarge the tank to buy the range back.)
+      const burnMul = FUEL_BURN_BASE
+        + Math.max(0, this._curGrade ?? 0) * FUEL_BURN_CLIMB
+        + (this._isBoost() ? FUEL_BURN_BOOST : 0)
+        + (this._engineLimp ? FUEL_BURN_HOT : 0);
+      this.player.gasMi = Math.max(0, this.player.gasMi - _odoDelta * burnMul);
       if (this.player.gasMi <= 0 && !this._strandedShown) {
         this._strandedShown = true;
         this._showPopup?.('⛽ OUT OF GAS — calling tow…', '#FF4444');
@@ -4522,6 +4547,39 @@ export class GameScene extends Phaser.Scene {
     // swing speed by more than ±15 %.
     const gradeMult = Math.max(0.85, Math.min(1.15, 1 - curGrade * 2.0));
     targetSpeed *= gradeMult;
+
+    // ── Engine heat / overheating ─────────────────────────────────────────
+    // engineTemp lerps toward a target driven by ambient desert heat, the
+    // current climb, and how hard the engine is working (speed/boost).  The
+    // Cooling stat (vehicle heat + cooling upgrades) lowers the target and
+    // speeds recovery.  Above ENGINE_LIMP_TEMP the car limps; on Normal/Hard
+    // it also takes slow HP damage if you keep flogging it.
+    if (!this._awaitingStart && Difficulty.mode?.() !== 'custom') {
+      const speedRatio = Math.max(0, Math.min(1, p.speed / MAX_SPEED));
+      const ambient    = this._ambientHeat01(this._odometer ?? 0);
+      // Cooling headroom: 1.45 − vehicle heat + cooling upgrades (higher = cooler).
+      const vehHeat    = VEHICLES[this.player.vehicleId]?.heat ?? 1;
+      const coolFactor = 1.45 - vehHeat + (this._upgradeFx?.cooling ?? 0);
+      const climbLoad  = Math.max(0, curGrade) * speedRatio * 520;
+      const speedLoad  = speedRatio * speedRatio * 22 + (this._isBoost() ? 10 : 0);
+      let target = 30 + ambient * 46 + climbLoad + speedLoad - (coolFactor - 0.8) * 46;
+      target = Math.max(20, Math.min(115, target));
+      // Rise slowly, fall faster when cooling is good.
+      const rate = (target > this._engineTemp ? 0.16 : 0.22 * Math.max(0.6, coolFactor)) * dt;
+      this._engineTemp += (target - this._engineTemp) * Math.min(1, rate);
+      this._engineTemp  = Math.max(0, Math.min(120, this._engineTemp));
+      // Limp hysteresis: engage at LIMP_TEMP, release only under LIMP_CLEAR.
+      if (this._engineLimp) { if (this._engineTemp < ENGINE_LIMP_CLEAR) this._engineLimp = false; }
+      else if (this._engineTemp >= ENGINE_LIMP_TEMP) this._engineLimp = true;
+      if (this._engineLimp) {
+        targetSpeed *= ENGINE_LIMP_MULT;
+        // Normal/Hard: flogging a redlined engine (moving, not braking) hurts it.
+        if (Difficulty.mode?.() !== 'easy' && !this._isBrake() && speedRatio > 0.3) {
+          this._applyDamage?.(ENGINE_HP_DPS * dt, 'overheat');
+        }
+      }
+    }
+    this._curGrade = curGrade;
 
     // ── Speed-trap auto-stop assist (0★ civil stop) ───────────────────────
     // Cruise braking floors at 60 mph, so the player can't reach a stop on
@@ -15755,9 +15813,58 @@ export class GameScene extends Phaser.Scene {
     // Title screen — bars graphics stay cleared and the label nodes
     // are hidden by _setHudVisible(false).  Exception: the controls editor
     // shows them (even from the title) so empty slots can be repositioned.
-    if (this._awaitingStart && !this._ctrlEditMode) { this._survLabels?.forEach(l => l.setVisible(false)); return; }
+    if (this._awaitingStart && !this._ctrlEditMode) {
+      this._survLabels?.forEach(l => l.setVisible(false));
+      this._engineTempTxt?.setVisible(false);
+      return;
+    }
     this._drawSurvivalBars();
+    this._drawEngineTemp();
     return;
+  }
+
+  /** Engine-temp gauge — hidden until the engine warms up (≥55°), then a
+   *  compact bar centered under the mirror that shifts orange (HOT) → red
+   *  (OVERHEATING), plus rising steam wisps over the hood when hot. */
+  _drawEngineTemp() {
+    const temp = this._engineTemp ?? 0;
+    if (!this._engineTempTxt) {
+      this._engineTempTxt = this.add.text(0, 0, '', {
+        fontSize: '11px', fontFamily: IMPACT, color: '#FFB84D', stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5, 0).setDepth(21);
+      this._hudObjects?.push(this._engineTempTxt);
+    }
+    if (temp < 55 && !this._engineLimp) { this._engineTempTxt.setVisible(false); return; }
+    const g  = this.hudGfx;
+    const mx = (x) => x + (C.HUD_OFFSET_X ?? 0);
+    const bw = 74, bh = 7;
+    const bx = mx(SCREEN_W / 2 - bw / 2), by = 62;   // centered, just under the mirror
+    const frac = Math.max(0, Math.min(1, (temp - 30) / 85));
+    const warn = temp >= ENGINE_WARN_TEMP, limp = this._engineLimp;
+    const col  = limp ? 0xFF3B30 : (warn ? 0xFF8C1A : 0x39C0D9);
+    g.fillStyle(0x0A0F1A, 0.8); g.fillRoundedRect(bx, by, bw, bh, 2);
+    g.fillStyle(col, 1);        g.fillRoundedRect(bx + 1, by + 1, frac * (bw - 2), bh - 2, 2);
+    g.lineStyle(1, 0x315173, 1); g.strokeRoundedRect(bx, by, bw, bh, 2);
+    const t = this.gameTime ?? 0;
+    this._engineTempTxt
+      .setText(limp ? '🌡 OVERHEATING' : (warn ? '🌡 ENGINE HOT' : '🌡 ENGINE'))
+      .setPosition(bx + bw / 2, by + bh + 2)
+      .setColor(limp ? '#FF6A5C' : (warn ? '#FFB84D' : '#9FB7D6'))
+      .setAlpha(limp ? 0.6 + 0.4 * Math.abs(Math.sin(t * 6)) : 1)
+      .setVisible(true);
+    // Steam wisps rising off the hood (screen bottom-center) once hot.
+    if (warn) {
+      const hoodX = mx(SCREEN_W / 2), hoodY = SCREEN_H * 0.66;
+      const n = limp ? 4 : 2;
+      for (let i = 0; i < n; i++) {
+        const ph = (t * 0.7 + i / n) % 1;                 // 0→1 rise cycle
+        const y  = hoodY - ph * 70;
+        const x  = hoodX + Math.sin((t + i) * 2) * (10 + ph * 22);
+        const a  = (1 - ph) * (limp ? 0.28 : 0.16);
+        g.fillStyle(0xDCE6EF, a);
+        g.fillCircle(x, y, 6 + ph * 16);
+      }
+    }
   }
 
   /** Survival HUD — three stacked bars (Tiredness / Hunger / Thirst) top-left.
