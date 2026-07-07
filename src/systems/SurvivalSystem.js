@@ -20,16 +20,16 @@ const DRIFT = { tiredness: +0.7, fullness: -0.9, hydration: -1.0 };
 
 // Item → { t, h, f } bar deltas (per spec §3).  Specials handled in applyItem.
 const ITEM_FX = {
-  water:        { t:  -5, h: +25, f:  +7 },
-  coldbrew:     { t: -18, h:  -8, f: +10 },
+  water:        { t:  -5, h: +16, f:  +5 },
+  coldbrew:     { t: -18, h:  -8, f:  +6 },
   caffeine:     { t: -30, h: -12, f:   0, addiction: true },
-  slushie:      { t: -10, h: +15, f: +10 },
-  gummies:      { t:  -6, h:   0, f:  +4, tripRoll: true },
-  sushi:        { t:  +5, h:   0, f: +10, badFishRoll: true },
-  burrito:      { t: +20, h:   0, f: +20 },
+  slushie:      { t: -10, h: +10, f:  +6 },
+  gummies:      { t:  -6, h:   0, f:  +3, tripRoll: true },
+  sushi:        { t:  +5, h:   0, f:  +6, badFishRoll: true },
+  burrito:      { t: +20, h:   0, f: +12 },
   dramamine:    { t: +25, h:   0, f:   0, curesNausea: true },
-  quadshot:     { t: null, h: -15, f: +10, clearTiredness: true },   // t handled by clear
-  rage:         { t:   0, h: +10, f: +10 },
+  quadshot:     { t: null, h: -15, f:  +6, clearTiredness: true },   // t handled by clear
+  rage:         { t:   0, h:  +6, f:  +6 },
 };
 
 const BAD_FISH_CHANCE   = 1 / 12;   // Sushi → bladder emergency
@@ -43,8 +43,8 @@ export class SurvivalSystem {
 
   reset() {
     this.tiredness = 0;
-    this.fullness  = 0;     // start empty — fill up on the road
-    this.hydration = 0;     // start empty — fill up on the road
+    this.fullness  = 25;    // start at 25% — just clear of the negative zone
+    this.hydration = 25;    // start at 25% — just clear of the negative zone
     this.nausea    = 0;
     this.caffeineDep    = 0;   // hidden dependence 0–100
     this.caffeineActive = 0;   // miles of caffeine still "in system"

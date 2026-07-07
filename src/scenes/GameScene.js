@@ -3453,6 +3453,17 @@ export class GameScene extends Phaser.Scene {
     if (this._paused) return;
 
     const phys  = this.effects.getPhysics(this.vices);
+    // The survival model reuses the legacy EffectsSystem for VISUALS only (via
+    // the synthetic-vice bridge below).  Its drug PHYSICS must NOT leak into
+    // handling — kill the acid steering-flip, drunk swerve/overcorrection,
+    // phantom road curve, drug steer-sensitivity, and the cocaine wanted-star
+    // multiplier.  Fatigue/hunger drive their own bespoke effects instead.
+    phys.invertSteering   = false;
+    phys.steerDrift       = 0;
+    phys.extraCurve       = 0;
+    phys.alcoholHoldover  = 0;
+    phys.steerSensitivity = 1;
+    phys.cocaineStarMul   = 1;
     const dt    = rawDt * phys.dtMultiplier;
     // Cocaine accelerates wanted-level gain — stamp the multiplier on
     // CopSystem so addStar(amount) reads it without touching call sites.
