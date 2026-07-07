@@ -15796,7 +15796,7 @@ export class GameScene extends Phaser.Scene {
         this._hudObjects?.push(this._survLabels[this._survLabels.length - 1]);
       }
     }
-    const mx = (x) => x + (HUD_OFFSET_X ?? 0);
+    const mx = (x) => x + (C.HUD_OFFSET_X ?? 0);
     const bx = mx(12), bw = 96, bh = 8, gap = 15;
     let by = 32;
     const rows = [
@@ -15830,15 +15830,15 @@ export class GameScene extends Phaser.Scene {
     if (!this._survFxGfx) {
       this._survFxGfx = this.add.graphics().setScrollFactor(0).setDepth(44);
       this._hudObjects?.push(this._survFxGfx);
-      this._bladderTxt = this.add.text(SCREEN_W / 2 + (HUD_OFFSET_X ?? 0), 66, '', {
+      this._bladderTxt = this.add.text(SCREEN_W / 2 + (C.HUD_OFFSET_X ?? 0), 66, '', {
         fontSize: '15px', fontFamily: IMPACT, color: '#FFEE66', stroke: '#000', strokeThickness: 4,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(45);
       this._hudObjects?.push(this._bladderTxt);
     }
     const g = this._survFxGfx; g.clear();
     if (this._awaitingStart) { this._bladderTxt.setVisible(false); return; }
-    const W = SCREEN_W + (HUD_OFFSET_X ?? 0) * 2, H = SCREEN_H;
-    const ox = -(HUD_OFFSET_X ?? 0);
+    const W = SCREEN_W + (C.HUD_OFFSET_X ?? 0) * 2, H = SCREEN_H;
+    const ox = -(C.HUD_OFFSET_X ?? 0);
     const t = this.gameTime ?? 0;
 
     // Dehydration → tunnel vision: dark edge bands close in as Hydration < 25.
