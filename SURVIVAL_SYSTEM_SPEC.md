@@ -12,9 +12,9 @@ Bars are stored 0–100 (internally 0–1 is fine; this doc uses 0–100).
 
 | Bar | 0 means | 100 means | Baseline drift/mile | Sweet spot |
 |---|---|---|---|---|
-| **Tiredness** | fully alert | asleep → crash | **+1.5 / mi** (rises) | keep < 50 |
-| **Fullness** (Hunger) | starving | stuffed | **−2 / mi** (falls, get hungry) | 35–65 |
-| **Hydration** (Thirst) | dehydrated | bursting bladder | **−2 / mi** (falls, get thirsty) | 35–65 |
+| **Tiredness** | fully alert | asleep → crash | **+0.7 / mi** (rises) | keep < 50 |
+| **Fullness** (Hunger) | starving | stuffed | **−0.9 / mi** (falls) start 62 | 35–65 |
+| **Hydration** (Thirst) | dehydrated | bursting bladder | **−1.0 / mi** (falls) start 68 | 35–65 |
 
 **Interlock accelerators on Tiredness gain:**
 - Dehydrated (Hydration < 25): ×1.5

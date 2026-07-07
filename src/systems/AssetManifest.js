@@ -114,23 +114,23 @@ export const ASSET_MANIFEST = {
   // Art lives in public/assets/vices/; procedural placeholders fill in until
   // each PNG is dropped there.
   vices: [
-    { key: 'vice_sushi',    path: 'assets/vices/sushi.png?v=reskin-2' },
-    { key: 'vice_burrito',  path: 'assets/vices/burrito.png?v=reskin-2' },
-    { key: 'vice_energy',   path: 'assets/vices/energy_shot.png?v=reskin-2' },
-    { key: 'vice_gummies',  path: 'assets/vices/gummies.png?v=reskin-2' },
-    { key: 'vice_hotdog',   path: 'assets/vices/hotdog.png?v=reskin-2' },
-    { key: 'vice_combo',    path: 'assets/vices/combo_meal.png?v=reskin-2' },
-    { key: 'vice_coldbrew', path: 'assets/vices/cold_brew.png?v=reskin-2' },
-    { key: 'vice_coma',     path: 'assets/vices/food_coma.png?v=reskin-2' },
-    { key: 'vice_slushie',  path: 'assets/vices/slushie.png?v=reskin-2' },
-    { key: 'vice_caffeine', path: 'assets/vices/caffeine_pills.png?v=reskin-2' },
-    { key: 'vice_water',     path: 'assets/vices/water.png?v=reskin-2' },
-    { key: 'vice_dramamine', path: 'assets/vices/dramamine.png?v=reskin-2' },
+    { key: 'vice_sushi',    path: 'assets/vices/sushi.png?v=reskin-3' },
+    { key: 'vice_burrito',  path: 'assets/vices/burrito.png?v=reskin-3' },
+    { key: 'vice_energy',   path: 'assets/vices/energy_shot.png?v=reskin-3' },
+    { key: 'vice_gummies',  path: 'assets/vices/gummies.png?v=reskin-3' },
+    { key: 'vice_hotdog',   path: 'assets/vices/hotdog.png?v=reskin-3' },
+    { key: 'vice_combo',    path: 'assets/vices/combo_meal.png?v=reskin-3' },
+    { key: 'vice_coldbrew', path: 'assets/vices/cold_brew.png?v=reskin-3' },
+    { key: 'vice_coma',     path: 'assets/vices/food_coma.png?v=reskin-3' },
+    { key: 'vice_slushie',  path: 'assets/vices/slushie.png?v=reskin-3' },
+    { key: 'vice_caffeine', path: 'assets/vices/caffeine_pills.png?v=reskin-3' },
+    { key: 'vice_water',     path: 'assets/vices/water.png?v=reskin-3' },
+    { key: 'vice_dramamine', path: 'assets/vices/dramamine.png?v=reskin-3' },
   ],
   // Power-ups: Redneck Rage (invincible rampage) + Emergency Espresso (OD save).
   powerups: [
-    { key: 'powerup_rage',     path: 'assets/vices/redneck_rage.png?v=reskin-2' },
-    { key: 'powerup_espresso', path: 'assets/vices/emergency_espresso.png?v=reskin-2' },
+    { key: 'powerup_rage',     path: 'assets/vices/redneck_rage.png?v=reskin-3' },
+    { key: 'powerup_espresso', path: 'assets/vices/emergency_espresso.png?v=reskin-3' },
   ],
   // NPC portraits for the rest-stop encounter cards.  Missing files fall back
   // to the procedural colored-bust placeholder (BootScene._makeNpcPlaceholder),

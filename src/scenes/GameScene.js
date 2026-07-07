@@ -3566,8 +3566,7 @@ export class GameScene extends Phaser.Scene {
       _L[VICES.HOTDOG]  = _oddGummy ? 1 : (_t >= 70 ? 0.6 + _hyp * 0.4 : 0);
       // Hangry tremor (reuse ENERGY/cocaine jitter) when Fullness < 25.
       _L[VICES.ENERGY]  = _ful < 25 ? Math.min(1, (25 - _ful) / 25) : 0;
-      // Dehydration darkening (reuse COMBO/heroin nod vignette lightly) < 25.
-      _L[VICES.COMBO]   = _hyd < 25 ? Math.min(0.6, (25 - _hyd) / 25 * 0.6) : 0;
+      // (Dehydration/nausea/bladder/withdrawal use bespoke overlays — _drawSurvivalFx.)
 
       // Terminal: asleep at the wheel → run ends.
       if (this.survival.isAsleep() && !this._asleepHandled) {
@@ -15820,6 +15819,55 @@ export class GameScene extends Phaser.Scene {
       lbl.setText(r.key).setPosition(bx + bw + 5, y - 1).setVisible(true);
       if (r.danger) lbl.setColor('#FF6A5C'); else lbl.setColor('#9FB7D6');
     });
+    this._drawSurvivalFx();
+  }
+
+  /** Bespoke survival-state overlays: dehydration tunnel-vision, nausea green
+   *  wash, caffeine-withdrawal headache, and the bladder "gotta go" nag. */
+  _drawSurvivalFx() {
+    const s = this.survival;
+    if (!s) return;
+    if (!this._survFxGfx) {
+      this._survFxGfx = this.add.graphics().setScrollFactor(0).setDepth(44);
+      this._hudObjects?.push(this._survFxGfx);
+      this._bladderTxt = this.add.text(SCREEN_W / 2 + (HUD_OFFSET_X ?? 0), 66, '', {
+        fontSize: '15px', fontFamily: IMPACT, color: '#FFEE66', stroke: '#000', strokeThickness: 4,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(45);
+      this._hudObjects?.push(this._bladderTxt);
+    }
+    const g = this._survFxGfx; g.clear();
+    if (this._awaitingStart) { this._bladderTxt.setVisible(false); return; }
+    const W = SCREEN_W + (HUD_OFFSET_X ?? 0) * 2, H = SCREEN_H;
+    const ox = -(HUD_OFFSET_X ?? 0);
+    const t = this.gameTime ?? 0;
+
+    // Dehydration → tunnel vision: dark edge bands close in as Hydration < 25.
+    const dehy = s.hydration < 25 ? (25 - s.hydration) / 25 : 0;
+    if (dehy > 0) {
+      const band = 24 + dehy * 140, a = 0.2 + dehy * 0.55;
+      g.fillStyle(0x000000, a);
+      g.fillRect(ox, 0, W, band); g.fillRect(ox, H - band, W, band);
+      g.fillRect(ox, 0, band, H); g.fillRect(ox + W - band, 0, band, H);
+    }
+    // Nausea → sickly green wash, slow pulse.
+    if (s.isNauseous()) {
+      const n = Math.min(1, (s.nausea - 30) / 70);
+      const a = Math.max(0, (0.09 + 0.05 * Math.sin(t * 2)) * n);
+      g.fillStyle(0x3FA34D, a); g.fillRect(ox, 0, W, H);
+    }
+    // Caffeine withdrawal → red headache pulse at top/bottom.
+    if (s.inWithdrawal()) {
+      const a = 0.05 + 0.06 * Math.abs(Math.sin(t * 3));
+      g.fillStyle(0x8B0000, a); g.fillRect(ox, 0, W, 80); g.fillRect(ox, H - 80, W, 80);
+    }
+    // Bladder → "gotta go" nag.
+    if (s.hydration >= 75) {
+      const urgent = s.hydration >= 90;
+      this._bladderTxt.setText(urgent ? '🚻 GOTTA GO NOW!' : '🚻 gotta go…')
+        .setColor(urgent ? '#FF7A55' : '#FFEE66')
+        .setAlpha(0.65 + 0.35 * Math.abs(Math.sin(t * (urgent ? 6 : 2))))
+        .setVisible(true);
+    } else this._bladderTxt.setVisible(false);
   }
 
   /** New vice-icon HUD — mirrors the weapon-icon stack on the

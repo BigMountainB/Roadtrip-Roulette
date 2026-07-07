@@ -14,8 +14,9 @@
 
 const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
-// Baseline per-mile drift.
-const DRIFT = { tiredness: +1.5, fullness: -2.0, hydration: -2.0 };
+// Baseline per-mile drift (tuned so an untended run survives ~90–110 mi and
+// you top up every ~35–40 mi — a real threat over 293 mi, not constant chores).
+const DRIFT = { tiredness: +0.7, fullness: -0.9, hydration: -1.0 };
 
 // Item → { t, h, f } bar deltas (per spec §3).  Specials handled in applyItem.
 const ITEM_FX = {
@@ -42,8 +43,8 @@ export class SurvivalSystem {
 
   reset() {
     this.tiredness = 0;
-    this.fullness  = 55;    // start comfortably fed
-    this.hydration = 60;    // start hydrated
+    this.fullness  = 62;    // start comfortably fed
+    this.hydration = 68;    // start hydrated
     this.nausea    = 0;
     this.caffeineDep    = 0;   // hidden dependence 0–100
     this.caffeineActive = 0;   // miles of caffeine still "in system"
