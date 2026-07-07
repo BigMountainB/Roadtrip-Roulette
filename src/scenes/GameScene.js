@@ -656,6 +656,10 @@ export class GameScene extends Phaser.Scene {
     this.vices   = new ViceSystem();
     this.survival = new SurvivalSystem();   // road-trip survival bars (see SURVIVAL_SYSTEM_SPEC.md)
     this._asleepHandled = false;
+    // Phaser reuses the scene instance across restarts; the cached survival-HUD
+    // objects were destroyed on shutdown, so drop the refs to rebuild them
+    // (else _drawSurvivalBars setText()s a dead Text → drawImage-of-null crash).
+    this._survLabels = null; this._survFxGfx = null; this._bladderTxt = null;
     // Restore persisted survival state on a rest-stop resume (fresh runs start clean).
     if (this._resumeFromStop || this._resumeFromPosition != null) {
       const _ss = this.registry.get('save')?.get?.('survivalState');
@@ -15792,13 +15796,15 @@ export class GameScene extends Phaser.Scene {
       for (let i = 0; i < 3; i++) {
         this._survLabels.push(this.add.text(0, 0, '', {
           fontSize: '9px', fontFamily: IMPACT, color: '#EAF2FF', stroke: '#000', strokeThickness: 2,
-        }).setDepth(21));
+        }).setOrigin(1, 0).setDepth(21));   // right-aligned: label sits LEFT of the bar
         this._hudObjects?.push(this._survLabels[this._survLabels.length - 1]);
       }
     }
     const mx = (x) => x + (C.HUD_OFFSET_X ?? 0);
-    const bx = mx(12), bw = 96, bh = 8, gap = 15;
-    let by = 32;
+    const bw = 92, bh = 8, gap = 15;
+    // Upper-RIGHT (clear of the top-left pause/music cluster that was hiding them).
+    const bx = mx(SCREEN_W - bw - 16);
+    let by = 92;
     const rows = [
       { key: 'TIRED', v: s.tiredness,  col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x6A7AE0, dual: false, danger: s.tiredness >= 70 },
       { key: 'FED',   v: s.fullness,   col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
@@ -15816,7 +15822,7 @@ export class GameScene extends Phaser.Scene {
       }
       g.lineStyle(1, 0x315173, 1); g.strokeRoundedRect(bx, y, bw, bh, 2);
       const lbl = this._survLabels[i];
-      lbl.setText(r.key).setPosition(bx + bw + 5, y - 1).setVisible(true);
+      lbl.setText(r.key).setPosition(bx - 6, y - 1).setVisible(true);   // left of the bar
       if (r.danger) lbl.setColor('#FF6A5C'); else lbl.setColor('#9FB7D6');
     });
     this._drawSurvivalFx();
@@ -16378,23 +16384,16 @@ export class GameScene extends Phaser.Scene {
       row++;
     }
 
-    // ── Disguise — its own INDEPENDENT button (id `disguise`).  Its DEFAULT
-    // sits under the Mute button's BASE spot (handedness), but it no longer
-    // rides Mute when Mute is moved — its own offset/scale owns it from there.
-    const mute = this._topRowButtons?.find((b) => b.id === 'mute');
-    if (mute) {
-      const muteBaseX = lhWeap ? mute.baseLeft : (SCREEN_W - mute.baseLeft - mute.size);
+    // ── Disguise — now a 5th cell in the weapon column (moved out of the
+    // top-right Mute area so the survival bars can live there).
+    {
       const dgo    = this._ctrlOff('disguise');
       const dIconW = 58 * dgo.s, dIconH = 56 * dgo.s;
-      const dx = Math.round(muteBaseX + mute.size / 2 - 58 / 2) + dgo.dx;  // centered under Mute's default
-      const dy = 2 + mute.size + 6 + dgo.dy;                               // just below Mute's default
+      const dx = baseColX + dgo.dx;
+      const dy = baseYTop + row * baseRow + dgo.dy;   // row === WEAPONS.length (below rocket)
       const dCount = counts.disguise ?? 0;
       this._renderF12Cell(DISGUISE, dx, dy, dCount, dCount > 0 && topTok === 'disguise', dgo.s);
-      // Publish bounds so the touch-steer handler can exclude this button
-      // (it sits inside the classic-mode left/right steer band).
       this._disguiseHitBounds = { x: dx, y: dy, w: dIconW, h: dIconH };
-    } else {
-      this._disguiseHitBounds = null;
     }
   }
 

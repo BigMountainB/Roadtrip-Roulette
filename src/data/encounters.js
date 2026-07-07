@@ -42,7 +42,7 @@ export const REST_STOP_ENCOUNTERS = [
     stopId: 'S', intro: true, once: true,
     portrait: 'street_weirdo', speaker: 'Street Weirdo',
     line: "Pullman by tonight? In THIS? Buddy, the mountain eats cars like yours for a light snack.",
-    fact: "I-90 climbs from sea level in Seattle to about 3,000 ft at Snoqualmie Pass.",
+    fact: "I-90 climbs from sea level in Seattle to just over 3000ft at Snoqualmie Pass.",
     choices: [
       { label: "Ask about the pass", effects: { revealHazard: 'snow', dialogue: "\"Chains or prayers past North Bend. Your call.\"" } },
       { label: "Give him a buck", cost: 1, effects: { dialogue: "\"A philanthropist. You'll die humble.\"" } },

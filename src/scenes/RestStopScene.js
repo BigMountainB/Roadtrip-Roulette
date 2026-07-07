@@ -613,15 +613,16 @@ export class RestStopScene extends Phaser.Scene {
     // The portable save code is now a long (~58-char) string, so it must
     // wrap instead of overflowing.  Tap the code to copy it to the clipboard
     // for transfer to another device.
+    // (Save code hidden from the rest-stop sign per design — the underlying
+    // save/transfer still works; it's just no longer shown on-screen.)
     const codeLabel = this.add.text(40, 56, 'SAVE CODE — TAP TO COPY', {
       fontSize: '10px', fontFamily: 'Arial', color: '#FFCC66',
-    }).setOrigin(0, 0);
+    }).setOrigin(0, 0).setVisible(false);
     const codeText = this.add.text(40, 67, this._code, {
       fontSize: '13px', fontFamily: 'Courier New, monospace',
       color: '#FFEE00', stroke: '#000', strokeThickness: 3,
       wordWrap: { width: SCREEN_W - 80, useAdvancedWrap: true },
-    }).setOrigin(0, 0);
-    this.tweens.add({ targets: codeText, alpha: 0.7, duration: 900, yoyo: true, repeat: -1 });
+    }).setOrigin(0, 0).setVisible(false);
 
     // Tap-to-copy — clipboard with a graceful fallback, plus a brief
     // "COPIED!" confirmation flashed in place of the label.
@@ -709,10 +710,9 @@ export class RestStopScene extends Phaser.Scene {
       if (tryExecCopy(text)) done();
       else manualCopySheet(text);
     };
-    const codeHit = this.add.rectangle(
-      40, 56, SCREEN_W - 80, (codeText.y + codeText.height) - 56, 0xffffff, 0,
-    ).setOrigin(0, 0).setInteractive({ useHandCursor: true });
-    codeHit.on('pointerdown', copyCode);
+    // (Code tap zone disabled — the save code is hidden from the sign.)
+    const codeHit = this.add.rectangle(40, 56, 1, 1, 0xffffff, 0).setOrigin(0, 0).setVisible(false);
+    void copyCode; void codeHit;
 
     // ── Score header ─────────────────────────────────────────────────────
     this._scoreText = this.add.text(SCREEN_W - 30, 60, '', {
@@ -1024,42 +1024,55 @@ export class RestStopScene extends Phaser.Scene {
     add(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.82)
       .setDepth(D).setInteractive());
 
-    const pw = Math.min(560, SCREEN_W - 40), ph = Math.min(360, SCREEN_H - 60);
+    // Big near-full-screen card dominated by the NPC portrait.
+    const pw = SCREEN_W - 16, ph = SCREEN_H - 16;
     const px = CX - pw / 2, py = SCREEN_H / 2 - ph / 2;
-    const panel = this.add.graphics().setDepth(D + 1);
-    panel.fillStyle(0x080C16, 0.98); panel.fillRoundedRect(px, py, pw, ph, 14);
-    panel.lineStyle(3, 0x39A8FF, 1);  panel.strokeRoundedRect(px, py, pw, ph, 14);
-    panel.lineStyle(1, 0xFF39AF, 0.6); panel.strokeRoundedRect(px + 5, py + 5, pw - 10, ph - 10, 11);
-    add(panel);
 
-    // Header: location + mile.
-    add(this.add.text(px + pw / 2, py + 12,
-      `${this._stop?.name ?? 'Rest Stop'}  ·  MILE ${Math.round(this._odometer ?? 0)}`, {
-        fontSize: '13px', fontFamily: IMPACT, color: '#8FB7E6',
-      }).setOrigin(0.5, 0).setDepth(D + 2));
-
-    // Portrait (placeholder if art absent).
+    // Portrait — cover-fit to fill the whole card (top-anchored so the face
+    // stays), clipped to the card rect by a geometry mask.
     const port = getPortrait(enc.portrait);
     this._ensureNpcTexture(port.texture, port.placeholderTint ?? 0x555555);
-    const portSize = Math.min(150, ph - 150);
-    add(this.add.image(px + 20 + portSize / 2, py + 40 + portSize / 2, port.texture)
-      .setDisplaySize(portSize, portSize).setDepth(D + 2));
-    add(this.add.text(px + 20 + portSize / 2, py + 44 + portSize, (enc.speaker ?? port.name).toUpperCase(), {
-      fontSize: '14px', fontFamily: IMPACT, color: '#FFD23D',
-      stroke: '#000', strokeThickness: 3,
-    }).setOrigin(0.5, 0).setDepth(D + 2));
+    const tex = this.textures.get(port.texture)?.source?.[0];
+    const iw = tex?.width || 600, ih = tex?.height || 660;
+    const scale = Math.max(pw / iw, ph / ih);
+    const portImg = this.add.image(px + pw / 2, py, port.texture)
+      .setOrigin(0.5, 0).setDisplaySize(iw * scale, ih * scale).setDepth(D + 1);
+    const maskG = this.make.graphics(); maskG.fillStyle(0xffffff).fillRoundedRect(px, py, pw, ph, 14);
+    portImg.setMask(maskG.createGeometryMask());
+    objs.push(portImg, { destroy: () => maskG.destroy() });
+    // Card border.
+    const border = this.add.graphics().setDepth(D + 5);
+    border.lineStyle(3, 0x39A8FF, 1); border.strokeRoundedRect(px, py, pw, ph, 14);
+    add(border);
+    // Dark gradient bands top (header + dialogue) and bottom (name/fact/choices).
+    const band = this.add.graphics().setDepth(D + 2);
+    band.fillStyle(0x02040B, 0.66); band.fillRect(px, py, pw, 118);
+    const choiceCount = (enc.choices ?? [{}]).length;
+    const botH = 60 + choiceCount * 34 + (enc.fact ? 34 : 0);
+    band.fillStyle(0x02040B, 0.74); band.fillRect(px, py + ph - botH, pw, botH);
+    add(band);
 
-    // Dialogue + optional fact, right of the portrait.
-    const textX = px + 40 + portSize, textW = pw - portSize - 60;
-    add(this.add.text(textX, py + 42, `"${enc.line}"`, {
-      fontSize: '15px', fontFamily: 'Georgia, serif', color: '#F4F7FF',
-      wordWrap: { width: textW }, lineSpacing: 3,
-    }).setDepth(D + 2));
+    // Header: location + mile (top).
+    add(this.add.text(px + pw / 2, py + 8,
+      `${this._stop?.name ?? 'Rest Stop'}  ·  MILE ${Math.round(this._odometer ?? 0)}`, {
+        fontSize: '13px', fontFamily: IMPACT, color: '#8FB7E6',
+      }).setOrigin(0.5, 0).setDepth(D + 4));
+
+    // Dialogue across the top band.
+    add(this.add.text(px + 20, py + 28, `"${enc.line}"`, {
+      fontSize: '18px', fontFamily: 'Georgia, serif', color: '#F4F7FF',
+      stroke: '#000', strokeThickness: 3, wordWrap: { width: pw - 40 }, lineSpacing: 3,
+    }).setDepth(D + 4));
+
+    // Speaker name (bottom band, above choices).
+    add(this.add.text(px + 18, py + ph - botH + 6, (enc.speaker ?? port.name).toUpperCase(), {
+      fontSize: '15px', fontFamily: IMPACT, color: '#FFD23D', stroke: '#000', strokeThickness: 3,
+    }).setDepth(D + 4));
     if (enc.fact) {
-      add(this.add.text(textX, py + 42 + 110, `📍 ${enc.fact}`, {
-        fontSize: '11px', fontFamily: 'Arial', color: '#7F9Fc0',
-        fontStyle: 'italic', wordWrap: { width: textW }, lineSpacing: 2,
-      }).setDepth(D + 2));
+      add(this.add.text(px + 18, py + ph - botH + 28, `📍 ${enc.fact}`, {
+        fontSize: '11px', fontFamily: 'Arial', color: '#9FB7D6',
+        fontStyle: 'italic', wordWrap: { width: pw - 36 }, lineSpacing: 2,
+      }).setDepth(D + 4));
     }
 
     // Effect-application context — writes to _purchases (resumed by GameScene)
