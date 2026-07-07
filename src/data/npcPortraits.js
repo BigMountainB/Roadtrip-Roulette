@@ -28,6 +28,8 @@ export const NPC_PORTRAITS = {
   diner_waitress:  { texture: 'npc_diner_waitress',  name: 'Diner Waitress',       placeholderTint: 0xD46A8A },
   grandma:         { texture: 'npc_grandma',         name: 'Roadside Grandma',     placeholderTint: 0xB59AC4 },
   tow_driver:      { texture: 'npc_tow_driver',      name: 'Tow Driver',           placeholderTint: 0xC98A3A },
+  desert_mechanic: { texture: 'npc_desert_mechanic', name: 'Shade-Tree Mechanic',  placeholderTint: 0x5A7286 },
+  lemonade_kids:   { texture: 'npc_lemonade_kids',   name: 'Lemonade Kids',        placeholderTint: 0xF2C14E },
 };
 
 /** Resolve a portrait descriptor by key, falling back to a generic card. */

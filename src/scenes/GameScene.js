@@ -2013,6 +2013,18 @@ export class GameScene extends Phaser.Scene {
             this.survival.hydration = 0;
             this._bladderBurstMile = null;
           }
+          // Encounter survival effects (food/drink/coffee) → adjust the bars.
+          if (buys.survivalDelta && this.survival) {
+            const cl = (v) => Math.max(0, Math.min(100, v));
+            const d  = buys.survivalDelta;
+            if (d.hydration) this.survival.hydration = cl(this.survival.hydration + d.hydration);
+            if (d.fullness)  this.survival.fullness  = cl(this.survival.fullness  + d.fullness);
+            if (d.tiredness) this.survival.tiredness = cl(this.survival.tiredness + d.tiredness);
+          }
+          // Encounter engine-cooling (coolant top-off / aux fan) → drop temp.
+          if (buys.coolEngine) {
+            this._engineTemp = Math.max(0, (this._engineTemp ?? 0) - buys.coolEngine);
+          }
           // Rest-stop ENCOUNTER effects (data-driven cards): partial fuel top-up
           // and party-clock delta (+ or −).  Kept separate from the full-refuel
           // flag + visit penalty so encounter rewards/costs stack cleanly.

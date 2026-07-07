@@ -1023,6 +1023,11 @@ export class RestStopScene extends Phaser.Scene {
       addBuff:      (id) => { this._purchases.encounterBuffs = [...(this._purchases.encounterBuffs ?? []), id]; },
       grantUpgrade: (id) => { this._purchases.encounterUpgrades = [...(this._purchases.encounterUpgrades ?? []), id]; },
       revealHazard: (id) => { this._purchases.revealHazard = id; },
+      addSurvival:  (bar, n) => {
+        const d = (this._purchases.survivalDelta ??= {});
+        d[bar] = (d[bar] ?? 0) + n;
+      },
+      coolEngine:   (n) => { this._purchases.coolEngine = (this._purchases.coolEngine ?? 0) + n; },
     };
 
     const choose = (choice) => {

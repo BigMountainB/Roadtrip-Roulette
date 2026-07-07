@@ -30,6 +30,11 @@
 //   buff        string id of a temporary buff (applied when buff system lands)
 //   grantUpgrade upgrade id (applied when upgrade system lands)
 //   revealHazard hazard id to surface in the HUD/next-zone hint
+//   hydration   +/- Thirst bar 0–100 (a drink raises it)
+//   fullness    +/- Hunger bar 0–100 (food raises it)
+//   tiredness   +/- Tiredness 0–100 (caffeine LOWERS it → more awake)
+//   coolEngine  degrees of engine temperature removed (coolant/fan)
+//   generous    true = a generous act; ~30% chance of a random karma reward
 //   dialogue    follow-up line shown after the choice resolves
 //
 // A choice may resolve randomly via `chance: [{ p, effects, dialogue }, …]`
@@ -45,7 +50,7 @@ export const REST_STOP_ENCOUNTERS = [
     fact: "I-90 climbs from sea level in Seattle to just over 3000ft at Snoqualmie Pass.",
     choices: [
       { label: "Ask about the pass", effects: { revealHazard: 'snow', dialogue: "\"Chains or prayers past North Bend. Your call.\"" } },
-      { label: "Give him a buck", cost: 1, effects: { dialogue: "\"A philanthropist. You'll die humble.\"" } },
+      { label: "Give him a buck", cost: 1, effects: { generous: true, dialogue: "\"A philanthropist. You'll die humble.\"" } },
       { label: "Just drive", effects: {} },
     ],
   },
@@ -79,7 +84,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Summit's whiteout past the tunnel. Slow is smooth, smooth is not-dead.",
     fact: "The Snoqualmie Pass summit sits at 3,015 ft — the lowest major I-90 crossing of the Cascades.",
     choices: [
-      { label: "Buy his thermos ($15)", cost: 15, effects: { buff: 'warm', timeSec: +10, dialogue: "Coffee that could strip paint. You feel alert." } },
+      { label: "Buy his thermos ($15)", cost: 15, effects: { buff: 'warm', timeSec: +10, tiredness: -18, dialogue: "Coffee that could strip paint. You feel alert." } },
       { label: "Ask the safe line", effects: { revealHazard: 'whiteout' } },
       { label: "Wave and go", effects: {} },
     ],
@@ -190,7 +195,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Rodeo's in town so the coffee's fresh and the regulars are feral. You look like you're running from something. Pie?",
     fact: "Ellensburg is Kittitas County's rodeo-and-college town, roughly halfway across the state.",
     choices: [
-      { label: "Coffee & pie ($12)", cost: 12, effects: { hp: +4, timeSec: +15, dialogue: "Best decision you've made all trip. Low bar, but still." } },
+      { label: "Coffee & pie ($12)", cost: 12, effects: { hp: +4, timeSec: +15, fullness: +16, tiredness: -12, dialogue: "Best decision you've made all trip. Low bar, but still." } },
       { label: "Ask what's ahead", effects: { revealHazard: 'wind', dialogue: "\"Wind past Vantage'll part your hair through the windshield.\"" } },
       { label: "Just the check", effects: {} },
     ],
@@ -208,8 +213,8 @@ export const REST_STOP_ENCOUNTERS = [
       {
         label: "Take a cookie",
         chance: [
-          { p: 0.7, effects: { hp: +3, dialogue: "Weirdly restorative. You feel watched, but nourished." } },
-          { p: 0.3, effects: { timeSec: -20, dialogue: "You blink and twenty minutes are gone. Really good cookie." } },
+          { p: 0.7, effects: { hp: +3, fullness: +14, dialogue: "Weirdly restorative. You feel watched, but nourished." } },
+          { p: 0.3, effects: { fullness: +14, timeSec: -20, dialogue: "You blink and twenty minutes are gone. Really good cookie." } },
         ],
       },
       { label: "Politely flee", effects: {} },
@@ -227,6 +232,34 @@ export const REST_STOP_ENCOUNTERS = [
       { label: "Prepay a tow discount ($50)", cost: 50, effects: { buff: 'tow_insurance', dialogue: "\"Crash and I'll only judge you a little.\"" } },
       { label: "Have her bang out a dent ($40)", cost: 40, effects: { hp: +12, dialogue: "A mallet, a grunt, and your car is marginally less sad." } },
       { label: "Wave her off", effects: {} },
+    ],
+  },
+
+  // ── Ellensburg (E) — coolant before the desert (engine-heat hook) ────────
+  {
+    id: 'ellensburg_coolant',
+    stopId: 'E', weight: 2,
+    portrait: 'desert_mechanic', speaker: 'Shade-Tree Mechanic',
+    line: "Heading into the Basin? Top off your coolant here. That temp gauge climbs quick once the shade runs out past Vantage.",
+    fact: "East of the Cascades the road drops into high desert — long, hot, and shadeless across the Columbia Basin.",
+    choices: [
+      { label: "Top off the coolant ($25)", cost: 25, effects: { coolEngine: 55, dialogue: "He tops the radiator and checks the fan. \"That'll hold — probably.\"" } },
+      { label: "Fill your jug from his hose", effects: { hydration: +15, dialogue: "Warm hose water, but it's wet. He waves off the coins." } },
+      { label: "I'll risk it", effects: {} },
+    ],
+  },
+
+  // ── Othello (O) — Basin heat, the only lemonade for 50 miles (thirst) ────
+  {
+    id: 'othello_lemonade',
+    stopId: 'O', weight: 2,
+    portrait: 'lemonade_kids', speaker: 'Lemonade Kids',
+    line: "Ice-cold lemonade, mister! Best in the whole Basin! (It's the ONLY one in the whole Basin.)",
+    fact: "The Columbia Basin bakes in summer — triple-digit heat is common out past the Saddle Mountains.",
+    choices: [
+      { label: "Buy the whole pitcher ($5)", cost: 5, effects: { hydration: +35, generous: true, dialogue: "Worth every cent — your tongue rejoins the living." } },
+      { label: "Just one cup ($1)", cost: 1, effects: { hydration: +18, dialogue: "Cold and impossibly sweet. You roll on." } },
+      { label: "Wave and go", effects: {} },
     ],
   },
 ];
@@ -285,6 +318,23 @@ export function resolveChoice(choice, rng = Math.random) {
     effects = { ...effects, ...(picked.effects ?? {}) };
     dialogue = picked.dialogue ?? dialogue;
   }
+  // "Generous" choices (tip, give a buck, help for free) occasionally pay karma
+  // back — a RANDOM reward, ~30% of the time, not every time.
+  if (effects.generous) {
+    delete effects.generous;
+    if (rng() < 0.30) {
+      const rewards = [
+        { e: { cash: +45 },    d: "Karma's quick today — you spot $45 tucked in the visor." },
+        { e: { cash: +80 },    d: "Miles later a stranger quietly covers your tab. 'Pay it forward.'" },
+        { e: { fuelMi: +45 },  d: "Someone waves you over and tops off your tank, no charge." },
+        { e: { hp: +9 },       d: "A trucker bangs your dent out for free — 'saw you help back there.'" },
+        { e: { timeSec: +45 }, d: "The road opens up, every light green. You make up real time." },
+      ];
+      const pick = rewards[Math.floor(rng() * rewards.length)];
+      for (const [k, v] of Object.entries(pick.e)) effects[k] = (effects[k] ?? 0) + v;
+      dialogue = pick.d;
+    }
+  }
   if (choice.cost) effects.cash = (effects.cash ?? 0) - choice.cost;
   return { effects, dialogue };
 }
@@ -302,4 +352,11 @@ export function applyEncounterEffects(effects = {}, ctx = {}) {
   if (effects.buff)                ctx.addBuff?.(effects.buff);
   if (effects.grantUpgrade)        ctx.grantUpgrade?.(effects.grantUpgrade);
   if (effects.revealHazard)        ctx.revealHazard?.(effects.revealHazard);
+  // Survival bars (0–100): a drink raises hydration, food raises fullness,
+  // caffeine lowers tiredness (negative = more awake).
+  if (effects.hydration   != null) ctx.addSurvival?.('hydration', effects.hydration);
+  if (effects.fullness    != null) ctx.addSurvival?.('fullness',  effects.fullness);
+  if (effects.tiredness   != null) ctx.addSurvival?.('tiredness', effects.tiredness);
+  // Engine heat: positive coolEngine = degrees of temperature removed.
+  if (effects.coolEngine  != null) ctx.coolEngine?.(effects.coolEngine);
 }
