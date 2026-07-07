@@ -217,7 +217,7 @@ function brandsForStop(stop) {
     dealer:  isWest
       ? { name: 'Lord Motors',          logo: 'biz_lord', carFuel: 'electric' }
       : { name: "Sam's Used Car Kingdom", logo: 'biz_suck', carFuel: 'gas' },
-    vices:   { name: 'Gas-N-Sip', logo: 'biz_pharmabros' },
+    vices:   { name: 'Gas-N-Sip', logo: 'biz_gasnsip' },
     parkride:{ name: 'Metro Park & Ride', logo: 'biz_parkride' },
   };
 }

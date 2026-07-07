@@ -252,7 +252,8 @@ export const ASSET_MANIFEST = {
     { key: 'biz_aok',        path: 'assets/businesses/aok.png' },          // Camp
     { key: 'biz_lord',       path: 'assets/businesses/lord.png' },         // Dealer — Lord Motors (EV)
     { key: 'biz_suck',       path: 'assets/businesses/suck.png' },         // Dealer — Sam's Used Car Kingdom (gas)
-    { key: 'biz_pharmabros', path: 'assets/businesses/pharmabros.png' },   // Vices — PharmaBros pharmacy
+    { key: 'biz_gasnsip',    path: 'assets/businesses/gasnsip.png' },      // Vices — Gas-N-Sip (trash gas station)
+    { key: 'biz_am_bm',      path: 'assets/businesses/am_bm.png' },        // AM/BM — trash gas station (toilet demolition)
     { key: 'biz_parkride',   path: 'assets/businesses/park-and-ride.png' }, // Park & Ride — Metro Park & Ride
     // Highway shield badges — composited onto green exit signs.
     { key: 'hwy_i90',   path: 'assets/businesses/hwy_i90.svg' },
