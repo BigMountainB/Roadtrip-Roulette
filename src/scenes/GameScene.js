@@ -660,6 +660,7 @@ export class GameScene extends Phaser.Scene {
     // objects were destroyed on shutdown, so drop the refs to rebuild them
     // (else _drawSurvivalBars setText()s a dead Text → drawImage-of-null crash).
     this._survLabels = null; this._survFxGfx = null; this._bladderTxt = null;
+    this._bladderBurstMile = null;   // odometer where Thirst hit ≥90 (bursting)
     // Restore persisted survival state on a rest-stop resume (fresh runs start clean).
     if (this._resumeFromStop || this._resumeFromPosition != null) {
       const _ss = this.registry.get('save')?.get?.('survivalState');
@@ -2007,6 +2008,11 @@ export class GameScene extends Phaser.Scene {
           }
           if (typeof buys.partyClockPenalty === 'number' && buys.partyClockPenalty > 0) {
             this._partyClockSec = Math.max(0, (this._partyClockSec ?? 0) - buys.partyClockPenalty);
+          }
+          // Restroom use → empties Thirst (bladder) and clears any bursting.
+          if (buys.emptyBladder && this.survival) {
+            this.survival.hydration = 0;
+            this._bladderBurstMile = null;
           }
           // Rest-stop ENCOUNTER effects (data-driven cards): partial fuel top-up
           // and party-clock delta (+ or −).  Kept separate from the full-refuel
@@ -3578,6 +3584,22 @@ export class GameScene extends Phaser.Scene {
         this._showPopup?.('😴 YOU FELL ASLEEP AT THE WHEEL', '#FF5C7A');
         this._endGame?.('overdose', { charge: 'FATIGUE' });
       }
+
+      // ── Bladder emergency: Thirst (hydration) ≥ 90 = "bursting".  You get
+      // ~2 miles of squirming (steering wobble in _updatePlayer) to reach a
+      // restroom; miss that window and you're forced to pull over — lose 30s
+      // and wet yourself (Thirst empties either way).
+      if (_hyd >= 90) {
+        if (this._bladderBurstMile == null) this._bladderBurstMile = this._odometer ?? 0;
+        else if ((this._odometer ?? 0) - this._bladderBurstMile >= 2) {
+          this._partyClockSec = Math.max(0, (this._partyClockSec ?? 0) - 30);
+          this._showPopup?.('💦 COULDN\'T HOLD IT — pulled over!\n−30 seconds', '#FF5C7A');
+          this.survival.hydration = 0;
+          this._bladderBurstMile = null;
+        }
+      } else {
+        this._bladderBurstMile = null;
+      }
     }
     // Guaranteed first taste — when a vice crosses its unlock gate this frame,
     // drop just 1–2 sprites a short way ahead (reachable within ~15s) so the
@@ -4994,6 +5016,13 @@ export class GameScene extends Phaser.Scene {
     // wheel rather than an instant lane jump.
     p.steerVelocity += (phys.steerDrift ?? 0) * dt;
     p.steerVelocity += (phys.extraCurve ?? 0) * p.speed * 0.001 * dt;
+
+    // Bladder squirm — while "bursting" (Thirst ≥ 90, not yet relieved) the
+    // driver fidgets: a low-freq wander that fights the wheel until you go.
+    if (this._bladderBurstMile != null) {
+      const _bt = this.gameTime ?? 0;
+      p.steerVelocity += (Math.sin(_bt * 5.5) * 0.9 + Math.sin(_bt * 2.3) * 0.5) * dt;
+    }
 
     // Microsleep — hands-off the wheel briefly: bleed lateral velocity
     // a little extra so the car drifts unsteered.

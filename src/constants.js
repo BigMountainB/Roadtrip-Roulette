@@ -479,7 +479,7 @@ const _REST_STOP_DEF = [
   { id: 'B',  name: 'Bellevue, WA',        mileage: 12.5, exit: 'Exit 10',    hwy: 'hwy_i90',   amenities: ['dealer', 'vices'] },
   { id: 'I',  name: 'Issaquah, WA',        mileage:   18, exit: 'Exit 18',    hwy: 'hwy_i90',   amenities: ['hunting', 'camp'] },
   { id: 'SQ', name: 'Snoqualmie, WA',      mileage:   25, exit: 'Exit 25',    hwy: 'hwy_i90',   amenities: ['dealer'] },
-  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'vices', 'parkride'] },
+  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'vices', 'parkride', 'ambm'] },
   { id: 'SP', name: 'Snoqualmie Pass, WA', mileage:   53, exit: 'Exit 53',    hwy: 'hwy_i90',   amenities: ['camp', 'gas'] },
   { id: 'EA', name: 'Easton, WA',          mileage:   70, exit: 'Exit 70',    hwy: 'hwy_i90',   amenities: ['camp'] },
   { id: 'C',  name: 'Cle Elum, WA',        mileage:   84, exit: 'Exit 84',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting'] },
@@ -493,9 +493,9 @@ const _REST_STOP_DEF = [
   // real WSDOT exit numbers ("Exit 4", "Exit 7B", etc.) since those
   // ARE numeric and don't echo the I-90 shield.
   { id: 'Y',  name: 'Royal City, WA',      mileage:  158, exit: 'Exit 158',   hwy: 'hwy_wa26',  amenities: ['hunting'] },
-  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['vices', 'gas', 'parkride'] },
+  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['vices', 'gas', 'parkride', 'ambm'] },
   { id: 'H',  name: 'Hatton, WA',          mileage:  205, exit: 'Exit 205',   hwy: 'hwy_wa26',  amenities: ['camp', 'gas'] },
-  { id: 'W',  name: 'Washtucna, WA',       mileage:  228, exit: 'Exit 228',   hwy: 'hwy_wa26',  amenities: ['gas'] },
+  { id: 'W',  name: 'Washtucna, WA',       mileage:  228, exit: 'Exit 228',   hwy: 'hwy_wa26',  amenities: ['gas', 'ambm'] },
   { id: 'L',  name: 'La Crosse, WA',       mileage:  253, exit: 'Exit 253',   hwy: 'hwy_us195', amenities: ['camp'] },
   { id: 'CO', name: 'Colfax, WA',          mileage:  274, exit: 'Exit 274',   hwy: 'hwy_us195', amenities: ['dealer', 'gas', 'parkride'] },
   { id: 'P',  name: 'Pullman, WA',         mileage:  289, exit: 'Exit 289',   hwy: 'hwy_wa270', amenities: ['gas', 'hunting', 'camp', 'dealer', 'vices', 'parkride'] },

@@ -33,6 +33,16 @@ export const VICE_PRICE = {
 
 const VICE_DISPLAY = (id) => VICE_CONFIG[id]?.label?.replace(/^[^A-Za-z]+/, '').trim() ?? id;
 
+// Restroom item — empties Thirst (bladder) to 0.  `gated` restrooms (the
+// trash gas stations, ~50% of them) are customers-only: you must buy
+// something at that stop first.  Park & Ride / Camp restrooms are free.
+const restroomItem = (gated) => ({
+  id: 'restroom', emoji: '🚽', label: '🚽  USE RESTROOM', cost: 0,
+  desc: gated ? 'Empties Thirst → 0. Customers only at some stops.'
+              : 'Free — empties Thirst → 0.',
+  payload: { restroom: true, gated: !!gated },
+});
+
 const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
   const items = [
     { id: 'coffee',     label: 'COFFEE',           emoji: '☕',
@@ -129,6 +139,13 @@ const SECTIONS = {
     label: '💊  VICES',
     items: viceItems(null),
   },
+  // AM/BM — a second trash gas station (toilet-demolition flavor).  Sells
+  // the same road snacks as Gas-N-Sip plus its own restroom.  Items are
+  // repopulated per-player in create().
+  ambm: {
+    label: '🚽  AM/BM',
+    items: viceItems(null),
+  },
   // ── 4-panel highway-services sections (match the rest stop sign) ──
   gas: {
     label: '⛽  GAS',
@@ -189,8 +206,8 @@ const SECTIONS = {
 
 // Landing tab order (brand placards).  dealer_acc / dealer_cars are
 // reached via the Dealer chooser, not the landing.
-const TAB_ORDER = ['gas', 'hunting', 'camp', 'dealer', 'parkride', 'vices'];
-const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'parkride', 'vices'];
+const TAB_ORDER = ['gas', 'hunting', 'camp', 'dealer', 'parkride', 'vices', 'ambm'];
+const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'parkride', 'vices', 'ambm'];
 
 // Charger availability — west-side rest stops carry the CarGo brand
 // which sells both gas AND charging.  East-side stops are Huff's,
@@ -218,6 +235,7 @@ function brandsForStop(stop) {
       ? { name: 'Lord Motors',          logo: 'biz_lord', carFuel: 'electric' }
       : { name: "Sam's Used Car Kingdom", logo: 'biz_suck', carFuel: 'gas' },
     vices:   { name: 'Gas-N-Sip', logo: 'biz_gasnsip' },
+    ambm:    { name: 'AM/BM',     logo: 'biz_am_bm' },
     parkride:{ name: 'Metro Park & Ride', logo: 'biz_parkride' },
   };
 }
@@ -376,6 +394,18 @@ export class RestStopScene extends Phaser.Scene {
     // before the registry existed, so it would show every vice.
     SECTIONS.vices.items = viceItems(this.registry?.get?.('viceUnlocks'));
 
+    // ── Restroom availability ────────────────────────────────────────
+    // Both trash gas stations (Gas-N-Sip + AM/BM) carry a restroom; ~50%
+    // of stops are "customers only" (must buy something first).  The gate
+    // is deterministic per stop id so it's stable across a visit.  Park &
+    // Ride and Camp restrooms are always free.
+    this._boughtSomething = false;
+    const _sid = String(this._stop?.id ?? '');
+    let _h = 0; for (let i = 0; i < _sid.length; i++) _h = (_h * 31 + _sid.charCodeAt(i)) | 0;
+    this._restroomGated = (Math.abs(_h) % 2) === 0;
+    SECTIONS.vices.items = [...SECTIONS.vices.items, restroomItem(true)];
+    SECTIONS.ambm.items  = [...viceItems(this.registry?.get?.('viceUnlocks')), restroomItem(true)];
+
     // ── GAS section: dynamic pricing ─────────────────────────────────
     // Refuel cost = missing miles × $0.333.  Charge cost = 35% of that
     // (only at chargers — every other rest stop).  Pre-tax preview;
@@ -462,6 +492,8 @@ export class RestStopScene extends Phaser.Scene {
         payload: {},
       }];
     }
+    // Park & Ride always has a free public restroom.
+    SECTIONS.parkride.items = [...SECTIONS.parkride.items, restroomItem(false)];
 
     // ── DEALER_CARS: build region-filtered vehicle catalog ──────────
     const _stopBrands = brandsForStop(this._stop);
@@ -563,6 +595,8 @@ export class RestStopScene extends Phaser.Scene {
       });
     }
     SECTIONS.camp.items    = [...SECTIONS.camp.items,    ...shopViceItems('camp',    _pickupCounts)];
+    // Campgrounds always have a free restroom.
+    SECTIONS.camp.items    = [...SECTIONS.camp.items,    restroomItem(false)];
     SECTIONS.dealer_acc.items = [...SECTIONS.dealer_acc.items, ...shopViceItems('dealer', _pickupCounts)];
     // Charging-station vices only appear if the stop actually has a
     // charger (CarGo west-side stops); add to the gas tab so they
@@ -1315,8 +1349,16 @@ export class RestStopScene extends Phaser.Scene {
         this._setStatus(`Need $${effectiveCost - this._score} more!`, '#FF6666');
         return;
       }
+      // Customers-only restroom gate — must buy something at this stop first.
+      if (item.payload?.restroom && item.payload.gated
+          && this._restroomGated && !this._boughtSomething) {
+        this._flash(bg, 0xFF4444);
+        this._setStatus('🚻 CUSTOMERS ONLY — buy something first!', '#FF6666');
+        return;
+      }
       if (effectiveCost > 0) {
         this._score -= effectiveCost;
+        this._boughtSomething = true;   // unlocks customers-only restrooms
         const _si = this._statsSpendInfo(item);
         this._stats?.recordSpend(effectiveCost, _si.category, _si.subId);
       }
@@ -1341,6 +1383,7 @@ export class RestStopScene extends Phaser.Scene {
       const outcome = this._rollHitchhiker();
       return outcome.message;
     }
+    if (item.payload?.restroom) return this._restroomMsg ?? '🚽 Sweet relief.';
     return `✓ ${item.label.replace(/[^\w ]/g, '').trim()}`;
   }
 
@@ -1397,6 +1440,17 @@ export class RestStopScene extends Phaser.Scene {
   _applyPurchase(item) {
     const p = item.payload;
     if (!p) return;
+    if (p.restroom) {
+      // Empties Thirst (bladder) → 0 on resume.  Small chance the "epic
+      // deuce" gets you a wanted star (someone calls it in).
+      this._purchases.emptyBladder = true;
+      if (Math.random() < 0.08) {
+        this._purchases.bumpStarsOnResume = (this._purchases.bumpStarsOnResume ?? 0) + 1;
+        this._restroomMsg = '💩 EPIC DEUCE! Someone called the cops. +1★ — but sweet relief.';
+      } else {
+        this._restroomMsg = '🚽 Ahhh… sweet relief. Bladder emptied.';
+      }
+    }
     if (p.repair) {
       this._purchases.repair             = true;
       // Restore to the actual vehicle's max HP, not the legacy 100.
