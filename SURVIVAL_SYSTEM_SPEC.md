@@ -59,23 +59,34 @@ DUI/reckless trigger with a coherent, non-drug reason.
 
 8 consumables + 2 power-ups. `+`/`−` are applied on pickup unless noted.
 
+**GLOBAL RULES (2026-07-06):** No consumable grants a **wanted-star**, a
+**speed/damage/combat bonus**, or a **delayed crash/rebound**. Consumables ONLY
+move the survival bars (immediate, fixed amounts). (Caffeine *addiction* in §4 is
+a kept dependence system, not a "crash".)
+
 | Item | Category | Tiredness | Hydration | Fullness | Notes |
 |---|---|---|---|---|---|
 | **Water** | hydration | −5 | **+25** | — | overshoot → bladder |
 | **Cold Brew** | caffeine (mild) | **−18** | −8 (diuretic) | — | **no addiction** — the safe starter |
 | **Caffeine Pills** | caffeine (strong) | **−30** | −12 (diuretic) | — | **builds addiction** (§4) |
-| **Slushie** | sugar | −22 spike | +15 | +8 | **sugar crash** ~40s later: Tiredness +30, brain-freeze stagger on drink |
-| **Gummies** | sugar | −18 spike | — | +6 | crash ~40s: Tiredness +25; saturation/rainbow visual while high |
-| **Sushi** | food | −6 (bite) | — | **+25** | ~**1/12 "bad fish"** → Hydration/Bladder → ~90 + nausea flash |
-| **Burrito** | food | −6 (bite) | — | **+35** | heavier → hits food-coma faster |
-| **Dramamine** | medicine | **+25** (drowsy) | — | — | **cures Nausea** |
+| **Slushie** | sugar drink | **−10** | **+15** | **+10** | no crash |
+| **Gummies** | sugar snack | **−6** | — | **+4** | **1/20 = "Odd Gas Station Gummies"** → max shroom trip (wavy road + rainbow); otherwise a tiny sugar pep |
+| **Sushi** | food (risky) | **+5** | — | **+10** | ~**1/12 "bad fish"** → Bladder → ~90 + nausea. **No other effects** (no double-vision/drift) |
+| **Burrito** | food (heavy) | **+20** | — | **+20** | **No other effects** (no permastoned lock) |
+| **Dramamine** | medicine | **+25** (drowsy) | — | — | **cures Nausea AND sushi sickness** |
 | **Quad Shot** | power-up | **→ 0** (clears bar) | — | — | inventory item (was Emergency Espresso) |
 | **Redneck Rage** | power-up | — | — | — | 1-mi invincible bulldoze + red spectacle (unchanged) |
 | **Sleep** (rest-stop nap) | action | **→ 0** | — | — | costs party-clock time (~3–8 min) |
 
-**Design contrast:** Sugar = fast pep + hard crash · Caffeine = lasting alertness
-+ dehydration (+ addiction on Pills) · Water = small honest reset · Food = fills
-but sedates the fuller you get · Dramamine = fixes stomach but sedates.
+**Design contrast:** Caffeine = alertness + dehydration (+ addiction on Pills) ·
+Water = small honest reset · Food = fills but *sedates* (Sushi +5 tired/bite,
+Burrito +20) · Dramamine = fixes stomach but sedates · Sugar = minor snack/drink
+(Gummies rare trip, Slushie a drink). Both sugar's crash and all speed/combat
+bonuses are gone per the global rules.
+
+**Nausea sources (kept simple):** (1) winding/curvy road (motion sickness —
+Snoqualmie Pass + mountain curves), (2) **bad Sushi** ("bad fish"). Dramamine
+cures both. That's it unless we add more later.
 
 **"More food = quicker sedation":** the higher Fullness is, the stronger the
 food-coma tiredness multiplier ramps (×1.0 at 75 → ×1.4 at 100).
