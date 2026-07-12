@@ -15914,13 +15914,35 @@ export class GameScene extends Phaser.Scene {
       { key: 'Drinks',    v: s.hydration,       col: s.hydrationTier() !== 'ok'    ? 0xE0483C : 0x39C0D9, dual: true,  danger: s.hydrationTier() !== 'ok' },
       { key: 'Food',      v: s.fullness,        col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
       // Bladder FILLS toward 100 (opposite of the others) — full = "gotta go".
-      { key: 'Bladder',   v: s.bladder,         col: s.bladderTier()   !== 'ok'    ? 0xE0483C : 0x8E7CE0, dual: false, danger: s.bladderTier()   !== 'ok' },
+      // Gradient fill: pee-yellow at the start → poop-brown toward the end.
+      { key: 'Bladder',   v: s.bladder,         col: 0x8E7CE0, dual: false, danger: s.bladderTier() !== 'ok', grad: true },
     ];
+    // Linear RGB interpolation for the bladder gradient.
+    const lerpRGB = (a, b, t) => {
+      const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+      const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+      return (Math.round(ar + (br - ar) * t) << 16)
+           | (Math.round(ag + (bg - ag) * t) << 8)
+           |  Math.round(ab + (bb - ab) * t);
+    };
     rows.forEach((r, i) => {
       const y = by + i * gap;
       g.fillStyle(0x0A0F1A, 0.8); g.fillRoundedRect(bx, y, bw, bh, 3);
-      const w = Math.max(0, Math.min(1, r.v / 100)) * (bw - 2);
-      g.fillStyle(r.col, 1); g.fillRoundedRect(bx + 1, y + 1, w, bh - 2, 3);
+      const frac = Math.max(0, Math.min(1, r.v / 100));
+      const w = frac * (bw - 2);
+      if (r.grad) {   // bladder: pee-yellow (start) → poop-brown (end), position-based
+        const SEG = 24;
+        for (let sIdx = 0; sIdx < SEG; sIdx++) {
+          const t0 = sIdx / SEG;
+          if (t0 >= frac) break;
+          const t1  = Math.min((sIdx + 1) / SEG, frac);
+          const col = lerpRGB(0xF2D338, 0x5A3212, t0);   // yellow → dark brown
+          g.fillStyle(col, 1);
+          g.fillRect(bx + 1 + t0 * (bw - 2), y + 1, Math.max(0.6, (t1 - t0) * (bw - 2)), bh - 2);
+        }
+      } else {
+        g.fillStyle(r.col, 1); g.fillRoundedRect(bx + 1, y + 1, w, bh - 2, 3);
+      }
       if (r.dual) {   // sweet-zone ticks at 25 and 75
         g.fillStyle(0x66FF99, 0.7);
         g.fillRect(bx + 1 + 0.25 * (bw - 2), y, 2, bh);
@@ -17040,6 +17062,7 @@ export class GameScene extends Phaser.Scene {
         stars:    this.cops.starDisplay ?? 0,
         position: this.player.position,
         odometer: this._odometer,
+        bladderAtEntry: this.survival?.bladder ?? 0,   // for the timed restroom cost
         // Full vice-bar snapshot — vice status pauses at the rest stop and
         // resumes from these levels (no decay during the menu, no silent
         // wipe of unlocked bars).  COFFEE / SNOOZE buys mutate this on

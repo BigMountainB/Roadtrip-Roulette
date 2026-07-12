@@ -118,15 +118,15 @@ export class SurvivalSystem {
    *  adds, plus a diuretic bump for caffeine and the quad-shot. */
   _bladderGain(id, fx = {}) {
     const posH = Math.max(0, fx.h || 0), posF = Math.max(0, fx.f || 0);
-    let g = posH * 0.7 + posF * 0.6;
-    if (fx.addiction || id === 'coldbrew' || id === 'caffeine' || id === 'quadshot') g += 8;
+    let g = posH * 0.07 + posF * 0.06;
+    if (fx.addiction || id === 'coldbrew' || id === 'caffeine' || id === 'quadshot') g += 0.8;
     return g;
   }
 
   /** External bladder fill (e.g. encounter food/drink that bypasses applyItem).
    *  posHydration/posFullness are the positive amounts added to those bars. */
   fillBladderFrom(posHydration = 0, posFullness = 0) {
-    this.bladder = clamp(this.bladder + Math.max(0, posHydration) * 0.7 + Math.max(0, posFullness) * 0.6);
+    this.bladder = clamp(this.bladder + Math.max(0, posHydration) * 0.07 + Math.max(0, posFullness) * 0.06);
   }
 
   // ── Tier getters (drive HUD + effects; thresholds per spec §2) ──────────

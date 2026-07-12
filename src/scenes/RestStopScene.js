@@ -309,6 +309,7 @@ export class RestStopScene extends Phaser.Scene {
     this._stars    = data?.stars    ?? 0;
     this._position = data?.position ?? 0;
     this._odometer = data?.odometer ?? 0;
+    this._bladderAtEntry = data?.bladderAtEntry ?? 0;   // for the timed restroom cost
     // Career stats — count this visit on entry; dwell time + spends are
     // recorded on exit (see the continue handler).
     this._stats = this.registry?.get?.('stats');
@@ -1341,14 +1342,18 @@ export class RestStopScene extends Phaser.Scene {
     const p = item.payload;
     if (!p) return;
     if (p.restroom) {
-      // Empties Thirst (bladder) → 0 on resume.  Small chance the "epic
-      // deuce" gets you a wanted star (someone calls it in).
+      // Empties the bladder on resume, but relieving TAKES TIME: the fuller you
+      // are, the more party-clock time it costs — 30s at a full bladder, scaled
+      // down proportionally (half full = 15s).  Small chance of an "epic deuce"
+      // wanted star.
       this._purchases.emptyBladder = true;
+      const costSec = Math.round(30 * Math.max(0, Math.min(100, this._bladderAtEntry)) / 100);
+      if (costSec > 0) this._purchases.partyClockPenalty = (this._purchases.partyClockPenalty ?? 0) + costSec;
       if (Math.random() < 0.08) {
         this._purchases.bumpStarsOnResume = (this._purchases.bumpStarsOnResume ?? 0) + 1;
-        this._restroomMsg = '💩 EPIC DEUCE! Someone called the cops. +1★ — but sweet relief.';
+        this._restroomMsg = `💩 EPIC DEUCE! Someone called the cops. +1★ — but sweet relief. (−${costSec}s)`;
       } else {
-        this._restroomMsg = '🚽 Ahhh… sweet relief. Bladder emptied.';
+        this._restroomMsg = `🚽 Ahhh… sweet relief. Bladder emptied. (−${costSec}s)`;
       }
     }
     if (p.repair) {
