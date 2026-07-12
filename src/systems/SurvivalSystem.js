@@ -2,7 +2,7 @@
 //
 // The road-trip survival model that replaces the drug/vice-effect system.
 // Three bars (0–100) + a Nausea sub-state + hidden caffeine dependence.
-// See SURVIVAL_SYSTEM_SPEC.md for the design contract.
+// See "Road Trip Roulette Overview.md" Chapter 4 (Survival System Spec) for the design contract.
 //
 //   Tiredness  0 = fully alert   → 100 = asleep (crash)   rises over distance
 //   Fullness   0 = starving      → 100 = stuffed          falls over distance

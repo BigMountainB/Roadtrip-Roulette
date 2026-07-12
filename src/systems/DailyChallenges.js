@@ -3,7 +3,7 @@
 // This module is DATA + PURE FUNCTIONS only.  GameScene interprets each
 // challenge's `objective` (detection) and applies its `mods` (the dailyStage
 // config — all gated behind daily-stage mode so normal/custom runs are
-// untouched).  Full design spec: PROJECT_OVERVIEW.md §8 (2026-06-06 entry).
+// untouched).  Full design spec: Overview.md Ch7 §8 (2026-06-06 entry).
 //
 // Reward economy (locked): unlimited tries; payout decays $1k per attempt from
 // $5k, floored at $0 (try 6+ still completes).  Complete all 5 weekday dailies

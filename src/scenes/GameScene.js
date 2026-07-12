@@ -349,7 +349,7 @@ export class GameScene extends Phaser.Scene {
     this._customStartLevels  = data?.startViceLevels ?? null;
     // Daily Challenge ("Run of the Day") stage config — when present this run
     // is a short start-city→end-city stage with spawn modifiers + an
-    // objective (see DailyChallenges.js + PROJECT_OVERVIEW §8).  Null on every
+    // objective (see DailyChallenges.js + Overview.md Ch7 §8).  Null on every
     // normal/custom run, and every consumer is null-guarded, so nothing else
     // changes.  Spawn-modifier + objective wiring lands in the next increment.
     this._dailyStage = data?.dailyStage ?? null;
@@ -653,12 +653,12 @@ export class GameScene extends Phaser.Scene {
 
     this.road    = new Road();
     this.vices   = new ViceSystem();
-    this.survival = new SurvivalSystem();   // road-trip survival bars (see SURVIVAL_SYSTEM_SPEC.md)
+    this.survival = new SurvivalSystem();   // road-trip survival bars (see Overview.md Ch4)
     this._asleepHandled = false;
     // Phaser reuses the scene instance across restarts; the cached survival-HUD
     // objects were destroyed on shutdown, so drop the refs to rebuild them
     // (else _drawSurvivalBars setText()s a dead Text → drawImage-of-null crash).
-    this._survLabels = null; this._survFxGfx = null; this._bladderTxt = null;
+    this._survLabels = null; this._survFxGfx = null; this._bladderTxt = null; this._engineTempTxt = null;
     this._bladderBurstMile = null;   // odometer where Thirst hit ≥90 (bursting)
     // Restore persisted survival state on a rest-stop resume (fresh runs start clean).
     if (this._resumeFromStop || this._resumeFromPosition != null) {
@@ -3535,7 +3535,7 @@ export class GameScene extends Phaser.Scene {
     // steady ~20 mph relative.  Safe accumulator rewrite — re-homes each
     // vice sprite between seg.sprites arrays (vice sprites have NO
     // position field), so it can never NaN the way the v1 sp.position
-    // hack did.  See PROJECT_OVERVIEW §8 2026-06-12.
+    // hack did.  See Overview.md Ch7 §8 (2026-06-12).
     this._updateViceDrift(rawDt);
     this._updateRadar(rawDt);
 
@@ -6248,7 +6248,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─── Collisions ───────────────────────────────────────────────────────
-  // ── Survival roster + meta-unlock ladder (see SURVIVAL_SYSTEM_SPEC.md §5) ──
+  // ── Survival roster + meta-unlock ladder (see Overview.md Ch4 §5) ──
   /** Items currently available to spawn (start kit + unlocked). */
   _availableVices() {
     const pool = ['water', 'burrito', 'coldbrew'];   // start kit
