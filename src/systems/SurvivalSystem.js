@@ -6,7 +6,9 @@
 //
 //   Tiredness  0 = fully alert   → 100 = asleep (crash)   rises over distance
 //   Fullness   0 = starving      → 100 = stuffed          falls over distance
-//   Hydration  0 = dehydrated    → 100 = bursting bladder falls over distance
+//   Hydration  0 = dehydrated    → 100 = fully hydrated   falls over distance
+//   Bladder    0 = empty         → 100 = gotta go NOW     fills when you eat/drink;
+//                                                          ONLY a restroom empties it
 //
 // This module is pure logic (no Phaser) so it's unit-testable.  GameScene
 // drives it: call update(milesTravelled, ctx) each frame and applyItem(id)
@@ -14,9 +16,9 @@
 
 const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
-// Baseline per-mile drift (tuned so an untended run survives ~90–110 mi and
-// you top up every ~35–40 mi — a real threat over 293 mi, not constant chores).
-const DRIFT = { tiredness: +0.7, fullness: -0.9, hydration: -1.0 };
+// Baseline per-mile drift.  Food + drinks drain fast now (~a top-up lasts a few
+// miles) so the survival loop stays active; tiredness rises slowly.
+const DRIFT = { tiredness: +0.7, fullness: -3.6, hydration: -4.0 };
 
 // Item → { t, h, f } bar deltas (per spec §3).  Specials handled in applyItem.
 const ITEM_FX = {
@@ -45,6 +47,7 @@ export class SurvivalSystem {
     this.tiredness = 0;
     this.fullness  = 25;    // start at 25% — just clear of the negative zone
     this.hydration = 25;    // start at 25% — just clear of the negative zone
+    this.bladder   = 0;     // fills as you eat/drink; only a restroom empties it
     this.nausea    = 0;
     this.caffeineDep    = 0;   // hidden dependence 0–100
     this.caffeineActive = 0;   // miles of caffeine still "in system"
@@ -92,18 +95,38 @@ export class SurvivalSystem {
     if (typeof fx.h === 'number') this.hydration = clamp(this.hydration + fx.h);
     if (typeof fx.f === 'number') this.fullness  = clamp(this.fullness  + fx.f);
 
+    // Eating AND drinking fill the bladder (scaled by how much they add);
+    // caffeine/quad-shot are diuretics and fill it extra.  Only a restroom
+    // empties it (see GameScene: buys.emptyBladder / bladder-burst pull-over).
+    this.bladder = clamp(this.bladder + this._bladderGain(id, fx));
+
     if (fx.addiction) { this.caffeineDep = clamp(this.caffeineDep + CAFFEINE_DEP_GAIN); this.caffeineActive = CAFFEINE_ACTIVE_MI; }
     if (id === 'coldbrew') this.caffeineActive = CAFFEINE_ACTIVE_MI;   // satisfies withdrawal, no dependence
     if (fx.curesNausea) { this.nausea = 0; ev.curedNausea = true; }
 
     if (fx.badFishRoll && rng() < BAD_FISH_CHANCE) {
-      this.hydration = clamp(Math.max(this.hydration, 90));   // bladder emergency
-      this.nausea    = clamp(this.nausea + 40);
+      this.bladder = clamp(Math.max(this.bladder, 90));   // bad fish → gotta go NOW
+      this.nausea  = clamp(this.nausea + 40);
       ev.badFish = true;
     }
     if (fx.tripRoll && rng() < ODD_GUMMY_CHANCE) ev.oddGummy = true;
 
     return ev;
+  }
+
+  /** How much a consumed item fills the bladder: scaled by the drink/food it
+   *  adds, plus a diuretic bump for caffeine and the quad-shot. */
+  _bladderGain(id, fx = {}) {
+    const posH = Math.max(0, fx.h || 0), posF = Math.max(0, fx.f || 0);
+    let g = posH * 0.7 + posF * 0.6;
+    if (fx.addiction || id === 'coldbrew' || id === 'caffeine' || id === 'quadshot') g += 8;
+    return g;
+  }
+
+  /** External bladder fill (e.g. encounter food/drink that bypasses applyItem).
+   *  posHydration/posFullness are the positive amounts added to those bars. */
+  fillBladderFrom(posHydration = 0, posFullness = 0) {
+    this.bladder = clamp(this.bladder + Math.max(0, posHydration) * 0.7 + Math.max(0, posFullness) * 0.6);
   }
 
   // ── Tier getters (drive HUD + effects; thresholds per spec §2) ──────────
@@ -116,9 +139,12 @@ export class SurvivalSystem {
     return 'alert';
   }
   hydrationTier() {
-    if (this.hydration >= 90) return 'bursting';
-    if (this.hydration >= 75) return 'bladder';
     if (this.hydration < 25)  return 'dehydrated';
+    return 'ok';
+  }
+  bladderTier() {
+    if (this.bladder >= 90) return 'bursting';
+    if (this.bladder >= 75) return 'full';
     return 'ok';
   }
   fullnessTier() {
@@ -133,13 +159,14 @@ export class SurvivalSystem {
   /** Snapshot for save/HUD. */
   snapshot() {
     return { tiredness: this.tiredness, fullness: this.fullness, hydration: this.hydration,
-             nausea: this.nausea, caffeineDep: this.caffeineDep };
+             bladder: this.bladder, nausea: this.nausea, caffeineDep: this.caffeineDep };
   }
   restore(s = {}) {
     if (!s) return;
     this.tiredness = s.tiredness ?? this.tiredness;
     this.fullness  = s.fullness  ?? this.fullness;
     this.hydration = s.hydration ?? this.hydration;
+    this.bladder   = s.bladder   ?? this.bladder;
     this.nausea    = s.nausea    ?? this.nausea;
     this.caffeineDep = s.caffeineDep ?? this.caffeineDep;
   }

@@ -2008,18 +2008,21 @@ export class GameScene extends Phaser.Scene {
           if (typeof buys.partyClockPenalty === 'number' && buys.partyClockPenalty > 0) {
             this._partyClockSec = Math.max(0, (this._partyClockSec ?? 0) - buys.partyClockPenalty);
           }
-          // Restroom use → empties Thirst (bladder) and clears any bursting.
+          // Restroom use → empties the Bladder and clears any bursting.  Leaves
+          // hydration/food intact (going to the bathroom doesn't dehydrate you).
           if (buys.emptyBladder && this.survival) {
-            this.survival.hydration = 0;
+            this.survival.bladder = 0;
             this._bladderBurstMile = null;
           }
-          // Encounter survival effects (food/drink/coffee) → adjust the bars.
+          // Encounter survival effects (food/drink/coffee) → adjust the bars,
+          // and fill the bladder from whatever you ate/drank.
           if (buys.survivalDelta && this.survival) {
             const cl = (v) => Math.max(0, Math.min(100, v));
             const d  = buys.survivalDelta;
             if (d.hydration) this.survival.hydration = cl(this.survival.hydration + d.hydration);
             if (d.fullness)  this.survival.fullness  = cl(this.survival.fullness  + d.fullness);
             if (d.tiredness) this.survival.tiredness = cl(this.survival.tiredness + d.tiredness);
+            this.survival.fillBladderFrom?.(d.hydration ?? 0, d.fullness ?? 0);
           }
           // Encounter engine-cooling (coolant top-off / aux fan) → drop temp.
           if (buys.coolEngine) {
@@ -3574,16 +3577,15 @@ export class GameScene extends Phaser.Scene {
         this._endGame?.('overdose', { charge: 'FATIGUE' });
       }
 
-      // ── Bladder emergency: Thirst (hydration) ≥ 90 = "bursting".  You get
-      // ~2 miles of squirming (steering wobble in _updatePlayer) to reach a
-      // restroom; miss that window and you're forced to pull over — lose 30s
-      // and wet yourself (Thirst empties either way).
-      if (_hyd >= 90) {
+      // ── Bladder emergency: Bladder ≥ 90 = "bursting".  You get ~2 miles of
+      // squirming (steering wobble in _updatePlayer) to reach a restroom; miss
+      // that window and you're forced to pull over — lose 30s and go anyway.
+      if (this.survival.bladder >= 90) {
         if (this._bladderBurstMile == null) this._bladderBurstMile = this._odometer ?? 0;
         else if ((this._odometer ?? 0) - this._bladderBurstMile >= 2) {
           this._partyClockSec = Math.max(0, (this._partyClockSec ?? 0) - 30);
           this._showPopup?.('💦 COULDN\'T HOLD IT — pulled over!\n−30 seconds', '#FF5C7A');
-          this.survival.hydration = 0;
+          this.survival.bladder = 0;
           this._bladderBurstMile = null;
         }
       } else {
@@ -15889,7 +15891,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.hudGfx;
     if (!this._survLabels) {
       this._survLabels = [];
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         this._survLabels.push(this.add.text(0, 0, '', {
           fontSize: '9px', fontFamily: IMPACT, color: '#EAF2FF', stroke: '#000', strokeThickness: 2,
         }).setOrigin(1, 0).setDepth(21));   // right-aligned: label sits LEFT of the bar
@@ -15908,9 +15910,11 @@ export class GameScene extends Phaser.Scene {
     const by = 92 + o.dy;
     const fontPx = Math.max(9, Math.round(18 * sc));
     const rows = [
-      { key: 'Awake',  v: 100 - s.tiredness, col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x6A7AE0, dual: false, danger: s.tiredness >= 70 },
-      { key: 'Hunger', v: s.fullness,        col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
-      { key: 'Thirst', v: s.hydration,       col: s.hydrationTier() !== 'ok'    ? 0xE0483C : 0x39C0D9, dual: true,  danger: s.hydrationTier() !== 'ok' },
+      { key: 'Alertness', v: 100 - s.tiredness, col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x6A7AE0, dual: false, danger: s.tiredness >= 70 },
+      { key: 'Drinks',    v: s.hydration,       col: s.hydrationTier() !== 'ok'    ? 0xE0483C : 0x39C0D9, dual: true,  danger: s.hydrationTier() !== 'ok' },
+      { key: 'Food',      v: s.fullness,        col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
+      // Bladder FILLS toward 100 (opposite of the others) — full = "gotta go".
+      { key: 'Bladder',   v: s.bladder,         col: s.bladderTier()   !== 'ok'    ? 0xE0483C : 0x8E7CE0, dual: false, danger: s.bladderTier()   !== 'ok' },
     ];
     rows.forEach((r, i) => {
       const y = by + i * gap;
@@ -15928,10 +15932,10 @@ export class GameScene extends Phaser.Scene {
       if (r.danger) lbl.setColor('#FF6A5C'); else lbl.setColor('#9FB7D6');
     });
     // Publish live bounds so the controls editor can place a drag handle over
-    // the whole 3-bar block (labels sit to the LEFT of bx).
+    // the whole 4-bar block (labels sit to the LEFT of bx).
     this._survBarsBounds = {
       x: bx - 78 * sc, y: by - 3,
-      w: bw + 78 * sc, h: 2 * gap + bh + 6,
+      w: bw + 78 * sc, h: 3 * gap + bh + 6,
     };
     this._drawSurvivalFx();
   }
@@ -15984,8 +15988,8 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0x000000, 0.06 + fc * 0.12); g.fillRect(ox, 0, W, H);   // overall heavy dim
     }
     // Bladder → "gotta go" nag.
-    if (s.hydration >= 75) {
-      const urgent = s.hydration >= 90;
+    if (s.bladder >= 75) {
+      const urgent = s.bladder >= 90;
       this._bladderTxt.setText(urgent ? '🚻 GOTTA GO NOW!' : '🚻 gotta go…')
         .setColor(urgent ? '#FF7A55' : '#FFEE66')
         .setAlpha(0.65 + 0.35 * Math.abs(Math.sin(t * (urgent ? 6 : 2))))
