@@ -20,18 +20,27 @@ const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 // miles) so the survival loop stays active; tiredness rises slowly.
 const DRIFT = { tiredness: +0.7, fullness: -3.6, hydration: -4.0 };
 
-// Item → { t, h, f } bar deltas (per spec §3).  Specials handled in applyItem.
+// Diuretics (coffee/caffeine/energy) hydrate a LITTLE up front but then make
+// hydration drain faster for a while.  `diuretic` charge decays over distance;
+// while active it adds DIURETIC_RATE × charge extra hydration loss per mile.
+const DIURETIC_RATE  = 1.0;   // extra hydration drain per charge-point per mile
+const DIURETIC_DECAY = 0.25;  // charge lost per mile (a +3 charge lasts ~12 mi)
+const DIURETIC_MAX   = 10;
+
+// Item → { t, h, f } bar deltas.  Specials (diuretic/addiction/…) handled in
+// applyItem.  Every BEVERAGE adds to hydration on the spot; diuretics claw it
+// back over the following miles instead of subtracting immediately.
 const ITEM_FX = {
   water:        { t:  -5, h: +16, f:  +5 },
-  coldbrew:     { t: -18, h:  -8, f:  +6 },
-  caffeine:     { t: -30, h: -12, f:   0, addiction: true },
+  coldbrew:     { t: -18, h:  +8, f:  +6, diuretic: 2 },
+  caffeine:     { t: -30, h:  +5, f:   0, addiction: true, diuretic: 3 },
   slushie:      { t: -10, h: +10, f:  +6 },
   gummies:      { t:  -6, h:   0, f:  +3, tripRoll: true },
   sushi:        { t:  +5, h:   0, f:  +6, badFishRoll: true },
   burrito:      { t: +20, h:   0, f: +12 },
   dramamine:    { t: +25, h:   0, f:   0, curesNausea: true },
-  quadshot:     { t: null, h: -15, f:  +6, clearTiredness: true },   // t handled by clear
-  rage:         { t:   0, h:  +6, f:  +6 },
+  quadshot:     { t: null, h:  +5, f:  +6, clearTiredness: true, diuretic: 3 },   // t handled by clear
+  rage:         { t:   0, h:  +6, f:  +6, diuretic: 1.5 },
 };
 
 const BAD_FISH_CHANCE   = 1 / 12;   // Sushi → bladder emergency
@@ -48,6 +57,7 @@ export class SurvivalSystem {
     this.fullness  = 25;    // start at 25% — just clear of the negative zone
     this.hydration = 25;    // start at 25% — just clear of the negative zone
     this.bladder   = 0;     // fills as you eat/drink; only a restroom empties it
+    this.diuretic  = 0;     // caffeine "pee it out" charge → faster hydration drain
     this.nausea    = 0;
     this.caffeineDep    = 0;   // hidden dependence 0–100
     this.caffeineActive = 0;   // miles of caffeine still "in system"
@@ -61,9 +71,11 @@ export class SurvivalSystem {
     this._lastMile = mile ?? 0;
     if (dMi <= 0) return;
 
-    // Fullness + hydration simply drain toward empty/dry.
+    // Fullness + hydration drain toward empty/dry; a caffeine diuretic charge
+    // adds extra hydration loss for a while, then decays.
     this.fullness  = clamp(this.fullness  + DRIFT.fullness  * dMi);
-    this.hydration = clamp(this.hydration + DRIFT.hydration * dMi);
+    this.hydration = clamp(this.hydration + (DRIFT.hydration - DIURETIC_RATE * this.diuretic) * dMi);
+    this.diuretic  = Math.max(0, this.diuretic - DIURETIC_DECAY * dMi);
 
     // Caffeine wears off with distance; dependence slowly decays.
     this.caffeineActive = Math.max(0, this.caffeineActive - dMi);
@@ -99,6 +111,7 @@ export class SurvivalSystem {
     // caffeine/quad-shot are diuretics and fill it extra.  Only a restroom
     // empties it (see GameScene: buys.emptyBladder / bladder-burst pull-over).
     this.bladder = clamp(this.bladder + this._bladderGain(id, fx));
+    if (fx.diuretic) this.diuretic = Math.min(DIURETIC_MAX, this.diuretic + fx.diuretic);
 
     if (fx.addiction) { this.caffeineDep = clamp(this.caffeineDep + CAFFEINE_DEP_GAIN); this.caffeineActive = CAFFEINE_ACTIVE_MI; }
     if (id === 'coldbrew') this.caffeineActive = CAFFEINE_ACTIVE_MI;   // satisfies withdrawal, no dependence
@@ -119,7 +132,7 @@ export class SurvivalSystem {
   _bladderGain(id, fx = {}) {
     const posH = Math.max(0, fx.h || 0), posF = Math.max(0, fx.f || 0);
     let g = posH * 0.07 + posF * 0.06;
-    if (fx.addiction || id === 'coldbrew' || id === 'caffeine' || id === 'quadshot') g += 0.8;
+    if (fx.diuretic) g += 0.8;   // diuretics make you go more
     return g;
   }
 
@@ -159,7 +172,7 @@ export class SurvivalSystem {
   /** Snapshot for save/HUD. */
   snapshot() {
     return { tiredness: this.tiredness, fullness: this.fullness, hydration: this.hydration,
-             bladder: this.bladder, nausea: this.nausea, caffeineDep: this.caffeineDep };
+             bladder: this.bladder, diuretic: this.diuretic, nausea: this.nausea, caffeineDep: this.caffeineDep };
   }
   restore(s = {}) {
     if (!s) return;
@@ -167,6 +180,7 @@ export class SurvivalSystem {
     this.fullness  = s.fullness  ?? this.fullness;
     this.hydration = s.hydration ?? this.hydration;
     this.bladder   = s.bladder   ?? this.bladder;
+    this.diuretic  = s.diuretic  ?? this.diuretic;
     this.nausea    = s.nausea    ?? this.nausea;
     this.caffeineDep = s.caffeineDep ?? this.caffeineDep;
   }
