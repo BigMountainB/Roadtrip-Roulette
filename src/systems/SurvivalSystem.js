@@ -20,12 +20,12 @@ const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 // miles) so the survival loop stays active; tiredness rises slowly.
 const DRIFT = { tiredness: +0.7, fullness: -3.6, hydration: -4.0 };
 
-// Diuretics (coffee/caffeine/energy) hydrate a LITTLE up front but then make
-// hydration drain faster for a while.  `diuretic` charge decays over distance;
-// while active it adds DIURETIC_RATE × charge extra hydration loss per mile.
-const DIURETIC_RATE  = 1.0;   // extra hydration drain per charge-point per mile
-const DIURETIC_DECAY = 0.25;  // charge lost per mile (a +3 charge lasts ~12 mi)
-const DIURETIC_MAX   = 10;
+// Diuretics (coffee/caffeine/energy) hydrate you now, but ~half of the hydration
+// they add drains right back off over the next couple miles.  `diuretic` is a
+// small POOL of hydration still to be clawed back (not an ongoing forever drain).
+const DIURETIC_FRAC  = 0.5;   // fraction of a drink's hydration that's "borrowed"
+const DIURETIC_DRAIN = 2.0;   // how fast the pool is clawed back (hydration/mile)
+const DIURETIC_MAX   = 20;
 
 // Item → { t, h, f } bar deltas.  Specials (diuretic/addiction/…) handled in
 // applyItem.  Every BEVERAGE adds to hydration on the spot; diuretics claw it
@@ -71,11 +71,15 @@ export class SurvivalSystem {
     this._lastMile = mile ?? 0;
     if (dMi <= 0) return;
 
-    // Fullness + hydration drain toward empty/dry; a caffeine diuretic charge
-    // adds extra hydration loss for a while, then decays.
+    // Fullness + hydration drain toward empty/dry.  If a diuretic pool is
+    // pending, claw back a bit of hydration each mile until it's spent.
     this.fullness  = clamp(this.fullness  + DRIFT.fullness  * dMi);
-    this.hydration = clamp(this.hydration + (DRIFT.hydration - DIURETIC_RATE * this.diuretic) * dMi);
-    this.diuretic  = Math.max(0, this.diuretic - DIURETIC_DECAY * dMi);
+    this.hydration = clamp(this.hydration + DRIFT.hydration * dMi);
+    if (this.diuretic > 0) {
+      const d = Math.min(this.diuretic, DIURETIC_DRAIN * dMi);
+      this.hydration = clamp(this.hydration - d);
+      this.diuretic  = Math.max(0, this.diuretic - d);
+    }
 
     // Caffeine wears off with distance; dependence slowly decays.
     this.caffeineActive = Math.max(0, this.caffeineActive - dMi);
@@ -111,7 +115,9 @@ export class SurvivalSystem {
     // caffeine/quad-shot are diuretics and fill it extra.  Only a restroom
     // empties it (see GameScene: buys.emptyBladder / bladder-burst pull-over).
     this.bladder = clamp(this.bladder + this._bladderGain(id, fx));
-    if (fx.diuretic) this.diuretic = Math.min(DIURETIC_MAX, this.diuretic + fx.diuretic);
+    // Diuretic: ~half of the hydration this drink added is "borrowed" and drains
+    // back off over the next couple miles.
+    if (fx.diuretic) this.diuretic = Math.min(DIURETIC_MAX, this.diuretic + Math.max(0, fx.h || 0) * DIURETIC_FRAC);
 
     if (fx.addiction) { this.caffeineDep = clamp(this.caffeineDep + CAFFEINE_DEP_GAIN); this.caffeineActive = CAFFEINE_ACTIVE_MI; }
     if (id === 'coldbrew') this.caffeineActive = CAFFEINE_ACTIVE_MI;   // satisfies withdrawal, no dependence

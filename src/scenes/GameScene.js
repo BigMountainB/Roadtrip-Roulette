@@ -659,6 +659,7 @@ export class GameScene extends Phaser.Scene {
     // objects were destroyed on shutdown, so drop the refs to rebuild them
     // (else _drawSurvivalBars setText()s a dead Text → drawImage-of-null crash).
     this._survLabels = null; this._survFxGfx = null; this._bladderTxt = null; this._engineTempTxt = null;
+    this._vigDark = null; this._vigBrown = null;
     this._bladderBurstMile = null;   // odometer where Thirst hit ≥90 (bursting)
     // Restore persisted survival state on a rest-stop resume (fresh runs start clean).
     if (this._resumeFromStop || this._resumeFromPosition != null) {
@@ -15974,6 +15975,25 @@ export class GameScene extends Phaser.Scene {
         fontSize: '15px', fontFamily: IMPACT, color: '#FFEE66', stroke: '#000', strokeThickness: 4,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(45);
       this._hudObjects?.push(this._bladderTxt);
+      // Soft radial-vignette texture (WHITE so it can be tinted): clear center
+      // fading to solid at the edges.  Reused for dehydration (dark) + food-coma
+      // (brown) instead of hard rectangular edge bands.
+      if (!this.textures.exists('rtr_vignette')) {
+        const VS = 256, cv = document.createElement('canvas'); cv.width = cv.height = VS;
+        const cx2 = cv.getContext('2d');
+        const rg = cx2.createRadialGradient(VS / 2, VS / 2, VS * 0.14, VS / 2, VS / 2, VS * 0.62);
+        rg.addColorStop(0,    'rgba(255,255,255,0)');
+        rg.addColorStop(0.45, 'rgba(255,255,255,0)');
+        rg.addColorStop(1,    'rgba(255,255,255,1)');
+        cx2.fillStyle = rg; cx2.fillRect(0, 0, VS, VS);
+        this.textures.addCanvas('rtr_vignette', cv);
+      }
+      const Wv = SCREEN_W + (C.HUD_OFFSET_X ?? 0) * 2, Hv = SCREEN_H;
+      const mkVig = (tint, depth) => this.add.image(SCREEN_W / 2, SCREEN_H / 2, 'rtr_vignette')
+        .setDisplaySize(Wv * 1.06, Hv * 1.12).setScrollFactor(0).setDepth(depth).setTint(tint).setAlpha(0);
+      this._vigDark  = mkVig(0x000000, 43);   // dehydration
+      this._vigBrown = mkVig(0x2A1A05, 43);   // food coma
+      this._hudObjects?.push(this._vigDark, this._vigBrown);
     }
     const g = this._survFxGfx; g.clear();
     if (this._awaitingStart) { this._bladderTxt.setVisible(false); return; }
@@ -15981,14 +16001,10 @@ export class GameScene extends Phaser.Scene {
     const ox = -(C.HUD_OFFSET_X ?? 0);
     const t = this.gameTime ?? 0;
 
-    // Dehydration → tunnel vision: dark edge bands close in as Hydration < 25.
+    // Dehydration → tunnel vision: a soft dark vignette closes in as Hydration
+    // drops below 25 (smooth radial fade, not hard edge bands).
     const dehy = s.hydration < 25 ? (25 - s.hydration) / 25 : 0;
-    if (dehy > 0) {
-      const band = 24 + dehy * 140, a = 0.2 + dehy * 0.55;
-      g.fillStyle(0x000000, a);
-      g.fillRect(ox, 0, W, band); g.fillRect(ox, H - band, W, band);
-      g.fillRect(ox, 0, band, H); g.fillRect(ox + W - band, 0, band, H);
-    }
+    this._vigDark?.setAlpha(dehy * 0.85).setVisible(dehy > 0);
     // Nausea → sickly green wash, slow pulse.
     if (s.isNauseous()) {
       const n = Math.min(1, (s.nausea - 30) / 70);
@@ -16000,15 +16016,11 @@ export class GameScene extends Phaser.Scene {
       const a = 0.05 + 0.06 * Math.abs(Math.sin(t * 3));
       g.fillStyle(0x8B0000, a); g.fillRect(ox, 0, W, 80); g.fillRect(ox, H - 80, W, 80);
     }
-    // Food coma → over-stuffed (Fullness ≥ 75): heavy sluggish dim + drooping
-    // top/bottom vignette that deepens toward 100.  Negative, drowsy read.
-    if (s.fullness >= 75) {
-      const fc = (s.fullness - 75) / 25;                 // 0 at 75 → 1 at 100
-      const band = 30 + fc * 90, a = 0.12 + fc * 0.32;
-      g.fillStyle(0x2A1A05, a);
-      g.fillRect(ox, 0, W, band); g.fillRect(ox, H - band, W, band);
-      g.fillStyle(0x000000, 0.06 + fc * 0.12); g.fillRect(ox, 0, W, H);   // overall heavy dim
-    }
+    // Food coma → over-stuffed (Fullness ≥ 75): soft brown vignette + a light
+    // overall dim that deepens toward 100.  Negative, drowsy read.
+    const fc = s.fullness >= 75 ? (s.fullness - 75) / 25 : 0;   // 0 at 75 → 1 at 100
+    this._vigBrown?.setAlpha(fc * 0.55).setVisible(fc > 0);
+    if (fc > 0) { g.fillStyle(0x000000, 0.06 + fc * 0.12); g.fillRect(ox, 0, W, H); }
     // Bladder → "gotta go" nag.
     if (s.bladder >= 75) {
       const urgent = s.bladder >= 90;
