@@ -31,6 +31,7 @@ to jump straight to the chapter you need to read or change.
 - **[Chapter 5 — Tree Asset Brief](#chapter-5--tree-asset-brief)** — roadside tree/shrub art keys by region, dimensions, manifest keys
 - **[Chapter 6 — Work History (DUI lineage, pre-fork)](#chapter-6--work-history-dui-lineage-pre-fork)** — dated session notes carried from DUI
 - **[Chapter 7 — Legacy Engine & Systems Reference](#chapter-7--legacy-engine--systems-reference-dui-era-partly-superseded)** — pre-fork DUI overview (shared engine, partly stale)
+- **[Chapter 8 — Mission System Plan](#chapter-8--mission-system-plan-locked-2026-07-13)** — dialogue-tree job offers, 5 types, per-type rep ladder (×1/×3/×6), build phases
 
 ---
 
@@ -4414,3 +4415,34 @@ Phone-menu PNG is 1408×2641 (aspect 0.533). `object-fit: cover` scales to fill,
 6. Latest session work is at the top of this file's **Major build-history** section.
 
 **If something blew up:** check Vite cache first. Then re-read this file for traps. Then dig in.
+
+---
+
+# Chapter 8 — Mission System Plan (locked 2026-07-13)
+
+Design decisions locked with Brendan; supersedes Ch3 §17's sketch. Not yet built.
+
+## Design decisions
+
+- **Offer surface: NPC CONVERSATIONS.** Missions are earned through dialogue, not a jobs board. Encounter cards become multi-step dialogue trees; the player can ask the NPC if they need anything, and conversations end only via an explicit exit choice ("Thank them and leave").
+- **Every rest stop carries jobs** — 100% offer availability, so stopping at each stop to collect work is a valid strategy.
+- **Multiple concurrent missions**, capped at ONE ACTIVE PER TYPE (max 5 running) so the HUD stays bounded and stacking is strategic, not degenerate.
+- **All 5 types in v1:** delivery / timed leg / passenger / heat-escape / weather run.
+- **Per-type reputation ladder:** lifetime completions per type, per player slot (`save.missionRep`). Tiers: **Rookie (0–2) ×1 → Known (3–5) ×3 → Legend (6+) ×6** reward multiplier; higher tiers also get longer hauls (1→2→3 stops), tighter timers, riskier terms. NPC offer dialogue references the player's tier.
+- **Fail stakes: no payout only** (plus a disappointed NPC line on re-encounter). Low frustration for v1.
+- **Base payout ~$150–350** scaled by distance/risk, then ×tier multiplier.
+
+## Architecture
+
+- `src/data/missions.js` — TEMPLATES per type, instantiated at offer time against the route (target stop picked 1–3 ahead by tier; heat-escape requires active stars; weather targets a hazard zone crossing like the Pass or Vantage wind).
+- `src/systems/MissionSystem.js` — active-missions list (one per type), progress checked from events GameScene already emits (rest-stop arrival, wreck, busted, party clock, star changes, zone crossings). Persisted in liveRun + lastRestStop snapshots so LAST/SAVED resume keeps missions.
+- **Dialogue-tree extension** to `encounters.js`: `choices[].next: 'nodeId'` re-renders the card with a new line + choices; no `next` = closes (existing single-step cards unchanged). Job-offer nodes appear in NPC conversations with Accept / Decline.
+- **HUD chips** (movable in Customize Controls): one line per active mission, e.g. `📦 ELLENSBURG · 14 mi · $220`.
+
+## Build phases (each independently shippable)
+
+1. **Dialogue trees** — the `next` node mechanic + exit choices; retrofit 2–3 existing cards with a second beat to prove it.
+2. **MissionSystem core + Delivery + Timed leg** — full pipeline: offer → accept → HUD chip → arrival check → payout popup → save persistence.
+3. **Heat-escape + Weather run + Passenger** (passenger drops occasional comment popups en route).
+4. **Reputation ladder** — rep persistence, tier scaling (×1/×3/×6), tier-aware offer dialogue.
+5. **Balance pass** — payout curve vs economy, offer mix per stop, stats rows (completions/fails per type).

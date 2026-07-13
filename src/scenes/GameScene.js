@@ -38,7 +38,7 @@ import { DamageModel }   from '../car/DamageModel.js';
 import { CloudSave }     from '../systems/CloudSave.js';
 import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
 import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '../utils/Colors.js';
-import { getUpgradeEffects } from '../systems/UpgradeSystem.js';
+import { getUpgradeEffects, getInstalledUpgrade } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
 
 const CAM_DEPTH = 0.84;
@@ -3740,6 +3740,7 @@ export class GameScene extends Phaser.Scene {
       this._trapTicket        = null;
     } else {
       this.cops.update(rawDt, this.player.position, this.player.speed, this.player.x);
+      this._updateScannerAlert();
     }
     // Sex-worker dirt buff: enforce the star cap and expire it once
     // the player passes the buff's end position.
@@ -18539,7 +18540,28 @@ export class GameScene extends Phaser.Scene {
     const merged = { ...up };
     for (const [k, v] of Object.entries(buff)) merged[k] = (merged[k] ?? 0) + v;
     this._upgradeFx = merged;
+    // Police Scanner (police slot L2+) — hears dispatch: GameScene chirps +
+    // banners when fresh pursuit/roadblocks spawn (see _updateScannerAlert).
+    const polLvl = getInstalledUpgrade?.(save, vehId, 'police')?.level ?? 0;
+    this._hasScanner = polLvl >= 2;
     return merged;
+  }
+
+  /** Police-scanner alert — with the Scanner upgrade installed, any NEW cop
+   *  entering the world (pursuit dispatch, roadblock) triggers a two-tone
+   *  radio chirp + a brief banner, so you hear the heat coming before it's in
+   *  the mirror.  6s cooldown so a barricade row doesn't machine-gun chirps. */
+  _updateScannerAlert() {
+    const n = this.cops?.cops?.length ?? 0;
+    const prev = this._scannerPrevCops ?? n;
+    this._scannerPrevCops = n;
+    if (!this._hasScanner || this._awaitingStart) return;
+    const now = this.gameTime ?? 0;
+    if (n > prev && now >= (this._scannerCooldownUntil ?? 0)) {
+      this._scannerCooldownUntil = now + 6;
+      try { this.audio?.playScannerChirp?.(); } catch (_) {}
+      this._showPopup?.('📻 SCANNER: UNITS DISPATCHED', '#8FD3FF');
+    }
   }
 
   // Top speed in internal units, accounting for cocaine + meth pickup boosts + NOS.

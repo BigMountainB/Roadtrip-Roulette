@@ -1103,6 +1103,39 @@ export class AudioSystem {
     osc.stop(t + dur + 0.02);
   }
 
+  /** Police-scanner "dispatch" alert — a two-tone descending chirp (distinct
+   *  from the radar detector's single rising blip) with a squelch-like tail.
+   *  Fired by GameScene when the scanner upgrade hears fresh units dispatched
+   *  (pursuit spawn / roadblock).  Procedural — no audio asset needed. */
+  playScannerChirp() {
+    if (!this.ready || this.muted || this._musicPaused) return;
+    const ctx = this._ctx;
+    if (!ctx || ctx.state !== 'running' || !this._master) return;
+    const t = ctx.currentTime;
+    const tone = (freq, at, dur, peak) => {
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      env.gain.setValueAtTime(0.0001, at);
+      env.gain.linearRampToValueAtTime(peak, at + 0.006);
+      env.gain.exponentialRampToValueAtTime(0.0006, at + dur);
+      osc.connect(env); env.connect(this._master);
+      osc.start(at); osc.stop(at + dur + 0.02);
+    };
+    tone(1180, t,        0.09, 0.20);   // high
+    tone(880,  t + 0.11, 0.09, 0.20);   // low — the "bee-boop"
+    // Squelch tail: a short burst of filtered noise, like a radio keying off.
+    const len = Math.floor(ctx.sampleRate * 0.06);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const ng = ctx.createGain(); ng.gain.value = 0.06;
+    src.connect(ng); ng.connect(this._master);
+    src.start(t + 0.22);
+  }
+
   get currentName()  { return STATIONS[this.currentStation].name; }
   get currentColor() { return STATIONS[this.currentStation].color; }
 
