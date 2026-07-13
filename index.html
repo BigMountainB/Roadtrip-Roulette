@@ -134,15 +134,10 @@
     }
     #phone-menu img.bg {
       position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      object-position: center center;
-      /* CONTAIN: the WHOLE menu image is always visible (every button,
-         top to bottom), centered, with black letterbox filling any extra
-         space on wide/short screens (e.g. iPad).  Hit-zone math uses the
-         matching contain scale + centered offsets (see recomputeCover). */
+      /* AUTO-SCALE: left/top/width/height are set from JS (recomputeCover) —
+         the image scales until the outermost BUTTONS sit 15px from the screen
+         edge (capped so no button crops off-screen), centered vertically.
+         Art beyond the button block may crop; the buttons never do. */
       pointer-events: none;
       user-select: none;
       -webkit-user-select: none;
@@ -1335,16 +1330,13 @@
         chip.textContent = 'CALIBRATE: tap any icon';
         document.body.appendChild(chip);
         document.addEventListener('pointerdown', (e) => {
-          const img = document.querySelector('#phone-menu img.bg');
-          if (!img?.naturalWidth) return;
+          // Uses the SAME auto-scale transform as the live hit zones
+          // (coverState from recomputeCover) so calibration stays accurate.
+          if (!coverState) return;
           const menu = document.getElementById('phone-menu');
           const rect = menu.getBoundingClientRect();
-          const vw = menu.clientWidth;
-          const scale = vw / img.naturalWidth;   // width-fit, top-anchored
-          const offX = 0;
-          const offY = 0;
-          const pngX = Math.round((e.clientX - rect.left - offX) / scale);
-          const pngY = Math.round((e.clientY - rect.top  - offY) / scale);
+          const pngX = Math.round((e.clientX - rect.left - coverState.offX) / coverState.scale);
+          const pngY = Math.round((e.clientY - rect.top  - coverState.offY) / coverState.scale);
           chip.textContent = `PNG: ${pngX}, ${pngY}`;
         }, { capture: true });
       }
@@ -1357,20 +1349,54 @@
       // artwork on every device (no per-aspect % retuning).
       const bgImg = document.querySelector('#phone-menu img.bg');
       let coverState = null;
+      // Bounding box of every declared button (data-px, PNG pixel coords) —
+      // drives the auto-scale so BUTTONS (not the art's padded edges) define
+      // how big the menu renders.  All skins share the same 853×1844 layout,
+      // so this is computed once from the DOM.
+      let btnBounds = null;
+      const computeBtnBounds = () => {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        document.querySelectorAll('[data-px]').forEach(el => {
+          const [x, y, w, h] = el.dataset.px.split(/\s+/).map(Number);
+          if (![x, y, w, h].every(Number.isFinite)) return;
+          minX = Math.min(minX, x); minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
+        });
+        btnBounds = (maxX > minX && maxY > minY) ? { minX, minY, maxX, maxY } : null;
+        return btnBounds;
+      };
       const recomputeCover = () => {
         if (!bgImg.naturalWidth || !bgImg.naturalHeight) return null;
         const imgW = bgImg.naturalWidth, imgH = bgImg.naturalHeight;
         const menu = document.getElementById('phone-menu');
         const vw = menu.clientWidth, vh = menu.clientHeight;
         if (!vw || !vh) return null;
-        // CONTAIN (matches img.bg object-fit:contain): fit the WHOLE image
-        // inside the viewport so every button is visible, then center it.
-        // Letterbox space (sides on iPad, or top/bottom) is black.  Overlays
-        // track the centered image via offX/offY.
-        const scale = Math.min(vw / imgW, vh / imgH);
+        // AUTO-SCALE (2026-07-13): grow the image until the outermost buttons
+        // sit 15px from the screen sides, capped so the button block never
+        // crops vertically.  Falls back to plain contain-fit if no buttons.
+        const b = btnBounds ?? computeBtnBounds();
+        const EDGE = 15;
+        let scale;
+        if (b) {
+          scale = Math.min(
+            (vw - EDGE * 2) / (b.maxX - b.minX),   // buttons 15px from the sides
+            (vh - EDGE * 2) / (b.maxY - b.minY),   // …but never crop them vertically
+          );
+        } else {
+          scale = Math.min(vw / imgW, vh / imgH);
+        }
+        // Center the image both ways (vertical centering per spec; the button
+        // grid is horizontally symmetric in the art, so centering ≈ equal
+        // side margins).  Art beyond the buttons may letterbox-crop — fine.
         const offX = (vw - imgW * scale) / 2;
         const offY = (vh - imgH * scale) / 2;
         coverState = { scale, offX, offY };
+        // Size/position the art itself with the SAME transform the hit zones
+        // use, so buttons stay glued to the artwork at any scale.
+        bgImg.style.left   = offX + 'px';
+        bgImg.style.top    = offY + 'px';
+        bgImg.style.width  = (imgW * scale) + 'px';
+        bgImg.style.height = (imgH * scale) + 'px';
         return coverState;
       };
       const placePngBox = (el, pngStr) => {
