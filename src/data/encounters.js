@@ -138,7 +138,7 @@ export const REST_STOP_ENCOUNTERS = [
   {
     id: 'bellevue_traffic_app',
     stopId: 'B', weight: 2,
-    portrait: 'biz_founder', speaker: 'App Founder',
+    portrait: 'biz_founder', speaker: 'Startup Founder',
     line: "Our app reroutes you around every speed trap to Pullman. Freemium. The free part is the disappointment.",
     fact: "Bellevue grew from a quiet suburb into a glass-tower tech hub in barely two decades.",
     choices: [
