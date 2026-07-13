@@ -13517,17 +13517,21 @@ export class GameScene extends Phaser.Scene {
           .setRotation(Math.sin(_t * 1.6 + _phase) * 0.10)   // ±~6° rock
           .setAlpha(1)
           .setVisible(true);
-        // Gold/amber glow halo behind the pickup — faked with concentric
-        // translucent circles, pulsing so it shimmers.  Centre on the
-        // pickup's visual middle (origin is bottom-centre).
+        // Category-coded glow halo behind the pickup — concentric translucent
+        // circles, pulsing.  Color = category so players can steer toward what
+        // they NEED from a distance (matches the HUD bar colors):
+        //   drinks = blue/cyan · food = orange · caffeine = purple ·
+        //   meds + invincibility powerups = GOLD (rare/special tier) ·
+        //   weapons keep the old amber.
         const _hg = this._viceHaloGfx;
         if (_hg) {
+          const _halo = this._pickupHaloColors(sp);
           const _hy    = _cy - dispH * 0.5;
           const _pulse = 0.6 + 0.3 * Math.sin(_t * 3.0 + _phase);   // 0.30–0.90
           const _r     = Math.max(6, dispW * 0.72);
-          _hg.fillStyle(0xFFB52E, 0.10 * _pulse); _hg.fillCircle(_cx, _hy, _r * 1.30);
-          _hg.fillStyle(0xFFC23D, 0.16 * _pulse); _hg.fillCircle(_cx, _hy, _r * 0.95);
-          _hg.fillStyle(0xFFE680, 0.22 * _pulse); _hg.fillCircle(_cx, _hy, _r * 0.55);
+          _hg.fillStyle(_halo[0], 0.10 * _pulse); _hg.fillCircle(_cx, _hy, _r * 1.30);
+          _hg.fillStyle(_halo[1], 0.16 * _pulse); _hg.fillCircle(_cx, _hy, _r * 0.95);
+          _hg.fillStyle(_halo[2], 0.22 * _pulse); _hg.fillCircle(_cx, _hy, _r * 0.55);
         }
 
         // Double-vision ghost copy — scaled by perspective so far
@@ -13549,6 +13553,29 @@ export class GameScene extends Phaser.Scene {
     if (ghostPool) {
       for (let i = ghostUsed; i < ghostPool.length; i++) ghostPool[i].setVisible(false);
     }
+  }
+
+  /** Halo color triplet [outer, mid, inner] for a pickup sprite, by category —
+   *  the distance-legible "what do I need?" signal.  Colors mirror the HUD
+   *  survival bars (Drinks = cyan, Food = orange), caffeine reads purple, and
+   *  GOLD is reserved for the rare/special tier: meds (Dramamine) + the
+   *  invincibility Redneck Rage / Quad Shot powerups.  Weapons keep amber. */
+  _pickupHaloColors(sp) {
+    const GOLD   = [0xFFB52E, 0xFFC23D, 0xFFE680];
+    const BLUE   = [0x1E8FE0, 0x39C0D9, 0x9FE8FF];
+    const ORANGE = [0xD96A12, 0xE0902E, 0xFFC97A];
+    const PURPLE = [0x7A3FD9, 0x9A5FE8, 0xD8B8FF];
+    if (sp.collectibleType === 'steroid' || sp.collectibleType === 'narcan') return GOLD;   // invincibility / quad shot
+    if (sp.collectibleType === 'f12') return GOLD.slice(0, 3);   // weapons keep the old amber-gold
+    if (sp.collectibleType === 'vice') {
+      switch (sp.type) {
+        case 'water': case 'slushie': case 'coldbrew': return BLUE;    // drinks
+        case 'caffeine':                            return PURPLE;  // alertness
+        case 'burrito': case 'sushi': case 'gummies': return ORANGE; // food
+        case 'dramamine':                            return GOLD;   // meds = special tier
+      }
+    }
+    return GOLD;
   }
 
   _renderExplosions() {
