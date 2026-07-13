@@ -1367,6 +1367,15 @@ export class GameScene extends Phaser.Scene {
 
     // ── State ─────────────────────────────────────────────────────────
     this.score           = 0;
+    // Persistent WALLET — money stays with the player across runs.  A fresh
+    // run starts from the banked wallet (per-mode profile); arrests/crashes
+    // dock their penalty but the remainder rolls into the next ride.  Resume
+    // paths overwrite this below with their snapshot's exact score.  Custom
+    // is a sandbox (seeds $100k later) and never reads or writes the wallet.
+    if (Difficulty.mode?.() !== 'custom') {
+      const _bank = this.registry?.get?.('save')?.get?.('wallet', 0);
+      if (Number.isFinite(_bank) && _bank > 0) this.score = Math.round(_bank);
+    }
     this.gameTime        = 0;
     // Party clock — counts down from Difficulty.partyClockSec() until
     // hitting 0.  Pullman finish before 0 → ON TIME (cash bonus).
@@ -17100,6 +17109,11 @@ export class GameScene extends Phaser.Scene {
     const snap = this._collectSaveSnapshot(rs.id);
     this._saveRestStop(rs.id, snap);
     this._lastCheckpoint = { name: rs.name, position: this.player.position, scoreAtCP: this.score };
+    // Bank the wallet at every rest stop — pulling in is the "safe" moment, so
+    // quitting mid-run never costs more than the leg since your last stop.
+    if (Difficulty.mode?.() !== 'custom') {
+      this.registry.get('save')?.set?.('wallet', Math.round(Math.max(0, this.score)));
+    }
 
     // Music keeps playing in the rest stop — only the mute button (M key /
     // in-game mute icon) silences the radio.  Previously paused on entry,
@@ -18826,6 +18840,24 @@ export class GameScene extends Phaser.Scene {
         maxReached:  this.vices.maxReached?.[id] ?? 0,
         pickupCount: this.vices.pickupCounts?.[id] ?? 0,
       };
+    }
+
+    // ── Persistent wallet settlement ────────────────────────────────────
+    // Money stays with the player.  Busted already docked its bail in
+    // _onArrested; crashes/overdoses dock the SAME shape here (half of
+    // earnings since the last checkpoint, tow-insurance halves it).  What's
+    // left banks to the save and seeds the next run.  Custom = sandbox, no
+    // wallet.  Guarded by _statsTripEnded's once-per-run gate below.
+    if (!this._statsTripEnded && Difficulty.mode?.() !== 'custom') {
+      if (cause === 'crash' || cause === 'overdose') {
+        const cp = this._lastCheckpoint ?? { scoreAtCP: 0 };
+        const earnedSince = Math.max(0, this.score - (cp.scoreAtCP ?? 0));
+        let lost = Math.floor(earnedSince / 2);
+        if (hasSpecialBuff(this._activeBuffs ?? [], 'cheaper_wreck')) lost = Math.floor(lost * 0.5);
+        this.score = Math.max(0, this.score - lost);
+        extra.losses = (extra.losses ?? 0) + lost;
+      }
+      this.registry.get('save')?.set?.('wallet', Math.round(Math.max(0, this.score)));
     }
 
     // Career stats: a Pullman finish is a completion; everything else
