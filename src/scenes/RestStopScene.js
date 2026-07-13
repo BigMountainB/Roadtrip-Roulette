@@ -954,55 +954,58 @@ export class RestStopScene extends Phaser.Scene {
     add(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.82)
       .setDepth(D).setInteractive());
 
-    // Big near-full-screen card dominated by the NPC portrait.
+    // Big near-full-screen card, SPLIT: NPC portrait pane on the left
+    // (fully uncovered), text + choices pane on the right.
     const pw = SCREEN_W - 16, ph = SCREEN_H - 16;
     const px = CX - pw / 2, py = SCREEN_H / 2 - ph / 2;
+    const imgW = Math.round(pw * 0.44);          // left pane = portrait
+    const txX  = px + imgW, txW = pw - imgW;     // right pane = text column
 
-    // Portrait — cover-fit to fill the whole card (top-anchored so the face
-    // stays), clipped to the card rect by a geometry mask.
+    // Right-pane backdrop (solid dark so text always reads).
+    const pane = this.add.graphics().setDepth(D + 1);
+    pane.fillStyle(0x060A14, 0.96); pane.fillRoundedRect(px, py, pw, ph, 14);
+    add(pane);
+
+    // Portrait — cover-fit into the LEFT pane (top-anchored so the face
+    // stays), clipped to the pane by a geometry mask.  Nothing overlaps it.
     const port = getPortrait(enc.portrait);
     this._ensureNpcTexture(port.texture, port.placeholderTint ?? 0x555555);
     const tex = this.textures.get(port.texture)?.source?.[0];
     const iw = tex?.width || 600, ih = tex?.height || 660;
-    const scale = Math.max(pw / iw, ph / ih);
-    const portImg = this.add.image(px + pw / 2, py, port.texture)
-      .setOrigin(0.5, 0).setDisplaySize(iw * scale, ih * scale).setDepth(D + 1);
-    const maskG = this.make.graphics(); maskG.fillStyle(0xffffff).fillRoundedRect(px, py, pw, ph, 14);
+    const scale = Math.max(imgW / iw, ph / ih);
+    const portImg = this.add.image(px + imgW / 2, py, port.texture)
+      .setOrigin(0.5, 0).setDisplaySize(iw * scale, ih * scale).setDepth(D + 2);
+    const maskG = this.make.graphics(); maskG.fillStyle(0xffffff).fillRoundedRect(px, py, imgW + 14, ph, 14);
+    maskG.fillRect(px + imgW - 14, py, 14, ph);   // square inner edge
     portImg.setMask(maskG.createGeometryMask());
     objs.push(portImg, { destroy: () => maskG.destroy() });
-    // Card border.
+    // Card border + pane divider.
     const border = this.add.graphics().setDepth(D + 5);
     border.lineStyle(3, 0x39A8FF, 1); border.strokeRoundedRect(px, py, pw, ph, 14);
+    border.lineStyle(2, 0x39A8FF, 0.5); border.lineBetween(txX, py + 2, txX, py + ph - 2);
     add(border);
-    // Dark gradient bands top (header + dialogue) and bottom (name/fact/choices)
-    // — kept COMPACT + translucent so ≥75% of the NPC portrait stays visible.
-    const band = this.add.graphics().setDepth(D + 2);
-    band.fillStyle(0x02040B, 0.52); band.fillRect(px, py, pw, 92);
-    const choiceCount = (enc.choices ?? [{}]).length;
-    const botH = 30 + choiceCount * 27 + (enc.fact ? 24 : 0);
-    band.fillStyle(0x02040B, 0.55); band.fillRect(px, py + ph - botH, pw, botH);
-    add(band);
 
-    // Header: location + mile (top).
-    add(this.add.text(px + pw / 2, py + 8,
+    // ── Right pane: header → dialogue → speaker → fact (choices at bottom). ──
+    const tx = txX + 16, tw = txW - 32;
+    add(this.add.text(txX + txW / 2, py + 10,
       `${this._stop?.name ?? 'Rest Stop'}  ·  MILE ${Math.round(this._odometer ?? 0)}`, {
-        fontSize: '13px', fontFamily: IMPACT, color: '#8FB7E6',
+        fontSize: '12px', fontFamily: IMPACT, color: '#8FB7E6',
       }).setOrigin(0.5, 0).setDepth(D + 4));
 
-    // Dialogue across the top band.
-    add(this.add.text(px + 20, py + 24, `"${enc.line}"`, {
-      fontSize: '15px', fontFamily: 'Georgia, serif', color: '#F4F7FF',
-      stroke: '#000', strokeThickness: 3, wordWrap: { width: pw - 40 }, lineSpacing: 2,
+    add(this.add.text(tx, py + 34, `"${enc.line}"`, {
+      fontSize: '16px', fontFamily: 'Georgia, serif', color: '#F4F7FF',
+      wordWrap: { width: tw }, lineSpacing: 3,
     }).setDepth(D + 4));
 
-    // Speaker name (bottom band, above choices).
-    add(this.add.text(px + 18, py + ph - botH + 4, (enc.speaker ?? port.name).toUpperCase(), {
-      fontSize: '13px', fontFamily: IMPACT, color: '#FFD23D', stroke: '#000', strokeThickness: 3,
+    const choiceCount = (enc.choices ?? [{}]).length;
+    const botH = 30 + choiceCount * 33 + (enc.fact ? 30 : 0);
+    add(this.add.text(tx, py + ph - botH + 2, (enc.speaker ?? port.name).toUpperCase(), {
+      fontSize: '14px', fontFamily: IMPACT, color: '#FFD23D',
     }).setDepth(D + 4));
     if (enc.fact) {
-      add(this.add.text(px + 18, py + ph - botH + 22, `📍 ${enc.fact}`, {
+      add(this.add.text(tx, py + ph - botH + 22, `📍 ${enc.fact}`, {
         fontSize: '10px', fontFamily: 'Arial', color: '#9FB7D6',
-        fontStyle: 'italic', wordWrap: { width: pw - 36 }, lineSpacing: 1,
+        fontStyle: 'italic', wordWrap: { width: tw }, lineSpacing: 1,
       }).setDepth(D + 4));
     }
 
@@ -1040,25 +1043,25 @@ export class RestStopScene extends Phaser.Scene {
       if (dialogue) this._showEncounterResult(dialogue);
     };
 
-    // Choice buttons stacked at the bottom — slim, translucent rows so the
-    // portrait shows through behind them.
+    // Choice buttons stacked at the bottom of the RIGHT pane — comfortable
+    // height again since they no longer cover the portrait.
     const choices = enc.choices ?? [{ label: 'Continue', effects: {} }];
-    const bh = 22, gap = 5;
-    let by = py + ph - (choices.length * (bh + gap)) - 5;
+    const bh = 28, gap = 5;
+    const bcx = txX + txW / 2;
+    let by = py + ph - (choices.length * (bh + gap)) - 6;
     for (const c of choices) {
       const cost = c.cost ?? 0;
       const afford = cost <= (this._score ?? 0);
-      const bg = this.add.rectangle(CX, by + bh / 2, pw - 40, bh, afford ? 0x143A5A : 0x2A1010, 0.55)
-        .setStrokeStyle(1.5, afford ? 0x39A8FF : 0x662222).setDepth(D + 2);
-      const lbl = this.add.text(CX, by + bh / 2, c.label, {
+      const bg = this.add.rectangle(bcx, by + bh / 2, txW - 28, bh, afford ? 0x143A5A : 0x2A1010)
+        .setStrokeStyle(2, afford ? 0x39A8FF : 0x662222).setDepth(D + 2);
+      const lbl = this.add.text(bcx, by + bh / 2, c.label, {
         fontSize: '13px', fontFamily: IMPACT, color: afford ? '#F4F7FF' : '#996666',
-        stroke: '#000', strokeThickness: 2,
       }).setOrigin(0.5).setDepth(D + 3);
       add(bg, lbl);
       if (afford) {
         bg.setInteractive({ useHandCursor: true });
-        bg.on('pointerover', () => bg.setFillStyle(0x1E5280, 0.75));
-        bg.on('pointerout',  () => bg.setFillStyle(0x143A5A, 0.55));
+        bg.on('pointerover', () => bg.setFillStyle(0x1E5280));
+        bg.on('pointerout',  () => bg.setFillStyle(0x143A5A));
         bg.on('pointerdown', (p) => { p.event?.stopPropagation?.(); choose(c); });
       }
       by += bh + gap;
