@@ -60,7 +60,8 @@ export class SurvivalSystem {
     this.tiredness = 0;
     this.fullness  = 25;    // start at 25% — just clear of the negative zone
     this.hydration = 25;    // start at 25% — just clear of the negative zone
-    this.bladder   = 0;     // fills as you eat/drink; only a restroom empties it
+    this.bladder   = 25;    // start at 25% (multiplier condition is <25, so an
+                            // early restroom stop buys the 2nd multiplier)
     this.diuretic  = 0;     // caffeine "pee it out" charge → faster hydration drain
     this.nausea    = 0;
     this.caffeineDep    = 0;   // hidden dependence 0–100

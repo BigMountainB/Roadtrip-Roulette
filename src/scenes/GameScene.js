@@ -9997,13 +9997,24 @@ export class GameScene extends Phaser.Scene {
     // Pulling a weapon during a parked speed-trap stop (the comply window OR
     // the held traffic stop) instead of pulling over counts as a weapon on a
     // cop: the trooper voids the civil stop, becomes a live chaser, and you
-    // escalate into the 4-5★ band.  Disguise / paint-bomb are non-aggressive
-    // (hide / repaint) so they're exempt — same exclusion as the F12 cop-kill
-    // escalation.
+    // escalate into the 4-5★ band.  Disguise / paint-bomb / spike-strip are
+    // non-aggressive (hide / repaint / passive road device) so they're exempt
+    // — same exclusion as the F12 cop-kill escalation.
     const weaponOnTrooper = (this._trapPursuitActive || this._trapStopHeld)
-                         && base !== 'disguise' && base !== 'paint_bomb';
+                         && base !== 'disguise' && base !== 'paint_bomb' && base !== 'spike_strip';
     const result = this.cops.useF12Token(base, this.player.position, dir, this.traffic, this._collectEncounterCops());
     if (result?.ok) {
+      // Spikes during a speed-trap pursuit: the trooper drove over them and is
+      // out of the chase — end the civil stop cleanly (no escalation, no
+      // "ignored the stop" star from the still-ticking comply timer).
+      if (base === 'spike_strip' && (this._trapPursuitActive || this._trapStopHeld)) {
+        this._trapPursuitActive = false;
+        this._trapStopping      = false;
+        this._trapComplyTimer   = 0;
+        this._trapStopHeld      = false;
+        this._trapStopHoldTimer = 0;
+        this.cops.endTrapPursuit?.();
+      }
       if (weaponOnTrooper) {
         this._trapPursuitActive = false;
         this._trapStopping      = false;
@@ -15023,12 +15034,14 @@ export class GameScene extends Phaser.Scene {
         AchievementSystem.award('connoisseur', this.registry);
       }
     }
-    if (mult > 1 || combos.length) {
+    {
+      // ALWAYS shown now — 0× (nothing managed, no earnings) and 1× are
+      // meaningful states in the survival multiplier, not "off".
       // Colorblind-safe ramp (blue→amber→orange) vs the default red/orange/
       // green — green↔red is the pair red-green CVD players can't separate.
       const tierColor = this._colorblind
-        ? (mult >= 8 ? '#FF7A00' : mult >= 5 ? '#FFD23D' : '#3A9BFF')
-        : (mult >= 8 ? '#FF2244' : mult >= 5 ? '#FFAA22' : '#44FF88');
+        ? (mult >= 8 ? '#FF7A00' : mult >= 5 ? '#FFD23D' : mult < 1 ? '#FF7A00' : '#3A9BFF')
+        : (mult >= 8 ? '#FF2244' : mult >= 5 ? '#FFAA22' : mult < 1 ? '#FF4444' : '#44FF88');
       // Non-color tier cue (colorblind mode only): a redundant pip suffix so
       // the tier boundary survives without relying on the blue/amber/orange
       // hue. <5x → "·", 5-8x → "··", 8x+ → "···". The NON-colorblind text
@@ -15041,9 +15054,6 @@ export class GameScene extends Phaser.Scene {
         .setText(`×${mult.toFixed(1)}${tierCue}`)
         .setColor(tierColor)
         .setVisible(true);
-    } else if (!this._ctrlEditMode) {
-      // Keep the editor placeholder visible so the multiplier stays grabbable.
-      this.hudMult.setVisible(false);
     }
     {
       const _distVal = this._unitsKmh ? milesRaw * 1.60934 : milesRaw;
@@ -16791,9 +16801,20 @@ export class GameScene extends Phaser.Scene {
     // Custom mode awards zero score — multiplier collapses to 0 so every
     // additive `this.score += pts * _scoreMult()` callsite no-ops.
     if (Difficulty.noScore?.()) return 0;
-    const mult = this.vices.scoreMultiplier + (this.cops.starDisplay ?? 0);
-    const m = Math.round(mult * 2) / 2;
-    return m;
+    // Survival-driven multiplier (2026-07-13): +1× per well-managed condition —
+    //   Drinks 25–75 · Food 25–75 · Alertness > 75 (tiredness < 25) · Bladder < 25.
+    // Start state (bars at 25, bladder 25) = 1× (alertness only); an early
+    // restroom stop buys 2×.  ZERO conditions met = 0× (no earnings).
+    // Wanted stars still ADD on top (risk pays).
+    const s = this.survival;
+    let cond = 0;
+    if (s) {
+      if (s.hydration > 25 && s.hydration < 75) cond++;
+      if (s.fullness  > 25 && s.fullness  < 75) cond++;
+      if (s.tiredness < 25)                     cond++;   // Alertness > 75
+      if (s.bladder   < 25)                     cond++;
+    }
+    return cond + (this.cops.starDisplay ?? 0);
   }
 
   /** Punchy display labels for each vice-line type — used by the spawner

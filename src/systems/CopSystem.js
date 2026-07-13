@@ -530,13 +530,15 @@ export class CopSystem {
     }
     // ── Cop-killer escalation ──────────────────────────────────────────
     // A WEAPON kill on a cop does NOT cool you down — it makes them want you
-    // MORE.  Each cop death (gun/rocket/spike — NOT donuts) adds +1★,
-    // so taking out two cruisers in one blast adds +2★.  The blast clears the
-    // immediate threat + resets the arrest counters, but you've bought only a
-    // 3-5 mile head start before fresh pursuit re-engages — time to reach a
-    // rest stop for a disguise / paint job / Park & Ride bus.
+    // MORE.  Each cop death (gun/rocket) adds +1★, so taking out two cruisers
+    // in one blast adds +2★.  The blast clears the immediate threat + resets
+    // the arrest counters, but you've bought only a 3-5 mile head start before
+    // fresh pursuit re-engages.  SPIKE STRIPS are exempt like donuts
+    // (2026-07-13): they're a passive road device, not an attack — without the
+    // exemption the +1★ respawned a fresh rear cop instantly, which made
+    // spikes look like they did nothing to the pursuit behind you.
     const copKills = victims.filter(v => v.isCop).length;
-    if (copKills > 0 && type !== 'paint_bomb' && type !== 'disguise') {
+    if (copKills > 0 && type !== 'paint_bomb' && type !== 'disguise' && type !== 'spike_strip') {
       this.escalateForCopKill(playerPos, copKills);
     }
     // Returns the victim list so GameScene can spawn per-car FX.
