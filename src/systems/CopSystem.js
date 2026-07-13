@@ -530,15 +530,13 @@ export class CopSystem {
     }
     // ── Cop-killer escalation ──────────────────────────────────────────
     // A WEAPON kill on a cop does NOT cool you down — it makes them want you
-    // MORE.  Each cop death (gun/rocket) adds +1★, so taking out two cruisers
-    // in one blast adds +2★.  The blast clears the immediate threat + resets
-    // the arrest counters, but you've bought only a 3-5 mile head start before
-    // fresh pursuit re-engages.  SPIKE STRIPS are exempt like donuts
-    // (2026-07-13): they're a passive road device, not an attack — without the
-    // exemption the +1★ respawned a fresh rear cop instantly, which made
-    // spikes look like they did nothing to the pursuit behind you.
+    // MORE.  Each cop death (gun/rocket/spike — NOT donuts) adds +1★,
+    // so taking out two cruisers in one blast adds +2★.  The blast clears the
+    // immediate threat + resets the arrest counters, but you've bought only a
+    // 3-5 mile head start before fresh pursuit re-engages — time to reach a
+    // rest stop for a disguise / paint job / Park & Ride bus.
     const copKills = victims.filter(v => v.isCop).length;
-    if (copKills > 0 && type !== 'paint_bomb' && type !== 'disguise' && type !== 'spike_strip') {
+    if (copKills > 0 && type !== 'paint_bomb' && type !== 'disguise') {
       this.escalateForCopKill(playerPos, copKills);
     }
     // Returns the victim list so GameScene can spawn per-car FX.
@@ -572,7 +570,7 @@ export class CopSystem {
    *  escalateForCopKill → 4★ inside useF12Token.  Setting to 2 here overwrites
    *  that in the same frame so the two can't stack into 5★.  Grace is cleared
    *  so this behaves like normal 2★ heat, not a 4-5★ weapon-kill head start. */
-  weaponPulledAtTrap(playerPos = 0) {
+  weaponPulledAtTrap(playerPos = 0, graceMi = 0) {
     const chaseSpeed = MAX_SPEED * (COP_TOP_MPH / 120);
     for (const c of this.cops) {
       if (!c.trapPursuit) continue;
@@ -588,7 +586,15 @@ export class CopSystem {
     this.headOnCount       = 0;
     this.pitCount          = 0;
     this.arrestPending     = false;
-    this._pursuitGraceMile = 0;   // no weapon-kill grace — normal 2★ pursuit
+    // graceMi > 0 = the weapon physically WRECKED the trooper (spikes): the
+    // replacement pursuit holds off for that long.  0 = the trooper survives
+    // as a live chaser — normal 2★ pursuit, no head start.  Either way, force
+    // a real spawn delay: at 0★ the spawn cooldown has been sitting expired,
+    // so without this a fresh cruiser appeared THE SAME FRAME the trooper
+    // died — which made spikes look like they did nothing (bug, 2026-07-13).
+    const mile = (playerPos / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+    this._pursuitGraceMile = graceMi > 0 ? mile + graceMi : 0;
+    this._spawnCooldown    = Math.max(this._spawnCooldown ?? 0, 2.5);
   }
 
   update(dt, playerPos, playerSpeed, playerX = 0) {

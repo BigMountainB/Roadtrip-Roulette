@@ -9997,31 +9997,24 @@ export class GameScene extends Phaser.Scene {
     // Pulling a weapon during a parked speed-trap stop (the comply window OR
     // the held traffic stop) instead of pulling over counts as a weapon on a
     // cop: the trooper voids the civil stop, becomes a live chaser, and you
-    // escalate into the 4-5★ band.  Disguise / paint-bomb / spike-strip are
-    // non-aggressive (hide / repaint / passive road device) so they're exempt
-    // — same exclusion as the F12 cop-kill escalation.
+    // escalate into the 4-5★ band.  Disguise / paint-bomb are non-aggressive
+    // (hide / repaint) so they're exempt — same exclusion as the F12 cop-kill
+    // escalation.  Spikes ARE aggressive (they wreck the trooper) but earn a
+    // short head start since the cruiser is physically disabled.
     const weaponOnTrooper = (this._trapPursuitActive || this._trapStopHeld)
-                         && base !== 'disguise' && base !== 'paint_bomb' && base !== 'spike_strip';
+                         && base !== 'disguise' && base !== 'paint_bomb';
     const result = this.cops.useF12Token(base, this.player.position, dir, this.traffic, this._collectEncounterCops());
     if (result?.ok) {
-      // Spikes during a speed-trap pursuit: the trooper drove over them and is
-      // out of the chase — end the civil stop cleanly (no escalation, no
-      // "ignored the stop" star from the still-ticking comply timer).
-      if (base === 'spike_strip' && (this._trapPursuitActive || this._trapStopHeld)) {
-        this._trapPursuitActive = false;
-        this._trapStopping      = false;
-        this._trapComplyTimer   = 0;
-        this._trapStopHeld      = false;
-        this._trapStopHoldTimer = 0;
-        this.cops.endTrapPursuit?.();
-      }
       if (weaponOnTrooper) {
         this._trapPursuitActive = false;
         this._trapStopping      = false;
         this._trapComplyTimer   = 0;
         this._trapStopHeld      = false;
         this._trapStopHoldTimer = 0;
-        this.cops.weaponPulledAtTrap(this.player.position);
+        // Spikes physically wreck the cruiser → ~2 mi before the replacement
+        // pursuit re-engages.  Other weapons: the trooper survives as a live
+        // chaser, no head start.
+        this.cops.weaponPulledAtTrap(this.player.position, base === 'spike_strip' ? 2 : 0);
       }
       // Weapons are infinite-use, but each fire has a 25% chance of
       // attracting a wanted star (witnesses, gunshot acoustic flags,
