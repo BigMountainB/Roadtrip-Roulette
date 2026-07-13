@@ -30,17 +30,21 @@ const DIURETIC_MAX   = 20;
 // Item → { t, h, f } bar deltas.  Specials (diuretic/addiction/…) handled in
 // applyItem.  Every BEVERAGE adds to hydration on the spot; diuretics claw it
 // back over the following miles instead of subtracting immediately.
+// BITE-SIZED (2026-07-12): each road sprite is a bite/sip, not a meal.  Values
+// tuned so collecting ~40–50% of spawned sprites (~3.2–4/mi of the ~8/mi that
+// spawn) holds the bars roughly level against drain (h −4.0, f −3.6, t +0.7
+// per mile).  Grab less → slowly starve/dehydrate; grab more → bank surplus.
 const ITEM_FX = {
-  water:        { t:  -5, h: +16, f:  +5 },
-  coldbrew:     { t: -18, h:  +8, f:  +6, diuretic: 2 },
-  caffeine:     { t: -30, h:  +5, f:   0, addiction: true, diuretic: 3 },
-  slushie:      { t: -10, h: +10, f:  +6 },
-  gummies:      { t:  -6, h:   0, f:  +3, tripRoll: true },
-  sushi:        { t:  +5, h:   0, f:  +6, badFishRoll: true },
-  burrito:      { t: +20, h:   0, f: +12 },
-  dramamine:    { t: +25, h:   0, f:   0, curesNausea: true },
-  quadshot:     { t: null, h:  +5, f:  +6, clearTiredness: true, diuretic: 3 },   // t handled by clear
-  rage:         { t:   0, h:  +6, f:  +6, diuretic: 1.5 },
+  water:        { t:  -1, h:  +3, f:   0 },
+  coldbrew:     { t:  -4, h:  +2, f:   0, diuretic: 2 },
+  caffeine:     { t:  -7, h:  +1, f:   0, addiction: true, diuretic: 3 },
+  slushie:      { t:  -2, h:  +3, f:  +2 },
+  gummies:      { t:  -1, h:   0, f:  +2, tripRoll: true },
+  sushi:        { t:  +1, h:   0, f:  +3, badFishRoll: true },
+  burrito:      { t:  +3, h:   0, f:  +4 },
+  dramamine:    { t:  +6, h:   0, f:   0, curesNausea: true },
+  quadshot:     { t: null, h:  +2, f:  +2, clearTiredness: true, diuretic: 3 },   // t handled by clear
+  rage:         { t:   0, h:  +2, f:  +2, diuretic: 1.5 },
 };
 
 const BAD_FISH_CHANCE   = 1 / 12;   // Sushi → bladder emergency
