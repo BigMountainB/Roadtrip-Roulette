@@ -2027,10 +2027,9 @@ export function buildRoute(count = ROUTE_SEGS) {
     if (i % 1200 === 77) {
       const f12Type = pickF12(rng);
       const f12TexMap = {
-        f12_gun:       'weapon_gun',
+        f12_coal:      'weapon_coal',        // procedural texture (BootScene)
         f12_fireworks: 'weapon_fireworks',   // procedural texture (BootScene)
         f12_paint:     'weapon_paint_bomb',
-        f12_rocket: 'weapon_rocket',     // procedural placeholder if PNG missing
       };
       sprites.push({
         type:            f12Type,
@@ -3047,21 +3046,16 @@ export function buildRoute(count = ROUTE_SEGS) {
 }
 
 /**
- * Weapon drop table — split evenly between forward-firing and panic-button
- * tools so the player can defend both sides at roughly the same rate.
+ * Weapon drop table — rolling coal is the rear smokescreen, fireworks +
+ * donuts cover the whole screen / rear:
  *
- *   Forward (kills front cops):     gun, rocket       → 50% combined
- *   Whole-screen / rear coverage:   fireworks, paint  → 50% combined
- *
- * Rockets are bidirectional in CopSystem.useF12Token so the rocket pickup
- * itself counts toward "balanced" because the player chooses direction at
- * fire time via the weapon-cycle button.
+ *   Rear smokescreen (stealth):     coal              → 30%
+ *   Whole-screen / rear coverage:   fireworks, paint  → 70% combined
  */
 function pickF12(rng) {
   const r = rng.next();
-  if (r < 0.30) return 'f12_gun';        // 30% — forward
-  if (r < 0.50) return 'f12_rocket';     // 20% — bidirectional (player picks)
-  if (r < 0.75) return 'f12_fireworks';  // 25% — scatters every cop on screen
+  if (r < 0.30) return 'f12_coal';       // 30% — rear smokescreen
+  if (r < 0.75) return 'f12_fireworks';  // 45% — scatters every cop on screen
   return 'f12_paint';                     // 25% — backward
 }
 

@@ -171,17 +171,23 @@
        artwork at any scale; shown/hidden by refreshNotifDots. */
     .notif-dot {
       position: absolute;
-      width: 14px;
-      height: 14px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       background: #FF3B30;
-      border: 2px solid #FFF;
+      border: 3px solid #FFF;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
       box-sizing: border-box;
       display: none;
       pointer-events: none;
       z-index: 5;
     }
+    /* Dots belong to the MAIN app grid only — hide them the moment any
+       sub-screen/app modal is open, re-appear automatically on close.
+       (:has beats wiring refreshNotifDots into every open/close path.) */
+    body:has(#phone-achievements.open, #phone-app.open, #phone-map.open,
+             #phone-garage.open, #phone-music.open, #phone-confirm.open,
+             #plate-modal.open) .notif-dot { display: none !important; }
     body.debug [data-px] { background: rgba(255,0,0,0.20); border: 1px dashed red; }
     body.debug [data-px]::before {
       content: attr(data-action);
@@ -345,6 +351,19 @@
     #phone-garage .row .stats { font-size: 2.6vmin; color: #AAD0FF; }
     #phone-garage .row .acc { font-size: 3.4vmin; margin-bottom: 0.5vmin; min-height: 4vmin; }
     #phone-garage .row .acc .badge { margin-right: 1vmin; }
+    /* Upgrade-panel cost badges — ONE uniform pill shape for every slot
+       (buy buttons and the MAX marker alike), sized to the enlarged
+       upgrade text.  Same palette as the rest of the garage. */
+    #phone-garage .up-buy, #phone-garage .up-max {
+      display: inline-block; min-width: 24vmin; padding: 1.4vmin 4vmin;
+      border-radius: 999px; border: 0.5vmin solid #335;
+      background: #16203a; color: #8aa;
+      font-family: inherit; font-weight: 800; font-size: 5.6vmin;
+      text-align: center; white-space: nowrap; cursor: pointer;
+      box-sizing: border-box;
+    }
+    #phone-garage .up-buy.on { border-color: #39A8FF; background: #1E5BB8; color: #FFF; }
+    #phone-garage .up-max { color: #66FF99; border-color: #2a5a3a; background: #0d1a12; cursor: default; }
     #phone-garage .close-btn {
       align-self: center;
       padding: 2vmin 6vmin;
@@ -932,6 +951,14 @@
     }
     #phone-app .pa-section:first-child { margin-top: 0; }
     #phone-app .pa-dim { color: #6E86A8; }
+    /* Per-thread unread dot in the Contacts list — sits left of the name,
+       cleared when that thread is opened (renderContact → __notif.ackMsg). */
+    #phone-app .msg-unread {
+      display: inline-block; width: 2.6vmin; height: 2.6vmin;
+      border-radius: 50%; background: #FF3B30;
+      margin-right: 1.6vmin; vertical-align: middle;
+      box-shadow: 0 0 1vmin rgba(255, 59, 48, 0.6);
+    }
     /* House-leaderboard metric tabs (Score / Time / Miles). */
     #phone-app .lb-tabs { display: flex; gap: 2vmin; margin: 2vmin 0 1vmin; }
     #phone-app .lb-tab {
@@ -1269,7 +1296,10 @@
       const errEl = document.getElementById('plate-err');
       if (!modal || !input || !done) return;
       let pendingDone = null;
-      const sanitize = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 8);
+      // Mirrors main.js _sanitizePlate: any printable ASCII except HTML-context
+      // hazards (< > & " ' ` \) — keep the two in sync.
+      const sanitize = (v) => String(v || '').toUpperCase()
+        .replace(/[^\x20-\x7E]/g, '').replace(/[<>&"'`\\]/g, '').slice(0, 8);
       const showErr = (m) => { if (errEl) errEl.textContent = m || ''; };
       const close = () => { modal.classList.remove('open'); pendingDone = null; showErr(''); };
       input.addEventListener('input', () => { input.value = sanitize(input.value); showErr(''); });
@@ -1372,16 +1402,21 @@
         const menu = document.getElementById('phone-menu');
         const vw = menu.clientWidth, vh = menu.clientHeight;
         if (!vw || !vh) return null;
-        // AUTO-SCALE (2026-07-13): grow the image until the outermost buttons
-        // sit 15px from the screen sides, capped so the button block never
-        // crops vertically.  Falls back to plain contain-fit if no buttons.
-        // Contain-fit the FULL artwork with a 15px margin on every edge,
-        // centered — aspect ratio preserved, so it scales to any device
-        // with no cropping (2026-07-13: replaces the button-block fit).
+        // AUTO-SCALE (2026-07-13): every 853×1844 menu skin carries a baked-in
+        // near-black dead border around the visible phone artwork — measured
+        // identical on all 9 skins: L36 R35 T100 B37 px.  Contain-fitting the
+        // FULL file kept that dead border inside the 15px margin, so the
+        // visible art sat 30-75px from the screen edge on iPhone.  Fit the
+        // VISIBLE content box to the 15px margin instead, centered; the dead
+        // border overflows into the black letterbox where it's invisible.
+        // coverState stays the full-image transform, so all data-px math is
+        // untouched.
         const EDGE = 15;
-        const scale = Math.min((vw - EDGE * 2) / imgW, (vh - EDGE * 2) / imgH);
-        const offX = (vw - imgW * scale) / 2;
-        const offY = (vh - imgH * scale) / 2;
+        const INS = { l: 36, r: 35, t: 100, b: 37 };   // baked border, art px
+        const cw = imgW - INS.l - INS.r, ch = imgH - INS.t - INS.b;
+        const scale = Math.min((vw - EDGE * 2) / cw, (vh - EDGE * 2) / ch);
+        const offX = (vw - cw * scale) / 2 - INS.l * scale;
+        const offY = (vh - ch * scale) / 2 - INS.t * scale;
         coverState = { scale, offX, offY };
         // Size/position the art itself with the SAME transform the hit zones
         // use, so buttons stay glued to the artwork at any scale.
@@ -1464,7 +1499,10 @@
           const btn = document.querySelector(`.phone-hit[data-action="${a}"]`);
           if (!btn || !btn.dataset.px) return;
           const [px, py, pw] = btn.dataset.px.split(/\s+/).map(Number);
-          notifDots[a].style.left = (coverState.offX + (px + pw) * coverState.scale - 7) + 'px';
+          // 28px dot whose UPPER-RIGHT corner sits where the old 14px
+          // centered dot's upper-right corner was (corner+7, corner-7) —
+          // doubling the size grows it inward/down, never past the tile.
+          notifDots[a].style.left = (coverState.offX + (px + pw) * coverState.scale + 7 - 28) + 'px';
           notifDots[a].style.top  = (coverState.offY +  py       * coverState.scale - 7) + 'px';
         });
       };
@@ -1535,6 +1573,12 @@
           const e  = (st.msgs[cid] ??= {});
           e.ack = Math.max(e.mark || 0, Date.now());
           notifSave(st); refreshNotifDots();
+        },
+        // Query-side: does contact `cid`'s thread have unread texts?
+        // (Contacts list uses this for its per-thread red dots.)
+        unreadMsg: (cid) => {
+          const e = notifLoad().msgs[cid];
+          return !!e && (e.mark || 0) > (e.ack || 0);
         },
         refresh: () => refreshNotifDots(),
       };
@@ -2125,32 +2169,35 @@
           const ORDER = ['grip','steering','stability','braking','durability','cooling','visibility','range'];
           const bar = (n) => `<span style="letter-spacing:1px;color:#39D9FF">${'▮'.repeat(n)}</span>`
                             + `<span style="letter-spacing:1px;color:#26384a">${'▮'.repeat(5-n)}</span>`;
-          const statsHtml = ORDER.map(k => `<div style="display:flex;justify-content:space-between;gap:6px;font-size:2.3vmin;">`
+          // Legibility pass (2026-07-13): upgrade text ~3× its old size
+          // (2.5/2.0/1.9vmin → 7/5.6/5.2vmin), stat meters 2× (2.3 → 4.6vmin)
+          // so the two-column grid still fits; the modal already scrolls.
+          const statsHtml = ORDER.map(k => `<div style="display:flex;justify-content:space-between;gap:6px;font-size:4.6vmin;">`
             + `<span style="color:#9fb7d6;text-transform:capitalize;">${k}</span><span>${bar(stats[k]?.bars ?? 0)}</span></div>`).join('');
           const slotsHtml = slots.map(s => {
             const owned = s.installedLabel
               ? `<span style="color:#66FF99">L${s.installedLevel} · ${s.installedLabel}</span>`
               : `<span style="color:#5b6b82">stock</span>`;
             let action;
-            if (!s.next) action = `<span style="color:#66FF99;font-size:2.1vmin;">MAX</span>`;
+            if (!s.next) action = `<span class="up-max">MAX</span>`;
             else {
               const afford = cash >= s.next.cost;
-              action = `<button class="up-buy pa-toggle ${afford?'on':''}" data-veh="${curId}" data-up="${s.next.id}" `
+              action = `<button class="up-buy ${afford?'on':''}" data-veh="${curId}" data-up="${s.next.id}" `
                      + `${afford?'':'disabled'}>$${s.next.cost.toLocaleString()}</button>`;
             }
-            return `<div style="padding:1.1vmin 0;border-top:1px solid #16283a;">`
-              + `<div style="display:flex;justify-content:space-between;align-items:center;">`
-              + `<span style="color:#F4F7FF;font-size:2.5vmin;">${s.slotLabel}</span>${action}</div>`
-              + `<div style="font-size:2.0vmin;">${owned}${s.next?` <span style="color:#5b6b82">→ ${s.next.label}</span>`:''}</div>`
-              + (s.next && s.next.tradeoff ? `<div style="font-size:1.9vmin;color:#d9a15a;">⚠ ${s.next.tradeoff}</div>` : '')
+            return `<div style="padding:2vmin 0;border-top:1px solid #16283a;">`
+              + `<div style="display:flex;justify-content:space-between;align-items:center;gap:2vmin;">`
+              + `<span style="color:#F4F7FF;font-size:7vmin;">${s.slotLabel}</span>${action}</div>`
+              + `<div style="font-size:5.6vmin;">${owned}${s.next?` <span style="color:#5b6b82">→ ${s.next.label}</span>`:''}</div>`
+              + (s.next && s.next.tradeoff ? `<div style="font-size:5.2vmin;color:#d9a15a;">⚠ ${s.next.tradeoff}</div>` : '')
               + `</div>`;
           }).join('');
-          panelHtml = `<div id="garage-upgrades" style="margin-top:2vmin;padding:2vmin;background:#080c16;`
+          panelHtml = `<div id="garage-upgrades" style="margin-top:2vmin;padding:2.5vmin;background:#080c16;`
             + `border:2px solid #163550;border-radius:2vmin;">`
-            + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1vmin;">`
-            + `<span style="color:#39D9FF;font-weight:bold;font-size:2.8vmin;">UPGRADES</span>`
-            + `<span style="color:#FFD23D;font-size:2.6vmin;">$${cash.toLocaleString()}</span></div>`
-            + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4vmin;margin-bottom:1.5vmin;">${statsHtml}</div>`
+            + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5vmin;">`
+            + `<span style="color:#39D9FF;font-weight:bold;font-size:7vmin;">UPGRADES</span>`
+            + `<span style="color:#FFD23D;font-size:6.4vmin;">$${cash.toLocaleString()}</span></div>`
+            + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4vmin;margin-bottom:2vmin;">${statsHtml}</div>`
             + slotsHtml + `</div>`;
         }
         garageList.innerHTML = carsHtml + panelHtml;
@@ -2915,8 +2962,13 @@
           miles: { label: 'Miles', has: p => p.mostMilesRun > 0,         val: p => sNum(p.mostMilesRun) + ' mi',
                    sort: (a, b) => (b.mostMilesRun || 0) - (a.mostMilesRun || 0) },
         };
+        // Plates are user text going into innerHTML — escape them (the plate
+        // sanitizer also blocks these chars, but server/world entries and old
+        // saves aren't guaranteed to have passed through it).
+        const escPlate = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         const hRow = (rank, p, valStr, dim) => {
-          const name = (p.plate && p.plate !== '—') ? p.plate : 'YOU';
+          const name = escPlate((p.plate && p.plate !== '—') ? p.plate : 'YOU');
           const tag  = (p.active && p.plate && p.plate !== '—') ? ' <span class="pa-dim">(you)</span>' : '';
           const rk   = rank ? `#${rank} ` : '';
           return `<div class="pa-row${p.active ? ' lb-me' : ''}">`
@@ -2963,7 +3015,7 @@
                             : sNum(e.miles) + ' mi';
           const wRow = (e) => {
             const me = !!e.playerId && e.playerId === myId;
-            const name = (e.plate && String(e.plate).trim()) ? e.plate : '—';
+            const name = escPlate((e.plate && String(e.plate).trim()) ? e.plate : '—');
             return `<div class="pa-row${me ? ' lb-me' : ''}">`
                  + `<span class="k">#${e.rank} ${name}${me ? ' <span class="pa-dim">(you)</span>' : ''}</span>`
                  + `<span class="v">${wVal(e)}</span></div>`;
@@ -3069,7 +3121,10 @@
         const shkPct = Math.round((window.__settings?.getShake?.() ?? 1) * 100);
         const hudOn = window.__settings?.getHud?.() ?? true;
         const cbOn  = window.__settings?.getColorblind?.() ?? false;
-        const curPlate = (window.__plate?.get?.() ?? '').trim();
+        // Escaped — plate is user text and this string goes into innerHTML.
+        const curPlate = (window.__plate?.get?.() ?? '').trim()
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         // App-icon switch is iOS-only (uses native alternate icons).
         const isIOS     = window.Capacitor?.getPlatform?.() === 'ios';
         const altIconOn = ((localStorage.getItem('rtr_appIcon') ?? localStorage.getItem('dui_appIcon')) || '') === 'AltIcon';
@@ -3219,7 +3274,7 @@
             `<p class="pa-note">Tap a contact to view their info.</p>` +
             rows.map(c =>
               `<div class="pa-row contact-row" data-cid="${c.id}" style="cursor:pointer">
-                 <span class="k">${c.name}<br><span class="pa-dim" style="font-size:0.82em">${c.sub}</span></span>
+                 <span class="k">${window.__notif?.unreadMsg?.(c.id) ? '<span class="msg-unread"></span>' : ''}${c.name}<br><span class="pa-dim" style="font-size:0.82em">${c.sub}</span></span>
                  <span class="v">›</span>
                </div>`).join(''));
           appBody.querySelectorAll('.contact-row').forEach(row =>

@@ -109,6 +109,10 @@ export class BootScene extends Phaser.Scene {
     // other weapon pickups' hand-drawn scale.
     this._makeFireworksSprite('weapon_fireworks');
 
+    // 💨 Rolling-coal weapon pickup — fully procedural: a chrome exhaust
+    // stack belching a clump of black diesel smoke.
+    this._makeCoalSprite('weapon_coal');
+
     // For any manifest key whose PNG is missing, synthesize a placeholder
     // so downstream code can reference manifest keys safely.
     this._fillMissingPlaceholders();
@@ -326,6 +330,29 @@ export class BootScene extends Phaser.Scene {
     // Star sparks above the bundle.
     g.fillStyle(0xFFF6C8, 0.95);
     g.fillCircle(10, 8, 2); g.fillCircle(46, 5, 2); g.fillCircle(28, 3, 2.5);
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+
+  /** 💨 Rolling-coal pickup sprite — a chrome exhaust stack with a rolling
+   *  black smoke clump billowing off the tip, so the pickup reads "diesel
+   *  smokescreen" at road distance.  Permanent procedural art. */
+  _makeCoalSprite(key) {
+    const size = 56;
+    const g = this.make.graphics({ x: 0, y: 0, add: false });
+    // Soft ground shadow.
+    g.fillStyle(0x000000, 0.30); g.fillEllipse(size / 2, size - 5, 30, 7);
+    // Stack pipe + chrome lip (slight left of centre so the smoke can roll right).
+    g.fillStyle(0x8A8A8A, 1); g.fillRect(23, 24, 7, 28);
+    g.fillStyle(0xC9C9C9, 1); g.fillRect(25, 24, 2, 28);       // chrome highlight
+    g.fillStyle(0xD8D8D8, 1); g.fillRect(21, 21, 11, 4);       // lip
+    // Black smoke clump — overlapping near-black puffs with a gray fringe.
+    g.fillStyle(0x141414, 1);
+    g.fillCircle(27, 14, 9); g.fillCircle(36, 11, 7); g.fillCircle(19, 10, 6);
+    g.fillStyle(0x2E2E2E, 0.95);
+    g.fillCircle(43, 8, 5); g.fillCircle(12, 7, 4.5); g.fillCircle(30, 5, 5.5);
+    g.fillStyle(0x4A4A4A, 0.85);
+    g.fillCircle(48, 5, 3); g.fillCircle(22, 3, 3); g.fillCircle(38, 3, 3.5);
     g.generateTexture(key, size, size);
     g.destroy();
   }

@@ -3938,12 +3938,21 @@ export class Road {
         g.fillRect(x - w * 0.2, y + h * 0.04, w * 0.4, h * 0.1);
         break;
       }
-      case 'f12_gun': {
-        g.fillStyle(0x888888, 1);
-        g.fillRect(x - w * 0.45, y + h * 0.35, w * 0.9, h * 0.3);
-        g.fillRect(x - w * 0.15, y + h * 0.15, w * 0.3, h * 0.55);
-        g.fillStyle(0xCCCCCC, 1);
-        g.fillRect(x - w * 0.1, y + h * 0.18, w * 0.2, h * 0.18);
+      case 'f12_coal': {
+        // Chrome exhaust stack belching a clump of black smoke — reads
+        // "rolling coal" at road distance.
+        g.fillStyle(0x999999, 1);                                       // stack pipe
+        g.fillRect(x - w * 0.08, y + h * 0.35, w * 0.16, h * 0.6);
+        g.fillStyle(0xCCCCCC, 1);                                       // chrome lip
+        g.fillRect(x - w * 0.12, y + h * 0.32, w * 0.24, h * 0.08);
+        g.fillStyle(0x1A1A1A, 1);                                       // smoke mass
+        g.fillCircle(x,            y + h * 0.20, w * 0.22);
+        g.fillCircle(x - w * 0.24, y + h * 0.14, w * 0.16);
+        g.fillCircle(x + w * 0.24, y + h * 0.12, w * 0.17);
+        g.fillStyle(0x333333, 0.9);                                     // lighter fringe
+        g.fillCircle(x - w * 0.38, y + h * 0.04, w * 0.11);
+        g.fillCircle(x + w * 0.40, y + h * 0.02, w * 0.12);
+        g.fillCircle(x,            y - h * 0.02, w * 0.13);
         break;
       }
       case 'f12_fireworks': {
@@ -3977,14 +3986,6 @@ export class Road {
         g.fillCircle(x - w * 0.3,  y + h * 0.72, w * 0.18);
         g.fillStyle(0xFFCC00, 0.9);
         g.fillCircle(x - w * 0.22, y + h * 0.35, w * 0.16);
-        break;
-      }
-      case 'f12_rocket': {
-        g.fillStyle(0xFF3300, 1);
-        g.fillRect(x - w * 0.12, y + h * 0.2, w * 0.24, h * 0.65);
-        g.fillTriangle(x, y, x - w * 0.22, y + h * 0.28, x + w * 0.22, y + h * 0.28);
-        g.fillStyle(0xFF8800, 1);
-        g.fillTriangle(x - w * 0.12, y + h * 0.85, x + w * 0.12, y + h * 0.85, x, y + h * 1.0);
         break;
       }
       case 'f12_emp': {

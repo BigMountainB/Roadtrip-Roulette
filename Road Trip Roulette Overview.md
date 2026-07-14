@@ -42,18 +42,23 @@ forked from DUI on **2026-07-04** into its own repo and Cloudflare Pages site. R
 into an App-Store-safe survival road trip and adds the commercial glue (encounters, part
 upgrades, survival + heat/fuel pressure).
 
-## Current snapshot (as of 2026-07-11)
+## Current snapshot (as of 2026-07-14)
 
-**Built & deployed:** rest-stop encounter system (13 cards) · car stats layer · part-upgrade
-system + garage UI · upgrades/buffs hooked into handling · survival rework (Awake/Hunger/Thirst
-+ restrooms/AM-BM) · engine overheating + aggressive fuel · Hatton rest stop.
+**Built & deployed:** rest-stop encounter system (dialogue trees + npcMemory) · **MISSION SYSTEM
+complete (Ch. 8, all 7 phases — 5 types, rep ladder ×1/×2.5/×5, 109 tests)** · car stats layer ·
+part-upgrade system + garage UI · upgrades/buffs hooked into handling · survival rework
+(Alertness/Bladder/Drinks/Food + restrooms/AM-BM + rest-stop mini bars) · engine overheating ·
+analog E↔F gas gauge (75-mi tank, 1:1 burn, reserve-tank upgrades) · 🎆 fireworks weapon (spikes
+removed) · phone-menu notification dots · Hatton rest stop.
 
 **Superseded vs the original design doc:** "DUI" framing removed (speeding stops only, reckless
 heat) · portable save/checkpoint codes removed (local LAST/SAVED kept) · sex worker → Hot Springs
-soak (PG-13).
+soak (PG-13) · party-clock HUD hidden (mechanics intact — arrival-status direction, see changelog).
 
-**Not yet built:** Mission system (Ch3 §17) · economy balance + Steam-demo cut + wishlist/tutorial
-(Ch3 §13/§22) · real NPC portrait art + real survival-item art (procedural placeholders in place).
+**Not yet built:** economy balance w/ real playtest data (mission `recordEarn` tagging ready;
+pickups+distance income the suspected inflators) · Steam-demo cut + wishlist/tutorial (Ch3
+§13/§22) · real NPC portrait art + survival-item art · 📌 Soundtrack Culture Packs (pinned below)
+· texting-relationship layer (pinned idea) · SAVE tile replacement (owner deciding).
 
 ## 📌 PINNED — Soundtrack Culture Packs (idea locked 2026-07-13, candidate for next build)
 
@@ -86,6 +91,43 @@ marketable hook.
 volume is the long pole (each pack = vehicle art + ~10 sprite images).
 
 ## Changelog (newest first)
+
+### 2026-07-13/14 — Mission system (all 7 phases) + fireworks/gauge/HUD batch (both DEPLOYED)
+**Deploy 1 — Mission system complete (Ch. 8 rev. B, built by a 7-agent relay):**
+- P1 dialogue trees (node schema, conditions, npcMemory→GLOBAL) · P2 MissionSystem.js + Delivery
+  (persisted offers, one-active-per-type, payout `(30+mi×3.5+risk+terms)×rep ×1/×2.5/×5`,
+  rewind-safe paid ledger) · P3 movable HUD chip + "+N JOBS" + JOBS list + drop-off cue ·
+  P4 Timed (party-clock budget) + Passenger (6 riders w/ nervous/carsick/fugitive/thrill quirks) ·
+  P5 Heat-escape + authored weather corridors (pass run, wind run, Legend no-chains dare) ·
+  P6 tier-up banners, REP readout, contact memory greetings incl. fail acknowledgment ·
+  P7 exploit hunt (rush clock-floor farm fixed; pay-clear halving built then REMOVED — owner call:
+  paid star-clears cost enough, escapes always pay full) + balance sim (`tests/balance_sim.mjs`;
+  mission $ on-target, pickups+distance gross-outearn missions — revisit w/ real playtest data).
+- Tests: `npm test` → tests/missions.test.mjs (109 passing).
+- Also: survival vignette centered/feathered/under-HUD; phone menu button-block auto-scale.
+
+**Deploy 2 — fireworks / gas gauge / HUD / notifications:**
+- Spike strip REMOVED everywhere (incl. SPIKED JACKS shop item — also kills the Legend heat-farm
+  loophole). 🎆 FIREWORKS in its slot: staged procedural show (rockets→bursts→crackle rings,
+  flash, shake, whistle/boom/crackle WebAudio), clears ALL on-screen cops, +1★ spectacle.
+- Analog E↔F gas gauge (ticking needle, red wedge, blinks near empty; movable id `gas`).
+  Beater tank = 75 mi at TRUE 1:1 burn (climb/boost/overheat still add). Fuel slot → reserve-tank
+  path: Jerry Can +25 / Aux Fuel Cell +50 / Reserve Gas Tank +100 ($120/$500/$900).
+- Survival bars reordered Alertness/Bladder/Drinks/Food, split into TWO movable editor units
+  (`survA`/`survB`); Alertness recolored to the caffeine-halo purple 0x9A5FE8 (drinks/food already
+  matched their pickup glows); compact unlabeled live-updating bars added to the rest-stop menu.
+- Party clock HIDDEN (`SHOW_PARTY_CLOCK=false`, mechanics intact; multiplier took its spot).
+  Future direction (owner): clock only surfaces as arrival status; bonuses from achievements,
+  jobs, friendships, texting relationships — texting app idea pinned alongside Soundtrack Packs.
+- Slow-motion start FIXED: Phaser `fps.smoothStep` off + world pre-rendered behind the 3.2s intro
+  as GPU warm-up. Vignette corner-blob bug fixed (created positioned/hidden + camera-ignored;
+  hidden in controls editor). Music starts on a random song across all 78 tracks (station pick
+  weighted by track count; saved default respected).
+- Phone menu: art contain-fits with ≥15px margin every edge (no cropping — the rotate-phone strip
+  was getting cut). RED NOTIFICATION DOTS on Tutorial/Calendar/Trophies/Garage/Maps/Messages
+  (`rtr.notif.v1` store + `window.__notif` bridge; clear-on-open, messages clear per-thread on
+  read). SAVE tile (old START OVER art): KEEP AS-IS for now — owner deciding its replacement
+  (autosave every 3s makes manual save redundant; slot candidates: Texting app, Jobs app).
 
 ### 2026-07-11 — Docs consolidation
 - Merged all project `.md` files into this single overview with a table of contents (Chapters 1–7).

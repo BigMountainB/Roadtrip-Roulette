@@ -321,11 +321,10 @@ export const ASSET_MANIFEST = {
     { key: 'tree_generic',        path: 'assets/trees/tree1.png' },
   ],
   weapons: [
-    { key: 'weapon_gun',         path: 'assets/weapons/gun.png' },
-    // weapon_fireworks has no PNG — BootScene generates it procedurally.
+    // weapon_coal + weapon_fireworks have no PNG — BootScene generates
+    // them procedurally.
     { key: 'weapon_paint_bomb',  path: 'assets/weapons/paint_bomb.png' },
     { key: 'weapon_disguise',    path: 'assets/weapons/disguise.png' },
-    { key: 'weapon_rocket',      path: 'assets/weapons/rocket.png' },
   ],
   cops: [
     // Police cop sprites are sourced from the car_back_police /

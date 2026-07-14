@@ -313,12 +313,19 @@ const _boot = () => {
   // License plate = the ACTIVE player slot's handle (their leaderboard name).
   // Each of the 3 title-screen slots is a full independent save; this bridge
   // always reads/writes whichever slot is currently selected.
+  // Any printable ASCII character is allowed (2026-07-13) EXCEPT the handful
+  // that are dangerous in HTML contexts (< > & " ' ` \) — plates are rendered
+  // into leaderboard innerHTML, so those stay out as defense-in-depth even
+  // though render sites also escape.
   const _sanitizePlate = (v) =>
-    String(v || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim().slice(0, 8);
-  // Normalized form for collision / blocklist checks — strip spaces so
-  // "ROAD TRIP", "ROADTRIP" and "roadtrip" all compare equal (mirrors the
+    String(v || '').toUpperCase()
+      .replace(/[^\x20-\x7E]/g, '')      // printable ASCII only
+      .replace(/[<>&"'`\\]/g, '')        // HTML/JS-context hazards
+      .trim().slice(0, 8);
+  // Normalized form for collision / blocklist checks — letters+digits only so
+  // "ROAD TRIP", "R.O.A.D-TRIP" and "roadtrip" all compare equal (mirrors the
   // future server's plate_name_norm column).
-  const _normPlate = (s) => _sanitizePlate(s).replace(/\s+/g, '');
+  const _normPlate = (s) => _sanitizePlate(s).replace(/[^A-Z0-9]/g, '');
   // Names that can't be claimed (impersonation / confusion).  The AUTHORITATIVE
   // filter lives server-side in Phase 2 (Worker + D1); this is the local
   // first-pass so obvious cases never even reach the server.

@@ -1229,8 +1229,7 @@ export class GameScene extends Phaser.Scene {
     this.keyF     = this.input.keyboard?.addKey('F');
     this.keyM     = this.input.keyboard?.addKey('M');
     this.keyR     = this.input.keyboard?.addKey('R');
-    // Q cycles the selected weapon (forward/backward rocket variants count
-    // as separate slots so the player can pick direction).
+    // Q cycles the selected weapon slot.
     this.keyQ     = this.input.keyboard?.addKey('Q');
     this.keySpace = this.input.keyboard?.addKey('SPACE');
     this.keyEnter = this.input.keyboard?.addKey('ENTER');
@@ -1434,6 +1433,12 @@ export class GameScene extends Phaser.Scene {
     // when idle; rebuilt per fire.  Nulled here so a scene restart can't
     // leave a stale show iterating destroyed graphics.
     this._fireworksShow  = null;
+    // Rolling-coal cloud state (💨 weapon) — rear smoke puffs + soot tint.
+    // Null when idle; rebuilt per fire (same lifecycle as _fireworksShow).
+    this._coalCloud      = null;
+    // Seconds the diesel smokescreen still blinds roadside speed traps —
+    // the trap-witnessing scan is skipped while > 0.
+    this._coalBlindTimer = 0;
     // ms-timestamp until which the player is invulnerable after a
     // scenery crash (tree / building / barrier).  During this window the
     // sprite blinks and _applyDamage is no-op.
@@ -2018,22 +2023,20 @@ export class GameScene extends Phaser.Scene {
           }
           if (Array.isArray(buys.f12)) {
             if (buys.weaponsOnResume && this.cops) {
-              this.cops.gunAmmo = Math.max(0, Math.min(18, buys.weaponsOnResume.gun || 0));
+              this.cops.coalAmmo = Math.max(0, Math.min(18, buys.weaponsOnResume.coal || 0));
               this.cops.f12Tokens = [];
-              if (this.cops.gunAmmo > 0) this.cops.f12Tokens.push('gun');
+              if (this.cops.coalAmmo > 0) this.cops.f12Tokens.push('coal');
               const add = (tok, n) => {
                 for (let i = 0; i < Math.min(3, n || 0); i++) this.cops.f12Tokens.push(tok);
               };
               add('fireworks',  buys.weaponsOnResume.fireworks);
               add('paint_bomb', buys.weaponsOnResume.donut);
-              add('rocket',     buys.weaponsOnResume.rocket);
               add('disguise',   buys.weaponsOnResume.disguise);
             }
             for (const t of buys.f12) {
-              const raw = t === 'gun' ? 'f12_gun'
+              const raw = t === 'coal' ? 'f12_coal'
                        : t === 'fireworks'   ? 'f12_fireworks'
                        : t === 'paint_bomb'  ? 'f12_paint'
-                       : t === 'rocket'      ? 'f12_rocket'
                        : t === 'disguise'    ? 'disguise' : null;
               if (raw) {
                 // disguise doesn't have an f12_* sprite key; pass the
@@ -3884,7 +3887,11 @@ export class GameScene extends Phaser.Scene {
     // Custom "No police" disables traps entirely — the witnessing scan never
     // runs, so no pursuit/ticket can ever start (the friend's warning text
     // above still fires as harmless flavor).
-    if (!this._awaitingFirstGameTap && !this._customFlags?.noPolice) {
+    // Rolling coal blinds the traps too — while the diesel smokescreen is
+    // live the witnessing scan simply doesn't run (the trooper can't clock
+    // a car he can't see through the smoke).
+    if (!this._awaitingFirstGameTap && !this._customFlags?.noPolice
+        && !(this._coalBlindTimer > 0)) {
       const segs = this.road?.segments;
       if (segs?.length) {
         const SEGN     = segs.length;
@@ -4429,7 +4436,7 @@ export class GameScene extends Phaser.Scene {
       this._showPopup(`NOW ENTERING\n${display.toUpperCase()}!\n${subtitle}`, '#44FF88');
     }
 
-    // ── Explosions / wrecks / gunshot stars timer ─────────────────────
+    // ── Explosions / wrecks timer ─────────────────────────────────────
     for (let i = this.explosions.length - 1; i >= 0; i--) {
       const fx = this.explosions[i];
       fx.timer += rawDt;
@@ -4448,6 +4455,10 @@ export class GameScene extends Phaser.Scene {
 
     // ── Fireworks show timer (🎆 weapon) ──────────────────────────────
     if (this._fireworksShow) this._updateFireworks(rawDt);
+
+    // ── Rolling-coal cloud timer (💨 weapon) ──────────────────────────
+    if (this._coalCloud) this._updateCoalCloud(rawDt);
+    if (this._coalBlindTimer > 0) this._coalBlindTimer -= rawDt;
 
     // ── Popup timer ───────────────────────────────────────────────────
     if (this.popupTimer > 0) this.popupTimer -= rawDt;
@@ -9076,7 +9087,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (type === 'f12') {
-      const invType = { f12_gun: 'gun', f12_fireworks: 'fireworks', f12_paint: 'paint_bomb', f12_rocket: 'rocket' }[sprite.type];
+      const invType = { f12_coal: 'coal', f12_fireworks: 'fireworks', f12_paint: 'paint_bomb' }[sprite.type];
       if (invType && !this.cops.canCarryMore(invType)) {
         // Inventory full for this type — don't consume the pickup so it
         // remains visible (and harvestable) if user later uses one.
@@ -9086,10 +9097,9 @@ export class GameScene extends Phaser.Scene {
       this.cops.addF12Token(sprite.type);
       this.stats?.recordWeaponCollected(invType ?? sprite.type);
       const labels = {
-        f12_gun:       '🔫 GUN ACQUIRED',
+        f12_coal:      '💨 ROLLING COAL',
         f12_fireworks: '🎆 FIREWORKS',
         f12_paint:     '🍩 DONUTS',
-        f12_rocket:    '🚀 ROCKET LAUNCHER',
       };
       this._showPopup(labels[sprite.type] ?? 'F12 TOKEN', '#AADDFF');
       this.effects.triggerShake(60, 0.002);
@@ -9165,10 +9175,10 @@ export class GameScene extends Phaser.Scene {
     // Stats: on-road hitchhiker is good below 0.70, bad at/above (no neutral).
     this.stats?.recordHitchhiker(r < 0.70 ? 'good' : 'bad');
 
-    // ── 14% — friendly biker, free rocket ─────────────────────────────
+    // ── 14% — friendly biker, free fireworks ──────────────────────────
     if (r < 0.14) {
-      this.cops.addF12Token('rocket');
-      this._showPopup('🤝 BIKER GAVE\nYOU A 🚀 ROCKET!', '#88FFCC');
+      this.cops.addF12Token('fireworks');
+      this._showPopup('🤝 BIKER GAVE\nYOU 🎆 FIREWORKS!', '#88FFCC');
       return;
     }
     // ── 14% — old hippie, free donuts ─────────────────────────────────
@@ -9263,29 +9273,23 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Order in which the weapon-cycle button steps through types. Rockets
-   *  appear twice (forward + backward) so the player can pick a direction. */
+  /** Order in which the weapon-cycle button steps through types. */
   static get WEAPON_CYCLE() {
-    // Every weapon (except fireworks and donuts, which aren't
-    // directional by design) has fwd/bwd variants so the player can fire
-    // in either direction.  Donuts drop behind the car and stall every
-    // cop on the road; fireworks launch straight up and scatter every
-    // cop on screen — each gets a single slot.
+    // Rolling coal belches a rear smokescreen (rear-only, single slot);
+    // donuts drop behind the car and stall every cop on the road;
+    // fireworks launch straight up and scatter every cop on screen.
     return [
-      'gun-fwd',     'gun-bwd',
-      'rocket-fwd',  'rocket-bwd',
+      'coal',
       'fireworks',
       'paint-bwd',
       'disguise',
     ];
   }
 
-  /** Resolve a cycle slot ('rocket-fwd' / 'paint-bwd' / etc.) back to the
-   *  underlying inventory token type stored in CopSystem.f12Tokens. */
+  /** Resolve a cycle slot ('paint-bwd' / etc.) back to the underlying
+   *  inventory token type stored in CopSystem.f12Tokens. */
   _baseWeaponType(slot) {
-    if (slot === 'rocket-fwd'  || slot === 'rocket-bwd')  return 'rocket';
-    if (slot === 'gun-fwd'     || slot === 'gun-bwd')     return 'gun';
-    if (slot === 'paint-bwd')                             return 'paint_bomb';
+    if (slot === 'paint-bwd') return 'paint_bomb';
     return slot;
   }
 
@@ -9295,12 +9299,9 @@ export class GameScene extends Phaser.Scene {
     return 'forward';
   }
 
-  /** Default cycle-slot for a freshly-picked-up base weapon — points at the
-   *  forward variant so legacy tap-to-fire keeps firing forward. */
+  /** Default cycle-slot for a freshly-picked-up base weapon. */
   _defaultSlotFor(baseType) {
     const map = {
-      rocket:     'rocket-fwd',
-      gun:        'gun-fwd',
       paint_bomb: 'paint-bwd',
     };
     return map[baseType] ?? baseType;
@@ -9345,7 +9346,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Cycle to the next available weapon (only stops on types the player
-   *  actually owns; rocket-fwd / rocket-bwd both require a 'rocket' token). */
+   *  actually owns). */
   _cycleWeapon() {
     const tokens = this.cops.f12Tokens;
     if (!tokens.length) return;
@@ -9366,10 +9367,7 @@ export class GameScene extends Phaser.Scene {
 
   _weaponLabels() {
     return {
-      'gun-fwd':     '🔫 GUN ▲ FWD',
-      'gun-bwd':     '🔫 GUN ▼ REAR',
-      'rocket-fwd':  '🚀 ROCKET ▲ FWD',
-      'rocket-bwd':  '🚀 ROCKET ▼ REAR',
+      coal:          '💨 ROLLING COAL',
       'paint-bwd':   '🍩 DONUTS',
       fireworks:     '🎆 FIREWORKS',
       disguise:      '🎭 DISGUISE',
@@ -10051,8 +10049,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Fire a specific weapon type directly (used by tap-on-icon).  If the
    *  player owns at least one of `baseType`, sets the selected slot to it
-   *  and fires.  Rocket defaults to forward (use Q / weapon-cycle for
-   *  rear-fire). */
+   *  and fires. */
   _fireWeaponByType(baseType) {
     if (!this.cops.f12Tokens.includes(baseType)) return;
     this._selectedWeapon = this._defaultSlotFor(baseType);
@@ -10106,10 +10103,13 @@ export class GameScene extends Phaser.Scene {
     // cop: the trooper voids the civil stop, becomes a live chaser, and you
     // escalate into the 4-5★ band.  Disguise / paint-bomb are non-aggressive
     // (hide / repaint) so they're exempt — same exclusion as the F12 cop-kill
-    // escalation.  Fireworks ARE aggressive (a pyrotechnic barrage at a
-    // trooper) but earn a short head start since the cruiser scatters.
+    // escalation.  Rolling coal is exempt too: smoke isn't brandishing a
+    // weapon — the trooper just can't see you.  Fireworks ARE aggressive
+    // (a pyrotechnic barrage at a trooper) but earn a short head start
+    // since the cruiser scatters.
     const weaponOnTrooper = (this._trapPursuitActive || this._trapStopHeld)
-                         && base !== 'disguise' && base !== 'paint_bomb';
+                         && base !== 'disguise' && base !== 'paint_bomb'
+                         && base !== 'coal';
     const result = this.cops.useF12Token(base, this.player.position, dir, this.traffic, this._collectEncounterCops());
     if (result?.ok) {
       if (weaponOnTrooper) {
@@ -10123,16 +10123,18 @@ export class GameScene extends Phaser.Scene {
         // survives as a live chaser, no head start.
         this.cops.weaponPulledAtTrap(this.player.position, base === 'fireworks' ? 2 : 0);
       }
-      // Weapons are infinite-use, but each fire has a 25% chance of
-      // attracting a wanted star (witnesses, gunshot acoustic flags,
-      // etc).  Custom mode bypasses since cops are typically off there.
-      // Disguise + paint_bomb don't make noise / aren't violent toward
-      // a target, so they don't roll the heat — disguise especially
-      // shouldn't re-add a star on the exact tap that zeroed them.
-      // Fireworks skip the roll too: they carry their OWN guaranteed +1★
-      // below (a public spectacle always draws heat).  Skip the roll
-      // entirely when we already escalated for pulling on the trooper.
-      const isHeatlessWeapon = (base === 'disguise' || base === 'fireworks' || base === 'paint_bomb');
+      // Some weapons roll a 25% wanted-star chance on fire (witnesses,
+      // acoustic flags, etc).  Custom mode bypasses since cops are
+      // typically off there.  Disguise + paint_bomb don't make noise /
+      // aren't violent toward a target, so they don't roll the heat —
+      // disguise especially shouldn't re-add a star on the exact tap that
+      // zeroed them.  Rolling coal is pure stealth (a smokescreen —
+      // nobody can see WHO to report).  Fireworks skip the roll too:
+      // they carry their OWN guaranteed +1★ below (a public spectacle
+      // always draws heat).  Skip the roll entirely when we already
+      // escalated for pulling on the trooper.
+      const isHeatlessWeapon = (base === 'disguise' || base === 'fireworks'
+                             || base === 'paint_bomb' || base === 'coal');
       if (!weaponOnTrooper && !isHeatlessWeapon
           && Math.random() < 0.25
           && Difficulty.mode?.() !== 'custom') {
@@ -10147,12 +10149,10 @@ export class GameScene extends Phaser.Scene {
           && Difficulty.mode?.() !== 'custom') {
         this.cops.addStar?.(1);
       }
-      const arrow = dir === 'backward' ? '▼ REAR' : '▲ FWD';
       const labels = {
-        gun:          `🔫 SHOT FIRED ${arrow}!`,
+        coal:         '💨 ROLLING COAL!',
         fireworks:    '🎆 FIREWORKS! — the law scatters',
         paint_bomb:   '🍩 DONUTS DEPLOYED!',
-        rocket:       `🚀 ROCKET ${arrow}!`,
         disguise:     '🎭 GOING DARK!',
       };
       this._showPopup(labels[base] ?? 'F12 USED!', '#AADDFF');
@@ -10160,10 +10160,17 @@ export class GameScene extends Phaser.Scene {
       // Fireworks show — bottle rockets up from the car, staggered radial
       // bursts, crackle rings, screen flash + shake on the big boom.
       if (base === 'fireworks') this._startFireworksShow();
+      // Rolling coal — thick diesel smoke erupts off the rear + a diesel
+      // rev growl; the lingering cloud also blinds speed traps for a few
+      // seconds (the witnessing scan is skipped while _coalBlindTimer > 0).
+      if (base === 'coal') {
+        this._startCoalCloud();
+        this._coalBlindTimer = 4;
+        this.audio?.playDieselRev?.();
+      }
 
       // Per-victim FX: project each car's last-known position to screen,
       // then drop the appropriate effect on top of it.
-      const isBomb = (base === 'rocket');
       for (const v of (result.victims ?? [])) {
         const relZ = v.position - this.player.position;
         if (Math.abs(relZ) > 80000) continue;
@@ -10179,13 +10186,6 @@ export class GameScene extends Phaser.Scene {
           ? (this.textures.exists('car_back_police') ? 'car_back_police' : 'cop_police')
           : this._carTexKey(v.colorSet, 'back');
         this._spawnWreck(sx, sy, sw, v.laneOffset, wreckTex);
-        if (base === 'gun') {
-          // Tiny star on the windshield (front half of the car).
-          this._spawnGunStar(sx, sy - sw * 0.12, sw);
-        } else if (isBomb) {
-          // Full explosion at the car's centre.
-          this._spawnExplosion(sx, sy, sw * 1.2);
-        }
       }
 
       // Override the weapon label so the escalation is the message that lands.
@@ -10197,14 +10197,94 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Tiny white star at gun-impact point — short-lived flash on the
-   *  victim's windshield. */
-  _spawnGunStar(sx, sy, sw) {
-    if (!this.explosions) this.explosions = [];
-    this.explosions.push({
-      sx, sy, sw: Math.max(8, sw * 0.5),
-      timer: 0, maxTimer: 0.18, kind: 'star',
-    });
+  /** 💨 Rolling-coal cloud — a ~1.2s eruption of dense black diesel smoke
+   *  off the car's rear.  Each puff spawns low at the exhaust, billows
+   *  backward/outward (down-screen + sideways), expands as it rises through
+   *  the frame, and lingers as a fading charcoal cloud for a few seconds —
+   *  the cloud is what "hits" the pursuing cops.  A brief soot tint hugs
+   *  the bottom screen edge on fire.  Fully procedural — drawn per-frame on
+   *  the explosion layer by _drawCoalCloud. */
+  _startCoalCloud() {
+    const inCockpit = !!this._cockpitActive;
+    const cx = inCockpit ? SCREEN_W * 0.5 : (this.playerSprite?.x ?? SCREEN_W / 2);
+    const cy = inCockpit ? SCREEN_H * 0.92 : ((this.playerSprite?.y ?? SCREEN_H * 0.8) + 6);
+    this._coalCloud = {
+      x: cx, y: cy,
+      emitT:   0,           // time spent belching
+      emitDur: 1.2,         // eruption length (puffs keep spawning)
+      spawnAcc: 0,
+      soot:    1,           // bottom-edge soot tint, fades out
+      puffs:   [],
+    };
+  }
+
+  /** Advance the coal cloud one frame — spawn fresh puffs while erupting,
+   *  then let the cloud drift back, expand and fade. */
+  _updateCoalCloud(dt) {
+    const c = this._coalCloud;
+    if (!c) return;
+    c.emitT += dt;
+    c.soot   = Math.max(0, c.soot - dt * 0.7);
+    // Belch phase — ~26 puffs/sec of overlapping soft dark blobs, two
+    // exhaust mouths (left/right of the bumper) so the wall reads wide.
+    if (c.emitT < c.emitDur) {
+      c.spawnAcc += dt * 26;
+      while (c.spawnAcc >= 1) {
+        c.spawnAcc -= 1;
+        const side = Math.random() < 0.5 ? -1 : 1;
+        c.puffs.push({
+          x:    c.x + side * (14 + Math.random() * 26),
+          y:    c.y - Math.random() * 8,
+          vx:   side * (18 + Math.random() * 55) + (Math.random() - 0.5) * 30,
+          vy:   28 + Math.random() * 70,                    // billows down-screen (behind the car)
+          r:    10 + Math.random() * 16,
+          grow: 26 + Math.random() * 30,                    // px/s expansion
+          life: 2.2 + Math.random() * 1.6,                  // lingers as the cloud
+          maxLife: 0,
+          // Charcoal band — near-black cores through dark-gray edges.
+          shade: [0x0A0A0A, 0x161616, 0x222222, 0x2E2E2E][(Math.random() * 4) | 0],
+          wobble: Math.random() * 6.283,
+        });
+        const p = c.puffs[c.puffs.length - 1];
+        p.maxLife = p.life;
+      }
+    }
+    // Puff physics — drag, slow expansion, lazy sideways wobble.
+    for (let i = c.puffs.length - 1; i >= 0; i--) {
+      const p = c.puffs[i];
+      p.x += (p.vx + Math.sin((this.gameTime ?? 0) * 1.7 + p.wobble) * 9) * dt;
+      p.y += p.vy * dt;
+      p.vx *= (1 - 0.9 * dt);
+      p.vy *= (1 - 0.7 * dt);
+      p.r  += p.grow * dt;
+      p.grow *= (1 - 0.5 * dt);
+      p.life -= dt;
+      if (p.life <= 0) c.puffs.splice(i, 1);
+    }
+    if (c.emitT >= c.emitDur && !c.puffs.length) this._coalCloud = null;
+  }
+
+  /** Paint the live coal cloud onto the explosion layer — many soft dark
+   *  circles (double-stamped: charcoal core + wider translucent skirt) so
+   *  the overlaps clump into one rolling black mass, plus the bottom-edge
+   *  soot tint while fresh. */
+  _drawCoalCloud(g) {
+    const c = this._coalCloud;
+    if (!c || !g) return;
+    if (c.soot > 0) {
+      g.fillStyle(0x0C0C0C, 0.28 * c.soot);
+      g.fillRect(0, SCREEN_H - 46, SCREEN_W, 46);
+      g.fillStyle(0x0C0C0C, 0.16 * c.soot);
+      g.fillRect(0, SCREEN_H - 90, SCREEN_W, 44);
+    }
+    for (const p of c.puffs) {
+      const t = Math.max(0, p.life / p.maxLife);          // 1 → 0 over life
+      const a = 0.66 * (t < 0.35 ? t / 0.35 : 1);         // hold dense, fade at the end
+      g.fillStyle(p.shade, a * 0.45);                     // wide soft skirt
+      g.fillCircle(p.x, p.y, p.r * 1.45);
+      g.fillStyle(p.shade, a);                            // dense core
+      g.fillCircle(p.x, p.y, p.r);
+    }
   }
 
   /** 🎆 Fireworks show — 3-5 bottle rockets streak up from the car over
@@ -13740,7 +13820,7 @@ export class GameScene extends Phaser.Scene {
         } else if (sp.collectibleType === 'f12') {
           // Hide weapon pickups when player is maxed (3-per-type cap).
           // Maps the route's 'f12_*' to the inventory's normalised name.
-          const invType = { f12_gun: 'gun', f12_fireworks: 'fireworks', f12_paint: 'paint_bomb', f12_rocket: 'rocket' }[sp.type];
+          const invType = { f12_coal: 'coal', f12_fireworks: 'fireworks', f12_paint: 'paint_bomb' }[sp.type];
           if (invType && !this.cops.canCarryMore(invType)) continue;
           texKey = sp.texKey;
         } else if (sp.collectibleType === 'steroid' || sp.collectibleType === 'narcan') {
@@ -13832,11 +13912,14 @@ export class GameScene extends Phaser.Scene {
     const ORANGE = [0xD96A12, 0xE0902E, 0xFFC97A];
     const PURPLE = [0x7A3FD9, 0x9A5FE8, 0xD8B8FF];
     const FESTIVE = [0xE03A3A, 0xFF8C2E, 0xFFD24D];   // red→gold — fireworks only
+    const CHARCOAL = [0x3A3A3A, 0x5A5A5A, 0x8C8C8C];  // smoke-gray — rolling coal only
     if (sp.collectibleType === 'steroid' || sp.collectibleType === 'narcan') return GOLD;   // invincibility / quad shot
     if (sp.collectibleType === 'f12') {
-      // Fireworks get their own festive red/gold halo so the party
-      // pickup reads differently from the standard weapon amber.
+      // Fireworks get their own festive red/gold halo, rolling coal a
+      // charcoal smoke halo — each reads differently from the standard
+      // weapon amber at distance.
       if (sp.type === 'f12_fireworks') return FESTIVE;
+      if (sp.type === 'f12_coal')      return CHARCOAL;
       return GOLD.slice(0, 3);   // weapons keep the old amber-gold
     }
     if (sp.collectibleType === 'vice') {
@@ -13866,20 +13949,6 @@ export class GameScene extends Phaser.Scene {
     for (const exp of this.explosions) {
       const prog  = exp.timer / exp.maxTimer;  // 0→1
       const alpha = 1 - prog;
-      // ── Gunshot star — small white burst with 4 short spokes. ─────
-      if (exp.kind === 'star') {
-        const s = exp.sw * (0.5 + prog * 0.4);
-        fireG.fillStyle(0xFFFFFF, alpha * 0.95);
-        // Cross
-        fireG.fillTriangle(exp.sx - s * 0.6, exp.sy,         exp.sx, exp.sy - s * 0.25, exp.sx, exp.sy + s * 0.25);
-        fireG.fillTriangle(exp.sx + s * 0.6, exp.sy,         exp.sx, exp.sy - s * 0.25, exp.sx, exp.sy + s * 0.25);
-        fireG.fillTriangle(exp.sx, exp.sy - s * 0.6,         exp.sx - s * 0.25, exp.sy, exp.sx + s * 0.25, exp.sy);
-        fireG.fillTriangle(exp.sx, exp.sy + s * 0.6,         exp.sx - s * 0.25, exp.sy, exp.sx + s * 0.25, exp.sy);
-        // Centre highlight
-        fireG.fillStyle(0xFFFFAA, alpha * 0.95);
-        fireG.fillCircle(exp.sx, exp.sy, s * 0.18);
-        continue;
-      }
       // ── Wreck — actual car sprite spinning + smoke trail. ─────────
       if (exp.kind === 'wreck') {
         const w = exp.sw * 0.9;
@@ -13936,6 +14005,9 @@ export class GameScene extends Phaser.Scene {
     // 🎆 Fireworks show overlays the same high-depth layer so the bursts
     // paint over buildings / vehicles / signs.
     this._drawFireworks(fireG);
+    // 💨 Rolling-coal cloud shares the layer — the smoke wall must paint
+    // over the road + the cops driving into it.
+    this._drawCoalCloud(fireG);
   }
 
   /** Screen-level critical damage warning shared by chase and cockpit views. */
@@ -17012,18 +17084,17 @@ export class GameScene extends Phaser.Scene {
     // edge.  Disguise is broken out to its OWN button on the opposite
     // edge (tucked under the Mute button) — handled separately below.
     const WEAPONS = [
-      { id: 'gun',         color: 0x888888, label: '🔫', tex: 'weapon_gun'         },
-      { id: 'fireworks',   color: 0xE04455, label: '🎆', tex: 'weapon_fireworks'  },
+      { id: 'coal',        color: 0x555555, label: '💨', tex: 'weapon_coal'       },
       { id: 'paint_bomb',  color: 0xFFEE00, label: '🍩', tex: 'weapon_paint_bomb' },
-      { id: 'rocket',      color: 0xFF3300, label: '🚀', tex: 'weapon_rocket'     },
+      { id: 'fireworks',   color: 0xE04455, label: '🎆', tex: 'weapon_fireworks'  },
     ];
     const DISGUISE = { id: 'disguise', color: 0xFFCC00, label: '🎭', tex: 'weapon_disguise' };
 
     const counts = {};
     for (const t of tokens) counts[t] = (counts[t] ?? 0) + 1;
-    // Gun is ammo-counted (6 bullets per pickup) so its count is the raw
-    // bullet total, not the number of stacked tokens.
-    counts.gun = this.cops.gunAmmo ?? 0;
+    // Rolling coal is charge-counted (6 clouds per pickup) so its count is
+    // the raw cloud total, not the number of stacked tokens.
+    counts.coal = this.cops.coalAmmo ?? 0;
     const topTok = tokens.length ? tokens[tokens.length - 1] : null;
 
     // Weapon column anchors to the dominant-thumb edge — right by default,
@@ -17054,7 +17125,7 @@ export class GameScene extends Phaser.Scene {
       const dgo    = this._ctrlOff('disguise');
       const dIconW = 58 * dgo.s, dIconH = 56 * dgo.s;
       const dx = baseColX + dgo.dx;
-      const dy = baseYTop + row * baseRow + dgo.dy;   // row === WEAPONS.length (below rocket)
+      const dy = baseYTop + row * baseRow + dgo.dy;   // row === WEAPONS.length (below the last weapon)
       const dCount = counts.disguise ?? 0;
       this._renderF12Cell(DISGUISE, dx, dy, dCount, dCount > 0 && topTok === 'disguise', dgo.s);
       this._disguiseHitBounds = { x: dx, y: dy, w: dIconW, h: dIconH };
@@ -17358,13 +17429,13 @@ export class GameScene extends Phaser.Scene {
     const ahead    = 30 + ((Math.random() * 50) | 0);
     const seg      = segs[(startSeg + ahead) % segs.length];
     if (!seg) return;
-    // 50/50 forward / rear so F12 drops at high stars stay balanced.
+    // Rear smokescreen vs. screen-clearing tools so F12 drops at high
+    // stars stay balanced.
     const r = Math.random();
     let f12Type, texKey;
-    if (r < 0.30)      { f12Type = 'f12_gun';    texKey = 'weapon_gun'; }
-    else if (r < 0.55) { f12Type = 'f12_rocket'; texKey = 'weapon_rocket'; }
+    if (r < 0.30)      { f12Type = 'f12_coal';      texKey = 'weapon_coal'; }
     else if (r < 0.80) { f12Type = 'f12_fireworks'; texKey = 'weapon_fireworks'; }
-    else               { f12Type = 'f12_paint';  texKey = 'weapon_paint_bomb'; }
+    else               { f12Type = 'f12_paint';     texKey = 'weapon_paint_bomb'; }
     seg.sprites.push({
       type:            f12Type,
       texKey,
@@ -17426,7 +17497,7 @@ export class GameScene extends Phaser.Scene {
       accessories: { bumper: !!acc.bumper, traction: !!acc.traction, nos: Math.max(0, Math.min(3, acc.nos ?? 0)) },
       owned: (this.registry?.get?.('ownedVehicles') ?? ['beater']),
       vices, unlocked,
-      weapons: { gun: this.cops?.gunAmmo ?? 0, fireworks: cnt('fireworks'), donut: cnt('paint_bomb'), rocket: cnt('rocket'), disguise: cnt('disguise') ? 1 : 0 },
+      weapons: { coal: this.cops?.coalAmmo ?? 0, fireworks: cnt('fireworks'), donut: cnt('paint_bomb'), disguise: cnt('disguise') ? 1 : 0 },
       radar: !!this._hasRadar,
       position: this.player?.position ?? 0,
       odometer: this._odometer ?? 0,
@@ -17552,13 +17623,14 @@ export class GameScene extends Phaser.Scene {
       if (this.cops) {
         if (typeof s.stars === 'number') this.cops.stars = Math.max(0, Math.min(5, s.stars));
         if (s.weapons) {
-          this.cops.gunAmmo = Math.max(0, Math.min(18, s.weapons.gun || 0));
+          // (Old saves carry `weapons.gun` — silently dropped; the gun was
+          // replaced by rolling coal.)
+          this.cops.coalAmmo = Math.max(0, Math.min(18, s.weapons.coal || 0));
           this.cops.f12Tokens = [];
-          if (this.cops.gunAmmo > 0) this.cops.f12Tokens.push('gun');
+          if (this.cops.coalAmmo > 0) this.cops.f12Tokens.push('coal');
           const add = (tok, n) => { for (let i = 0; i < Math.min(3, n || 0); i++) this.cops.f12Tokens.push(tok); };
           add('fireworks',  s.weapons.fireworks);
           add('paint_bomb', s.weapons.donut);
-          add('rocket',     s.weapons.rocket);
           add('disguise',   s.weapons.disguise);
         }
       }
@@ -18852,13 +18924,13 @@ export class GameScene extends Phaser.Scene {
       this.score = 100000;
       // All weapons available from the start (sandbox).  Custom fire is
       // infinite (useF12Token never decrements), so we just seed the
-      // inventory to full: gun to max ammo + a full stack of every
-      // deployable and the disguise so all slots show and are usable.
+      // inventory to full: rolling coal to max clouds + a full stack of
+      // every deployable and the disguise so all slots show and are usable.
       if (this.cops) {
         this.cops.f12Tokens = [];
-        this.cops.gunAmmo   = 18;
-        this.cops.f12Tokens.push('gun');
-        for (const w of ['fireworks', 'paint_bomb', 'rocket', 'disguise']) {
+        this.cops.coalAmmo  = 18;
+        this.cops.f12Tokens.push('coal');
+        for (const w of ['fireworks', 'paint_bomb', 'disguise']) {
           for (let i = 0; i < 3; i++) this.cops.f12Tokens.push(w);
         }
       }

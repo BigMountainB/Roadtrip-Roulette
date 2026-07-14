@@ -1222,6 +1222,57 @@ export class AudioSystem {
     }
   }
 
+  /** 💨 Diesel rev growl — fired once per rolling-coal blast.  A low
+   *  sawtooth burble (pitch lurches up then settles like a floored diesel)
+   *  with a slower square sub underneath and a lowpassed exhaust-noise bed.
+   *  Procedural — no audio asset needed; routed through the master gain
+   *  like every cue. */
+  playDieselRev() {
+    if (!this.ready || this.muted || this._musicPaused) return;
+    const ctx = this._ctx;
+    if (!ctx || ctx.state !== 'running' || !this._master) return;
+    const t   = ctx.currentTime;
+    const dur = 1.1;
+    // Burble — sawtooth revving 55 → 95 → 62 Hz over the blast.
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(55, t);
+    osc.frequency.exponentialRampToValueAtTime(95, t + 0.22);
+    osc.frequency.exponentialRampToValueAtTime(62, t + dur);
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(0.26, t + 0.06);
+    env.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    osc.connect(env); env.connect(this._master);
+    osc.start(t); osc.stop(t + dur + 0.02);
+    // Sub — square an octave down for the chest-thump idle knock.
+    const sub  = ctx.createOscillator();
+    const senv = ctx.createGain();
+    sub.type = 'square';
+    sub.frequency.setValueAtTime(28, t);
+    sub.frequency.exponentialRampToValueAtTime(46, t + 0.22);
+    sub.frequency.exponentialRampToValueAtTime(31, t + dur);
+    senv.gain.setValueAtTime(0.0001, t);
+    senv.gain.linearRampToValueAtTime(0.10, t + 0.06);
+    senv.gain.exponentialRampToValueAtTime(0.0006, t + dur);
+    sub.connect(senv); senv.connect(this._master);
+    sub.start(t); sub.stop(t + dur + 0.02);
+    // Exhaust noise — lowpassed rumble bed that swells with the rev.
+    const len = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d   = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 1.5;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const lp  = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(320, t);
+    lp.frequency.exponentialRampToValueAtTime(700, t + 0.22);
+    lp.frequency.exponentialRampToValueAtTime(240, t + dur);
+    const ng = ctx.createGain(); ng.gain.value = 0.16;
+    src.connect(lp); lp.connect(ng); ng.connect(this._master);
+    src.start(t);
+  }
+
   get currentName()  { return STATIONS[this.currentStation].name; }
   get currentColor() { return STATIONS[this.currentStation].color; }
 

@@ -25,11 +25,10 @@
  * Top speed for every cop: COP_TOP_MPH.  Rear cops close unless the
  * player is already faster than that ceiling.
  *
- * F12 tokens (f12_gun / f12_fireworks / f12_paint / f12_rocket → normalized):
- *   'gun'         — instantly removes one cop in front
+ * F12 tokens (f12_coal / f12_fireworks / f12_paint → normalized):
+ *   'coal'        — Rolling Coal: rear diesel-smoke cloud, pursuers lose sight
  *   'fireworks'   — show over the car: EVERY cop on screen scatters (+1★)
  *   'paint_bomb'  — 'Donuts': every cop stops chasing for 15s (no kills)
- *   'rocket'      — directional (forward / backward / auto), kills ≤4
  *   'disguise'    — resets stars + cops entirely (hitchhiker reward)
  */
 import {
@@ -51,10 +50,9 @@ const ONCOMING_UNITS   = MAX_SPEED * (70 / 120);
 
 // Normalize raw sprite token names → internal names used in useF12Token
 const TOKEN_MAP = {
-  f12_gun:    'gun',
+  f12_coal:   'coal',
   f12_fireworks: 'fireworks',
   f12_paint:  'paint_bomb',
-  f12_rocket: 'rocket',
 };
 
 export class CopSystem {
@@ -63,10 +61,11 @@ export class CopSystem {
     this.starTimer     = 0;
     this.cops          = [];
     this.f12Tokens     = [];
-    // Gun ammunition pool — each pickup adds 6 bullets (cap 18 = 3 pickups
-    // max).  The 'gun' token in f12Tokens is present whenever gunAmmo > 0;
-    // each fire decrements ammo, and the token is removed when ammo hits 0.
-    this.gunAmmo       = 0;
+    // Rolling-coal charge pool — each pickup adds 6 clouds (cap 18 = 3
+    // pickups max).  The 'coal' token in f12Tokens is present whenever
+    // coalAmmo > 0; each fire burns a charge, and the token is removed
+    // when the pool hits 0.
+    this.coalAmmo      = 0;
     this.lastStateLine = -1;
 
     this._spawnCooldown = 0;
@@ -357,29 +356,30 @@ export class CopSystem {
   addF12Token(rawType) {
     const type = TOKEN_MAP[rawType] ?? rawType;
     if (!this.canCarryMore(type)) return;
-    if (type === 'gun') {
-      // Each gun pickup grants 6 bullets up to a cap of 18.  The token
-      // is present whenever gunAmmo > 0 (driven by the inventory render).
-      this.gunAmmo = Math.min(18, this.gunAmmo + 6);
-      if (!this.f12Tokens.includes('gun')) this.f12Tokens.push('gun');
+    if (type === 'coal') {
+      // Each coal pickup grants 6 clouds up to a cap of 18.  The token
+      // is present whenever coalAmmo > 0 (driven by the inventory render).
+      this.coalAmmo = Math.min(18, this.coalAmmo + 6);
+      if (!this.f12Tokens.includes('coal')) this.f12Tokens.push('coal');
       return;
     }
     this.f12Tokens.push(type);
   }
 
-  /** Per-type cap.  Gun caps at 18 bullets (= 3 pickups); other types
-   *  cap at 3 tokens. */
+  /** Per-type cap.  Rolling coal caps at 18 clouds (= 3 pickups); other
+   *  types cap at 3 tokens. */
   canCarryMore(type) {
-    if (type === 'gun') return this.gunAmmo < 18;
+    if (type === 'coal') return this.coalAmmo < 18;
     let count = 0;
     for (const t of this.f12Tokens) if (t === type) count++;
     return count < 3;
   }
 
-  /** Inventory count surfaced in the HUD.  Gun returns its ammo total
-   *  (so the badge reads ×6/×12/×18); other types return their stack size. */
+  /** Inventory count surfaced in the HUD.  Rolling coal returns its cloud
+   *  total (so the badge reads ×6/×12/×18); other types return their stack
+   *  size. */
   countOf(type) {
-    if (type === 'gun') return this.gunAmmo;
+    if (type === 'coal') return this.coalAmmo;
     let n = 0;
     for (const t of this.f12Tokens) if (t === type) n++;
     return n;
@@ -392,18 +392,18 @@ export class CopSystem {
     // picking up resupply.  Heat (25% star roll per fire) is added
     // at the GameScene call site.
     const isCustom = Difficulty.mode?.() === 'custom';
-    if (type === 'gun') {
+    if (type === 'coal') {
       if (!isCustom) {
-        if (this.gunAmmo <= 0) return { ok: false, victims: [], weapon: type };
-        this.gunAmmo--;
-        if (this.gunAmmo === 0) {
-          const i = this.f12Tokens.indexOf('gun');
+        if (this.coalAmmo <= 0) return { ok: false, victims: [], weapon: type };
+        this.coalAmmo--;
+        if (this.coalAmmo === 0) {
+          const i = this.f12Tokens.indexOf('coal');
           if (i !== -1) this.f12Tokens.splice(i, 1);
         }
-      } else if (!this.f12Tokens.includes('gun')) {
-        // Sandbox safety — gun must always be in the inventory for
+      } else if (!this.f12Tokens.includes('coal')) {
+        // Sandbox safety — coal must always be in the inventory for
         // the HUD to show the slot.  Re-add if it was somehow stripped.
-        this.f12Tokens.push('gun');
+        this.f12Tokens.push('coal');
       }
     } else {
       const idx = this.f12Tokens.indexOf(type);
@@ -430,7 +430,7 @@ export class CopSystem {
 
     // Capture each victim's position + lane before splicing so the
     // caller (GameScene) can project them to screen space and spawn
-    // explosions / wreck-spins / gunshot stars at the right spot.
+    // explosions / wreck-spins at the right spot.
     const victims = [];
     const removeAll = (entries) => {
       let copKills = 0;
@@ -453,18 +453,40 @@ export class CopSystem {
       side === 'backward' ? (rel < 0) : (rel > 0);
 
     switch (type) {
-      case 'gun': {
-        // Forward OR backward burst — up to 3 cars within 8000 units in the
-        // chosen direction.  Cops AND civilian traffic both get hit.
-        const side = direction === 'backward' ? 'backward' : 'forward';
-        const targets = pool
-          .filter((e) => {
-            const rel = e.pos - playerPos;
-            return inDirection(rel, side) && Math.abs(rel) < 8000;
-          })
-          .sort((a, b) => Math.abs(a.pos - playerPos) - Math.abs(b.pos - playerPos))
-          .slice(0, 3);
-        removeAll(targets);
+      case 'coal': {
+        // Rolling coal — a rear-only diesel smokescreen.  Every ACTIVE
+        // pursuer behind the player (within the cloud's reach) drives into
+        // the smoke, loses sight, falls back and despawns — the same
+        // fleeing pipeline fireworks use, but flagged `_fleeNoSwerve` so
+        // they sink straight back into the cloud instead of swerving for
+        // the shoulder.  STEALTHY: no kills, no stars, no escalation —
+        // firing with nobody behind just wastes the cloud.  Parked /
+        // roadside encounter sprites are untouched (smoke isn't a weapon).
+        let smoked = 0;
+        for (const cop of this.cops) {
+          const rel = cop.position - playerPos;
+          if (inDirection(rel, 'backward') && Math.abs(rel) < 15000) {
+            cop.fleeing       = true;
+            cop._fleeNoSwerve = true;
+            cop._fleeTimer    = 1.6 + Math.random() * 0.8;   // staggered fade-outs
+            cop.trapPursuit   = false;
+            cop.parked        = false;
+            cop._pitProgress  = 0;
+            cop._pitArmed     = false;
+            smoked++;
+          }
+        }
+        if (smoked > 0) {
+          // Nobody can see you to bust you — reset the counters and hold
+          // off the replacement spawn so the escape actually registers
+          // (same guard as fireworksScatter / weaponPulledAtTrap).
+          this.bumpCount      = 0;
+          this.rearBumpCount  = 0;
+          this.headOnCount    = 0;
+          this.pitCount       = 0;
+          this.arrestPending  = false;
+          this._spawnCooldown = Math.max(this._spawnCooldown ?? 0, 2.5);
+        }
         break;
       }
 
@@ -496,22 +518,6 @@ export class CopSystem {
         break;
       }
 
-      case 'rocket': {
-        // Directional rocket — wipes EVERY car on the chosen side (no
-        // cap).  Auto picks whichever side has more targets.
-        let side = direction;
-        if (side !== 'forward' && side !== 'backward') {
-          let front = 0, rear = 0;
-          for (const e of pool) {
-            if (e.pos - playerPos > 0) front++; else rear++;
-          }
-          side = front >= rear ? 'forward' : 'backward';
-        }
-        const targets = pool.filter((e) => inDirection(e.pos - playerPos, side));
-        removeAll(targets);
-        break;
-      }
-
       case 'disguise':
         this.stars     = 0;
         this.starTimer = 0;
@@ -529,17 +535,14 @@ export class CopSystem {
     }
     // ── Cop-killer escalation ──────────────────────────────────────────
     // A WEAPON kill on a cop does NOT cool you down — it makes them want you
-    // MORE.  Each cop death (gun/rocket — NOT donuts) adds +1★,
-    // so taking out two cruisers in one blast adds +2★.  The blast clears the
-    // immediate threat + resets the arrest counters, but you've bought only a
-    // 3-5 mile head start before fresh pursuit re-engages — time to reach a
-    // rest stop for a disguise / paint job / Park & Ride bus.
+    // MORE.  Each cop death adds +1★, so taking out two cruisers in one
+    // blast adds +2★.  Kept live even though no current weapon records
+    // kills (fireworks scatter, coal smokes, donuts stall — nobody dies):
+    // any future lethal weapon that pushes `victims` re-arms this path.
     const copKills = victims.filter(v => v.isCop).length;
     if (copKills > 0 && type !== 'paint_bomb' && type !== 'disguise') {
       this.escalateForCopKill(playerPos, copKills);
     }
-    // (Fireworks never records cop kills — cops flee, they don't die — so it
-    // can't reach this escalation by construction.)
     // Returns the victim list so GameScene can spawn per-car FX.
     return { ok: true, victims, weapon: type };
   }
@@ -588,10 +591,10 @@ export class CopSystem {
   /** Player pulled a WEAPON on a parked speed-trap trooper instead of pulling
    *  over.  Voids the civil stop: every surviving trap pursuer becomes a live
    *  chaser (un-parked, back up to speed) and you land at a flat 2★ — a real
-   *  but escapable offense, milder than gunning down an active pursuer (4-5★).
+   *  but escapable offense, milder than taking out an active pursuer (4-5★).
    *
    *  Stars are SET, not added: the triggering weapon may itself have just
-   *  "killed" the trooper (e.g. a rocket fired backward), which runs
+   *  "killed" the trooper (a future lethal weapon), which runs
    *  escalateForCopKill → 4★ inside useF12Token.  Setting to 2 here overwrites
    *  that in the same frame so the two can't stack into 5★.  Grace is cleared
    *  so this behaves like normal 2★ heat, not a 4-5★ weapon-kill head start. */
@@ -713,13 +716,18 @@ export class CopSystem {
       const dist  = cop.position - playerPos;
       const aDist = Math.abs(dist);
 
-      // Fireworks scatter — the cop breaks pursuit, swerves for the shoulder,
-      // and drops back until its retreat timer expires, then despawns.  Skips
+      // Fireworks scatter / coal smoke-out — the cop breaks pursuit and
+      // drops back until its retreat timer expires, then despawns.  Skips
       // all pursuit AI so a fleeing cop can never PIT / ram on the way out.
+      // Fireworks flee swerves for the shoulder; rolling coal sets
+      // `_fleeNoSwerve` so the blinded cop just sinks straight back into
+      // the smoke (lost sight — no dramatic swerve).
       if (cop.fleeing) {
         cop._fleeTimer = (cop._fleeTimer ?? 2.5) - dt;
-        cop.laneOffset += (cop.laneOffset >= 0 ? 1 : -1) * 2.4 * dt;
-        cop.speed = Math.max(0, playerSpeed * 0.5);
+        if (!cop._fleeNoSwerve) {
+          cop.laneOffset += (cop.laneOffset >= 0 ? 1 : -1) * 2.4 * dt;
+        }
+        cop.speed = Math.max(0, playerSpeed * (cop._fleeNoSwerve ? 0.35 : 0.5));
         cop.position += cop.speed * dt;
         if (cop._fleeTimer <= 0) this.cops.splice(i, 1);
         continue;

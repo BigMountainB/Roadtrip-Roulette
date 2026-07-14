@@ -86,7 +86,7 @@ const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
 // pharmacy is the dedicated vice shop and isn't gated by exposure).
 const SHOP_VICES = {
   gas:     ['sushi', 'burrito'],                       // Beer + weed at the pump
-  hunting: ['sushi'],                               // Beer at the gun store
+  hunting: ['sushi'],                               // Beer at the outfitter
   charge:  ['gummies', 'hotdog', 'burrito'],                // Hippie EV crowd
   camp:    ['coma', 'slushie', 'caffeine'],          // Sketchy back-country
   dealer:  ['energy'],                               // Dealership = blow
@@ -158,10 +158,10 @@ const SECTIONS = {
   hunting: {
     label: '🦌  HUNTING',
     items: [
-      { id: 'gun',     label: 'PISTOL',           icon: 'weapon_gun',         cost:  500, desc: '+6 bullets',                                payload: { f12: 'gun' } },
-      // Rocket Launcher now ships 3 rockets per purchase (the launcher
-      // is the asset, the rockets are ammo).  Triple-stacks the F12 token.
-      { id: 'rocket',  label: 'ROCKET LAUNCHER',  icon: 'weapon_rocket',      cost: 1000, desc: '+3 directional rockets',                    payload: { f12: 'rocket', f12Count: 3 } },
+      { id: 'coal',    label: 'DIESEL TUNE',      icon: 'weapon_coal',        cost:  800, desc: '+6 clouds — smoke out the law behind you',  payload: { f12: 'coal' } },
+      // Fireworks ship 3 shows per purchase (full stack).  Triple-stacks
+      // the F12 token via f12Count.
+      { id: 'fireworks', label: 'FIREWORKS',      icon: 'weapon_fireworks',   cost: 1000, desc: '+3 shows — scatters every cop on screen',   payload: { f12: 'fireworks', f12Count: 3 } },
       { id: 'paint',   label: 'DONUTS',           icon: 'weapon_paint_bomb',  cost:   50, desc: '+1 — all cops stop chasing 15s',            payload: { f12: 'paint_bomb' } },
       { id: 'camo',    label: '🥷  NEW PASSPORT', cost: 2000, desc: 'Single-use: clears 2 stars on resume',                                  payload: { camouflage: true } },
     ],
@@ -1590,8 +1590,8 @@ export class RestStopScene extends Phaser.Scene {
     // Stats: good < 0.55, bad (robbery) < 0.90, else neutral ("bailed").
     this._stats?.recordHitchhiker(r < 0.55 ? 'good' : (r < 0.90 ? 'bad' : 'neutral'));
     if (r < 0.18) {
-      this._purchases.f12.push('rocket');
-      return { message: '🤝 Friendly biker — gave you a ROCKET!' };
+      this._purchases.f12.push('fireworks');
+      return { message: '🤝 Friendly biker — gave you FIREWORKS!' };
     }
     if (r < 0.40) {
       const bonus = 800;
@@ -1757,8 +1757,8 @@ export class RestStopScene extends Phaser.Scene {
     if (p.clearStars) this._purchases.clearStars = true;
     if (p.scoreBonus) this._purchases.scoreBonus += p.scoreBonus;
     if (p.f12) {
-      // f12Count lets a single purchase stack multiple tokens (Rocket
-      // Launcher ships 3 rockets per buy).  Defaults to 1 for the rest.
+      // f12Count lets a single purchase stack multiple tokens (Fireworks
+      // ship 3 shows per buy).  Defaults to 1 for the rest.
       const _f12N = Math.max(1, Math.floor(p.f12Count ?? 1));
       for (let _i = 0; _i < _f12N; _i++) this._purchases.f12.push(p.f12);
     }

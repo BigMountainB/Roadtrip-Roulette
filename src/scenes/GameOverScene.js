@@ -192,16 +192,17 @@ export class GameOverScene extends Phaser.Scene {
         .setDisplaySize(SCREEN_W, SCREEN_H);
     }
 
-    // (Portable checkpoint codes removed — LOAD SAVE resumes the local
+    // (Portable checkpoint codes removed — CONTINUE resumes the local
     // checkpoint on this device; cross-device transfer awaits account login.)
 
     // The authored Crashed and Busted plates already contain their full
-    // typography and button faces (RETRY / LOAD SAVE / MAIN MENU).
-    // Hit zones trace those buttons and route to the matching handler:
-    //   RETRY     → fresh run from mile 0, skip title (same settings)
-    //   LOAD SAVE → resume at last checkpoint (falls back to fresh run
-    //               if no checkpoint exists this run)
-    //   MAIN MENU → back to the title screen
+    // typography and button faces (RESTART / CONTINUE / MENU — plate art
+    // still shows the old RETRY / LOAD SAVE / MAIN MENU faces until the
+    // PNGs are re-exported).  Hit zones trace those buttons:
+    //   RESTART  → fresh run from mile 0, skip title (same settings)
+    //   CONTINUE → resume at last checkpoint (falls back to fresh run
+    //              if no checkpoint exists this run)
+    //   MENU     → back to the title screen
     const cp = this.lastCheckpoint;
     this._makeImageButtonZone([
       { x: 139, y: 400 }, { x: 150, y: 361 },
@@ -240,9 +241,9 @@ export class GameOverScene extends Phaser.Scene {
           fontSize: '13px', fontFamily: IMPACT, color: '#FFFFFF',
         }).setOrigin(0.5).setDepth(43);
       };
-      fbBtn(217, 'RETRY',     0xFF39AF);   // x-zone 139–296
-      fbBtn(386, 'LOAD SAVE', 0x39A8FF);   // x-zone 306–467
-      fbBtn(560, 'MAIN MENU', 0xF4F7FF);   // x-zone 474–647
+      fbBtn(217, 'RESTART',  0xFF39AF);   // x-zone 139–296
+      fbBtn(386, 'CONTINUE', 0x39A8FF);   // x-zone 306–467
+      fbBtn(560, 'MENU',     0xF4F7FF);   // x-zone 474–647
     }
 
     this.input.keyboard?.once('keydown-SPACE', () => this._retrySameSettings());
@@ -329,7 +330,7 @@ export class GameOverScene extends Phaser.Scene {
     // the 242-wide buttons clear the panel with equal margins each side.
     const RIGHT_CX = 611;
     const cp = this.lastCheckpoint;
-    this._makeNeonButton(RIGHT_CX, 263, 242, 39, 'RETRY', accent, () => this._retrySameSettings());
+    this._makeNeonButton(RIGHT_CX, 263, 242, 39, 'RESTART', accent, () => this._retrySameSettings());
     this._makeNeonButton(RIGHT_CX, 310, 242, 39, 'START OVER', 0x2D9BFF, () => this._startOver());
 
     this.add.text(RIGHT_CX, 365, 'NEED SUPPORT?', {
