@@ -27,7 +27,7 @@
  *
  * F12 tokens (f12_coal / f12_fireworks / f12_paint → normalized):
  *   'coal'        — Rolling Coal: rear diesel-smoke cloud, pursuers lose sight
- *   'fireworks'   — show over the car: EVERY cop on screen scatters (+1★)
+ *   'fireworks'   — show over the car: EVERY vehicle on screen blows up (+1★)
  *   'paint_bomb'  — 'Donuts': every cop stops chasing for 15s (no kills)
  *   'disguise'    — resets stars + cops entirely (hitchhiker reward)
  */
@@ -457,7 +457,7 @@ export class CopSystem {
         // Rolling coal — a rear-only diesel smokescreen.  Every ACTIVE
         // pursuer behind the player (within the cloud's reach) drives into
         // the smoke, loses sight, falls back and despawns — the same
-        // fleeing pipeline fireworks use, but flagged `_fleeNoSwerve` so
+        // fleeing pipeline, flagged `_fleeNoSwerve` so
         // they sink straight back into the cloud instead of swerving for
         // the shoulder.  STEALTHY: no kills, no stars, no escalation —
         // firing with nobody behind just wastes the cloud.  Parked /
@@ -479,7 +479,7 @@ export class CopSystem {
         if (smoked > 0) {
           // Nobody can see you to bust you — reset the counters and hold
           // off the replacement spawn so the escape actually registers
-          // (same guard as fireworksScatter / weaponPulledAtTrap).
+          // (same guard as the fireworks wipe / weaponPulledAtTrap).
           this.bumpCount      = 0;
           this.rearBumpCount  = 0;
           this.headOnCount    = 0;
@@ -491,20 +491,49 @@ export class CopSystem {
       }
 
       case 'fireworks': {
-        // Fireworks show — a public spectacle that scatters EVERY cop on
-        // screen.  No kills are recorded (nobody dies, they just peel off),
-        // so this deliberately skips the removeAll/victims path and the
-        // cop-killer escalation below.  The flat +1★ for the stunt is added
-        // at the GameScene call site via addStar.  Parked speed-trap /
-        // ambient encounter sprites in view are cleared off the road here;
-        // active cruisers flee via fireworksScatter().
+        // Fireworks show — a full screen WIPE: every vehicle in view
+        // (pursuing cops, parked speed-trap / ambient encounter sprites AND
+        // civilian traffic) blows up as the barrage rains down.  Kills are
+        // DEFERRED: nothing is spliced here — the victims go back with live
+        // obj/src refs (`deferredVictims`) so GameScene can stagger the
+        // detonations (~0.1-0.3s apart, timed to the aerial bursts) and
+        // remove each car AT its own boom, not one simultaneous pop.
+        // Bypasses removeAll/`victims` so the cop-killer escalation below
+        // never sees these kills — the show's only heat is the flat +1★
+        // spectacle star at the GameScene call site (no per-cop escalation,
+        // no NPC-wreck reckless heat).  Visibility window matches
+        // _collectEncounterCops (-60..+200 segs around the player).
+        const deferred = [];
         for (const e of pool) {
-          if (!e.isCop || e.src === this.cops) continue;   // encounter sprites only
-          const i = e.src.indexOf(e.obj);
-          if (i !== -1) e.src.splice(i, 1);
+          const rel = e.pos - playerPos;
+          if (rel < -60 * SEG_LENGTH || rel > 200 * SEG_LENGTH) continue;
+          deferred.push({
+            obj:        e.obj,
+            src:        e.src,
+            position:   e.pos,
+            laneOffset: e.lane,
+            isCop:      e.isCop,
+            colorSet:   e.colorSet ?? null,
+            texColor:   e.color ?? 0xFFFFFF,
+          });
         }
-        this.fireworksScatter();
-        break;
+        // Doomed cruisers keep driving until their boom lands, but they
+        // can't hurt you in that beat: disarm PITs / trap pursuit now,
+        // reset the arrest counters (nobody survives to bust you) and hold
+        // off the replacement spawn — same guard as weaponPulledAtTrap.
+        for (const cop of this.cops) {
+          cop.trapPursuit  = false;
+          cop.parked       = false;
+          cop._pitProgress = 0;
+          cop._pitArmed    = false;
+        }
+        this.bumpCount      = 0;
+        this.rearBumpCount  = 0;
+        this.headOnCount    = 0;
+        this.pitCount       = 0;
+        this.arrestPending  = false;
+        this._spawnCooldown = Math.max(this._spawnCooldown ?? 0, 2.5);
+        return { ok: true, victims: [], deferredVictims: deferred, weapon: type };
       }
 
       case 'paint_bomb': {
@@ -537,8 +566,9 @@ export class CopSystem {
     // A WEAPON kill on a cop does NOT cool you down — it makes them want you
     // MORE.  Each cop death adds +1★, so taking out two cruisers in one
     // blast adds +2★.  Kept live even though no current weapon records
-    // kills (fireworks scatter, coal smokes, donuts stall — nobody dies):
-    // any future lethal weapon that pushes `victims` re-arms this path.
+    // kills here (fireworks defers its wipe and returns early, coal smokes,
+    // donuts stall): any future lethal weapon that pushes `victims` re-arms
+    // this path.
     const copKills = victims.filter(v => v.isCop).length;
     if (copKills > 0 && type !== 'paint_bomb' && type !== 'disguise') {
       this.escalateForCopKill(playerPos, copKills);
@@ -562,30 +592,6 @@ export class CopSystem {
     this.arrestPending = false;
     const mile = (playerPos / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
     this._pursuitGraceMile = mile + (3 + Math.random() * 2);   // 3-5 mi head start
-  }
-
-  /** Fireworks scatter — every active cop (rear pursuit, oncoming, SWAT,
-   *  barricades, trap pursuers) breaks off and flees: it steers hard for the
-   *  shoulder, falls behind, and despawns after a short retreat (handled in
-   *  update() via the `fleeing` flag) so it visibly peels away instead of
-   *  vanishing.  Arrest counters reset (nobody is left to bust you) and the
-   *  spawn cooldown is forced up so a replacement cruiser can't appear the
-   *  same frame — same fix pattern as weaponPulledAtTrap (2026-07-13). */
-  fireworksScatter() {
-    for (const cop of this.cops) {
-      cop.fleeing      = true;
-      cop._fleeTimer   = 2.0 + Math.random() * 1.0;   // staggered exits
-      cop.trapPursuit  = false;
-      cop.parked       = false;
-      cop._pitProgress = 0;
-      cop._pitArmed    = false;
-    }
-    this.bumpCount     = 0;
-    this.rearBumpCount = 0;
-    this.headOnCount   = 0;
-    this.pitCount      = 0;
-    this.arrestPending = false;
-    this._spawnCooldown = Math.max(this._spawnCooldown ?? 0, 2.5);
   }
 
   /** Player pulled a WEAPON on a parked speed-trap trooper instead of pulling

@@ -30,21 +30,22 @@ const DIURETIC_MAX   = 20;
 // Item → { t, h, f } bar deltas.  Specials (diuretic/addiction/…) handled in
 // applyItem.  Every BEVERAGE adds to hydration on the spot; diuretics claw it
 // back over the following miles instead of subtracting immediately.
-// BITE-SIZED (2026-07-12): each road sprite is a bite/sip, not a meal.  Values
-// tuned so collecting ~40–50% of spawned sprites (~3.2–4/mi of the ~8/mi that
-// spawn) holds the bars roughly level against drain (h −4.0, f −3.6, t +0.7
-// per mile).  Grab less → slowly starve/dehydrate; grab more → bank surplus.
+// BITE-SIZED (2026-07-12): each road sprite is a bite/sip, not a meal.
+// FILLING ×2.5 (2026-07-13 playtest): the original bite values couldn't keep
+// up with the drain — hydration/fullness gains ×2.5; tiredness and diuretic
+// values unchanged.  (Diuretic claw-back + bladder gain scale off the new
+// h/f automatically.)
 const ITEM_FX = {
-  water:        { t:  -1, h:  +3, f:   0 },
-  coldbrew:     { t:  -4, h:  +2, f:   0, diuretic: 2 },
-  caffeine:     { t:  -7, h:  +1, f:   0, addiction: true, diuretic: 3 },
-  slushie:      { t:  -2, h:  +3, f:  +2 },
-  gummies:      { t:  -1, h:   0, f:  +2, tripRoll: true },
-  sushi:        { t:  +1, h:   0, f:  +3, badFishRoll: true },
-  burrito:      { t:  +3, h:   0, f:  +4 },
-  dramamine:    { t:  +6, h:   0, f:   0, curesNausea: true },
-  quadshot:     { t: null, h:  +2, f:  +2, clearTiredness: true, diuretic: 3 },   // t handled by clear
-  rage:         { t:   0, h:  +2, f:  +2, diuretic: 1.5 },
+  water:        { t:  -1, h: +7.5, f:    0 },
+  coldbrew:     { t:  -4, h:   +5, f:    0, diuretic: 2 },
+  caffeine:     { t:  -7, h: +2.5, f:    0, addiction: true, diuretic: 3 },
+  slushie:      { t:  -2, h: +7.5, f:   +5 },
+  gummies:      { t:  -1, h:    0, f:   +5, tripRoll: true },
+  sushi:        { t:  +1, h:    0, f: +7.5, badFishRoll: true },
+  burrito:      { t:  +3, h:    0, f:  +10 },
+  dramamine:    { t:  +6, h:    0, f:    0, curesNausea: true },
+  quadshot:     { t: null, h:  +5, f:   +5, clearTiredness: true, diuretic: 3 },   // t handled by clear
+  rage:         { t:   0, h:  +5, f:   +5, diuretic: 1.5 },
 };
 
 const BAD_FISH_CHANCE   = 1 / 12;   // Sushi → bladder emergency

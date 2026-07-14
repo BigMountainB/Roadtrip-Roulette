@@ -171,8 +171,8 @@
        artwork at any scale; shown/hidden by refreshNotifDots. */
     .notif-dot {
       position: absolute;
-      width: 28px;
-      height: 28px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       background: #FF3B30;
       border: 3px solid #FFF;
@@ -951,14 +951,16 @@
     }
     #phone-app .pa-section:first-child { margin-top: 0; }
     #phone-app .pa-dim { color: #6E86A8; }
-    /* Per-thread unread dot in the Contacts list — sits left of the name,
-       cleared when that thread is opened (renderContact → __notif.ackMsg). */
+    /* Per-thread unread dot in the Contacts list — sits to the RIGHT of the
+       name, cleared when that thread is opened (renderContact → __notif.ackMsg). */
     #phone-app .msg-unread {
       display: inline-block; width: 2.6vmin; height: 2.6vmin;
       border-radius: 50%; background: #FF3B30;
-      margin-right: 1.6vmin; vertical-align: middle;
+      margin-left: 1.6vmin; vertical-align: middle;
       box-shadow: 0 0 1vmin rgba(255, 59, 48, 0.6);
     }
+    /* Contact-row chevron — 3× the row font, reads as a tap affordance. */
+    #phone-app .contact-row .v { font-size: 11vmin; line-height: 1; color: #6E86A8; }
     /* House-leaderboard metric tabs (Score / Time / Miles). */
     #phone-app .lb-tabs { display: flex; gap: 2vmin; margin: 2vmin 0 1vmin; }
     #phone-app .lb-tab {
@@ -1400,14 +1402,12 @@
         if (!bgImg.naturalWidth || !bgImg.naturalHeight) return null;
         const imgW = bgImg.naturalWidth, imgH = bgImg.naturalHeight;
         const menu = document.getElementById('phone-menu');
-        // Measure the LIVE visual viewport, not the container: on iOS Safari
-        // the collapsing URL bar / home-indicator inset make clientHeight
-        // disagree with what's actually visible, which read as an off-center
-        // menu with a black band at the bottom.  visualViewport is the truth;
-        // clientWidth/Height is the fallback for older browsers.
-        const vvp = window.visualViewport;
-        const vw = Math.round(vvp?.width  ?? menu.clientWidth);
-        const vh = Math.round(vvp?.height ?? menu.clientHeight);
+        // Measure the CONTAINER (fixed inset:0 = the full glass).  Do NOT use
+        // visualViewport here: iOS excludes the strip reserved for Safari's
+        // minimized bottom bar from vv.height even though the fixed container
+        // (and the visible page) extend under it — centering on vv.height
+        // shoved the art up and left a black band at the bottom (2026-07-13).
+        const vw = menu.clientWidth, vh = menu.clientHeight;
         if (!vw || !vh) return null;
         // AUTO-SCALE (2026-07-13): every 853×1844 menu skin carries a baked-in
         // near-black dead border around the visible phone artwork — measured
@@ -1506,10 +1506,10 @@
           const btn = document.querySelector(`.phone-hit[data-action="${a}"]`);
           if (!btn || !btn.dataset.px) return;
           const [px, py, pw] = btn.dataset.px.split(/\s+/).map(Number);
-          // 28px dot whose UPPER-RIGHT corner sits where the old 14px
+          // 22px dot whose UPPER-RIGHT corner sits where the original 14px
           // centered dot's upper-right corner was (corner+7, corner-7) —
-          // doubling the size grows it inward/down, never past the tile.
-          notifDots[a].style.left = (coverState.offX + (px + pw) * coverState.scale + 7 - 28) + 'px';
+          // size changes grow/shrink it inward/down, never past the tile.
+          notifDots[a].style.left = (coverState.offX + (px + pw) * coverState.scale + 7 - 22) + 'px';
           notifDots[a].style.top  = (coverState.offY +  py       * coverState.scale - 7) + 'px';
         });
       };
@@ -1532,6 +1532,15 @@
         try { return window.__daily?.today?.() ? new Date().toDateString() : ''; }
         catch (_) { return ''; }
       };
+      // Does contact `cid`'s thread have any real message content?  Buddy
+      // threads come from the game bridge; the Crush only counts once texted.
+      const msgHasContent = (cid) => {
+        try {
+          if (cid === 'girl') return !!window.__girl?.status?.()?.everTexted;
+          const t = window.__buddytexts?.threads?.()?.[cid];
+          return Array.isArray(t) && t.length > 0;
+        } catch (_) { return false; }
+      };
       const refreshNotifDots = () => {
         const st   = notifLoad();
         const pend = (a) => { const e = st.apps[a]; return !!e && (e.mark || 0) > (e.ack || 0); };
@@ -1547,8 +1556,11 @@
           || (!!dayMark && dayMark !== (st.meta.calendarDay || ''));  // new day's run up
         on.garage   = pend('garage')
           || garageAffordCount() > (st.meta.garageAfford || 0);       // newly affordable
-        on.messages = Object.values(st.msgs)                // any unread thread
-          .some(e => (e.mark || 0) > (e.ack || 0));
+        // Any unread thread — but only threads that actually CONTAIN messages
+        // (a bump with no visible text, e.g. an event fired before the thread
+        // has content, must not light the tile).
+        on.messages = Object.entries(st.msgs)
+          .some(([cid, e]) => (e.mark || 0) > (e.ack || 0) && msgHasContent(cid));
         NOTIF_APPS.forEach(a => { notifDots[a].style.display = on[a] ? 'block' : 'none'; });
       };
       window.__notif = {
@@ -1585,7 +1597,7 @@
         // (Contacts list uses this for its per-thread red dots.)
         unreadMsg: (cid) => {
           const e = notifLoad().msgs[cid];
-          return !!e && (e.mark || 0) > (e.ack || 0);
+          return !!e && (e.mark || 0) > (e.ack || 0) && msgHasContent(cid);
         },
         refresh: () => refreshNotifDots(),
       };
@@ -3284,7 +3296,7 @@
             `<p class="pa-note">Tap a contact to view their info.</p>` +
             rows.map(c =>
               `<div class="pa-row contact-row" data-cid="${c.id}" style="cursor:pointer">
-                 <span class="k">${window.__notif?.unreadMsg?.(c.id) ? '<span class="msg-unread"></span>' : ''}${c.name}<br><span class="pa-dim" style="font-size:0.82em">${c.sub}</span></span>
+                 <span class="k">${c.name}${window.__notif?.unreadMsg?.(c.id) ? '<span class="msg-unread"></span>' : ''}<br><span class="pa-dim" style="font-size:0.82em">${c.sub}</span></span>
                  <span class="v">›</span>
                </div>`).join(''));
           appBody.querySelectorAll('.contact-row').forEach(row =>

@@ -3299,6 +3299,8 @@ export class GameScene extends Phaser.Scene {
     this.hudMult?.setVisible(v);
     this.hudDist?.setVisible(v);
     this.hudSpeed?.setVisible(v);
+    this._mphSub?.setVisible(v);   // the MPH/KM-H sublabel hid separately —
+                                   // it lingered on the title screen without this
     this.hudRegion?.setVisible(v);
     this.hudStars?.setVisible(v);
     this.hudRadio?.setVisible(v);
@@ -4455,6 +4457,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Fireworks show timer (🎆 weapon) ──────────────────────────────
     if (this._fireworksShow) this._updateFireworks(rawDt);
+    if (this._fwWipeQueue)   this._updateFireworksWipe(rawDt);
 
     // ── Rolling-coal cloud timer (💨 weapon) ──────────────────────────
     if (this._coalCloud) this._updateCoalCloud(rawDt);
@@ -10106,7 +10109,7 @@ export class GameScene extends Phaser.Scene {
     // escalation.  Rolling coal is exempt too: smoke isn't brandishing a
     // weapon — the trooper just can't see you.  Fireworks ARE aggressive
     // (a pyrotechnic barrage at a trooper) but earn a short head start
-    // since the cruiser scatters.
+    // since the cruiser goes up with the rest of the road.
     const weaponOnTrooper = (this._trapPursuitActive || this._trapStopHeld)
                          && base !== 'disguise' && base !== 'paint_bomb'
                          && base !== 'coal';
@@ -10118,7 +10121,7 @@ export class GameScene extends Phaser.Scene {
         this._trapComplyTimer   = 0;
         this._trapStopHeld      = false;
         this._trapStopHoldTimer = 0;
-        // Fireworks scatter the cruiser entirely → ~2 mi before the
+        // Fireworks blow the cruiser up entirely → ~2 mi before the
         // replacement pursuit re-engages.  Other weapons: the trooper
         // survives as a live chaser, no head start.
         this.cops.weaponPulledAtTrap(this.player.position, base === 'fireworks' ? 2 : 0);
@@ -10142,7 +10145,8 @@ export class GameScene extends Phaser.Scene {
         this._showPopup?.('🚓 +1 STAR — heard the shot', '#FF6644');
       }
       // Fireworks flat heat — the show is unmissable, so it's a guaranteed
-      // +1★ (no per-cop kill escalation; nobody dies, they just scatter).
+      // +1★ for the spectacle (deliberately NO per-cop kill escalation and
+      // no NPC-wreck reckless heat, even though the wipe destroys cars).
       // Skipped when weaponPulledAtTrap already SET the stars this frame,
       // and in custom mode (cops are typically off there).
       if (base === 'fireworks' && !weaponOnTrooper
@@ -10151,7 +10155,7 @@ export class GameScene extends Phaser.Scene {
       }
       const labels = {
         coal:         '💨 ROLLING COAL!',
-        fireworks:    '🎆 FIREWORKS! — the law scatters',
+        fireworks:    '🎆 FIREWORKS! — the road goes up',
         paint_bomb:   '🍩 DONUTS DEPLOYED!',
         disguise:     '🎭 GOING DARK!',
       };
@@ -10160,6 +10164,19 @@ export class GameScene extends Phaser.Scene {
       // Fireworks show — bottle rockets up from the car, staggered radial
       // bursts, crackle rings, screen flash + shake on the big boom.
       if (base === 'fireworks') this._startFireworksShow();
+      // Fireworks WIPE — queue every deferred victim (cops, parked traps,
+      // civilian traffic) for a staggered detonation so the explosions read
+      // as the barrage raining down, not one simultaneous pop.  First boom
+      // lands ~0.9s in, as the first aerial shells burst; each car keeps
+      // driving until its own explosion removes it (_updateFireworksWipe).
+      if (base === 'fireworks' && result.deferredVictims?.length) {
+        let t = 0.9;
+        this._fwWipeQueue = result.deferredVictims.map((v) => {
+          const entry = { ...v, t };
+          t += 0.1 + Math.random() * 0.2;   // ~0.1-0.3s between booms
+          return entry;
+        });
+      }
       // Rolling coal — thick diesel smoke erupts off the rear + a diesel
       // rev growl; the lingering cloud also blinds speed traps for a few
       // seconds (the witnessing scan is skipped while _coalBlindTimer > 0).
@@ -10315,6 +10332,45 @@ export class GameScene extends Phaser.Scene {
       });
     }
     this._fireworksShow = { rockets, particles: [], crackles: [] };
+  }
+
+  /** Tick the fireworks screen-wipe queue — each queued victim (cop /
+   *  parked trap / civilian NPC) keeps driving until its timer runs out,
+   *  then it's spliced off the road and a full explosion + wreck-spin lands
+   *  where it was.  Booms are staggered ~0.1-0.3s apart so the wipe reads
+   *  as the barrage raining down (see _useTopF12).  Live objects (cops /
+   *  traffic) explode at their CURRENT position; roadside encounter sprites
+   *  don't move, so they use the position captured at fire time.  These
+   *  kills are pure spectacle: no wreck stats, no reckless-star witnesses,
+   *  no cop-kill escalation — the flat +1★ already landed on fire. */
+  _updateFireworksWipe(dt) {
+    const q = this._fwWipeQueue;
+    if (!q?.length) { this._fwWipeQueue = null; return; }
+    for (let i = q.length - 1; i >= 0; i--) {
+      const v = q[i];
+      v.t -= dt;
+      if (v.t > 0) continue;
+      q.splice(i, 1);
+      // Remove the car from the road (it may already be gone — e.g. a
+      // disguise wiped this.cops, or the NPC despawned out of range).
+      const idx = v.src.indexOf(v.obj);
+      if (idx !== -1) v.src.splice(idx, 1);
+      const pos  = v.obj.position ?? v.position;
+      const relZ = pos - this.player.position;
+      if (Math.abs(relZ) > 80000) continue;
+      const lane = v.obj.laneOffset ?? v.laneOffset;
+      const proj = this.road.getVehicleProjection(relZ, lane);
+      if (!proj || proj.sw < 4) continue;
+      const sx = proj.sx;
+      const sy = proj.sy - proj.sw * 0.25;   // mid-body height of the car
+      const sw = proj.sw;
+      this._spawnExplosion(sx, sy, sw * 1.2);
+      const wreckTex = v.isCop
+        ? (this.textures.exists('car_back_police') ? 'car_back_police' : 'cop_police')
+        : this._carTexKey(v.colorSet, 'back');
+      this._spawnWreck(sx, sy, sw, lane, wreckTex);
+    }
+    if (!q.length) this._fwWipeQueue = null;
   }
 
   /** Advance the fireworks show one frame — rocket flight + spark trails,
@@ -14932,31 +14988,25 @@ export class GameScene extends Phaser.Scene {
     const diffX = 249, diffW = 177;
     const steeringX = 422, steeringW = 190;
 
-    this._titleDiffHeader = this.add.text(diffX + diffW / 2, panelY + 9, 'DIFFICULTY', {
-      fontSize: '13px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
-      color: '#E9F4FF',
-    }).setOrigin(0.5).setDepth(d + 12);
-    this._titleDiffValue = this.add.text(diffX + diffW / 2, panelY + 28, '', {
+    // (DIFFICULTY / DRIVING TYPE header labels removed 2026-07-13 — the value
+    // words (EASY / THUMBS / …) speak for themselves; values re-centered up.)
+    this._titleDiffValue = this.add.text(diffX + diffW / 2, panelY + 20, '', {
       fontSize: '20px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
       color: '#37B9FF', stroke: '#07111F', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(d + 12);
-    this._titleDiffBlurb = this.add.text(diffX + diffW / 2, panelY + 49, '', {
+    this._titleDiffBlurb = this.add.text(diffX + diffW / 2, panelY + 45, '', {
       fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#D0D8E4',
     }).setOrigin(0.5).setDepth(d + 12);
-    this._titleThumbsHeader = this.add.text(steeringX + steeringW / 2, panelY + 9, 'DRIVING TYPE', {
-      fontSize: '13px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
-      color: '#E9F4FF',
-    }).setOrigin(0.5).setDepth(d + 12);
-    this._titleThumbsValue = this.add.text(steeringX + steeringW / 2, panelY + 28, '', {
+    this._titleThumbsValue = this.add.text(steeringX + steeringW / 2, panelY + 20, '', {
       fontSize: '20px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
       color: '#BD70FF', stroke: '#130A1E', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(d + 12);
-    this._titleThumbsBlurb = this.add.text(steeringX + steeringW / 2, panelY + 49, '', {
+    this._titleThumbsBlurb = this.add.text(steeringX + steeringW / 2, panelY + 45, '', {
       fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#D0D8E4',
     }).setOrigin(0.5).setDepth(d + 12);
     this._titleDifficultyBtns.push(
-      this._titleDiffHeader, this._titleDiffValue, this._titleDiffBlurb,
-      this._titleThumbsHeader, this._titleThumbsValue, this._titleThumbsBlurb,
+      this._titleDiffValue, this._titleDiffBlurb,
+      this._titleThumbsValue, this._titleThumbsBlurb,
     );
 
     // Difficulty value tint mirrors the in-game Speed/MPH palette so
