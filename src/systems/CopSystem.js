@@ -25,9 +25,9 @@
  * Top speed for every cop: COP_TOP_MPH.  Rear cops close unless the
  * player is already faster than that ceiling.
  *
- * F12 tokens (f12_gun / f12_spike / f12_paint / f12_rocket → normalized):
+ * F12 tokens (f12_gun / f12_fireworks / f12_paint / f12_rocket → normalized):
  *   'gun'         — instantly removes one cop in front
- *   'spike_strip' — disables closest rear cop for 8s
+ *   'fireworks'   — show over the car: EVERY cop on screen scatters (+1★)
  *   'paint_bomb'  — 'Donuts': every cop stops chasing for 15s (no kills)
  *   'rocket'      — directional (forward / backward / auto), kills ≤4
  *   'disguise'    — resets stars + cops entirely (hitchhiker reward)
@@ -52,7 +52,7 @@ const ONCOMING_UNITS   = MAX_SPEED * (70 / 120);
 // Normalize raw sprite token names → internal names used in useF12Token
 const TOKEN_MAP = {
   f12_gun:    'gun',
-  f12_spike:  'spike_strip',
+  f12_fireworks: 'fireworks',
   f12_paint:  'paint_bomb',
   f12_rocket: 'rocket',
 };
@@ -101,7 +101,6 @@ export class CopSystem {
       colorSet:    'police',
       color:       0xFFFFFF,
       alive:       true,
-      spiked:      false,
       painted:     false,
       _closeFactor: 0.10 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
@@ -177,7 +176,6 @@ export class CopSystem {
         colorSet:    'police',
         color:       0xFFFFFF,
         alive:       true,
-        spiked:      false,
         painted:     false,
         _closeFactor: 0,
         _laneDrift:   0,
@@ -253,7 +251,6 @@ export class CopSystem {
       damageMul:   isSwat ? 2.0 : 1.0,                 // SWAT hits do 2× damage
       color:       0xFFFFFF,
       alive:       true,
-      spiked:      false,
       painted:     false,
       _closeFactor: 0.06 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
@@ -415,7 +412,7 @@ export class CopSystem {
     }
 
     // Build a unified pool of targets across cops + traffic so every weapon
-    // (except spike strips) can affect either kind of car uniformly.
+    // can affect either kind of car uniformly.
     // Unified target pool.  Every entry carries its world position (`pos`),
     // lane (`lane`), whether it's a cop (`isCop`, drives escalation + wreck
     // texture), and the array to splice it from (`src`) — so cops, civilian
@@ -471,18 +468,20 @@ export class CopSystem {
         break;
       }
 
-      case 'spike_strip': {
-        // Spike strip wipes EVERY cop behind the player — no range cap,
-        // no 8-second crawl, no survivors.  Drops the rear pursuit
-        // completely in one drop.  Civilian traffic behind the player
-        // is also pulled over.
-        // KNOWN BUG (2026-06-18): on the live build spikes do NOTHING to a
-        // speed-trap cop sitting behind the player — token consumed, no
-        // removal, no star change.  Root cause NOT yet found (the trap pursuer
-        // *should* be in `this.cops` here).  Needs runtime instrumentation to
-        // see what the pool actually contains at fire time — do NOT guess-fix.
-        const targets = pool.filter((e) => (e.pos - playerPos) < 0);
-        removeAll(targets);
+      case 'fireworks': {
+        // Fireworks show — a public spectacle that scatters EVERY cop on
+        // screen.  No kills are recorded (nobody dies, they just peel off),
+        // so this deliberately skips the removeAll/victims path and the
+        // cop-killer escalation below.  The flat +1★ for the stunt is added
+        // at the GameScene call site via addStar.  Parked speed-trap /
+        // ambient encounter sprites in view are cleared off the road here;
+        // active cruisers flee via fireworksScatter().
+        for (const e of pool) {
+          if (!e.isCop || e.src === this.cops) continue;   // encounter sprites only
+          const i = e.src.indexOf(e.obj);
+          if (i !== -1) e.src.splice(i, 1);
+        }
+        this.fireworksScatter();
         break;
       }
 
@@ -530,7 +529,7 @@ export class CopSystem {
     }
     // ── Cop-killer escalation ──────────────────────────────────────────
     // A WEAPON kill on a cop does NOT cool you down — it makes them want you
-    // MORE.  Each cop death (gun/rocket/spike — NOT donuts) adds +1★,
+    // MORE.  Each cop death (gun/rocket — NOT donuts) adds +1★,
     // so taking out two cruisers in one blast adds +2★.  The blast clears the
     // immediate threat + resets the arrest counters, but you've bought only a
     // 3-5 mile head start before fresh pursuit re-engages — time to reach a
@@ -539,6 +538,8 @@ export class CopSystem {
     if (copKills > 0 && type !== 'paint_bomb' && type !== 'disguise') {
       this.escalateForCopKill(playerPos, copKills);
     }
+    // (Fireworks never records cop kills — cops flee, they don't die — so it
+    // can't reach this escalation by construction.)
     // Returns the victim list so GameScene can spawn per-car FX.
     return { ok: true, victims, weapon: type };
   }
@@ -560,13 +561,37 @@ export class CopSystem {
     this._pursuitGraceMile = mile + (3 + Math.random() * 2);   // 3-5 mi head start
   }
 
+  /** Fireworks scatter — every active cop (rear pursuit, oncoming, SWAT,
+   *  barricades, trap pursuers) breaks off and flees: it steers hard for the
+   *  shoulder, falls behind, and despawns after a short retreat (handled in
+   *  update() via the `fleeing` flag) so it visibly peels away instead of
+   *  vanishing.  Arrest counters reset (nobody is left to bust you) and the
+   *  spawn cooldown is forced up so a replacement cruiser can't appear the
+   *  same frame — same fix pattern as weaponPulledAtTrap (2026-07-13). */
+  fireworksScatter() {
+    for (const cop of this.cops) {
+      cop.fleeing      = true;
+      cop._fleeTimer   = 2.0 + Math.random() * 1.0;   // staggered exits
+      cop.trapPursuit  = false;
+      cop.parked       = false;
+      cop._pitProgress = 0;
+      cop._pitArmed    = false;
+    }
+    this.bumpCount     = 0;
+    this.rearBumpCount = 0;
+    this.headOnCount   = 0;
+    this.pitCount      = 0;
+    this.arrestPending = false;
+    this._spawnCooldown = Math.max(this._spawnCooldown ?? 0, 2.5);
+  }
+
   /** Player pulled a WEAPON on a parked speed-trap trooper instead of pulling
    *  over.  Voids the civil stop: every surviving trap pursuer becomes a live
    *  chaser (un-parked, back up to speed) and you land at a flat 2★ — a real
    *  but escapable offense, milder than gunning down an active pursuer (4-5★).
    *
    *  Stars are SET, not added: the triggering weapon may itself have just
-   *  "killed" the trooper (e.g. spikes wipe every cop behind you), which runs
+   *  "killed" the trooper (e.g. a rocket fired backward), which runs
    *  escalateForCopKill → 4★ inside useF12Token.  Setting to 2 here overwrites
    *  that in the same frame so the two can't stack into 5★.  Grace is cleared
    *  so this behaves like normal 2★ heat, not a 4-5★ weapon-kill head start. */
@@ -586,12 +611,12 @@ export class CopSystem {
     this.headOnCount       = 0;
     this.pitCount          = 0;
     this.arrestPending     = false;
-    // graceMi > 0 = the weapon physically WRECKED the trooper (spikes): the
+    // graceMi > 0 = the weapon fully cleared the trooper (fireworks): the
     // replacement pursuit holds off for that long.  0 = the trooper survives
     // as a live chaser — normal 2★ pursuit, no head start.  Either way, force
     // a real spawn delay: at 0★ the spawn cooldown has been sitting expired,
     // so without this a fresh cruiser appeared THE SAME FRAME the trooper
-    // died — which made spikes look like they did nothing (bug, 2026-07-13).
+    // cleared — which made the weapon look like it did nothing (bug, 2026-07-13).
     const mile = (playerPos / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
     this._pursuitGraceMile = graceMi > 0 ? mile + graceMi : 0;
     this._spawnCooldown    = Math.max(this._spawnCooldown ?? 0, 2.5);
@@ -688,6 +713,17 @@ export class CopSystem {
       const dist  = cop.position - playerPos;
       const aDist = Math.abs(dist);
 
+      // Fireworks scatter — the cop breaks pursuit, swerves for the shoulder,
+      // and drops back until its retreat timer expires, then despawns.  Skips
+      // all pursuit AI so a fleeing cop can never PIT / ram on the way out.
+      if (cop.fleeing) {
+        cop._fleeTimer = (cop._fleeTimer ?? 2.5) - dt;
+        cop.laneOffset += (cop.laneOffset >= 0 ? 1 : -1) * 2.4 * dt;
+        cop.speed = Math.max(0, playerSpeed * 0.5);
+        cop.position += cop.speed * dt;
+        if (cop._fleeTimer <= 0) this.cops.splice(i, 1);
+        continue;
+      }
       // Parked at a civil traffic stop — pinned behind the stopped player,
       // no pursuit AI / PIT / drift until endTrapPursuit() removes it.
       if (cop.parked) {
@@ -702,12 +738,9 @@ export class CopSystem {
         cop._pitProgress = 0;
         cop._pitArmed    = false;
       }
-      // Disabled overrides — spike-strip stops the car flat for 8s, EMP for
-      // a custom timer.
+      // Disabled override — EMP stops the car flat for a custom timer.
       else if (cop.empTimer > 0) {
         cop.empTimer -= dt; cop.speed = 0;
-      } else if (cop.spiked) {
-        cop.speed = 40;
       } else {
         switch (cop.kind) {
           case 'rear': {

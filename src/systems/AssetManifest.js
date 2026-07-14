@@ -322,7 +322,7 @@ export const ASSET_MANIFEST = {
   ],
   weapons: [
     { key: 'weapon_gun',         path: 'assets/weapons/gun.png' },
-    { key: 'weapon_spike_strip', path: 'assets/weapons/spike_strip.png' },
+    // weapon_fireworks has no PNG — BootScene generates it procedurally.
     { key: 'weapon_paint_bomb',  path: 'assets/weapons/paint_bomb.png' },
     { key: 'weapon_disguise',    path: 'assets/weapons/disguise.png' },
     { key: 'weapon_rocket',      path: 'assets/weapons/rocket.png' },

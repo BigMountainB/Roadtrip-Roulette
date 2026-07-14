@@ -165,6 +165,23 @@
       background: rgba(255, 205, 60, 0.12);
       animation: tutFlash 1.05s ease-in-out infinite;
     }
+    /* Notification dots — small red badge at a menu tile's top-right corner
+       when that app has something new (new trophy, unread text, new daily…).
+       Created + positioned from JS (positionNotifDots) so they track the
+       artwork at any scale; shown/hidden by refreshNotifDots. */
+    .notif-dot {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #FF3B30;
+      border: 2px solid #FFF;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+      box-sizing: border-box;
+      display: none;
+      pointer-events: none;
+      z-index: 5;
+    }
     body.debug [data-px] { background: rgba(255,0,0,0.20); border: 1px dashed red; }
     body.debug [data-px]::before {
       content: attr(data-action);
@@ -1349,22 +1366,6 @@
       // artwork on every device (no per-aspect % retuning).
       const bgImg = document.querySelector('#phone-menu img.bg');
       let coverState = null;
-      // Bounding box of every declared button (data-px, PNG pixel coords) —
-      // drives the auto-scale so BUTTONS (not the art's padded edges) define
-      // how big the menu renders.  All skins share the same 853×1844 layout,
-      // so this is computed once from the DOM.
-      let btnBounds = null;
-      const computeBtnBounds = () => {
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        document.querySelectorAll('[data-px]').forEach(el => {
-          const [x, y, w, h] = el.dataset.px.split(/\s+/).map(Number);
-          if (![x, y, w, h].every(Number.isFinite)) return;
-          minX = Math.min(minX, x); minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
-        });
-        btnBounds = (maxX > minX && maxY > minY) ? { minX, minY, maxX, maxY } : null;
-        return btnBounds;
-      };
       const recomputeCover = () => {
         if (!bgImg.naturalWidth || !bgImg.naturalHeight) return null;
         const imgW = bgImg.naturalWidth, imgH = bgImg.naturalHeight;
@@ -1374,20 +1375,12 @@
         // AUTO-SCALE (2026-07-13): grow the image until the outermost buttons
         // sit 15px from the screen sides, capped so the button block never
         // crops vertically.  Falls back to plain contain-fit if no buttons.
-        const b = btnBounds ?? computeBtnBounds();
+        // Contain-fit the FULL artwork with a 15px margin on every edge,
+        // centered — aspect ratio preserved, so it scales to any device
+        // with no cropping (2026-07-13: replaces the button-block fit).
         const EDGE = 15;
-        let scale;
-        if (b) {
-          scale = Math.min(
-            (vw - EDGE * 2) / (b.maxX - b.minX),   // buttons 15px from the sides…
-            vh / imgH,                             // …but the FULL art must fit
-          );                                       // vertically (the "rotate
-        } else {                                   // phone" strip below the
-          scale = Math.min(vw / imgW, vh / imgH);  // buttons was getting cropped)
-        }
-        // Horizontally center the BUTTON BLOCK (the grid isn't dead-center in
-        // the art); vertically center the whole image — it always fits now.
-        const offX = b ? vw / 2 - ((b.minX + b.maxX) / 2) * scale : (vw - imgW * scale) / 2;
+        const scale = Math.min((vw - EDGE * 2) / imgW, (vh - EDGE * 2) / imgH);
+        const offX = (vw - imgW * scale) / 2;
         const offY = (vh - imgH * scale) / 2;
         coverState = { scale, offX, offY };
         // Size/position the art itself with the SAME transform the hit zones
@@ -1414,6 +1407,11 @@
         // Re-position the selection ring (its source is whichever
         // steering button is currently .selected).
         positionSelectionRing();
+        // Re-glue the notification dots to their tiles' top-right corners
+        // and re-evaluate which apps have something new (menu show fires
+        // a resize → this runs on every open).
+        positionNotifDots();
+        refreshNotifDots();
       };
       // Move the steering ring onto the active steering button's
       // ring-rect, or hide it if nothing is selected.  Pulled out
@@ -1426,6 +1424,121 @@
         placePngBox(ring, active.dataset.ringPx);
         ring.style.display = 'block';
       };
+
+      // ── Notification dots ─────────────────────────────────────────────
+      // A small red badge on a tile's top-right corner when that app has
+      // something NEW.  Per-app "mark vs ack" timestamps persist in
+      // localStorage (rtr.notif.v1); the game bumps marks at event sites
+      // (trophy earned, rest stop reached, text arrived, daily finished)
+      // via window.__notif, and the tile's open handler acks them.
+      // Messages tracks per-thread marks — the dot clears only when the
+      // NEW thread is actually opened, not merely the Contacts list.
+      const NOTIF_KEY  = 'rtr.notif.v1';
+      const NOTIF_APPS = ['tutorial', 'garage', 'maps', 'calendar', 'trophy', 'messages'];
+      const notifLoad = () => {
+        let st = null;
+        try { st = JSON.parse(localStorage.getItem(NOTIF_KEY)); } catch (_) {}
+        if (!st || typeof st !== 'object') st = {};
+        st.apps ??= {};   // { app: {mark, ack} }
+        st.msgs ??= {};   // { contactId: {mark, ack} }
+        st.meta ??= {};   // { calendarDay, garageAfford }
+        return st;
+      };
+      const notifSave = (st) => { try { localStorage.setItem(NOTIF_KEY, JSON.stringify(st)); } catch (_) {} };
+      // One dot element per badged tile, children of #phone-menu so they
+      // share the art's stacking context and coverState transform.
+      const notifDots = {};
+      NOTIF_APPS.forEach(a => {
+        const d = document.createElement('div');
+        d.className = 'notif-dot';
+        d.dataset.for = a;
+        document.getElementById('phone-menu').appendChild(d);
+        notifDots[a] = d;
+      });
+      // Center each dot on its tile's top-right corner using the SAME
+      // data-px → coverState math as the hit zones, so the badges stay
+      // glued to the artwork at any device scale.
+      const positionNotifDots = () => {
+        if (!coverState) return;
+        NOTIF_APPS.forEach(a => {
+          const btn = document.querySelector(`.phone-hit[data-action="${a}"]`);
+          if (!btn || !btn.dataset.px) return;
+          const [px, py, pw] = btn.dataset.px.split(/\s+/).map(Number);
+          notifDots[a].style.left = (coverState.offX + (px + pw) * coverState.scale - 7) + 'px';
+          notifDots[a].style.top  = (coverState.offY +  py       * coverState.scale - 7) + 'px';
+        });
+      };
+      // Garage "newly actionable" check — how many part upgrades on the
+      // current car the player can afford RIGHT NOW.  Compared against the
+      // count snapshotted at last Garage open; growth = red dot.  (Cheap by
+      // design: current vehicle's slots only, computed on menu show.)
+      const garageAffordCount = () => {
+        try {
+          const cash = window.__upgrades?.cash?.() ?? 0;
+          const cur  = window.__garage?.current?.();
+          if (!cur) return 0;
+          return (window.__upgrades?.slots?.(cur) ?? [])
+            .filter(s => s.next && cash >= s.next.cost).length;
+        } catch (_) { return 0; }
+      };
+      // "There's a daily up today" marker — its calendar day, or '' on
+      // weekends (no daily → day rollover alone shouldn't badge).
+      const calendarDayMark = () => {
+        try { return window.__daily?.today?.() ? new Date().toDateString() : ''; }
+        catch (_) { return ''; }
+      };
+      const refreshNotifDots = () => {
+        const st   = notifLoad();
+        const pend = (a) => { const e = st.apps[a]; return !!e && (e.mark || 0) > (e.ack || 0); };
+        const on   = {};
+        // Tutorial: until it's been opened once ever (same flag as tut-flash).
+        try {
+          on.tutorial = !localStorage.getItem('rtr_tutorialSeen') && !localStorage.getItem('dui_tutorialSeen');
+        } catch (_) { on.tutorial = false; }
+        on.trophy   = pend('trophy');                       // new trophy earned
+        on.maps     = pend('maps');                         // new rest stop reached
+        const dayMark = calendarDayMark();
+        on.calendar = pend('calendar')                      // daily finished (pass/fail)
+          || (!!dayMark && dayMark !== (st.meta.calendarDay || ''));  // new day's run up
+        on.garage   = pend('garage')
+          || garageAffordCount() > (st.meta.garageAfford || 0);       // newly affordable
+        on.messages = Object.values(st.msgs)                // any unread thread
+          .some(e => (e.mark || 0) > (e.ack || 0));
+        NOTIF_APPS.forEach(a => { notifDots[a].style.display = on[a] ? 'block' : 'none'; });
+      };
+      window.__notif = {
+        // Game-side: "app X has something new" (1-liners at the event sites).
+        bump: (app) => {
+          const st = notifLoad();
+          (st.apps[app] ??= {}).mark = Date.now();
+          notifSave(st); refreshNotifDots();
+        },
+        // Game-side: a text arrived on contact `cid`'s thread.
+        bumpMsg: (cid) => {
+          const st = notifLoad();
+          (st.msgs[cid] ??= {}).mark = Date.now();
+          notifSave(st); refreshNotifDots();
+        },
+        // Menu-side: the app was opened — clear its dot (and snapshot the
+        // computed baselines for the derived garage/calendar checks).
+        ack: (app) => {
+          const st = notifLoad();
+          const e  = (st.apps[app] ??= {});
+          e.ack = Math.max(e.mark || 0, Date.now());
+          if (app === 'calendar') st.meta.calendarDay  = calendarDayMark();
+          if (app === 'garage')   st.meta.garageAfford = garageAffordCount();
+          notifSave(st); refreshNotifDots();
+        },
+        // Menu-side: a message THREAD was opened (reading clears it).
+        ackMsg: (cid) => {
+          const st = notifLoad();
+          const e  = (st.msgs[cid] ??= {});
+          e.ack = Math.max(e.mark || 0, Date.now());
+          notifSave(st); refreshNotifDots();
+        },
+        refresh: () => refreshNotifDots(),
+      };
+
       // Run on load, on resize, on orientation change.
       if (bgImg.complete) layoutHitZones();
       else bgImg.addEventListener('load', layoutHitZones);
@@ -1945,7 +2058,7 @@
           }
         }
       };
-      const openMap = () => { mapModal.classList.add('open'); renderMap(); };
+      const openMap = () => { window.__notif?.ack?.('maps'); mapModal.classList.add('open'); renderMap(); };
       const closeMap = () => { mapModal.classList.remove('open'); markModalClosing(); };
       addTap(mapClose, closeMap);
       addTap(document.querySelector('.phone-hit[data-action="maps"]'), openMap);
@@ -2063,7 +2176,7 @@
           });
         });
       };
-      const openGarage  = () => { renderGarage(); syncMenuBg(); garageModal.classList.add('open'); };
+      const openGarage  = () => { window.__notif?.ack?.('garage'); renderGarage(); syncMenuBg(); garageModal.classList.add('open'); };
       const closeGarage = () => { garageModal.classList.remove('open'); markModalClosing(); };
       addTap(garageClose, closeGarage);
       addTap(document.querySelector('.phone-hit[data-action="garage"]'), openGarage);
@@ -2735,10 +2848,12 @@
       };
       addTap(achClose, () => { achModal.classList.remove('open'); markModalClosing(); });
       addTap(document.querySelector('.phone-hit[data-action="trophy"]'), () => {
+        window.__notif?.ack?.('trophy');
         renderAchievements();
         achModal.classList.add('open');
       });
       addTap(document.getElementById('phone-trophy'), () => {
+        window.__notif?.ack?.('trophy');
         renderAchievements();
         achModal.classList.add('open');
       });
@@ -3222,6 +3337,7 @@
         };
 
         const renderContact = (cid) => {
+          window.__notif?.ackMsg?.(cid);   // reading the thread clears its unread dot
           if (cid === 'lawyer') renderLawyer();
           else if (cid === 'dealer') renderDealer();
           else if (cid === 'girl') renderGirl();
@@ -3247,6 +3363,7 @@
       const markTutorialSeen = () => {
         try { localStorage.setItem(TUT_SEEN_KEY, '1'); } catch (_) {}
         qhit('tutorial')?.classList.remove('tut-flash');
+        window.__notif?.refresh?.();   // tutorial dot reads the same flag
       };
       try {
         // Treat the legacy dui_tutorialSeen flag as already-seen (migration).
@@ -3286,6 +3403,7 @@
       // Calendar — Daily Challenge ("Run of the Day"). Read-only preview for
       // now; Play activates once the stage runner is wired (__daily.playable).
       addTap(qhit('calendar'), () => {
+        window.__notif?.ack?.('calendar');
         const D = window.__daily;
         const today = D?.today?.() ?? null;
         const week  = D?.week?.()  ?? [];

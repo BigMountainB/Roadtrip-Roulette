@@ -55,6 +55,36 @@ soak (PG-13).
 **Not yet built:** Mission system (Ch3 §17) · economy balance + Steam-demo cut + wishlist/tutorial
 (Ch3 §13/§22) · real NPC portrait art + real survival-item art (procedural placeholders in place).
 
+## 📌 PINNED — Soundtrack Culture Packs (idea locked 2026-07-13, candidate for next build)
+
+**The pitch (Brendan's):** choosing your music genre is a *loadout decision* that reskins the
+whole run. Picking a soundtrack changes every sprite's ART (never its effect — same bars, same
+values, pure cosmetics) AND the starting vehicle, to match that music's culture:
+
+- **Country** → big 80's diesel beater truck · sprites: gas-station Coffee, Chewing Tobacco tin,
+  "Manster" Energy, jerky, biscuits-and-gravy burrito.
+- **Hip-hop** → older Acura sedan or beat-up Cadillac · sprites: "Ghust" Energy, "Gumbie Cluster"
+  gummies, honey bun, Arizona-style tallboy tea.
+- (Future packs: Phonk, Metal, Pop-punk, Norteño… each = 1 vehicle + ~8–10 sprite reskins.)
+
+Snacks and drinks that genuinely resonate with each musical culture — the parody brand names are
+part of the joke. Rolling-coal-style flavor (e.g. a smoke weapon reading as diesel ROLLING COAL)
+lands best in the truck/country pack, which is what sparked the idea.
+
+**Why it's strong:** the music picker already exists (6 stations, 78 tracks), sprites are
+data-driven (`VICE_CONFIG` + manifest keys), and vehicles are data-driven — so this is mostly
+an art-keying layer (sprite-skin per pack) + a big art order, not new systems. It converts
+"radio station" from ambience into identity/replayability — pick your culture, drive its run.
+
+**Prior art:** no mainstream game does exactly this. Closest: Brütal Legend (whole world themed
+to one genre, not selectable), GTA radio stations (set tone, change nothing), Crypt of the
+NecroDancer / Audiosurf / Beat Hazard (music drives *mechanics*, not culture skins), cosmetic
+skin packs (no music link). Genre-as-selectable-culture-reskin looks genuinely novel — a
+marketable hook.
+
+**Status:** PINNED — not scheduled; likely next major build after mission-system playtest. Art
+volume is the long pole (each pack = vehicle art + ~10 sprite images).
+
 ## Changelog (newest first)
 
 ### 2026-07-11 — Docs consolidation

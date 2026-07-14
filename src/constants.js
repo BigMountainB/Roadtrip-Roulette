@@ -545,7 +545,7 @@ export const PASS_THROUGH_CITIES = _PASS_THROUGH_CITY_DEF.map(c => ({
 //   sprite       — texture key; falls back to 'car_player' if absent
 export const VEHICLES = {
   beater: {
-    id: 'beater', label: 'Used Sedan', hp: 50,  rangeMi: 250, topMph: 110, boostMph: 20,
+    id: 'beater', label: 'Used Sedan', hp: 50,  rangeMi: 75, topMph: 110, boostMph: 20,
     grip: 1.00, turnRate: 1.00, stability: 1.00, offroadGrip: 1.00,
     drive: '2WD', fuel: 'gas', heat: 0.85, priceUsd: 0,
     sprite: 'car_player', spriteBack: 'codex_beater_back', spriteFront: 'codex_beater_front',
@@ -611,11 +611,18 @@ export const GAS_ROBBERY_CHANCE     = 0.20;        // 20% chance per gas fillup
 export const GAS_ROBBERY_FRAC       = 0.20;        // loses 20% of cash if robbed
 export const CHARGE_AD_SECONDS      = 90;          // 1.5 min ad timer (game time)
 
+// Party-clock HUD readout — mechanics (rush deadlines, rest-stop time buys,
+// arrival timing) always run; this flag only controls the ⏱ readout draw +
+// its Customize Controls handle.  The ×multiplier stays visible and slides
+// into the clock's HUD slot while this is false.
+export const SHOW_PARTY_CLOCK = false;
+
 // ── Aggressive fuel economy ──────────────────────────────────────────────
 // Fuel drains FASTER than 1 tank-mile per mile driven; climbs, boosting, and
 // an overheating engine all guzzle more.  The Fuel-System upgrades enlarge the
 // tank (rangeMi), which is how the player buys the range back.
-export const FUEL_BURN_BASE   = 1.5;   // tank-miles burned per mile driven (base)
+export const FUEL_BURN_BASE   = 1.0;   // tank-miles burned per mile driven (base;
+                                       // 1:1 so tank miles = real miles, 2026-07-13)
 export const FUEL_BURN_CLIMB  = 8.0;   // + per unit of positive gradePct (0.06 → +0.48)
 export const FUEL_BURN_BOOST  = 0.35;  // + while boosting
 export const FUEL_BURN_HOT    = 0.35;  // + while the engine is in limp/overheat

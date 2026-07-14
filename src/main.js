@@ -89,6 +89,12 @@ const config = {
   input: {
     activePointers: 3,
   },
+  // Raw frame deltas.  Phaser's default 10-frame delta smoothing seeds at
+  // 60fps, so the startup jank window (texture uploads / shader compiles)
+  // simulated less time than actually passed — the whole world ran in slow
+  // motion for the first seconds, then "sped up".  Raw deltas keep sim time
+  // true to wall time; the jank itself is hidden behind the intro warm-up.
+  fps: { smoothStep: false },
   render: {
     antialias:        true,
     pixelArt:         false,

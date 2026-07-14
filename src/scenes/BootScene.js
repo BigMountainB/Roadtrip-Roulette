@@ -104,6 +104,11 @@ export class BootScene extends Phaser.Scene {
     // texture; tinting an orange body just gives muddy orange).
     this._makeCarTexture('npc_car_white', 0xFFFFFF, 0xDDDDDD);
 
+    // 🎆 Fireworks weapon pickup — fully procedural (no PNG in the
+    // manifest): a bundle of bottle rockets with star sparks, matching the
+    // other weapon pickups' hand-drawn scale.
+    this._makeFireworksSprite('weapon_fireworks');
+
     // For any manifest key whose PNG is missing, synthesize a placeholder
     // so downstream code can reference manifest keys safely.
     this._fillMissingPlaceholders();
@@ -291,6 +296,36 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xE53935, 1);
     g.fillRect(27, 28, 2, 10);
     g.fillRect(24, 31, 8, 2.5);
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+
+  /** 🎆 Fireworks pickup sprite — three leaning bottle rockets (red / gold /
+   *  teal) on launch sticks with star sparks overhead, so the pickup reads
+   *  "fireworks show" at road distance.  Permanent procedural art. */
+  _makeFireworksSprite(key) {
+    const size = 56;
+    const g = this.make.graphics({ x: 0, y: 0, add: false });
+    // Soft ground shadow.
+    g.fillStyle(0x000000, 0.30); g.fillEllipse(size / 2, size - 5, 34, 7);
+    const tubes = [
+      { cx: 17, lean: -3, c: 0xE03A3A },   // red
+      { cx: 28, lean:  0, c: 0xFFD24D },   // gold
+      { cx: 39, lean:  3, c: 0x2EE6D6 },   // teal
+    ];
+    for (const tb of tubes) {
+      // Launch stick.
+      g.fillStyle(0xC8A26A, 1); g.fillRect(tb.cx - 1, 26, 2, 26);
+      // Rocket body + nose cone (nose leans slightly for a loose bundle).
+      g.fillStyle(tb.c, 1);
+      g.fillRoundedRect(tb.cx - 4, 18, 8, 16, 2);
+      g.fillTriangle(tb.cx + tb.lean, 8, tb.cx - 5, 19, tb.cx + 5, 19);
+      // Body highlight.
+      g.fillStyle(0xFFFFFF, 0.30); g.fillRect(tb.cx - 3, 20, 2, 12);
+    }
+    // Star sparks above the bundle.
+    g.fillStyle(0xFFF6C8, 0.95);
+    g.fillCircle(10, 8, 2); g.fillCircle(46, 5, 2); g.fillCircle(28, 3, 2.5);
     g.generateTexture(key, size, size);
     g.destroy();
   }

@@ -162,7 +162,6 @@ const SECTIONS = {
       // Rocket Launcher now ships 3 rockets per purchase (the launcher
       // is the asset, the rockets are ammo).  Triple-stacks the F12 token.
       { id: 'rocket',  label: 'ROCKET LAUNCHER',  icon: 'weapon_rocket',      cost: 1000, desc: '+3 directional rockets',                    payload: { f12: 'rocket', f12Count: 3 } },
-      { id: 'spike',   label: 'SPIKED JACKS',     icon: 'weapon_spike_strip', cost:  200, desc: '+1 rear strip — heat goes UP (max 3)',      payload: { f12: 'spike_strip', spikeHeat: true } },
       { id: 'paint',   label: 'DONUTS',           icon: 'weapon_paint_bomb',  cost:   50, desc: '+1 — all cops stop chasing 15s',            payload: { f12: 'paint_bomb' } },
       { id: 'camo',    label: '🥷  NEW PASSPORT', cost: 2000, desc: 'Single-use: clears 2 stars on resume',                                  payload: { camouflage: true } },
     ],
@@ -315,10 +314,16 @@ export class RestStopScene extends Phaser.Scene {
     // acceptance as party-clock values (Ch. 8).
     this._partyClockSec = data?.partyClockSec ?? null;
     this._bladderAtEntry = data?.bladderAtEntry ?? 0;   // for the timed restroom cost
+    // Full survival snapshot at pull-in — drives the compact (unlabeled)
+    // status bars on the landing menu.  Live-updated from purchases
+    // (restroom / encounter food+drink) via _drawSurvivalMini.
+    this._survAtEntry = data?.survivalAtEntry ?? null;
+    this._survMiniGfx = null;
     // Career stats — count this visit on entry; dwell time + spends are
     // recorded on exit (see the continue handler).
     this._stats = this.registry?.get?.('stats');
     this._stats?.restStopEnter(this._stop.id);
+    try { window.__notif?.bump?.('maps'); } catch (_) {}   // new stop reached → Maps dot
     // Pre-paid Dealer orders — vices already paid for via the phone, redeemed
     // FREE in the vice menu here (claimed on purchase).
     this._dealerOrders = (this.registry?.get?.('save')?.get?.('dealerOrders', []) || []).slice();
@@ -669,6 +674,12 @@ export class RestStopScene extends Phaser.Scene {
         stroke: '#000', strokeThickness: 3,
       }).setOrigin(1, 0);
     }
+
+    // ── Survival status — compact UNLABELED bars under the HP readout.
+    //    Same colors + top→bottom order as the drive HUD (Alertness /
+    //    Bladder gradient / Drinks / Food) so they read on recognition. ──
+    this._survMiniGfx = this.add.graphics();
+    this._drawSurvivalMini();
 
     // ── Active JOBS ("Favors", Ch. 8) — review commitments before rolling ──
     // Compact left-side list mirroring the HUD chip: destination · miles
@@ -1272,6 +1283,7 @@ export class RestStopScene extends Phaser.Scene {
       addSurvival:  (bar, n) => {
         const d = (this._purchases.survivalDelta ??= {});
         d[bar] = (d[bar] ?? 0) + n;
+        this._drawSurvivalMini();
       },
       coolEngine:   (n) => { this._purchases.coolEngine = (this._purchases.coolEngine ?? 0) + n; },
     };
@@ -1638,6 +1650,7 @@ export class RestStopScene extends Phaser.Scene {
       } else {
         this._restroomMsg = `🚽 Ahhh… sweet relief. Bladder emptied. (−${costSec}s)`;
       }
+      this._drawSurvivalMini();   // bladder bar drains on the landing HUD
     }
     if (p.repair) {
       this._purchases.repair             = true;
@@ -1725,11 +1738,6 @@ export class RestStopScene extends Phaser.Scene {
       this._purchases.radarBought = true;
       this._setStatus?.('📡 RADAR DETECTOR installed — it\'ll warn you before speed traps.', '#88FFCC');
     }
-    if (p.spikeHeat) {
-      // Spike-strip purchase also bumps heat (player heard from store
-      // workers gossiping — cops + NPCs hunt them harder).
-      this._purchases.bumpStarsOnResume = (this._purchases.bumpStarsOnResume ?? 0) + 1;
-    }
     if (p.buyVehicle) {
       this._purchases.boughtVehicles = this._purchases.boughtVehicles ?? [];
       this._purchases.boughtVehicles.push(p.buyVehicle);
@@ -1779,6 +1787,61 @@ export class RestStopScene extends Phaser.Scene {
 
   _refreshScore() {
     this._scoreText.setText(`CASH: $${this._score.toLocaleString()}`);
+  }
+
+  /** Compact survival bars for the landing menu — no labels, just the drive
+   *  HUD's colors in its top→bottom order (Alertness / Bladder / Drinks /
+   *  Food) at ~60% scale.  Values = entry snapshot + this visit's purchases
+   *  (restroom empty, encounter food/drink survivalDelta), so the bars
+   *  live-update while shopping. */
+  _drawSurvivalMini() {
+    const g = this._survMiniGfx;
+    if (!g) return;
+    const e = this._survAtEntry
+      ?? { tiredness: 0, hydration: 50, fullness: 50, bladder: this._bladderAtEntry ?? 0 };
+    const d  = this._purchases?.survivalDelta ?? {};
+    const cl = (v) => Math.max(0, Math.min(100, v));
+    // Same row colors as GameScene._drawSurvivalBars (danger recolors too).
+    const rows = [
+      { v: cl(100 - (e.tiredness + (d.tiredness ?? 0))), col: (e.tiredness + (d.tiredness ?? 0)) >= 70 ? 0xE0483C : 0x9A5FE8 },
+      { v: this._purchases?.emptyBladder ? 0 : cl(e.bladder), grad: true },
+      { v: cl(e.hydration + (d.hydration ?? 0)), col: 0x39C0D9, dual: true },
+      { v: cl(e.fullness  + (d.fullness  ?? 0)), col: 0xE0902E, dual: true },
+    ];
+    const lerpRGB = (a, b, t) => {
+      const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+      const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+      return (Math.round(ar + (br - ar) * t) << 16)
+           | (Math.round(ag + (bg - ag) * t) << 8)
+           |  Math.round(ab + (bb - ab) * t);
+    };
+    // ~60% of the drive-HUD block, right-aligned under the 🔧 HP readout.
+    const bw = 110, bh = 9, gap = 13;
+    const bx = SCREEN_W - 30 - bw, by = 102;
+    g.clear();
+    rows.forEach((r, i) => {
+      const y = by + i * gap;
+      g.fillStyle(0x0A0F1A, 0.8); g.fillRoundedRect(bx, y, bw, bh, 2);
+      const frac = r.v / 100;
+      if (r.grad) {   // bladder: pee-yellow → poop-brown, position-based
+        const SEG = 16;
+        for (let sIdx = 0; sIdx < SEG; sIdx++) {
+          const t0 = sIdx / SEG;
+          if (t0 >= frac) break;
+          const t1 = Math.min((sIdx + 1) / SEG, frac);
+          g.fillStyle(lerpRGB(0xF2D338, 0x5A3212, t0), 1);
+          g.fillRect(bx + 1 + t0 * (bw - 2), y + 1, Math.max(0.6, (t1 - t0) * (bw - 2)), bh - 2);
+        }
+      } else {
+        g.fillStyle(r.col, 1); g.fillRoundedRect(bx + 1, y + 1, frac * (bw - 2), bh - 2, 2);
+      }
+      if (r.dual) {   // sweet-zone ticks at 25 / 75, like the drive HUD
+        g.fillStyle(0x66FF99, 0.7);
+        g.fillRect(bx + 1 + 0.25 * (bw - 2), y, 1.5, bh);
+        g.fillRect(bx + 1 + 0.75 * (bw - 2), y, 1.5, bh);
+      }
+      g.lineStyle(1, 0x315173, 1); g.strokeRoundedRect(bx, y, bw, bh, 2);
+    });
   }
 
   _setStatus(msg, color) {

@@ -166,6 +166,7 @@ export const AchievementSystem = {
     save.set('achievements', owned);
     const def = VICE_INFO[Object.keys(VICE_INFO).find(k => VICE_INFO[k].id === id)] ?? RUN_DEFS[id];
     if (def && _onAward) _onAward({ id, tier, def });
+    try { window.__notif?.bump?.('trophy'); } catch (_) {}   // phone-menu red dot
     return true;
   },
 

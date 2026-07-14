@@ -3946,15 +3946,27 @@ export class Road {
         g.fillRect(x - w * 0.1, y + h * 0.18, w * 0.2, h * 0.18);
         break;
       }
-      case 'f12_spike': {
-        g.fillStyle(0xFF7700, 1);
-        g.fillRect(x - w * 0.5, y + h * 0.65, w, h * 0.2);
-        for (let s = 0; s < 5; s++) {
-          const sx = x - w * 0.4 + s * w * 0.2;
-          g.fillTriangle(sx, y + h * 0.65, sx - w * 0.08, y + h * 0.85, sx + w * 0.08, y + h * 0.85);
+      case 'f12_fireworks': {
+        // Bundle of bottle rockets — three leaning tubes on sticks with
+        // star sparks above, so the pickup reads "fireworks" at a glance.
+        const tubes = [
+          { dx: -0.22, c: 0xE03A3A },   // red
+          { dx:  0.00, c: 0xFFD24D },   // gold
+          { dx:  0.22, c: 0x2EE6D6 },   // teal
+        ];
+        for (const tb of tubes) {
+          const tx = x + w * tb.dx;
+          g.fillStyle(0xC8A26A, 1);                                    // stick
+          g.fillRect(tx - w * 0.02, y + h * 0.45, w * 0.04, h * 0.55);
+          g.fillStyle(tb.c, 1);                                        // rocket body
+          g.fillRect(tx - w * 0.07, y + h * 0.28, w * 0.14, h * 0.30);
+          g.fillTriangle(tx, y + h * 0.12, tx - w * 0.09, y + h * 0.30, tx + w * 0.09, y + h * 0.30);
         }
-        g.fillStyle(0xFFAA44, 0.7);
-        g.fillRect(x - w * 0.4, y + h * 0.25, w * 0.8, h * 0.2);
+        // Star sparks above the bundle
+        g.fillStyle(0xFFF6C8, 0.9);
+        g.fillCircle(x - w * 0.28, y + h * 0.06, w * 0.05);
+        g.fillCircle(x + w * 0.30, y + h * 0.02, w * 0.05);
+        g.fillCircle(x + w * 0.04, y - h * 0.04, w * 0.06);
         break;
       }
       case 'f12_paint': {

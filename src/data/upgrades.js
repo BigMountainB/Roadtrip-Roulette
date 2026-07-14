@@ -77,12 +77,12 @@ export const UPGRADE_CATALOG = {
       desc: 'Boost all day in the desert.', effects: { cooling: +0.24, persistent: true } },
   ],
   fuel: [
-    { id: 'fuel_1', slot: 'fuel', level: 1, label: 'Clean Filter', cost: 120,
-      desc: 'Sips instead of guzzles.', effects: { rangeMi: +25, persistent: true } },
-    { id: 'fuel_2', slot: 'fuel', level: 2, label: 'Efficiency Tune', cost: 500,
-      desc: 'More miles per bad decision.', effects: { rangeMi: +55, persistent: true } },
-    { id: 'fuel_3', slot: 'fuel', level: 3, label: 'Larger Tank', cost: 900,
-      desc: 'Heavier, but you can skip a stop.', effects: { rangeMi: +110, grip: -0.02, persistent: true },
+    { id: 'fuel_1', slot: 'fuel', level: 1, label: 'Jerry Can Rack', cost: 120,
+      desc: 'Spare gallons strapped on.', effects: { rangeMi: +25, persistent: true } },
+    { id: 'fuel_2', slot: 'fuel', level: 2, label: 'Auxiliary Fuel Cell', cost: 500,
+      desc: 'A second small tank in the trunk.', effects: { rangeMi: +50, persistent: true } },
+    { id: 'fuel_3', slot: 'fuel', level: 3, label: 'Reserve Gas Tank', cost: 900,
+      desc: 'Heavier, but you can skip a stop.', effects: { rangeMi: +100, grip: -0.02, persistent: true },
       tradeoff: 'Slightly heavier (−grip)' },
   ],
   body: [

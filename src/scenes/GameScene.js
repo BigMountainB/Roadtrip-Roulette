@@ -7,7 +7,7 @@ import {
   getLocationName,
   getLastSignTown,
   CAR_LEN_Z, CAR_WIDTH_LANES, PLAYER_VIRTUAL_Z,
-  VEHICLES, GAS_LIGHT_AT_MI,
+  VEHICLES,
   FUEL_BURN_BASE, FUEL_BURN_CLIMB, FUEL_BURN_BOOST, FUEL_BURN_HOT,
   ENGINE_TEMP_START, ENGINE_WARN_TEMP, ENGINE_LIMP_TEMP, ENGINE_LIMP_CLEAR,
   ENGINE_LIMP_MULT, ENGINE_HP_DPS,
@@ -661,6 +661,10 @@ export class GameScene extends Phaser.Scene {
     // (else _drawSurvivalBars setText()s a dead Text → drawImage-of-null crash).
     this._survLabels = null; this._survFxGfx = null; this._bladderTxt = null; this._engineTempTxt = null;
     this._vigDark = null; this._vigBrown = null;
+    this._survABounds = null; this._survBBounds = null;
+    // Analog gas gauge — cached label Texts (E/½/F/⛽) follow the same
+    // restart-safety rule; needle state resets so it re-seats on the new tank.
+    this._gasGaugeTxts = null; this._gasGaugeBounds = null; this._gasNeedleFrac = null;
     // Mission ("Favors") HUD chip — same restart-safety rule as the survival
     // labels: drop the cached Text refs so the chip rebuilds after a scene
     // restart instead of setText()ing destroyed objects.
@@ -761,6 +765,13 @@ export class GameScene extends Phaser.Scene {
       // Per-profile Customize Controls layout: { elementId: {dx,dy} } screen
       // offsets from each element's default position.  Stored per save slot.
       this._hudLayout    = _save?.get?.('controlsLayout', {}) || {};
+      // Migration: the old single 4-row 'survbars' block split into TWO
+      // movable groups (survA = Alertness+Bladder, survB = Drinks+Food).
+      // An old saved offset seeds group A; B keeps its default directly below.
+      if (this._hudLayout.survbars && !this._hudLayout.survA) {
+        this._hudLayout.survA = { ...this._hudLayout.survbars };
+        delete this._hudLayout.survbars;
+      }
       this._hudUndoStack = [];
       // Colorblind-safe mode: remaps the red/green score-multiplier tiers to
       // a blue→amber→orange ramp (distinguishable across all CVD types).
@@ -1419,6 +1430,10 @@ export class GameScene extends Phaser.Scene {
     this.lastSegIdx      = 0;
     this.popupTimer      = 0;
     this.explosions      = [];
+    // Fireworks show state (🎆 weapon) — rockets + burst particles.  Null
+    // when idle; rebuilt per fire.  Nulled here so a scene restart can't
+    // leave a stale show iterating destroyed graphics.
+    this._fireworksShow  = null;
     // ms-timestamp until which the player is invulnerable after a
     // scenery crash (tree / building / barrier).  During this window the
     // sprite blinks and _applyDamage is no-op.
@@ -2009,14 +2024,14 @@ export class GameScene extends Phaser.Scene {
               const add = (tok, n) => {
                 for (let i = 0; i < Math.min(3, n || 0); i++) this.cops.f12Tokens.push(tok);
               };
-              add('spike_strip', buys.weaponsOnResume.spike);
-              add('paint_bomb',  buys.weaponsOnResume.donut);
-              add('rocket',      buys.weaponsOnResume.rocket);
-              add('disguise',    buys.weaponsOnResume.disguise);
+              add('fireworks',  buys.weaponsOnResume.fireworks);
+              add('paint_bomb', buys.weaponsOnResume.donut);
+              add('rocket',     buys.weaponsOnResume.rocket);
+              add('disguise',   buys.weaponsOnResume.disguise);
             }
             for (const t of buys.f12) {
               const raw = t === 'gun' ? 'f12_gun'
-                       : t === 'spike_strip' ? 'f12_spike'
+                       : t === 'fireworks'   ? 'f12_fireworks'
                        : t === 'paint_bomb'  ? 'f12_paint'
                        : t === 'rocket'      ? 'f12_rocket'
                        : t === 'disguise'    ? 'disguise' : null;
@@ -3119,6 +3134,11 @@ export class GameScene extends Phaser.Scene {
     const DUR = 3.2;
     this._introT       += dt / DUR;
     this._introCloudT  += dt;
+    // GPU warm-up: paint the real world every intro frame BEHIND the intro
+    // overlay, so first-use texture uploads / pipeline compiles happen while
+    // the player is watching the intro — not as jank in the first seconds of
+    // actual driving.
+    this._renderFrame();
 
     if (this._introT >= 1.0) {
       this._introT = 1.0;
@@ -3283,11 +3303,11 @@ export class GameScene extends Phaser.Scene {
     // Title screen also hides HP / gas / party clock / damage popup so
     // the player car + title buttons own the screen.
     this.hudHP?.setVisible(v);
-    this.hudGas?.setVisible(v);
-    this.hudGasIcon?.setVisible(v);
+    // (Gas gauge draws in hudGfx + its cached label Texts, gated by the same
+    // _awaitingStart branch as the survival bars — nothing to toggle here.)
     this.hudAccelBar?.setVisible(v);
     this.hudHPDamage?.setVisible(v);
-    this.hudPartyClock?.setVisible(v);
+    this.hudPartyClock?.setVisible(v && C.SHOW_PARTY_CLOCK);
     // Touch pedals — hidden on the title screen so they don't compete with
     // the "TAP TO START" prompt; shown only once gameplay actually begins.
     this._gasBtn?.setVisible(v);
@@ -4252,6 +4272,7 @@ export class GameScene extends Phaser.Scene {
       this._dailyDone = true;
       const grade = this._gradeDailyObjective();
       this._dailyResult = grade;
+      try { window.__notif?.bump?.('calendar'); } catch (_) {}   // daily finished → Calendar dot
       if (grade.pass) {
         // Flat base payout for now — attempt-decay + per-profile completion
         // save (which lights the Calendar ✓ dots) is the next increment.
@@ -4425,6 +4446,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // ── Fireworks show timer (🎆 weapon) ──────────────────────────────
+    if (this._fireworksShow) this._updateFireworks(rawDt);
+
     // ── Popup timer ───────────────────────────────────────────────────
     if (this.popupTimer > 0) this.popupTimer -= rawDt;
 
@@ -4475,16 +4499,17 @@ export class GameScene extends Phaser.Scene {
       const mox_ = (o) => lh ? (1 - o) : o;
       const READOUT_LEFT_X_  = SCREEN_W / 2 - 130 - 6;
       const READOUT_RIGHT_X_ = SCREEN_W / 2 + 130 + 6;
-      const READOUT_LEFT_MULT_X_ = READOUT_LEFT_X_ - 60;
+      // Mult takes the clock's slot while the clock readout is hidden.
+      const READOUT_LEFT_MULT_X_ = C.SHOW_PARTY_CLOCK ? READOUT_LEFT_X_ - 60 : READOUT_LEFT_X_;
       // LEFT cluster: Timer, Mult, Cash, HP, HPDamage (right-aligned in base coords).
       if (this.hudPartyClock) { this.hudPartyClock.x = mx_(READOUT_LEFT_X_);      this.hudPartyClock.setOrigin(mox_(1), 0); }
       if (this.hudMult)       { this.hudMult.x       = mx_(READOUT_LEFT_MULT_X_); this.hudMult.setOrigin(mox_(1), 0); }
       if (this.hudScore)      { this.hudScore.x      = mx_(READOUT_LEFT_X_);      this.hudScore.setOrigin(mox_(1), 0); }
       if (this.hudHP)         { this.hudHP.x         = mx_(READOUT_LEFT_X_);      this.hudHP.setOrigin(mox_(1), 0); }
       if (this.hudHPDamage)   { this.hudHPDamage.setOrigin(mox_(1), 0); }
-      // RIGHT cluster: Speed, MPH, Gas (left-aligned in base coords).
+      // RIGHT cluster: Speed, MPH (left-aligned in base coords).  The gas
+      // gauge recomputes its handed base itself each frame in _drawGasGauge.
       if (this.hudSpeed)      { this.hudSpeed.x      = mx_(READOUT_RIGHT_X_);     this.hudSpeed.setOrigin(mox_(0), 0); }
-      if (this.hudGas)        { this.hudGas.x        = mx_(READOUT_RIGHT_X_);     this.hudGas.setOrigin(mox_(0), 0); }
       this._applyTopRowHandedness?.();
       this._applyPedalHandedness?.();
       this._appliedLeftHanded = this._leftHanded;
@@ -9051,7 +9076,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (type === 'f12') {
-      const invType = { f12_gun: 'gun', f12_spike: 'spike_strip', f12_paint: 'paint_bomb', f12_rocket: 'rocket' }[sprite.type];
+      const invType = { f12_gun: 'gun', f12_fireworks: 'fireworks', f12_paint: 'paint_bomb', f12_rocket: 'rocket' }[sprite.type];
       if (invType && !this.cops.canCarryMore(invType)) {
         // Inventory full for this type — don't consume the pickup so it
         // remains visible (and harvestable) if user later uses one.
@@ -9061,10 +9086,10 @@ export class GameScene extends Phaser.Scene {
       this.cops.addF12Token(sprite.type);
       this.stats?.recordWeaponCollected(invType ?? sprite.type);
       const labels = {
-        f12_gun:    '🔫 GUN ACQUIRED',
-        f12_spike:  '📍 SPIKE STRIP',
-        f12_paint:  '🍩 DONUTS',
-        f12_rocket: '🚀 ROCKET LAUNCHER',
+        f12_gun:       '🔫 GUN ACQUIRED',
+        f12_fireworks: '🎆 FIREWORKS',
+        f12_paint:     '🍩 DONUTS',
+        f12_rocket:    '🚀 ROCKET LAUNCHER',
       };
       this._showPopup(labels[sprite.type] ?? 'F12 TOKEN', '#AADDFF');
       this.effects.triggerShake(60, 0.002);
@@ -9241,15 +9266,15 @@ export class GameScene extends Phaser.Scene {
   /** Order in which the weapon-cycle button steps through types. Rockets
    *  appear twice (forward + backward) so the player can pick a direction. */
   static get WEAPON_CYCLE() {
-    // Every weapon (except spike strips and donuts, which are
-    // rear-only by design) has fwd/bwd variants so the player can fire
-    // in either direction.  Donuts aren't directional — they drop
-    // behind the car and stall every cop on the road — so they get a
-    // single rear slot.
+    // Every weapon (except fireworks and donuts, which aren't
+    // directional by design) has fwd/bwd variants so the player can fire
+    // in either direction.  Donuts drop behind the car and stall every
+    // cop on the road; fireworks launch straight up and scatter every
+    // cop on screen — each gets a single slot.
     return [
       'gun-fwd',     'gun-bwd',
       'rocket-fwd',  'rocket-bwd',
-      'spike_strip',
+      'fireworks',
       'paint-bwd',
       'disguise',
     ];
@@ -9346,7 +9371,7 @@ export class GameScene extends Phaser.Scene {
       'rocket-fwd':  '🚀 ROCKET ▲ FWD',
       'rocket-bwd':  '🚀 ROCKET ▼ REAR',
       'paint-bwd':   '🍩 DONUTS',
-      spike_strip:   '📍 SPIKE STRIP',
+      fireworks:     '🎆 FIREWORKS',
       disguise:      '🎭 DISGUISE',
     };
   }
@@ -10081,8 +10106,8 @@ export class GameScene extends Phaser.Scene {
     // cop: the trooper voids the civil stop, becomes a live chaser, and you
     // escalate into the 4-5★ band.  Disguise / paint-bomb are non-aggressive
     // (hide / repaint) so they're exempt — same exclusion as the F12 cop-kill
-    // escalation.  Spikes ARE aggressive (they wreck the trooper) but earn a
-    // short head start since the cruiser is physically disabled.
+    // escalation.  Fireworks ARE aggressive (a pyrotechnic barrage at a
+    // trooper) but earn a short head start since the cruiser scatters.
     const weaponOnTrooper = (this._trapPursuitActive || this._trapStopHeld)
                          && base !== 'disguise' && base !== 'paint_bomb';
     const result = this.cops.useF12Token(base, this.player.position, dir, this.traffic, this._collectEncounterCops());
@@ -10093,35 +10118,48 @@ export class GameScene extends Phaser.Scene {
         this._trapComplyTimer   = 0;
         this._trapStopHeld      = false;
         this._trapStopHoldTimer = 0;
-        // Spikes physically wreck the cruiser → ~2 mi before the replacement
-        // pursuit re-engages.  Other weapons: the trooper survives as a live
-        // chaser, no head start.
-        this.cops.weaponPulledAtTrap(this.player.position, base === 'spike_strip' ? 2 : 0);
+        // Fireworks scatter the cruiser entirely → ~2 mi before the
+        // replacement pursuit re-engages.  Other weapons: the trooper
+        // survives as a live chaser, no head start.
+        this.cops.weaponPulledAtTrap(this.player.position, base === 'fireworks' ? 2 : 0);
       }
       // Weapons are infinite-use, but each fire has a 25% chance of
       // attracting a wanted star (witnesses, gunshot acoustic flags,
       // etc).  Custom mode bypasses since cops are typically off there.
-      // Disguise + spike_strip don't make noise / aren't violent toward
+      // Disguise + paint_bomb don't make noise / aren't violent toward
       // a target, so they don't roll the heat — disguise especially
-      // shouldn't re-add a star on the exact tap that zeroed them.  Skip the
-      // roll entirely when we already escalated for pulling on the trooper.
-      const isHeatlessWeapon = (base === 'disguise' || base === 'spike_strip' || base === 'paint_bomb');
+      // shouldn't re-add a star on the exact tap that zeroed them.
+      // Fireworks skip the roll too: they carry their OWN guaranteed +1★
+      // below (a public spectacle always draws heat).  Skip the roll
+      // entirely when we already escalated for pulling on the trooper.
+      const isHeatlessWeapon = (base === 'disguise' || base === 'fireworks' || base === 'paint_bomb');
       if (!weaponOnTrooper && !isHeatlessWeapon
           && Math.random() < 0.25
           && Difficulty.mode?.() !== 'custom') {
         this.cops.addStar?.(1, 3);
         this._showPopup?.('🚓 +1 STAR — heard the shot', '#FF6644');
       }
+      // Fireworks flat heat — the show is unmissable, so it's a guaranteed
+      // +1★ (no per-cop kill escalation; nobody dies, they just scatter).
+      // Skipped when weaponPulledAtTrap already SET the stars this frame,
+      // and in custom mode (cops are typically off there).
+      if (base === 'fireworks' && !weaponOnTrooper
+          && Difficulty.mode?.() !== 'custom') {
+        this.cops.addStar?.(1);
+      }
       const arrow = dir === 'backward' ? '▼ REAR' : '▲ FWD';
       const labels = {
         gun:          `🔫 SHOT FIRED ${arrow}!`,
-        spike_strip:  '📍 SPIKES DEPLOYED!',
+        fireworks:    '🎆 FIREWORKS! — the law scatters',
         paint_bomb:   '🍩 DONUTS DEPLOYED!',
         rocket:       `🚀 ROCKET ${arrow}!`,
         disguise:     '🎭 GOING DARK!',
       };
       this._showPopup(labels[base] ?? 'F12 USED!', '#AADDFF');
       this.effects.triggerShake(180, 0.007);
+      // Fireworks show — bottle rockets up from the car, staggered radial
+      // bursts, crackle rings, screen flash + shake on the big boom.
+      if (base === 'fireworks') this._startFireworksShow();
 
       // Per-victim FX: project each car's last-known position to screen,
       // then drop the appropriate effect on top of it.
@@ -10167,6 +10205,148 @@ export class GameScene extends Phaser.Scene {
       sx, sy, sw: Math.max(8, sw * 0.5),
       timer: 0, maxTimer: 0.18, kind: 'star',
     });
+  }
+
+  /** 🎆 Fireworks show — 3-5 bottle rockets streak up from the car over
+   *  ~1.5s, each ending in a staggered radial burst (80-150 mixed-color
+   *  particles with gravity pull + fading embers) followed by a delayed
+   *  secondary "crackle" ring of tiny flickering sparkles.  Brief white
+   *  screen flash on every detonation, camera shake on the biggest boom.
+   *  Fully procedural — drawn per-frame on the explosion layer by
+   *  _drawFireworks; audio cues fire from _updateFireworks. */
+  _startFireworksShow() {
+    const COLORS = [0xFF3B30, 0xFFD24D, 0x2EE6D6, 0xB06CFF];   // red / gold / teal / violet
+    const n   = 3 + ((Math.random() * 3) | 0);                 // 3-5 rockets
+    const cx  = SCREEN_W / 2, cy = SCREEN_H * 0.78;            // launch off the hood
+    const big = (Math.random() * n) | 0;                       // which one is the finale
+    const rockets = [];
+    for (let i = 0; i < n; i++) {
+      rockets.push({
+        delay:    (i / n) * 1.5 * (0.85 + Math.random() * 0.3),  // staggered over ~1.5s
+        x:        cx + (Math.random() - 0.5) * 70,
+        y:        cy,
+        vx:       (Math.random() - 0.5) * 130,
+        vy:       -(430 + Math.random() * 150),
+        fuse:     0.7 + Math.random() * 0.4,                     // flight time to burst
+        color:    COLORS[i % COLORS.length],
+        big:      i === big,
+        launched: false,
+        burst:    false,
+      });
+    }
+    this._fireworksShow = { rockets, particles: [], crackles: [] };
+  }
+
+  /** Advance the fireworks show one frame — rocket flight + spark trails,
+   *  detonations, crackle rings, and particle physics (gravity + drag). */
+  _updateFireworks(dt) {
+    const show = this._fireworksShow;
+    if (!show) return;
+    const COLORS = [0xFF3B30, 0xFFD24D, 0x2EE6D6, 0xB06CFF];
+    for (const r of show.rockets) {
+      if (r.burst) continue;
+      if (!r.launched) {
+        r.delay -= dt;
+        if (r.delay > 0) continue;
+        r.launched = true;
+        this.audio?.playFireworkWhistle?.();
+      }
+      // Flight — slight gravity pull so the streak arcs like a real rocket.
+      r.x += r.vx * dt;
+      r.y += r.vy * dt;
+      r.vy += 120 * dt;
+      // Spark trail — a couple of short-lived embers shed per frame.
+      for (let s = 0; s < 2; s++) {
+        show.particles.push({
+          x: r.x + (Math.random() - 0.5) * 4, y: r.y + Math.random() * 6,
+          vx: (Math.random() - 0.5) * 30, vy: 40 + Math.random() * 40,
+          life: 0.25 + Math.random() * 0.2, maxLife: 0.45,
+          size: 1.5, color: 0xFFE9A8,
+        });
+      }
+      r.fuse -= dt;
+      if (r.fuse <= 0) {
+        r.burst = true;
+        // Radial burst — 80-150 mixed-color particles (finale gets the max).
+        const count = r.big ? 150 : 80 + ((Math.random() * 40) | 0);
+        for (let p = 0; p < count; p++) {
+          const ang = Math.random() * Math.PI * 2;
+          const spd = 90 + Math.random() * (r.big ? 260 : 190);
+          show.particles.push({
+            x: r.x, y: r.y,
+            vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+            life: 1.0 + Math.random() * 0.7, maxLife: 1.7,
+            size: r.big ? 2.6 : 2.1,
+            color: Math.random() < 0.6 ? r.color : COLORS[(Math.random() * COLORS.length) | 0],
+            ember: true,
+          });
+        }
+        // Delayed secondary crackle ring around the burst shell.
+        show.crackles.push({ at: 0.45, x: r.x, y: r.y, r: r.big ? 90 : 62 });
+        // Brief white flash per detonation; the finale also shakes the camera.
+        this.cameras?.main?.flash?.(r.big ? 140 : 80, 255, 255, 255);
+        if (r.big) this.effects.triggerShake(320, 0.010);
+        this.audio?.playFireworkBoom?.(r.big ? 1 : 0.6);
+      }
+    }
+    // Crackle rings — pop after their delay into flickering sparkles.
+    for (let i = show.crackles.length - 1; i >= 0; i--) {
+      const c = show.crackles[i];
+      c.at -= dt;
+      if (c.at > 0) continue;
+      const n = 30 + ((Math.random() * 20) | 0);
+      for (let p = 0; p < n; p++) {
+        const ang = Math.random() * Math.PI * 2;
+        const rad = c.r * (0.75 + Math.random() * 0.35);
+        show.particles.push({
+          x: c.x + Math.cos(ang) * rad, y: c.y + Math.sin(ang) * rad,
+          vx: (Math.random() - 0.5) * 30, vy: 20 + Math.random() * 40,
+          life: 0.4 + Math.random() * 0.4, maxLife: 0.8,
+          size: 1.4, color: 0xFFF6C8, flicker: true,
+        });
+      }
+      this.audio?.playFireworkCrackle?.();
+      show.crackles.splice(i, 1);
+    }
+    // Particle physics — gravity pull + air drag; dead embers drop out.
+    for (let i = show.particles.length - 1; i >= 0; i--) {
+      const p = show.particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 190 * dt;
+      p.vx *= (1 - 1.4 * dt);
+      p.life -= dt;
+      if (p.life <= 0) show.particles.splice(i, 1);
+    }
+    // Show over — every rocket burst, crackles fired, particles gone.
+    if (!show.particles.length && !show.crackles.length
+        && show.rockets.every(r => r.burst)) {
+      this._fireworksShow = null;
+    }
+  }
+
+  /** Paint the live fireworks show onto the explosion layer (depth 9.96,
+   *  over the whole world).  Rockets draw as bright white-hot streaks with
+   *  colored tails; particles as fading circles — embers dim quadratically,
+   *  crackle sparkles shimmer with per-frame random alpha. */
+  _drawFireworks(g) {
+    const show = this._fireworksShow;
+    if (!show || !g) return;
+    for (const r of show.rockets) {
+      if (!r.launched || r.burst) continue;
+      g.lineStyle(2, 0xFFFFFF, 0.95);
+      g.beginPath(); g.moveTo(r.x, r.y); g.lineTo(r.x - r.vx * 0.05, r.y - r.vy * 0.05); g.strokePath();
+      g.lineStyle(3, r.color, 0.45);
+      g.beginPath(); g.moveTo(r.x - r.vx * 0.05, r.y - r.vy * 0.05); g.lineTo(r.x - r.vx * 0.12, r.y - r.vy * 0.12); g.strokePath();
+      g.fillStyle(0xFFFFFF, 1); g.fillCircle(r.x, r.y, 2.2);
+    }
+    for (const p of show.particles) {
+      let a = Math.max(0, p.life / p.maxLife);
+      if (p.ember)   a *= a;                          // embers die quadratically
+      if (p.flicker) a *= 0.4 + Math.random() * 0.6;  // crackle shimmer
+      g.fillStyle(p.color, a);
+      g.fillCircle(p.x, p.y, p.size);
+    }
   }
 
   /** Wreck animation — the actual car sprite spinning and drifting
@@ -13560,7 +13740,7 @@ export class GameScene extends Phaser.Scene {
         } else if (sp.collectibleType === 'f12') {
           // Hide weapon pickups when player is maxed (3-per-type cap).
           // Maps the route's 'f12_*' to the inventory's normalised name.
-          const invType = { f12_gun: 'gun', f12_spike: 'spike_strip', f12_paint: 'paint_bomb', f12_rocket: 'rocket' }[sp.type];
+          const invType = { f12_gun: 'gun', f12_fireworks: 'fireworks', f12_paint: 'paint_bomb', f12_rocket: 'rocket' }[sp.type];
           if (invType && !this.cops.canCarryMore(invType)) continue;
           texKey = sp.texKey;
         } else if (sp.collectibleType === 'steroid' || sp.collectibleType === 'narcan') {
@@ -13651,8 +13831,14 @@ export class GameScene extends Phaser.Scene {
     const BLUE   = [0x1E8FE0, 0x39C0D9, 0x9FE8FF];
     const ORANGE = [0xD96A12, 0xE0902E, 0xFFC97A];
     const PURPLE = [0x7A3FD9, 0x9A5FE8, 0xD8B8FF];
+    const FESTIVE = [0xE03A3A, 0xFF8C2E, 0xFFD24D];   // red→gold — fireworks only
     if (sp.collectibleType === 'steroid' || sp.collectibleType === 'narcan') return GOLD;   // invincibility / quad shot
-    if (sp.collectibleType === 'f12') return GOLD.slice(0, 3);   // weapons keep the old amber-gold
+    if (sp.collectibleType === 'f12') {
+      // Fireworks get their own festive red/gold halo so the party
+      // pickup reads differently from the standard weapon amber.
+      if (sp.type === 'f12_fireworks') return FESTIVE;
+      return GOLD.slice(0, 3);   // weapons keep the old amber-gold
+    }
     if (sp.collectibleType === 'vice') {
       switch (sp.type) {
         case 'water': case 'slushie': case 'coldbrew': return BLUE;    // drinks
@@ -13747,6 +13933,9 @@ export class GameScene extends Phaser.Scene {
       fireG.fillStyle(0x444444, alpha * 0.3);
       fireG.fillCircle(exp.sx, exp.sy - radius * 0.4, radius * 0.9);
     }
+    // 🎆 Fireworks show overlays the same high-depth layer so the bursts
+    // paint over buildings / vehicles / signs.
+    this._drawFireworks(fireG);
   }
 
   /** Screen-level critical damage warning shared by chase and cockpit views. */
@@ -13846,11 +14035,13 @@ export class GameScene extends Phaser.Scene {
     // Mult sits just past Timer's outward edge (timer text is ~58 px
     // wide).  Smaller font keeps the readout clear of the next
     // top-row button (Mute on the right side in default LH).
-    const READOUT_LEFT_MULT_X = READOUT_LEFT_X - 60;
+    // While the party-clock readout is hidden (C.SHOW_PARTY_CLOCK=false,
+    // mechanics unaffected) the mult takes over the clock's slot.
+    const READOUT_LEFT_MULT_X = C.SHOW_PARTY_CLOCK ? READOUT_LEFT_X - 60 : READOUT_LEFT_X;
     this.hudPartyClock = this.add.text(mx(READOUT_LEFT_X), 4, '⏱  --:--', {
       fontSize: '14px', fontFamily: IMPACT,
       color: '#FFFFFF', stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(mox(1), 0).setDepth(d);
+    }).setOrigin(mox(1), 0).setDepth(d).setVisible(C.SHOW_PARTY_CLOCK);
     this.hudMult = this.add.text(mx(READOUT_LEFT_MULT_X), 4, '', {
       fontSize: '16px', fontFamily: IMPACT,
       color: '#44FF88', stroke: '#000000', strokeThickness: 3,
@@ -13913,28 +14104,12 @@ export class GameScene extends Phaser.Scene {
     this._hpDamageUntil = 0;
 
     // ── Gas gauge (below MPH, in the speed cluster) ─────────────────
-    // PNG pump icon (ui_gas_full → ui_gas_empty swap below 30 mi) sits
-    // on the OUTWARD side of the remaining-miles text — pushed outside
-    // the speed cluster so it never tucks under the mirror.  Smaller
-    // displaySize (24 px) than the old 36 px so it fits beside the
-    // 22 px text without crowding the adjacent top-row button.
-    const _gasIconKey = this.textures.exists('ui_gas_full') ? 'ui_gas_full' : null;
-    if (_gasIconKey) {
-      // Icon sits OUTWARD of the Speed number (away from the mirror)
-      // — aligned vertically with Speed's center.  _renderHUD repositions
-      // its x each frame relative to the live Speed text bounds.
-      this.hudGasIcon = this.add.image(mx(READOUT_RIGHT_X), 21, 'ui_gas_full')
-        .setOrigin(0.5, 0.5).setDepth(d).setDisplaySize(24, 24);
-    } else {
-      this.hudGasIcon = null;
-    }
-    this.hudGas = this.add.text(mx(READOUT_RIGHT_X), 56,
-      this.hudGasIcon ? '--- mi' : '⛽ --- mi', {
-        fontSize: '22px', fontFamily: IMPACT,
-        color: '#39A8FF', stroke: '#000000', strokeThickness: 4,
-      }).setOrigin(mox(0), 0).setDepth(d);
+    // Analog E↔F gauge, procedurally drawn into hudGfx each frame by
+    // _drawGasGauge (movable in the controls editor under the old
+    // readout's id `gas`).  Its label Texts (E/½/F/⛽) are lazily
+    // created there, mission-chip style.
     // Accel-pedal charge bar — thin status bar that sits directly
-    // under the gas readout.  Width matches the gas text bounds
+    // under the gas gauge.  Width matches the gauge plate bounds
     // (re-measured every frame in _renderHUD).  5 min full drain, 20
     // min refill.
     this.hudAccelBar = this.add.graphics().setDepth(d);
@@ -14873,7 +15048,7 @@ export class GameScene extends Phaser.Scene {
       // (reading 'isParent')".
       this._hudObjects.push(
         ...[
-          this.hudScore, this.hudMult, this.hudDist, this.hudRegion, this.hudStars, this.hudSteroid, this.hudNarcan, this.hudHP, this.hudHPDamage, this.hudGas, this.hudGasIcon, this.hudAccelBar,
+          this.hudScore, this.hudMult, this.hudDist, this.hudRegion, this.hudStars, this.hudSteroid, this.hudNarcan, this.hudHP, this.hudHPDamage, this.hudAccelBar,
           this.hudSpeed, this.hudRadio, this.hudPopup, this._trapSign,
           this.hudRearCop, this.hudRestStop, this.hudHelicopter, this.hudHelicopterImg,
           this._titleScrim, this._titleBackdrop, this._titleMain, this._titleSub, this._titleRoute, this._titleTap,
@@ -15011,68 +15186,15 @@ export class GameScene extends Phaser.Scene {
       this.hudHPDamage.setVisible(false);
       this._hpDamageUntil = 0;
     }
-    // Gas gauge — miles remaining.  Green > 30, amber 30→10, red ≤ 10
-    // with a slow blink (sin gate) so the low-fuel state is unmistakable.
-    // Also forces the warning state when an upcoming rest-stop exit is
-    // ≤1 mi ahead (so the player notices their tank as a refuel option
-    // approaches), per spec.
-    if (this.hudGas) {
-      const gas = Math.max(0, Math.round(this.player.gasMi ?? 0));
-      // Colorblind cue — a "!"/"!!" prefix so the urgency reads without color
-      // (redundant with the gas_full↔gas_empty icon swap).
-      const gCue = this._colorblind
-        ? (gas <= 0 ? '' : gas <= 10 ? '!! ' : gas <= GAS_LIGHT_AT_MI ? '! ' : '')
-        : '';
-      // Color tracks the gas level only.  The old near-exit warning
-      // flicker (orange when ≤1 mi from a rest stop) was dropped per
-      // player feedback — it made the gas readout strobe between
-      // blue and orange as exits passed.
-      let gColor;
-      if (this._colorblind) {
-        // CB: critical pulses on LUMINANCE (white↔blue), never red↔dark.
-        if (gas <= 0)                    gColor = '#BBBBBB';
-        else if (gas <= 10)              gColor = (Math.sin(this.gameTime * 6) > 0 ? '#FFFFFF' : '#39A8FF');
-        else if (gas <= GAS_LIGHT_AT_MI) gColor = '#FFAA22';
-        else                             gColor = '#39A8FF';
-      } else {
-        if (gas <= 0)                    gColor = '#888888';
-        else if (gas <= 10)              gColor = (Math.sin(this.gameTime * 6) > 0 ? '#FF2244' : '#660000');
-        else if (gas <= GAS_LIGHT_AT_MI) gColor = '#FFAA22';
-        else                             gColor = '#39A8FF';
-      }
-      // If the PNG icon is mounted, render text-only (no emoji); icon
-      // texture swaps to gas_empty once miles ≤ GAS_LIGHT_AT_MI (30).
-      if (this.hudGasIcon) {
-        const gStr = gas <= 0 ? 'EMPTY' : `${gCue}${gas} mi`;
-        if (this.hudGas.text !== gStr) this.hudGas.setText(gStr);
-        if (this.hudGas.style.color !== gColor) this.hudGas.setColor(gColor);
-        const wantKey = gas <= GAS_LIGHT_AT_MI ? 'ui_gas_empty' : 'ui_gas_full';
-        if (this.hudGasIcon.texture.key !== wantKey
-            && this.textures.exists(wantKey)) {
-          this.hudGasIcon.setTexture(wantKey);
-        }
-        // Position icon just OUTWARD of the Speed number — away from
-        // the mirror.  Speed cluster mirrors with handedness, so the
-        // icon hugs Speed's outward edge on both sides.
-        const tb = this.hudSpeed?.getBounds?.();
-        if (tb) {
-          const GAP = 5, ICON_HALF = 12;
-          this.hudGasIcon.x = this._leftHanded
-            ? (tb.left  - GAP - ICON_HALF)
-            : (tb.right + GAP + ICON_HALF);
-        }
-      } else {
-        const gStr = gas <= 0 ? '⛽ EMPTY' : `⛽ ${gCue}${gas} mi`;
-        if (this.hudGas.text !== gStr) this.hudGas.setText(gStr);
-        if (this.hudGas.style.color !== gColor) this.hudGas.setColor(gColor);
-      }
-    }
+    // Gas — the analog E↔F gauge draws in hudGfx via _drawGasGauge (called
+    // from the _drawViceBars HUD pass, alongside the survival bars).
     // Accel-pedal charge bar — thin status bar directly below the gas
-    // readout; width matches the live gas text bounds so it stretches
-    // with the readout no matter what's displayed ("EMPTY", "180 mi",
-    // etc.).  Colour shifts from green → amber → red as it depletes.
-    if (this.hudAccelBar && this.hudGas) {
-      const tb = this.hudGas.getBounds?.();
+    // gauge; width matches the gauge plate bounds published by
+    // _drawGasGauge (previous frame's — fine, it moves per-frame anyway).
+    // Colour shifts from green → amber → red as it depletes.
+    if (this.hudAccelBar) {
+      const gb = this._gasGaugeBounds;
+      const tb = gb ? { left: gb.x, bottom: gb.y + gb.h, width: gb.w } : null;
       this.hudAccelBar.clear();
       if (tb) {
         const barH = 4;
@@ -15165,7 +15287,9 @@ export class GameScene extends Phaser.Scene {
 
     // Party clock readout — MM:SS, with color thresholds.  At 0 it shows
     // a ring-of-fire "TOO LATE" tag so the player knows the bonus is gone.
-    if (this.hudPartyClock) {
+    // Skipped entirely while C.SHOW_PARTY_CLOCK is false (readout hidden;
+    // clock mechanics still tick everywhere else).
+    if (this.hudPartyClock && C.SHOW_PARTY_CLOCK) {
       const sec   = Math.max(0, Math.floor(this._partyClockSec ?? 0));
       const mm    = Math.floor(sec / 60).toString().padStart(2, '0');
       const ss    = (sec % 60).toString().padStart(2, '0');
@@ -15945,11 +16069,13 @@ export class GameScene extends Phaser.Scene {
       this._engineTempTxt?.setVisible(false);
       this._missionChipTxt?.setVisible(false);
       this._missionBadgeTxt?.setVisible(false);
+      this._gasGaugeTxts?.forEach(l => l.setVisible(false));
       return;
     }
     this._drawSurvivalBars();
     this._drawEngineTemp();
     this._drawMissionChip();
+    this._drawGasGauge();
     return;
   }
 
@@ -16138,24 +16264,12 @@ export class GameScene extends Phaser.Scene {
       }
     }
     const mx = (x) => x + (C.HUD_OFFSET_X ?? 0);
-    // 2× the original bar block (92/8/15 → 184/16/26), and INDEPENDENTLY
-    // movable+scalable in the controls editor (id `survbars`).
-    const o  = this._ctrlOff('survbars');
-    const sc = o.s;
+    // 2× the original bar block (92/8/15 → 184/16/26), split into TWO
+    // independently movable+scalable editor units (mission-chip style):
+    //   survA = Alertness + Bladder (top block, seeds from the old
+    //   single-`survbars` layout — see the create() migration),
+    //   survB = Drinks + Food (defaults directly below A).
     const BW = 184, BH = 16, GAP = 26;
-    const bw = BW * sc, bh = BH * sc, gap = GAP * sc;
-    // Upper-RIGHT (clear of the top-left pause/music cluster that was hiding them).
-    const bx = mx(SCREEN_W - BW - 16) + o.dx;
-    const by = 92 + o.dy;
-    const fontPx = Math.max(9, Math.round(18 * sc));
-    const rows = [
-      { key: 'Alertness', v: 100 - s.tiredness, col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x6A7AE0, dual: false, danger: s.tiredness >= 70 },
-      { key: 'Drinks',    v: s.hydration,       col: s.hydrationTier() !== 'ok'    ? 0xE0483C : 0x39C0D9, dual: true,  danger: s.hydrationTier() !== 'ok' },
-      { key: 'Food',      v: s.fullness,        col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
-      // Bladder FILLS toward 100 (opposite of the others) — full = "gotta go".
-      // Gradient fill: pee-yellow at the start → poop-brown toward the end.
-      { key: 'Bladder',   v: s.bladder,         col: 0x8E7CE0, dual: false, danger: s.bladderTier() !== 'ok', grad: true },
-    ];
     // Linear RGB interpolation for the bladder gradient.
     const lerpRGB = (a, b, t) => {
       const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
@@ -16164,41 +16278,175 @@ export class GameScene extends Phaser.Scene {
            | (Math.round(ag + (bg - ag) * t) << 8)
            |  Math.round(ab + (bb - ab) * t);
     };
-    rows.forEach((r, i) => {
-      const y = by + i * gap;
-      g.fillStyle(0x0A0F1A, 0.8); g.fillRoundedRect(bx, y, bw, bh, 3);
-      const frac = Math.max(0, Math.min(1, r.v / 100));
-      const w = frac * (bw - 2);
-      if (r.grad) {   // bladder: pee-yellow (start) → poop-brown (end), position-based
-        const SEG = 24;
-        for (let sIdx = 0; sIdx < SEG; sIdx++) {
-          const t0 = sIdx / SEG;
-          if (t0 >= frac) break;
-          const t1  = Math.min((sIdx + 1) / SEG, frac);
-          const col = lerpRGB(0xF2D338, 0x5A3212, t0);   // yellow → dark brown
-          g.fillStyle(col, 1);
-          g.fillRect(bx + 1 + t0 * (bw - 2), y + 1, Math.max(0.6, (t1 - t0) * (bw - 2)), bh - 2);
+    const groups = [
+      { id: 'survA', baseY: 92, rows: [
+        { key: 'Alertness', v: 100 - s.tiredness, col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x9A5FE8, dual: false, danger: s.tiredness >= 70 },
+        // Bladder FILLS toward 100 (opposite of the others) — full = "gotta go".
+        // Gradient fill: pee-yellow at the start → poop-brown toward the end.
+        { key: 'Bladder',   v: s.bladder,         col: 0x8E7CE0, dual: false, danger: s.bladderTier() !== 'ok', grad: true },
+      ] },
+      { id: 'survB', baseY: 92 + 2 * GAP, rows: [
+        { key: 'Drinks',    v: s.hydration,       col: s.hydrationTier() !== 'ok'    ? 0xE0483C : 0x39C0D9, dual: true,  danger: s.hydrationTier() !== 'ok' },
+        { key: 'Food',      v: s.fullness,        col: s.fullnessTier()  !== 'ok'    ? 0xE0483C : 0xE0902E, dual: true,  danger: s.fullnessTier()  !== 'ok' },
+      ] },
+    ];
+    let li = 0;   // label index — 4 cached Texts shared across both groups
+    const bounds = {};
+    for (const grp of groups) {
+      const o  = this._ctrlOff(grp.id);
+      const sc = o.s;
+      const bw = BW * sc, bh = BH * sc, gap = GAP * sc;
+      // Upper-RIGHT (clear of the top-left pause/music cluster that was hiding them).
+      const bx = mx(SCREEN_W - BW - 16) + o.dx;
+      const by = grp.baseY + o.dy;
+      const fontPx = Math.max(9, Math.round(18 * sc));
+      grp.rows.forEach((r, i) => {
+        const y = by + i * gap;
+        g.fillStyle(0x0A0F1A, 0.8); g.fillRoundedRect(bx, y, bw, bh, 3);
+        const frac = Math.max(0, Math.min(1, r.v / 100));
+        const w = frac * (bw - 2);
+        if (r.grad) {   // bladder: pee-yellow (start) → poop-brown (end), position-based
+          const SEG = 24;
+          for (let sIdx = 0; sIdx < SEG; sIdx++) {
+            const t0 = sIdx / SEG;
+            if (t0 >= frac) break;
+            const t1  = Math.min((sIdx + 1) / SEG, frac);
+            const col = lerpRGB(0xF2D338, 0x5A3212, t0);   // yellow → dark brown
+            g.fillStyle(col, 1);
+            g.fillRect(bx + 1 + t0 * (bw - 2), y + 1, Math.max(0.6, (t1 - t0) * (bw - 2)), bh - 2);
+          }
+        } else {
+          g.fillStyle(r.col, 1); g.fillRoundedRect(bx + 1, y + 1, w, bh - 2, 3);
         }
-      } else {
-        g.fillStyle(r.col, 1); g.fillRoundedRect(bx + 1, y + 1, w, bh - 2, 3);
-      }
-      if (r.dual) {   // sweet-zone ticks at 25 and 75
-        g.fillStyle(0x66FF99, 0.7);
-        g.fillRect(bx + 1 + 0.25 * (bw - 2), y, 2, bh);
-        g.fillRect(bx + 1 + 0.75 * (bw - 2), y, 2, bh);
-      }
-      g.lineStyle(1.5, 0x315173, 1); g.strokeRoundedRect(bx, y, bw, bh, 3);
-      const lbl = this._survLabels[i];
-      lbl.setText(r.key).setFontSize(fontPx).setPosition(bx - 8 * sc, y - 1).setVisible(true);   // left of the bar
-      if (r.danger) lbl.setColor('#FF6A5C'); else lbl.setColor('#9FB7D6');
-    });
-    // Publish live bounds so the controls editor can place a drag handle over
-    // the whole 4-bar block (labels sit to the LEFT of bx).
-    this._survBarsBounds = {
-      x: bx - 78 * sc, y: by - 3,
-      w: bw + 78 * sc, h: 3 * gap + bh + 6,
-    };
+        if (r.dual) {   // sweet-zone ticks at 25 and 75
+          g.fillStyle(0x66FF99, 0.7);
+          g.fillRect(bx + 1 + 0.25 * (bw - 2), y, 2, bh);
+          g.fillRect(bx + 1 + 0.75 * (bw - 2), y, 2, bh);
+        }
+        g.lineStyle(1.5, 0x315173, 1); g.strokeRoundedRect(bx, y, bw, bh, 3);
+        const lbl = this._survLabels[li++];
+        lbl.setText(r.key).setFontSize(fontPx).setPosition(bx - 8 * sc, y - 1).setVisible(true);   // left of the bar
+        if (r.danger) lbl.setColor('#FF6A5C'); else lbl.setColor('#9FB7D6');
+      });
+      // Publish live bounds so the controls editor can place a drag handle
+      // over each 2-bar block (labels sit to the LEFT of bx).
+      bounds[grp.id] = {
+        x: bx - 78 * sc, y: by - 3,
+        w: bw + 78 * sc, h: gap + bh + 6,
+      };
+    }
+    this._survABounds = bounds.survA;
+    this._survBBounds = bounds.survB;
     this._drawSurvivalFx();
+  }
+
+  /** Analog gas gauge — procedurally drawn E↔F arc (red low-fuel wedge, tick
+   *  marks, jittering needle) replacing the old remaining-miles readout.  Sits
+   *  in the speed cluster where the old text lived, mirrors with handedness,
+   *  and is movable/pinch-scalable in the controls editor under the old
+   *  readout's id (`gas`).  Reads FRACTION of tank (gasMi / gasMaxMi), so
+   *  Reserve-Tank upgrades just make the needle sweep slower. */
+  _drawGasGauge() {
+    const p = this.player;
+    if (!p) return;
+    const g = this.hudGfx;
+    if (!this._gasGaugeTxts) {
+      this._gasGaugeTxts = [];
+      const spec = [
+        ['E', '11px'], ['½', '9px'], ['F', '11px'], ['⛽', '13px'],
+      ];
+      for (const [txt, fs] of spec) {
+        const t = this.add.text(0, 0, txt, {
+          fontSize: fs, fontFamily: IMPACT, color: '#9FB7D6', stroke: '#000', strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(21);
+        this._hudObjects?.push(t);
+        this.cameras?.main?.ignore?.([t]);   // late-created — UI camera only
+        this._gasGaugeTxts.push(t);
+      }
+    }
+    const mxo = (x) => x + (C.HUD_OFFSET_X ?? 0);
+    const o  = this._ctrlOff('gas');
+    const sc = o.s;
+    // Plate geometry — parked where the old "### mi" text sat (right of the
+    // mirror in base coords; mirrored to the left when left-handed).
+    const BW = 84, BH = 58;
+    const baseLeft = this._leftHanded
+      ? (SCREEN_W - (SCREEN_W / 2 + 136) - BW)
+      : (SCREEN_W / 2 + 136);
+    const bx = mxo(baseLeft) + o.dx;
+    const by = 52 + o.dy;
+    const bw = BW * sc, bh = BH * sc;
+    // Fuel fraction → needle target; the drawn needle LAGS it (smooth lerp)
+    // plus a tiny wobble so it reads like a real damped analog movement.
+    const frac = Math.max(0, Math.min(1,
+      (p.gasMi ?? 0) / Math.max(1, p.gasMaxMi ?? 1)));
+    if (this._gasNeedleFrac == null) this._gasNeedleFrac = frac;
+    this._gasNeedleFrac += (frac - this._gasNeedleFrac) * 0.08;
+    const t   = this.gameTime ?? 0;
+    const jit = (Math.sin(t * 13) * 0.5 + Math.sin(t * 31 + 1.7) * 0.5) * 0.006;
+    const nFrac = Math.max(0, Math.min(1, this._gasNeedleFrac + jit));
+    const low   = frac <= 0.15;                       // needle in the red wedge
+    const crit  = (p.gasMi ?? 0) <= 10;               // blink like the old readout
+    const blinkOn = Math.sin(t * 6) > 0;
+    // Backing plate — survival-bar palette.
+    g.fillStyle(0x0A0F1A, 0.8);  g.fillRoundedRect(bx, by, bw, bh, 3);
+    g.lineStyle(1.5, 0x315173, 1); g.strokeRoundedRect(bx, by, bw, bh, 3);
+    // Arc: pivot at bottom-center of the plate, sweeping 100° from E (left)
+    // to F (right).  Screen y grows DOWN, so "up-left" is −125°.
+    const cx = bx + bw / 2, cy = by + bh - 10 * sc, R = 34 * sc;
+    const A0 = Phaser.Math.DegToRad(-145);            // E
+    const A1 = Phaser.Math.DegToRad(-35);             // F
+    const angAt = (f) => A0 + (A1 - A0) * f;
+    g.lineStyle(2 * sc, 0x9FB7D6, 0.9);
+    g.beginPath(); g.arc(cx, cy, R, A0, A1, false); g.strokePath();
+    // Red low-fuel wedge — first 15% of the sweep, hugging the arc's inside.
+    // CB mode swaps red for orange (red↔dark blink is the unreadable pair).
+    const wedgeCol = this._colorblind ? 0xFF7A00 : 0xFF2244;
+    g.lineStyle(5 * sc, wedgeCol, 0.85);
+    g.beginPath(); g.arc(cx, cy, R - 4 * sc, A0, angAt(0.15), false); g.strokePath();
+    // Ticks — major at E/½/F (long), minor at ¼/¾ (short).
+    for (const [f, len] of [[0, 7], [0.25, 4], [0.5, 7], [0.75, 4], [1, 7]]) {
+      const a = angAt(f);
+      g.lineStyle((f % 0.5 === 0 ? 2 : 1.5) * sc, 0xEAF2FF, 0.9);
+      g.beginPath();
+      g.moveTo(cx + Math.cos(a) * (R - len * sc), cy + Math.sin(a) * (R - len * sc));
+      g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+      g.strokePath();
+    }
+    // Needle — white normally; red (blinking bright/dim when ≤10 tank-mi)
+    // once it's in the wedge.  CB blinks on luminance (white↔blue).
+    const needleCol = low
+      ? (this._colorblind
+        ? (crit && blinkOn ? 0xFFFFFF : 0x39A8FF)
+        : (crit && !blinkOn ? 0x660000 : 0xFF2244))
+      : 0xEAF2FF;
+    const na = angAt(nFrac);
+    g.lineStyle(2.5 * sc, needleCol, 1);
+    g.beginPath();
+    g.moveTo(cx, cy);
+    g.lineTo(cx + Math.cos(na) * (R - 5 * sc), cy + Math.sin(na) * (R - 5 * sc));
+    g.strokePath();
+    g.fillStyle(0x9FB7D6, 1); g.fillCircle(cx, cy, 3 * sc);   // needle hub
+    // Labels — E / ½ / F ride just outside the arc; ⛽ glyph under the hub.
+    const fontPx = (base) => Math.max(8, Math.round(base * sc));
+    const place = (idx, f, rOff, base) => {
+      const a = angAt(f);
+      this._gasGaugeTxts[idx]
+        .setFontSize(fontPx(base))
+        .setPosition(cx + Math.cos(a) * (R + rOff * sc), cy + Math.sin(a) * (R + rOff * sc))
+        .setVisible(true);
+    };
+    place(0, 0,   7, 11);   // E
+    place(1, 0.5, 6, 9);    // ½
+    place(2, 1,   7, 11);   // F
+    this._gasGaugeTxts[0].setColor(low ? '#FF6A5C' : '#9FB7D6');
+    this._gasGaugeTxts[3]
+      .setFontSize(fontPx(13))
+      .setPosition(cx, cy - 12 * sc)
+      .setVisible(true);
+    // Publish live bounds for the controls-editor drag handle (+ the accel
+    // charge bar, which parks itself under this plate in _renderHUD).
+    this._gasGaugeBounds = { x: bx, y: by, w: bw, h: bh };
   }
 
   /** Bespoke survival-state overlays: dehydration tunnel-vision, nausea green
@@ -16228,14 +16476,30 @@ export class GameScene extends Phaser.Scene {
       }
       // Depth 15: above the world, BELOW hudGfx(20)/labels(21)/buttons(62+) so
       // the vignette never darkens buttons or HUD readouts.
-      const mkVig = (tint) => this.add.image(0, 0, 'rtr_vignette')
-        .setScrollFactor(0).setDepth(15).setTint(tint).setAlpha(0);
+      // Created LATE (first _drawSurvivalFx call) — position + size + hide
+      // immediately so no frame renders the raw 256px texture at (0,0), and
+      // explicitly ignore on the main camera (the bulk _hudObjects ignore()
+      // snapshot ran at camera setup, before these existed).
+      const _vw0 = (SCREEN_W + (C.HUD_OFFSET_X ?? 0) * 2) * 1.05;
+      const mkVig = (tint) => this.add.image(
+        SCREEN_W / 2 + (C.HUD_OFFSET_X ?? 0), SCREEN_H / 2, 'rtr_vignette')
+        .setScrollFactor(0).setDepth(15).setTint(tint).setAlpha(0)
+        .setDisplaySize(_vw0, SCREEN_H * 1.15).setVisible(false);
       this._vigDark  = mkVig(0x000000);   // dehydration
       this._vigBrown = mkVig(0x2A1A05);   // food coma
       this._hudObjects?.push(this._vigDark, this._vigBrown);
+      this.cameras?.main?.ignore?.([this._vigDark, this._vigBrown]);
     }
     const g = this._survFxGfx; g.clear();
-    if (this._awaitingStart) { this._bladderTxt.setVisible(false); return; }
+    // No overlays on the title screen OR in the controls editor — the editor
+    // reaches here via _drawViceBars' _ctrlEditMode branch, and a lingering
+    // vignette would sit over the drag handles.
+    if (this._awaitingStart || this._ctrlEditMode) {
+      this._bladderTxt.setVisible(false);
+      this._vigDark?.setVisible(false);
+      this._vigBrown?.setVisible(false);
+      return;
+    }
     const W = SCREEN_W + (C.HUD_OFFSET_X ?? 0) * 2, H = SCREEN_H;
     const ox = -(C.HUD_OFFSET_X ?? 0);
     const t = this.gameTime ?? 0;
@@ -16749,7 +17013,7 @@ export class GameScene extends Phaser.Scene {
     // edge (tucked under the Mute button) — handled separately below.
     const WEAPONS = [
       { id: 'gun',         color: 0x888888, label: '🔫', tex: 'weapon_gun'         },
-      { id: 'spike_strip', color: 0xFF7700, label: '📍', tex: 'weapon_spike_strip' },
+      { id: 'fireworks',   color: 0xE04455, label: '🎆', tex: 'weapon_fireworks'  },
       { id: 'paint_bomb',  color: 0xFFEE00, label: '🍩', tex: 'weapon_paint_bomb' },
       { id: 'rocket',      color: 0xFF3300, label: '🚀', tex: 'weapon_rocket'     },
     ];
@@ -16891,6 +17155,7 @@ export class GameScene extends Phaser.Scene {
     const thread = (this._buddyThreads[cid] ??= []);
     thread.push({ text, from, mile: Math.round(this._odometer ?? 0) });
     if (thread.length > 12) thread.shift();
+    try { window.__notif?.bumpMsg?.(cid); } catch (_) {}   // Messages unread dot
     this._showPopup('📱 New text — ' + from, '#9FE8FF');
   }
 
@@ -16924,6 +17189,7 @@ export class GameScene extends Phaser.Scene {
   _girlMsg(text, quiet = false) {
     (this._girlThread ??= []).push({ text, mile: Math.round(this._odometer ?? 0) });
     if (this._girlThread.length > 12) this._girlThread.shift();
+    try { window.__notif?.bumpMsg?.('girl'); } catch (_) {}   // Messages unread dot
     this._showPopup(quiet ? '💕 …' : '📱 New text — The Crush', quiet ? '#C9B6D8' : '#FF9FD0');
   }
 
@@ -17097,7 +17363,7 @@ export class GameScene extends Phaser.Scene {
     let f12Type, texKey;
     if (r < 0.30)      { f12Type = 'f12_gun';    texKey = 'weapon_gun'; }
     else if (r < 0.55) { f12Type = 'f12_rocket'; texKey = 'weapon_rocket'; }
-    else if (r < 0.80) { f12Type = 'f12_spike';  texKey = 'weapon_spike_strip'; }
+    else if (r < 0.80) { f12Type = 'f12_fireworks'; texKey = 'weapon_fireworks'; }
     else               { f12Type = 'f12_paint';  texKey = 'weapon_paint_bomb'; }
     seg.sprites.push({
       type:            f12Type,
@@ -17160,7 +17426,7 @@ export class GameScene extends Phaser.Scene {
       accessories: { bumper: !!acc.bumper, traction: !!acc.traction, nos: Math.max(0, Math.min(3, acc.nos ?? 0)) },
       owned: (this.registry?.get?.('ownedVehicles') ?? ['beater']),
       vices, unlocked,
-      weapons: { gun: this.cops?.gunAmmo ?? 0, spike: cnt('spike_strip'), donut: cnt('paint_bomb'), rocket: cnt('rocket'), disguise: cnt('disguise') ? 1 : 0 },
+      weapons: { gun: this.cops?.gunAmmo ?? 0, fireworks: cnt('fireworks'), donut: cnt('paint_bomb'), rocket: cnt('rocket'), disguise: cnt('disguise') ? 1 : 0 },
       radar: !!this._hasRadar,
       position: this.player?.position ?? 0,
       odometer: this._odometer ?? 0,
@@ -17290,10 +17556,10 @@ export class GameScene extends Phaser.Scene {
           this.cops.f12Tokens = [];
           if (this.cops.gunAmmo > 0) this.cops.f12Tokens.push('gun');
           const add = (tok, n) => { for (let i = 0; i < Math.min(3, n || 0); i++) this.cops.f12Tokens.push(tok); };
-          add('spike_strip', s.weapons.spike);
-          add('paint_bomb',  s.weapons.donut);
-          add('rocket',      s.weapons.rocket);
-          add('disguise',    s.weapons.disguise);
+          add('fireworks',  s.weapons.fireworks);
+          add('paint_bomb', s.weapons.donut);
+          add('rocket',     s.weapons.rocket);
+          add('disguise',   s.weapons.disguise);
         }
       }
       // Radar detector — additive (never strips one the device already owns):
@@ -17396,6 +17662,14 @@ export class GameScene extends Phaser.Scene {
         // stored as party-clock values, fixed at acceptance (Ch. 8).
         partyClockSec: this._partyClockSec ?? null,
         bladderAtEntry: this.survival?.bladder ?? 0,   // for the timed restroom cost
+        // Full survival snapshot — drives the compact status bars on the
+        // rest-stop landing menu (same colors/order as the drive HUD).
+        survivalAtEntry: {
+          tiredness: this.survival?.tiredness ?? 0,
+          hydration: this.survival?.hydration ?? 50,
+          fullness:  this.survival?.fullness  ?? 50,
+          bladder:   this.survival?.bladder   ?? 0,
+        },
         // Full vice-bar snapshot — vice status pauses at the rest stop and
         // resumes from these levels (no decay during the menu, no silent
         // wipe of unlocked bars).  COFFEE / SNOOZE buys mutate this on
@@ -17500,13 +17774,14 @@ export class GameScene extends Phaser.Scene {
     return [
       ['score',   [this.hudScore]],
       ['speed',   [this.hudSpeed, this._mphSub]],     // number + MPH/KM-H label
-      ['gas',     [this.hudGas]],                     // fuel readout
-      ['gasIcon', [this.hudGasIcon]],                 // fuel pump logo (independent)
+      // (`gas` is now the DRAWN analog gauge — proxied like survbars/mission
+      // via _gasGaugeBounds, not a text group.)
       ['dist',    [this.hudDist]],
       ['region',  [this.hudRegion]],
       ['radio',   [this.hudRadio]],
       ['hp',      [this.hudHP]],
-      ['clock',   [this.hudPartyClock]],              // party-clock timer (own handle)
+      // Party-clock handle only exists while its readout is shown.
+      ...(C.SHOW_PARTY_CLOCK ? [['clock', [this.hudPartyClock]]] : []),
       ['mult',    [this.hudMult]],                    // score multiplier (separate)
       ['stars',   [this.hudStars]],
       // Transient pop-ups — shown with placeholder text in the editor so they
@@ -17716,10 +17991,13 @@ export class GameScene extends Phaser.Scene {
     // a HIGHER depth than the draggable text (65) so they reliably grab even
     // where the top-center buttons/mirror sit over the small readouts.
     try { this._drawSurvivalBars(); } catch (_) {}
-    mk('survbars', this._survBarsBounds, 66);
+    mk('survA', this._survABounds, 66);
+    mk('survB', this._survBBounds, 66);
     try { this._drawMissionChip(); } catch (_) {}
     mk('mission', this._missionChipBounds, 66);
-    mk('clock', this._boundsOfTextObj(this.hudPartyClock), 66);
+    try { this._drawGasGauge(); } catch (_) {}
+    mk('gas', this._gasGaugeBounds, 66);
+    if (C.SHOW_PARTY_CLOCK) mk('clock', this._boundsOfTextObj(this.hudPartyClock), 66);
     mk('mult',  this._boundsOfTextObj(this.hudMult),       66);
   }
 
@@ -17750,9 +18028,11 @@ export class GameScene extends Phaser.Scene {
       if (id === 'wiper')      return this._wiperLiveBounds;
       if (id.startsWith('weapon_')) return this._weaponCellBounds?.[id.slice(7)];
       if (id.startsWith('vice_'))   return this._viceCellBounds?.[id.slice(5)];
-      if (id === 'survbars') return this._survBarsBounds;
+      if (id === 'survA')    return this._survABounds;
+      if (id === 'survB')    return this._survBBounds;
       if (id === 'mission')  return this._missionChipBounds;
-      if (id === 'clock')    return this._boundsOfTextObj(this.hudPartyClock);
+      if (id === 'gas')      return this._gasGaugeBounds;
+      if (id === 'clock')    return C.SHOW_PARTY_CLOCK ? this._boundsOfTextObj(this.hudPartyClock) : null;
       if (id === 'mult')     return this._boundsOfTextObj(this.hudMult);
       return null;
     };
@@ -18578,7 +18858,7 @@ export class GameScene extends Phaser.Scene {
         this.cops.f12Tokens = [];
         this.cops.gunAmmo   = 18;
         this.cops.f12Tokens.push('gun');
-        for (const w of ['spike_strip', 'paint_bomb', 'rocket', 'disguise']) {
+        for (const w of ['fireworks', 'paint_bomb', 'rocket', 'disguise']) {
           for (let i = 0; i < 3; i++) this.cops.f12Tokens.push(w);
         }
       }
@@ -18593,18 +18873,22 @@ export class GameScene extends Phaser.Scene {
       const customMusicPlaying =
         (!!this.audio._trackEl && !this.audio._trackEl.paused) ||
         (Array.isArray(this.audio._playlistQueue) && this.audio._playlistQueue.length > 0);
+      // Implicit start = a random song from the FULL catalogue (station
+      // weighted by track count, track randomized within it) — unless the
+      // player saved a default station in the Music app settings.
+      const _defSt = this.registry?.get?.('save')?.get?.('settings.radio', 0);
+      const _station = (Number.isInteger(_defSt) && _defSt > 0)
+        ? _defSt : (this.audio.randomStationIndex?.() ?? 0);
       if (!this.audio._inited) {
-        // First-ever init — default to PHONK.
-        this.audio.currentStation = 0;
+        // First-ever init.
+        this.audio.currentStation = _station;
         this.audio.init?.();
         this.audio._inited = true;
       } else if (!customMusicPlaying) {
-        // No music currently playing — kick a fresh PHONK track so
-        // Start Over / Checkpoint still drops the player into music
-        // instead of silence.
-        this.audio.currentStation = 0;
+        // No music currently playing — kick a fresh track so Start Over /
+        // Checkpoint still drops the player into music instead of silence.
         this.audio._enablePlayback?.();
-        this.audio.setStation?.(0);
+        this.audio.setStation?.(_station);
       } else {
         // Player's own song/playlist is already running.  Resume
         // playback state without touching the station selection.

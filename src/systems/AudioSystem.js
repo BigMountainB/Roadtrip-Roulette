@@ -752,6 +752,18 @@ export class AudioSystem {
     this._startTrack(this._playlistQueue[0]);
   }
   /** Shuffle all real-track stations into a single rotating set. */
+  /** Station pick weighted by track count — an implicit music start lands on
+   *  a uniformly random song across the whole catalogue (station is chosen
+   *  here; _refreshStationPlayback already randomizes the track within it). */
+  randomStationIndex() {
+    const w = STATIONS.map(s => s.tracks?.length ?? 0);
+    const total = w.reduce((a, b) => a + b, 0);
+    if (!total) return 0;
+    let r = Math.random() * total;
+    for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return i; }
+    return 0;
+  }
+
   shuffleAllTracks() {
     this._playlistQueue = null;
     const pool = [];
@@ -1134,6 +1146,80 @@ export class AudioSystem {
     const ng = ctx.createGain(); ng.gain.value = 0.06;
     src.connect(ng); ng.connect(this._master);
     src.start(t + 0.22);
+  }
+
+  /** 🎆 Bottle-rocket whistle — a rising sawtooth sweep as the rocket climbs,
+   *  fired once per launch by GameScene's fireworks show.  Procedural — no
+   *  audio asset needed; routed through the master gain like every cue. */
+  playFireworkWhistle() {
+    if (!this.ready || this.muted || this._musicPaused) return;
+    const ctx = this._ctx;
+    if (!ctx || ctx.state !== 'running' || !this._master) return;
+    const t   = ctx.currentTime;
+    const dur = 0.55 + Math.random() * 0.2;
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    osc.type = 'sawtooth';
+    // Rising sweep — ~700Hz off the hood up to ~2.2kHz at apex.
+    osc.frequency.setValueAtTime(650 + Math.random() * 120, t);
+    osc.frequency.exponentialRampToValueAtTime(2100 + Math.random() * 300, t + dur);
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(0.08, t + 0.05);
+    env.gain.exponentialRampToValueAtTime(0.0006, t + dur);
+    osc.connect(env); env.connect(this._master);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+
+  /** 🎆 Firework detonation — a deep low-sine thump plus a broadband noise
+   *  burst.  `intensity` 0-1 scales level + noise length (1 = the finale). */
+  playFireworkBoom(intensity = 1) {
+    if (!this.ready || this.muted || this._musicPaused) return;
+    const ctx = this._ctx;
+    if (!ctx || ctx.state !== 'running' || !this._master) return;
+    const t = ctx.currentTime;
+    const k = Math.max(0, Math.min(1, intensity));
+    // Low thump — a sine that pitches down as it decays (classic boom).
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(38, t + 0.35);
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.linearRampToValueAtTime(0.30 + k * 0.20, t + 0.008);
+    env.gain.exponentialRampToValueAtTime(0.0006, t + 0.45);
+    osc.connect(env); env.connect(this._master);
+    osc.start(t); osc.stop(t + 0.5);
+    // Noise burst — the "crack" body of the explosion, fading fast.
+    const nDur = 0.18 + k * 0.14;
+    const len  = Math.floor(ctx.sampleRate * nDur);
+    const buf  = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d    = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const ng  = ctx.createGain(); ng.gain.value = 0.12 + k * 0.10;
+    src.connect(ng); ng.connect(this._master);
+    src.start(t);
+  }
+
+  /** 🎆 Crackle tail — a scatter of short random noise ticks over ~0.6s,
+   *  like the sparkle shell popping off after the main burst. */
+  playFireworkCrackle() {
+    if (!this.ready || this.muted || this._musicPaused) return;
+    const ctx = this._ctx;
+    if (!ctx || ctx.state !== 'running' || !this._master) return;
+    const t = ctx.currentTime;
+    const ticks = 14 + ((Math.random() * 8) | 0);
+    for (let i = 0; i < ticks; i++) {
+      const at  = t + Math.random() * 0.6;
+      const len = Math.floor(ctx.sampleRate * 0.012);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d   = buf.getChannelData(0);
+      for (let s = 0; s < len; s++) d[s] = (Math.random() * 2 - 1) * (1 - s / len);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const ng  = ctx.createGain(); ng.gain.value = 0.03 + Math.random() * 0.04;
+      src.connect(ng); ng.connect(this._master);
+      src.start(at);
+    }
   }
 
   get currentName()  { return STATIONS[this.currentStation].name; }
