@@ -1404,6 +1404,46 @@
       // artwork on every device (no per-aspect % retuning).
       const bgImg = document.querySelector('#phone-menu img.bg');
       let coverState = null;
+      // ── Layout diagnostics — tap the WEATHER header 5× to toggle.  Shows
+      // every measurement the menu layout uses, live, so device-specific
+      // layout bugs get fixed from data instead of guesses.
+      let dbgEl = null;
+      const dbgUpdate = () => {
+        if (!dbgEl) return;
+        const menu = document.getElementById('phone-menu');
+        const vv = window.visualViewport;
+        const r  = bgImg.getBoundingClientRect();
+        dbgEl.textContent =
+          `standalone:${!!navigator.standalone} dpr:${window.devicePixelRatio}\n`
+          + `inner:${window.innerWidth}x${window.innerHeight} screen:${screen.width}x${screen.height}\n`
+          + `menu client:${menu.clientWidth}x${menu.clientHeight}\n`
+          + `vv:${vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' offTop:' + Math.round(vv.offsetTop) : 'n/a'}\n`
+          + `safe-b:${getComputedStyle(document.documentElement).getPropertyValue('--dbg-sab') || '?'}\n`
+          + (coverState ? `scale:${coverState.scale.toFixed(4)} offX:${Math.round(coverState.offX)} offY:${Math.round(coverState.offY)}\n` : 'coverState:null\n')
+          + `img rect: t:${Math.round(r.top)} b:${Math.round(r.bottom)} l:${Math.round(r.left)} r:${Math.round(r.right)}`;
+      };
+      const dbgToggle = () => {
+        if (dbgEl) { dbgEl.remove(); dbgEl = null; return; }
+        document.documentElement.style.setProperty('--dbg-sab', 'env(safe-area-inset-bottom)');
+        dbgEl = document.createElement('pre');
+        dbgEl.style.cssText = 'position:fixed;left:8px;top:30%;z-index:100002;margin:0;'
+          + 'background:rgba(0,0,0,0.85);color:#7CFF7C;font:11px/1.5 Menlo,monospace;'
+          + 'padding:8px;border:1px solid #7CFF7C;border-radius:6px;pointer-events:none;white-space:pre;';
+        document.getElementById('phone-menu').appendChild(dbgEl);
+        dbgUpdate();
+        setInterval(dbgUpdate, 500);
+      };
+      (() => {
+        let taps = 0, last = 0;
+        const el = document.getElementById('phone-loc');
+        el?.addEventListener('pointerdown', () => {
+          const now = Date.now();
+          taps = (now - last < 600) ? taps + 1 : 1;
+          last = now;
+          if (taps >= 5) { taps = 0; dbgToggle(); }
+        });
+      })();
+
       const recomputeCover = () => {
         if (!bgImg.naturalWidth || !bgImg.naturalHeight) return null;
         const imgW = bgImg.naturalWidth, imgH = bgImg.naturalHeight;
