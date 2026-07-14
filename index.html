@@ -1400,7 +1400,14 @@
         if (!bgImg.naturalWidth || !bgImg.naturalHeight) return null;
         const imgW = bgImg.naturalWidth, imgH = bgImg.naturalHeight;
         const menu = document.getElementById('phone-menu');
-        const vw = menu.clientWidth, vh = menu.clientHeight;
+        // Measure the LIVE visual viewport, not the container: on iOS Safari
+        // the collapsing URL bar / home-indicator inset make clientHeight
+        // disagree with what's actually visible, which read as an off-center
+        // menu with a black band at the bottom.  visualViewport is the truth;
+        // clientWidth/Height is the fallback for older browsers.
+        const vvp = window.visualViewport;
+        const vw = Math.round(vvp?.width  ?? menu.clientWidth);
+        const vh = Math.round(vvp?.height ?? menu.clientHeight);
         if (!vw || !vh) return null;
         // AUTO-SCALE (2026-07-13): every 853×1844 menu skin carries a baked-in
         // near-black dead border around the visible phone artwork — measured
@@ -1588,6 +1595,9 @@
       else bgImg.addEventListener('load', layoutHitZones);
       window.addEventListener('resize', layoutHitZones);
       window.addEventListener('orientationchange', () => requestAnimationFrame(layoutHitZones));
+      // iOS: the visual viewport resizes when Safari's toolbars collapse or
+      // the keyboard shows — window 'resize' does NOT always fire for these.
+      window.visualViewport?.addEventListener('resize', layoutHitZones);
       // iOS Safari quirk — on cold launch the viewport reports the
       // wrong height for a few hundred ms while the status bar / safe
       // area settles.  Re-layout multiple times during the first
