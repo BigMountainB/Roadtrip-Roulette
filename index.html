@@ -1413,10 +1413,14 @@
         // minimized bottom bar from vv.height even though the fixed container
         // (and the visible page) extend under it — centering on vv.height
         // shoved the art up and left a black band at the bottom (2026-07-13).
-        // innerHeight tracks the LARGE viewport once toolbars collapse —
-        // take the max so the centering box always spans the full glass.
+        // Fit + center within the VISIBLE viewport (visualViewport = glass
+        // minus Safari's bottom bar).  In portrait Safari NEVER fully cedes
+        // its nav-bar strip to a non-scrolling page (landscape auto-hides it,
+        // which is why gameplay gets the whole screen) — centering into that
+        // strip just gets the art's bottom clipped behind the bar.  The lvh
+        // container stays black underneath so the whole glass reads seamless.
         const vw = menu.clientWidth;
-        const vh = Math.max(menu.clientHeight, window.innerHeight || 0);
+        const vh = Math.round(window.visualViewport?.height ?? menu.clientHeight);
         if (!vw || !vh) return null;
         // AUTO-SCALE (2026-07-13): every 853×1844 menu skin carries a baked-in
         // near-black dead border around the visible phone artwork — measured
