@@ -1419,7 +1419,12 @@
         // coverState stays the full-image transform, so all data-px math is
         // untouched.
         const EDGE = 15;
-        const INS = { l: 36, r: 35, t: 100, b: 37 };   // baked border, art px
+        // VISIBLE content box (luminance-measured, identical on all skins):
+        // bright art spans rows 106–1711 / cols 41–813 of the 853×1844 file.
+        // The earlier {t:100,b:37} box included ~95px of essentially-black
+        // filler BELOW the rotate strip (opaque but invisible on screen),
+        // which pushed the visible art up — the "not centered vertically" bug.
+        const INS = { l: 41, r: 853 - 813, t: 106, b: 1844 - 1712 };
         const cw = imgW - INS.l - INS.r, ch = imgH - INS.t - INS.b;
         const scale = Math.min((vw - EDGE * 2) / cw, (vh - EDGE * 2) / ch);
         const offX = (vw - cw * scale) / 2 - INS.l * scale;
