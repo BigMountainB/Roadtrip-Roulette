@@ -25,7 +25,13 @@ const SLOT_COUNT = 3;
 // its defaults on load, so the bucket here can start empty.
 // NOTE: "global" is now per-SLOT — each player keeps their own lifetime
 // stats / achievements; only progress is duplicated per steering mode.
-const GLOBAL_KEYS = new Set(['achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector']);
+// npcMemory (recurring rest-stop NPCs remembering the player) is a lifetime
+// per-player thing, so it lives in GLOBAL too — otherwise it would silently
+// fork per steering mode.
+// missionRep / missionStats (Ch. 8 Favors) are lifetime per-player records —
+// rep tiers and accepted/completed/failed counts must survive per-mode
+// resets and never fork per steering mode, so they're GLOBAL too.
+const GLOBAL_KEYS = new Set(['achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector', 'npcMemory', 'missionRep', 'missionStats']);
 
 // Storage-key names for each profile bucket.  Kept as-is for backward
 // compatibility with on-disk saves.  The GameScene UI uses 'flappy' and
@@ -126,6 +132,18 @@ const DEFAULT_GLOBAL = {
   // beeps + flashes a dashboard light approaching a speed trap.  Persists
   // across runs once bought.
   radarDetector:   false,
+  // Recurring-NPC memory for encounter dialogue trees.  Shape:
+  //   npcMemory: { [npcId]: { met: true, hadPie: true, … } }
+  // Flat flag/value bags written by choice `setMemory`; drives return-visit
+  // greetings (and later, mission callbacks — Ch. 8 continuity).
+  npcMemory:       {},
+  // Mission ("Favors") lifetime records — Ch. 8.  Rep = completions per
+  // mission type (drives Rookie/Known/Legend payout tiers; never decreases).
+  // Stats = accepted/completed/failed counters per type (skeptical-NPC
+  // dialogue hooks).  Active missions + offers are RUN state and live in
+  // run snapshots instead (see MissionSystem.serialize).
+  missionRep:      {},
+  missionStats:    {},
 };
 
 // A single player profile slot — its license-plate handle plus a complete,
@@ -367,6 +385,12 @@ export class SaveSystem {
     g.stats           = isObj(stats) ? stats : {};
     g.leaderboard     = this._sanitizeLeaderboard(src.leaderboard);
     g.radarDetector   = src.radarDetector === true;
+    const npcMemory   = cleanJson(src.npcMemory, {});
+    g.npcMemory       = isObj(npcMemory) ? npcMemory : {};
+    const missionRep   = cleanJson(src.missionRep, {});
+    g.missionRep       = isObj(missionRep) ? missionRep : {};
+    const missionStats = cleanJson(src.missionStats, {});
+    g.missionStats     = isObj(missionStats) ? missionStats : {};
     if (src.money !== undefined) g.money = finiteInt(src.money, 0, 0);
     return g;
   }

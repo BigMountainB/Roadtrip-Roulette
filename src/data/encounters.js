@@ -39,6 +39,24 @@
 //
 // A choice may resolve randomly via `chance: [{ p, effects, dialogue }, …]`
 // (probabilities should sum to ~1).  `cost` is sugar for effects.cash = -cost.
+//
+// ── Dialogue trees (multi-node conversations) ────────────────────────────
+// A card MAY carry a `nodes` map instead of a flat line/choices — the scene
+// walks the tree in the same split-screen card (renderer only; effects still
+// resolve through resolveChoice/applyEncounterEffects when a choice is picked):
+//   npcId      stable id for npcMemory (recurring NPCs); omit = no memory
+//   startNode  entry node id, OR a function (mem) => nodeId so a recurring
+//              NPC can greet a returning player differently
+//   nodes      { [nodeId]: { line, speaker?, fact?, choices[] } }
+// Node choices extend the flat-choice shape with:
+//   next        id of the node to show after the choice resolves, OR
+//   end: true   close the conversation (EVERY node choice must declare one —
+//               no implicit closes; validateEncounterTrees enforces it, plus
+//               a reachable free/unconditional polite exit from every node)
+//   conditions  { minCash, hasBuff, memory: { key: value|true } } — failing
+//               choices render grayed out (or hidden with hideWhenLocked)
+//   setMemory   { key: value } merged into npcMemory[npcId] when chosen
+// Legacy flat cards (no `nodes`) keep today's behavior untouched.
 
 export const REST_STOP_ENCOUNTERS = [
   // ── Seattle (S) — urban intro ──────────────────────────────────────────
@@ -55,25 +73,47 @@ export const REST_STOP_ENCOUNTERS = [
     ],
   },
 
-  // ── North Bend (N) — chains before the pass ─────────────────────────────
+  // ── North Bend (N) — chains before the pass (dialogue tree) ─────────────
   {
     id: 'north_bend_chain_guy',
     stopId: 'N', weight: 3,
     portrait: 'chain_guy', speaker: 'Chain Guy',
-    line: "Pass is getting ugly. Chains now are cheaper than learning physics in a ditch.",
     fact: "Snoqualmie Pass weather can change fast between North Bend and the summit.",
-    choices: [
-      { label: "Buy chains ($80)", cost: 80, effects: { buff: 'snow_chains', revealHazard: 'snow', generous: true } },
-      {
-        label: "Haggle him down",
-        cost: 55,
-        chance: [
-          { p: 0.65, effects: { buff: 'snow_chains' } },
-          { p: 0.35, effects: { dialogue: "He sold you decorative chains. Society continues." } },
+    startNode: 'greet',
+    nodes: {
+      greet: {
+        line: "Pass is getting ugly. Chains now are cheaper than learning physics in a ditch.",
+        choices: [
+          { label: "Buy chains ($80)", cost: 80, conditions: { minCash: 80 }, effects: { buff: 'snow_chains', revealHazard: 'snow', generous: true }, end: true },
+          { label: "Eighty bucks? Let's talk.", next: 'haggle' },
+          { label: "How bad is it up there, really?", next: 'passInfo' },
+          { label: "Thanks anyway — I'll risk it", effects: {}, end: true },
         ],
       },
-      { label: "Skip it", effects: {} },
-    ],
+      haggle: {
+        line: "Fifty-five, cash, no receipt, no refunds, no eye contact. That's the whole negotiation.",
+        choices: [
+          {
+            label: "Deal ($55)",
+            cost: 55, conditions: { minCash: 55 },
+            chance: [
+              { p: 0.65, effects: { buff: 'snow_chains' } },
+              { p: 0.35, effects: { dialogue: "He sold you decorative chains. Society continues." } },
+            ],
+            end: true,
+          },
+          { label: "Back to full price", next: 'greet' },
+          { label: "Walk away", effects: {}, end: true },
+        ],
+      },
+      passInfo: {
+        line: "Bad enough that I'm out here instead of home. Whiteout past the summit, plows losing the argument.",
+        choices: [
+          { label: "Fine. The chains.", next: 'greet', effects: { revealHazard: 'snow' } },
+          { label: "Thank him and leave", effects: { revealHazard: 'snow' }, end: true },
+        ],
+      },
+    },
   },
 
   // ── Snoqualmie Pass (SP) — ski bum warning ──────────────────────────────
@@ -191,38 +231,82 @@ export const REST_STOP_ENCOUNTERS = [
     ],
   },
 
-  // ── Ellensburg (E) — rodeo-town diner ───────────────────────────────────
+  // ── Ellensburg (E) — rodeo-town diner (recurring NPC via npcMemory) ──────
   {
     id: 'ellensburg_diner',
     stopId: 'E', weight: 3,
     portrait: 'diner_waitress', speaker: 'Diner Waitress',
-    line: "Rodeo's in town so the coffee's fresh and the regulars are feral. You look like you're running from something. Pie?",
     fact: "Ellensburg is Kittitas County's rodeo-and-college town, roughly halfway across the state.",
-    choices: [
-      { label: "Coffee & pie ($12)", cost: 12, effects: { hp: +4, timeSec: +15, fullness: +16, tiredness: -12, generous: true, dialogue: "Best decision you've made all trip. Low bar, but still." } },
-      { label: "Ask what's ahead", effects: { revealHazard: 'wind', dialogue: "\"Wind past Vantage'll part your hair through the windshield.\"" } },
-      { label: "Just the check", effects: {} },
-    ],
+    npcId: 'diner_waitress',
+    // She remembers you — return visits open on a different greeting.
+    startNode: (mem) => (mem?.met ? 'greetReturn' : 'greetFirst'),
+    nodes: {
+      greetFirst: {
+        line: "Rodeo's in town so the coffee's fresh and the regulars are feral. You look like you're running from something. Pie?",
+        choices: [
+          { label: "Coffee & pie ($12)", cost: 12, conditions: { minCash: 12 }, setMemory: { met: true, hadPie: true }, effects: { hp: +4, timeSec: +15, fullness: +16, tiredness: -12, generous: true, dialogue: "Best decision you've made all trip. Low bar, but still." }, end: true },
+          { label: "What's ahead of me?", next: 'roadTalk', setMemory: { met: true } },
+          { label: "Just the check, thanks", setMemory: { met: true }, effects: {}, end: true },
+        ],
+      },
+      greetReturn: {
+        line: "Well, look who survived. Same booth's open, and I already know you're ordering pie. Don't fight it.",
+        choices: [
+          { label: "The usual ($12)", cost: 12, conditions: { minCash: 12 }, setMemory: { hadPie: true }, effects: { hp: +4, timeSec: +15, fullness: +16, tiredness: -12, generous: true, dialogue: "\"Knew it.\" The pie arrives before you finish sitting down." }, end: true },
+          { label: "Any news up the road?", next: 'roadTalk' },
+          { label: "Just passing through — take care", effects: {}, end: true },
+        ],
+      },
+      roadTalk: {
+        line: "Wind past Vantage'll part your hair through the windshield. Truckers came in white-knuckled all morning.",
+        choices: [
+          { label: "Better fuel up on pie then ($12)", cost: 12, conditions: { minCash: 12 }, setMemory: { hadPie: true }, effects: { hp: +4, fullness: +16, tiredness: -12, revealHazard: 'wind', generous: true, dialogue: "\"Smart. Nobody fights the wind hungry.\"" }, end: true },
+          { label: "Thank her and hit the road", effects: { revealHazard: 'wind' }, end: true },
+        ],
+      },
+    },
   },
 
-  // ── Hatton (H) — the loneliest rest stop ────────────────────────────────
+  // ── Hatton (H) — the loneliest rest stop (dialogue tree) ────────────────
   {
     id: 'hatton_grandma',
     stopId: 'H', weight: 3,
     portrait: 'grandma', speaker: 'Roadside Grandma',
-    line: "Not many stop in Hatton, dear. I keep gas for the ones who do. And cookies. The gas is safer.",
     fact: "Hatton is a tiny spot on WA-26, in the sparse country between Othello and Washtucna.",
-    choices: [
-      { label: "Buy her gas ($35)", cost: 35, effects: { fuelMi: +50, generous: true, dialogue: "\"Drive safe. Or don't. I'll hear about it either way.\"" } },
-      {
-        label: "Take a cookie",
-        chance: [
-          { p: 0.7, effects: { hp: +3, fullness: +14, dialogue: "Weirdly restorative. You feel watched, but nourished." } },
-          { p: 0.3, effects: { fullness: +14, timeSec: -20, dialogue: "You blink and twenty minutes are gone. Really good cookie." } },
+    startNode: 'greet',
+    nodes: {
+      greet: {
+        line: "Not many stop in Hatton, dear. I keep gas for the ones who do. And cookies. The gas is safer.",
+        choices: [
+          { label: "Buy her gas ($35)", cost: 35, conditions: { minCash: 35 }, effects: { fuelMi: +50, generous: true, dialogue: "\"Drive safe. Or don't. I'll hear about it either way.\"" }, end: true },
+          { label: "Safer? What's in the cookies?", next: 'cookies' },
+          { label: "Why Hatton, of all places?", next: 'whyHatton' },
+          { label: "Politely flee", effects: {}, end: true },
         ],
       },
-      { label: "Politely flee", effects: {} },
-    ],
+      cookies: {
+        line: "Butter, sugar, and a family recipe the county asked me to stop asking about. One won't hurt you. Probably.",
+        choices: [
+          {
+            label: "Take a cookie",
+            chance: [
+              { p: 0.7, effects: { hp: +3, fullness: +14, dialogue: "Weirdly restorative. You feel watched, but nourished." } },
+              { p: 0.3, effects: { fullness: +14, timeSec: -20, dialogue: "You blink and twenty minutes are gone. Really good cookie." } },
+            ],
+            end: true,
+          },
+          { label: "Maybe the gas instead", next: 'greet' },
+          { label: "Decline politely and leave", effects: {}, end: true },
+        ],
+      },
+      whyHatton: {
+        line: "Somebody has to watch this stretch, dear. The road takes the careless ones. I just tidy up after.",
+        choices: [
+          { label: "…About that gas", next: 'greet' },
+          { label: "Thank her and back away slowly", effects: {}, end: true },
+        ],
+      },
+    },
   },
 
   // ── Washtucna (W) — the tow driver who's seen things ────────────────────
@@ -363,4 +447,85 @@ export function applyEncounterEffects(effects = {}, ctx = {}) {
   if (effects.tiredness   != null) ctx.addSurvival?.('tiredness', effects.tiredness);
   // Engine heat: positive coolEngine = degrees of temperature removed.
   if (effects.coolEngine  != null) ctx.coolEngine?.(effects.coolEngine);
+}
+
+// ── Dialogue-tree helpers (renderer-side; NO effect resolution here) ──────
+
+/** True when a card is a multi-node dialogue tree. */
+export function isDialogueTree(enc) {
+  return !!(enc?.nodes && typeof enc.nodes === 'object');
+}
+
+/** Entry node id for a tree — `startNode` may be a function of the NPC's
+ *  memory (recurring greeting) or a plain id.  Falls back to the first key. */
+export function getStartNode(enc, mem = {}) {
+  const s = typeof enc.startNode === 'function' ? enc.startNode(mem) : enc.startNode;
+  if (s && enc.nodes?.[s]) return s;
+  return Object.keys(enc.nodes ?? {})[0] ?? null;
+}
+
+/** Fetch a node, or a legacy view of a flat card (line/choices lifted into a
+ *  synthetic single node whose choices all end) so one renderer serves both. */
+export function getEncounterNode(enc, nodeId) {
+  if (isDialogueTree(enc)) return enc.nodes[nodeId] ?? null;
+  return {
+    line: enc.line, speaker: enc.speaker, fact: enc.fact,
+    choices: (enc.choices ?? [{ label: 'Continue', effects: {} }]).map(c => ({ ...c, end: true })),
+  };
+}
+
+/** Evaluate a choice's `conditions` against { cash, buffs, memory }.
+ *  Returns null when unlocked, else a short reason string for the gray-out. */
+export function choiceLocked(choice, ctx = {}) {
+  const c = choice?.conditions;
+  if (!c) return null;
+  if (c.minCash != null && (ctx.cash ?? 0) < c.minCash) return 'cash';
+  if (c.hasBuff && !(ctx.buffs ?? []).includes(c.hasBuff)) return 'item';
+  if (c.memory) {
+    const mem = ctx.memory ?? {};
+    for (const [k, want] of Object.entries(c.memory)) {
+      if (want === true ? !mem[k] : mem[k] !== want) return 'memory';
+    }
+  }
+  return null;
+}
+
+/** Author-time sanity check for every dialogue tree: valid startNode, every
+ *  choice declares exactly next-or-end pointing at a real node, and every
+ *  node keeps a reachable FREE unconditional exit (the polite way out).
+ *  Returns an array of problem strings (empty = all good). */
+export function validateEncounterTrees(list = REST_STOP_ENCOUNTERS) {
+  const problems = [];
+  for (const enc of list) {
+    if (!isDialogueTree(enc)) continue;
+    const ids = Object.keys(enc.nodes);
+    const start = getStartNode(enc, {});
+    if (!start) { problems.push(`${enc.id}: no resolvable startNode`); continue; }
+    // Nodes from which a free (no cost/conditions) `end` is reachable.
+    const safe = new Set();
+    for (const id of ids) {
+      for (const ch of enc.nodes[id].choices ?? []) {
+        const hasNext = typeof ch.next === 'string';
+        const hasEnd  = ch.end === true;
+        if (hasNext === hasEnd) problems.push(`${enc.id}.${id}: choice "${ch.label}" must declare exactly one of next / end:true`);
+        if (hasNext && !enc.nodes[ch.next]) problems.push(`${enc.id}.${id}: choice "${ch.label}" → unknown node "${ch.next}"`);
+        if (hasEnd && !ch.cost && !ch.conditions) safe.add(id);
+      }
+    }
+    // Propagate: a node is safe if a free unconditional choice leads to a safe node.
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const id of ids) {
+        if (safe.has(id)) continue;
+        for (const ch of enc.nodes[id].choices ?? []) {
+          if (!ch.cost && !ch.conditions && typeof ch.next === 'string' && safe.has(ch.next)) {
+            safe.add(id); grew = true; break;
+          }
+        }
+      }
+    }
+    for (const id of ids) if (!safe.has(id)) problems.push(`${enc.id}.${id}: no free polite exit path`);
+  }
+  return problems;
 }

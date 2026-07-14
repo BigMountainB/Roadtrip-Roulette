@@ -28,6 +28,7 @@ import geoData           from '../road/routeGeo.json';
 import { ViceSystem }    from '../systems/ViceSystem.js';
 import { SurvivalSystem } from '../systems/SurvivalSystem.js';
 import { EffectsSystem } from '../systems/EffectsSystem.js';
+import { MissionSystem, MISSION_TIERS, tierFor, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
 import { CopSystem }     from '../systems/CopSystem.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
 import { Difficulty }    from '../systems/Difficulty.js';
@@ -660,6 +661,12 @@ export class GameScene extends Phaser.Scene {
     // (else _drawSurvivalBars setText()s a dead Text → drawImage-of-null crash).
     this._survLabels = null; this._survFxGfx = null; this._bladderTxt = null; this._engineTempTxt = null;
     this._vigDark = null; this._vigBrown = null;
+    // Mission ("Favors") HUD chip — same restart-safety rule as the survival
+    // labels: drop the cached Text refs so the chip rebuilds after a scene
+    // restart instead of setText()ing destroyed objects.
+    this._missionChipTxt = null; this._missionBadgeTxt = null;
+    this._missionChipBounds = null;
+    this._dropCueShown = new Set();   // per-run: one DROP-OFF AHEAD popup per job
     this._bladderBurstMile = null;   // odometer where Thirst hit ≥90 (bursting)
     // Restore persisted survival state on a rest-stop resume (fresh runs start clean).
     if (this._resumeFromStop || this._resumeFromPosition != null) {
@@ -675,6 +682,34 @@ export class GameScene extends Phaser.Scene {
     this.vices.hydrateProgress?.(this.registry.get('viceProgress'));
     this.effects = new EffectsSystem(this);
     this.cops    = new CopSystem();
+    // ── Mission ("Favors") system — Ch. 8 ─────────────────────────────
+    // Registry-owned singleton so active missions + persisted offers ride
+    // across GameScene↔RestStopScene restarts within a session.  Fresh runs
+    // (New / Start Over / Retry — same gate as the per-run contact reset
+    // above) reroll the offer seed and clear run state; resumes keep it.
+    this.missions = this.registry.get('missions');
+    if (!this.missions) {
+      this.missions = new MissionSystem(this.registry.get('save'));
+      this.registry.set('missions', this.missions);
+    }
+    this.missions.attachSave(this.registry.get('save'));
+    if (!this._resumeFromStop && this._resumeFromPosition == null
+        && !this._resumeLive && !this._titleResumeSnap) {
+      this.missions.resetRun();
+    }
+    // Illegal-cargo heat (Ch. 8 'illegal' term): while hauling illegal
+    // cargo, every star gain bites one star harder.  Wraps addStar so all
+    // CopSystem/GameScene call sites inherit it without edits.
+    {
+      const _origAddStar = this.cops.addStar.bind(this.cops);
+      this.cops.addStar = (amount = 1, sourceCap) => {
+        if ((amount ?? 0) > 0 && this.missions?.illegalCargoActive?.()) {
+          amount += 1;
+          this._showPopup?.('🚔 They clocked the cargo! Extra heat.', '#FF4444');
+        }
+        return sourceCap === undefined ? _origAddStar(amount) : _origAddStar(amount, sourceCap);
+      };
+    }
     this.haptics = new HapticSystem();
     // Honor the phone-menu Settings → Haptics toggle (persisted in save).
     this.haptics.setEnabled(this.registry.get('save')?.get?.('settings.haptics', true) !== false);
@@ -4059,6 +4094,35 @@ export class GameScene extends Phaser.Scene {
     // distances (Portland at 630 mi, Boise at 1,115 mi, …, Miami at 4,390).
     const _odoPrev = this._odometer ?? 0;
     this._odometer = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+
+    // Mission deadlines — perishable (miles from acceptance) + timed rush
+    // jobs (party-clock deadline, clock counts down).  Cheap no-op unless a
+    // deadlined job is active.
+    {
+      const _mExp = this.missions?.checkDeadlines?.(this._odometer, this._partyClockSec) ?? [];
+      for (const _m of _mExp) {
+        this._showPopup?.(_m.failReason === 'rush'
+          ? `⚡ TOO SLOW — ${_m.cargo} missed the window. Job failed.`
+          : `📦 TOO LATE — ${_m.cargo} spoiled. Job failed.`, '#FF4444', 4);
+      }
+      // Fugitive passengers bail past the heat cap; every passenger tracks
+      // peak stars for the thrill-seeker tip.  No-op without a passenger.
+      const _mHot = this.missions?.checkHeat?.(this.cops?.starDisplay ?? 0) ?? [];
+      for (const _m of _mHot) {
+        this._showPopup?.(`🧍 ${_m.passenger?.name ?? 'Passenger'} bailed — too much heat. No fare.`, '#FF4444', 4);
+      }
+      // One mid-route passenger comment per ride (Ch. 8 flavor line).
+      const _mSay = this.missions?.checkComments?.(this._odometer) ?? [];
+      for (const _s of _mSay) {
+        this._showPopup?.(`🧍 ${_s.mission.passenger?.name}: ${_s.line}`, '#9FE0FF', 4);
+      }
+      // Legend "no chains" weather dare — chains on the car void it (Ch. 8).
+      const _mCh = this.missions?.checkChains?.(
+        hasSpecialBuff(this._activeBuffs ?? [], 'snow_chains')) ?? [];
+      for (const _m of _mCh) {
+        this._showPopup?.(`🌨 DARE VOIDED — chains spotted. ${_m.cargo} contract failed.`, '#FF4444', 4);
+      }
+    }
 
     // ── Gas decrement (in odometer miles per frame) ──────────────────
     // Custom mode is sandbox — no gas burn, no tow-truck stranding,
@@ -8347,6 +8411,14 @@ export class GameScene extends Phaser.Scene {
       // Untouchable streak broken — reset the per-run no-damage timer.
       this._noDamageTimer = 0;
       this._noDamageFlags = { '1m': false, '2m': false, '3m': false, '5m': false };
+      // Fragile cargo + passenger comfort track crash damage; over the cap
+      // (or one HARD hit for a nervous rider) = failed.
+      const _mFailed = this.missions?.onDamage?.(adj, source) ?? [];
+      for (const _m of _mFailed) {
+        this._showPopup?.(_m.type === 'passenger'
+          ? `🧍 ${_m.passenger?.name ?? 'Passenger'} bailed — ${_m.failReason === 'passenger_sick' ? 'too carsick to go on' : 'that crash was the last straw'}. No fare.`
+          : `📦 CARGO WRECKED — ${_m.cargo} job failed. No pay.`, '#FF4444', 4);
+      }
     }
     // Return the effective damage (after difficulty / vice / bumper
     // modifiers) so crash sites can score `$5 × damage received`.
@@ -15871,11 +15943,137 @@ export class GameScene extends Phaser.Scene {
     if (this._awaitingStart && !this._ctrlEditMode) {
       this._survLabels?.forEach(l => l.setVisible(false));
       this._engineTempTxt?.setVisible(false);
+      this._missionChipTxt?.setVisible(false);
+      this._missionBadgeTxt?.setVisible(false);
       return;
     }
     this._drawSurvivalBars();
     this._drawEngineTemp();
+    this._drawMissionChip();
     return;
+  }
+
+  /** Mission ("Favors") HUD — ONE tracked-job chip (Ch. 8): destination +
+   *  remaining miles + payout on line 1, term flags (FRAGILE damage count /
+   *  perishable countdown / illegal heat) on line 2, plus a "+N JOBS" badge
+   *  when more than one job is active.  Tracking is automatic most-urgent:
+   *  nearest perishable deadline first, else nearest destination.  Within
+   *  ~1 mi of the drop the chip pulses green and flips to DROP-OFF AHEAD
+   *  (plus a one-time popup per job).  Movable in the controls editor
+   *  (id `mission`), default just under the survival bars. */
+  _drawMissionChip() {
+    const active = this.missions?.activeMissions?.() ?? [];
+    const editorPlaceholder = !active.length && this._ctrlEditMode;
+    if (!active.length && !editorPlaceholder) {
+      this._missionChipTxt?.setVisible(false);
+      this._missionBadgeTxt?.setVisible(false);
+      this._missionChipBounds = null;
+      return;
+    }
+    if (!this._missionChipTxt) {
+      this._missionChipTxt = this.add.text(0, 0, '', {
+        fontSize: '12px', fontFamily: IMPACT, color: '#EAF2FF', stroke: '#000', strokeThickness: 3,
+        lineSpacing: 2,
+      }).setOrigin(0, 0).setDepth(21);
+      this._hudObjects?.push(this._missionChipTxt);
+      this._missionBadgeTxt = this.add.text(0, 0, '', {
+        fontSize: '10px', fontFamily: IMPACT, color: '#FFCC44', stroke: '#000', strokeThickness: 3,
+      }).setOrigin(1, 0).setDepth(21);
+      this._hudObjects?.push(this._missionBadgeTxt);
+    }
+    const odo   = this._odometer ?? 0;
+    const clock = this._partyClockSec ?? null;
+    // Auto-track the most urgent job: nearest deadline wins (perishable in
+    // miles; timed rush in party-clock seconds ≈ 8 s/mi equivalent), else
+    // nearest destination (Ch. 8 auto-priority; no tap-cycle plumbing).
+    const urgency = (m) => {
+      if (m.deadlineMile != null) return m.deadlineMile - odo;
+      if (m.deadlineClockSec != null && clock != null) return (clock - m.deadlineClockSec) / 8;
+      return 1e9;
+    };
+    const typeIcon = (m) => (m?.type === 'passenger' ? '🧍'
+      : m?.type === 'timed' ? '⚡'
+      : m?.type === 'heat' ? '🔥'
+      : m?.type === 'weather' ? (m.terms?.weather_run?.tag === 'wind' ? '🌬' : '🌨')
+      : '📦');
+    const tracked = editorPlaceholder ? null : [...active].sort((a, b) =>
+      (urgency(a) - urgency(b)) || ((a.targetMile - odo) - (b.targetMile - odo)))[0];
+    const remaining = tracked ? Math.max(0, tracked.targetMile - odo) : 14;
+    const near = tracked ? remaining <= 1 : false;
+    // One-time approach popup per job.
+    if (near && tracked && !this._dropCueShown?.has(tracked.id)) {
+      this._dropCueShown?.add(tracked.id);
+      this._showPopup?.(`${typeIcon(tracked)} DROP-OFF AHEAD — ${tracked.targetName}`, '#66FF99', 3);
+    }
+    // Chip text — decision-relevant info only (Ch. 8).
+    const miTxt = remaining < 10 ? remaining.toFixed(1) : String(Math.round(remaining));
+    const line1 = tracked
+      ? `${typeIcon(tracked)} ${tracked.targetName.toUpperCase()} · ${miTxt} MI · $${tracked.payout.toLocaleString()}`
+      : '📦 VANTAGE · 14 MI · $185';   // editor placeholder
+    const flags = [];
+    if (tracked?.terms?.fragile) {
+      flags.push(`FRAGILE ${Math.round(tracked.progress?.damageTaken ?? 0)}/${tracked.terms.fragile.maxDamage}`);
+    }
+    if (tracked?.deadlineMile != null) {
+      flags.push(`⏱ ${Math.max(0, tracked.deadlineMile - odo).toFixed(1)} MI`);
+    }
+    if (tracked?.deadlineClockSec != null && clock != null) {
+      // Rush countdown — party-clock seconds left before the window closes.
+      const _left = Math.max(0, Math.floor(clock - tracked.deadlineClockSec));
+      flags.push(`⏱ ${Math.floor(_left / 60)}:${String(_left % 60).padStart(2, '0')}`);
+    }
+    if (tracked?.terms?.illegal) flags.push('🚨 HOT');
+    if (tracked?.type === 'heat') {
+      // Live escape progress: miles survived toward the ≥20-mi target,
+      // current heat (must land at 0★).
+      const _cov = Math.min(tracked.routeMiles,
+        Math.max(0, odo - (tracked.acceptedAtMile ?? odo)));
+      flags.push(`ESCAPE ${_cov.toFixed(1)}/${tracked.routeMiles} MI · ${this.cops?.starDisplay ?? 0}★`);
+    }
+    if (tracked?.terms?.no_chains) flags.push('NO CHAINS');
+    if (tracked?.type === 'passenger' && tracked.passenger?.quirk) {
+      flags.push(tracked.passenger.quirk === 'nervous' ? 'NERVOUS'
+        : tracked.passenger.quirk === 'carsick' ? `CARSICK ${Math.round(tracked.progress?.damageTaken ?? 0)}/${CARSICK_MAX_DAMAGE}`
+        : tracked.passenger.quirk === 'fugitive' ? '🚨 FUGITIVE'
+        : 'THRILL');
+    }
+    const line2 = near ? 'DROP-OFF AHEAD' : flags.join(' · ');
+    // Layout — under the survival bars' default block, independently movable.
+    const g  = this.hudGfx;
+    const mx = (x) => x + (C.HUD_OFFSET_X ?? 0);
+    const o  = this._ctrlOff('mission');
+    const sc = o.s;
+    const BW = 184, PAD = 6;
+    const bw = BW * sc;
+    const fontPx = Math.max(9, Math.round(12 * sc));
+    const bx = mx(SCREEN_W - BW - 16) + o.dx;
+    const by = 212 + o.dy;
+    this._missionChipTxt
+      .setText(line2 ? `${line1}\n${line2}` : line1)
+      .setFontSize(fontPx)
+      .setPosition(bx + PAD * sc, by + PAD * sc)
+      .setColor(near ? '#66FF99' : '#EAF2FF')
+      .setVisible(true);
+    const bh = this._missionChipTxt.height + PAD * 2 * sc;
+    const t  = this.gameTime ?? 0;
+    // Backing plate + border (green pulse on approach) — survival-bar palette.
+    g.fillStyle(0x0A0F1A, 0.8);
+    g.fillRoundedRect(bx, by, bw, bh, 3);
+    if (near) g.lineStyle(1.5, 0x66FF99, 0.55 + 0.45 * Math.abs(Math.sin(t * 5)));
+    else      g.lineStyle(1.5, 0x315173, 1);
+    g.strokeRoundedRect(bx, by, bw, bh, 3);
+    // "+N JOBS" badge — only when MORE than the tracked job is active.
+    if (active.length > 1) {
+      this._missionBadgeTxt
+        .setText(`+${active.length - 1} JOBS`)
+        .setFontSize(Math.max(8, Math.round(10 * sc)))
+        .setPosition(bx + bw, by + bh + 2)
+        .setVisible(true);
+    } else {
+      this._missionBadgeTxt.setVisible(false);
+    }
+    // Publish live bounds for the controls-editor drag handle.
+    this._missionChipBounds = { x: bx, y: by, w: bw, h: bh + (active.length > 1 ? 14 * sc : 0) };
   }
 
   /** Engine-temp gauge — hidden until the engine warms up (≥55°), then a
@@ -16021,18 +16219,19 @@ export class GameScene extends Phaser.Scene {
       if (!this.textures.exists('rtr_vignette')) {
         const VS = 256, cv = document.createElement('canvas'); cv.width = cv.height = VS;
         const cx2 = cv.getContext('2d');
-        const rg = cx2.createRadialGradient(VS / 2, VS / 2, VS * 0.14, VS / 2, VS / 2, VS * 0.62);
+        const rg = cx2.createRadialGradient(VS / 2, VS / 2, 0, VS / 2, VS / 2, VS * 0.55);
         rg.addColorStop(0,    'rgba(255,255,255,0)');
-        rg.addColorStop(0.45, 'rgba(255,255,255,0)');
+        rg.addColorStop(0.28, 'rgba(255,255,255,0)');
         rg.addColorStop(1,    'rgba(255,255,255,1)');
         cx2.fillStyle = rg; cx2.fillRect(0, 0, VS, VS);
         this.textures.addCanvas('rtr_vignette', cv);
       }
-      const Wv = SCREEN_W + (C.HUD_OFFSET_X ?? 0) * 2, Hv = SCREEN_H;
-      const mkVig = (tint, depth) => this.add.image(SCREEN_W / 2, SCREEN_H / 2, 'rtr_vignette')
-        .setDisplaySize(Wv * 1.06, Hv * 1.12).setScrollFactor(0).setDepth(depth).setTint(tint).setAlpha(0);
-      this._vigDark  = mkVig(0x000000, 43);   // dehydration
-      this._vigBrown = mkVig(0x2A1A05, 43);   // food coma
+      // Depth 15: above the world, BELOW hudGfx(20)/labels(21)/buttons(62+) so
+      // the vignette never darkens buttons or HUD readouts.
+      const mkVig = (tint) => this.add.image(0, 0, 'rtr_vignette')
+        .setScrollFactor(0).setDepth(15).setTint(tint).setAlpha(0);
+      this._vigDark  = mkVig(0x000000);   // dehydration
+      this._vigBrown = mkVig(0x2A1A05);   // food coma
       this._hudObjects?.push(this._vigDark, this._vigBrown);
     }
     const g = this._survFxGfx; g.clear();
@@ -16043,6 +16242,12 @@ export class GameScene extends Phaser.Scene {
 
     // Dehydration → tunnel vision: a soft dark vignette closes in as Hydration
     // drops below 25 (smooth radial fade, not hard edge bands).
+    // scrollFactor(0) = canvas space, so center at SCREEN_W/2 + HUD_OFFSET_X
+    // (like _bladderTxt) and span the full canvas width W; sized every frame
+    // because HUD_OFFSET_X changes on orientation resize.
+    const vx = SCREEN_W / 2 + (C.HUD_OFFSET_X ?? 0), vw = W * 1.05, vh = H * 1.15;
+    this._vigDark?.setPosition(vx, H / 2).setDisplaySize(vw, vh);
+    this._vigBrown?.setPosition(vx, H / 2).setDisplaySize(vw, vh);
     const dehy = s.hydration < 25 ? (25 - s.hydration) / 25 : 0;
     this._vigDark?.setAlpha(dehy * 0.85).setVisible(dehy > 0);
     // Nausea → sickly green wash, slow pulse.
@@ -16964,6 +17169,10 @@ export class GameScene extends Phaser.Scene {
       // a reload can't be used to refresh them.
       partyClockSec: this._partyClockSec ?? null,
       gameTime:      this.gameTime ?? 0,
+      // Mission run state (offers + actives + outcome ledger) — restored via
+      // MissionSystem.restore, which keeps terminal failures/paid flags
+      // authoritative across checkpoint rewinds (Ch. 8).
+      missions: this.missions?.serialize?.() ?? null,
       runState: {
         flatTireTimer: Math.max(0, Number(this._flatTireTimer) || 0),
         probationTimer: Math.max(0, Number(this._probationTimer) || 0),
@@ -17095,6 +17304,7 @@ export class GameScene extends Phaser.Scene {
       }
       this._applyRunState(s.runState);
       this._applyMessageState(s.messageState);
+      if (s.missions) this.missions?.restore?.(s.missions);
     } catch (e) { console.error('[applyResumeSnapshot]', e); }
   }
 
@@ -17106,6 +17316,58 @@ export class GameScene extends Phaser.Scene {
     this._takingExit = true;
     this._passedRestStops.add(rs.id);
     this._everUsedRestStop = true;
+    // Mission arrivals — active deliveries targeting THIS stop complete and
+    // pay out on pull-in (before the snapshot, so the payout is banked and
+    // shows in the rest-stop CASH header).  arriveAtStop returns only
+    // newly-paid missions — the `paid` flag makes a re-entry a no-op.
+    if (Difficulty.mode?.() !== 'custom') {
+      // Heat-escape jobs must land at 0 stars (Ch. 8) — pass current heat so
+      // arriveAtStop can fail a hot arrival; catch those for the fail popup.
+      const _arrStars = this.cops?.starDisplay ?? 0;
+      const _heatHere = (this.missions?.activeMissions?.() ?? [])
+        .filter(m => m.type === 'heat' && m.targetStopId === rs.id);
+      const _mDone = this.missions?.arriveAtStop?.(rs.id, this._odometer, _arrStars) ?? [];
+      for (const _m of _heatHere) {
+        if (_m.status === 'failed') {
+          this._showPopup?.(`🔥 STILL HOT — you pulled in wearing ${_arrStars}★. No payout.`, '#FF4444', 4);
+        }
+      }
+      for (const _m of _mDone) {
+        const _pay = _m.payout + (_m.tip ?? 0);
+        this.score += _pay;
+        this.stats?.recordEarn?.(_pay, 'mission');
+        // Payoff moment (Ch. 8): cargo + cash + rep progress toward the next
+        // tier ("Known 4/8"); at Legend there's no next rung, show the count.
+        const _rep  = (this.registry.get('save')?.get?.('missionRep', {}) ?? {})[_m.type] ?? 0;
+        const _tier = tierFor(_rep);
+        const _next = MISSION_TIERS[MISSION_TIERS.indexOf(_tier) + 1];
+        const _repStr = _next ? `${_tier.name} ${_rep}/${_next.minDone}` : `${_tier.name} ${_rep}`;
+        const _head = _m.type === 'passenger'
+          ? `🧍 DROPPED OFF — ${_m.passenger?.name ?? 'Passenger'} ${_m.passenger?.dropoff ?? ''}`.trimEnd()
+          : _m.type === 'heat'
+            ? '🔥 CLEAN GETAWAY — tail lost'
+          : _m.type === 'weather'
+            ? `${_m.terms?.weather_run?.tag === 'wind' ? '🌬 THROUGH THE WIND' : '🌨 OVER THE PASS'} — ${_m.cargo}, intact`
+          : (_m.type === 'timed'
+            ? `⚡ MADE IT — ${_m.cargo}, inside the window`
+            : `📦 DELIVERED — ${_m.cargo}`);
+        const _tipStr = (_m.tip ?? 0) > 0 ? ` (+$${_m.tip} tip)` : '';
+        this._showPopup?.(
+          `${_head}\n+$${_pay.toLocaleString()}${_tipStr} · REP ${_repStr}`,
+          '#66FF99', 4);
+        // Tier-up moment (Ch. 8 Phase 6): this completion crossed a rep
+        // threshold — a distinct celebratory popup on top of the payoff
+        // ("⭐ KNOWN COURIER — payouts ×2.5").  The REP line above already
+        // reads the post-bump count, so "Known 3/8" and the banner agree.
+        if (_m.tierUp) {
+          const _job = { delivery: 'COURIER', timed: 'RUSH RUNNER', passenger: 'DRIVER',
+                         heat: 'GETAWAY DRIVER', weather: 'STORM RUNNER' }[_m.type] ?? 'COURIER';
+          this._showPopup?.(
+            `⭐ ${_m.tierUp.name.toUpperCase()} ${_job} — payouts ×${_m.tierUp.mult}`,
+            '#FFD23D', 5);
+        }
+      }
+    }
     const snap = this._collectSaveSnapshot(rs.id);
     this._saveRestStop(rs.id, snap);
     this._lastCheckpoint = { name: rs.name, position: this.player.position, scoreAtCP: this.score };
@@ -17130,6 +17392,9 @@ export class GameScene extends Phaser.Scene {
         stars:    this.cops.starDisplay ?? 0,
         position: this.player.position,
         odometer: this._odometer,
+        // Party clock at pull-in — timed ("rush") mission deadlines are
+        // stored as party-clock values, fixed at acceptance (Ch. 8).
+        partyClockSec: this._partyClockSec ?? null,
         bladderAtEntry: this.survival?.bladder ?? 0,   // for the timed restroom cost
         // Full vice-bar snapshot — vice status pauses at the rest stop and
         // resumes from these levels (no decay during the menu, no silent
@@ -17452,6 +17717,8 @@ export class GameScene extends Phaser.Scene {
     // where the top-center buttons/mirror sit over the small readouts.
     try { this._drawSurvivalBars(); } catch (_) {}
     mk('survbars', this._survBarsBounds, 66);
+    try { this._drawMissionChip(); } catch (_) {}
+    mk('mission', this._missionChipBounds, 66);
     mk('clock', this._boundsOfTextObj(this.hudPartyClock), 66);
     mk('mult',  this._boundsOfTextObj(this.hudMult),       66);
   }
@@ -17484,6 +17751,7 @@ export class GameScene extends Phaser.Scene {
       if (id.startsWith('weapon_')) return this._weaponCellBounds?.[id.slice(7)];
       if (id.startsWith('vice_'))   return this._viceCellBounds?.[id.slice(5)];
       if (id === 'survbars') return this._survBarsBounds;
+      if (id === 'mission')  return this._missionChipBounds;
       if (id === 'clock')    return this._boundsOfTextObj(this.hudPartyClock);
       if (id === 'mult')     return this._boundsOfTextObj(this.hudMult);
       return null;
@@ -18627,6 +18895,11 @@ export class GameScene extends Phaser.Scene {
     if (hasSpecialBuff(this._activeBuffs ?? [], 'cheaper_wreck')) lost = Math.floor(lost * 0.5);
     this.score       -= lost;
 
+    // Busted = every active mission fails (Ch. 8: Delivery "wreck/busted =
+    // fail").  Applies on Easy respawns too — the cargo was confiscated.
+    // Non-easy falls through to _endGame, whose failAllActive is then a no-op.
+    this.missions?.failAllActive?.('busted');
+
     // EASY mode — a bust doesn't end the run; you keep the cash dock but get
     // sent back to the last checkpoint/rest stop (Seattle/start if none passed)
     // and released, cops cleared and car repaired, to carry on the trip.
@@ -18792,9 +19065,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   _endGame(cause, extra = {}) {
-    // (Mission/Hub branch removed — MissionManager and HubScene were
-    // vestigial from the abandoned hub-mode design.  Game runs straight
-    // through GameScene → GameOverScene now.)
+    // Run-ending events terminally fail every active mission — no payout,
+    // rep untouched (Ch. 8).  Recorded in the outcome ledger so a
+    // busted_late checkpoint restart can't resurrect them.  A Pullman
+    // finish is also run-end: undelivered cargo just failed.
+    {
+      const _mFailed = this.missions?.failAllActive?.(cause) ?? [];
+      if (_mFailed.length) {
+        this._showPopup?.(`📦 ${_mFailed.length} job${_mFailed.length > 1 ? 's' : ''} failed — cargo never arrived.`, '#FF8844', 4);
+      }
+    }
 
     // Pause the music so the OD/crash dirge isn't the kart-radio loop.
     this.audio?.setPaused?.(true);

@@ -8,8 +8,10 @@ import {
 import { Difficulty } from '../systems/Difficulty.js';
 import {
   pickEncounterForStop, resolveChoice, applyEncounterEffects,
+  isDialogueTree, getStartNode, getEncounterNode, choiceLocked,
 } from '../data/encounters.js';
 import { getPortrait } from '../data/npcPortraits.js';
+import { MISSION_TIERS, tierFor, contactIdFor, contactGreeting } from '../systems/MissionSystem.js';
 
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
@@ -309,6 +311,9 @@ export class RestStopScene extends Phaser.Scene {
     this._stars    = data?.stars    ?? 0;
     this._position = data?.position ?? 0;
     this._odometer = data?.odometer ?? 0;
+    // Party clock at pull-in — timed ("rush") mission deadlines are fixed at
+    // acceptance as party-clock values (Ch. 8).
+    this._partyClockSec = data?.partyClockSec ?? null;
     this._bladderAtEntry = data?.bladderAtEntry ?? 0;   // for the timed restroom cost
     // Career stats — count this visit on entry; dwell time + spends are
     // recorded on exit (see the continue handler).
@@ -665,6 +670,68 @@ export class RestStopScene extends Phaser.Scene {
       }).setOrigin(1, 0);
     }
 
+    // ── Active JOBS ("Favors", Ch. 8) — review commitments before rolling ──
+    // Compact left-side list mirroring the HUD chip: destination · miles
+    // left · payout · term flags.  Only renders when jobs are active.
+    {
+      const _missions = this.registry?.get?.('missions');
+      const _jobs = _missions?.activeMissions?.() ?? [];
+      if (_jobs.length) {
+        const _flags = (m) => {
+          const f = [];
+          if (m.terms?.fragile)    f.push('FRAGILE');
+          if (m.deadlineMile != null) f.push(`⏱ ${Math.max(0, m.deadlineMile - this._odometer).toFixed(1)} MI`);
+          if (m.deadlineClockSec != null && this._partyClockSec != null) {
+            const _s = Math.max(0, Math.floor(this._partyClockSec - m.deadlineClockSec));
+            f.push(`RUSH ⏱ ${Math.floor(_s / 60)}:${String(_s % 60).padStart(2, '0')}`);
+          } else if (m.terms?.rush) f.push('RUSH');
+          if (m.terms?.illegal)    f.push('🚨 HOT');
+          if (m.type === 'heat') {
+            const _cov = Math.min(m.routeMiles, Math.max(0, this._odometer - (m.acceptedAtMile ?? this._odometer)));
+            f.push(`ESCAPE ${_cov.toFixed(1)}/${m.routeMiles} MI · ${this._stars ?? 0}★`);
+          }
+          if (m.terms?.no_chains)  f.push('NO CHAINS');
+          if (m.type === 'passenger' && m.passenger?.quirk) f.push(m.passenger.quirk.toUpperCase().replace('_', '-'));
+          return f.length ? ` · ${f.join(' · ')}` : '';
+        };
+        const _icon = (m) => (m.type === 'passenger' ? '🧍'
+          : m.type === 'timed' ? '⚡'
+          : m.type === 'heat' ? '🔥'
+          : m.type === 'weather' ? (m.terms?.weather_run?.tag === 'wind' ? '🌬' : '🌨')
+          : '📦');
+        const _lines = _jobs.map((m) => {
+          const _left = Math.max(0, m.targetMile - this._odometer);
+          const _mi   = _left < 10 ? _left.toFixed(1) : String(Math.round(_left));
+          return `${_icon(m)} ${m.targetName} · ${_mi} MI · $${m.payout.toLocaleString()}${_flags(m)}`;
+        });
+        this.add.text(30, 56, `JOBS\n${_lines.join('\n')}`, {
+          fontSize: '11px', fontFamily: IMPACT, color: '#9FE0FF',
+          stroke: '#000', strokeThickness: 3, lineSpacing: 3,
+        }).setOrigin(0, 0);
+      }
+      // ── REPUTATION readout (Ch. 8 Phase 6) — per-type tier + progress
+      // toward the next rung ("📦 Known 5/8"), matching the payoff popup's
+      // REP string.  Compact one-liner under the JOBS block; only types the
+      // player has actually worked show, so a fresh save stays clean.
+      const _rep = this.registry?.get?.('save')?.get?.('missionRep', {}) ?? {};
+      const _repIcon = { delivery: '📦', timed: '⚡', passenger: '🧍', heat: '🔥', weather: '🌨' };
+      const _repBits = ['delivery', 'timed', 'passenger', 'heat', 'weather']
+        .filter(t => (_rep[t] ?? 0) > 0)
+        .map(t => {
+          const n    = _rep[t];
+          const tier = tierFor(n);
+          const next = MISSION_TIERS[MISSION_TIERS.indexOf(tier) + 1];
+          return `${_repIcon[t]} ${tier.name} ${next ? `${n}/${next.minDone}` : n}`;
+        });
+      if (_repBits.length) {
+        this.add.text(30, 56 + (_jobs.length ? (_jobs.length + 1) * 14 + 4 : 0),
+          `REP  ${_repBits.join(' · ')}`, {
+            fontSize: '11px', fontFamily: IMPACT, color: '#FFD23D',
+            stroke: '#000', strokeThickness: 3,
+          }).setOrigin(0, 0);
+      }
+    }
+
     // ── NPC vignette — flavor one-liner picked from per-stop pool ──
     const vignette = pickVignette(this._stop?.id);
     if (vignette) {
@@ -913,8 +980,13 @@ export class RestStopScene extends Phaser.Scene {
     const visited    = new Set(save?.get?.('stopsVisited', []) ?? []);
     const firstVisit = !visited.has(stopId);
     if (firstVisit) { visited.add(stopId); save?.set?.('stopsVisited', [...visited]); }
+    // Mission ("Favors") contact — every stop carries side work (Ch. 8;
+    // Pullman is payoff-only, gated inside offersForStop).  Queued so it
+    // shows AFTER the regular encounter conversation closes, or immediately
+    // when no encounter fires.  Custom mode = unranked sandbox, no missions.
+    this._pendingMissionCard = Difficulty.noScore?.() !== true;
     // First visit → guaranteed intro; later visits → 60% chance.
-    if (!firstVisit && Math.random() > 0.60) return;
+    if (!firstVisit && Math.random() > 0.60) { this._maybeShowMissionCard(); return; }
     const seen = new Set(save?.get?.('encountersSeen', []) ?? []);
     const enc  = pickEncounterForStop(stopId, {
       firstVisit,
@@ -923,6 +995,162 @@ export class RestStopScene extends Phaser.Scene {
       heat:    this._stars ?? 0,
     });
     if (enc) this._showEncounterCard(enc, save, seen);
+    else     this._maybeShowMissionCard();
+  }
+
+  /** Show the queued mission-offer conversation, once per visit. */
+  _maybeShowMissionCard() {
+    if (!this._pendingMissionCard) return;
+    this._pendingMissionCard = false;
+    const missions = this.registry.get('missions');
+    if (!missions) return;
+    const enc = this._buildMissionEncounter(missions);
+    if (enc) this._showEncounterCard(enc, this.registry.get('save'), new Set());
+  }
+
+  /** Synthesize a Phase-1 dialogue-tree card from this stop's persisted
+   *  mission offers — the ask · the destination · the catch · the money —
+   *  with accept / decline / polite-exit choices.  Returns null when the
+   *  stop has no open offers left (accepted/declined stay resolved for the
+   *  run — offers are persisted, no reroll on re-entry). */
+  _buildMissionEncounter(missions) {
+    const stopId = this._stop?.id;
+    // Conditional-offer context (Ch. 8 Phase 5): heat-escape jobs spawn only
+    // while the player is wearing 2+ stars; the authored weather-corridor
+    // contracts spawn only at their start stop while the hazard is live
+    // (pass = weather enabled on this difficulty; Vantage wind always blows).
+    const offers = missions.offersForStop(stopId, {
+      stars:     this._stars ?? 0,
+      weatherOk: !!Difficulty.weather?.(),
+      windOk:    true,
+    }) ?? [];
+    const open   = offers.filter(o => o.status === 'offered');
+    if (!open.length) return null;
+    const npcName = open[0].npcName ?? 'Shady Contact';
+    // Deterministic per-stop portrait from the existing NPC pool.
+    const portraits = ['long_haul_mike', 'tow_driver', 'farm_worker', 'street_weirdo'];
+    let h = 0; for (let i = 0; i < String(stopId).length; i++) h = (h * 31 + String(stopId).charCodeAt(i)) | 0;
+    const portrait = portraits[Math.abs(h) % portraits.length];
+
+    // "The catch" line per offer, from its terms.
+    const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    const termLine = (o) => {
+      const t = [];
+      if (o.terms?.fragile)    t.push(`it's FRAGILE — over ${o.terms.fragile.maxDamage} HP of crash damage and it's trash`);
+      if (o.terms?.perishable) t.push("it's PERISHABLE — dawdle and it spoils");
+      if (o.terms?.illegal)    t.push("cops can't see it — heat comes down HARDER while you're carrying");
+      if (o.terms?.rush)       t.push(`it's a RUSH — ${mmss(o.terms.rush.budgetSec)} on the clock from the second you say yes`);
+      if (o.terms?.weather_run) t.push(o.terms.weather_run.tag === 'wind'
+        ? 'the Vantage wind is HOWLING the whole way'
+        : 'the pass is a mess — rain into snow, all of it');
+      if (o.terms?.no_chains)  t.push("the DARE: no chains — strap them on and the deal's dead");
+      return t.length ? `The catch: ${t.join('; ')}.` : 'No strings. Easy money.';
+    };
+    // Passenger quirk warning — the rider states their own terms.
+    const quirkLine = {
+      nervous:       "One hard crash and I'm walking, deal's off.",
+      carsick:       'Keep it smooth — too much banging around and I am DONE.',
+      fugitive:      "If the stars start stacking up, I'm gone out the door. Two's my limit.",
+      thrill_seeker: "Fare's flat, but make it interesting and there's a tip in it.",
+    };
+
+    // Busy is PER TYPE (one active per type, Ch. 8) — an occupied slot still
+    // shows the pitch, just without the accept button.
+    const busyType = (t) => missions.hasActiveOfType(t);
+    const anyBusy  = open.some(o => busyType(o.type));
+
+    // NPC continuity (Ch. 8 Phase 6): the contact remembers you — greeting
+    // shifts with jobs done for them, and a pending failure gets a nod first
+    // (flavor only, no rep loss).  Any reply clears the fail-ack flag.
+    const npcId  = contactIdFor(stopId);
+    const memAll = this.registry.get('save')?.get?.('npcMemory', {}) ?? {};
+    const mem    = memAll[npcId] ?? {};
+    const memLine = contactGreeting(mem);
+    const ackFail = !!mem.failAckPending;
+
+    // Offer flavor by tier (Ch. 8 Phase 6) — text only, the pitch changes
+    // with your rep at that type: cautious Rookie ask → Legend trust.
+    const tierIntro = (o) => {
+      const t = missions.tierOf?.(o.type)?.name ?? 'Rookie';
+      return t === 'Legend' ? "You're the only one I'd trust with this. "
+        : t === 'Known' ? "You've earned the better work. "
+        : '';
+    };
+
+    const nodes = {};
+    const greetChoices = open.map((o, i) => ({
+      label: o.type === 'passenger'
+        ? `"Who's the rider for ${o.targetName}?"`
+        : o.type === 'heat'
+          ? '"About all this heat I\'m wearing…"'
+        : (open.length > 1 ? `"What's the ${o.targetName} job?"` : '"What\'s the job?"'),
+      next:  `offer${i}`,
+      ...(ackFail ? { setMemory: { failAckPending: false } } : {}),
+    }));
+    greetChoices.push({ label: 'Thank them and leave', effects: {}, end: true,
+      ...(ackFail ? { setMemory: { failAckPending: false } } : {}) });
+    nodes.greet = {
+      line: memLine ?? (anyBusy
+        ? "You're already hauling for somebody — I can see it in how you parked. Hear me out anyway."
+        : (open.length > 1
+          ? `Got ${open.length} runs that need a driver who doesn't ask questions.`
+          : "Got a run that needs a driver who doesn't ask questions.")),
+      choices: greetChoices,
+    };
+    open.forEach((o, i) => {
+      const busy = busyType(o.type);
+      const choices = [];
+      if (!busy) {
+        // Acceptance is idempotent (MissionSystem.accept is double-tap safe).
+        choices.push({
+          label: o.type === 'passenger' ? `Take them aboard ($${o.payout})` : `Take the job ($${o.payout})`,
+          effects: {}, end: true, missionAccept: o.id,
+        });
+      }
+      choices.push({ label: 'Not my problem', effects: {}, end: true, missionDecline: o.id });
+      if (open.length > 1) choices.push({ label: 'What else you got?', next: 'greet' });
+      choices.push({ label: 'Thank them and leave', effects: {}, end: true });
+      if (o.type === 'passenger') {
+        // The passenger makes their own ask — their face, their voice.
+        const p = o.passenger ?? {};
+        nodes[`offer${i}`] = {
+          speaker: p.name ?? 'Passenger',
+          portrait: p.portrait,
+          line: `${p.ask ?? 'I need a ride.'} ${o.targetName}, ${o.routeMiles} miles. `
+              + `${quirkLine[p.quirk] ?? ''} $${o.payout} when we get there.`
+              + (busy ? " …Looks like your passenger seat's spoken for, though." : ''),
+          choices,
+        };
+      } else if (o.type === 'heat') {
+        // Heat escape — however you shed the stars counts (paid clears too;
+        // their price is penalty enough — 2026-07-13 decision).
+        nodes[`offer${i}`] = {
+          line: `${tierIntro(o)}You're glowing, friend. Lose the tail and pull into ${o.targetName} `
+              + `CLEAN — ${o.routeMiles} miles, zero stars when you land. `
+              + `$${o.payout}, and I don't care how you shake them. Get busted, we never met.`
+              + (busy ? " …Except you're already running from something for someone." : ''),
+          choices,
+        };
+      } else {
+        const verb = o.type === 'timed' ? 'Run' : 'Haul';
+        nodes[`offer${i}`] = {
+          line: `${tierIntro(o)}${verb} ${o.cargo} to ${o.targetName} — ${o.routeMiles} miles up the road. `
+              + `${termLine(o)} $${o.payout} on delivery, cash.`
+              + (busy ? " …But your trunk's full. Come back when it isn't." : ''),
+          choices,
+        };
+      }
+    });
+
+    return {
+      id: `mission_offers_${stopId}`,
+      stopId,
+      npcId,                       // recurring contact — npcMemory continuity
+      portrait,
+      speaker: npcName,
+      startNode: 'greet',
+      nodes,
+    };
   }
 
   /** Lazily synthesize a placeholder portrait texture (colored bust) so
@@ -943,8 +1171,18 @@ export class RestStopScene extends Phaser.Scene {
   }
 
   /** Build the portrait card overlay: portrait, speaker, line, optional fact,
-   *  and 2–3 choice buttons.  Blocks the shop until the player picks. */
-  _showEncounterCard(enc, save, seen) {
+   *  and 2–3 choice buttons.  Blocks the shop until the player picks.
+   *  Handles BOTH flat legacy cards and multi-node dialogue trees — the
+   *  renderer walks nodes (nodeId re-entry); effects still resolve only
+   *  through resolveChoice/applyEncounterEffects when a choice is picked. */
+  _showEncounterCard(enc, save, seen, nodeId = null) {
+    // Recurring-NPC memory (GLOBAL save bucket) + current node view.
+    const memAll = save?.get?.('npcMemory', {}) ?? {};
+    const mem    = enc.npcId ? (memAll[enc.npcId] ?? {}) : {};
+    if (nodeId == null && isDialogueTree(enc)) nodeId = getStartNode(enc, mem);
+    const node = getEncounterNode(enc, nodeId);
+    if (!node) return;
+
     const D = 500;                       // above every shop element
     const objs = [];
     const add = (...n) => { objs.push(...n); return n[0]; };
@@ -968,7 +1206,9 @@ export class RestStopScene extends Phaser.Scene {
 
     // Portrait — cover-fit into the LEFT pane (top-anchored so the face
     // stays), clipped to the pane by a geometry mask.  Nothing overlaps it.
-    const port = getPortrait(enc.portrait);
+    // A node may override the card portrait (e.g. a passenger making their
+    // own ask inside the contact's conversation).
+    const port = getPortrait(node.portrait ?? enc.portrait);
     this._ensureNpcTexture(port.texture, port.placeholderTint ?? 0x555555);
     const tex = this.textures.get(port.texture)?.source?.[0];
     const iw = tex?.width || 600, ih = tex?.height || 660;
@@ -992,18 +1232,19 @@ export class RestStopScene extends Phaser.Scene {
         fontSize: '12px', fontFamily: IMPACT, color: '#8FB7E6',
       }).setOrigin(0.5, 0).setDepth(D + 4));
 
-    add(this.add.text(tx, py + 34, `"${enc.line}"`, {
+    add(this.add.text(tx, py + 34, `"${node.line}"`, {
       fontSize: '16px', fontFamily: 'Georgia, serif', color: '#F4F7FF',
       wordWrap: { width: tw }, lineSpacing: 3,
     }).setDepth(D + 4));
 
-    const choiceCount = (enc.choices ?? [{}]).length;
-    const botH = 30 + choiceCount * 33 + (enc.fact ? 30 : 0);
-    add(this.add.text(tx, py + ph - botH + 2, (enc.speaker ?? port.name).toUpperCase(), {
+    const fact = node.fact ?? enc.fact;
+    const choiceCount = (node.choices ?? [{}]).length;
+    const botH = 30 + choiceCount * 33 + (fact ? 30 : 0);
+    add(this.add.text(tx, py + ph - botH + 2, (node.speaker ?? enc.speaker ?? port.name).toUpperCase(), {
       fontSize: '14px', fontFamily: IMPACT, color: '#FFD23D',
     }).setDepth(D + 4));
-    if (enc.fact) {
-      add(this.add.text(tx, py + ph - botH + 22, `📍 ${enc.fact}`, {
+    if (fact) {
+      add(this.add.text(tx, py + ph - botH + 22, `📍 ${fact}`, {
         fontSize: '10px', fontFamily: 'Arial', color: '#9FB7D6',
         fontStyle: 'italic', wordWrap: { width: tw }, lineSpacing: 1,
       }).setDepth(D + 4));
@@ -1038,20 +1279,56 @@ export class RestStopScene extends Phaser.Scene {
     const choose = (choice) => {
       const { effects, dialogue } = resolveChoice(choice);
       applyEncounterEffects(effects, applyCtx);
-      if (enc.once) { seen.add(enc.id); save?.set?.('encountersSeen', [...seen]); }
+      // Node-walker bookkeeping — SEPARATE from effect resolution above.
+      if (enc.npcId && choice.setMemory) {
+        memAll[enc.npcId] = { ...mem, ...choice.setMemory };
+        save?.set?.('npcMemory', memAll);
+      }
+      // Mission offer accept/decline (Ch. 8 Favors) — routed to the
+      // MissionSystem, never through the effects vocabulary.
+      if (choice.missionAccept) {
+        const m = this.registry.get('missions')?.accept?.(
+          choice.missionAccept, this._odometer ?? 0, this._partyClockSec ?? null);
+        if (m?.type === 'passenger') {
+          this._setStatus(`🧍 ${m.passenger?.name} climbs in. ${m.passenger?.pickup ?? ''} $${m.payout} at ${m.targetName}.`, '#88FF88');
+        } else if (m?.type === 'timed') {
+          this._setStatus(`⚡ Rush job taken — ${m.cargo} to ${m.targetName}. Clock's already running.`, '#88FF88');
+        } else if (m?.type === 'heat') {
+          this._setStatus(`🔥 Deal — land at ${m.targetName} with ZERO stars. $${m.payout} clean, half if you pay your way out.`, '#88FF88');
+        } else if (m?.type === 'weather') {
+          this._setStatus(`${m.terms?.weather_run?.tag === 'wind' ? '🌬' : '🌨'} Contract taken — ${m.cargo} to ${m.targetName}, intact. $${m.payout}.`, '#88FF88');
+        } else if (m) {
+          this._setStatus(`📦 Job taken — ${m.cargo} to ${m.targetName}. $${m.payout} on delivery.`, '#88FF88');
+        }
+      }
+      if (choice.missionDecline) {
+        this.registry.get('missions')?.decline?.(choice.missionDecline);
+      }
       dismiss();
       if (dialogue) this._showEncounterResult(dialogue);
+      if (typeof choice.next === 'string') {
+        this._showEncounterCard(enc, save, seen, choice.next);   // walk the tree
+      } else {
+        if (enc.once) { seen.add(enc.id); save?.set?.('encountersSeen', [...seen]); }
+        // Conversation over — surface the queued mission contact (no-op when
+        // this card IS the mission contact or nothing is pending).
+        this._maybeShowMissionCard();
+      }
     };
 
     // Choice buttons stacked at the bottom of the RIGHT pane — comfortable
-    // height again since they no longer cover the portrait.
-    const choices = enc.choices ?? [{ label: 'Continue', effects: {} }];
+    // height again since they no longer cover the portrait.  Choices whose
+    // `conditions` fail (cash / item / npcMemory) render grayed out like an
+    // unaffordable cost, or vanish entirely with `hideWhenLocked`.
+    const condCtx = { cash: this._score ?? 0, buffs: this._purchases.encounterBuffs ?? [], memory: mem };
+    const choices = (node.choices ?? [{ label: 'Continue', effects: {}, end: true }])
+      .filter(c => !(c.hideWhenLocked && choiceLocked(c, condCtx)));
     const bh = 28, gap = 5;
     const bcx = txX + txW / 2;
     let by = py + ph - (choices.length * (bh + gap)) - 6;
     for (const c of choices) {
       const cost = c.cost ?? 0;
-      const afford = cost <= (this._score ?? 0);
+      const afford = cost <= (this._score ?? 0) && !choiceLocked(c, condCtx);
       const bg = this.add.rectangle(bcx, by + bh / 2, txW - 28, bh, afford ? 0x143A5A : 0x2A1010)
         .setStrokeStyle(2, afford ? 0x39A8FF : 0x662222).setDepth(D + 2);
       const lbl = this.add.text(bcx, by + bh / 2, c.label, {

@@ -1385,11 +1385,11 @@
         } else {
           scale = Math.min(vw / imgW, vh / imgH);
         }
-        // Center the image both ways (vertical centering per spec; the button
-        // grid is horizontally symmetric in the art, so centering ≈ equal
-        // side margins).  Art beyond the buttons may letterbox-crop — fine.
-        const offX = (vw - imgW * scale) / 2;
-        const offY = (vh - imgH * scale) / 2;
+        // Center on the BUTTON BLOCK, not the image — the grid isn't centered
+        // within the artwork, so image-centering leaves the visible menu
+        // off-center vertically.  Art beyond the buttons may letterbox-crop.
+        const offX = b ? vw / 2 - ((b.minX + b.maxX) / 2) * scale : (vw - imgW * scale) / 2;
+        const offY = b ? vh / 2 - ((b.minY + b.maxY) / 2) * scale : (vh - imgH * scale) / 2;
         coverState = { scale, offX, offY };
         // Size/position the art itself with the SAME transform the hit zones
         // use, so buttons stay glued to the artwork at any scale.
