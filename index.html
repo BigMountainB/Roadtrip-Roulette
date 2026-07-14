@@ -125,6 +125,12 @@
       bottom: 0;
       left: 0;
       min-height: 100svh;
+      /* iOS: a fixed inset:0 box only spans the SMALL (toolbar-visible)
+         viewport — even with the toolbar hidden it stops ~50px short of the
+         glass, which skewed the menu's vertical centering (art rode high,
+         black band at the bottom).  100lvh = the LARGE viewport = the full
+         glass; bottom:0 above stays as the fallback for old browsers. */
+      height: 100lvh;
       /* Black so the width-fit art's bottom gap reads as letterbox, not the
          old app's light-blue background showing through. */
       background: #000;
@@ -1407,7 +1413,10 @@
         // minimized bottom bar from vv.height even though the fixed container
         // (and the visible page) extend under it — centering on vv.height
         // shoved the art up and left a black band at the bottom (2026-07-13).
-        const vw = menu.clientWidth, vh = menu.clientHeight;
+        // innerHeight tracks the LARGE viewport once toolbars collapse —
+        // take the max so the centering box always spans the full glass.
+        const vw = menu.clientWidth;
+        const vh = Math.max(menu.clientHeight, window.innerHeight || 0);
         if (!vw || !vh) return null;
         // AUTO-SCALE (2026-07-13): every 853×1844 menu skin carries a baked-in
         // near-black dead border around the visible phone artwork — measured

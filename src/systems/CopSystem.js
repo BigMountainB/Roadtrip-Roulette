@@ -266,7 +266,15 @@ export class CopSystem {
     // Cocaine "sloppy" multiplier — GameScene stamps phys.cocaineStarMul
     // onto this._starGainMul each frame so we don't have to plumb the
     // multiplier through every addStar call site.
-    const mul  = (this._starGainMul ?? 1) * Difficulty.starGainMul();
+    // Difficulty.starGainMul (Easy 0.5×) only softens FRACTIONAL drip heat
+    // (collision bumps etc.).  Whole-star gains (amount >= 1) are announced
+    // events — "Failed to pull over! +1★", "WANTED LEVEL ACTIVATED", the
+    // fireworks spectacle star — and must land a full DISPLAY star: halving
+    // them made the popup promise +1★ while floor(stars) never moved
+    // (2026-07-14 playtest bug).  _starGainMul (cocaine >1× / steroid 0×)
+    // still applies to everything.
+    const mul  = (this._starGainMul ?? 1)
+               * (amount >= 1 ? 1 : Difficulty.starGainMul());
     const ceil = Math.min(MAX_STARS, hardCap, Math.max(this.stars, sourceCap));
     this.stars     = clamp(this.stars + amount * mul, 0, ceil);
     this.starTimer = 4;

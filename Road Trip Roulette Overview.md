@@ -92,6 +92,31 @@ volume is the long pole (each pack = vehicle art + ~10 sprite images).
 
 ## Changelog (newest first)
 
+### 2026-07-14 — Playtest round 2 (DEPLOYED)
+- Fireworks = full screen wipe (staggered explosions take out cops, traps AND traffic — old
+  rocket behavior with the aerial show on top; +1★ unchanged).
+- Food/drink bites: ×2.5 was too much → **×1.5 of original**; bladder coefficients compensated
+  (÷1.5) so bladder pace stays ORIGINAL. Gas: 75-mi tank at true 1:1 burn.
+- Wide-phone overlay coverage bugs (same class as the vignette): food-coma/nausea/withdrawal
+  washes now span the full canvas (right-edge light band fixed); phone-menu container sized to
+  100lvh (iOS fixed inset:0 stops ~50px short of the glass even with toolbars hidden) and the
+  centering box uses the measured VISIBLE art bounds (rows 106–1711 — skins carry ~95px of
+  invisible black filler below the rotate strip).
+- Rest-stop shop screens: survival mini bars moved to upper-left (were clipping offscreen),
+  title/quote overlap fixed, sub-screens titled with the SHOP name (CowBella, Gas-N-Sip, …);
+  landing keeps the location name.
+- Notification dots: 22px, main-screen only, Messages dot requires actual thread content;
+  per-thread dots right of the name; contact chevrons 3×. Garage text 3× + oval pills.
+- Title screen: MPH sublabel hidden; DIFFICULTY/DRIVING TYPE headers removed. Game-over
+  fallback buttons: RESTART / CONTINUE / MENU (plate art re-export still pending).
+- License plates accept special characters (HTML-hazard chars blocked + render-site escaping).
+- Traffic-stop fixes: the officer WAS there but parked at a road depth that projects below the
+  screen (never drew) — park spot moved into view; Easy's 0.5× star multiplier no longer halves
+  announced whole-star events (popup said +1★, HUD floor() showed nothing); trap-light flash +
+  rain/snow washes/spawn ranges + windshield-crack haze + coal soot bands all extended to the
+  full wide-phone canvas.
+
+
 ### 2026-07-13/14 — Mission system (all 7 phases) + fireworks/gauge/HUD batch (both DEPLOYED)
 **Deploy 1 — Mission system complete (Ch. 8 rev. B, built by a 7-agent relay):**
 - P1 dialogue trees (node schema, conditions, npcMemory→GLOBAL) · P2 MissionSystem.js + Delivery

@@ -31,21 +31,20 @@ const DIURETIC_MAX   = 20;
 // applyItem.  Every BEVERAGE adds to hydration on the spot; diuretics claw it
 // back over the following miles instead of subtracting immediately.
 // BITE-SIZED (2026-07-12): each road sprite is a bite/sip, not a meal.
-// FILLING ×2.5 (2026-07-13 playtest): the original bite values couldn't keep
-// up with the drain — hydration/fullness gains ×2.5; tiredness and diuretic
-// values unchanged.  (Diuretic claw-back + bladder gain scale off the new
-// h/f automatically.)
+// FILLING ×1.5 (2026-07-14 playtest): ×2.5 overshot ("too much"), reduced by
+// 40% → 1.5× the original bite values.  Tiredness and diuretic unchanged;
+// _bladderGain coefficients are ÷1.5 so bladder pace stays at the ORIGINAL.
 const ITEM_FX = {
-  water:        { t:  -1, h: +7.5, f:    0 },
-  coldbrew:     { t:  -4, h:   +5, f:    0, diuretic: 2 },
-  caffeine:     { t:  -7, h: +2.5, f:    0, addiction: true, diuretic: 3 },
-  slushie:      { t:  -2, h: +7.5, f:   +5 },
-  gummies:      { t:  -1, h:    0, f:   +5, tripRoll: true },
-  sushi:        { t:  +1, h:    0, f: +7.5, badFishRoll: true },
-  burrito:      { t:  +3, h:    0, f:  +10 },
+  water:        { t:  -1, h: +4.5, f:    0 },
+  coldbrew:     { t:  -4, h:   +3, f:    0, diuretic: 2 },
+  caffeine:     { t:  -7, h: +1.5, f:    0, addiction: true, diuretic: 3 },
+  slushie:      { t:  -2, h: +4.5, f:   +3 },
+  gummies:      { t:  -1, h:    0, f:   +3, tripRoll: true },
+  sushi:        { t:  +1, h:    0, f: +4.5, badFishRoll: true },
+  burrito:      { t:  +3, h:    0, f:   +6 },
   dramamine:    { t:  +6, h:    0, f:    0, curesNausea: true },
-  quadshot:     { t: null, h:  +5, f:   +5, clearTiredness: true, diuretic: 3 },   // t handled by clear
-  rage:         { t:   0, h:  +5, f:   +5, diuretic: 1.5 },
+  quadshot:     { t: null, h:  +3, f:   +3, clearTiredness: true, diuretic: 3 },   // t handled by clear
+  rage:         { t:   0, h:  +3, f:   +3, diuretic: 1.5 },
 };
 
 const BAD_FISH_CHANCE   = 1 / 12;   // Sushi → bladder emergency
@@ -143,7 +142,9 @@ export class SurvivalSystem {
    *  adds, plus a diuretic bump for caffeine and the quad-shot. */
   _bladderGain(id, fx = {}) {
     const posH = Math.max(0, fx.h || 0), posF = Math.max(0, fx.f || 0);
-    let g = posH * 0.07 + posF * 0.06;
+    // Coefficients ÷1.5 alongside the FILLING ×1.5 bite buff so the bladder
+    // fills at its ORIGINAL pace (owner call 2026-07-14).
+    let g = posH * 0.0467 + posF * 0.04;
     if (fx.diuretic) g += 0.8;   // diuretics make you go more
     return g;
   }
@@ -151,7 +152,7 @@ export class SurvivalSystem {
   /** External bladder fill (e.g. encounter food/drink that bypasses applyItem).
    *  posHydration/posFullness are the positive amounts added to those bars. */
   fillBladderFrom(posHydration = 0, posFullness = 0) {
-    this.bladder = clamp(this.bladder + Math.max(0, posHydration) * 0.07 + Math.max(0, posFullness) * 0.06);
+    this.bladder = clamp(this.bladder + Math.max(0, posHydration) * 0.0467 + Math.max(0, posFullness) * 0.04);
   }
 
   // ── Tier getters (drive HUD + effects; thresholds per spec §2) ──────────

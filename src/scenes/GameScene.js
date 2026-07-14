@@ -4014,9 +4014,16 @@ export class GameScene extends Phaser.Scene {
       const _tc = this.cops.cops.find(c => c.trapPursuit);
       if (_tc) {
         // Slide from behind (mirror-only) up to a CLOSE spot just ahead-left so
-        // it's big and unmistakably on screen for the stop.  +600 is close
-        // enough to render large at the 2.2× cop scale.
-        _tc.position   = this.player.position + (-1800 + 2400 * _e);   // -1800 → +600 (close, ahead-left)
+        // it's big and unmistakably on screen for the stop.  The park spot
+        // must sit at a relZ the projection can actually SEE: anything under
+        // ~1400 projects BELOW the screen bottom (those surface samples are
+        // visible:false → getVehicleProjection returns null → invisible
+        // trooper — the 2026-07-14 playtest bug).  +4400 parks it just
+        // ahead-left of the player car's own virtual depth (PLAYER_VIRTUAL_Z
+        // 3000) so it renders big and unmistakable.  Cockpit shifts the eye
+        // +eyeForwardZ, so offset the spot by it too.
+        const _stopZ   = 4400 + (CAM.eyeForwardZ ?? 0);
+        _tc.position   = this.player.position + (-1800 + (_stopZ + 1800) * _e);   // -1800 → +4400 (close, ahead-left)
         _tc.laneOffset = 0.5;
       }
       // Flashing red/blue cruiser lights across the top + sides of the screen.
@@ -10289,10 +10296,13 @@ export class GameScene extends Phaser.Scene {
     const c = this._coalCloud;
     if (!c || !g) return;
     if (c.soot > 0) {
+      // Bottom-edge soot band must span past ±HUD_OFFSET_X on wide phones
+      // (world-layer graphics — same class as the trap-light fix, 2026-07-14).
+      const _sOff = (C.HUD_OFFSET_X ?? 0) + 20;
       g.fillStyle(0x0C0C0C, 0.28 * c.soot);
-      g.fillRect(0, SCREEN_H - 46, SCREEN_W, 46);
+      g.fillRect(-_sOff, SCREEN_H - 46, SCREEN_W + _sOff * 2, 46);
       g.fillStyle(0x0C0C0C, 0.16 * c.soot);
-      g.fillRect(0, SCREEN_H - 90, SCREEN_W, 44);
+      g.fillRect(-_sOff, SCREEN_H - 90, SCREEN_W + _sOff * 2, 44);
     }
     for (const p of c.puffs) {
       const t = Math.max(0, p.life / p.maxLife);          // 1 → 0 over life
@@ -11504,6 +11514,12 @@ export class GameScene extends Phaser.Scene {
     const eff   = Math.max(0, Math.min(2.4, inten * sev));
     // dt for particle update — use the same Phaser delta the scene runs at.
     const dt = (this.game?.loop?.delta ?? 16) / 1000;
+    // Wide-phone bleed: weatherFxGfx is a world-layer graphics (main cam
+    // scrolled −HUD_OFFSET_X), so "full screen" spans −wOff..SCREEN_W+wOff —
+    // particles/washes clipped to 0..SCREEN_W stopped at the old 800px
+    // border on phones (same bug class as the trap-light / _drawSurvivalFx
+    // fixes, 2026-07-14).
+    const wOff = (C.HUD_OFFSET_X ?? 0) + 20;
 
     if (state === 'rain') {
       this._snowFlakes && (this._snowFlakes.length = 0);
@@ -11525,7 +11541,7 @@ export class GameScene extends Phaser.Scene {
       // initial wave falls through.
       while (pool.length < targetCount) {
         pool.push({
-          x:  Math.random() * (SCREEN_W + 80) - 40,
+          x:  Math.random() * (SCREEN_W + wOff * 2) - wOff,
           y:  Math.random() * (SCREEN_H + 80) - 40,
           v:  fallSpeed * (0.85 + Math.random() * 0.3),
         });
@@ -11542,16 +11558,16 @@ export class GameScene extends Phaser.Scene {
         d.y += d.v * cosW * dt;
         if (d.y > SCREEN_H + 4) {
           d.y = -streakLen;
-          d.x = Math.random() * (SCREEN_W + 80) - 40;
+          d.x = Math.random() * (SCREEN_W + wOff * 2) - wOff;
         }
-        if (d.x < -20) d.x = SCREEN_W + 10;
-        else if (d.x > SCREEN_W + 20) d.x = -10;
+        if (d.x < -wOff) d.x = SCREEN_W + wOff - 10;
+        else if (d.x > SCREEN_W + wOff) d.x = -wOff + 10;
         // Draw streak as a thin slanted rectangle.
         g.fillRect(d.x, d.y, dropW, streakLen);
       }
       // Subtle sky darkening at peak storm.
       g.fillStyle(0x101820, 0.10 * (eff / 2.4));
-      g.fillRect(0, 0, SCREEN_W, SCREEN_H);
+      g.fillRect(-wOff, 0, SCREEN_W + wOff * 2, SCREEN_H);
     } else if (state === 'snow') {
       this._rainDrops && (this._rainDrops.length = 0);
       const MAX_FLAKES = 260;
@@ -11562,7 +11578,7 @@ export class GameScene extends Phaser.Scene {
       const fallSpeed = 140 + 180 * (eff / 2.4);
       while (pool.length < targetCount) {
         pool.push({
-          x:    Math.random() * (SCREEN_W + 40) - 20,
+          x:    Math.random() * (SCREEN_W + wOff * 2) - wOff,
           y:    Math.random() * SCREEN_H * -1,
           v:    fallSpeed * (0.6 + Math.random() * 0.7),
           r:    1.0 + Math.random() * 2.0 * (0.5 + 0.5 * (eff / 2.4)),
@@ -11578,15 +11594,15 @@ export class GameScene extends Phaser.Scene {
         f.x += drift * dt;
         if (f.y > SCREEN_H + 4) {
           f.y = -4;
-          f.x = Math.random() * (SCREEN_W + 40) - 20;
+          f.x = Math.random() * (SCREEN_W + wOff * 2) - wOff;
         }
-        if (f.x < -10) f.x = SCREEN_W + 5;
-        else if (f.x > SCREEN_W + 10) f.x = -5;
+        if (f.x < -wOff) f.x = SCREEN_W + wOff - 5;
+        else if (f.x > SCREEN_W + wOff) f.x = -wOff + 5;
         g.fillCircle(f.x, f.y, f.r);
       }
       // Sky desaturation at peak snow.
       g.fillStyle(0xCEDADE, 0.08 * (eff / 2.4));
-      g.fillRect(0, 0, SCREEN_W, SCREEN_H);
+      g.fillRect(-wOff, 0, SCREEN_W + wOff * 2, SCREEN_H);
     }
   }
 
@@ -14124,8 +14140,12 @@ export class GameScene extends Phaser.Scene {
     drawCrack(0.20 + severity * 0.18, 3, 0x18202A);
     drawCrack(0.42 + severity * 0.48, severity > 0.58 ? 2 : 1, 0xEAF6FF);
     if (severity > 0.60) {
+      // Full-screen glass haze — _damageGlassGfx is a world-layer graphics,
+      // so span past ±HUD_OFFSET_X or the wash stops at the old 800px border
+      // on wide phones (same class as the trap-light fix, 2026-07-14).
+      const _cOff = (C.HUD_OFFSET_X ?? 0) + 20;
       g.fillStyle(0xD9EEFF, (severity - 0.60) * 0.10);
-      g.fillRect(0, 0, SCREEN_W, SCREEN_H);
+      g.fillRect(-_cOff, 0, SCREEN_W + _cOff * 2, SCREEN_H);
     }
   }
 
@@ -16623,7 +16643,10 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const W = SCREEN_W + (C.HUD_OFFSET_X ?? 0) * 2, H = SCREEN_H;
-    const ox = -(C.HUD_OFFSET_X ?? 0);
+    // _survFxGfx is scrollFactor(0) = CANVAS space (0..W), so full-screen
+    // washes start at 0 — the old -HUD_OFFSET_X start (scrolled-layer math)
+    // shifted everything left and left a light band on the RIGHT edge.
+    const ox = 0;
     const t = this.gameTime ?? 0;
 
     // Dehydration → tunnel vision: a soft dark vignette closes in as Hydration
@@ -17373,13 +17396,18 @@ export class GameScene extends Phaser.Scene {
     const redOn   = (Math.floor(elapsed * 5) % 2) === 0;   // swap ~5×/sec
     const rA = redOn ? 0.40 : 0.12;
     const bA = redOn ? 0.12 : 0.40;
-    const w = SCREEN_W, h = SCREEN_H, barH = h * 0.11;
+    // _trapLightGfx lives on the HUD layer (uiCam, scrolled −HUD_OFFSET_X),
+    // so full-screen fills must start at −HUD_OFFSET_X and span the whole
+    // wide-phone canvas — a plain 0..SCREEN_W band stopped at the old 800px
+    // border (2026-07-14 playtest bug; same class as the _drawSurvivalFx fix).
+    const off = C.HUD_OFFSET_X ?? 0;
+    const ox = -off, w = SCREEN_W + off * 2, h = SCREEN_H, barH = h * 0.11;
     // Top band: red over the left half, blue over the right half.
-    g.fillStyle(0xFF1E1E, rA); g.fillRect(0,       0, w * 0.5, barH);
-    g.fillStyle(0x2A5BFF, bA); g.fillRect(w * 0.5, 0, w * 0.5, barH);
+    g.fillStyle(0xFF1E1E, rA); g.fillRect(ox,           0, w * 0.5, barH);
+    g.fillStyle(0x2A5BFF, bA); g.fillRect(ox + w * 0.5, 0, w * 0.5, barH);
     // Soft side columns for a wraparound "lights filling the cabin" feel.
-    g.fillStyle(0xFF1E1E, rA * 0.6); g.fillRect(0,        0, w * 0.06, h);
-    g.fillStyle(0x2A5BFF, bA * 0.6); g.fillRect(w * 0.94, 0, w * 0.06, h);
+    g.fillStyle(0xFF1E1E, rA * 0.6); g.fillRect(ox,            0, w * 0.06, h);
+    g.fillStyle(0x2A5BFF, bA * 0.6); g.fillRect(ox + w * 0.94, 0, w * 0.06, h);
   }
 
   /** Combined multiplier — strictly ADDITIVE, lands on a clean 0.5

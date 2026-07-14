@@ -646,7 +646,9 @@ export class RestStopScene extends Phaser.Scene {
     }
 
     // ── Title ────────────────────────────────────────────────────────────
-    this.add.text(CX, 30, `${this._stop.name.toUpperCase()}`, {
+    // Landing shows the LOCATION; shop sub-screens swap in the shop's
+    // brand name (see _showSection / _showDealerChooser / _showLanding).
+    this._titleText = this.add.text(CX, 30, `${this._stop.name.toUpperCase()}`, {
       fontSize: '18px', fontFamily: IMPACT,
       color: '#FFEEAA', stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5, 0);
@@ -675,7 +677,7 @@ export class RestStopScene extends Phaser.Scene {
       }).setOrigin(1, 0);
     }
 
-    // ── Survival status — compact UNLABELED bars under the HP readout.
+    // ── Survival status — compact UNLABELED bars upper-left, below BACK.
     //    Same colors + top→bottom order as the drive HUD (Alertness /
     //    Bladder gradient / Drinks / Food) so they read on recognition. ──
     this._survMiniGfx = this.add.graphics();
@@ -715,7 +717,7 @@ export class RestStopScene extends Phaser.Scene {
           const _mi   = _left < 10 ? _left.toFixed(1) : String(Math.round(_left));
           return `${_icon(m)} ${m.targetName} · ${_mi} MI · $${m.payout.toLocaleString()}${_flags(m)}`;
         });
-        this.add.text(30, 56, `JOBS\n${_lines.join('\n')}`, {
+        this.add.text(30, 100, `JOBS\n${_lines.join('\n')}`, {
           fontSize: '11px', fontFamily: IMPACT, color: '#9FE0FF',
           stroke: '#000', strokeThickness: 3, lineSpacing: 3,
         }).setOrigin(0, 0);
@@ -735,7 +737,7 @@ export class RestStopScene extends Phaser.Scene {
           return `${_repIcon[t]} ${tier.name} ${next ? `${n}/${next.minDone}` : n}`;
         });
       if (_repBits.length) {
-        this.add.text(30, 56 + (_jobs.length ? (_jobs.length + 1) * 14 + 4 : 0),
+        this.add.text(30, 100 + (_jobs.length ? (_jobs.length + 1) * 14 + 4 : 0),
           `REP  ${_repBits.join(' · ')}`, {
             fontSize: '11px', fontFamily: IMPACT, color: '#FFD23D',
             stroke: '#000', strokeThickness: 3,
@@ -746,10 +748,13 @@ export class RestStopScene extends Phaser.Scene {
     // ── NPC vignette — flavor one-liner picked from per-stop pool ──
     const vignette = pickVignette(this._stop?.id);
     if (vignette) {
-      this.add.text(SCREEN_W / 2, 90, `“${vignette}”`, {
+      // Stacked directly under the big title (y=52) so it can never
+      // collide with the section header at contentY-32; narrower wrap
+      // keeps it clear of the left survival bars + right CASH/HP stack.
+      this.add.text(SCREEN_W / 2, 52, `“${vignette}”`, {
         fontSize: '12px', fontFamily: 'Arial, sans-serif',
         color: '#CCCCCC', stroke: '#000', strokeThickness: 2,
-        align: 'center', wordWrap: { width: SCREEN_W - 80 },
+        align: 'center', wordWrap: { width: SCREEN_W - 300 },
       }).setOrigin(0.5, 0);
     }
 
@@ -766,6 +771,9 @@ export class RestStopScene extends Phaser.Scene {
 
     // Brand logo + label per landing tile, region-aware via brandsForStop.
     const stopBrands = brandsForStop(this._stop);
+    // Kept on the scene so sub-screens can title themselves with the
+    // shop's brand name (see _shopNameFor).
+    this._brands = stopBrands;
     // Filter the landing tiles to only the amenities present at this
     // stop (per the REST_STOPS amenities field).  A camp-only stop now
     // shows just the Camp tile; Pullman shows all 5.  Falls back to
@@ -1375,6 +1383,13 @@ export class RestStopScene extends Phaser.Scene {
     for (const c of Object.values(this._sectionContainers ?? {})) c.setVisible(false);
   }
 
+  /** Brand (shop) name for a section key, or null where no brand exists
+   *  (e.g. dealer_acc).  dealer_cars titles itself as the dealer brand. */
+  _shopNameFor(key) {
+    const brandKey = key === 'dealer_cars' ? 'dealer' : key;
+    return this._brands?.[brandKey]?.name ?? null;
+  }
+
   /** Show the landing screen (5 brand placards). */
   _showLanding() {
     this._screenStack = ['landing'];
@@ -1384,6 +1399,8 @@ export class RestStopScene extends Phaser.Scene {
     this._backBtnBg?.setVisible(false);
     this._backBtnLbl?.setVisible(false);
     this._sectionHeader?.setVisible(false);
+    // Landing shows the LOCATION; sub-screens swap in the shop name.
+    this._titleText?.setText(this._stop.name.toUpperCase());
   }
 
   /** Show the dealer chooser (Cars / Accessories). */
@@ -1394,9 +1411,11 @@ export class RestStopScene extends Phaser.Scene {
     for (const obj of (this._dealerChooserObjs ?? [])) obj.setVisible?.(true);
     this._backBtnBg?.setVisible(true);
     this._backBtnLbl?.setVisible(true);
+    const shopName = this._shopNameFor('dealer');
     if (this._sectionHeader) {
-      this._sectionHeader.setText('🏬  DEALER').setVisible(true);
+      this._sectionHeader.setText(shopName ?? '🏬  DEALER').setVisible(true);
     }
+    this._titleText?.setText(shopName ?? this._stop.name.toUpperCase());
   }
 
   /** Show a sub-menu for a section key.  parent (optional) = the
@@ -1412,9 +1431,14 @@ export class RestStopScene extends Phaser.Scene {
     }
     this._backBtnBg?.setVisible(true);
     this._backBtnLbl?.setVisible(true);
+    // Sub-screens brand themselves as the shop the player is IN — the
+    // big title and section header both show the store's name (falling
+    // back to the section label where no brand exists, e.g. ACCESSORIES).
+    const shopName = this._shopNameFor(key);
     if (this._sectionHeader) {
-      this._sectionHeader.setText(SECTIONS[key]?.label ?? key.toUpperCase()).setVisible(true);
+      this._sectionHeader.setText(shopName ?? SECTIONS[key]?.label ?? key.toUpperCase()).setVisible(true);
     }
+    this._titleText?.setText(shopName ?? this._stop.name.toUpperCase());
     this._setSectionScroll(key, 0);
   }
 
@@ -1815,9 +1839,11 @@ export class RestStopScene extends Phaser.Scene {
            | (Math.round(ag + (bg - ag) * t) << 8)
            |  Math.round(ab + (bb - ab) * t);
     };
-    // ~60% of the drive-HUD block, right-aligned under the 🔧 HP readout.
+    // ~60% of the drive-HUD block, upper-LEFT below the ← BACK button.
+    // (Was right-aligned under the 🔧 HP readout, where wide phones
+    // clipped it past the right screen edge.)
     const bw = 110, bh = 9, gap = 13;
-    const bx = SCREEN_W - 30 - bw, by = 102;
+    const bx = 30, by = 44;
     g.clear();
     rows.forEach((r, i) => {
       const y = by + i * gap;
