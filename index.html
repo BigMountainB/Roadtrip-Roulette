@@ -1379,17 +1379,16 @@
         let scale;
         if (b) {
           scale = Math.min(
-            (vw - EDGE * 2) / (b.maxX - b.minX),   // buttons 15px from the sides
-            (vh - EDGE * 2) / (b.maxY - b.minY),   // …but never crop them vertically
-          );
-        } else {
-          scale = Math.min(vw / imgW, vh / imgH);
+            (vw - EDGE * 2) / (b.maxX - b.minX),   // buttons 15px from the sides…
+            vh / imgH,                             // …but the FULL art must fit
+          );                                       // vertically (the "rotate
+        } else {                                   // phone" strip below the
+          scale = Math.min(vw / imgW, vh / imgH);  // buttons was getting cropped)
         }
-        // Center on the BUTTON BLOCK, not the image — the grid isn't centered
-        // within the artwork, so image-centering leaves the visible menu
-        // off-center vertically.  Art beyond the buttons may letterbox-crop.
+        // Horizontally center the BUTTON BLOCK (the grid isn't dead-center in
+        // the art); vertically center the whole image — it always fits now.
         const offX = b ? vw / 2 - ((b.minX + b.maxX) / 2) * scale : (vw - imgW * scale) / 2;
-        const offY = b ? vh / 2 - ((b.minY + b.maxY) / 2) * scale : (vh - imgH * scale) / 2;
+        const offY = (vh - imgH * scale) / 2;
         coverState = { scale, offX, offY };
         // Size/position the art itself with the SAME transform the hit zones
         // use, so buttons stay glued to the artwork at any scale.
