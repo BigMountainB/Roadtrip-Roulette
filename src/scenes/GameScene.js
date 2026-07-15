@@ -9170,9 +9170,9 @@ export class GameScene extends Phaser.Scene {
       }
       // Meta-unlock accounting (Cold Brew count → Caffeine Pills).
       this._recordViceUnlockProgress?.(itemId);
-      const earned = Math.round(10 * this._scoreMult());
+      const earned = Math.round(5 * this._scoreMult());   // $5/sprite (was $10, 2026-07-15)
       this.score  += earned;
-      this.stats?.recordEarn(earned, 'pickup', 10);
+      this.stats?.recordEarn(earned, 'pickup', 5);
       const label  = VICE_CONFIG[itemId]?.label ?? itemId;
       this._showPopup(`${label}  +$${earned}`, '#FFFF44');
       this.effects.triggerShake(55, 0.002);
@@ -10270,25 +10270,38 @@ export class GameScene extends Phaser.Scene {
     // of the bumper) so the wall reads wide.  The array is naturally
     // z-ascending (the car only moves forward), which the draw passes
     // exploit for cheap far→near ordering.
-    const COAL_MAX_PUFFS = 48;      // hard cap — ~26/s × 1.2s + headroom
+    const COAL_MAX_PUFFS = 64;      // hard cap — world cloud + attached plume
     const pl = this.player;
+    // Exhaust plane = rear bumper of the VISIBLE car (sprite sits
+    // PLAYER_VIRTUAL_Z ahead of the physics position).  Needed past the
+    // belch phase too — attached plume puffs re-track it every frame.
+    const exhaustZ = pl ? pl.position + PLAYER_VIRTUAL_Z - CAR_LEN_Z : 0;
     if (c.emitT < c.emitDur && pl) {
       c.spawnAcc += dt * 26;
-      // Exhaust plane = rear bumper of the VISIBLE car (sprite sits
-      // PLAYER_VIRTUAL_Z ahead of the physics position).
-      const exhaustZ = pl.position + PLAYER_VIRTUAL_Z - CAR_LEN_Z;
       while (c.spawnAcc >= 1) {
         c.spawnAcc -= 1;
         if (c.puffs.length >= COAL_MAX_PUFFS) break;
         const side = Math.random() < 0.5 ? -1 : 1;
+        // ~35% of puffs are CAR-TRACKING "exhaust plume": they hang just
+        // off the rear bumper (z re-pinned to the moving exhaust each
+        // frame) with short lives, dark + chunky, so the player clearly
+        // sees black smoke boiling off their own car during the burst.
+        // The other ~65% stay world-anchored (fixed road z) and carry
+        // the lingering cloud the pursuit drives into.
+        const attach = Math.random() < 0.35;
         c.puffs.push({
-          z:    exhaustZ - Math.random() * 160,             // world road z — FIXED for life
+          attach,
+          off:  attach ? 60 + Math.random() * 340 : 0,      // plume trail depth behind bumper
+          z:    attach ? exhaustZ - (60 + Math.random() * 340)
+                       : exhaustZ - Math.random() * 160,    // world puffs: FIXED for life
           lat:  (pl.x ?? 0) + side * (0.05 + Math.random() * 0.09),  // lane-offset units
           dLat: side * (0.04 + Math.random() * 0.09),       // lateral billow, lane-units/s (decays)
-          wr:   0.12 + Math.random() * 0.10,                // radius in car-widths (× proj.sw on draw)
+          wr:   attach ? 0.16 + Math.random() * 0.14        // plume puffs: chunkier
+                       : 0.12 + Math.random() * 0.10,       // radius in car-widths (× proj.sw on draw)
           grow: 0.50 + Math.random() * 0.35,                // car-widths/s expansion (decays)
           age:  0,
-          life: 3.4 + Math.random() * 1.4,                  // hangs long enough to swallow a pursuer
+          life: attach ? 0.8 + Math.random() * 0.4          // plume: short-lived hug
+                       : 3.4 + Math.random() * 1.4,         // cloud: swallows a pursuer
           wobble: Math.random() * 6.283,
         });
       }
@@ -10298,6 +10311,9 @@ export class GameScene extends Phaser.Scene {
     for (let i = c.puffs.length - 1; i >= 0; i--) {
       const p = c.puffs[i];
       p.age  += dt;
+      // Attached plume puffs track the car: re-pin z to the CURRENT
+      // exhaust minus their fixed trail offset every frame.
+      if (p.attach && pl) p.z = exhaustZ - p.off;
       p.lat  += p.dLat * dt;
       p.dLat *= (1 - 1.2 * dt);
       p.wr   += p.grow * dt;
@@ -10313,6 +10329,15 @@ export class GameScene extends Phaser.Scene {
    *  the forward pass (_drawCoalCloud) and the mirror smoke pass so the
    *  cloud reads identically on both sides of the camera. */
   _coalPuffStyle(p) {
+    if (p.attach) {
+      // Car-tracking exhaust plume — born near-black and dense (raw soot
+      // straight off the pipe), quick in, fades over the back ~0.5s of
+      // its short life.
+      const darkT = Math.min(1, p.age / 0.3);
+      const inA   = Math.min(1, p.age / 0.1);
+      const outA  = Math.max(0, Math.min(1, (p.life - p.age) / 0.5));
+      return { shade: lerpColor(0x3A3A3A, 0x0E0E0E, darkT), a: 0.78 * inA * outA };
+    }
     const darkT = Math.min(1, p.age / 1.0);
     const inA   = Math.min(1, p.age / 0.15);                    // quick puff-in
     const outA  = Math.max(0, Math.min(1, (p.life - p.age) / 1.2));

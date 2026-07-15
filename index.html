@@ -2032,13 +2032,18 @@
       const mapClose   = document.getElementById('phone-map-close');
       // Amenity → business logo PNG (west/east brand split, matching the
       // rest-stop screens: CarGo/Huff's gas, Lord/SUCK dealer, etc.).
+      // Filenames + display names mirror RestStopScene's brandsForStop()
+      // and AssetManifest (biz_* keys → public/assets/businesses/*.png).
       const BIZ_LOGO = (a, isWest) => ({
-        gas:     isWest ? 'cargo.png' : 'huffs.png',
-        hunting: 'cowbellas.png',
-        camp:    'aok.png',
-        dealer:  isWest ? 'lord.png' : 'suck.png',
-        vices:   'pharmabros.png',
-        parkride: 'park-and-ride.png',
+        gas:     isWest ? { file: 'cargo.png', name: 'CarGo' }
+                        : { file: 'huffs.png', name: "Huff's Gas" },
+        hunting: { file: 'cowbellas.png',      name: 'CowBella' },
+        camp:    { file: 'aok.png',            name: 'AOK Camp' },
+        dealer:  isWest ? { file: 'lord.png',  name: 'Lord Motors' }
+                        : { file: 'suck.png',  name: "Sam's Used Car Kingdom" },
+        vices:   { file: 'gasnsip.png',        name: 'Gas-N-Sip' },
+        ambm:    { file: 'am_bm.png',          name: 'AM/BM' },
+        parkride: { file: 'park-and-ride.png', name: 'Metro Park & Ride' },
       }[a] || null);
       // I-90 → WA-26 → US-195 → WA-270 waypoints (mile, lat, lon).
       const WAYPOINTS = [
@@ -2199,8 +2204,15 @@
           const logos = !next ? [] : (next.amenities || [])
             .map(a => BIZ_LOGO(a, isWest)).filter(Boolean);
           if (next && logos.length) {
+            // onerror fallback: if a logo file ever goes missing, hide the
+            // broken-image icon and show the brand name as text instead.
             mapStops.innerHTML = `<div class="np-title">NEXT REST STOP</div>`
-              + logos.map(f => `<img src="assets/businesses/${f}" alt="">`).join('');
+              + logos.map(b =>
+                  `<img src="assets/businesses/${b.file}" alt="${b.name}" `
+                + `onerror="this.style.display='none';`
+                + `var t=document.createElement('div');t.textContent=this.alt;`
+                + `t.style.cssText='color:#FFE066;font:bold 2.4vmin Helvetica,Arial,sans-serif;text-align:center;';`
+                + `this.parentNode.insertBefore(t,this.nextSibling)">`).join('');
             mapStops.style.display = 'flex';
           } else {
             mapStops.innerHTML = '';
