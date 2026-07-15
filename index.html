@@ -1461,8 +1461,16 @@
         // which is why gameplay gets the whole screen) — centering into that
         // strip just gets the art's bottom clipped behind the bar.  The lvh
         // container stays black underneath so the whole glass reads seamless.
+        // Home-Screen (standalone) apps: iOS under-reports visualViewport AND
+        // innerHeight by ~62px (diagnosed on-device 2026-07-14: vv 402x812 vs
+        // a real 402x874 glass, no browser chrome anywhere) — the 100lvh
+        // container is the only honest height there.  In a Safari tab the
+        // shorter visualViewport is REAL (the nav bar overlays the page), so
+        // keep using it in that case.
         const vw = menu.clientWidth;
-        const vh = Math.round(window.visualViewport?.height ?? menu.clientHeight);
+        const vh = navigator.standalone
+          ? menu.clientHeight
+          : Math.round(window.visualViewport?.height ?? menu.clientHeight);
         if (!vw || !vh) return null;
         // AUTO-SCALE (2026-07-13): every 853×1844 menu skin carries a baked-in
         // near-black dead border around the visible phone artwork — measured
