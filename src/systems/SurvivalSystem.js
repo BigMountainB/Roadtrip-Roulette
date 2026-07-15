@@ -18,7 +18,8 @@ const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
 // Baseline per-mile drift.  Food + drinks drain fast now (~a top-up lasts a few
 // miles) so the survival loop stays active; tiredness rises slowly.
-const DRIFT = { tiredness: +0.7, fullness: -3.6, hydration: -4.0 };
+// Food/drink drain +15% (2026-07-14 playtest: bars stayed "too full" too long).
+const DRIFT = { tiredness: +0.7, fullness: -4.14, hydration: -4.6 };
 
 // Diuretics (coffee/caffeine/energy) hydrate you now, but ~half of the hydration
 // they add drains right back off over the next couple miles.  `diuretic` is a
@@ -57,7 +58,7 @@ export class SurvivalSystem {
   constructor() { this.reset(); }
 
   reset() {
-    this.tiredness = 0;
+    this.tiredness = 25;    // Alertness starts at 75% (owner call 2026-07-14)
     this.fullness  = 25;    // start at 25% — just clear of the negative zone
     this.hydration = 25;    // start at 25% — just clear of the negative zone
     this.bladder   = 25;    // start at 25% (multiplier condition is <25, so an

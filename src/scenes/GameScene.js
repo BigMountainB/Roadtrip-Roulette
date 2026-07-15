@@ -6404,9 +6404,9 @@ export class GameScene extends Phaser.Scene {
   _checkViceUnlocks() {
     if (this._awaitingStart) return;
     const mile = this._odometer ?? 0;
-    if (!this._isViceUnlocked('gummies')  && mile >= 100) this._unlockVice('gummies', 'Gummies');
-    if (!this._isViceUnlocked('sushi')    && mile >= 84)  this._unlockVice('sushi', 'Sushi');
-    if (!this._isViceUnlocked('slushie')  && mile >= 109) this._unlockVice('slushie', 'Slushie');
+    if (!this._isViceUnlocked('gummies')  && mile >= 70)  this._unlockVice('gummies', 'Gummies');
+    if (!this._isViceUnlocked('sushi')    && mile >= 34)  this._unlockVice('sushi', 'Sushi');
+    if (!this._isViceUnlocked('slushie')  && mile >= 100) this._unlockVice('slushie', 'Slushie');
     if (!this._isViceUnlocked('dramamine') && mile >= 55) this._unlockVice('dramamine', 'Dramamine');   // cleared the Pass
   }
 
@@ -10234,77 +10234,98 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** 💨 Rolling-coal cloud — a ~1.2s eruption of dense black diesel smoke
-   *  off the car's rear.  Each puff spawns low at the exhaust, billows
-   *  backward/outward (down-screen + sideways), expands as it rises through
-   *  the frame, and lingers as a fading charcoal cloud for a few seconds —
-   *  the cloud is what "hits" the pursuing cops.  A brief soot tint hugs
-   *  the bottom screen edge on fire.  Fully procedural — drawn per-frame on
-   *  the explosion layer by _drawCoalCloud. */
+  /** 💨 Rolling-coal cloud — a ~1.2s eruption of dense diesel smoke off the
+   *  car's rear, anchored to the ROAD, not the screen.  Each puff is emitted
+   *  at the exhaust's CURRENT world position (road z + lateral lane offset)
+   *  and then STAYS there — it billows/expands in place and recedes behind
+   *  the player as they drive on, so swerving during the burst paints a
+   *  curved trail across the lanes.  Puffs start light gray, darken to
+   *  near-black over the first ~1s while expanding, keep expanding, then
+   *  fade out (total life ~3.4-4.8s — long enough that a pursuing cop
+   *  drives INTO the hanging cloud).  Once a puff falls behind the camera
+   *  it re-projects into the rear-view mirror (see the smoke pass in the
+   *  mirror block of _renderHUD).  A brief soot tint hugs the bottom screen
+   *  edge on fire.  Fully procedural — drawn per-frame on the explosion
+   *  layer by _drawCoalCloud. */
   _startCoalCloud() {
-    const inCockpit = !!this._cockpitActive;
-    const cx = inCockpit ? SCREEN_W * 0.5 : (this.playerSprite?.x ?? SCREEN_W / 2);
-    const cy = inCockpit ? SCREEN_H * 0.92 : ((this.playerSprite?.y ?? SCREEN_H * 0.8) + 6);
     this._coalCloud = {
-      x: cx, y: cy,
       emitT:   0,           // time spent belching
-      emitDur: 1.2,         // eruption length (puffs keep spawning)
+      emitDur: 1.2,         // eruption length (puffs keep spawning off the moving exhaust)
       spawnAcc: 0,
       soot:    1,           // bottom-edge soot tint, fades out
-      puffs:   [],
+      puffs:   [],          // world-anchored; capped at COAL_MAX_PUFFS
     };
   }
 
-  /** Advance the coal cloud one frame — spawn fresh puffs while erupting,
-   *  then let the cloud drift back, expand and fade. */
+  /** Advance the coal cloud one frame — spawn fresh world-anchored puffs
+   *  off the moving exhaust while erupting, then let each puff billow in
+   *  place (radius growth + lateral spread) and age out. */
   _updateCoalCloud(dt) {
     const c = this._coalCloud;
     if (!c) return;
     c.emitT += dt;
     c.soot   = Math.max(0, c.soot - dt * 0.7);
-    // Belch phase — ~26 puffs/sec of overlapping soft dark blobs, two
-    // exhaust mouths (left/right of the bumper) so the wall reads wide.
-    if (c.emitT < c.emitDur) {
+    // Belch phase — ~26 puffs/sec dropped at the exhaust's CURRENT road
+    // position (rear bumper of the visible car), two mouths (left/right
+    // of the bumper) so the wall reads wide.  The array is naturally
+    // z-ascending (the car only moves forward), which the draw passes
+    // exploit for cheap far→near ordering.
+    const COAL_MAX_PUFFS = 48;      // hard cap — ~26/s × 1.2s + headroom
+    const pl = this.player;
+    if (c.emitT < c.emitDur && pl) {
       c.spawnAcc += dt * 26;
+      // Exhaust plane = rear bumper of the VISIBLE car (sprite sits
+      // PLAYER_VIRTUAL_Z ahead of the physics position).
+      const exhaustZ = pl.position + PLAYER_VIRTUAL_Z - CAR_LEN_Z;
       while (c.spawnAcc >= 1) {
         c.spawnAcc -= 1;
+        if (c.puffs.length >= COAL_MAX_PUFFS) break;
         const side = Math.random() < 0.5 ? -1 : 1;
         c.puffs.push({
-          x:    c.x + side * (14 + Math.random() * 26),
-          y:    c.y - Math.random() * 8,
-          vx:   side * (18 + Math.random() * 55) + (Math.random() - 0.5) * 30,
-          vy:   28 + Math.random() * 70,                    // billows down-screen (behind the car)
-          r:    10 + Math.random() * 16,
-          grow: 26 + Math.random() * 30,                    // px/s expansion
-          life: 2.2 + Math.random() * 1.6,                  // lingers as the cloud
-          maxLife: 0,
-          // Charcoal band — near-black cores through dark-gray edges.
-          shade: [0x0A0A0A, 0x161616, 0x222222, 0x2E2E2E][(Math.random() * 4) | 0],
+          z:    exhaustZ - Math.random() * 160,             // world road z — FIXED for life
+          lat:  (pl.x ?? 0) + side * (0.05 + Math.random() * 0.09),  // lane-offset units
+          dLat: side * (0.04 + Math.random() * 0.09),       // lateral billow, lane-units/s (decays)
+          wr:   0.12 + Math.random() * 0.10,                // radius in car-widths (× proj.sw on draw)
+          grow: 0.50 + Math.random() * 0.35,                // car-widths/s expansion (decays)
+          age:  0,
+          life: 3.4 + Math.random() * 1.4,                  // hangs long enough to swallow a pursuer
           wobble: Math.random() * 6.283,
         });
-        const p = c.puffs[c.puffs.length - 1];
-        p.maxLife = p.life;
       }
     }
-    // Puff physics — drag, slow expansion, lazy sideways wobble.
+    // Puff aging — expansion with drag + lateral spread; position on the
+    // road never changes (real smoke hangs where it was belched).
     for (let i = c.puffs.length - 1; i >= 0; i--) {
       const p = c.puffs[i];
-      p.x += (p.vx + Math.sin((this.gameTime ?? 0) * 1.7 + p.wobble) * 9) * dt;
-      p.y += p.vy * dt;
-      p.vx *= (1 - 0.9 * dt);
-      p.vy *= (1 - 0.7 * dt);
-      p.r  += p.grow * dt;
-      p.grow *= (1 - 0.5 * dt);
-      p.life -= dt;
-      if (p.life <= 0) c.puffs.splice(i, 1);
+      p.age  += dt;
+      p.lat  += p.dLat * dt;
+      p.dLat *= (1 - 1.2 * dt);
+      p.wr   += p.grow * dt;
+      p.grow *= (1 - 0.45 * dt);
+      if (p.age >= p.life) c.puffs.splice(i, 1);
     }
     if (c.emitT >= c.emitDur && !c.puffs.length) this._coalCloud = null;
   }
 
-  /** Paint the live coal cloud onto the explosion layer — many soft dark
-   *  circles (double-stamped: charcoal core + wider translucent skirt) so
-   *  the overlaps clump into one rolling black mass, plus the bottom-edge
-   *  soot tint while fresh. */
+  /** Shared puff lifecycle → { shade, a }.  Starts LIGHT gray and darkens
+   *  to near-black over the first ~1s (fresh diesel soot billowing dense),
+   *  holds, then alpha-fades over the last ~1.2s of life.  Used by both
+   *  the forward pass (_drawCoalCloud) and the mirror smoke pass so the
+   *  cloud reads identically on both sides of the camera. */
+  _coalPuffStyle(p) {
+    const darkT = Math.min(1, p.age / 1.0);
+    const inA   = Math.min(1, p.age / 0.15);                    // quick puff-in
+    const outA  = Math.max(0, Math.min(1, (p.life - p.age) / 1.2));
+    return { shade: lerpColor(0x9A9A9A, 0x141414, darkT), a: 0.62 * inA * outA };
+  }
+
+  /** Paint the live coal cloud onto the explosion layer — each puff is
+   *  projected from its FIXED world position (z + lateral) like any other
+   *  road object, so the cloud sits on the pavement and recedes/shrinks as
+   *  the player drives away.  Double-stamped soft circles (dense core +
+   *  wider translucent skirt) clump into one rolling mass; drawn far→near
+   *  so near smoke paints over far.  Puffs behind the camera are skipped
+   *  here — they show up in the rear-view mirror instead. */
   _drawCoalCloud(g) {
     const c = this._coalCloud;
     if (!c || !g) return;
@@ -10317,13 +10338,26 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0x0C0C0C, 0.16 * c.soot);
       g.fillRect(-_sOff, SCREEN_H - 90, SCREEN_W + _sOff * 2, 44);
     }
-    for (const p of c.puffs) {
-      const t = Math.max(0, p.life / p.maxLife);          // 1 → 0 over life
-      const a = 0.66 * (t < 0.35 ? t / 0.35 : 1);         // hold dense, fade at the end
-      g.fillStyle(p.shade, a * 0.45);                     // wide soft skirt
-      g.fillCircle(p.x, p.y, p.r * 1.45);
-      g.fillStyle(p.shade, a);                            // dense core
-      g.fillCircle(p.x, p.y, p.r);
+    if (!c.puffs.length) return;
+    const camPos = this._renderCamPos();
+    // Array is z-ascending; ahead of the camera larger z = farther, so
+    // walk from the last index down to draw far→near (near paints over far).
+    for (let i = c.puffs.length - 1; i >= 0; i--) {
+      const p    = c.puffs[i];
+      const relZ = p.z - camPos;
+      if (relZ < 260 || relZ > 76000) continue;   // behind the camera → mirror pass
+      const lat  = p.lat + Math.sin((this.gameTime ?? 0) * 1.4 + p.wobble) * 0.015;
+      const proj = this.road.getVehicleProjection(relZ, lat);
+      if (!proj || proj.sw < 2) continue;
+      const r = proj.sw * p.wr;                   // world radius scales with distance
+      if (r < 1) continue;
+      const { shade, a } = this._coalPuffStyle(p);
+      if (a <= 0.01) continue;
+      const cy = proj.sy - r * 0.55;              // smoke hangs just above the pavement
+      g.fillStyle(shade, a * 0.45);               // wide soft skirt
+      g.fillCircle(proj.sx, cy, r * 1.45);
+      g.fillStyle(shade, a);                      // dense core
+      g.fillCircle(proj.sx, cy, r);
     }
   }
 
@@ -12096,9 +12130,12 @@ export class GameScene extends Phaser.Scene {
     // (alpha fade) so they wash out into the haze instead of staying crisp.
     const _fogP = Weather.fogParams((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
     const nearCull = cockpit ? 100 : 300;
-    const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '') => {
-      if (relZ < nearCull || relZ > 76000) return;
-      const _fa = Weather.fogFade(relZ, _fogP) * (1 - _fogP.density * 0.26);   // distance dissolve + near-haze (bumped so NPC traffic sits deeper in fog)
+    const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1) => {
+      if (relZ < nearCull || relZ > 76000 || alphaMul <= 0.01) return;
+      // alphaMul folds a per-vehicle fade (e.g. a smoked cop's fleeFade)
+      // into the same factor as the fog dissolve, so sprite + shadow +
+      // outline + ghost + fog glow all fade out together.
+      const _fa = Weather.fogFade(relZ, _fogP) * (1 - _fogP.density * 0.26) * alphaMul;   // distance dissolve + near-haze (bumped so NPC traffic sits deeper in fog)
       const _shadowFa = _fa * (1 - _fogP.density * 0.4);                       // shadows soften further in fog
       const segIdx = Math.floor((camPos + relZ) / SEG_LENGTH) % this.road.segments.length;
       const inTunnel = !!this.road.segments[segIdx]?.tunnel;
@@ -12382,7 +12419,10 @@ export class GameScene extends Phaser.Scene {
       // able to clearly see who's on you).
       const copScale = cop.parked ? 1.5 : 1.4;
       const maxCopW  = (this.playerSprite?.displayWidth || 78) * 1.3;
-      place(cop.relativePos, cop.laneOffset, 0xFFFFFF, copScale, 0, texKey, true, maxCopW, 'cop', cop.colorSet ?? 'police');
+      // fleeFade: smoked/scattered cops alpha OUT over their retreat's
+      // last second (shrinking with distance the whole way) instead of
+      // popping off the road when the flee timer splices them.
+      place(cop.relativePos, cop.laneOffset, 0xFFFFFF, copScale, 0, texKey, true, maxCopW, 'cop', cop.colorSet ?? 'police', cop.fleeFade ?? 1);
     }
 
     // Player tire shadow — anchored to sprite.y (the actual on-screen
@@ -12514,21 +12554,25 @@ export class GameScene extends Phaser.Scene {
       // of ballooning off a close cop's raw projection (giant-lightbar bug).
       const copScale = cop.parked ? 1.5 : 1.4;
       const maxCopW  = (this.playerSprite?.displayWidth || 78) * 1.3;
+      // Light bar fades with the fleeing cruiser body — no lingering bar
+      // after a smoked cop's sprite has alpha'd out.
+      const _lbFa = cop.fleeFade ?? 1;
+      if (_lbFa <= 0.01) continue;
       const w = Math.min(proj.sw, maxCopW / copScale), x = proj.sx, y = proj.sy - w * 0.55;
-      g.fillStyle(0x111111, 1); g.fillRect(x - w * 0.32, y, w * 0.64, w * 0.10);
+      g.fillStyle(0x111111, _lbFa); g.fillRect(x - w * 0.32, y, w * 0.64, w * 0.10);
       if (this._colorblind) {
         // CB: red half → amber (red↔dark reads as near-black on/off for
         // protan/deutan), blue half unchanged, + a white center that blinks
         // with the bar so "active chase" reads by shape + blink, not hue.
-        g.fillStyle(cop.flash ? 0xFFB000 : 0x3A2600, 1);
+        g.fillStyle(cop.flash ? 0xFFB000 : 0x3A2600, _lbFa);
         g.fillRect(x - w * 0.30, y + 1, w * 0.28, w * 0.07);
-        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, 1);
+        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa);
         g.fillRect(x + w * 0.02, y + 1, w * 0.28, w * 0.07);
-        if (cop.flash) { g.fillStyle(0xFFFFFF, 1); g.fillRect(x - w * 0.035, y, w * 0.07, w * 0.10); }
+        if (cop.flash) { g.fillStyle(0xFFFFFF, _lbFa); g.fillRect(x - w * 0.035, y, w * 0.07, w * 0.10); }
       } else {
-        g.fillStyle(cop.flash ? 0xFF3333 : 0x440000, 1);
+        g.fillStyle(cop.flash ? 0xFF3333 : 0x440000, _lbFa);
         g.fillRect(x - w * 0.30, y + 1, w * 0.28, w * 0.07);
-        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, 1);
+        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa);
         g.fillRect(x + w * 0.02, y + 1, w * 0.28, w * 0.07);
       }
     }
@@ -15793,7 +15837,7 @@ export class GameScene extends Phaser.Scene {
       // Helper — set a pool sprite to a texture and place it.  Caps
       // height by depth so a close-by car stays inside the glass.
       const mirrorZoom = this._mirrorZoom ?? 1;
-      const placeSprite = (s, tex, x, y, depthT, maxH = 26) => {
+      const placeSprite = (s, tex, x, y, depthT, maxH = 26, alpha = 1) => {
         if (s.texture.key !== tex && this.textures.exists(tex)) s.setTexture(tex);
         const t  = this.textures.get(s.texture.key).source[0];
         const tw = t?.width  || 64;
@@ -15806,6 +15850,10 @@ export class GameScene extends Phaser.Scene {
         const targetW = targetH * (tw / th);
         s.setDisplaySize(targetW, targetH);
         s.setPosition(x, y);
+        // Always reset alpha — pool slots are shared between NPC cars and
+        // (fading) smoked cops, so a stale flee-fade must not stick to the
+        // next car that reuses the slot.
+        s.setAlpha(alpha);
         s.setVisible(true);
       };
 
@@ -16048,10 +16096,15 @@ export class GameScene extends Phaser.Scene {
         .sort((a, b) => b.vz - a.vz);
       for (const { c: cop, vz } of copsBehind) {
         if (usedCars >= carPool.length) break;
+        // Smoked/scattered cops fade OUT in the mirror too (same
+        // _fleeFade the forward view uses) — no pop-out in the glass as
+        // the flee timer splices them mid-retreat.
+        const copFa = cop.fleeing ? (cop._fleeFade ?? 1) : 1;
+        if (copFa <= 0.01) continue;
         const proj = projectRear(vz, cop.laneOffset, MIRROR_FAR_Z);
         const tex = this.textures.exists('car_front_police') ? 'car_front_police' : 'car_front_white';
         const slot = carPool[usedCars++];
-        placeSprite(slot, tex, proj.x, proj.y, proj.depthT, 20);
+        placeSprite(slot, tex, proj.x, proj.y, proj.depthT, 20, copFa);
         if (_hlOnMirror) {
           const targetW = slot.displayWidth;
           const targetH = slot.displayHeight;
@@ -16060,19 +16113,49 @@ export class GameScene extends Phaser.Scene {
           const barH = Math.max(1.0, targetW * 0.08);
           const flashLeft = !!this.cops?.lightFlash;
           ml.blendMode = Phaser.BlendModes.ADD;
-          ml.fillStyle(flashLeft ? 0xFF2233 : 0x2A66FF, Math.min(1, 0.30 + _darknessMirror * 0.55));
+          ml.fillStyle(flashLeft ? 0xFF2233 : 0x2A66FF, Math.min(1, 0.30 + _darknessMirror * 0.55) * copFa);
           ml.fillEllipse(proj.x - barW * 0.22, y, barW * 0.55, barH);
-          ml.fillStyle(flashLeft ? 0x2A66FF : 0xFF2233, Math.min(1, 0.30 + _darknessMirror * 0.55));
+          ml.fillStyle(flashLeft ? 0x2A66FF : 0xFF2233, Math.min(1, 0.30 + _darknessMirror * 0.55) * copFa);
           ml.fillEllipse(proj.x + barW * 0.22, y, barW * 0.55, barH);
           // Pursuit headlights are visible in the mirror because rear cops
           // are closing in the player's lane.
           const lampY = proj.y - targetH * 0.50;
           const r = Math.max(0.8, targetW * 0.055);
           const dx = targetW * 0.24;
-          ml.fillStyle(0xFFE680, Math.min(1, lightAM * 1.8));
+          ml.fillStyle(0xFFE680, Math.min(1, lightAM * 1.8) * copFa);
           ml.fillCircle(proj.x - dx, lampY, r);
           ml.fillCircle(proj.x + dx, lampY, r);
           ml.blendMode = Phaser.BlendModes.NORMAL;
+        }
+      }
+
+      // 💨 Coal smoke behind the player — world-anchored puffs that have
+      // fallen behind the camera re-project onto the mirror's curved rear
+      // road (same projectRear as the cars, so the trail bends with the
+      // road and preserves the driver's left/right frame — forward-LEFT
+      // smoke stays mirror-LEFT).  Drawn on hudMirrorLights, which paints
+      // ABOVE the mirror car sprites: a cop retreating into the cloud is
+      // visibly swallowed by the dark mass.  Array is z-ascending, so
+      // index 0 = smallest z = FARTHEST behind → forward iteration is
+      // already far→near.
+      {
+        const cc = this._coalCloud;
+        if (cc?.puffs.length) {
+          for (let i = 0; i < cc.puffs.length; i++) {
+            const pf = cc.puffs[i];
+            const vz = visualPlayerZ - pf.z;
+            if (vz <= MIRROR_NEAR_CULL || vz > MIRROR_FAR_Z) continue;
+            const mproj = projectRear(vz, pf.lat);
+            const r = (2 * mb.roadHalfW * mproj.depthT) * pf.wr;   // car-width analogue at this depth
+            if (r < 0.8) continue;
+            const { shade, a } = this._coalPuffStyle(pf);
+            if (a <= 0.01) continue;
+            const cy = mproj.y - r * 0.55;
+            ml.fillStyle(shade, a * 0.45);      // wide soft skirt
+            ml.fillCircle(mproj.x, cy, r * 1.45);
+            ml.fillStyle(shade, a);             // dense core
+            ml.fillCircle(mproj.x, cy, r);
+          }
         }
       }
 

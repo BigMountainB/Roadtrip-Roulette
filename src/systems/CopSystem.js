@@ -766,6 +766,12 @@ export class CopSystem {
       // the smoke (lost sight — no dramatic swerve).
       if (cop.fleeing) {
         cop._fleeTimer = (cop._fleeTimer ?? 2.5) - dt;
+        // Fade OUT instead of popping — alpha eases to zero over the
+        // retreat's final ~1s, so by the time the timer splices the cop
+        // it's already invisible (shrunk by distance + swallowed by the
+        // coal cloud).  Renderers read it via getCopsForRender().fleeFade
+        // (forward view) or cop._fleeFade directly (rear-view mirror).
+        cop._fleeFade = Math.max(0, Math.min(1, cop._fleeTimer / 1.0));
         if (!cop._fleeNoSwerve) {
           cop.laneOffset += (cop.laneOffset >= 0 ? 1 : -1) * 2.4 * dt;
         }
@@ -901,6 +907,9 @@ export class CopSystem {
         speed:       cop.speed,
         parked:      cop.parked,
         flash:       this.lightFlash,
+        // 1 for normal cops; a fleeing cop's fade-out multiplier (→0 at
+        // despawn) so the forward view alpha-fades instead of popping.
+        fleeFade:    cop.fleeing ? (cop._fleeFade ?? 1) : 1,
       }))
       .filter(c => c.relativePos > 0 && c.relativePos < 50000);
   }

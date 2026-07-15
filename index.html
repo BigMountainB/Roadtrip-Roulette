@@ -1491,7 +1491,11 @@
         const cw = imgW - INS.l - INS.r, ch = imgH - INS.t - INS.b;
         const scale = Math.min((vw - EDGE * 2) / cw, (vh - EDGE * 2) / ch);
         const offX = (vw - cw * scale) / 2 - INS.l * scale;
-        const offY = (vh - ch * scale) / 2 - INS.t * scale;
+        // BOTTOM-FLUSH (owner call 2026-07-14): the art's aspect leaves ~50px
+        // of slack at 15px side margins — ALL of it goes to the TOP (hides
+        // under the status bar), so there is never a black bar below the
+        // rotate strip.  Content bottom sits exactly on the screen bottom.
+        const offY = (vh - ch * scale) - INS.t * scale;
         coverState = { scale, offX, offY };
         // Size/position the art itself with the SAME transform the hit zones
         // use, so buttons stay glued to the artwork at any scale.

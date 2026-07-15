@@ -92,6 +92,31 @@ volume is the long pole (each pack = vehicle art + ~10 sprite images).
 
 ## Changelog (newest first)
 
+### 2026-07-14 (later) — Playtest round 3 (DEPLOYED)
+- **Rolling coal realism rework**: puffs are now WORLD-anchored (dropped at the road spot where
+  released, billow in place, recede behind the car — swerving mid-burst paints a curved trail);
+  lifecycle light-gray → near-black over ~1s while expanding, fade over ~4s; cloud renders in the
+  REAR-VIEW MIRROR (non-flipped frame); smoked cops fade/shrink into the cloud instead of popping.
+  Earlier same day: coal zone fixed to cover the bumper/alongside rammer (it only smoked distant
+  tail cops) + fleeing cops can no longer land a ram; 14-check regression test (tests/coal.test.mjs).
+- **Fireworks tune**: ~1.7s longer show (5–7 rockets over ~3s), 180° launch fan, bursts ~22%
+  bigger, ground-wipe detonations re-spread across the longer show.
+- **Barricade maze**: 3 staggered rows (Easy: 2 rows, wider gap) spanning the road, gap lane never
+  repeats between rows — forced zigzag; same trigger/damage/flat-tire rules.
+- **Traffic-stop fixes**: trooper parked at a road depth that projected below the screen (never
+  drew) — now parks in view; Easy's 0.5× star multiplier no longer halves announced whole-star
+  events; trap-light flash + rain/snow/crack/soot overlays span the full wide-phone canvas.
+- **Phone menu, ENDGAME**: standalone iOS under-reports visualViewport/innerHeight by ~62px
+  (proven with the new on-device diagnostics — 5 fast taps top-left toggles a live readout);
+  standalone now uses the 100lvh container height. Final layout per owner: BOTTOM-FLUSH — all
+  letterbox slack goes above (under the status bar), rotate strip sits on the screen's bottom
+  edge, 15px sides. Menu-art skins carry an invisible ~95px black filler below the rotate strip
+  (and 36–106px dead borders) — fit uses the measured VISIBLE box (rows 106–1711, cols 41–813).
+- **Survival tuning**: Alertness starts at 75%; food/drink drain +15% (fullness −4.14/mi,
+  hydration −4.6/mi); bites ×1.5 with bladder pace held at original. Unlocks moved: Sushi mile 34,
+  Gummies mile 70, Slushie mile 100 (Dramamine 55, Caffeine Pills 40 cold brews unchanged).
+
+
 ### 2026-07-14 — Playtest round 2 (DEPLOYED)
 - Fireworks = full screen wipe (staggered explosions take out cops, traps AND traffic — old
   rocket behavior with the aerial show on top; +1★ unchanged).
