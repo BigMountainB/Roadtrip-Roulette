@@ -1434,9 +1434,11 @@
         setInterval(dbgUpdate, 500);
       };
       (() => {
+        // #phone-loc is pointer-events:none, so listen on the menu itself and
+        // count fast taps landing in the top-left quarter (the weather header).
         let taps = 0, last = 0;
-        const el = document.getElementById('phone-loc');
-        el?.addEventListener('pointerdown', () => {
+        document.getElementById('phone-menu')?.addEventListener('pointerdown', (e) => {
+          if (e.clientX > window.innerWidth * 0.5 || e.clientY > window.innerHeight * 0.25) return;
           const now = Date.now();
           taps = (now - last < 600) ? taps + 1 : 1;
           last = now;
