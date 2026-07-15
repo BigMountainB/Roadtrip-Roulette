@@ -154,31 +154,53 @@ export class CopSystem {
     for (const c of this.cops) if (c.trapPursuit) c.trapPursuit = false;
   }
 
-  /** 5★ rolling barricade — 3 stationary cop cars across the road with a
-   *  single-lane gap.  Player must thread the gap or take the slow penalty. */
+  /** 5★ roadblock maze — strings of parked cruisers spanning the drivable
+   *  width, each row with ONE open pass lane.  Rows are staggered a tight
+   *  reaction distance apart and every row's gap lands in a DIFFERENT lane
+   *  than the previous one, so the player weaves a short zigzag through
+   *  the blockade instead of just holding one line.  Hitting any cruiser
+   *  = the classic barricade penalty (kind 'barricade' → damage + 45-mph
+   *  flat-tire slow in _onCopCollision).  Difficulty-aware: Easy runs 2
+   *  rows with a double-wide gap; Normal/Hard run 3 rows, single-lane gap. */
   _spawnBarricade(playerPos) {
-    // Position the row ~14k units ahead so the player has time to react.
-    const rowZ = playerPos + 14000 + Math.random() * 4000;
-    // Pick which lane is the GAP (one of -0.6, -0.2, +0.2, +0.6).
-    const gapLanes = [-0.6, -0.2, 0.2, 0.6];
-    const gapIdx   = (Math.random() * gapLanes.length) | 0;
-    for (let i = 0; i < gapLanes.length; i++) {
-      if (i === gapIdx) continue;
-      this.cops.push({
-        id:          Math.random(),
-        position:    rowZ + (Math.random() - 0.5) * 80,    // tiny stagger
-        laneOffset:  gapLanes[i],
-        speed:       200,                                  // nearly stationary
-        baseSpeed:   200,
-        side:        'front',
-        kind:        'barricade',
-        colorSet:    'police',
-        color:       0xFFFFFF,
-        alive:       true,
-        painted:     false,
-        _closeFactor: 0,
-        _laneDrift:   0,
-      });
+    // First row ~14k units ahead so the player has time to read the maze.
+    const firstRowZ = playerPos + 14000 + Math.random() * 4000;
+    // 5 lane slots across the drivable width; the gap is one (or two,
+    // on Easy) of these.
+    const laneSlots = [-0.8, -0.4, 0, 0.4, 0.8];
+    const easy      = Difficulty.mode?.() === 'easy';
+    const rows      = easy ? 2 : 3;
+    const gapWidth  = easy ? 2 : 1;               // adjacent open slots per row
+    // Row spacing — ~0.4s of reaction at highway speed (≈100 mph is
+    // 22.5k units/s), tight enough to force a real weave but dodgeable.
+    const rowGapZ   = easy ? 11000 : 9000;
+    let prevGap = -1;
+    for (let r = 0; r < rows; r++) {
+      const rowZ = firstRowZ + r * rowGapZ;
+      // Pick the gap's leftmost slot — never the same as the previous
+      // row's, so consecutive rows always force a lane change.
+      const maxGapIdx = laneSlots.length - gapWidth;
+      let gapIdx;
+      do { gapIdx = (Math.random() * (maxGapIdx + 1)) | 0; } while (gapIdx === prevGap);
+      prevGap = gapIdx;
+      for (let i = 0; i < laneSlots.length; i++) {
+        if (i >= gapIdx && i < gapIdx + gapWidth) continue;   // the pass lane
+        this.cops.push({
+          id:          Math.random(),
+          position:    rowZ + (Math.random() - 0.5) * 80,    // tiny stagger
+          laneOffset:  laneSlots[i],
+          speed:       200,                                  // nearly stationary
+          baseSpeed:   200,
+          side:        'front',
+          kind:        'barricade',
+          colorSet:    'police',
+          color:       0xFFFFFF,
+          alive:       true,
+          painted:     false,
+          _closeFactor: 0,
+          _laneDrift:   0,
+        });
+      }
     }
   }
 
@@ -457,9 +479,6 @@ export class CopSystem {
       return copKills;
     };
 
-    const inDirection = (rel, side) =>
-      side === 'backward' ? (rel < 0) : (rel > 0);
-
     switch (type) {
       case 'coal': {
         // Rolling coal — a rear-only diesel smokescreen.  Every ACTIVE
@@ -473,7 +492,16 @@ export class CopSystem {
         let smoked = 0;
         for (const cop of this.cops) {
           const rel = cop.position - playerPos;
-          if (inDirection(rel, 'backward') && Math.abs(rel) < 15000) {
+          // The cloud erupts off the REAR of the car, but pursuers don't
+          // sit politely behind it: the rear-cop AI oscillates around
+          // rel ≈ 0 (alongside at playerSpeed + 200, throttling back once
+          // slightly ahead).  The old strict `rel < 0` test excluded
+          // exactly the cops actively ramming — they kept pursuing right
+          // through the smoke (bug, 2026-07-14).  Anything from 15k behind
+          // up to ~2.5k ahead (the alongside / nose-ahead pressure band)
+          // is IN the cloud.  Stationary barricade rows aren't chasing by
+          // sight, so smoke can't shake them.
+          if (cop.kind !== 'barricade' && rel < 2500 && rel > -15000) {
             cop.fleeing       = true;
             cop._fleeNoSwerve = true;
             cop._fleeTimer    = 1.6 + Math.random() * 0.8;   // staggered fade-outs

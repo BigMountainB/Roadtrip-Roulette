@@ -6975,6 +6975,13 @@ export class GameScene extends Phaser.Scene {
       // Parked civil-stop cops are inert via cop.parked in CopSystem.update,
       // not here, so they won't false-collide while you sit at the stop.
       if (cop.parked) continue;
+      // Fleeing (coal-smoked / scattered) cops have broken pursuit and are
+      // fading out — CopSystem.update skips all their pursuit AI, so skip
+      // their collision here too.  Without this, a cruiser overlapping the
+      // player the moment coal fired still landed a COP RAM
+      // (registerRearBump + damage) on its way out, making the smokescreen
+      // read as a dud.
+      if (cop.fleeing) continue;
       if (onBridge && (cop.speed ?? 0) < 0
           && Math.abs(playerLane - (cop.laneOffset ?? 0)) > BRIDGE_OPPDIR_GAP) continue;
       // Same dual gate as the traffic loop above.
@@ -10177,10 +10184,16 @@ export class GameScene extends Phaser.Scene {
       // lands ~0.9s in, as the first aerial shells burst; each car keeps
       // driving until its own explosion removes it (_updateFireworksWipe).
       if (base === 'fireworks' && result.deferredVictims?.length) {
+        // Spread the ground booms across the aerial show's detonation
+        // window (first shell bursts ~0.9s in, last around ~4s now that
+        // the rockets stagger over ~3s) — evenly paced with jitter, but
+        // never slower than ~0.35s/boom so a short queue doesn't drag.
+        const nV  = result.deferredVictims.length;
+        const per = Math.min(0.35, 3.0 / Math.max(1, nV - 1));
         let t = 0.9;
         this._fwWipeQueue = result.deferredVictims.map((v) => {
           const entry = { ...v, t };
-          t += 0.1 + Math.random() * 0.2;   // ~0.1-0.3s between booms
+          t += per * (0.7 + Math.random() * 0.6);
           return entry;
         });
       }
@@ -10314,26 +10327,39 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** 🎆 Fireworks show — 3-5 bottle rockets streak up from the car over
-   *  ~1.5s, each ending in a staggered radial burst (80-150 mixed-color
-   *  particles with gravity pull + fading embers) followed by a delayed
-   *  secondary "crackle" ring of tiny flickering sparkles.  Brief white
-   *  screen flash on every detonation, camera shake on the biggest boom.
-   *  Fully procedural — drawn per-frame on the explosion layer by
+  /** 🎆 Fireworks show — 5-7 bottle rockets fan out from the hood across
+   *  the full forward hemisphere (a ~180° left-to-right spread) over ~3s,
+   *  each ending in a staggered radial burst (80-150 mixed-color particles
+   *  with gravity pull + fading embers) followed by a delayed secondary
+   *  "crackle" ring of tiny flickering sparkles.  Brief white screen flash
+   *  on every detonation, camera shake on the biggest boom.  Fully
+   *  procedural — drawn per-frame on the explosion layer by
    *  _drawFireworks; audio cues fire from _updateFireworks. */
   _startFireworksShow() {
     const COLORS = [0xFF3B30, 0xFFD24D, 0x2EE6D6, 0xB06CFF];   // red / gold / teal / violet
-    const n   = 3 + ((Math.random() * 3) | 0);                 // 3-5 rockets
+    const n   = 5 + ((Math.random() * 3) | 0);                 // 5-7 rockets
     const cx  = SCREEN_W / 2, cy = SCREEN_H * 0.78;            // launch off the hood
     const big = (Math.random() * n) | 0;                       // which one is the finale
     const rockets = [];
     for (let i = 0; i < n; i++) {
+      // 180° fan — launch angles sweep the forward hemisphere left→right
+      // (168° … 12° from the +x axis, ±8° jitter) so the bursts fill the
+      // whole sky instead of clustering straight up off the hood.  The
+      // sweep order is shuffled by the per-rocket delay jitter, so the
+      // show pops around the sky rather than strictly panning.
+      const fan = 168 - (i / Math.max(1, n - 1)) * 156;        // degrees
+      const ang = (fan + (Math.random() - 0.5) * 16) * Math.PI / 180;
+      const spd = 430 + Math.random() * 150;
       rockets.push({
-        delay:    (i / n) * 1.5 * (0.85 + Math.random() * 0.3),  // staggered over ~1.5s
+        delay:    (i / n) * 3.0 * (0.85 + Math.random() * 0.3),  // staggered over ~3s
         x:        cx + (Math.random() - 0.5) * 70,
         y:        cy,
-        vx:       (Math.random() - 0.5) * 130,
-        vy:       -(430 + Math.random() * 150),
+        // Horizontal reach damped to 0.75× so edge rockets burst just
+        // inside the frame (800 px wide); vertical component floored at
+        // sin 45° so even the shallowest fan angles still climb well
+        // clear of the hood before detonating.
+        vx:       Math.cos(ang) * spd * 0.75,
+        vy:       -Math.max(Math.sin(ang), 0.45) * spd * (0.8 + Math.random() * 0.2),
         fuse:     0.7 + Math.random() * 0.4,                     // flight time to burst
         color:    COLORS[i % COLORS.length],
         big:      i === big,
@@ -10417,18 +10443,20 @@ export class GameScene extends Phaser.Scene {
         const count = r.big ? 150 : 80 + ((Math.random() * 40) | 0);
         for (let p = 0; p < count; p++) {
           const ang = Math.random() * Math.PI * 2;
-          const spd = 90 + Math.random() * (r.big ? 260 : 190);
+          // ~22% bigger shells — radius (ember speed) and particle size
+          // both scaled up so the bursts read fuller across the wider fan.
+          const spd = 110 + Math.random() * (r.big ? 320 : 230);
           show.particles.push({
             x: r.x, y: r.y,
             vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
             life: 1.0 + Math.random() * 0.7, maxLife: 1.7,
-            size: r.big ? 2.6 : 2.1,
+            size: r.big ? 3.2 : 2.6,
             color: Math.random() < 0.6 ? r.color : COLORS[(Math.random() * COLORS.length) | 0],
             ember: true,
           });
         }
         // Delayed secondary crackle ring around the burst shell.
-        show.crackles.push({ at: 0.45, x: r.x, y: r.y, r: r.big ? 90 : 62 });
+        show.crackles.push({ at: 0.45, x: r.x, y: r.y, r: r.big ? 112 : 78 });
         // Brief white flash per detonation; the finale also shakes the camera.
         this.cameras?.main?.flash?.(r.big ? 140 : 80, 255, 255, 255);
         if (r.big) this.effects.triggerShake(320, 0.010);
