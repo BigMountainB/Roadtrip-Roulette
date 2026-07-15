@@ -1423,13 +1423,22 @@
           + `img rect: t:${Math.round(r.top)} b:${Math.round(r.bottom)} l:${Math.round(r.left)} r:${Math.round(r.right)}`;
       };
       const dbgToggle = () => {
-        if (dbgEl) { dbgEl.remove(); dbgEl = null; return; }
+        if (dbgEl) { dbgEl._strip?.remove(); dbgEl.remove(); dbgEl = null; return; }
         document.documentElement.style.setProperty('--dbg-sab', 'env(safe-area-inset-bottom)');
         dbgEl = document.createElement('pre');
         dbgEl.style.cssText = 'position:fixed;left:8px;top:30%;z-index:100002;margin:0;'
           + 'background:rgba(0,0,0,0.85);color:#7CFF7C;font:11px/1.5 Menlo,monospace;'
           + 'padding:8px;border:1px solid #7CFF7C;border-radius:6px;pointer-events:none;white-space:pre;';
         document.getElementById('phone-menu').appendChild(dbgEl);
+        // Paint test: can the page draw into the very bottom of the glass?
+        // Red = paintable (something of ours covers it); black = iOS owns it.
+        const strip = document.createElement('div');
+        strip.className = 'dbg-strip';
+        strip.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:40px;'
+          + 'background:#FF2244;z-index:100001;pointer-events:none;';
+        dbgEl.appendChild(document.createTextNode(''));  // keep pre text-only
+        document.getElementById('phone-menu').appendChild(strip);
+        dbgEl._strip = strip;
         dbgUpdate();
         setInterval(dbgUpdate, 500);
       };
@@ -1491,11 +1500,14 @@
         const cw = imgW - INS.l - INS.r, ch = imgH - INS.t - INS.b;
         const scale = Math.min((vw - EDGE * 2) / cw, (vh - EDGE * 2) / ch);
         const offX = (vw - cw * scale) / 2 - INS.l * scale;
-        // BOTTOM-FLUSH (owner call 2026-07-14): the art's aspect leaves ~50px
-        // of slack at 15px side margins — ALL of it goes to the TOP (hides
-        // under the status bar), so there is never a black bar below the
-        // rotate strip.  Content bottom sits exactly on the screen bottom.
-        const offY = (vh - ch * scale) - INS.t * scale;
+        // CENTERED (final, owner-approved via the 2026-07-15 green-box
+        // screenshot).  NOTE the black strip at the very bottom of the glass
+        // in standalone mode is iOS'S OWN — the OS does not composite the
+        // bottom ~62px of Home-Screen web apps (bottom-flush proved it: art
+        // pushed there gets masked, not shown).  Centering parks the
+        // letterbox slack under that mask, which is the best any layout can
+        // do; the strip itself is not removable by the page.
+        const offY = (vh - ch * scale) / 2 - INS.t * scale;
         coverState = { scale, offX, offY };
         // Size/position the art itself with the SAME transform the hit zones
         // use, so buttons stay glued to the artwork at any scale.

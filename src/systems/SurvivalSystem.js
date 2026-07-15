@@ -67,20 +67,29 @@ export class SurvivalSystem {
     this.nausea    = 0;
     this.caffeineDep    = 0;   // hidden dependence 0–100
     this.caffeineActive = 0;   // miles of caffeine still "in system"
-    this._lastMile = 0;
+    this._lastMile = null;   // null = sync on first update, no drain
   }
 
   // ── Per-frame advance, driven by distance travelled (miles). ────────────
   // ctx: { curvature?: 0–1 (road bendiness), monotony?: 0–1 (empty straight) }
   update(mile, ctx = {}) {
-    const dMi = Math.max(0, (mile ?? 0) - (this._lastMile ?? 0));
+    // First update after a reset/restore just SYNCS the mile tracker (no
+    // drain) — restore() never carried _lastMile, so resuming at mile N
+    // charged N miles of drain in one frame (bars slammed to 0 leaving a
+    // rest stop).  The 0.5-mi cap keeps route-map warps/checkpoint jumps
+    // from doing the same.
+    const dMi = this._lastMile == null ? 0
+      : Math.min(0.5, Math.max(0, (mile ?? 0) - this._lastMile));
     this._lastMile = mile ?? 0;
     if (dMi <= 0) return;
 
-    // Fullness + hydration drain toward empty/dry.  If a diuretic pool is
-    // pending, claw back a bit of hydration each mile until it's spent.
-    this.fullness  = clamp(this.fullness  + DRIFT.fullness  * dMi);
-    this.hydration = clamp(this.hydration + DRIFT.hydration * dMi);
+    // Fullness + hydration drain toward empty/dry.  Inside the 25–75 sweet
+    // zone they drain 25% FASTER (2026-07-15: the multiplier window shouldn't
+    // be a resting state), slower again above 75 / below 25.  If a diuretic
+    // pool is pending, claw back a bit of hydration each mile until it's spent.
+    const zone = (v) => (v > 25 && v < 75) ? 1.25 : 1.0;
+    this.fullness  = clamp(this.fullness  + DRIFT.fullness  * zone(this.fullness)  * dMi);
+    this.hydration = clamp(this.hydration + DRIFT.hydration * zone(this.hydration) * dMi);
     if (this.diuretic > 0) {
       const d = Math.min(this.diuretic, DIURETIC_DRAIN * dMi);
       this.hydration = clamp(this.hydration - d);
@@ -197,6 +206,7 @@ export class SurvivalSystem {
     this.diuretic  = s.diuretic  ?? this.diuretic;
     this.nausea    = s.nausea    ?? this.nausea;
     this.caffeineDep = s.caffeineDep ?? this.caffeineDep;
+    this._lastMile = null;   // re-sync on the next update — never back-charge miles
   }
 }
 

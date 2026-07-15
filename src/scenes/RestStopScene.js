@@ -1573,7 +1573,7 @@ export class RestStopScene extends Phaser.Scene {
       if (item.payload?.restroom && item.payload.gated
           && this._restroomGated && !this._boughtSomething) {
         this._flash(bg, 0xFF4444);
-        this._setStatus('🚻 CUSTOMERS ONLY — buy something first!', '#FF6666');
+        this._setStatus('🚻 CUSTOMERS ONLY — buy something first!', '#FF6666', true);
         return;
       }
       if (effectiveCost > 0) {
@@ -1870,10 +1870,17 @@ export class RestStopScene extends Phaser.Scene {
     });
   }
 
-  _setStatus(msg, color) {
-    this._statusText.setText(msg).setColor(color);
+  _setStatus(msg, color, big = false) {
+    // `big` = attention-grabbing variant (e.g. CUSTOMERS ONLY): ~4x the base
+    // 11px, bold, longer hold - the base size is unreadable on phones.
+    this._statusText.setText(msg).setColor(color)
+      .setFontSize(big ? 40 : 11)
+      .setFontStyle(big ? 'bold' : 'normal')
+      .setStroke(big ? '#000000' : '', big ? 6 : 0);
     if (this._statusTimer) this._statusTimer.remove();
-    this._statusTimer = this.time.delayedCall(2400, () => this._statusText.setText(''));
+    this._statusTimer = this.time.delayedCall(big ? 3200 : 2400, () => {
+      this._statusText.setText('').setFontSize(11).setFontStyle('normal').setStroke('', 0);
+    });
   }
 
   _flash(obj, color) {
