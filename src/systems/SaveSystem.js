@@ -417,6 +417,9 @@ export class SaveSystem {
       : [];
     p.accessories = this._sanitizeAccessories(src.accessories);
     p.controlsLayout = this._sanitizeControlsLayout(src.controlsLayout);
+    // Layout-version gate (GameScene resets stale pre-v2 offsets once) — must
+    // survive this whitelist or the reset re-fires every session.
+    p.controlsLayoutVer = finiteNum(src.controlsLayoutVer, 1, 1);
     p.liveRun = this._sanitizeLiveRun(src.liveRun);
     return p;
   }

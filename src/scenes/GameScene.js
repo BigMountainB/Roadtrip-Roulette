@@ -766,6 +766,17 @@ export class GameScene extends Phaser.Scene {
       // Per-profile Customize Controls layout: { elementId: {dx,dy} } screen
       // offsets from each element's default position.  Stored per save slot.
       this._hudLayout    = _save?.get?.('controlsLayout', {}) || {};
+      // LAYOUT VERSION GATE: saved offsets are deltas FROM THE DEFAULTS, so
+      // the 2026-07-15 default-layout overhaul (owner's arrangement became
+      // the default) invalidated every pre-existing delta — old offsets on
+      // top of the new bases flung elements off-screen.  One-time reset to
+      // the new defaults; the editor keeps working from there.
+      const LAYOUT_VER = 2;
+      if ((_save?.get?.('controlsLayoutVer', 1) ?? 1) < LAYOUT_VER) {
+        this._hudLayout = {};
+        _save?.set?.('controlsLayout', {});
+        _save?.set?.('controlsLayoutVer', LAYOUT_VER);
+      }
       // Migration: the old single 4-row 'survbars' block split into TWO
       // movable groups (survA = Alertness+Bladder, survB = Drinks+Food).
       // An old saved offset seeds group A; B keeps its default directly below.
@@ -3302,6 +3313,12 @@ export class GameScene extends Phaser.Scene {
     this.hudSpeed?.setVisible(v);
     this._mphSub?.setVisible(v);   // the MPH/KM-H sublabel hid separately —
                                    // it lingered on the title screen without this
+    // Top-row button strips (pause/ff/genre + speaker/map/garage) — hidden on
+    // the title screen so they don't sit on the title art (2026-07-15).
+    for (const b of (this._topRowButtons || [])) {
+      b.bg?.setVisible?.(v);
+      b.lbl?.setVisible?.(v);
+    }
     this.hudRegion?.setVisible(v);
     this.hudStars?.setVisible(v);
     this.hudRadio?.setVisible(v);
@@ -15089,7 +15106,9 @@ export class GameScene extends Phaser.Scene {
 
     const dynamicFill = (g, x, w) => {
       g.fillStyle(0x070B14, 0.92);
-      g.fillRoundedRect(x + 8, panelY + 6, w - 16, panelH - 12, 6);
+      // Inset well inside the baked art frame (2026-07-15: the old 8/6
+      // insets spilled past the frame art and covered its baked header).
+      g.fillRoundedRect(x + 14, panelY + 14, w - 28, panelH - 22, 6);
     };
     const diffX = 249, diffW = 177;
     const steeringX = 422, steeringW = 190;

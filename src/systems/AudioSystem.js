@@ -439,9 +439,12 @@ export class AudioSystem {
     this._schedTimer   = null;
     this._nextStepTime = 0;
     this._currentStep  = 0;
-    // Default radio station: PHONK (index 0) — drift-phonk MP3s play
-    // when a fresh run starts.
-    this.currentStation = 0;
+    // Default radio station: RANDOM across the whole catalogue, weighted by
+    // track count (2026-07-15: the menu's background radio starts BEFORE the
+    // run does, so a fixed 0 here meant every session opened on PHONK and
+    // the run-start randomizer never got a turn).  A saved Music-app default
+    // station still overrides this in BootScene.
+    this.currentStation = this.randomStationIndex?.() ?? 0;
     this.muted         = false;
     // Music-app pause (distinct from game-pause `paused`, which only ducks
     // volume).  When true, the scheduler stops synthesizing AND any real
