@@ -14,14 +14,14 @@
 // ── Mission instance shape (canonical, Ch. 8) ─────────────────────────────
 //   { id, templateId, type, originStopId, targetStopId, targetName,
 //     routeMiles, acceptedAtMile, targetMile, deadlineMile, payout, cargo,
-//     npcName, status: 'offered'|'declined'|'active'|'completed'|'failed',
+//     npcName, status: 'offered'|'declined'|'active'|'ready'|'completed'|'failed',
 //     terms: { fragile?, perishable?, illegal?, rush?, <passengerQuirk>? },
 //     progress: { damageTaken, maxStars? }, paid }
 //   Timed adds:     deadlineClockSec (party-clock value, Ch. 8)
 //   Passenger adds: passenger { name, portrait, quirk, ask/pickup/mid/dropoff },
 //                   commentAtMile, and tip (set at drop-off)
 //
-// `paid` is the double-award guard: arriveAtStop only pays a mission whose
+// `paid` is the double-award guard: collect() only pays a mission whose
 // paid flag is still false, and the flag ALSO lives in the run-scoped
 // `_outcomes` ledger, which restore() re-applies AFTER a snapshot load — so
 // a checkpoint rewind to a pre-delivery snapshot can never pay twice, and a
@@ -486,6 +486,11 @@ export class MissionSystem {
   }
   byId(id)          { return this._allMissions().find(m => m.id === id) ?? null; }
   activeMissions()  { return this._allMissions().filter(m => m.status === 'active'); }
+  /** READY = graded at pull-in, awaiting explicit drop-off (unpaid). */
+  readyMissions(stopId = null) {
+    return this._allMissions().filter(m => m.status === 'ready'
+      && (stopId == null || m.targetStopId === stopId));
+  }
   hasActiveOfType(type) { return this.activeMissions().some(m => m.type === type); }
   illegalCargoActive()  { return this.activeMissions().some(m => m.terms?.illegal); }
 
@@ -639,39 +644,65 @@ export class MissionSystem {
 
   // ── Completion / payout ─────────────────────────────────────────────────
 
-  /** Player pulled into a rest stop: complete + pay every active mission
-   *  targeting it (delivery / timed / passenger).  Returns ONLY the newly
-   *  paid missions (the caller adds m.payout + m.tip to the wallet); the
-   *  `paid` flag + outcome ledger make this idempotent across scene
-   *  transitions, autosave/resume, and rewinds.
+  /** Player pulled into a rest stop: GRADE every active mission targeting
+   *  it (delivery / timed / passenger / heat / weather).  Deadline / heat
+   *  conditions are judged HERE, at pull-in, so browsing the shop menu can
+   *  never fail a job the player already earned — but nothing is paid yet.
+   *  Qualifying missions become 'ready' (tip locked in) and await an
+   *  explicit collect() from the rest-stop drop-off button.
    *
    *  `stars` = current wanted stars at pull-in: a HEAT-escape job must land
    *  at 0 stars (Ch. 8 "arrive at 0 stars") — arriving hot terminally fails
-   *  it instead of paying. */
-  arriveAtStop(stopId, mile = 0, stars = 0) {
-    const done = [];
+   *  it instead of grading ready.  Returns the newly-READY missions. */
+  gradeArrivals(stopId, mile = 0, stars = 0) {
+    const ready = [];
     for (const m of this.activeMissions()) {
       if (m.targetStopId !== stopId) continue;
       if (m.paid) continue;
       if (m.type === 'heat' && stars > 0) { this._fail(m, 'still_hot'); continue; }
       // Thrill-seeker tip condition: the ride actually got spicy (any heat).
       m.tip = (m.terms?.thrill_seeker && (m.progress?.maxStars ?? 0) >= 1) ? THRILL_TIP : 0;
-      m.status = 'completed';
-      m.paid = true;
-      m.completedAtMile = mile;
-      this._outcomes[m.id] = { status: 'completed', paid: true };
-      this._bumpStat(m.type, 'completed');
-      // Tier-up detection (Ch. 8 Phase 6): when THIS completion crosses a
-      // tier threshold (Rookie→Known at 3, Known→Legend at 8), tag the
-      // mission so the payoff screen can show the celebratory moment.
-      const prevTier = tierFor(this._repOf(m.type));
-      this._bumpRep(m.type);
-      const newTier = tierFor(this._repOf(m.type));
-      if (newTier !== prevTier) m.tierUp = { name: newTier.name, mult: newTier.mult };
-      this._noteNpcOutcome(m, 'completed');
-      done.push(m);
+      m.status = 'ready';
+      m.arrivedAtMile = mile;
+      ready.push(m);
     }
-    return done;
+    return ready;
+  }
+
+  /** Explicit drop-off: pay ONE ready mission.  Returns the mission (the
+   *  caller adds m.payout + m.tip to the wallet) or null when it isn't
+   *  collectable.  The `paid` flag + outcome ledger make this idempotent
+   *  across scene transitions, autosave/resume, and checkpoint rewinds. */
+  collect(missionId) {
+    const m = this.byId(missionId);
+    if (!m || m.status !== 'ready' || m.paid) return null;
+    m.status = 'completed';
+    m.paid = true;
+    m.completedAtMile = m.arrivedAtMile ?? 0;
+    this._outcomes[m.id] = { status: 'completed', paid: true };
+    this._bumpStat(m.type, 'completed');
+    // Tier-up detection (Ch. 8 Phase 6): when THIS completion crosses a
+    // tier threshold (Rookie→Known at 3, Known→Legend at 8), tag the
+    // mission so the payoff screen can show the celebratory moment.
+    const prevTier = tierFor(this._repOf(m.type));
+    this._bumpRep(m.type);
+    const newTier = tierFor(this._repOf(m.type));
+    if (newTier !== prevTier) m.tierUp = { name: newTier.name, mult: newTier.mult };
+    this._noteNpcOutcome(m, 'completed');
+    return m;
+  }
+
+  /** Player drove off without dropping off — the route is one-way, so every
+   *  uncollected READY mission (at this stop, or all when stopId is null)
+   *  terminally fails as 'not_delivered': no payout, rep untouched (Ch. 8
+   *  "rep never decreases").  Returns the newly failed missions. */
+  failUncollected(stopId = null) {
+    const failed = [];
+    for (const m of this.readyMissions(stopId)) {
+      this._fail(m, 'not_delivered');
+      failed.push(m);
+    }
+    return failed;
   }
 
   // ── Reputation / lifetime stats (slot-GLOBAL via SaveSystem) ────────────

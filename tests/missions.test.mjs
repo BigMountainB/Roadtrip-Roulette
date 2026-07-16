@@ -4,6 +4,7 @@
 // Pure-node tests against MissionSystem (no Phaser): offer generation and
 // the Phase-4 type mix, acceptance guards, term failures (fragile /
 // perishable / timed rush / passenger comfort), payout math per tier, the
+// explicit drop-off flow (gradeArrivals at pull-in → collect per mission),
 // paid-idempotency + outcome-ledger rewind rules, and per-type rep.
 
 import {
@@ -44,6 +45,15 @@ function allOffers(m) {
   const out = [];
   for (const rs of REST_STOPS) out.push(...m.offersForStop(rs.id));
   return out;
+}
+
+/** Full drop-off flow: grade the pull-in, then collect every graded-ready
+ *  mission (what GameScene + the RestStopScene gold buttons do together).
+ *  Returns the newly PAID missions, like the old arriveAtStop did. */
+function deliver(m, stopId, mile = 0, stars = 0) {
+  return m.gradeArrivals(stopId, mile, stars)
+    .map(r => m.collect(r.id))
+    .filter(Boolean);
 }
 
 // ── Offer generation + Phase-4 type mix ───────────────────────────────────
@@ -129,7 +139,7 @@ function firstOfType(m, type) {
   const exp = m.checkDeadlines(2, 1000 - budget - 1);
   check('past the window = failed rush', exp.length === 1 && exp[0] === rsh
     && rsh.status === 'failed' && rsh.failReason === 'rush');
-  check('failed rush never pays', m.arriveAtStop(rsh.targetStopId, rsh.targetMile).length === 0);
+  check('failed rush never pays', deliver(m, rsh.targetStopId, rsh.targetMile).length === 0);
 
   // Lazy binding: accepted without a known clock → first tick binds it.
   const m3 = sys(42);
@@ -140,14 +150,14 @@ function firstOfType(m, type) {
   check('deadline binds on first tick', r3.deadlineClockSec === 800 - r3.terms.rush.budgetSec);
 }
 
-// ── Timed completion pays through arriveAtStop, rep per type ─────────────
+// ── Timed completion pays through grade+collect, rep per type ────────────
 {
   const m = sys(42);
   const rsh = firstOfType(m, 'timed');
   m.accept(rsh.id, 0, 5000);
-  const done = m.arriveAtStop(rsh.targetStopId, rsh.targetMile);
+  const done = deliver(m, rsh.targetStopId, rsh.targetMile);
   check('timed pays on arrival', done.length === 1 && rsh.status === 'completed' && rsh.paid);
-  check('timed pays only once (paid guard)', m.arriveAtStop(rsh.targetStopId, rsh.targetMile).length === 0);
+  check('timed pays only once (paid guard)', deliver(m, rsh.targetStopId, rsh.targetMile).length === 0);
   const rep = m._save.get('missionRep', {});
   check('rep tracked under the timed key only', rep.timed === 1 && !rep.delivery && !rep.passenger);
 }
@@ -173,7 +183,7 @@ function firstOfType(m, type) {
     check('nervous ignores continuous scrapes', n.m.onDamage(99, 'offroad_bleed').length === 0);
     const f = n.m.onDamage(HARD_CRASH_HP);
     check('nervous bails on a hard crash', f.length === 1 && n.p.status === 'failed' && n.p.failReason === 'passenger_scared');
-    check('failed passenger never pays', n.m.arriveAtStop(n.p.targetStopId).length === 0);
+    check('failed passenger never pays', deliver(n.m, n.p.targetStopId).length === 0);
   }
 
   // Carsick: cumulative crash damage past the cap.
@@ -206,7 +216,7 @@ function firstOfType(m, type) {
     t.m.onDamage(50);                                      // shrugs it off
     t.m.checkHeat(3);                                      // loves it
     check('thrill-seeker never comfort-fails', t.p.status === 'active');
-    const done = t.m.arriveAtStop(t.p.targetStopId, t.p.targetMile);
+    const done = deliver(t.m, t.p.targetStopId, t.p.targetMile);
     check('thrill-seeker tips a spicy ride', done.length === 1 && t.p.tip === THRILL_TIP);
     const rep = t.m._save.get('missionRep', {});
     check('rep tracked under the passenger key', rep.passenger === 1 && !rep.timed && !rep.delivery);
@@ -216,7 +226,7 @@ function firstOfType(m, type) {
   const t2 = byQuirk('thrill_seeker');
   if (t2) {
     t2.m.accept(t2.p.id, 0);
-    const done = t2.m.arriveAtStop(t2.p.targetStopId, t2.p.targetMile);
+    const done = deliver(t2.m, t2.p.targetStopId, t2.p.targetMile);
     check('no tip on a boring ride', done.length === 1 && t2.p.tip === 0);
   }
 }
@@ -294,7 +304,7 @@ function firstOfType(m, type) {
   // Arriving HOT at the target = terminal fail, never pays.
   m.accept(esc.id, 32);
   check('heat accept occupies its own type slot', m.hasActiveOfType('heat'));
-  const hot = m.arriveAtStop(esc.targetStopId, esc.targetMile, 1);
+  const hot = deliver(m, esc.targetStopId, esc.targetMile, 1);
   check('arriving hot fails, never pays', hot.length === 0
     && esc.status === 'failed' && esc.failReason === 'still_hot' && !esc.paid);
 
@@ -302,7 +312,7 @@ function firstOfType(m, type) {
   const m2 = sys(42);
   const e2 = m2.offersForStop('N', { stars: 3 }).find(o => o.type === 'heat');
   m2.accept(e2.id, 32);
-  const d2 = m2.arriveAtStop(e2.targetStopId, e2.targetMile, 0);
+  const d2 = deliver(m2, e2.targetStopId, e2.targetMile, 0);
   check('clean arrival pays the full price', d2.length === 1 && e2.paid && e2.status === 'completed');
   check('rep tracked under the heat key', m2._save.get('missionRep', {}).heat === 1);
 
@@ -313,7 +323,7 @@ function firstOfType(m, type) {
   const full = e3.payout;
   m3.accept(e3.id, 32);
   check('no pay-clear halving hook exists', typeof m3.noteHeatClearPaid !== 'function');
-  const d3 = m3.arriveAtStop(e3.targetStopId, e3.targetMile, 0);
+  const d3 = deliver(m3, e3.targetStopId, e3.targetMile, 0);
   check('arrival after any star-clear pays in full', d3.length === 1 && d3[0].payout === full);
 
   // Busted = fail (failAllActive covers heat too).
@@ -377,10 +387,10 @@ function firstOfType(m, type) {
   const m2 = sys(42);
   const w2 = m2.offersForStop('E', { windOk: true }).find(o => o.type === 'weather');
   m2.accept(w2.id, 109);
-  const d2 = m2.arriveAtStop('O', 184);
+  const d2 = deliver(m2, 'O', 184);
   check('wind contract pays on arrival at Othello', d2.length === 1 && w2.paid);
   check('rep tracked under the weather key', m2._save.get('missionRep', {}).weather === 1);
-  check('weather pays only once (paid guard)', m2.arriveAtStop('O', 184).length === 0);
+  check('weather pays only once (paid guard)', deliver(m2, 'O', 184).length === 0);
 }
 
 // ── Phase 6: tier-up detection at completion ──────────────────────────────
@@ -389,7 +399,7 @@ function firstOfType(m, type) {
   const m = sys(42);
   const d = firstOfType(m, 'delivery');
   m.accept(d.id, 0);
-  m.arriveAtStop(d.targetStopId, d.targetMile);
+  deliver(m, d.targetStopId, d.targetMile);
   check('no tier-up on an ordinary completion', d.paid && !d.tierUp);
 
   // 2→3 crosses Rookie→Known.
@@ -397,7 +407,7 @@ function firstOfType(m, type) {
   mK._save.set('missionRep', { delivery: 2 });
   const dK = firstOfType(mK, 'delivery');
   mK.accept(dK.id, 0);
-  mK.arriveAtStop(dK.targetStopId, dK.targetMile);
+  deliver(mK, dK.targetStopId, dK.targetMile);
   check('Rookie→Known tier-up tagged at 3', dK.tierUp?.name === 'Known' && dK.tierUp?.mult === 2.5);
 
   // 7→8 crosses Known→Legend — and only on the crossing type.
@@ -405,11 +415,11 @@ function firstOfType(m, type) {
   mL._save.set('missionRep', { timed: 7, delivery: 5 });
   const rL = firstOfType(mL, 'timed');
   mL.accept(rL.id, 0, 9000);
-  mL.arriveAtStop(rL.targetStopId, rL.targetMile);
+  deliver(mL, rL.targetStopId, rL.targetMile);
   check('Known→Legend tier-up tagged at 8', rL.tierUp?.name === 'Legend' && rL.tierUp?.mult === 5);
   const dL = allOffers(mL).find(o => o.type === 'delivery' && o.status === 'offered');
   mL.accept(dL.id, 0);
-  mL.arriveAtStop(dL.targetStopId, dL.targetMile);
+  deliver(mL, dL.targetStopId, dL.targetMile);
   check('mid-tier completion carries no tag', dL.paid && !dL.tierUp);
 }
 
@@ -419,7 +429,7 @@ function firstOfType(m, type) {
   const d = firstOfType(m, 'delivery');
   const id = contactIdFor(d.originStopId);
   m.accept(d.id, 0);
-  m.arriveAtStop(d.targetStopId, d.targetMile);
+  deliver(m, d.targetStopId, d.targetMile);
   let e = m._save.get('npcMemory', {})[id];
   check('completion counted for the origin contact', e?.jobsCompleted === 1
     && e.lastOutcome === 'completed' && e.failAckPending === false);
@@ -438,7 +448,7 @@ function firstOfType(m, type) {
   const r2 = allOffers(m).find(o => o.originStopId === r.originStopId && o.status === 'offered');
   if (r2) {
     m.accept(r2.id, 0, 9000);
-    m.arriveAtStop(r2.targetStopId, r2.targetMile);
+    deliver(m, r2.targetStopId, r2.targetMile);
     e = m._save.get('npcMemory', {})[rId];
     check('next success clears the fail-ack flag', e.failAckPending === false
       && e.lastOutcome === 'completed');
@@ -474,7 +484,58 @@ function firstOfType(m, type) {
   const f = m.checkDeadlines(2, 0);        // clock floored at 0
   check('exhausted party clock fails the rush', f.length === 1 && f[0] === rsh
     && rsh.status === 'failed' && rsh.failReason === 'rush');
-  check('clock-floored rush never pays', m.arriveAtStop(rsh.targetStopId, rsh.targetMile).length === 0);
+  check('clock-floored rush never pays', deliver(m, rsh.targetStopId, rsh.targetMile).length === 0);
+}
+
+// ── Explicit drop-off (2026-07-15): grade at pull-in, collect per mission ─
+{
+  const m = sys(42);
+  const d = firstOfType(m, 'delivery');
+  m.accept(d.id, 0);
+  const ready = m.gradeArrivals(d.targetStopId, d.targetMile, 0);
+  check('pull-in grades READY, not paid', ready.length === 1 && ready[0] === d
+    && d.status === 'ready' && !d.paid);
+  check('grading bumps no rep', Object.keys(m._save.get('missionRep', {})).length === 0);
+  check('ready missions queryable per stop', m.readyMissions(d.targetStopId)[0] === d
+    && m.readyMissions('ZZ').length === 0);
+  check('re-grading is a no-op', m.gradeArrivals(d.targetStopId, d.targetMile, 0).length === 0);
+  const paid = m.collect(d.id);
+  check('collect pays the ready mission', paid === d && d.status === 'completed' && d.paid
+    && d.completedAtMile === d.targetMile);
+  check('rep bumps only on collect', m._save.get('missionRep', {}).delivery === 1);
+  check('collect is idempotent (paid guard)', m.collect(d.id) === null);
+
+  // A checkpoint rewind after collect can't double-pay (ledger union).
+  const pre = sys(42); allOffers(pre);
+  m.restore({ ...pre.serialize(), outcomes: {} });
+  check('collect survives rewind (still paid)', m.byId(d.id)?.paid === true
+    && m.byId(d.id)?.status === 'completed');
+  check('rewound mission cannot re-collect', m.collect(d.id) === null);
+
+  // Leaving the stop without collecting = terminal 'not_delivered' fail.
+  const m2 = sys(42);
+  const p2 = firstOfType(m2, 'passenger');
+  m2.accept(p2.id, 0);
+  m2.gradeArrivals(p2.targetStopId, p2.targetMile, 0);
+  const gone = m2.failUncollected(p2.targetStopId);
+  check('leaving fails uncollected as not_delivered', gone.length === 1
+    && p2.status === 'failed' && p2.failReason === 'not_delivered' && !p2.paid);
+  check('not_delivered leaves rep unchanged', Object.keys(m2._save.get('missionRep', {})).length === 0);
+  check('failed drop-off cannot be collected', m2.collect(p2.id) === null);
+
+  // collect refuses a merely-active mission (must be graded first).
+  const m3 = sys(42);
+  const d3 = firstOfType(m3, 'delivery');
+  m3.accept(d3.id, 0);
+  check('collect requires a graded arrival', m3.collect(d3.id) === null && d3.status === 'active');
+
+  // The heat 0-star requirement is judged AT PULL-IN (terminal still_hot).
+  const m4 = sys(42);
+  const e4 = m4.offersForStop('N', { stars: 2 }).find(o => o.type === 'heat');
+  m4.accept(e4.id, 32);
+  check('hot pull-in fails at grading, never ready',
+    m4.gradeArrivals(e4.targetStopId, e4.targetMile, 1).length === 0
+    && e4.status === 'failed' && e4.failReason === 'still_hot');
 }
 
 // ── 2026-07-13: heat-escape pay is never halved — no scene may reintroduce

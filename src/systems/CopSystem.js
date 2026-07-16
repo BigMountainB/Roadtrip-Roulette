@@ -48,6 +48,16 @@ const COP_TOP_UNITS    = MAX_SPEED * (COP_TOP_MPH / 120);
 // in the world frame).  ~70 mph relative to a stationary world.
 const ONCOMING_UNITS   = MAX_SPEED * (70 / 120);
 
+// Fleeing-cop removal is POSITION-driven: a smoked/scattered cop stays alive
+// until it has receded past the bottom of the forward view (rel <= 0 is
+// already off-screen; FLEE_DESPAWN_REL adds margin so it's also tiny in the
+// rear-view mirror before it's spliced).  FLEE_MAX_SEC is only a lifetime
+// FAILSAFE (e.g. player at a dead stop — the cop can't recede at 35% of
+// zero speed), never the primary removal trigger.
+const FLEE_MAX_SEC     = 6;
+const FLEE_DESPAWN_REL = -6000;   // world units behind the player at despawn
+const FLEE_FADE_SPAN   = 9000;    // alpha ramps 1→0 over rel 3000 → -6000
+
 // Normalize raw sprite token names → internal names used in useF12Token
 const TOKEN_MAP = {
   f12_coal:   'coal',
@@ -504,7 +514,7 @@ export class CopSystem {
           if (cop.kind !== 'barricade' && rel < 2500 && rel > -15000) {
             cop.fleeing       = true;
             cop._fleeNoSwerve = true;
-            cop._fleeTimer    = 1.6 + Math.random() * 0.8;   // staggered fade-outs
+            cop._fleeTimer    = FLEE_MAX_SEC;   // failsafe only — removal is positional
             cop.trapPursuit   = false;
             cop.parked        = false;
             cop._pitProgress  = 0;
@@ -759,25 +769,34 @@ export class CopSystem {
       const aDist = Math.abs(dist);
 
       // Fireworks scatter / coal smoke-out — the cop breaks pursuit and
-      // drops back until its retreat timer expires, then despawns.  Skips
-      // all pursuit AI so a fleeing cop can never PIT / ram on the way out.
-      // Fireworks flee swerves for the shoulder; rolling coal sets
+      // drops back until it has RECEDED PAST THE BOTTOM OF THE SCREEN, then
+      // despawns (position-driven; the timer is only a lifetime failsafe).
+      // Skips all pursuit AI so a fleeing cop can never PIT / ram on the
+      // way out.  Fireworks flee swerves for the shoulder; rolling coal sets
       // `_fleeNoSwerve` so the blinded cop just sinks straight back into
       // the smoke (lost sight — no dramatic swerve).
       if (cop.fleeing) {
-        cop._fleeTimer = (cop._fleeTimer ?? 2.5) - dt;
-        // Fade OUT instead of popping — alpha eases to zero over the
-        // retreat's final ~1s, so by the time the timer splices the cop
-        // it's already invisible (shrunk by distance + swallowed by the
-        // coal cloud).  Renderers read it via getCopsForRender().fleeFade
-        // (forward view) or cop._fleeFade directly (rear-view mirror).
-        cop._fleeFade = Math.max(0, Math.min(1, cop._fleeTimer / 1.0));
+        cop._fleeTimer = (cop._fleeTimer ?? FLEE_MAX_SEC) - dt;
         if (!cop._fleeNoSwerve) {
           cop.laneOffset += (cop.laneOffset >= 0 ? 1 : -1) * 2.4 * dt;
         }
         cop.speed = Math.max(0, playerSpeed * (cop._fleeNoSwerve ? 0.35 : 0.5));
         cop.position += cop.speed * dt;
-        if (cop._fleeTimer <= 0) this.cops.splice(i, 1);
+        const rel = cop.position - playerPos;
+        // Alpha eases with POSITION, not time — full while still up-screen,
+        // sinking toward zero as the cop slides down-screen into the smoke
+        // and drops behind.  The fade's tail also covers its shrinking image
+        // in the rear-view mirror.  Renderers read it via
+        // getCopsForRender().fleeFade (forward view) or cop._fleeFade
+        // directly (mirror).
+        cop._fleeFade = Math.max(0, Math.min(1, (rel - FLEE_DESPAWN_REL) / FLEE_FADE_SPAN));
+        // Despawn OFF-SCREEN only: rel <= 0 is already past the forward
+        // view's bottom edge — the extra margin means it's also faded out
+        // and tiny in the mirror.  rel > 50000 matches the render cutoff
+        // (fully off-view ahead).  The timer is the 6 s failsafe.
+        if (rel <= FLEE_DESPAWN_REL || rel > 50000 || cop._fleeTimer <= 0) {
+          this.cops.splice(i, 1);
+        }
         continue;
       }
       // Parked at a civil traffic stop — pinned behind the stopped player,

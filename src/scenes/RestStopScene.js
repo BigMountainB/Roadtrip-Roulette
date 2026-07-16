@@ -378,6 +378,9 @@ export class RestStopScene extends Phaser.Scene {
     // which made the second visit's button silently no-op.  Same kind of
     // bug as GameScene's `_takingExit`.
     this._continuing    = false;
+    // Leave-confirm gate for uncollected READY drop-offs — must reset per
+    // visit or a confirmed leave at stop 1 would skip the warning at stop 2.
+    this._leaveConfirmed = false;
     this._statusTimer   = null;
     this._tabBgs        = null;
     this._tabLbs        = null;
@@ -758,16 +761,63 @@ export class RestStopScene extends Phaser.Scene {
       }).setOrigin(0.5, 0);
     }
 
+    // ── READY drop-offs (Ch. 8 explicit collect) ─────────────────────
+    // One unmissable gold action button per graded-ready mission, at the
+    // TOP of the menu area (the placard grid shifts down to make room).
+    // Tapping it pays THAT job (wallet + payoff banner via collect());
+    // hitting the road without tapping fails it as 'not_delivered'.
+    const _missionsSys = this.registry?.get?.('missions');
+    this._readyJobs = (Difficulty.noScore?.() === true) ? []
+      : (_missionsSys?.readyMissions?.(this._stop?.id) ?? []);
+    const _readyRowH = 42, _readyGap = 6;
+    const _readyBlockH = this._readyJobs.length * (_readyRowH + _readyGap);
+
     // ── Landing screen — 5 brand-style category placards ──────────────
     // Mimics the highway services sign: each section is a white-bordered
     // placard with the category title + brand name, laid out in a grid
     // inside the blue sign.  Click a placard → drill into its sub-menu.
-    const contentY = 110;
+    const contentY = 110 + _readyBlockH;
     const contentH = SCREEN_H - contentY - 60;
     this._contentX = 40;
     this._contentY = contentY;
     this._contentW = SCREEN_W - 80;
     this._contentH = contentH;
+
+    this._readyJobs.forEach((m, i) => {
+      const ry    = 110 + i * (_readyRowH + _readyGap);
+      const total = m.payout + (m.tip ?? 0);
+      const label = m.type === 'passenger'
+        ? `🧍 DROP OFF ${(m.passenger?.name ?? 'PASSENGER').toUpperCase()} — $${total.toLocaleString()}`
+        : m.type === 'heat'
+          ? `🔥 COLLECT — LOST THE TAIL — $${total.toLocaleString()}`
+          : `📦 DROP OFF PACKAGE — $${total.toLocaleString()}`;
+      const bg = this.add.rectangle(this._contentX, ry, this._contentW, _readyRowH, 0xFFD23D)
+        .setOrigin(0, 0).setStrokeStyle(3, 0xFFFFFF)
+        .setInteractive({ useHandCursor: true });
+      const lbl = this.add.text(this._contentX + this._contentW / 2, ry + _readyRowH / 2, label, {
+        fontSize: '18px', fontFamily: IMPACT, color: '#3A2800',
+      }).setOrigin(0.5);
+      bg.on('pointerover', () => bg.setFillStyle(0xFFE585));
+      bg.on('pointerout',  () => { if (bg.input?.enabled) bg.setFillStyle(0xFFD23D); });
+      bg.on('pointerdown', (ptr) => {
+        ptr.event?.stopPropagation?.();
+        const paid = _missionsSys?.collect?.(m.id);
+        if (!paid) return;                       // double-tap / rewind safe
+        const pay = paid.payout + (paid.tip ?? 0);
+        this._score += pay;
+        this._stats?.recordEarn?.(pay, 'mission');
+        this._refreshScore();
+        // Bank immediately — pulling in is the "safe" moment, and the
+        // GameScene entry-bank no longer includes uncollected mission pay.
+        if (Difficulty.noScore?.() !== true) {
+          this.registry.get('save')?.set?.('wallet', Math.round(Math.max(0, this._score)));
+        }
+        this._buttonRefresh.forEach(fn => fn());   // shop affordability updates
+        bg.disableInteractive().setFillStyle(0x8A7A3A);
+        lbl.setText('✓ COLLECTED').setColor('#33301E');
+        this._showPayoffBanner(paid);
+      });
+    });
 
     // Brand logo + label per landing tile, region-aware via brandsForStop.
     const stopBrands = brandsForStop(this._stop);
@@ -1251,23 +1301,45 @@ export class RestStopScene extends Phaser.Scene {
         fontSize: '12px', fontFamily: IMPACT, color: '#8FB7E6',
       }).setOrigin(0.5, 0).setDepth(D + 4));
 
-    add(this.add.text(tx, py + 34, `"${node.line}"`, {
-      fontSize: '16px', fontFamily: 'Georgia, serif', color: '#F4F7FF',
-      wordWrap: { width: tw }, lineSpacing: 3,
-    }).setDepth(D + 4));
-
+    // ── Adaptive 2× type scale (2026-07-15) — dialogue/speaker/fact/choice
+    // sizes DOUBLED from the original 16/14/10/13px; long dialogues (or tall
+    // choice stacks) step down a tier so the column never overflows the
+    // right pane.  Each tier is measured with the real wrapped text before
+    // committing; the last tier is the original sizes (guaranteed fit).
     const fact = node.fact ?? enc.fact;
-    const choiceCount = (node.choices ?? [{}]).length;
-    const botH = 30 + choiceCount * 33 + (fact ? 30 : 0);
-    add(this.add.text(tx, py + ph - botH + 2, (node.speaker ?? enc.speaker ?? port.name).toUpperCase(), {
-      fontSize: '14px', fontFamily: IMPACT, color: '#FFD23D',
-    }).setDepth(D + 4));
-    if (fact) {
-      add(this.add.text(tx, py + ph - botH + 22, `📍 ${fact}`, {
-        fontSize: '10px', fontFamily: 'Arial', color: '#9FB7D6',
+    const condCtx = { cash: this._score ?? 0, buffs: this._purchases.encounterBuffs ?? [], memory: mem };
+    const choices = (node.choices ?? [{ label: 'Continue', effects: {}, end: true }])
+      .filter(c => !(c.hideWhenLocked && choiceLocked(c, condCtx)));
+    const TYPE_TIERS = [
+      { dlg: 32, spk: 28, fct: 20, ch: 24, bh: 56 },   // full 2×
+      { dlg: 26, spk: 22, fct: 16, ch: 20, bh: 46 },
+      { dlg: 20, spk: 18, fct: 13, ch: 16, bh: 38 },
+      { dlg: 16, spk: 14, fct: 10, ch: 13, bh: 28 },   // pre-2026-07-15 sizes
+    ];
+    let T = TYPE_TIERS[TYPE_TIERS.length - 1];
+    let dlgText = null, factText = null, botH = 0;
+    for (const t of TYPE_TIERS) {
+      const d = this.add.text(tx, py + 34, `"${node.line}"`, {
+        fontSize: `${t.dlg}px`, fontFamily: 'Georgia, serif', color: '#F4F7FF',
+        wordWrap: { width: tw }, lineSpacing: Math.round(t.dlg * 0.2),
+      }).setDepth(D + 4);
+      const f = fact ? this.add.text(0, 0, `📍 ${fact}`, {
+        fontSize: `${t.fct}px`, fontFamily: 'Arial', color: '#9FB7D6',
         fontStyle: 'italic', wordWrap: { width: tw }, lineSpacing: 1,
-      }).setDepth(D + 4));
+      }).setDepth(D + 4).setVisible(false) : null;
+      const bot = (t.spk + 8) + (f ? f.height + 6 : 0) + choices.length * (t.bh + 6) + 8;
+      const last = t === TYPE_TIERS[TYPE_TIERS.length - 1];
+      if (py + 34 + d.height + 10 <= py + ph - bot || last) {
+        T = t; dlgText = d; factText = f; botH = bot;
+        break;
+      }
+      d.destroy(); f?.destroy();
     }
+    add(dlgText);
+    add(this.add.text(tx, py + ph - botH, (node.speaker ?? enc.speaker ?? port.name).toUpperCase(), {
+      fontSize: `${T.spk}px`, fontFamily: IMPACT, color: '#FFD23D',
+    }).setDepth(D + 4));
+    if (factText) add(factText.setPosition(tx, py + ph - botH + T.spk + 6).setVisible(true));
 
     // Effect-application context — writes to _purchases (resumed by GameScene)
     // and to live _score/_stars for on-card display.
@@ -1336,14 +1408,11 @@ export class RestStopScene extends Phaser.Scene {
       }
     };
 
-    // Choice buttons stacked at the bottom of the RIGHT pane — comfortable
-    // height again since they no longer cover the portrait.  Choices whose
-    // `conditions` fail (cash / item / npcMemory) render grayed out like an
-    // unaffordable cost, or vanish entirely with `hideWhenLocked`.
-    const condCtx = { cash: this._score ?? 0, buffs: this._purchases.encounterBuffs ?? [], memory: mem };
-    const choices = (node.choices ?? [{ label: 'Continue', effects: {}, end: true }])
-      .filter(c => !(c.hideWhenLocked && choiceLocked(c, condCtx)));
-    const bh = 28, gap = 5;
+    // Choice buttons stacked at the bottom of the RIGHT pane, sized by the
+    // committed type tier (2× at full scale).  Choices whose `conditions`
+    // fail (cash / item / npcMemory) render grayed out like an unaffordable
+    // cost, or vanish entirely with `hideWhenLocked` (filtered above).
+    const bh = T.bh, gap = 6;
     const bcx = txX + txW / 2;
     let by = py + ph - (choices.length * (bh + gap)) - 6;
     for (const c of choices) {
@@ -1352,7 +1421,8 @@ export class RestStopScene extends Phaser.Scene {
       const bg = this.add.rectangle(bcx, by + bh / 2, txW - 28, bh, afford ? 0x143A5A : 0x2A1010)
         .setStrokeStyle(2, afford ? 0x39A8FF : 0x662222).setDepth(D + 2);
       const lbl = this.add.text(bcx, by + bh / 2, c.label, {
-        fontSize: '13px', fontFamily: IMPACT, color: afford ? '#F4F7FF' : '#996666',
+        fontSize: `${T.ch}px`, fontFamily: IMPACT, color: afford ? '#F4F7FF' : '#996666',
+        wordWrap: { width: txW - 44 }, align: 'center',
       }).setOrigin(0.5).setDepth(D + 3);
       add(bg, lbl);
       if (afford) {
@@ -1870,6 +1940,116 @@ export class RestStopScene extends Phaser.Scene {
     });
   }
 
+  /** BIG celebratory payoff moment for an explicit drop-off (Ch. 8): a
+   *  centered banner — flavor line, "YOU EARNED $X" at 40px, tip + REP
+   *  progress ("Known 4/8"), and the tier-up copy when this collect crossed
+   *  a rep threshold.  Auto-fades; tap anywhere to dismiss early. */
+  _showPayoffBanner(m) {
+    const D   = 620;
+    const pay = m.payout + (m.tip ?? 0);
+    const head = m.type === 'passenger'
+      ? `🧍 ${m.passenger?.name ?? 'Passenger'} ${m.passenger?.dropoff ?? ''}`.trimEnd()
+      : m.type === 'heat'
+        ? '🔥 CLEAN GETAWAY — tail lost'
+      : m.type === 'weather'
+        ? `${m.terms?.weather_run?.tag === 'wind' ? '🌬 THROUGH THE WIND' : '🌨 OVER THE PASS'} — ${m.cargo}, intact`
+      : (m.type === 'timed'
+        ? `⚡ MADE IT — ${m.cargo}, inside the window`
+        : `📦 DELIVERED — ${m.cargo}`);
+    // REP progress toward the next rung; at Legend there's no next rung,
+    // show the lifetime count (same string as the old drive-side payoff).
+    const rep  = (this.registry.get('save')?.get?.('missionRep', {}) ?? {})[m.type] ?? 0;
+    const tier = tierFor(rep);
+    const next = MISSION_TIERS[MISSION_TIERS.indexOf(tier) + 1];
+    const repStr = next ? `${tier.name} ${rep}/${next.minDone}` : `${tier.name} ${rep}`;
+    const tipStr = (m.tip ?? 0) > 0 ? `+$${m.tip} tip  ·  ` : '';
+
+    const objs = [];
+    const scrim = this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.72)
+      .setDepth(D).setInteractive({ useHandCursor: true });
+    objs.push(scrim);
+    objs.push(this.add.text(CX, SCREEN_H * 0.28, head, {
+      fontSize: '18px', fontFamily: IMPACT, color: '#F4F7FF',
+      stroke: '#000', strokeThickness: 4, align: 'center',
+      wordWrap: { width: SCREEN_W - 120 },
+    }).setOrigin(0.5).setDepth(D + 1));
+    objs.push(this.add.text(CX, SCREEN_H * 0.44, `YOU EARNED $${pay.toLocaleString()}`, {
+      fontSize: '40px', fontFamily: IMPACT, fontStyle: 'bold', color: '#FFD23D',
+      stroke: '#000', strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(D + 1));
+    objs.push(this.add.text(CX, SCREEN_H * 0.57, `${tipStr}REP ${repStr}`, {
+      fontSize: '16px', fontFamily: IMPACT, color: '#66FF99',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(D + 1));
+    // Tier-up moment (Ch. 8 Phase 6) — same celebratory copy as before:
+    // "⭐ KNOWN COURIER — payouts ×2.5".  The REP line above already reads
+    // the post-bump count, so "Known 3/8" and the banner agree.
+    if (m.tierUp) {
+      const job = { delivery: 'COURIER', timed: 'RUSH RUNNER', passenger: 'DRIVER',
+                    heat: 'GETAWAY DRIVER', weather: 'STORM RUNNER' }[m.type] ?? 'COURIER';
+      objs.push(this.add.text(CX, SCREEN_H * 0.68,
+        `⭐ ${m.tierUp.name.toUpperCase()} ${job} — payouts ×${m.tierUp.mult}`, {
+          fontSize: '22px', fontFamily: IMPACT, color: '#FFD23D',
+          stroke: '#000', strokeThickness: 5,
+        }).setOrigin(0.5).setDepth(D + 1));
+    }
+    let done = false;
+    const dismiss = () => { if (done) return; done = true; for (const o of objs) o?.destroy?.(); };
+    scrim.on('pointerdown', (p) => { p.event?.stopPropagation?.(); dismiss(); });
+    this.time.delayedCall(3400, dismiss);
+  }
+
+  /** Two-button confirm before HIT THE ROAD abandons uncollected READY
+   *  drop-offs — the route is one-way, so leaving fails them for good. */
+  _showLeaveConfirm(ready) {
+    const D = 640;
+    const names = ready.map(m =>
+      m.type === 'passenger' ? (m.passenger?.name ?? 'your passenger') : m.cargo).join(', ');
+    const objs = [];
+    const dismiss = () => { for (const o of objs) o?.destroy?.(); };
+    objs.push(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.82)
+      .setDepth(D).setInteractive());
+    const pw = 520, ph = 190;
+    const panel = this.add.graphics().setDepth(D + 1);
+    panel.fillStyle(0x060A14, 0.97); panel.fillRoundedRect(CX - pw / 2, SCREEN_H / 2 - ph / 2, pw, ph, 12);
+    panel.lineStyle(3, 0xFFD23D, 1);  panel.strokeRoundedRect(CX - pw / 2, SCREEN_H / 2 - ph / 2, pw, ph, 12);
+    objs.push(panel);
+    objs.push(this.add.text(CX, SCREEN_H / 2 - ph / 2 + 24,
+      `⚠️ You haven't dropped off ${names}!\nLeave anyway = job failed — no payout.`, {
+        fontSize: '17px', fontFamily: IMPACT, color: '#FFEEAA',
+        stroke: '#000', strokeThickness: 3, align: 'center',
+        wordWrap: { width: pw - 40 }, lineSpacing: 6,
+      }).setOrigin(0.5, 0).setDepth(D + 2));
+    const btns = [
+      { label: '← GO BACK', color: 0x44AA44, hover: 0x66CC66, act: () => {
+          dismiss();
+          // Re-arm the leave shortcuts the `once` handlers already consumed.
+          this.input.keyboard?.once('keydown-ENTER', () => this._continue());
+          this.input.keyboard?.once('keydown-SPACE', () => this._continue());
+        } },
+      { label: 'LEAVE ANYWAY', color: 0xAA3333, hover: 0xCC5555, act: () => {
+          dismiss();
+          this._leaveConfirmed = true;   // _continue fails them on the way out
+          this._continue();
+        } },
+    ];
+    btns.forEach((b, i) => {
+      const bx = CX + (i === 0 ? -125 : 125);
+      const byY = SCREEN_H / 2 + ph / 2 - 38;
+      const bg = this.add.rectangle(bx, byY, 220, 40, b.color)
+        .setStrokeStyle(3, 0xFFFFFF).setDepth(D + 2)
+        .setInteractive({ useHandCursor: true });
+      const lb = this.add.text(bx, byY, b.label, {
+        fontSize: '17px', fontFamily: IMPACT, color: '#FFFFFF',
+        stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(D + 3);
+      bg.on('pointerover', () => bg.setFillStyle(b.hover));
+      bg.on('pointerout',  () => bg.setFillStyle(b.color));
+      bg.on('pointerdown', (p) => { p.event?.stopPropagation?.(); b.act(); });
+      objs.push(bg, lb);
+    });
+  }
+
   _setStatus(msg, color, big = false) {
     // `big` = attention-grabbing variant (e.g. CUSTOMERS ONLY): ~4x the base
     // 11px, bold, longer hold - the base size is unreadable on phones.
@@ -1897,7 +2077,13 @@ export class RestStopScene extends Phaser.Scene {
 
   _continue() {
     if (this._continuing) return;
+    // Uncollected READY drop-offs — the route is one-way, so leaving now
+    // fails them for good.  Confirm first; LEAVE ANYWAY re-enters with the
+    // flag set and fails them as 'not_delivered' (no payout, rep unchanged).
+    const _ready = this.registry.get('missions')?.readyMissions?.(this._stop?.id) ?? [];
+    if (_ready.length && !this._leaveConfirmed) { this._showLeaveConfirm(_ready); return; }
     this._continuing = true;
+    if (_ready.length) this.registry.get('missions')?.failUncollected?.(this._stop?.id);
     this.registry.get('audio')?.setPaused?.(false);
     // Time penalty for visiting the stop — real seconds spent here ×
     // 0.5 deducted from the party clock.  Per spec: each stop costs

@@ -7,8 +7,11 @@
 // (rel < 0), but the rear-cop AI oscillates around rel ≈ 0 (alongside at
 // playerSpeed + 200), so the cop actually applying ram pressure never
 // qualified.  Coal must smoke every pursuer in the -15000..+2500 band:
-// fleeing + _fleeNoSwerve, drop to 35% player speed (never gains again),
-// and despawn within ~3s.
+// fleeing + _fleeNoSwerve, drop to 35% player speed (never gains again).
+// Removal is POSITION-driven (2026-07-15): a smoked cop stays alive until it
+// has receded past the bottom of the screen (rel <= -6000, off the forward
+// view AND tiny in the mirror) — never a mid-screen pop.  The flee timer is
+// only a 6 s lifetime failsafe.
 
 import { CopSystem } from '../src/systems/CopSystem.js';
 import { MAX_SPEED } from '../src/constants.js';
@@ -51,13 +54,19 @@ function pursuitCop(position, laneOffset = 0) {
   check('PIT disarmed on smoked cops', !rear._pitArmed && !alongside._pitArmed);
   check('arrest counters cleared', cs.rearBumpCount === 0 && !cs.arrestPending);
 
-  // Simulate 3 s of chase at fixed player speed — smoked cops must never
-  // gain ground, never touch the player, and despawn within ~3 s.
+  // Simulate up to 8 s of chase at fixed player speed — smoked cops must
+  // never gain ground, never touch the player, only despawn once they've
+  // receded past the bottom of the screen (rel <= -6000), and be gone well
+  // inside the 6 s lifetime failsafe.
   let pos = playerPos;
   let minGapRear = Infinity, everGained = false, everOverSpeed = false;
   let prevGap = pos - rear.position;
+  // Last observed rel (cop.position - playerPos) per smoked cop, so we can
+  // verify each was OFF-SCREEN (well behind) at the moment it was removed.
+  let lastRelRear = rear.position - pos, lastRelAlong = alongside.position - pos;
+  let despawnT = null;
   const dt = 1 / 60;
-  for (let t = 0; t < 3; t += dt) {
+  for (let t = 0; t < 8; t += dt) {
     pos += playerSpeed * dt;
     cs.update(dt, pos, playerSpeed, 0);
     if (cs.cops.includes(rear)) {
@@ -66,12 +75,21 @@ function pursuitCop(position, laneOffset = 0) {
       if (rear.speed > playerSpeed * 0.35 + 1e-6) everOverSpeed = true;
       minGapRear = Math.min(minGapRear, gap);
       prevGap = gap;
+      lastRelRear = rear.position - pos;
     }
+    if (cs.cops.includes(alongside)) lastRelAlong = alongside.position - pos;
+    if (despawnT == null && !cs.cops.includes(rear) && !cs.cops.includes(alongside)) despawnT = t;
   }
   check('smoked cop never gained on the player', !everGained);
   check('smoked cop capped at 35% player speed', !everOverSpeed);
   check('smoked cop never reached the player (no ram possible)', minGapRear >= 3000);
-  check('smoked cops despawned within ~3s', !cs.cops.includes(rear) && !cs.cops.includes(alongside));
+  check('smoked cops eventually despawned', despawnT != null);
+  check('smoked cops despawned inside the 6s failsafe', despawnT != null && despawnT < 6);
+  // Position-driven removal: at despawn each cop had already receded past
+  // the bottom of the screen (rel <= 0 is off the forward view; the -6000
+  // margin means it was faded + tiny in the mirror) — no mid-screen pop.
+  check('rear cop was off-screen (rel <= -5500) when removed', lastRelRear <= -5500);
+  check('alongside cop was off-screen (rel <= -5500) when removed', lastRelAlong <= -5500);
   check('unsmoked far-ahead cop survives', cs.cops.includes(farAhead));
 }
 
