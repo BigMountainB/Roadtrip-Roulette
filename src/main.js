@@ -676,8 +676,12 @@ const _boot = () => {
   window.__warpTo = (mile) => {
     const scene = game.scene.getScene('Game');
     if (!scene || typeof mile !== 'number') return { ok: false, reason: 'no-run' };
-    const mode = game.registry.get('difficulty');
-    if (mode !== 'custom') return { ok: false, reason: 'not-custom' };
+    // Belt-and-suspenders: registry AND save must BOTH say custom — a stale
+    // registry value from a prior custom run must not leak teleport into
+    // scored modes (2026-07-16 owner report: warped on Easy).
+    const mode  = game.registry.get('difficulty');
+    const saved = game.registry.get('save')?.get?.('difficulty');
+    if (mode !== 'custom' || saved !== 'custom') return { ok: false, reason: 'not-custom' };
     const ok = scene._warpToMile?.(mile);
     return { ok: !!ok, reason: ok ? '' : 'failed' };
   };

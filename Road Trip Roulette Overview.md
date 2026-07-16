@@ -92,6 +92,35 @@ volume is the long pole (each pack = vehicle art + ~10 sprite images).
 
 ## Changelog (newest first)
 
+### 2026-07-16 — Big playtest batch (18 items, no agents per owner)
+- **Survival persistence ROOT CAUSE**: 'survivalState' was read on resume but NEVER written —
+  every rest stop silently reset food/drink/alertness to fresh-run values (also why shop food
+  seemed to do nothing).  Now written at rest-stop entry + whitelisted in SaveSystem.  Encounter
+  BUFFS (snow chains, wind-ready, tow insurance) had the same scene-restart amnesia — persisted
+  the same way (chains now actually survive to the snow).
+- **Rest-stop menu accumulation ROOT CAUSE**: SECTIONS is module-level and was mutated per visit —
+  restrooms/shop items DUPLICATED across visits (AOK's "3 restroom options") and a camp-repair
+  disabled at one stop stayed disabled forever (Easton's missing repair at 6 HP).  Pristine
+  per-visit reset added.  Crowded menus (>6 items) now lay out in 2 columns w/ taller buttons.
+- **Missions**: drive past a destination → "❌ MISSION FAILED — you passed X" popup, slot freed;
+  3 fails of a type per run = that type stops being offered (rep gate).  Mission chip tap no
+  longer fires the top weapon (it sat in the center tap-fire band).  Welcome NPC now also
+  presents the job offers (no character swap mid-stop).  JOBS list → lower-right corner.
+- **Economy**: sprites $5; coffee $10 ("Raises your Alertness"); gas-station food/drink $25 at
+  HALF road-bite fill; TOP UP ALL removed; refuel shows "X gal @ $Y.YY/gal" w/ per-stop price
+  drift (±14%), robbery chance hidden ("You were robbed when counting your cash" on hit);
+  710 Oil → ADD PINT OF OIL $20 = −5% engine heat.
+- **World/feel**: rain WALLS at mid-North Bend (severity up to 4.8 past mile 32 — wipers or
+  blind); snow wander halved; tilt/steering cues 2× size, show 1 mile then fade, "🛞 NORMAL
+  STEERING" handoff prompt when the zone ends; soiling yourself drains only 40% of the bladder;
+  map teleport double-gated to Custom; caffeine pills much rarer than water (weighted vice
+  spawns: food/drink > caffeinated > meds) + violet tint so they stop reading as water.
+- **Answered (working as designed)**: "gas auto-refilled" = the out-of-gas TOW (AAA takes 50%
+  of cash, tows you BACK to the previous stop with a full tank — popup can be missed at speed);
+  "+9 HP from just a restroom" = the generous-karma encounter reward (30% roll on a generous
+  choice: one prize is +9 HP).
+
+
 ### 2026-07-14 (later) — Playtest round 3 (DEPLOYED)
 - **Rolling coal realism rework**: puffs are now WORLD-anchored (dropped at the road spot where
   released, billow in place, recede behind the car — swerving mid-burst paints a curved trail);

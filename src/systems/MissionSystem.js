@@ -261,6 +261,8 @@ export class MissionSystem {
     this._seed = (seed ?? ((Date.now() ^ (Math.random() * 0xFFFFFFFF)) >>> 0)) >>> 0;
     this._offersByStop = {};           // { stopId: [mission, …] } (persisted offers)
     this._outcomes = {};               // { missionId: { status, paid } } — survives rewind
+    this._failCounts = {};             // { type: n } — run-scoped; 3 fails of a type
+                                       // lock that type's offers for the rest of the run
   }
 
   /** Run-state snapshot — rides inside GameScene._collectSaveSnapshot(). */
@@ -269,6 +271,7 @@ export class MissionSystem {
       seed: this._seed,
       offersByStop: JSON.parse(JSON.stringify(this._offersByStop)),
       outcomes: { ...this._outcomes },
+      failCounts: { ...this._failCounts },
     };
   }
 
@@ -282,6 +285,10 @@ export class MissionSystem {
     this._offersByStop = (snap.offersByStop && typeof snap.offersByStop === 'object')
       ? JSON.parse(JSON.stringify(snap.offersByStop)) : {};
     this._outcomes = { ...(snap.outcomes ?? {}), ...this._outcomes };
+    // Union-max so a rewind can't un-count a lockout fail.
+    for (const [t, n] of Object.entries(snap.failCounts ?? {})) {
+      this._failCounts[t] = Math.max(this._failCounts[t] ?? 0, n | 0);
+    }
     for (const m of this._allMissions()) {
       const o = this._outcomes[m.id];
       if (o) { m.status = o.status; m.paid = !!o.paid; }
@@ -306,7 +313,14 @@ export class MissionSystem {
       this._offersByStop[stopId] = this._generateOffers(stopId);
     }
     this._appendConditionalOffers(stopId, ctx);
-    return this._offersByStop[stopId];
+    // Type lockout: after 3 failed jobs of a type this run, contacts stop
+    // offering it (still-offered entries of that type are hidden, not
+    // mutated, so the underlying array stays deterministic).
+    const list = this._offersByStop[stopId];
+    const anyLock = list.some(o => o.status === 'offered' && this.typeLocked(o.type));
+    return anyLock
+      ? list.filter(o => o.status !== 'offered' || !this.typeLocked(o.type))
+      : list;   // identity-stable when nothing is locked (persistence contract)
   }
 
   /** Heat-escape + weather-corridor offers — deterministic (no rng: the
@@ -638,8 +652,29 @@ export class MissionSystem {
     m.status = 'failed';
     m.failReason = reason;
     this._outcomes[m.id] = { status: 'failed', paid: !!m.paid };
+    this._failCounts[m.type] = (this._failCounts[m.type] ?? 0) + 1;
     this._bumpStat(m.type, 'failed');
     this._noteNpcOutcome(m, 'failed');
+  }
+
+  /** Rep gate (2026-07-16): 3 failed jobs of a type this run = contacts stop
+   *  offering that type for the rest of the run. */
+  typeLocked(type) { return (this._failCounts[type] ?? 0) >= 3; }
+
+  /** Drove PAST an active mission's destination without stopping — the job
+   *  is now impossible: fail it terminally (frees the type slot so a new
+   *  offer can be taken at the next stop).  `graceMi` forgives the pull-in
+   *  window around the stop itself. */
+  checkMissedTargets(mile, graceMi = 1.0) {
+    const failed = [];
+    for (const m of this.activeMissions()) {
+      if (m.status !== 'active') continue;
+      if ((mile ?? 0) > (m.targetMile ?? Infinity) + graceMi) {
+        this._fail(m, 'missed_stop');
+        failed.push(m);
+      }
+    }
+    return failed;
   }
 
   // ── Completion / payout ─────────────────────────────────────────────────

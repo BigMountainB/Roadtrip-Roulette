@@ -5,6 +5,7 @@ import {
   GAS_USD_PER_MI, CHARGE_COST_FACTOR, GAS_ROBBERY_CHANCE, GAS_ROBBERY_FRAC,
   HUD_OFFSET_X,
 } from '../constants.js';
+import { ITEM_FX } from '../systems/SurvivalSystem.js';
 import { Difficulty } from '../systems/Difficulty.js';
 import {
   pickEncounterForStop, resolveChoice, applyEncounterEffects,
@@ -48,11 +49,10 @@ const restroomItem = (gated) => ({
 const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
   const items = [
     { id: 'coffee',     label: 'COFFEE',           emoji: '☕',
-      cost: 7, desc: '−1% on every vice', payload: { reduceVices: 0.99 } },
+      cost: 10, desc: 'Raises your Alertness. Brewed at some point this week.',
+      payload: { coffee: true, reduceVices: 0.99, survivalDelta: { tiredness: -8 } } },
     { id: 'snooze',     label: 'TAKE A SNOOZE',    emoji: '😴',
       cost: 150, desc: 'Wipes all vice bars (instant — no ad watch)', payload: { reduceVices: 0 } },
-    { id: 'top_all_50', label: 'TOP UP ALL TO 50%', emoji: '⬆️',
-      cost: 300, desc: 'Every unlocked bar to ≥50 %', payload: { topAllTo: 0.5 } },
   ];
   // Vice unlocks are stored in the registry by ViceSystem.snapshotUnlocks
   // as a PLAIN OBJECT { sushi: true, burrito: true, gummies: true, ... },
@@ -64,13 +64,21 @@ const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
   };
   for (const id of Object.values(VICES)) {
     if (!isUnlocked(id)) continue;
+    // Gas-station food/drink: flat $25, fills the survival bars at HALF
+    // the road-sprite amounts (2026-07-16 owner economy pass).
+    const fx = ITEM_FX[id] ?? {};
+    const half = (v) => (v ? Math.round(v * 5) / 10 : 0);   // half, 1dp
+    const bits = [];
+    if (half(fx.h)) bits.push(`+${half(fx.h)} Drinks`);
+    if (half(fx.f)) bits.push(`+${half(fx.f)} Food`);
+    if (fx.t && fx.t < 0) bits.push(`+${half(-fx.t)} Alertness`);
     items.push({
       id:    `vice_${id}`,
       label: VICE_DISPLAY(id).toUpperCase(),
       icon:  VICE_TEX(id),
-      cost:  VICE_PRICE[id] ?? 200,
-      desc:  '+10 % to this bar (cap 80 %)',
-      payload: { viceTopUp: id, amount: 0.10 },
+      cost:  25,
+      desc:  bits.length ? `${bits.join(' · ')} (half a road bite)` : 'A nibble.',
+      payload: { survivalDelta: { hydration: half(fx.h), fullness: half(fx.f), tiredness: fx.t ? -half(-fx.t) : 0 } },
     });
   }
   return items;
@@ -99,15 +107,15 @@ function shopViceItems(shopKey, pickupCounts) {
   const out = [];
   for (const id of allow) {
     if (!pickupCounts || (pickupCounts[id] ?? 0) <= 0) continue;
-    const base = VICE_PRICE[id] ?? 200;
-    const cost = Math.round(base * SHOP_VICE_MARKUP);
+    const fx = ITEM_FX[id] ?? {};
+    const half = (v) => (v ? Math.round(v * 5) / 10 : 0);
     out.push({
       id:    `shopvice_${id}`,
       label: VICE_DISPLAY(id).toUpperCase(),
       icon:  VICE_TEX(id),
-      cost,
-      desc:  '+10% to this bar (markup vs PharmaBros)',
-      payload: { viceTopUp: id, amount: 0.10 },
+      cost:  25,
+      desc:  'Half a road bite, roadside prices.',
+      payload: { survivalDelta: { hydration: half(fx.h), fullness: half(fx.f), tiredness: fx.t ? -half(-fx.t) : 0 } },
     });
   }
   return out;
@@ -202,6 +210,16 @@ const SECTIONS = {
     items: [],
   },
 };
+
+// SECTIONS is mutated per visit (dynamic pricing, restrooms, shop vices…) —
+// but it's MODULE-level, so without a reset the mutations ACCUMULATED across
+// visits: every camp added another restroom row, dynamic items duplicated,
+// and a campfix disabled at one stop stayed disabled forever (2026-07-16
+// owner reports: "3 restroom options at AOK", "no repair at Easton at 6 HP").
+// Pristine per-section item lists, restored at the top of every create().
+const SECTIONS_PRISTINE = Object.fromEntries(
+  Object.entries(SECTIONS).map(([k, v]) => [k, Array.isArray(v.items) ? [...v.items] : v.items]),
+);
 
 // Landing tab order (brand placards).  dealer_acc / dealer_cars are
 // reached via the Dealer chooser, not the landing.
@@ -414,6 +432,9 @@ export class RestStopScene extends Phaser.Scene {
     const _sid = String(this._stop?.id ?? '');
     let _h = 0; for (let i = 0; i < _sid.length; i++) _h = (_h * 31 + _sid.charCodeAt(i)) | 0;
     this._restroomGated = (Math.abs(_h) % 2) === 0;
+    for (const _k of Object.keys(SECTIONS_PRISTINE)) {
+      if (Array.isArray(SECTIONS_PRISTINE[_k])) SECTIONS[_k].items = [...SECTIONS_PRISTINE[_k]];
+    }
     SECTIONS.vices.items = [...SECTIONS.vices.items, restroomItem(true)];
     SECTIONS.ambm.items  = [...viceItems(this.registry?.get?.('viceUnlocks')), restroomItem(true)];
 
@@ -422,20 +443,26 @@ export class RestStopScene extends Phaser.Scene {
     // (only at chargers — every other rest stop).  Pre-tax preview;
     // robbery roll happens on confirm.
     const _missingMi = Math.max(0, this._gasMaxMi - this._gasMi);
-    const _refuelCost = Math.max(1, Math.round(_missingMi * GAS_USD_PER_MI));
+    // Per-gallon price DRIFTS along the trip (±14%, deterministic per stop —
+    // hash of the stop id) around the base economy ($0.50/mi at 30 mpg =
+    // $15/gal base).  Shown to the penny; total = gallons × price.
+    const _basePerGal = GAS_USD_PER_MI * 30;
+    let _gh = 0; const _gsid = String(this._stop?.id ?? 'x');
+    for (let i = 0; i < _gsid.length; i++) _gh = (_gh * 33 + _gsid.charCodeAt(i)) | 0;
+    const _perGal = Math.round(_basePerGal * (1 + (((Math.abs(_gh) % 29) - 14) / 100)) * 100) / 100;
+    // Display gallons needed, rounded UP to the nearest 1/4 gal.
+    const _galRaw     = _missingMi / 30;
+    const _galDisplay = Math.ceil(_galRaw * 4) / 4;
+    const _refuelCost = Math.max(1, Math.round(_galDisplay * _perGal));
     const _chargeCost = Math.max(1, Math.round(_refuelCost * CHARGE_COST_FACTOR));
     const _isCharger  = hasCharger(this._stop?.id);
     const _vehFuel    = VEHICLES[this._vehicleId]?.fuel ?? 'gas';
-    // Display gallons needed, rounded UP to the nearest 1/4 gal.
-    // Game economy: $10 per 30 mi = $10/gal at 30 mpg, so 30 mi = 1 gal.
-    const _galRaw     = _missingMi / 30;
-    const _galDisplay = Math.ceil(_galRaw * 4) / 4;
     const gasItems = [];
     if (_missingMi > 0) {
       gasItems.push({
         id: 'refuel', label: '⛽  REFUEL',
         cost: _refuelCost,
-        desc: `Fill tank (${_galDisplay} gal / +${_missingMi} mi). 10% chance of robbery (-${Math.round(GAS_ROBBERY_FRAC*100)}% cash).`,
+        desc: `${_galDisplay} gal @ $${_perGal.toFixed(2)}/gal`,
         payload: { refuel: true, refuelMi: _missingMi },
       });
     } else {
@@ -463,24 +490,13 @@ export class RestStopScene extends Phaser.Scene {
       });
     }
 
-    // ── Quart of 710 Oil — +2 HP top-up.  "710" = "OIL" upside down. ──
-    const _vehMaxHp     = VEHICLES[this._vehicleId]?.hp ?? 100;
-    const _hpAtEntry    = this._durabilityAtEntry ?? _vehMaxHp;
-    const _hpAlreadyMax = _hpAtEntry >= _vehMaxHp;
-    if (_hpAlreadyMax) {
-      gasItems.push({
-        id: 'oil_710', label: '🛢  710 OIL',
-        cost: 0, desc: 'HP already maxed.',
-        payload: {},
-      });
-    } else {
-      gasItems.push({
-        id: 'oil_710', label: '🛢  ADD A QUART OF 710 OIL',
-        cost: 80,
-        desc: `+2 HP (capped at ${_vehMaxHp} max).`,
-        payload: { oil710: true },
-      });
-    }
+    // ── Pint of oil — knocks 5% off the engine heat (2026-07-16). ──
+    gasItems.push({
+      id: 'oil_710', label: '🛢  ADD PINT OF OIL',
+      cost: 20,
+      desc: 'Reduces engine heat by 5%.',
+      payload: { coolEngineFrac: 0.05 },
+    });
 
     SECTIONS.gas.items = gasItems;
 
@@ -720,10 +736,12 @@ export class RestStopScene extends Phaser.Scene {
           const _mi   = _left < 10 ? _left.toFixed(1) : String(Math.round(_left));
           return `${_icon(m)} ${m.targetName} · ${_mi} MI · $${m.payout.toLocaleString()}${_flags(m)}`;
         });
-        this.add.text(30, 100, `JOBS\n${_lines.join('\n')}`, {
+        // Lower-RIGHT corner (2026-07-16 owner request), right-aligned,
+        // anchored above the REP line.
+        this.add.text(SCREEN_W - 30, SCREEN_H - 44, `JOBS\n${_lines.join('\n')}`, {
           fontSize: '11px', fontFamily: IMPACT, color: '#9FE0FF',
-          stroke: '#000', strokeThickness: 3, lineSpacing: 3,
-        }).setOrigin(0, 0);
+          stroke: '#000', strokeThickness: 3, lineSpacing: 3, align: 'right',
+        }).setOrigin(1, 1);
       }
       // ── REPUTATION readout (Ch. 8 Phase 6) — per-type tier + progress
       // toward the next rung ("📦 Known 5/8"), matching the payoff popup's
@@ -740,11 +758,11 @@ export class RestStopScene extends Phaser.Scene {
           return `${_repIcon[t]} ${tier.name} ${next ? `${n}/${next.minDone}` : n}`;
         });
       if (_repBits.length) {
-        this.add.text(30, 100 + (_jobs.length ? (_jobs.length + 1) * 14 + 4 : 0),
+        this.add.text(SCREEN_W - 30, SCREEN_H - 28,
           `REP  ${_repBits.join(' · ')}`, {
             fontSize: '11px', fontFamily: IMPACT, color: '#FFD23D',
-            stroke: '#000', strokeThickness: 3,
-          }).setOrigin(0, 0);
+            stroke: '#000', strokeThickness: 3, align: 'right',
+          }).setOrigin(1, 1);
       }
     }
 
@@ -923,7 +941,7 @@ export class RestStopScene extends Phaser.Scene {
       this._sectionContainers[key] = container;
       this._sectionScroll[key]     = 0;
       const itemCount = SECTIONS[key].items.length;
-      const colsK = key === 'vices' ? 2 : 1;
+      const colsK = (key === 'vices' || itemCount > 6) ? 2 : 1;
       const rowsK = Math.ceil(itemCount / colsK);
       const itemH = Math.min(56, Math.max(30, (this._contentH - (rowsK - 1) * 6) / rowsK));
       this._sectionContentH[key] = rowsK * (itemH + 6) - 6;
@@ -1063,8 +1081,13 @@ export class RestStopScene extends Phaser.Scene {
       mile:    this._odometer ?? 0,
       heat:    this._stars ?? 0,
     });
-    if (enc) this._showEncounterCard(enc, save, seen);
-    else     this._maybeShowMissionCard();
+    if (enc) {
+      // Remember the welcome NPC so the mission-offer card that follows is
+      // presented by the SAME character (2026-07-16 owner: no NPC swap
+      // between the greeting and the job pitch).
+      this._welcomeNpc = { portrait: enc.portrait, speaker: enc.speaker };
+      this._showEncounterCard(enc, save, seen);
+    } else this._maybeShowMissionCard();
   }
 
   /** Show the queued mission-offer conversation, once per visit. */
@@ -1095,11 +1118,13 @@ export class RestStopScene extends Phaser.Scene {
     }) ?? [];
     const open   = offers.filter(o => o.status === 'offered');
     if (!open.length) return null;
-    const npcName = open[0].npcName ?? 'Shady Contact';
-    // Deterministic per-stop portrait from the existing NPC pool.
+    // Same character as the welcome encounter when one fired this visit
+    // (2026-07-16 owner: no NPC swap between greeting and job pitch);
+    // hash-picked stable contact otherwise.
     const portraits = ['long_haul_mike', 'tow_driver', 'farm_worker', 'street_weirdo'];
     let h = 0; for (let i = 0; i < String(stopId).length; i++) h = (h * 31 + String(stopId).charCodeAt(i)) | 0;
-    const portrait = portraits[Math.abs(h) % portraits.length];
+    const portrait = this._welcomeNpc?.portrait ?? portraits[Math.abs(h) % portraits.length];
+    const npcName  = this._welcomeNpc?.speaker ?? open[0].npcName ?? 'Shady Contact';
 
     // "The catch" line per offer, from its terms.
     const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -1538,8 +1563,10 @@ export class RestStopScene extends Phaser.Scene {
 
   _buildTabContent(key, x, y, w, h) {
     const items = SECTIONS[key].items;
-    // Vices section needs 2 columns to fit 12 entries; others stay 1-col.
-    const cols  = key === 'vices' ? 2 : 1;
+    // TWO columns whenever one column would squeeze rows unreadably thin
+    // (2026-07-16: AM/BM + camp menus were cutting descriptions off) —
+    // fewer, TALLER buttons beat many crushed ones.
+    const cols  = (key === 'vices' || items.length > 6) ? 2 : 1;
     const rows  = Math.ceil(items.length / cols);
     const cellW = (w - (cols - 1) * 6) / cols;
     const cellH = Math.min(56, Math.max(30, (h - (rows - 1) * 6) / rows));
@@ -1643,7 +1670,7 @@ export class RestStopScene extends Phaser.Scene {
       if (item.payload?.restroom && item.payload.gated
           && this._restroomGated && !this._boughtSomething) {
         this._flash(bg, 0xFF4444);
-        this._setStatus('🚻 CUSTOMERS ONLY — buy something first!', '#FF6666', true);
+        this._setStatus('🚻 CUSTOMERS ONLY', '#FF6666', true);
         return;
       }
       if (effectiveCost > 0) {
@@ -1763,7 +1790,7 @@ export class RestStopScene extends Phaser.Scene {
         this._score = Math.max(0, this._score - loss);
         this._stats?.recordRobbery(loss);
         this._refreshScore();
-        this._setStatus?.(`💀 ROBBED at the pump! −$${loss}`, '#FF4444');
+        this._setStatus?.('💀 You were robbed when counting your cash', '#FF4444', true);
       }
     }
     if (p.charge) {
@@ -1787,12 +1814,11 @@ export class RestStopScene extends Phaser.Scene {
       const target = Math.round(vehMax * 0.65);
       this._purchases.durabilityOnResume = Math.max(this._purchases.durabilityOnResume ?? 0, target);
     }
-    if (p.oil710) {
-      // +2 HP, capped at the vehicle's max.  Stacks if bought multiple
-      // times in one stop.
-      const vehMax = VEHICLES[this._vehicleId]?.hp ?? 100;
-      const cur    = this._purchases.durabilityOnResume ?? this._durabilityAtEntry ?? vehMax;
-      this._purchases.durabilityOnResume = Math.min(vehMax, cur + 2);
+    if (p.coolEngineFrac) {
+      // Pint of oil: −5% engine heat per pint; stacks additively (two pints
+      // = −10%).  GameScene resume multiplies _engineTemp by (1 − total).
+      this._purchases.coolEngineFrac =
+        Math.min(0.9, (this._purchases.coolEngineFrac ?? 0) + p.coolEngineFrac);
     }
     if (p.tractionTires) {
       // Legacy payload (global flag) — kept so existing call sites don't
@@ -1865,9 +1891,14 @@ export class RestStopScene extends Phaser.Scene {
       const cur = this._purchases.viceTopUps[p.viceTopUp] ?? 0;
       this._purchases.viceTopUps[p.viceTopUp] = Math.min(0.80, cur + (p.amount ?? 0.10));
     }
-    if (p.topAllTo) {
-      // "Top all to N" — every unlocked bar lifts to >= this threshold.
-      this._purchases.topAllTo = Math.max(this._purchases.topAllTo ?? 0, p.topAllTo);
+    if (p.survivalDelta) {
+      // Shop food/drink/coffee → survival bars (same channel the encounter
+      // food uses); mini bars redraw immediately so the buy is VISIBLE.
+      const d = (this._purchases.survivalDelta ??= {});
+      for (const k of ['hydration', 'fullness', 'tiredness']) {
+        if (p.survivalDelta[k]) d[k] = (d[k] ?? 0) + p.survivalDelta[k];
+      }
+      this._drawSurvivalMini?.();
     }
     if (typeof p.reduceVices === 'number') {
       // Multiplier on every vice bar at resume.  Multiple buys multiply

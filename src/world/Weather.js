@@ -76,10 +76,13 @@ export const Weather = {
    *  weather window so callers can safely multiply unconditionally. */
   severity(mile) {
     if (!Difficulty.weather()) return 1;
-    // Rain ramps HARD: ~2.0 by mile 35, peaking 2.4 by mile 37 and holding
-    // — so it's a heavy, wipers-needed downpour through the back half of
-    // the rain window (per user: "very strong after mile 35").
-    if (mile >= 30 && mile < 40) return 1 + 1.4 * Math.min(1, (mile - 30) / 7);
+    // Rain ramps, then WALLS at mid-North Bend (2026-07-16 owner spec: "gets
+    // worse halfway through North Bend — almost impossible to see without
+    // wipers"): 1.0 → 2.0 approaching mile 32, then a DOUBLE-strength storm
+    // (up to 4.8) from 32 to the snow handoff.  The windshield-drop load and
+    // streak density scale straight off this; callers clamp what they must.
+    if (mile >= 24 && mile < 32) return 1 + 1.0 * ((mile - 24) / 8);
+    if (mile >= 32 && mile < 40) return 2.0 + 2.8 * Math.min(1, (mile - 32) / 4);
     if (mile >= 40 && mile < 88) return 1 + 1.4 * ((mile - 40) / 48);
     return 1;
   },

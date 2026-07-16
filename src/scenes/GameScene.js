@@ -29,7 +29,7 @@ import { ViceSystem }    from '../systems/ViceSystem.js';
 import { SurvivalSystem } from '../systems/SurvivalSystem.js';
 import { EffectsSystem } from '../systems/EffectsSystem.js';
 import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
-import { CopSystem }     from '../systems/CopSystem.js';
+import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
 import { Difficulty }    from '../systems/Difficulty.js';
 import { TimeOfDay }     from '../world/TimeOfDay.js';
@@ -662,6 +662,7 @@ export class GameScene extends Phaser.Scene {
     this._survLabels = null; this._survFxGfx = null; this._bladderTxt = null;
     this._engineTempTxt = null; this._engineTempBounds = null;
     this._vigDark = null; this._vigBrown = null;
+    this._snowCueText = null; this._snowCueShown = null; this._snowCueWasSteering = false;
     this._survABounds = null; this._survBBounds = null;
     // Analog gas gauge — cached label Texts (E/½/F/⛽) follow the same
     // restart-safety rule; needle state resets so it re-seats on the new tank.
@@ -677,6 +678,11 @@ export class GameScene extends Phaser.Scene {
     if (this._resumeFromStop || this._resumeFromPosition != null) {
       const _ss = this.registry.get('save')?.get?.('survivalState');
       if (_ss) this.survival.restore(_ss);
+      const _bf = this.registry.get('save')?.get?.('activeBuffs');
+      if (Array.isArray(_bf) && _bf.length) {
+        this._activeBuffs = [..._bf];
+        // _recomputeUpgradeFx runs later in create() and merges these.
+      }
     }
     // Hydrate persistent vice unlocks from the Phaser registry — survives
     // arrest/death/respawn within the same play session.  See "viceUnlocks"
@@ -818,12 +824,11 @@ export class GameScene extends Phaser.Scene {
         const n = Math.round(amount * 10) / 10;
         const txt = (n === Math.floor(n)) ? `-${n.toFixed(0)}` : `-${n.toFixed(1)}`;
         this.hudHPDamage.setText(txt).setVisible(true);
-        // Position just on the CENTER side of the live HP text — right
-        // of HP in left-handed mode, left of HP otherwise.
+        // Position just BELOW the live HP text (y36, set at build) —
+        // aligned to HP's outer edge for the current handedness.
         const hb = this.hudHP?.getBounds?.();
         if (hb) {
-          const GAP = 8;
-          this.hudHPDamage.x = this._leftHanded ? (hb.right + GAP) : (hb.left - GAP);
+          this.hudHPDamage.x = this._leftHanded ? hb.left : hb.right;
         }
         this._hpDamageUntil = (this.time?.now ?? 0) + 1500;
       }
@@ -2006,17 +2011,6 @@ export class GameScene extends Phaser.Scene {
           }
           // "Top all to N" — every UNLOCKED bar lifts to >= N.  Use
           // this.vices.unlocked (already hydrated from registry above)
-          // as the authoritative source — the previous version read the
-          // registry directly and checked `instanceof Set`, but the
-          // registry stores unlocks as a plain object, so the check
-          // always fell through to VICE_CONFIG which only marks
-          // alcohol/weed as default-unlocked.  Result: nothing topped up.
-          if (buys.topAllTo && this.vices?.levels) {
-            for (const id of Object.keys(this.vices.levels)) {
-              if (!this.vices.unlocked?.[id]) continue;
-              this.vices.levels[id] = Math.max(this.vices.levels[id] ?? 0, buys.topAllTo);
-            }
-          }
           // Sex-worker dirt-on-a-politician buff — caps cops at 2★ for
           // the next N miles after resume.  Tracked on this.cops so
           // CopSystem can clamp star-add operations against the cap.
@@ -2106,6 +2100,10 @@ export class GameScene extends Phaser.Scene {
           // Rest-stop ENCOUNTER effects (data-driven cards): partial fuel top-up
           // and party-clock delta (+ or −).  Kept separate from the full-refuel
           // flag + visit penalty so encounter rewards/costs stack cleanly.
+          // Pint(s) of oil — knock a fraction off the current engine heat.
+          if (buys.coolEngineFrac && typeof this._engineTemp === 'number') {
+            this._engineTemp = Math.max(0, this._engineTemp * (1 - buys.coolEngineFrac));
+          }
           if (typeof buys.addGasMi === 'number' && this.player) {
             this.player.gasMi = Math.max(0,
               Math.min(this.player.gasMaxMi ?? Infinity, (this.player.gasMi ?? 0) + buys.addGasMi));
@@ -2406,13 +2404,20 @@ export class GameScene extends Phaser.Scene {
       const overWiper = !!wb && !!this.hudWiperBtn?.visible
         && sx >= wb.x && sx <= wb.x + wb.w
         && p.y >= wb.y && p.y <= wb.y + wb.h;
+      // Mission chip — sits in the center-tap weapon band since the 2026-07-16
+      // default layout, so an info tap on it was FIRING the top weapon
+      // (owner: "it rolled coal").  Swallow taps on its live bounds.
+      const mcb = this._missionChipBounds;
+      const overMissionChip = !!mcb
+        && sx >= mcb.x && sx <= mcb.x + mcb.w
+        && p.y >= mcb.y && p.y <= mcb.y + mcb.h;
       if (overMirror) this._setMirrorZoom(this._mirrorHoldZoom ?? 3.0);
       // If the gesture STARTS on a button band, suppress steering
       // for the entire down-up cycle.  Without this, classic-mode
       // pointermove would re-evaluate x-position on every finger
       // jitter and latch a turn while the player is just holding
       // Pause / FF / Genre.
-      if (overTopButtons || overWeaponCol || overDisguise || overPedals || overWiper) {
+      if (overTopButtons || overWeaponCol || overDisguise || overPedals || overWiper || overMissionChip) {
         this._noSteerThisGesture = true;
         return;
       }
@@ -2834,13 +2839,14 @@ export class GameScene extends Phaser.Scene {
   _updateSnowSteerCue() {
     const inSnow = (this._snowSteerRamp?.() ?? 0) > 0;
     const inWind = (this._windStrength?.() ?? 0) > 0;
-    const active = (inSnow || inWind)
-                && !this._awaitingStart && !this._ctrlEditMode && this._introDone;
+    const active = !this._awaitingStart && !this._ctrlEditMode && this._introDone;
     if (!this._snowCueText) {
-      if (!active) return;   // don't build it until the first snow/wind frame
+      if (!(inSnow || inWind) || !active) return;   // build on first snow/wind frame
+      // 2× size (17→34px) per 2026-07-16 owner spec; shows for ONE MILE then
+      // fades over the next ~0.4 mi instead of squatting on the screen.
       this._snowCueText = this.add.text(SCREEN_W / 2, 104, '', {
-        fontSize: '17px', fontFamily: IMPACT, color: '#BFE6FF',
-        stroke: '#012033', strokeThickness: 4, align: 'center',
+        fontSize: '34px', fontFamily: IMPACT, color: '#BFE6FF',
+        stroke: '#012033', strokeThickness: 6, align: 'center',
       }).setOrigin(0.5).setDepth(70).setVisible(false);
       this._addHudObjs(this._snowCueText);
     }
@@ -2851,9 +2857,30 @@ export class GameScene extends Phaser.Scene {
     if (inWind && mode === 'flappy') { label = '💨 CROSSWIND — HOLD TO FIGHT IT'; color = '#FFE08A'; }
     else if (inSnow && mode === 'tilt')          { label = '📱 SNOW — TILT TO STEER'; color = '#BFE6FF'; }
     else if (inSnow && !this._tiltAttached)      { label = '❄️ SNOW — SLIPPERY';      color = '#E6F2FF'; }
-    if (!label) { if (cue.visible) cue.setVisible(false); return; }
-    if (cue.text !== label) cue.setText(label);
-    if (cue.style?.color !== color) cue.setColor(color);
+    // Steering-scheme HANDOFF prompt: when the snow/tilt zone ends, tell the
+    // player they're back on their normal scheme (one mile + fade, like the
+    // entry cue) instead of the tilt cue just vanishing silently.
+    if (!label && this._snowCueWasSteering) {
+      this._snowCueWasSteering = false;
+      this._snowCueShown = { text: '🛞 NORMAL STEERING', color: '#B7FFC5', startMile: this._odometer ?? 0 };
+      cue.setText(this._snowCueShown.text).setColor(this._snowCueShown.color);
+    } else if (label) {
+      this._snowCueWasSteering = (label.includes('TILT') || label.includes('SNOW'));
+      if (this._snowCueShown?.text !== label) {
+        this._snowCueShown = { text: label, color, startMile: this._odometer ?? 0 };
+        cue.setText(label).setColor(color);
+      }
+    }
+    const shown = this._snowCueShown;
+    if (!shown) { if (cue.visible) cue.setVisible(false); return; }
+    const age = (this._odometer ?? 0) - shown.startMile;
+    const alpha = age <= 1 ? 1 : Math.max(0, 1 - (age - 1) / 0.4);
+    if (alpha <= 0) {
+      this._snowCueShown = null;
+      if (cue.visible) cue.setVisible(false);
+      return;
+    }
+    cue.setAlpha(alpha);
     if (!cue.visible) cue.setVisible(true);
   }
 
@@ -3673,7 +3700,9 @@ export class GameScene extends Phaser.Scene {
         else if ((this._odometer ?? 0) - this._bladderBurstMile >= 2) {
           this._partyClockSec = Math.max(0, (this._partyClockSec ?? 0) - 30);
           this._showPopup?.('💦 COULDN\'T HOLD IT — pulled over!\n−30 seconds', '#FF5C7A');
-          this.survival.bladder = 0;
+          // Soiling yourself only relieves 40% of the bladder (2026-07-16) —
+          // you still need a real restroom to empty out.
+          this.survival.bladder = Math.max(0, this.survival.bladder * 0.6);
           this._bladderBurstMile = null;
         }
       } else {
@@ -4159,6 +4188,14 @@ export class GameScene extends Phaser.Scene {
           ? `⚡ TOO SLOW — ${_m.cargo} missed the window. Job failed.`
           : `📦 TOO LATE — ${_m.cargo} spoiled. Job failed.`, '#FF4444', 4);
       }
+      // Drove PAST a job's destination (one-way route = job now impossible):
+      // fail it loudly and free the type slot for the next stop's offers.
+      const _mMiss = this.missions?.checkMissedTargets?.(this._odometer) ?? [];
+      for (const _m of _mMiss) {
+        this._showPopup?.(`❌ MISSION FAILED — you passed ${_m.targetName}.\n`
+          + `${_m.type === 'passenger' ? (_m.passenger?.name ?? 'Your rider') + ' is not pleased.' : 'No payout.'}`,
+          '#FF4444', 5);
+      }
       // Fugitive passengers bail past the heat cap; every passenger tracks
       // peak stars for the thrill-seeker tip.  No-op without a passenger.
       const _mHot = this.missions?.checkHeat?.(this.cops?.starDisplay ?? 0) ?? [];
@@ -4534,30 +4571,30 @@ export class GameScene extends Phaser.Scene {
     // touch Phaser display state every frame.
     if (this._appliedLeftHanded !== this._leftHanded) {
       const lh  = !!this._leftHanded;
-      const mx_  = (x) => lh ? (SCREEN_W - x) : x;
-      const mox_ = (o) => lh ? (1 - o) : o;
+      const mx_  = (x) => lh ? x : (SCREEN_W - x);
+      const mox_ = (o) => lh ? o : (1 - o);
       // Corner-readout coords — MUST mirror the _buildHUD defaults exactly
       // (this block also fires on the FIRST frame, since _appliedLeftHanded
       // starts undefined; stale coords here used to pile the mult onto the
       // score at the old centre spot, which made the mult ungrabbable in the
-      // controls editor).
-      const READOUT_EDGE_X_  = SCREEN_W - 12 + (C.HUD_OFFSET_X ?? 0);   // speed side
-      const READOUT_CASH_X_  = SCREEN_W - READOUT_EDGE_X_;              // opposite edge
-      const READOUT_MULT_X_  = READOUT_CASH_X_ + 88;
-      const READOUT_CLOCK_X_ = READOUT_MULT_X_ + 60;
-      // Cash-side cluster: Clock, Mult, Cash, HP, HPDamage.
-      if (this.hudPartyClock) { this.hudPartyClock.x = mx_(READOUT_CLOCK_X_); this.hudPartyClock.setOrigin(mox_(0), 0); }
-      if (this.hudMult)       { this.hudMult.x       = mx_(READOUT_MULT_X_);  this.hudMult.setOrigin(mox_(0), 0); }
-      if (this.hudScore)      { this.hudScore.x      = mx_(READOUT_CASH_X_);  this.hudScore.setOrigin(mox_(0), 0); }
-      if (this.hudHP)         { this.hudHP.x         = mx_(READOUT_CASH_X_);  this.hudHP.setOrigin(mox_(0), 0); }
+      // controls editor).  Owner-space coords (default left-handed):
+      // money/mult/clock centered x200, HP left-aligned x564, MPH x634.
+      const READOUT_CASH_X_  = 200;
+      const READOUT_HP_X_    = 564;
+      const READOUT_SPEED_X_ = 634;
+      // Money-side cluster: Clock, Mult, Cash (all center-anchored), HP, HPDamage.
+      if (this.hudPartyClock) { this.hudPartyClock.x = mx_(READOUT_CASH_X_); this.hudPartyClock.setOrigin(0.5, 0); }
+      if (this.hudMult)       { this.hudMult.x       = mx_(READOUT_CASH_X_); this.hudMult.setOrigin(0.5, 0); }
+      if (this.hudScore)      { this.hudScore.x      = mx_(READOUT_CASH_X_); this.hudScore.setOrigin(0.5, 0); }
+      if (this.hudHP)         { this.hudHP.x         = mx_(READOUT_HP_X_);   this.hudHP.setOrigin(mox_(0), 0); }
       if (this.hudHPDamage)   { this.hudHPDamage.setOrigin(mox_(0), 0); }
-      // Speed-side cluster: Speed + MPH sublabel.  The gas gauge, survival
+      // Speed cluster: Speed + MPH sublabel.  The gas gauge, survival
       // bars, mission chip and weapon row recompute their handed bases
       // themselves each frame in their own draw passes.
-      if (this.hudSpeed)      { this.hudSpeed.x      = mx_(READOUT_EDGE_X_);  this.hudSpeed.setOrigin(mox_(1), 0); }
-      if (this._mphSub)       { this._mphSub.x       = mx_(READOUT_EDGE_X_);  this._mphSub.setOrigin(mox_(1), 0); }
+      if (this.hudSpeed)      { this.hudSpeed.x      = mx_(READOUT_SPEED_X_); this.hudSpeed.setOrigin(mox_(0), 0); }
+      if (this._mphSub)       { this._mphSub.x       = mx_(READOUT_SPEED_X_); this._mphSub.setOrigin(mox_(0), 0); }
       // Wanted stars ride the weapon-row side of bottom-center.
-      if (this.hudStars)      { this.hudStars.x      = mx_(310); }
+      if (this.hudStars)      { this.hudStars.x      = mx_(482); }
       this._applyTopRowHandedness?.();
       this._applyPedalHandedness?.();
       this._appliedLeftHanded = this._leftHanded;
@@ -4979,7 +5016,7 @@ export class GameScene extends Phaser.Scene {
       const _t = (this.time?.now ?? 0) * 0.001;
       // Two detuned sines → a slow, non-repeating wander (not a metronome).
       const wander = (Math.sin(_t * 0.62) + 0.5 * Math.sin(_t * 0.27 + 1.3)) / 1.5;
-      const SNOW_DRIFT_MAX = 0.40;
+      const SNOW_DRIFT_MAX = 0.20;   // halved 2026-07-16 ("50% less erratic in snow")
       effectiveSteerDir = Math.max(-1, Math.min(1,
         effectiveSteerDir + wander * SNOW_DRIFT_MAX * _snowRamp));
     }
@@ -6454,7 +6491,15 @@ export class GameScene extends Phaser.Scene {
       for (const sp of seg.sprites) {
         if (sp.type !== 'vice-pending') continue;
         const _avail = this._availableVices();
-        sp.type = _avail[(Math.random() * _avail.length) | 0];
+        // Weighted rarity (2026-07-16): food/drink most common, caffeinated
+        // items noticeably rarer (caffeine pills MUCH rarer than water),
+        // meds rare.  Weapons/powerups spawn on their own channels.
+        const _VICE_W = { water: 30, burrito: 22, sushi: 18, slushie: 14,
+                          gummies: 12, coldbrew: 10, caffeine: 4, dramamine: 4 };
+        let _tot = 0; for (const v of _avail) _tot += (_VICE_W[v] ?? 8);
+        let _r = Math.random() * _tot;
+        sp.type = _avail[_avail.length - 1];
+        for (const v of _avail) { _r -= (_VICE_W[v] ?? 8); if (_r < 0) { sp.type = v; break; } }
       }
     }
   }
@@ -11625,7 +11670,9 @@ export class GameScene extends Phaser.Scene {
     }
     const inten = Weather.intensity?.(mile) ?? 0;
     const sev   = Weather.severity?.(mile)  ?? 1;
-    const eff   = Math.max(0, Math.min(2.4, inten * sev));
+    // Rain may hit sev 4.8 in the North Bend storm wall — let the falling-
+    // streak layer double too (snow still tops out at its old 2.4 feel).
+    const eff   = Math.max(0, Math.min(state === 'rain' ? 4.8 : 2.4, inten * sev));
     // dt for particle update — use the same Phaser delta the scene runs at.
     const dt = (this.game?.loop?.delta ?? 16) / 1000;
     // Wide-phone bleed: weatherFxGfx is a world-layer graphics (main cam
@@ -12182,7 +12229,7 @@ export class GameScene extends Phaser.Scene {
     // (alpha fade) so they wash out into the haze instead of staying crisp.
     const _fogP = Weather.fogParams((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
     const nearCull = cockpit ? 100 : 300;
-    const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1) => {
+    const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1, exitT = 0) => {
       if (relZ < nearCull || relZ > 76000 || alphaMul <= 0.01) return;
       // alphaMul folds a per-vehicle fade (e.g. a smoked cop's fleeFade)
       // into the same factor as the fog dissolve, so sprite + shadow +
@@ -12198,7 +12245,7 @@ export class GameScene extends Phaser.Scene {
       // lanes while collision stayed out at ±0.75 — the long-standing
       // "drive through cars sitting between lanes" bug.  Sprite +
       // collision now both use the real laneOffset.
-      const proj = this.road.getVehicleProjection(relZ, laneOffset);
+      let proj = this.road.getVehicleProjection(relZ, laneOffset);
       if (!proj || proj.sw < 2) return;
       const useTex = texKey || 'npc_car_white';
       const tex = this.textures.get(useTex)?.source?.[0];
@@ -12209,6 +12256,18 @@ export class GameScene extends Phaser.Scene {
       // fill the screen — clamp so it never renders past ~player-car size.
       if (maxW && targetW > maxW) targetW = maxW;
       const targetH = targetW * (baseH / baseW);
+      // Synthetic bottom-edge exit (fleeing/smoked cops).  The caller has
+      // already CLAMPED relZ at FLEE_EXIT_HOLD_REL (the projection floor —
+      // getVehicleProjection can't project nearer/behind), so here we drive
+      // the sprite's screen-Y downward past SCREEN_H by the exit progress:
+      // the cruiser holds its near-field size and visibly sinks off the
+      // bottom of the screen instead of blinking out mid-frame.  Shadow,
+      // outline, fog glow and ghost all read the shifted proj.sy so the
+      // whole stack slides together.
+      if (exitT > 0) {
+        const sink = Math.pow(Math.min(1, exitT), 1.15);
+        proj = { ...proj, sy: proj.sy + sink * (SCREEN_H + targetH * 1.6 - proj.sy) };
+      }
       // Cars inside a curving tunnel paint above the shell so the curb
       // does not cover cars on the exposed pavement. Cull only when the
       // visible body is actually behind a nearer concrete side wall.
@@ -12471,10 +12530,19 @@ export class GameScene extends Phaser.Scene {
       // able to clearly see who's on you).
       const copScale = cop.parked ? 1.5 : 1.4;
       const maxCopW  = (this.playerSprite?.displayWidth || 78) * 1.3;
-      // fleeFade: smoked/scattered cops alpha OUT over their retreat's
-      // last second (shrinking with distance the whole way) instead of
-      // popping off the road when the flee timer splices them.
-      place(cop.relativePos, cop.laneOffset, 0xFFFFFF, copScale, 0, texKey, true, maxCopW, 'cop', cop.colorSet ?? 'police', cop.fleeFade ?? 1);
+      // Smoked/scattered (fleeing) cops take the SYNTHETIC BOTTOM-EDGE EXIT:
+      // once their rel falls toward the projection floor the draw depth is
+      // clamped at FLEE_EXIT_HOLD_REL (the last reliably-projectable depth)
+      // and place() slides the sprite's screen-Y down past SCREEN_H by
+      // fleeExit — the cruiser grows to near-field size, sinks off the
+      // bottom of the screen and only THEN fades out (alpha hits 0 at exit
+      // complete, never a mid-screen blink-out).
+      const exitT   = cop.fleeing ? (cop.fleeExit ?? 0) : 0;
+      const drawRel = exitT > 0 ? Math.max(cop.relativePos, FLEE_EXIT_HOLD_REL) : cop.relativePos;
+      const copFa   = exitT > 0
+        ? Math.max(0, Math.min(1, (1 - exitT) / 0.3))   // fade only over the exit's last stretch
+        : (cop.fleeFade ?? 1);
+      place(drawRel, cop.laneOffset, 0xFFFFFF, copScale, 0, texKey, true, maxCopW, 'cop', cop.colorSet ?? 'police', copFa, exitT);
     }
 
     // Player tire shadow — anchored to sprite.y (the actual on-screen
@@ -12599,8 +12667,17 @@ export class GameScene extends Phaser.Scene {
 
     // Cop flashing light bars stay on top of everything else.
     for (const cop of copsForRender) {
-      const proj = this.road.getVehicleProjection(cop.relativePos, cop.laneOffset);
+      // Mirror the body's synthetic bottom-edge exit (clamped depth +
+      // downward screen shift) so a smoked cruiser's light bar stays glued
+      // to the car as it sinks off the bottom of the screen.
+      const _lbExit = cop.fleeing ? (cop.fleeExit ?? 0) : 0;
+      const _lbRel  = _lbExit > 0 ? Math.max(cop.relativePos, FLEE_EXIT_HOLD_REL) : cop.relativePos;
+      let proj = this.road.getVehicleProjection(_lbRel, cop.laneOffset);
       if (!proj || proj.sw < 6) continue;
+      if (_lbExit > 0) {
+        const sink = Math.pow(Math.min(1, _lbExit), 1.15);
+        proj = { ...proj, sy: proj.sy + sink * (SCREEN_H + proj.sw * 1.2 - proj.sy) };
+      }
       // Clamp to the same on-screen size cap as the cruiser BODY (see the
       // cop render loop) so the light bar scales with the capped car instead
       // of ballooning off a close cop's raw projection (giant-lightbar bug).
@@ -12608,7 +12685,9 @@ export class GameScene extends Phaser.Scene {
       const maxCopW  = (this.playerSprite?.displayWidth || 78) * 1.3;
       // Light bar fades with the fleeing cruiser body — no lingering bar
       // after a smoked cop's sprite has alpha'd out.
-      const _lbFa = cop.fleeFade ?? 1;
+      const _lbFa = _lbExit > 0
+        ? Math.max(0, Math.min(1, (1 - _lbExit) / 0.3))
+        : (cop.fleeFade ?? 1);
       if (_lbFa <= 0.01) continue;
       const w = Math.min(proj.sw, maxCopW / copScale), x = proj.sx, y = proj.sy - w * 0.55;
       g.fillStyle(0x111111, _lbFa); g.fillRect(x - w * 0.32, y, w * 0.64, w * 0.10);
@@ -14031,6 +14110,11 @@ export class GameScene extends Phaser.Scene {
         if (used >= pool.length) break;
         const s = pool[used++];
         if (s.texture.key !== texKey) s.setTexture(texKey);
+        // Caffeine pills read too much like water at road distance
+        // (2026-07-16) — give the sprite itself a violet cast to match its
+        // purple halo.  Pooled sprites must clear the tint for everyone else.
+        if (sp.type === 'caffeine') s.setTint(0xC9A6FF);
+        else if (s.isTinted) s.clearTint();
         // Preserve each image's original aspect ratio. We size each so
         // the LARGEST dimension equals targetMax — so all pickups appear
         // at "roughly the same size" without distorting any of them.
@@ -14288,61 +14372,67 @@ export class GameScene extends Phaser.Scene {
   _buildHUD() {
     const d = 20;
 
-    // Handedness helpers — when `_leftHanded`, mirror x-coordinates and
-    // origin-x anchors so the right-side stack (HP, gas, speed,
-    // weapons) lands on the left and the vice bars land on the right.
-    // Music controls, score/clock/dist, and centre HUD stay put.
+    // Handedness helpers — coords below are written in OWNER SPACE (the
+    // default LEFT-handed rendering, measured from Brendan's Customize
+    // Controls screenshot 2026-07-16).  When handedness flips to RIGHT,
+    // mx/mox mirror the whole arrangement across SCREEN_W/2.
+    // NOTE: the live re-mirror block in update() (~line 4535) repeats
+    // these coords — keep the two in LOCKSTEP or the layout is undone
+    // on frame 1.
     const lh  = !!this._leftHanded;
-    const mx  = (x) => lh ? (SCREEN_W - x) : x;
-    const mox = (o) => lh ? (1 - o) : o;
+    const mx  = (x) => lh ? x : (SCREEN_W - x);
+    const mox = (o) => lh ? o : (1 - o);
+    const off = C.HUD_OFFSET_X ?? 0;
 
-    // ── Corner readouts (owner default layout, 2026-07-15) ────────────
-    // MPH hugs the dominant-side top edge (LEFT in default left-handed
-    // mode) just under the top-row buttons; Cash + HP hug the opposite
-    // edge; Mult (and the hidden Clock) sit inboard of Cash on the same
-    // row.  READOUT_EDGE_X folds in HUD_OFFSET_X so the cluster hugs the
-    // PHYSICAL screen edge on wide phones; mx()/mox() mirror the whole
-    // arrangement when handedness flips.
-    const READOUT_EDGE_X  = SCREEN_W - 12 + (C.HUD_OFFSET_X ?? 0);   // speed side
-    const READOUT_CASH_X  = SCREEN_W - READOUT_EDGE_X;               // opposite edge
-    const READOUT_TOP_Y   = 60;                                      // under the button row
-    // While the party-clock readout is hidden (C.SHOW_PARTY_CLOCK=false,
-    // mechanics unaffected) the mult takes over the clock's slot.
-    const READOUT_MULT_X  = READOUT_CASH_X + 88;
-    const READOUT_CLOCK_X = READOUT_MULT_X + 60;
-    this.hudPartyClock = this.add.text(mx(READOUT_CLOCK_X), READOUT_TOP_Y, '⏱  --:--', {
+    // ── Pedal columns (fixed — NOT handedness-mirrored, like before) ──
+    // BRAKE hugs the bottom-left physical corner (partly in the wide-phone
+    // margin band, centre x−13 → spans −48…22); ACCEL is its exact mirror
+    // (centre 813).  On desktop (HUD_OFFSET_X=0) both clamp fully
+    // on-screen (left edge ≥ 2).  Computed HERE (before the readouts) so
+    // the mile/town readout can clamp against ACCEL's live edge.
+    this._brakePedalX = Math.max(-13, 37 - off);
+    this._accelPedalX = SCREEN_W - this._brakePedalX;
+
+    // ── Corner readouts (owner default layout, 2026-07-16) ────────────
+    // MONEY sits top-center-left (centered x200), MULT directly below it;
+    // HP + MPH sit right of the mirror; the hidden party clock parks
+    // under the mult.
+    const READOUT_CASH_X  = 200;                       // money/mult center
+    const READOUT_TOP_Y   = 10;
+    const READOUT_HP_X    = 564;                       // right of the mirror
+    const READOUT_SPEED_X = 634;                       // right of HP
+    this.hudPartyClock = this.add.text(mx(READOUT_CASH_X), 68, '⏱  --:--', {
       fontSize: '14px', fontFamily: IMPACT,
       color: '#FFFFFF', stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(mox(0), 0).setDepth(d).setVisible(C.SHOW_PARTY_CLOCK);
-    this.hudMult = this.add.text(mx(READOUT_MULT_X), READOUT_TOP_Y + 4, '', {
+    }).setOrigin(0.5, 0).setDepth(d).setVisible(C.SHOW_PARTY_CLOCK);
+    this.hudMult = this.add.text(mx(READOUT_CASH_X), 44, '', {
       fontSize: '16px', fontFamily: IMPACT,
       color: '#44FF88', stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(mox(0), 0).setDepth(d + 1);   // above the wallet ($) text when overlapping
-    // Money — TOP-RIGHT corner (default handedness).
+    }).setOrigin(0.5, 0).setDepth(d + 1);   // above the wallet ($) text when overlapping
+    // Money — top-center-left, 1.4× the old 22px size per the owner layout.
     this.hudScore = this.add.text(mx(READOUT_CASH_X), READOUT_TOP_Y, '$0', {
-      fontSize: '22px', fontFamily: IMPACT,
+      fontSize: '31px', fontFamily: IMPACT,
       color: '#39FF8A', stroke: '#000000', strokeThickness: 5,
-    }).setOrigin(mox(0), 0).setDepth(d);
-    // Mileage — bottom-right, parked just LEFT of the region label above
-    // ACCEL (per-frame x-tracking in _renderHUD keeps it against the
-    // region's live left edge so it reads "8 MI · WASHINGTON").
-    this.hudDist = this.add.text(SCREEN_W / 2 + 254, SCREEN_H - 58, '0 MI', {
+    }).setOrigin(0.5, 0).setDepth(d);
+    // ── BOTTOM-RIGHT: mileage stacked above the town label, left of
+    // ACCEL.  Fixed (not handedness-mirrored — the pedals don't mirror).
+    // Centered ~x715 on wide phones; clamps inboard with ACCEL on desktop.
+    const READOUT_TOWN_X = this._accelPedalX - 35 - 63;
+    this.hudDist = this.add.text(READOUT_TOWN_X, SCREEN_H - 50, '0 MI', {
       fontSize: '13px', fontFamily: IMPACT,
       color: '#88DDFF', stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(1, 1).setDepth(d);
-
-    // ── BOTTOM-RIGHT: Region · mileage (above ACCEL) ───────────────────
-    this.hudRegion = this.add.text(SCREEN_W / 2 + 260, SCREEN_H - 58, 'WASHINGTON', {
+    }).setOrigin(0.5, 0).setDepth(d);
+    this.hudRegion = this.add.text(READOUT_TOWN_X, SCREEN_H - 26, 'WASHINGTON', {
       fontSize: '14px', fontFamily: IMPACT,
       color: '#FFFFFF', stroke: '#000000', strokeThickness: 4,
-    }).setOrigin(0.5, 1).setDepth(d);
+    }).setOrigin(0.5, 0).setDepth(d);
     // Wanted stars (+ the RAM/HEAD-ON/PIT tallies appended to the same
-    // text) — bottom-center, in the gap between the end of the weapon row
-    // and the mile/town readout.  Mirrors with handedness (the weapon row
-    // swaps sides).  Smaller font keeps the row readable.
-    this.hudStars = this.add.text(mx(310), SCREEN_H - 40, '', {
+    // text) — bottom-center (x482), in the gap between the end of the
+    // weapon row and the mile/town readout.  Mirrors with handedness
+    // (the weapon row swaps sides).
+    this.hudStars = this.add.text(mx(482), SCREEN_H - 54, '', {
       fontSize: '13px', color: '#FFDD00', stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5, 1).setDepth(d);
+    }).setOrigin(0.5, 0).setDepth(d);
 
     // Steroid power-up readout — sits just above the stars line, hidden
     // unless the buff is active (toggled in _updateSteroid).
@@ -14358,18 +14448,18 @@ export class GameScene extends Phaser.Scene {
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5, 1).setDepth(d).setVisible(false);
 
-    // Car HP readout — right edge, directly BELOW the cash readout.
-    // Color stays pink at every value; the floating "-X" damage popup
-    // beside it conveys took-damage events.
-    this.hudHP = this.add.text(mx(READOUT_CASH_X), READOUT_TOP_Y + 26, '100 HP', {
+    // Car HP readout — right of the mirror, on the top row.  Color stays
+    // pink at every value; the floating "-X" damage popup below it
+    // conveys took-damage events.
+    this.hudHP = this.add.text(mx(READOUT_HP_X), READOUT_TOP_Y, '100 HP', {
       fontSize: '22px', fontFamily: IMPACT,
       color: '#FF39AF', stroke: '#000000', strokeThickness: 4,
     }).setOrigin(mox(0), 0).setDepth(d);
 
-    // Floating "-X" damage popup — appears just on the INWARD (screen-
-    // center) side of HP for 1.5 s after each hit.  Positioned dynamically
-    // in the damage listener so it tracks the live HP text bounds.
-    this.hudHPDamage = this.add.text(0, READOUT_TOP_Y + 26, '', {
+    // Floating "-X" damage popup — appears just BELOW the HP readout
+    // for 1.5 s after each hit.  X is positioned dynamically in the
+    // damage listener so it tracks the live HP text bounds.
+    this.hudHPDamage = this.add.text(0, 36, '', {
       fontSize: '17px', fontFamily: IMPACT,
       color: '#FF2244', stroke: '#000000', strokeThickness: 3,
     }).setOrigin(mox(0), 0).setDepth(d).setVisible(false);
@@ -14407,17 +14497,16 @@ export class GameScene extends Phaser.Scene {
     };
     const _spTones = this._colorblind ? speedTonesCB : speedTones;
     const tones = _spTones[Difficulty.mode()] ?? _spTones.normal;
-    // Speed hugs the TOP-LEFT edge (default handedness), just under the
-    // top-row buttons; the survival A block defaults directly below it.
-    // mx/mox flip it to the top-right when handedness flips.
-    this.hudSpeed = this.add.text(mx(READOUT_EDGE_X), READOUT_TOP_Y, '0', {
+    // Speed sits right of the HP readout on the top row (owner layout),
+    // sublabel under the digits.  mx/mox mirror it when handedness flips.
+    this.hudSpeed = this.add.text(mx(READOUT_SPEED_X), READOUT_TOP_Y, '0', {
       fontSize: '34px', fontFamily: IMPACT,
       color: tones.main, stroke: '#000000', strokeThickness: 6,
-    }).setOrigin(mox(1), 0).setDepth(d);
-    const _mphSub = this.add.text(mx(READOUT_EDGE_X), READOUT_TOP_Y + 38, 'MPH', {
+    }).setOrigin(mox(0), 0).setDepth(d);
+    const _mphSub = this.add.text(mx(READOUT_SPEED_X), READOUT_TOP_Y + 38, 'MPH', {
       fontSize: '11px', fontFamily: IMPACT,
       color: tones.sub, stroke: '#000000', strokeThickness: 2,
-    }).setOrigin(mox(1), 0).setDepth(d);
+    }).setOrigin(mox(0), 0).setDepth(d);
     this._mphSub = _mphSub;   // ref so the units toggle can swap MPH↔KM/H
     this._hudObjects?.push(_mphSub);
 
@@ -14519,26 +14608,19 @@ export class GameScene extends Phaser.Scene {
     this._hudObjects?.push(this.hudSkipBtn, this.hudSkipLbl);
     registerTopBtn({ id: 'ff', bg: this.hudSkipBtn, lbl: this.hudSkipLbl, artType: 'ff', baseLeft: skipLeft, size: muteSize });
 
-    // Weather / wiper button — beside BRAKE on the inner side of the
-    // pedal column. It mirrors with the pedals when handedness flips.
+    // Weather / wiper button — right edge, below the top-right button
+    // strip.  Fixed (does NOT mirror with handedness, same as the pedals).
     // Icon is a custom windshield-with-single-wiper symbol; red border
     // signals a negative weather effect for both rain and snow.
-    const WIPER_PEDAL_W = 70;
-    const WIPER_PEDAL_H = 50;
-    const WIPER_SIDE_GAP = 8;
-    // Wiper baseline now matches the pedal ROW (pedals moved to the bottom,
-    // flanking the centre readout — see the _buildHUD pedal block; row Y =
-    // SCREEN_H - 4).  The wiper sits beside the BRAKE pedal, on its LEFT
-    // (toward the screen edge).  getWiperLeft reads the brake's live X,
-    // which is set once the pedals are built, so the initial value here
-    // uses a fallback and _layoutWiperButton() (called from
-    // _layoutPedalsToText) corrects it.
-    const getWiperLeft = () => {
-      const bx = this._brakePedalX ?? (WIPER_PEDAL_W / 2 + 4);
-      return (bx - WIPER_PEDAL_W / 2) - WIPER_SIDE_GAP - muteSize;
-    };
+    // Owner layout: the wiper hugs the PHYSICAL right edge, just below
+    // the top-right (speaker/map/garage) button strip (y2–58).  On wide
+    // phones it sits in the margin band (~x827–883); on desktop
+    // (HUD_OFFSET_X=0) it clamps on-screen at x738–794, right under the
+    // Garage button.  getWiperLeft is re-evaluated by _layoutWiperButton
+    // so a live orientation change re-hugs the edge.
+    const getWiperLeft = () => SCREEN_W + (C.HUD_OFFSET_X ?? 0) - 6 - muteSize;
     let wiperLeft = getWiperLeft();
-    const wiperTop = (SCREEN_H - 4) - WIPER_PEDAL_H / 2 - muteSize / 2;
+    const wiperTop = 64;
     this.hudWiperBtn = this.add.graphics().setDepth(62).setVisible(false);
     const drawWiper = (alpha = 0.85) => {
       this.hudWiperBtn.clear();
@@ -14616,8 +14698,8 @@ export class GameScene extends Phaser.Scene {
       this._wiperMode = this._wiperMode ? 0 : 1;
     });
     this._hudObjects?.push(this.hudWiperBtn, this.hudWiperLbl);
-    // NOT registered with _topRowButtons — this belongs beside BRAKE and
-    // follows pedal handedness through _layoutWiperButton().
+    // NOT registered with _topRowButtons — it has its own editor id
+    // (`wiper`) and a fixed edge-hugging default via _layoutWiperButton().
 
     // Custom-mode vice-slider button removed — vice levels are now set
     // by clicking/dragging the actual HUD vice bars directly when in
@@ -14770,16 +14852,11 @@ export class GameScene extends Phaser.Scene {
     // text.  Origin (0.5, 1) → x is the pedal centre, y its bottom edge.
     const PEDAL_ROW_Y = SCREEN_H - 4;
     this._pedalRowY = PEDAL_ROW_Y;
-    {
-      // Owner layout: the mile/town readout lives bottom-RIGHT now, so the
-      // pedals hug the CORNERS instead of flanking a centre readout.  BRAKE
-      // bottom-left (leaving room for the wiper button on its outside), the
-      // weapon row starting at its right edge (x175); ACCEL is the exact
-      // mirror (centre 660) and sits directly under the region label
-      // (centred at SCREEN_W/2 + 260).
-      this._brakePedalX = 140;                          // spans x105–175
-      this._accelPedalX = SCREEN_W - this._brakePedalX; // ACCEL (exact mirror)
-    }
+    // Owner layout: BRAKE hugs the bottom-left physical corner (partly in
+    // the wide-phone margin band, below the gas gauge), ACCEL the exact
+    // bottom-right mirror.  _brakePedalX/_accelPedalX were computed (and
+    // desktop-clamped) at the top of _buildHUD, before the corner
+    // readouts, so the mile/town readout could anchor against ACCEL.
     // Actual positions + steer-exclusion zones are applied by
     // _layoutPedalsToText() (called at the end of HUD build); the buttons
     // are created at those X's below so there's no first-frame flash.
@@ -15577,13 +15654,8 @@ export class GameScene extends Phaser.Scene {
       const rStr = getLastSignTown(mileNow) || getLocationName(progress) || palette.name || '';
       if (this.hudRegion.text !== rStr) this.hudRegion.setText(rStr);
     }
-    // Park hudDist (mileage) immediately to the LEFT of hudRegion so
-    // the two read as one "8 MI  WASHINGTON" line.  Done here because
-    // region's bounds change with the location name length.
-    if (this.hudDist && this.hudRegion) {
-      const rb = this.hudRegion.getBounds?.();
-      if (rb) this.hudDist.x = rb.left - 8;
-    }
+    // (hudDist now sits center-stacked directly ABOVE hudRegion — both
+    // are placed statically in _buildHUD, no per-frame x-tracking.)
     // Keep the in-game mute icon in sync with the audio system —
     // covers any path that flips audio.muted from outside this
     // button's own click handler (iPhone-menu long-press, etc.).
@@ -16452,19 +16524,16 @@ export class GameScene extends Phaser.Scene {
     const line2 = near ? 'DROP-OFF AHEAD' : flags.join(' · ');
     // Layout — under the survival bars' default block, independently movable.
     const g  = this.hudGfx;
-    const mx = (x) => x + (C.HUD_OFFSET_X ?? 0);
     const o  = this._ctrlOff('mission');
     const sc = o.s;
     const BW = 184, PAD = 6;
     const bw = BW * sc;
     const fontPx = Math.max(9, Math.round(12 * sc));
-    // Default: speed-side flank under the survA bars (the old right-edge
-    // spot now belongs to the vice grid).  Mirrors with handedness.
-    const chipBase = this._leftHanded
-      ? (70 - (C.HUD_OFFSET_X ?? 0))
-      : mx(SCREEN_W - BW - 70);
+    // Default (owner layout): centered directly UNDER the rear-view
+    // mirror (x400, y72).  Center-anchored, so no handedness mirroring.
+    const chipBase = SCREEN_W / 2 - bw / 2;
     const bx = chipBase + o.dx;
-    const by = 170 + o.dy;
+    const by = 72 + o.dy;
     this._missionChipTxt
       .setText(line2 ? `${line1}\n${line2}` : line1)
       .setFontSize(fontPx)
@@ -16494,8 +16563,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Engine-temp gauge — hidden until the engine warms up (≥55°), then a
-   *  compact bar centered under the mirror that shifts orange (HOT) → red
-   *  (OVERHEATING), plus rising steam wisps over the hood when hot. */
+   *  compact bar on the right side above the mile readout that shifts
+   *  orange (HOT) → red (OVERHEATING), plus rising steam wisps when hot. */
   _drawEngineTemp() {
     let temp = this._engineTemp ?? 0;
     if (!this._engineTempTxt) {
@@ -16516,9 +16585,13 @@ export class GameScene extends Phaser.Scene {
     // apply on top of the default top-center-under-mirror spot.
     const o  = this._ctrlOff('engine');
     const sc = o.s;
-    const bw = 74 * sc, bh = 7 * sc;
-    const bx = SCREEN_W / 2 - bw / 2 + o.dx;   // centered, just under the mirror
-    const by = 62 + o.dy;
+    // Owner default: right side, just above the mile/town readout
+    // (bar x640→760, y361–373, ENGINE label underneath).  Mirrors with
+    // handedness like the other readouts.
+    const bw = 120 * sc, bh = 12 * sc;
+    const baseEngX = this._leftHanded ? 640 : (SCREEN_W - 640 - 120);
+    const bx = baseEngX + o.dx;
+    const by = 361 + o.dy;
     const frac = Math.max(0, Math.min(1, (temp - 30) / 85));
     const warn = temp >= ENGINE_WARN_TEMP, limp = this._engineLimp;
     const col  = limp ? 0xFF3B30 : (warn ? 0xFF8C1A : 0x39C0D9);
@@ -16572,7 +16645,7 @@ export class GameScene extends Phaser.Scene {
     //   survA = Alertness + Bladder (top block, seeds from the old
     //   single-`survbars` layout — see the create() migration),
     //   survB = Drinks + Food (defaults directly below A).
-    const BW = 184, BH = 16, GAP = 26;
+    const BW = 184, BH = 16, GAP = 27;
     // Linear RGB interpolation for the bladder gradient.
     const lerpRGB = (a, b, t) => {
       const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
@@ -16581,20 +16654,21 @@ export class GameScene extends Phaser.Scene {
            | (Math.round(ag + (bg - ag) * t) << 8)
            |  Math.round(ab + (bb - ab) * t);
     };
-    // Default placement (owner layout): survA sits on the SPEED side just
-    // under the MPH readout (labels left of the bars, bars extending toward
-    // screen-center); survB sits on the CASH side on the SAME rows, its bars
-    // ending short of the HP text (and clear of the right-edge vice grid).
-    // Base X's are written for the default LEFT-handed mode and mirror when
-    // handedness flips; HUD_OFFSET_X pushes each block toward its physical
-    // edge on wide phones.
+    // Default placement (owner layout, 2026-07-16): survA (Alertness +
+    // Bladder) sits top-left under the money readout, bars x73→257 with
+    // the right-aligned labels to their left; survB (Drinks + Food) sits
+    // on the SAME rows (y77 / y104) on the right, its bars running x628→812
+    // — intentionally ~12px into the wide-phone margin band.  On desktop
+    // (HUD_OFFSET_X=0) survB clamps fully on-screen (bars 612→796).
+    // Base X's are written for the default LEFT-handed mode and mirror
+    // when handedness flips.
     const lh   = !!this._leftHanded;
     const off  = C.HUD_OFFSET_X ?? 0;
-    const SURV_ROW_Y  = 114;                       // under the MPH sublabel
-    const A_LEFT_LH   = 70;                        // bars 70→254 (labels 2→62)
-    const B_LEFT_LH   = SCREEN_W - BW - 154;       // bars 462→646, short of HP + vices
-    const baseAX = lh ? (A_LEFT_LH - off) : (SCREEN_W - A_LEFT_LH - BW + off);
-    const baseBX = lh ? (B_LEFT_LH + off) : (SCREEN_W - B_LEFT_LH - BW - off);
+    const SURV_ROW_Y  = 77;                        // rows y77 + y104
+    const A_LEFT_LH   = 73;                        // bars 73→257 (labels end x65)
+    const B_LEFT_LH   = Math.min(628, SCREEN_W + off - 4 - BW);
+    const baseAX = lh ? A_LEFT_LH : (SCREEN_W - A_LEFT_LH - BW);
+    const baseBX = lh ? B_LEFT_LH : (SCREEN_W - B_LEFT_LH - BW);
     const groups = [
       { id: 'survA', baseX: baseAX, baseY: SURV_ROW_Y, rows: [
         { key: 'Alertness', v: 100 - s.tiredness, col: s.tirednessTier() !== 'alert' ? 0xE0483C : 0x9A5FE8, dual: false, danger: s.tiredness >= 70 },
@@ -16658,7 +16732,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Analog gas gauge — procedurally drawn E↔F arc (red low-fuel wedge, tick
    *  marks, jittering needle) replacing the old remaining-miles readout.  Sits
-   *  in the speed cluster where the old text lived, mirrors with handedness,
+   *  directly above the BRAKE pedal (bottom-left, fixed like the pedals)
    *  and is movable/pinch-scalable in the controls editor under the old
    *  readout's id (`gas`).  Reads FRACTION of tank (gasMi / gasMaxMi), so
    *  Reserve-Tank upgrades just make the needle sweep slower. */
@@ -16682,18 +16756,17 @@ export class GameScene extends Phaser.Scene {
     }
     const o  = this._ctrlOff('gas');
     const sc = o.s;
-    // Plate geometry — bottom-left, centred directly ABOVE the BRAKE pedal
-    // (the accel-charge bar parks under the plate, still clear of the
-    // pedal's top edge at y396).  Mirrors above ACCEL when right-handed;
-    // HUD_OFFSET_X hugs it to the physical corner on wide phones.
-    const BW = 84, BH = 58;
-    const off = C.HUD_OFFSET_X ?? 0;
-    const brakeX  = this._brakePedalX ?? 140;
-    const baseLeft = this._leftHanded
-      ? (brakeX - BW / 2 - off)
-      : (SCREEN_W - brakeX - BW / 2 + off);
+    // Plate geometry — bottom-left, centred directly ABOVE the BRAKE
+    // pedal (owner layout: plate x−52…26 / y327–388, partly in the
+    // wide-phone margin band; the accel-charge bar parks under the plate,
+    // clear of the pedal's top edge).  FIXED like the pedals (no
+    // handedness mirroring — it stays glued above BRAKE); on desktop
+    // (HUD_OFFSET_X=0) it clamps on-screen with the clamped brake column.
+    const BW = 78, BH = 61;
+    const brakeX  = this._brakePedalX ?? -13;
+    const baseLeft = Math.max(brakeX - BW / 2, 2 - (C.HUD_OFFSET_X ?? 0));
     const bx = baseLeft + o.dx;
-    const by = 318 + o.dy;
+    const by = 327 + o.dy;
     const bw = BW * sc, bh = BH * sc;
     // Fuel fraction → needle target; the drawn needle LAGS it (smooth lerp)
     // plus a tiny wobble so it reads like a real damped analog movement.
@@ -17350,20 +17423,19 @@ export class GameScene extends Phaser.Scene {
     counts.coal = this.cops.coalAmmo ?? 0;
     const topTok = tokens.length ? tokens[tokens.length - 1] : null;
 
-    // Weapons run as a HORIZONTAL ROW along the bottom, starting at the
-    // BRAKE pedal's right edge (dominant-thumb side) and growing toward
+    // Weapons run as a HORIZONTAL ROW along the bottom band, right of the
+    // BRAKE column (owner layout: x91→341, y393–449), growing toward
     // screen-center, cells in cycle order then the disguise as the last
-    // cell.  Right-handed mirrors the row: it starts at SCREEN_W-178 and
+    // cell.  Right-handed mirrors the row: it starts at SCREEN_W-91 and
     // grows LEFTWARD.  Each cell is still INDEPENDENTLY movable+scalable
     // (id `weapon_<id>` / `disguise`) on top of its default slot.
     const lhWeap    = !!this._leftHanded;
     const CELL_W    = 58, CELL_H = 56, PITCH = CELL_W + 6;
-    const ROW_Y     = SCREEN_H - 66;                 // cells span y384–440
-    const ROW_START = 178;                           // just right of BRAKE (x105–175)
-    const off       = C.HUD_OFFSET_X ?? 0;
+    const ROW_Y     = SCREEN_H - 57;                 // cells span y393–449
+    const ROW_START = 91;                            // just right of the BRAKE column
     const cellBaseX = (i) => lhWeap
-      ? (ROW_START + i * PITCH - off)
-      : (SCREEN_W - ROW_START - CELL_W - i * PITCH + off);
+      ? (ROW_START + i * PITCH)
+      : (SCREEN_W - ROW_START - CELL_W - i * PITCH);
     this._weaponCellBounds = {};
 
     let slot = 0;
@@ -17957,6 +18029,14 @@ export class GameScene extends Phaser.Scene {
     // Fade-to-white-then-launch effect — short cinematic so the transition
     // feels like an actual off-ramp pull-over, not an instant scene swap.
     this.cameras.main.fadeOut(380, 0, 0, 0);
+    // Persist the survival bars for the post-rest-stop scene restart.
+    // create() reads 'survivalState' on resume — but NOTHING ever wrote it,
+    // so food/drink/alertness silently reset to fresh-run defaults after
+    // every stop (2026-07-16 owner report).
+    this.registry.get('save')?.set?.('survivalState', this.survival?.snapshot?.() ?? null);
+    // Encounter buffs (chains, wind-ready, tow insurance…) suffered the same
+    // scene-restart amnesia — persist and re-hydrate them too.
+    this.registry.get('save')?.set?.('activeBuffs', [...(this._activeBuffs ?? [])]);
     this.cameras.main.once('camerafadeoutcomplete', () => {
       this.scene.start('RestStop', {
         stop:     rs,

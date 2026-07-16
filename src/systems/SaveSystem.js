@@ -420,6 +420,11 @@ export class SaveSystem {
     // Layout-version gate (GameScene resets stale pre-v2 offsets once) — must
     // survive this whitelist or the reset re-fires every session.
     p.controlsLayoutVer = finiteNum(src.controlsLayoutVer, 1, 1);
+    // Survival bars carried across the rest-stop scene restart (and across
+    // sessions for LOAD SAVE) — written at rest-stop entry, read in create().
+    p.survivalState = cleanJson(src.survivalState, null);
+    p.activeBuffs = Array.isArray(src.activeBuffs)
+      ? src.activeBuffs.filter(v => typeof v === 'string').slice(0, 40) : [];
     p.liveRun = this._sanitizeLiveRun(src.liveRun);
     return p;
   }

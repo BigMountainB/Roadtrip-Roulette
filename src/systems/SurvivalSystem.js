@@ -35,7 +35,7 @@ const DIURETIC_MAX   = 20;
 // FILLING ×1.5 (2026-07-14 playtest): ×2.5 overshot ("too much"), reduced by
 // 40% → 1.5× the original bite values.  Tiredness and diuretic unchanged;
 // _bladderGain coefficients are ÷1.5 so bladder pace stays at the ORIGINAL.
-const ITEM_FX = {
+export const ITEM_FX = {
   water:        { t:  -1, h: +4.5, f:    0 },
   coldbrew:     { t:  -4, h:   +3, f:    0, diuretic: 2 },
   caffeine:     { t:  -7, h: +1.5, f:    0, addiction: true, diuretic: 3 },
@@ -210,4 +210,4 @@ export class SurvivalSystem {
   }
 }
 
-export { ITEM_FX, BAD_FISH_CHANCE, ODD_GUMMY_CHANCE };
+export { BAD_FISH_CHANCE, ODD_GUMMY_CHANCE };

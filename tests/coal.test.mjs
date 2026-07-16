@@ -11,9 +11,15 @@
 // Removal is POSITION-driven (2026-07-15): a smoked cop stays alive until it
 // has receded past the bottom of the screen (rel <= -6000, off the forward
 // view AND tiny in the mirror) — never a mid-screen pop.  The flee timer is
-// only a 6 s lifetime failsafe.
+// only a lifetime failsafe, and (2026-07-16) it can no longer splice a cop
+// mid-screen: an expired timer must ALSO have completed the synthetic
+// bottom-edge exit (_fleeExit = 1) before removal.
+// 2026-07-16 additions: a coal use that smokes >= 1 cop suppresses ALL new
+// cop spawns for 30 s (_coalLull re-asserted onto _spawnCooldown every tick
+// so nothing shortens it), and the synthetic exit slide (FLEE_EXIT_HOLD_REL
+// depth clamp + screen-Y push in GameScene) replaces the old blink-out.
 
-import { CopSystem } from '../src/systems/CopSystem.js';
+import { CopSystem, FLEE_EXIT_HOLD_REL, FLEE_EXIT_SPAN } from '../src/systems/CopSystem.js';
 import { MAX_SPEED } from '../src/constants.js';
 import { readFileSync } from 'node:fs';
 
@@ -105,10 +111,84 @@ function pursuitCop(position, laneOffset = 0) {
   check('barricade cop not smoked', !block.fleeing);
 }
 
+// ── 30 s spawn suppression after a smoked cop ─────────────────────────────
+{
+  const cs = new CopSystem();
+  cs.stars     = 2;
+  cs.starTimer = 999;                 // hold the wanted level through the lull
+  cs.addF12Token('coal');
+  const playerSpeed = MAX_SPEED * 0.75;
+  let pos = 100000;
+  const chaser = pursuitCop(pos - 3000);
+  cs.cops.push(chaser);
+
+  cs.useF12Token('coal', pos);
+  check('coal smoke arms >= 30 s spawn cooldown', cs._spawnCooldown >= 30);
+  check('coal lull timer armed (guards encounter/barricade spawns too)', (cs._coalLull ?? 0) >= 30);
+
+  // A later system trying to shorten the cooldown (trap escalation, star
+  // change, clearArrest) must be overridden by the lull re-assert in update.
+  cs._spawnCooldown = 1;
+  const dt = 1 / 60;
+  let firstSpawnT = null;
+  const initial = new Set(cs.cops);
+  // 120 s window: the post-lull spawn is a probabilistic per-tick roll, so a
+  // 10 s tail sometimes (legitimately) produced no spawn — flaky test, not a
+  // gameplay bug.  The lull assertion itself stays exact.
+  for (let t = 0; t < 120; t += dt) {
+    pos += playerSpeed * dt;
+    cs.update(dt, pos, playerSpeed, 0);
+    if (firstSpawnT == null && cs.cops.some(c => !initial.has(c))) firstSpawnT = t;
+  }
+  // 29.9 tolerance: t accumulates 1/60 floats, so the first legal spawn
+  // tick lands at ~29.9999 rather than a clean 30.
+  check('no new cop spawns during the 30 s lull', firstSpawnT == null || firstSpawnT >= 29.9);
+  check('pursuit resumes after the lull (stars persisted)', firstSpawnT != null && firstSpawnT < 120);
+}
+
+// ── Timer failsafe can't blink a cop out mid-screen ───────────────────────
+// Player fully stopped: the fleeing cop's speed (35% of player) is 0, so
+// rel never falls.  The 6 s timer expires — but the cop must NOT be spliced
+// until the synthetic bottom-edge exit (_fleeExit) has completed, so the
+// forward view can slide it off the bottom of the screen first.
+{
+  const cs = new CopSystem();
+  cs.stars = 2;
+  cs.addF12Token('coal');
+  const playerPos = 100000;
+  const stalled = pursuitCop(playerPos + 2000);   // visible ahead, rel = +2000
+  cs.cops.push(stalled);
+  cs.useF12Token('coal', playerPos);
+  check('stalled cop smoked', stalled.fleeing === true);
+
+  const dt = 1 / 60;
+  let atTimerExpiry = null, despawnT = null;
+  for (let t = 0; t < 12; t += dt) {
+    cs.update(dt, playerPos, 0, 0);               // player speed 0 → rel frozen
+    const alive = cs.cops.includes(stalled);
+    if (t >= 6 && atTimerExpiry == null) atTimerExpiry = { alive, exit: stalled._fleeExit ?? 0 };
+    if (!alive && despawnT == null) despawnT = t;
+  }
+  check('cop still on screen when the timer expires (no blink-out)',
+        atTimerExpiry != null && atTimerExpiry.alive === true && atTimerExpiry.exit < 1);
+  check('boost finishes the exit slide and despawns the stalled cop', despawnT != null);
+  // The splice happens on the same tick _fleeExit reaches 1, so read the
+  // final value off the (now-removed) cop object itself.
+  check('despawn only after the synthetic exit completed (_fleeExit = 1)', (stalled._fleeExit ?? 0) >= 1);
+  // Sanity on the exit geometry: exit progress is positional, 0 at the
+  // projection-floor hold depth and 1 once fully behind/below the screen.
+  check('exit constants sane (hold depth ahead of camera, span past rel 0)',
+        FLEE_EXIT_HOLD_REL > 0 && FLEE_EXIT_HOLD_REL - FLEE_EXIT_SPAN < 0);
+}
+
 // ── GameScene guards: fleeing cops excluded from collision / ram ─────────
 {
   const src = readFileSync(new URL('../src/scenes/GameScene.js', import.meta.url), 'utf8');
   check('GameScene collision loop skips fleeing cops', /if \(cop\.fleeing\) continue;/.test(src));
+  check('GameScene renders the synthetic exit (depth clamp at FLEE_EXIT_HOLD_REL)',
+        /Math\.max\(cop\.relativePos, FLEE_EXIT_HOLD_REL\)/.test(src));
+  check('GameScene slides the exiting cruiser past the bottom edge (SCREEN_H push)',
+        /proj\.sy \+ sink \* \(SCREEN_H/.test(src));
 }
 
 console.log(`coal.test: ${passed} passed, ${failed} failed`);

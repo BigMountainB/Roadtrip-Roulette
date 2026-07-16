@@ -448,7 +448,9 @@ export class EffectsSystem {
         // density/opacity and the windshield-drop load so the rain visibly
         // builds into a hard-to-see-through downpour past mile ~35.
         const sev  = Weather.severity?.(mile) ?? 1;
-        const sevT = Math.max(0, Math.min(1, (sev - 1) / 1.4));
+        // sevT rides to 2.0 in the mid-North-Bend storm wall (sev up to 4.8)
+        // so drop/streak load genuinely doubles past mile 32.
+        const sevT = Math.max(0, Math.min(2, (sev - 1) / 1.4));
         // Slanted white streaks falling top → bottom-right.  Spawn area
         // extended into the 150-px margin so a rotated camera still sees
         // rain instead of a sharp boundary at x=0 / 800.  Count + opacity

@@ -57,6 +57,22 @@ const ONCOMING_UNITS   = MAX_SPEED * (70 / 120);
 const FLEE_MAX_SEC     = 6;
 const FLEE_DESPAWN_REL = -6000;   // world units behind the player at despawn
 const FLEE_FADE_SPAN   = 9000;    // alpha ramps 1→0 over rel 3000 → -6000
+// ── Synthetic bottom-edge exit ──────────────────────────────────────────
+// getVehicleProjection() can't project a vehicle once rel drops below the
+// visible band (which starts well AHEAD of the player's own virtual depth —
+// see the 2026-07-14 traffic-stop fix, where the parked trooper had to sit
+// at +4400 to render).  A fleeing cop therefore used to blink out
+// mid-screen the frame its rel crossed the projection floor.  Instead we
+// track an EXIT PROGRESS (0→1) as rel falls from FLEE_EXIT_HOLD_REL (the
+// last reliably-projectable depth) down to FLEE_EXIT_HOLD_REL −
+// FLEE_EXIT_SPAN: the renderer clamps the cop's draw depth at the hold
+// value and drives its screen-Y down past the bottom edge with this
+// progress, so the cruiser visibly sinks off the screen before it fades.
+export const FLEE_EXIT_HOLD_REL = 4400;
+export const FLEE_EXIT_SPAN     = 7400;   // exit completes at rel ≈ -3000
+// Rolling coal that actually smokes a pursuer buys a real lull: NO new cop
+// spawns for 30 s (stars persist — pursuit just doesn't remanifest).
+const COAL_LULL_SEC = 30;
 
 // Normalize raw sprite token names → internal names used in useF12Token
 const TOKEN_MAP = {
@@ -99,6 +115,8 @@ export class CopSystem {
    *  with stars ≥ 1.  Spawns a rear-pursuit cop closing in from behind so
    *  the encounter has consequence. */
   _spawnRearFromEncounter(playerPos) {
+    // Rolling-coal lull — route encounters don't manifest pursuers either.
+    if ((this._coalLull ?? 0) > 0) return;
     this.cops.push({
       id:          Math.random(),
       position:    playerPos - (3000 + Math.random() * 3000),
@@ -531,7 +549,12 @@ export class CopSystem {
           this.headOnCount    = 0;
           this.pitCount       = 0;
           this.arrestPending  = false;
-          this._spawnCooldown = Math.max(this._spawnCooldown ?? 0, 2.5);
+          // 30-second spawn lull — the smokescreen bought a real escape.
+          // _coalLull is re-asserted onto _spawnCooldown every update tick
+          // so nothing else (trap escalation, star changes, clearArrest)
+          // can shorten it; it also gates encounter/barricade spawns.
+          this._coalLull      = Math.max(this._coalLull ?? 0, COAL_LULL_SEC);
+          this._spawnCooldown = Math.max(this._spawnCooldown ?? 0, COAL_LULL_SEC);
         }
         break;
       }
@@ -722,6 +745,13 @@ export class CopSystem {
     // faster respawn.  TimeOfDay.darkness() adds an extra +30% at full
     // night (graveyard-shift cops are out in force).
     this._spawnCooldown -= dt;
+    // Rolling-coal lull — re-assert the remaining lull onto the spawn
+    // cooldown every tick so no other system (trap escalation, star
+    // changes, clearArrest) can shorten the 30 s no-new-cops window.
+    if ((this._coalLull ?? 0) > 0) {
+      this._coalLull = Math.max(0, this._coalLull - dt);
+      this._spawnCooldown = Math.max(this._spawnCooldown, this._coalLull);
+    }
     const escMul = Difficulty.copEscalationMul();
     const _mileForCops = (playerPos / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
     const nightMul = 1 + TimeOfDay.darkness(_mileForCops) * 0.30;
@@ -745,7 +775,7 @@ export class CopSystem {
     // At max wanted level the highway gets cluttered with rolling
     // road-block formations and a permanent chopper overhead.
     this._barricadeCooldown = (this._barricadeCooldown ?? 0) - dt;
-    if (this.stars >= 5 && this._barricadeCooldown <= 0) {
+    if (this.stars >= 5 && this._barricadeCooldown <= 0 && (this._coalLull ?? 0) <= 0) {
       this._spawnBarricade(playerPos);
       this._barricadeCooldown = 6 + Math.random() * 4;   // every 6-10 sec
     }
@@ -790,11 +820,27 @@ export class CopSystem {
         // getCopsForRender().fleeFade (forward view) or cop._fleeFade
         // directly (mirror).
         cop._fleeFade = Math.max(0, Math.min(1, (rel - FLEE_DESPAWN_REL) / FLEE_FADE_SPAN));
-        // Despawn OFF-SCREEN only: rel <= 0 is already past the forward
-        // view's bottom edge — the extra margin means it's also faded out
-        // and tiny in the mirror.  rel > 50000 matches the render cutoff
-        // (fully off-view ahead).  The timer is the 6 s failsafe.
-        if (rel <= FLEE_DESPAWN_REL || rel > 50000 || cop._fleeTimer <= 0) {
+        // Synthetic exit progress (0→1) — drives the FORWARD view's
+        // bottom-edge slide once rel is below the projection floor (the
+        // renderer clamps draw depth at FLEE_EXIT_HOLD_REL and pushes
+        // screen-Y down past SCREEN_H by this amount).  Position-driven;
+        // if the flee timer expires with rel stalled (e.g. player stopped,
+        // so the fleeing cop's 35%-of-player speed is 0 and rel never
+        // falls) a small time boost finishes the slide instead of the old
+        // mid-screen blink-out.
+        const posExit = Math.max(0, Math.min(1, (FLEE_EXIT_HOLD_REL - rel) / FLEE_EXIT_SPAN));
+        if (cop._fleeTimer <= 0) {
+          cop._fleeExitBoost = Math.min(1, (cop._fleeExitBoost ?? 0) + dt * 0.6);
+        }
+        cop._fleeExit = Math.min(1, posExit + (cop._fleeExitBoost ?? 0));
+        // Despawn OFF-SCREEN only: the exit slide has the cruiser past the
+        // bottom edge (and alpha 0) by _fleeExit = 1; the extra rel margin
+        // means it's also faded out and tiny in the mirror.  rel > 50000
+        // matches the render cutoff (fully off-view ahead).  The expired
+        // timer alone no longer splices — it must ALSO have completed the
+        // exit slide, so there is never a mid-screen pop.
+        if (rel <= FLEE_DESPAWN_REL || rel > 50000
+            || (cop._fleeTimer <= 0 && cop._fleeExit >= 1)) {
           this.cops.splice(i, 1);
         }
         continue;
@@ -929,8 +975,19 @@ export class CopSystem {
         // 1 for normal cops; a fleeing cop's fade-out multiplier (→0 at
         // despawn) so the forward view alpha-fades instead of popping.
         fleeFade:    cop.fleeing ? (cop._fleeFade ?? 1) : 1,
+        // Synthetic bottom-edge exit (fleeing cops only): 0 = normal
+        // projection, 1 = fully slid off the bottom of the screen.  The
+        // renderer clamps draw depth at FLEE_EXIT_HOLD_REL and offsets
+        // screen-Y down by this progress so the cruiser never blinks out
+        // when rel drops below the projection floor.
+        fleeing:     !!cop.fleeing,
+        fleeExit:    cop.fleeing ? (cop._fleeExit ?? 0) : 0,
       }))
-      .filter(c => c.relativePos > 0 && c.relativePos < 50000);
+      // Fleeing cops stay in the render list through their whole synthetic
+      // exit (even once rel drops below the projection floor / behind the
+      // camera) so the forward view can slide them off the bottom edge.
+      .filter(c => (c.relativePos > 0 && c.relativePos < 50000)
+                || (c.fleeing && c.fleeExit < 1 && c.relativePos > FLEE_DESPAWN_REL && c.relativePos < 50000));
   }
 
   // Rear cops aren't visible in pseudo-3D; expose count + nearest distance.
