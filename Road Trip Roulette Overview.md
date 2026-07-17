@@ -92,6 +92,60 @@ volume is the long pole (each pack = vehicle art + ~10 sprite images).
 
 ## Changelog (newest first)
 
+### 2026-07-16/17 — Playtest batch #2 + world clock / donut render / town facts (DEPLOYED)
+Two pushes (`6119d0e`, `f258694`). Build clean, 123 mission + 28 coal tests green.
+
+**Feel / weather:**
+- **Rain steering** de-sluggished — was `0.25 × intensity × severity` (severity rides to 4.8 in
+  the North Bend storm wall → grip clamped near 0, felt dead). Now a flat **~18% slide** at full
+  intensity; severity still ramps the VISUALS but no longer the steering grip loss.
+- **Rain windshield visual** reverted to the pre-storm-wall look (owner: today's change made a
+  "linear wall of ~600 drops creeping up in unison"). `EffectsSystem` `sevT` clamp `min(2)→min(1)`;
+  `GameScene` falling-streak `eff` rain cap `4.8→2.4`. Builds gradually again like the snow layer.
+- **Snow tilt** — force TILT-to-steer for everyone in snow when the sensor's attached (it had been
+  silently gated to `default`-pick only). Banner now reads `📱 TILT TO STEER` (dropped the "SNOW —"
+  prefix) and a dismissal guard stops it re-firing every ~1.4 mi (that's what read as "permanent").
+
+**Rest stops:**
+- **Nap It Off + Coffee** are alertness-only now — stripped the vice-cut AND the party-clock
+  penalty from both copy and mechanic (nap = full alertness via `tiredness -100`, coffee = partial).
+- **Customers-only restroom** is per-BUSINESS/visit — `_boughtSomething` (one global flag) → a
+  `_boughtAt` Set keyed by section, threaded through `_makeButton(bizKey)`. Buying at AM/BM no
+  longer unlocks Gas-N-Sip's restroom.
+- **Cowbellas** (hunting) sells hunting gear only — dropped the vice/food append (`SHOP_VICES.hunting = []`).
+- **Restroom copy** bladder-only + funny ("Piss in bliss"); Park & Ride = "Nasty, but free."
+- **Town facts** — new `src/data/townFacts.js`: **3-5 facts for all 19 stops**, one rotates in per
+  visit via `nextTownFact` (per-stop index in save's `factRotation`). Shown on the **job/mission
+  card too**, so stops with no NPC encounter (e.g. Mercer Island) still surface a fact.
+
+**Cop weapons:**
+- **Rolling Coal** cop now KEEPS PACE (~0.88× player, no swerve) then fades to 0 alpha + slides
+  down past the bottom edge over `COAL_FADE_SEC` (1.8s) — time-driven "lost in the black" instead
+  of dropping back at 0.35×. Coal unit tests rewritten to the new spec.
+- **Donuts** — cops break pursuit and VEER toward the drop (`_donutLure` lane on the flee), then
+  peel off; short 6s no-spawn window (was a flat 15s freeze-in-place). A pink bakery box is tossed
+  out the driver window, arcs onto the road, and stays as projected debris ~9s
+  (`_throwDonutBox`/`_updateDonutDebris`/`_drawDonutDebris`, modeled on the coal-cloud projection).
+
+**Systems:**
+- **World clock** (phone-menu `#phone-clock`) rebuilt: was mapping the party-clock COUNTDOWN to
+  2→8 PM (felt like real time). Now driven by **MILES DRIVEN** — the 293-mi route spans **2:00 PM →
+  7:00 PM** (5 in-world hrs), plus rest-stop/shop time at a **compressed rate** (`STOP_CLOCK_SCALE
+  = 300/45 ≈ 6.67×`), so arrival varies by how long you dawdle. `_worldClockMinutes()` /
+  `_worldClockLabel()` in GameScene; `_restStopClockMin` persisted in the live snapshot;
+  `restStopVisitSec` passed back from `RestStopScene._continue`. **Texts timestamped** with the
+  clock ("4:37 PM"), old threads fall back to `~mile N`.
+- **Job/Task HUD** plate 65% more transparent (fill `0.8→0.28`, text/border untouched).
+- **Map fast-travel** gated to Custom only (`tappable = inCustom`) — no Easy/Normal/Hard teleport.
+- **Combo banners** removed entirely (drug-themed "BEER RUN"/"TRACK MARKS"/… no longer fit the reskin).
+- **Bladder pull-over** — brake + shoulder while "gotta go" (bladder ≥ 75) → 30s held stop (reuses
+  the trap-stop pin) → bladder emptied. Distinct from the involuntary soiling at ≥90.
+
+**Tuning knobs flagged for playtest:** `STOP_CLOCK_SCALE` (arrival drift from stops), donut box
+size/arc in `_drawDonutDebris`, coal `0.88×`/`1.8s`, rain `0.18` slide. **Not done:** #1 Mercer
+NPC/charitable choice (owner unsure — skipped, not invented). Mile-based clock does NOT tick while
+idling parked on the road (only miles + stop-time advance it) — confirm that's desired.
+
 ### 2026-07-16 — Big playtest batch (18 items, no agents per owner)
 - **Survival persistence ROOT CAUSE**: 'survivalState' was read on resume but NEVER written —
   every rest stop silently reset food/drink/alertness to fresh-run values (also why shop food
