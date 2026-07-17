@@ -92,6 +92,32 @@ volume is the long pole (each pack = vehicle art + ~10 sprite images).
 
 ## Changelog (newest first)
 
+### 2026-07-17 (later) — Reskin cleanup, shop balance/layout, donut+coal visual fixes (DEPLOYED)
+Push `fe2c47f`. Build clean, 123 mission + 27 coal tests green.
+- **DUI drug references scrubbed** (player-visible): snooze desc "wipes all vice bars"
+  → "Sleep it all off — every buzz back to zero"; Othello vignette "They had cocaine"
+  → "the good energy drinks". Swept all src string literals — vice items, brand names
+  (Gas-N-Sip / CowBella / AM/BM / etc.) were already reskinned; only these two were live.
+- **Coffee vs caffeine rebalanced**: coffee Alertness −25 → **−15** (moderate, cheap $10);
+  **CAFFEINE PILLS** are now a special-cased premium item — **$18 (~1.8× coffee), +28
+  Alertness** — so the rare pills are the pricey-strong option and coffee the cheap-moderate
+  one (fixes "coffee gives more AND costs less"). Road caffeine pickup ITEM_FX unchanged.
+- **Two-column menus** extended to `gas`, `hunting`, `ambm`, `parkride` (were stretching
+  buttons full-width) via a `TWO_COL` set in `_buildTabContent`.
+- **Gas REFUEL** fills the tank fully (already did) and is now **single-use** — greys out +
+  relabels "TANK FULL" after one buy. Made `item.disabled` a LIVE read in the button
+  refresh/handler so a purchase can flip it.
+- **Prices**: Fireworks $1000 → **$500**; Diesel Tune $800 → **$350**.
+- **Donuts render fixed** (was invisible): rebuilt as a **screen-space parabolic toss** —
+  box flies out the driver window, arcs onto the road, sits + fades. The world-anchored
+  version sat in the engine's un-projectable sub-1400 depth band behind the car (same zone
+  that forced the fleeing-cop synthetic-exit hack), so nothing drew.
+- **Rolling Coal cop exit fixed**: the time-driven `_fleeExit` synthetic bottom-slide made
+  the cop "jump up, shrink, and float to the bottom". Replaced with pure positional recede —
+  **keeps pace ~1.5s (`COAL_PACE_SEC`), then slows to 0.45× and drops off the bottom the same
+  way it drove in**; `_fleeExit` stays 0, `FLEE_MAX_SEC` timer covers the player-stopped case.
+  Coal unit tests rewritten to the positional spec.
+
 ### 2026-07-16/17 — Playtest batch #2 + world clock / donut render / town facts (DEPLOYED)
 Two pushes (`6119d0e`, `f258694`). Build clean, 123 mission + 28 coal tests green.
 
