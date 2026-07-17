@@ -1121,6 +1121,28 @@
   </style>
 </head>
 <body>
+  <!-- TEMP DIAGNOSTIC OVERLAY (glitch hunt 2026-07-17 — REMOVE AFTER):
+       on-screen FPS + GameScene create-count + any JS error/rejection. -->
+  <script>
+  (function () {
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;top:2px;left:2px;z-index:2147483647;font:bold 12px monospace;color:#0f0;background:rgba(0,0,0,0.65);padding:2px 6px;pointer-events:none;white-space:pre;max-width:96vw;overflow:hidden;';
+    function mount(){ if (document.body && !box.parentNode) document.body.appendChild(box); }
+    document.addEventListener('DOMContentLoaded', mount); mount();
+    var frames = 0, last = performance.now(), fps = 0, errLine = '';
+    function tick(){
+      frames++; var now = performance.now();
+      if (now - last >= 500){ fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; }
+      var g = window.__phaserGame, af = (g && g.loop && g.loop.actualFps) ? Math.round(g.loop.actualFps) : '?';
+      box.style.color = errLine ? '#ff5' : ((af !== '?' && af < 30) ? '#f55' : '#0f0');
+      box.textContent = 'FPS ' + fps + ' / phaser ' + af + '  creates ' + (window.__gsCreates || 0) + (errLine ? ('\n' + errLine) : '');
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+    window.addEventListener('error', function (e){ errLine = 'ERR: ' + (e.message || (e.error && e.error.message) || e.error) + ' @ ' + String(e.filename || '').split('/').pop() + ':' + e.lineno; });
+    window.addEventListener('unhandledrejection', function (e){ errLine = 'REJECT: ' + ((e.reason && e.reason.message) || e.reason); });
+  })();
+  </script>
   <!-- Game canvas mounts here (Phaser scale.parent = 'game-root').  The box is
        inset to the device SAFE AREA so the FIT-scaled game — and its edge
        buttons (top HUD cluster, bottom pedals) — always clear camera cutouts,
