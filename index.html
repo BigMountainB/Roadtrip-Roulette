@@ -1126,16 +1126,25 @@
   <script>
   (function () {
     var box = document.createElement('div');
-    box.style.cssText = 'position:fixed;top:2px;left:2px;z-index:2147483647;font:bold 12px monospace;color:#0f0;background:rgba(0,0,0,0.65);padding:2px 6px;pointer-events:none;white-space:pre;max-width:96vw;overflow:hidden;';
+    box.style.cssText = 'position:fixed;top:2px;left:2px;z-index:2147483647;font:bold 12px monospace;color:#0f0;background:rgba(0,0,0,0.72);padding:3px 7px;cursor:pointer;white-space:pre;max-width:96vw;overflow:hidden;';
     function mount(){ if (document.body && !box.parentNode) document.body.appendChild(box); }
     document.addEventListener('DOMContentLoaded', mount); mount();
+    // TAP the box to cycle which heavy render pass is DISABLED. Whichever pass,
+    // when off, jumps the FPS back up is the hog.
+    var modes = ['all on', 'no EFFECTS', 'no SPRITES', 'no MIRROR'], mi = 0;
+    function applyMode(){
+      var s = window.__phaserGame && window.__phaserGame.scene && window.__phaserGame.scene.getScene && window.__phaserGame.scene.getScene('Game');
+      if (s && s._perf){ s._perf.noEffects = (mi===1); s._perf.noSprites = (mi===2); s._perf.noMirror = (mi===3); }
+    }
+    box.addEventListener('click', function(){ mi = (mi + 1) % modes.length; applyMode(); });
     var frames = 0, last = performance.now(), fps = 0, errLine = '';
     function tick(){
       frames++; var now = performance.now();
       if (now - last >= 500){ fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; }
+      applyMode();   // re-assert (scene may have restarted)
       var g = window.__phaserGame, af = (g && g.loop && g.loop.actualFps) ? Math.round(g.loop.actualFps) : '?';
       box.style.color = errLine ? '#ff5' : ((af !== '?' && af < 30) ? '#f55' : '#0f0');
-      box.textContent = 'FPS ' + fps + ' / phaser ' + af + '  creates ' + (window.__gsCreates || 0) + (errLine ? ('\n' + errLine) : '');
+      box.textContent = 'FPS ' + fps + ' / ph ' + af + '  cr ' + (window.__gsCreates || 0) + '  [' + modes[mi] + ']' + (errLine ? ('\n' + errLine) : '');
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
