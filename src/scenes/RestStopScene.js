@@ -12,6 +12,7 @@ import {
   isDialogueTree, getStartNode, getEncounterNode, choiceLocked,
 } from '../data/encounters.js';
 import { getPortrait } from '../data/npcPortraits.js';
+import { nextTownFact } from '../data/townFacts.js';
 import { MISSION_TIERS, tierFor, contactIdFor, contactGreeting } from '../systems/MissionSystem.js';
 
 const CX = SCREEN_W / 2;
@@ -1069,6 +1070,11 @@ export class RestStopScene extends Phaser.Scene {
     const save   = this.registry.get('save');
     const stopId = this._stop?.id;
     if (!stopId) return;
+    // Rotating town fact for THIS visit — cycles through the town's 3-5 facts
+    // (owner 2026-07-17) so pulling in repeatedly doesn't show the same line.
+    // Shown on whatever card appears (welcome NPC or the job/mission card),
+    // so every stop — even ones with no NPC encounter — surfaces a fact.
+    this._townFact = nextTownFact(stopId, save);
     const visited    = new Set(save?.get?.('stopsVisited', []) ?? []);
     const firstVisit = !visited.has(stopId);
     if (firstVisit) { visited.add(stopId); save?.set?.('stopsVisited', [...visited]); }
@@ -1336,7 +1342,9 @@ export class RestStopScene extends Phaser.Scene {
     // choice stacks) step down a tier so the column never overflows the
     // right pane.  Each tier is measured with the real wrapped text before
     // committing; the last tier is the original sizes (guaranteed fit).
-    const fact = node.fact ?? enc.fact;
+    // Rotating town fact takes precedence over the encounter's own fact so the
+    // same 3-5 town facts cycle across visits regardless of which NPC greets you.
+    const fact = this._townFact ?? node.fact ?? enc.fact;
     const condCtx = { cash: this._score ?? 0, buffs: this._purchases.encounterBuffs ?? [], memory: mem };
     const choices = (node.choices ?? [{ label: 'Continue', effects: {}, end: true }])
       .filter(c => !(c.hideWhenLocked && choiceLocked(c, condCtx)));
@@ -2128,6 +2136,10 @@ export class RestStopScene extends Phaser.Scene {
     const visitPenalty = Math.round(visitSec * 0.5);
     this._purchases.partyClockPenalty =
       (this._purchases.partyClockPenalty ?? 0) + visitPenalty;
+    // Raw real seconds spent at the stop — GameScene scales this into in-world
+    // minutes for the WORLD clock (time at stops counts toward arrival).
+    this._purchases.restStopVisitSec =
+      (this._purchases.restStopVisitSec ?? 0) + visitSec;
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
       const finalScore = this._score + (this._purchases.scoreBonus ?? 0);

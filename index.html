@@ -1926,28 +1926,15 @@
           btn.addEventListener('click',     h, { passive: false });
         });
 
-      // ── In-world party-time clock over the Calendar ───────────────────
-      // The Phaser side ticks _partyClockSec (real-time countdown).  Map
-      // the elapsed fraction to 2 PM → 8 PM (6-hour span).
+      // ── In-world road-trip clock over the Calendar ────────────────────
+      // Driven by MILES DRIVEN (not real time): the 293-mi route spans
+      // 2:00 PM → 7:00 PM, plus scaled rest-stop time. The Phaser side owns
+      // the math (_worldClockLabel); this just reads it each tick.
       const clockEl = document.getElementById('phone-clock');
       const formatPhoneTime = () => {
-        const game = window.__phaserGame;
-        const scene = game?.scene?.getScene?.('Game');
-        if (!scene) return '— : — PM';
-        const total = scene._partyClockTotalSec || (scene._partyClockSec ? null : null);
-        const remain = scene._partyClockSec ?? 0;
-        const partyTotal = total
-          ?? (typeof scene._partyClockSecMax !== 'undefined' ? scene._partyClockSecMax : 40 * 60);
-        // Find difficulty's total — fall back to detection from remain at start.
-        // 2:00 PM = 14:00.  8:00 PM = 20:00.  6h span = 360 min.
-        const elapsedFrac = Math.max(0, Math.min(1.5, 1 - (remain / partyTotal)));
-        const totalMin = elapsedFrac * 360;
-        const hour24   = 14 + Math.floor(totalMin / 60);
-        const min      = Math.floor(totalMin % 60);
-        const ampm     = (hour24 % 24) >= 12 ? 'PM' : 'AM';
-        const hour12   = ((hour24 % 12) === 0) ? 12 : (hour24 % 12);
-        const mm       = String(min).padStart(2, '0');
-        return `${hour12}:${mm} ${ampm}`;
+        const scene = window.__phaserGame?.scene?.getScene?.('Game');
+        if (!scene || typeof scene._worldClockLabel !== 'function') return '— : — PM';
+        try { return scene._worldClockLabel(); } catch (_) { return '— : — PM'; }
       };
       // ── Top weather widget — location name + temp + weather symbol ────
       const locEl  = document.getElementById('phone-loc');
@@ -3421,7 +3408,7 @@
           // plus a miss-you reply when you text 3 towns in a row).
           const thread = (g.thread ?? []);
           const convo = thread.length
-            ? thread.map(m => `<div class="pa-row"><span class="k">${m.text}<br><span class="pa-dim" style="font-size:0.78em">~mile ${m.mile}</span></span></div>`).join('')
+            ? thread.map(m => `<div class="pa-row"><span class="k">${m.text}<br><span class="pa-dim" style="font-size:0.78em">${m.time ? m.time : `~mile ${m.mile}`}</span></span></div>`).join('')
             : '';
           openApp('CONTACTS',
             backBtn +
@@ -3451,7 +3438,7 @@
           const body = msgs.length
             ? msgs.map(m => {
                 const sender = (cid === 'spam' && m.from) ? `<b>${m.from}:</b> ` : '';
-                return `<div class="pa-row"><span class="k">${sender}${m.text}<br><span class="pa-dim" style="font-size:0.78em">~mile ${m.mile}</span></span></div>`;
+                return `<div class="pa-row"><span class="k">${sender}${m.text}<br><span class="pa-dim" style="font-size:0.78em">${m.time ? m.time : `~mile ${m.mile}`}</span></span></div>`;
               }).join('')
             : `<div class="pa-row"><span class="k pa-dim">No messages yet — they'll text you on the road.</span></div>`;
           openApp('CONTACTS', backBtn + sSec(BUDDY_NAMES[cid] ?? cid) + body);

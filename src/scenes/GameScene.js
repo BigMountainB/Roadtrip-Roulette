@@ -44,6 +44,16 @@ import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
 
 const CAM_DEPTH = 0.84;
 const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
+
+// ── World clock (owner 2026-07-17) ───────────────────────────────────────
+// The in-world phone clock is driven by MILES DRIVEN, not real seconds: the
+// full 293-mi route spans 2:00 PM → 7:00 PM (5 in-world hours = 300 min).
+// Rest-stop / shop time ALSO counts, at a compressed rate matching the ~45-min
+// real playtime for the 5-hour drive (300 in-world min / 45 real min ≈ 6.67×),
+// so dawdling at stops pushes your arrival past 7 — arrival varies per player.
+const DEPART_MIN       = 14 * 60;    // 2:00 PM depart
+const DRIVE_SPAN_MIN   = 300;        // 5 in-world hours across the whole route
+const STOP_CLOCK_SCALE = 300 / 45;   // ≈ 6.67 in-world seconds per real second at a stop
 const PLAYER_CAR_VISUAL_H = 49;
 // Bottom-anchored Y for chase-view popups + speed-trap sign — just ABOVE the
 // mile/town location line (SCREEN_H-8) and its wanted-stars row (SCREEN_H-26).
@@ -1455,6 +1465,7 @@ export class GameScene extends Phaser.Scene {
     // Rolling-coal cloud state (💨 weapon) — rear smoke puffs + soot tint.
     // Null when idle; rebuilt per fire (same lifecycle as _fireworksShow).
     this._coalCloud      = null;
+    this._donutDebris    = null;   // thrown donut boxes that land + linger on the road
     // Seconds the diesel smokescreen still blinds roadside speed traps —
     // the trap-witnessing scan is skipped while > 0.
     this._coalBlindTimer = 0;
@@ -1485,6 +1496,9 @@ export class GameScene extends Phaser.Scene {
     // ── Odometer — advances at speed × 4× time compression ───────────
     // At 120 mph display: 120 × 4 / 3600 = 0.1333 mi/s → 120 mi in 15 min ✓
     this._odometer = 0;
+    // Accumulated in-world minutes from rest-stop/shop time (scaled real time).
+    // Persisted in the live snapshot so it survives Game↔RestStop scene swaps.
+    this._restStopClockMin = 0;
     // Steroid power-up — invincible "Mario star" lasting 1 mile of road
     // (distance-based, so higher speeds cover more ground in the same buff).
     // Active while _odometer < _steroidUntilMile.  -1 = inactive.
@@ -1784,6 +1798,8 @@ export class GameScene extends Phaser.Scene {
       this._odometer = (typeof lr.snap.odometer === 'number')
         ? lr.snap.odometer
         : (this.player.position / segWorld) * TOTAL_ROUTE_MILES;
+      this._restStopClockMin = (typeof lr.snap.restStopClockMin === 'number')
+        ? lr.snap.restStopClockMin : 0;
       this._applyResumeSnapshot(lr.snap);
       const tNow = this.player.position / segWorld;
       this._passedRestStops   = new Set(REST_STOPS.filter(r => r.t <= tNow).map(r => r.id));
@@ -2078,6 +2094,12 @@ export class GameScene extends Phaser.Scene {
           }
           if (typeof buys.partyClockPenalty === 'number' && buys.partyClockPenalty > 0) {
             this._partyClockSec = Math.max(0, (this._partyClockSec ?? 0) - buys.partyClockPenalty);
+          }
+          // Rest-stop/shop time advances the WORLD clock at the compressed
+          // stop rate, so time spent shopping pushes your arrival past 7 PM.
+          if (typeof buys.restStopVisitSec === 'number' && buys.restStopVisitSec > 0) {
+            this._restStopClockMin = (this._restStopClockMin ?? 0)
+              + (buys.restStopVisitSec * STOP_CLOCK_SCALE) / 60;
           }
           // Restroom use → empties the Bladder and clears any bursting.  Leaves
           // hydration/food intact (going to the bathroom doesn't dehydrate you).
@@ -2824,6 +2846,25 @@ export class GameScene extends Phaser.Scene {
    *  _updatePhysics and the tilt auto-engage in _activeSteeringMode.  The
    *  snow VISUAL is full from mile 40; only this STEERING feel eases in —
    *  that gentle build is the "coast into tilt" the design calls for. */
+  /** In-world clock, in minutes past midnight. Driven by MILES DRIVEN (2 PM +
+   *  up to 5 hours across the 293-mi route) plus scaled rest-stop time. Read by
+   *  the phone-menu clock UI and stamped on incoming texts. */
+  _worldClockMinutes() {
+    const mi = Math.max(0, Math.min(TOTAL_ROUTE_MILES, this._odometer ?? 0));
+    const driveMin = (mi / TOTAL_ROUTE_MILES) * DRIVE_SPAN_MIN;
+    return DEPART_MIN + driveMin + (this._restStopClockMin ?? 0);
+  }
+
+  /** World clock formatted as "h:mm AM/PM" (e.g. "4:37 PM"). */
+  _worldClockLabel() {
+    const total = Math.round(this._worldClockMinutes());
+    const h24   = Math.floor(total / 60) % 24;
+    const min   = ((total % 60) + 60) % 60;
+    const ampm  = h24 >= 12 ? 'PM' : 'AM';
+    const h12   = (h24 % 12) === 0 ? 12 : (h24 % 12);
+    return `${h12}:${String(min).padStart(2, '0')} ${ampm}`;
+  }
+
   _snowSteerRamp(mile = this._playerMile()) {
     if (!Weather.isSnow(mile)) return 0;               // Easy / outside zone
     if (mile < 43) return (mile - 40) / 3;             // ramp in over 3 mi
@@ -4565,6 +4606,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Rolling-coal cloud timer (💨 weapon) ──────────────────────────
     if (this._coalCloud) this._updateCoalCloud(rawDt);
+    if (this._donutDebris) this._updateDonutDebris(rawDt);
     if (this._coalBlindTimer > 0) this._coalBlindTimer -= rawDt;
 
     // ── Popup timer ───────────────────────────────────────────────────
@@ -10322,6 +10364,9 @@ export class GameScene extends Phaser.Scene {
       // Rolling coal — thick diesel smoke erupts off the rear + a diesel
       // rev growl; the lingering cloud also blinds speed traps for a few
       // seconds (the witnessing scan is skipped while _coalBlindTimer > 0).
+      // Donuts — a bakery box tossed out the driver window that arcs onto
+      // the road and stays as debris (the cops veer for it in CopSystem).
+      if (base === 'paint_bomb') this._throwDonutBox();
       if (base === 'coal') {
         this._startCoalCloud();
         this._coalBlindTimer = 4;
@@ -10443,6 +10488,74 @@ export class GameScene extends Phaser.Scene {
       if (p.age >= p.life) c.puffs.splice(i, 1);
     }
     if (c.emitT >= c.emitDur && !c.puffs.length) this._coalCloud = null;
+  }
+
+  /** 🍩 Throw a donut box out the driver window — it arcs onto the road just
+   *  behind the rear bumper and STAYS as debris (world-anchored, projected on
+   *  the road so it recedes as you drive on). Cops veer toward it (see the
+   *  paint_bomb case in CopSystem). Lingers ~9s then fades. */
+  _throwDonutBox() {
+    const pl = this.player;
+    if (!pl) return;
+    const exhaustZ = pl.position + PLAYER_VIRTUAL_Z - CAR_LEN_Z;
+    (this._donutDebris ??= []).push({
+      z:    exhaustZ - 240,                             // lands just behind the bumper
+      lat:  (pl.x ?? 0) + (Math.random() < 0.5 ? -0.05 : 0.05),
+      arc:  1,                                          // 1 = airborne (just tossed), 0 = resting
+      age:  0,
+      life: 9,
+    });
+    if (this._donutDebris.length > 6) this._donutDebris.shift();   // cap
+  }
+
+  /** Advance thrown donut boxes: settle the toss arc, then age the debris out. */
+  _updateDonutDebris(dt) {
+    const arr = this._donutDebris;
+    if (!arr || !arr.length) return;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const d = arr[i];
+      d.age += dt;
+      if (d.arc > 0) d.arc = Math.max(0, d.arc - dt / 0.55);   // ~0.55s to land
+      if (d.age >= d.life) arr.splice(i, 1);
+    }
+    if (!arr.length) this._donutDebris = null;
+  }
+
+  /** Draw the donut boxes on the road (far→near). A pink bakery box with a lid
+   *  seam; while airborne it rides an arc up off the pavement, then rests. */
+  _drawDonutDebris(g) {
+    const arr = this._donutDebris;
+    if (!arr || !arr.length || !g) return;
+    const camPos = this._renderCamPos();
+    const order = arr.map((d, i) => [d.z - camPos, i]).sort((a, b) => b[0] - a[0]);
+    for (const [relZ, i] of order) {
+      const d = arr[i];
+      if (relZ < 260 || relZ > 60000) continue;
+      const proj = this.road.getVehicleProjection(relZ, d.lat);
+      if (!proj || proj.sw < 3) continue;
+      const w = Math.max(3, proj.sw * 0.34);     // box width scales with distance
+      const h = w * 0.55;
+      const arcLift = d.arc * proj.sw * 1.1;      // rides up off the road while airborne
+      const cx = proj.sx;
+      const cy = proj.sy - h * 0.5 - arcLift;
+      const fade = Math.min(1, (d.life - d.age) / 1.5);   // fade over the last 1.5s
+      if (fade <= 0.02) continue;
+      // Pavement shadow once it's basically landed.
+      if (d.arc < 0.2) {
+        g.fillStyle(0x000000, 0.22 * fade);
+        g.fillEllipse(cx, proj.sy, w * 1.1, h * 0.45);
+      }
+      // Pink bakery box body + darker lid seam + edge outline.
+      g.fillStyle(0xF2A6C4, fade);
+      g.fillRect(cx - w / 2, cy - h / 2, w, h);
+      g.fillStyle(0xD9799F, fade);
+      g.fillRect(cx - w / 2, cy - h / 2, w, Math.max(1, h * 0.22));
+      g.lineStyle(Math.max(1, w * 0.05), 0x8A4A66, fade);
+      g.strokeRect(cx - w / 2, cy - h / 2, w, h);
+      // String tie across the lid.
+      g.lineStyle(Math.max(1, w * 0.05), 0xFFFFFF, 0.7 * fade);
+      g.beginPath(); g.moveTo(cx, cy - h / 2); g.lineTo(cx, cy + h / 2); g.strokePath();
+    }
   }
 
   /** Shared puff lifecycle → { shade, a }.  Starts LIGHT gray and darkens
@@ -14339,6 +14452,7 @@ export class GameScene extends Phaser.Scene {
     // 💨 Rolling-coal cloud shares the layer — the smoke wall must paint
     // over the road + the cops driving into it.
     this._drawCoalCloud(fireG);
+    this._drawDonutDebris(fireG);
   }
 
   /** Screen-level critical damage warning shared by chase and cockpit views. */
@@ -17606,7 +17720,7 @@ export class GameScene extends Phaser.Scene {
    *  content lives in the Messages app, so the HUD just says a text arrived. */
   _logBuddyText(cid, from, text) {
     const thread = (this._buddyThreads[cid] ??= []);
-    thread.push({ text, from, mile: Math.round(this._odometer ?? 0) });
+    thread.push({ text, from, mile: Math.round(this._odometer ?? 0), time: this._worldClockLabel() });
     if (thread.length > 12) thread.shift();
     try { window.__notif?.bumpMsg?.(cid); } catch (_) {}   // Messages unread dot
     this._showPopup('📱 New text — ' + from, '#9FE8FF');
@@ -17640,7 +17754,7 @@ export class GameScene extends Phaser.Scene {
   /** Log an incoming text FROM the Crush to the thread + a road notification.
    *  `quiet` (the "…" silent-treatment bubbles) skips the loud popup. */
   _girlMsg(text, quiet = false) {
-    (this._girlThread ??= []).push({ text, mile: Math.round(this._odometer ?? 0) });
+    (this._girlThread ??= []).push({ text, mile: Math.round(this._odometer ?? 0), time: this._worldClockLabel() });
     if (this._girlThread.length > 12) this._girlThread.shift();
     try { window.__notif?.bumpMsg?.('girl'); } catch (_) {}   // Messages unread dot
     this._showPopup(quiet ? '💕 …' : '📱 New text — The Crush', quiet ? '#C9B6D8' : '#FF9FD0');
@@ -17843,6 +17957,7 @@ export class GameScene extends Phaser.Scene {
         if (!text) return null;
         const mile = Number.isFinite(m.mile) ? Math.round(m.mile) : Math.round(this._odometer ?? 0);
         const out = { text, mile };
+        if (m.time != null) out.time = String(m.time);
         if (m.from != null) out.from = String(m.from);
         return out;
       })
@@ -17868,6 +17983,7 @@ export class GameScene extends Phaser.Scene {
       radar: !!this._hasRadar,
       position: this.player?.position ?? 0,
       odometer: this._odometer ?? 0,
+      restStopClockMin: this._restStopClockMin ?? 0,
       // Live-resume extras (ignored by the bit-packed code path, which only
       // reads the fixed fields above): preserve the party clock + run timer so
       // a reload can't be used to refresh them.
@@ -17911,6 +18027,7 @@ export class GameScene extends Phaser.Scene {
         if (!text) return null;
         const mile = Number.isFinite(msg.mile) ? Math.round(msg.mile) : Math.round(this._odometer ?? 0);
         const out = { text, mile };
+        if (msg.time != null) out.time = String(msg.time);
         if (msg.from != null) out.from = String(msg.from);
         return out;
       })
@@ -18077,6 +18194,7 @@ export class GameScene extends Phaser.Scene {
         stars:    this.cops.starDisplay ?? 0,
         position: this.player.position,
         odometer: this._odometer,
+        restStopClockMin: this._restStopClockMin ?? 0,
         // Party clock at pull-in — timed ("rush") mission deadlines are
         // stored as party-clock values, fixed at acceptance (Ch. 8).
         partyClockSec: this._partyClockSec ?? null,
