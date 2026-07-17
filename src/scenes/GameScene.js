@@ -472,6 +472,8 @@ export class GameScene extends Phaser.Scene {
     this._trapStopping        = false;   // auto-stop assist engaged
     this._trapStopHeld        = false;   // held at a full stop for the traffic stop
     this._trapStopHoldTimer   = 0;
+    this._bladderStopHeld     = false;   // held at a full stop for the voluntary bathroom pull-over
+    this._bladderStopTimer    = 0;
     // Stage 3 — the ticket.  `_trapTicket` snapshots the speeding offense at the
     // MOMENT of pulling over; it's resolved when the hold ends.
     this._trapTicket          = null;
@@ -2855,8 +2857,15 @@ export class GameScene extends Phaser.Scene {
     const mode = this._activeSteeringMode?.();
     let label = '', color = '#BFE6FF';
     if (inWind && mode === 'flappy') { label = '💨 CROSSWIND — HOLD TO FIGHT IT'; color = '#FFE08A'; }
-    else if (inSnow && mode === 'tilt')          { label = '📱 SNOW — TILT TO STEER'; color = '#BFE6FF'; }
+    else if (inSnow && mode === 'tilt')          { label = '📱 TILT TO STEER'; color = '#BFE6FF'; }
     else if (inSnow && !this._tiltAttached)      { label = '❄️ SNOW — SLIPPERY';      color = '#E6F2FF'; }
+    // A cue that already played then faded must NOT re-fire every ~1.4 mi
+    // (that made it read as "permanent", owner 2026-07-16). Reset the
+    // dismissal guard only when the computed label actually CHANGES.
+    if (label !== this._snowCueLastLabel) {
+      this._snowCueLastLabel = label;
+      this._snowCueDismissed = null;
+    }
     // Steering-scheme HANDOFF prompt: when the snow/tilt zone ends, tell the
     // player they're back on their normal scheme (one mile + fade, like the
     // entry cue) instead of the tilt cue just vanishing silently.
@@ -2864,7 +2873,7 @@ export class GameScene extends Phaser.Scene {
       this._snowCueWasSteering = false;
       this._snowCueShown = { text: '🛞 NORMAL STEERING', color: '#B7FFC5', startMile: this._odometer ?? 0 };
       cue.setText(this._snowCueShown.text).setColor(this._snowCueShown.color);
-    } else if (label) {
+    } else if (label && this._snowCueDismissed !== label) {
       this._snowCueWasSteering = (label.includes('TILT') || label.includes('SNOW'));
       if (this._snowCueShown?.text !== label) {
         this._snowCueShown = { text: label, color, startMile: this._odometer ?? 0 };
@@ -2876,6 +2885,9 @@ export class GameScene extends Phaser.Scene {
     const age = (this._odometer ?? 0) - shown.startMile;
     const alpha = age <= 1 ? 1 : Math.max(0, 1 - (age - 1) / 0.4);
     if (alpha <= 0) {
+      // Remember what just faded so it won't immediately re-fire; it only
+      // shows again once the computed label changes (see the guard above).
+      this._snowCueDismissed = shown.text;
       this._snowCueShown = null;
       if (cue.visible) cue.setVisible(false);
       return;
@@ -2913,6 +2925,11 @@ export class GameScene extends Phaser.Scene {
    *  Distinct from _steeringMode() (the persisted pick). */
   _activeSteeringMode() {
     const picked = this._steeringMode();   // 'classic'|'flappy'|'tilt'|'default'
+    // SNOW forces TILT on EVERYONE when the sensor is attached (owner
+    // 2026-07-16: "tilt to steer will be forced on the player"). Snow is a
+    // tilt-to-steer section regardless of the player's normal pick; if tilt
+    // can't attach (desktop / permission denied) it falls through to classic.
+    if (this._tiltAttached && (this._snowSteerRamp?.() ?? 0) > 0) return 'tilt';
     // Explicit picks LOCK their scheme — no weather switching.
     if (picked === 'classic') return 'classic';
     if (picked === 'flappy')  return 'flappy';
@@ -3695,7 +3712,7 @@ export class GameScene extends Phaser.Scene {
       // ── Bladder emergency: Bladder ≥ 90 = "bursting".  You get ~2 miles of
       // squirming (steering wobble in _updatePlayer) to reach a restroom; miss
       // that window and you're forced to pull over — lose 30s and go anyway.
-      if (this.survival.bladder >= 90) {
+      if (this.survival.bladder >= 90 && !this._bladderStopHeld) {
         if (this._bladderBurstMile == null) this._bladderBurstMile = this._odometer ?? 0;
         else if ((this._odometer ?? 0) - this._bladderBurstMile >= 2) {
           this._partyClockSec = Math.max(0, (this._partyClockSec ?? 0) - 30);
@@ -3705,8 +3722,35 @@ export class GameScene extends Phaser.Scene {
           this.survival.bladder = Math.max(0, this.survival.bladder * 0.6);
           this._bladderBurstMile = null;
         }
-      } else {
+      } else if (this.survival.bladder < 90) {
         this._bladderBurstMile = null;
+      }
+
+      // ── Voluntary bathroom pull-over (owner 2026-07-16) ─────────────────
+      // When "gotta go" is alerting (bladder ≥ 75), the player may CHOOSE to
+      // pull onto the shoulder and brake to a stop — held 30s like a traffic
+      // stop (car pinned, see _updatePlayer), then the bladder empties fully.
+      // No cost beyond the time. Beats soiling yourself at ≥90.
+      if (this._bladderStopHeld) {
+        this._bladderStopTimer -= rawDt;
+        if (this._bladderStopTimer <= 0) {
+          this._bladderStopHeld = false;
+          this.survival.bladder = 0;
+          this._bladderBurstMile = null;
+          this._showPopup?.('🚻 Ahhh… sweet relief. Bladder emptied.', '#88FFCC');
+        }
+      } else {
+        const alerted    = this.survival.bladder >= 75;
+        const onShoulder = Math.abs(this.player?.x ?? 0) >= 1.0;   // off the painted road
+        const halted     = (this._displayMPH?.() ?? 0) < 3;
+        const braking    = !!this._touchBrake;
+        if (alerted && onShoulder && halted && braking
+            && !this._trapStopHeld && !this._trapPursuitActive && !this._trapStopping) {
+          this._bladderStopHeld  = true;
+          this._bladderStopTimer = 30;
+          this._bladderStopHeldX = this.player.x;
+          this._showPopup?.('🚻 PULLED OVER — 30s to relieve yourself…', '#9AD8FF');
+        }
       }
     }
     // Guaranteed first taste — when a vice crosses its unlock gate this frame,
@@ -4139,7 +4183,6 @@ export class GameScene extends Phaser.Scene {
       this._injectViceLine({
         types:  [viceType, viceType, viceType, viceType],
         spread: 14,
-        label:  this._viceLineLabel(viceType),
       });
     }
     // Every ~100 in-game miles a longer mixed-vice line spawns. Tracked
@@ -4155,7 +4198,6 @@ export class GameScene extends Phaser.Scene {
       this._injectViceLine({
         types:  mixed,
         spread: 16,
-        label:  `🎉 MIXED VICE LINE — MILE ${milesNow}!`,
       });
     }
 
@@ -4803,7 +4845,7 @@ export class GameScene extends Phaser.Scene {
     } else if (this._trapStopping) {
       this._trapStopping = false;
     }
-    if (this._trapStopHeld) targetSpeed = 0;      // pinned for the held traffic stop
+    if (this._trapStopHeld || this._bladderStopHeld) targetSpeed = 0;   // pinned for a held stop (traffic / bathroom)
     if (this._finishCinematic) targetSpeed = 0;   // finish cinematic — ease to a stop at the house
 
     // Flat tire from roadblock — hard-cap top speed to 45 mph until timer ends.
@@ -5066,7 +5108,11 @@ export class GameScene extends Phaser.Scene {
     const wInten = Weather.intensity?.(_mileForGrip) ?? 0;
     const wSev   = Weather.severity?.(_mileForGrip) ?? 1;
     let weatherSlide = 0;
-    if (wState === 'rain') weatherSlide = 0.25 * wInten * wSev;
+    // Rain: flat ~18% slide at full intensity — a touch LOOSE, not sluggish.
+    // severity() still ramps the VISUALS (windshield drop load) but must NOT
+    // crank steering grip loss, or the North Bend storm wall (sev up to 4.8)
+    // clamps grip to near-zero and the car feels dead/heavy (owner 2026-07-16).
+    if (wState === 'rain') weatherSlide = 0.18 * wInten;
     if (wState === 'snow') weatherSlide = 0.45 * wInten * wSev;
     // Clamp so severity ramp can't push slide past total grip loss.
     weatherSlide = Math.min(0.92, weatherSlide);
@@ -5669,6 +5715,7 @@ export class GameScene extends Phaser.Scene {
     // it with no input, which showed as the car "rocking in place") so the car
     // is dead still — no translation, no lean.
     if (this._trapStopHeld) { p.x = this._trapStopHeldX ?? p.x; p.steerVelocity = 0; }
+    if (this._bladderStopHeld) { p.x = this._bladderStopHeldX ?? p.x; p.steerVelocity = 0; }
 
     // Advance
     // World-units position: full speed so the road scrolls fast and the game
@@ -10009,7 +10056,10 @@ export class GameScene extends Phaser.Scene {
       g.strokePath();
       const tier      = tiers[rs.id];
       const snapHere  = savesByStop[rs.id];
-      const tappable  = !!snapHere || inCustom;
+      // Map fast-travel is CUSTOM-ONLY (owner 2026-07-16): tapping a saved
+      // checkpoint mid-run to warp there is teleporting, so it's disabled on
+      // Easy/Normal/Hard — those must drive the route. Custom stays a sandbox.
+      const tappable  = inCustom;
       const labelCol  = inCustom
         ? '#FFCC44'
         : (TIER_HEX[tier] ?? (tappable ? '#F4F7FF' : '#7894A8'));
@@ -11670,9 +11720,10 @@ export class GameScene extends Phaser.Scene {
     }
     const inten = Weather.intensity?.(mile) ?? 0;
     const sev   = Weather.severity?.(mile)  ?? 1;
-    // Rain may hit sev 4.8 in the North Bend storm wall — let the falling-
-    // streak layer double too (snow still tops out at its old 2.4 feel).
-    const eff   = Math.max(0, Math.min(state === 'rain' ? 4.8 : 2.4, inten * sev));
+    // Falling-streak density caps at the old 2.4 feel for BOTH rain and snow
+    // (owner 2026-07-16 revert): letting rain ride to 4.8 made a too-dense
+    // linear sheet. Rain builds gradually now, not a wall.
+    const eff   = Math.max(0, Math.min(2.4, inten * sev));
     // dt for particle update — use the same Phaser delta the scene runs at.
     const dt = (this.game?.loop?.delta ?? 16) / 1000;
     // Wide-phone bleed: weatherFxGfx is a world-layer graphics (main cam
@@ -16543,7 +16594,9 @@ export class GameScene extends Phaser.Scene {
     const bh = this._missionChipTxt.height + PAD * 2 * sc;
     const t  = this.gameTime ?? 0;
     // Backing plate + border (green pulse on approach) — survival-bar palette.
-    g.fillStyle(0x0A0F1A, 0.8);
+    // Plate 65% more transparent (owner 2026-07-16): 0.8 → 0.28. Text + border
+    // keep full opacity so the job line stays fully readable.
+    g.fillStyle(0x0A0F1A, 0.28);
     g.fillRoundedRect(bx, by, bw, bh, 3);
     if (near) g.lineStyle(1.5, 0x66FF99, 0.55 + 0.45 * Math.abs(Math.sin(t * 5)));
     else      g.lineStyle(1.5, 0x315173, 1);
@@ -17696,26 +17749,6 @@ export class GameScene extends Phaser.Scene {
     return cond + (this.cops.starDisplay ?? 0);
   }
 
-  /** Punchy display labels for each vice-line type — used by the spawner
-   *  to flash a themed banner ("🍻 BEER RUN!", "🧙 MUSHROOM HUNTING!", …)
-   *  when a line drops on the road.  Mixed-vice lines fall back to the
-   *  generic mixed banner below. */
-  _viceLineLabel(viceType) {
-    const labels = {
-      sushi:     '🍻 BEER RUN!',
-      burrito:     '🌿 CHAIN SMOKING!',
-      energy:  '❄️ RAIL RUN!',
-      gummies:  '🍄 MUSHROOM HUNTING!',
-      hotdog:      '💊 TAB RUN!',
-      combo:   '💉 TRACK MARKS!',
-      coldbrew:       '📜 SCRIPT ROLL!',
-      coma: '☠️ RUSSIAN ROULETTE!',
-      slushie: '🐴 K-HOLE!',
-      caffeine:     '⚡ TWEAKER TRAIL!',
-    };
-    return labels[viceType] ?? '💊 STREET STASH!';
-  }
-
   /** Inject a long line of vice pickups onto consecutive segments ahead.
    *  Each pickup adds the standard 0.17 to the alcohol bar, so 3 cans nets
    *  roughly +50% — i.e. a 3-can line is enough to half-fill the player's
@@ -17748,9 +17781,9 @@ export class GameScene extends Phaser.Scene {
       });
       placed++;
     }
-    if (placed > 0) {
-      this._showPopup(o$.label ?? '🍻 BEER RUN!', '#FFCC44');
-    }
+    // No themed banner on spawn (owner 2026-07-16): the drug-referencing
+    // combo names ("BEER RUN", "TRACK MARKS", …) no longer fit the reskin.
+    // The pickup line still drops silently.
   }
 
   /** Inject a synthesized F12 weapon sprite onto a segment ~30-80 segments

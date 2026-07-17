@@ -73,6 +73,12 @@ export const FLEE_EXIT_SPAN     = 7400;   // exit completes at rel ≈ -3000
 // Rolling coal that actually smokes a pursuer buys a real lull: NO new cop
 // spawns for 30 s (stars persist — pursuit just doesn't remanifest).
 const COAL_LULL_SEC = 30;
+// Rolling-coal smoke-out FADE (owner 2026-07-16): the blinded cop keeps trying
+// to keep up (near player speed, no swerve) but the diesel cloud swallows it —
+// over this many seconds its alpha fades to 0 AND it slides DOWN below the
+// bottom edge ("gets lost in the black"), then despawns. Time-driven so it
+// works even when the player holds a steady lead.
+const COAL_FADE_SEC = 1.8;
 
 // Normalize raw sprite token names → internal names used in useF12Token
 const TOKEN_MAP = {
@@ -606,13 +612,38 @@ export class CopSystem {
       }
 
       case 'paint_bomb': {
-        // Donuts — the player lays a smoking burnout that transfixes
-        // every cop on the road.  All pursuit stops cold for 15 seconds
-        // (handled in update(): cops freeze and no fresh pursuit spawns).
-        // It's a pure DISTRACTION — no cars are removed and your wanted
-        // level doesn't change (no reduce, no escalate).  Non-directional:
-        // direction is ignored since it stalls cops everywhere.
-        this._donutPauseTimer = 15;
+        // Donuts — a box tossed onto the road behind you. Every cop in range
+        // BREAKS PURSUIT and veers toward the donuts (lane 0), then peels off
+        // the back of the screen (owner 2026-07-16). Unlike rolling coal they
+        // do NOT linger/fade in place — they divert and are gone. Pure
+        // DISTRACTION: no kills, no star change. `_donutLure` steers the flee
+        // toward the donuts; the fireworks-style positional recede slides them
+        // off. A SHORT no-spawn window keeps them from re-manifesting instantly.
+        let lured = 0;
+        for (const cop of this.cops) {
+          const rel = cop.position - playerPos;
+          if (cop.kind !== 'barricade' && rel < 3000 && rel > -15000) {
+            cop.fleeing       = true;
+            cop._fleeNoSwerve = false;      // uses the positional recede, not coal's fade
+            cop._donutLure    = 0;          // veer toward the donuts (road centre) on the way out
+            cop._fleeTimer    = FLEE_MAX_SEC;
+            cop.trapPursuit   = false;
+            cop.parked        = false;
+            cop._pitProgress  = 0;
+            cop._pitArmed     = false;
+            lured++;
+          }
+        }
+        if (lured > 0) {
+          this.bumpCount     = 0;
+          this.rearBumpCount = 0;
+          this.headOnCount   = 0;
+          this.pitCount      = 0;
+          this.arrestPending = false;
+        }
+        // 6s no-spawn window (vs coal's 30s) — donuts distract, they don't
+        // buy a long lull. Reuses the existing donut spawn-gate below.
+        this._donutPauseTimer = 6;
         break;
       }
 
@@ -807,10 +838,31 @@ export class CopSystem {
       // the smoke (lost sight — no dramatic swerve).
       if (cop.fleeing) {
         cop._fleeTimer = (cop._fleeTimer ?? FLEE_MAX_SEC) - dt;
-        if (!cop._fleeNoSwerve) {
+        // ── ROLLING COAL: keep-up-then-fade-into-the-black ──────────────
+        // The blinded cop hangs on near player speed (no swerve) but the
+        // smoke swallows it — over COAL_FADE_SEC its alpha fades to 0 AND it
+        // slides down past the bottom edge. Time-driven, so it works even
+        // when rel barely changes (player holding a steady lead).
+        if (cop._fleeNoSwerve) {
+          cop.speed = playerSpeed * 0.88;   // hangs on, drifts back only slightly
+          cop.position += cop.speed * dt;
+          const ft = (cop._coalFade ?? COAL_FADE_SEC) - dt;
+          cop._coalFade = ft;
+          const k = Math.max(0, Math.min(1, ft / COAL_FADE_SEC));   // 1 → 0
+          cop._fleeFade = k;          // alpha eases out
+          cop._fleeExit = 1 - k;      // synthetic slide DOWN past the bottom edge
+          if (ft <= 0) this.cops.splice(i, 1);
+          continue;
+        }
+        if (cop._donutLure != null) {
+          // Donut lure — steer TOWARD the donuts (lure lane) while receding,
+          // instead of the fireworks swerve toward the shoulder.
+          const d = cop._donutLure - cop.laneOffset;
+          cop.laneOffset += Math.sign(d) * Math.min(Math.abs(d), 2.4 * dt);
+        } else {
           cop.laneOffset += (cop.laneOffset >= 0 ? 1 : -1) * 2.4 * dt;
         }
-        cop.speed = Math.max(0, playerSpeed * (cop._fleeNoSwerve ? 0.35 : 0.5));
+        cop.speed = Math.max(0, playerSpeed * 0.5);
         cop.position += cop.speed * dt;
         const rel = cop.position - playerPos;
         // Alpha eases with POSITION, not time — full while still up-screen,
@@ -851,16 +903,11 @@ export class CopSystem {
         cop.speed = 0;
         continue;
       }
-      // Donut freeze — pursuit halted for the whole window.  The cop
-      // sits still (so the player drives off and it despawns behind them)
-      // and any armed PIT is disarmed so a stalled cop can't bust you.
-      if (this._donutPauseTimer > 0) {
-        cop.speed = 0;
-        cop._pitProgress = 0;
-        cop._pitArmed    = false;
-      }
+      // (Donuts no longer freeze cops in place — affected cops are set
+      //  `fleeing` toward the donuts in useF12Token and recede off-screen via
+      //  the flee block above. The 6s _donutPauseTimer only gates new spawns.)
       // Disabled override — EMP stops the car flat for a custom timer.
-      else if (cop.empTimer > 0) {
+      if (cop.empTimer > 0) {
         cop.empTimer -= dt; cop.speed = 0;
       } else {
         switch (cop.kind) {

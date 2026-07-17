@@ -7,13 +7,13 @@
 // (rel < 0), but the rear-cop AI oscillates around rel ≈ 0 (alongside at
 // playerSpeed + 200), so the cop actually applying ram pressure never
 // qualified.  Coal must smoke every pursuer in the -15000..+2500 band:
-// fleeing + _fleeNoSwerve, drop to 35% player speed (never gains again).
-// Removal is POSITION-driven (2026-07-15): a smoked cop stays alive until it
-// has receded past the bottom of the screen (rel <= -6000, off the forward
-// view AND tiny in the mirror) — never a mid-screen pop.  The flee timer is
-// only a lifetime failsafe, and (2026-07-16) it can no longer splice a cop
-// mid-screen: an expired timer must ALSO have completed the synthetic
-// bottom-edge exit (_fleeExit = 1) before removal.
+// fleeing + _fleeNoSwerve.
+// Recede is TIME-driven (owner 2026-07-16): a smoked cop HANGS ON near player
+// speed (~0.88×, "trying to keep up") but the diesel smoke swallows it — over
+// COAL_FADE_SEC (~1.8 s) its alpha fades to 0 (_fleeFade 1→0) AND it slides
+// down past the bottom edge (_fleeExit 0→1), then despawns. This works even
+// when the player holds a steady lead OR is fully stopped (rel never changes),
+// so there is never a mid-screen blink-out.
 // 2026-07-16 additions: a coal use that smokes >= 1 cop suppresses ALL new
 // cop spawns for 30 s (_coalLull re-asserted onto _spawnCooldown every tick
 // so nothing shortens it), and the synthetic exit slide (FLEE_EXIT_HOLD_REL
@@ -60,16 +60,15 @@ function pursuitCop(position, laneOffset = 0) {
   check('PIT disarmed on smoked cops', !rear._pitArmed && !alongside._pitArmed);
   check('arrest counters cleared', cs.rearBumpCount === 0 && !cs.arrestPending);
 
-  // Simulate up to 8 s of chase at fixed player speed — smoked cops must
-  // never gain ground, never touch the player, only despawn once they've
-  // receded past the bottom of the screen (rel <= -6000), and be gone well
-  // inside the 6 s lifetime failsafe.
+  // Simulate up to 8 s of chase at fixed player speed — a smoked cop HANGS
+  // ON near player speed (never EXCEEDS it, never gains), and despawns via the
+  // ~1.8 s smoke fade with its alpha at ~0 and its bottom-edge slide complete.
   let pos = playerPos;
   let minGapRear = Infinity, everGained = false, everOverSpeed = false;
   let prevGap = pos - rear.position;
-  // Last observed rel (cop.position - playerPos) per smoked cop, so we can
-  // verify each was OFF-SCREEN (well behind) at the moment it was removed.
-  let lastRelRear = rear.position - pos, lastRelAlong = alongside.position - pos;
+  // Last observed fade/exit on the rear cop before removal — verifies it faded
+  // out (_fleeFade→0) and slid off the bottom (_fleeExit→1), not a mid pop.
+  let lastFadeRear = 1, lastExitRear = 0;
   let despawnT = null;
   const dt = 1 / 60;
   for (let t = 0; t < 8; t += dt) {
@@ -78,24 +77,23 @@ function pursuitCop(position, laneOffset = 0) {
     if (cs.cops.includes(rear)) {
       const gap = pos - rear.position;
       if (gap < prevGap - 1e-6) everGained = true;   // cop closed the gap
-      if (rear.speed > playerSpeed * 0.35 + 1e-6) everOverSpeed = true;
+      if (rear.speed > playerSpeed + 1e-6) everOverSpeed = true;
       minGapRear = Math.min(minGapRear, gap);
       prevGap = gap;
-      lastRelRear = rear.position - pos;
+      lastFadeRear = rear._fleeFade ?? lastFadeRear;
+      lastExitRear = rear._fleeExit ?? lastExitRear;
     }
-    if (cs.cops.includes(alongside)) lastRelAlong = alongside.position - pos;
     if (despawnT == null && !cs.cops.includes(rear) && !cs.cops.includes(alongside)) despawnT = t;
   }
   check('smoked cop never gained on the player', !everGained);
-  check('smoked cop capped at 35% player speed', !everOverSpeed);
-  check('smoked cop never reached the player (no ram possible)', minGapRear >= 3000);
+  check('smoked cop never exceeds player speed (hangs on ~0.88x)', !everOverSpeed);
+  check('smoked cop never reached the player (no ram possible)', minGapRear >= 2500);
   check('smoked cops eventually despawned', despawnT != null);
-  check('smoked cops despawned inside the 6s failsafe', despawnT != null && despawnT < 6);
-  // Position-driven removal: at despawn each cop had already receded past
-  // the bottom of the screen (rel <= 0 is off the forward view; the -6000
-  // margin means it was faded + tiny in the mirror) — no mid-screen pop.
-  check('rear cop was off-screen (rel <= -5500) when removed', lastRelRear <= -5500);
-  check('alongside cop was off-screen (rel <= -5500) when removed', lastRelAlong <= -5500);
+  check('smoked cops despawned via the ~1.8s smoke fade', despawnT != null && despawnT < 2.5);
+  // Time-driven removal: just before despawn the cop had faded (alpha→0) and
+  // slid down past the bottom edge (_fleeExit→1) — "lost in the black".
+  check('smoked cop faded out before removal (_fleeFade→0)', lastFadeRear <= 0.05);
+  check('smoked cop slid off the bottom before removal (_fleeExit→1)', lastExitRear >= 0.95);
   check('unsmoked far-ahead cop survives', cs.cops.includes(farAhead));
 }
 
@@ -146,11 +144,11 @@ function pursuitCop(position, laneOffset = 0) {
   check('pursuit resumes after the lull (stars persisted)', firstSpawnT != null && firstSpawnT < 120);
 }
 
-// ── Timer failsafe can't blink a cop out mid-screen ───────────────────────
-// Player fully stopped: the fleeing cop's speed (35% of player) is 0, so
-// rel never falls.  The 6 s timer expires — but the cop must NOT be spliced
-// until the synthetic bottom-edge exit (_fleeExit) has completed, so the
-// forward view can slide it off the bottom of the screen first.
+// ── Time-driven fade despawns even a "stalled" coal cop (no blink-out) ─────
+// Player fully stopped: rel never changes.  The old positional recede would
+// never remove the cop; the new smoke fade is TIME-driven, so over ~1.8 s the
+// cop fades (alpha→0) and slides down past the bottom edge (_fleeExit→1), then
+// despawns — mid-screen but fully faded + slid off, so there is no pop.
 {
   const cs = new CopSystem();
   cs.stars = 2;
@@ -159,24 +157,21 @@ function pursuitCop(position, laneOffset = 0) {
   const stalled = pursuitCop(playerPos + 2000);   // visible ahead, rel = +2000
   cs.cops.push(stalled);
   cs.useF12Token('coal', playerPos);
-  check('stalled cop smoked', stalled.fleeing === true);
+  check('stalled cop smoked', stalled.fleeing === true && stalled._fleeNoSwerve === true);
 
   const dt = 1 / 60;
-  let atTimerExpiry = null, despawnT = null;
+  let despawnT = null, lastFade = 1, lastExit = 0;
   for (let t = 0; t < 12; t += dt) {
     cs.update(dt, playerPos, 0, 0);               // player speed 0 → rel frozen
-    const alive = cs.cops.includes(stalled);
-    if (t >= 6 && atTimerExpiry == null) atTimerExpiry = { alive, exit: stalled._fleeExit ?? 0 };
-    if (!alive && despawnT == null) despawnT = t;
+    if (cs.cops.includes(stalled)) {
+      lastFade = stalled._fleeFade ?? lastFade;
+      lastExit = stalled._fleeExit ?? lastExit;
+    } else if (despawnT == null) despawnT = t;
   }
-  check('cop still on screen when the timer expires (no blink-out)',
-        atTimerExpiry != null && atTimerExpiry.alive === true && atTimerExpiry.exit < 1);
-  check('boost finishes the exit slide and despawns the stalled cop', despawnT != null);
-  // The splice happens on the same tick _fleeExit reaches 1, so read the
-  // final value off the (now-removed) cop object itself.
-  check('despawn only after the synthetic exit completed (_fleeExit = 1)', (stalled._fleeExit ?? 0) >= 1);
-  // Sanity on the exit geometry: exit progress is positional, 0 at the
-  // projection-floor hold depth and 1 once fully behind/below the screen.
+  check('stalled coal cop despawns on the ~1.8s fade (rel frozen)', despawnT != null && despawnT < 2.5);
+  check('faded out before removal (_fleeFade→0)', lastFade <= 0.05);
+  check('slid off the bottom before removal (_fleeExit→1)', lastExit >= 0.95);
+  // Exit-slide constants still exported + sane (used by the forward renderer).
   check('exit constants sane (hold depth ahead of camera, span past rel 0)',
         FLEE_EXIT_HOLD_REL > 0 && FLEE_EXIT_HOLD_REL - FLEE_EXIT_SPAN < 0);
 }

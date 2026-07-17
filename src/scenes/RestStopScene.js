@@ -36,13 +36,14 @@ export const VICE_PRICE = {
 
 const VICE_DISPLAY = (id) => VICE_CONFIG[id]?.label?.replace(/^[^A-Za-z]+/, '').trim() ?? id;
 
-// Restroom item — empties Thirst (bladder) to 0.  `gated` restrooms (the
-// trash gas stations, ~50% of them) are customers-only: you must buy
-// something at that stop first.  Park & Ride / Camp restrooms are free.
-const restroomItem = (gated) => ({
+// Restroom item — empties the BLADDER bar (nothing else). `gated` restrooms
+// (the trash gas stations, ~50% of them) are customers-only: you must buy
+// something at THAT stop first. Park & Ride / Camp restrooms are free.
+// `freeDesc` overrides the flavor line for a specific free restroom.
+const restroomItem = (gated, freeDesc) => ({
   id: 'restroom', emoji: '🚽', label: '🚽  USE RESTROOM', cost: 0,
-  desc: gated ? 'Empties Thirst → 0. Customers only at some stops.'
-              : 'Free — empties Thirst → 0.',
+  desc: gated ? 'Piss in bliss — customers only.'
+              : (freeDesc ?? 'Piss in bliss — and it\'s free.'),
   payload: { restroom: true, gated: !!gated },
 });
 
@@ -50,7 +51,7 @@ const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
   const items = [
     { id: 'coffee',     label: 'COFFEE',           emoji: '☕',
       cost: 10, desc: 'Raises your Alertness. Brewed at some point this week.',
-      payload: { coffee: true, reduceVices: 0.99, survivalDelta: { tiredness: -8 } } },
+      payload: { coffee: true, survivalDelta: { tiredness: -25 } } },
     { id: 'snooze',     label: 'TAKE A SNOOZE',    emoji: '😴',
       cost: 150, desc: 'Wipes all vice bars (instant — no ad watch)', payload: { reduceVices: 0 } },
   ];
@@ -94,7 +95,7 @@ const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
 // pharmacy is the dedicated vice shop and isn't gated by exposure).
 const SHOP_VICES = {
   gas:     ['sushi', 'burrito'],                       // Beer + weed at the pump
-  hunting: ['sushi'],                               // Beer at the outfitter
+  hunting: [],                                       // Cowbellas = hunting gear only, no food
   charge:  ['gummies', 'hotdog', 'burrito'],                // Hippie EV crowd
   camp:    ['coma', 'slushie', 'caffeine'],          // Sketchy back-country
   dealer:  ['energy'],                               // Dealership = blow
@@ -178,8 +179,8 @@ const SECTIONS = {
     label: '🏕  CAMP',
     items: [
       { id: 'hitch',    label: '🧍  PICK UP HITCHHIKER',  cost:   0, desc: 'Free — but it\'s a gamble',                              payload: { hitchhike: true } },
-      { id: 'sleep',    label: '😴  NAP IT OFF',          cost:   0, desc: 'Watch ad (5s); −25% on every vice; party-clock penalty', payload: { sleep: true,  reduceVices: 0.75 } },
-      { id: 'coffee',   label: '☕  COFFEE',                cost:   7, desc: '−1% on every vice',                                     payload: { coffee: true, reduceVices: 0.99 } },
+      { id: 'sleep',    label: '😴  NAP IT OFF',          cost:   0, desc: 'Watch ad (5s); fully restores Alertness',                 payload: { sleep: true,  survivalDelta: { tiredness: -100 } } },
+      { id: 'coffee',   label: '☕  COFFEE',                cost:   7, desc: 'Restores Alertness',                                     payload: { coffee: true, survivalDelta: { tiredness: -25 } } },
       { id: 'campfix',  label: '🔧  CAMP REPAIR',          cost: 400, desc: 'Repair up to 65% HP (cheaper than dealership)',          payload: { campRepair: true } },
       // Hot Springs soak — a stacking +10 HP "bonus" (extra over max) that
       // carries into gameplay and is consumed by crash damage before regular HP.
@@ -428,7 +429,10 @@ export class RestStopScene extends Phaser.Scene {
     // of stops are "customers only" (must buy something first).  The gate
     // is deterministic per stop id so it's stable across a visit.  Park &
     // Ride and Camp restrooms are always free.
-    this._boughtSomething = false;
+    // Per-business purchase tracking (owner 2026-07-16): a customers-only
+    // restroom unlocks ONLY if you bought something at THAT business this
+    // visit — buying at AM/BM must NOT unlock Gas-N-Sip's restroom, etc.
+    this._boughtAt = new Set();
     const _sid = String(this._stop?.id ?? '');
     let _h = 0; for (let i = 0; i < _sid.length; i++) _h = (_h * 31 + _sid.charCodeAt(i)) | 0;
     this._restroomGated = (Math.abs(_h) % 2) === 0;
@@ -520,7 +524,7 @@ export class RestStopScene extends Phaser.Scene {
       }];
     }
     // Park & Ride always has a free public restroom.
-    SECTIONS.parkride.items = [...SECTIONS.parkride.items, restroomItem(false)];
+    SECTIONS.parkride.items = [...SECTIONS.parkride.items, restroomItem(false, 'Nasty, but free.')];
 
     // ── DEALER_CARS: build region-filtered vehicle catalog ──────────
     const _stopBrands = brandsForStop(this._stop);
@@ -600,7 +604,8 @@ export class RestStopScene extends Phaser.Scene {
     const _pickupCounts = this.registry.get('vicePickupCounts')
       ?? this._vicePickupCounts ?? {};
     SECTIONS.gas.items     = [...SECTIONS.gas.items,     ...shopViceItems('gas',     _pickupCounts)];
-    SECTIONS.hunting.items = [...SECTIONS.hunting.items, ...shopViceItems('hunting', _pickupCounts)];
+    // Cowbellas (hunting) sells hunting GEAR only — no food/beer (owner
+    // 2026-07-16). Base items (Diesel Tune, Fireworks, Donuts, Passport) stand.
     // Camp repair guard — if the player's HP is already higher than
     // 65 % of this vehicle's max, the "repair to 65 %" purchase would
     // DOWN-tier their HP.  Mark it disabled so it shows "N/A" and the
@@ -1576,13 +1581,13 @@ export class RestStopScene extends Phaser.Scene {
       const c  = i % cols;
       const cx = x + c * (cellW + 6);
       const cy = y + r * (cellH + 6);
-      const created = this._makeButton(cx, cy, cellW, cellH, item);
+      const created = this._makeButton(cx, cy, cellW, cellH, item, key);
       created.forEach(o => objs.push(o));
     });
     return objs;
   }
 
-  _makeButton(x, y, w, h, item) {
+  _makeButton(x, y, w, h, item, bizKey) {
     const bg = this.add.rectangle(x, y, w, h, 0x2A1808)
       .setOrigin(0, 0)
       .setStrokeStyle(2, 0xFFCC66)
@@ -1668,14 +1673,14 @@ export class RestStopScene extends Phaser.Scene {
       }
       // Customers-only restroom gate — must buy something at this stop first.
       if (item.payload?.restroom && item.payload.gated
-          && this._restroomGated && !this._boughtSomething) {
+          && this._restroomGated && !this._boughtAt.has(bizKey)) {
         this._flash(bg, 0xFF4444);
         this._setStatus('🚻 CUSTOMERS ONLY', '#FF6666', true);
         return;
       }
       if (effectiveCost > 0) {
         this._score -= effectiveCost;
-        this._boughtSomething = true;   // unlocks customers-only restrooms
+        if (bizKey) this._boughtAt.add(bizKey);   // unlocks THIS business's restroom only
         const _si = this._statsSpendInfo(item);
         this._stats?.recordSpend(effectiveCost, _si.category, _si.subId);
       }
@@ -1799,12 +1804,13 @@ export class RestStopScene extends Phaser.Scene {
       this._purchases.partyClockPenalty = (this._purchases.partyClockPenalty ?? 0) + 60;
     }
     if (p.sleep) {
+      // NAP IT OFF: alertness-only now (owner 2026-07-16). No vice cut, no
+      // party-clock penalty — just the 5s ad, then Alertness is restored via
+      // the survivalDelta on the payload.
       this._purchases.sleepAdMs       = 5000;
-      this._purchases.partyClockPenalty = (this._purchases.partyClockPenalty ?? 0) + 180;
     }
-    if (p.coffee) {
-      this._purchases.partyClockPenalty = (this._purchases.partyClockPenalty ?? 0) + 30;
-    }
+    // COFFEE: alertness-only — its survivalDelta handles the boost; no
+    // party-clock penalty and no vice reduction anymore.
     if (p.campRepair) {
       // Repair to 65 % of the CURRENT vehicle's max HP, not a flat 65
       // points — otherwise low-HP cars (Beater = 50 max) get clamped to
@@ -1861,10 +1867,6 @@ export class RestStopScene extends Phaser.Scene {
     if (p.buyVehicle) {
       this._purchases.boughtVehicles = this._purchases.boughtVehicles ?? [];
       this._purchases.boughtVehicles.push(p.buyVehicle);
-    }
-    if (p.reduceVices && (p.coffee || p.sleep)) {
-      // Multiplicative vice reduction handled below in the existing
-      // reduceVices branch — leave as-is so the math composes.
     }
     if (p.restHp) {
       // Grants +10 bonus HP — extra above the vehicle's max, consumed by crash
