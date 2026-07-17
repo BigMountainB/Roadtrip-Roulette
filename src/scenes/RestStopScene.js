@@ -51,10 +51,10 @@ const restroomItem = (gated, freeDesc) => ({
 const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
   const items = [
     { id: 'coffee',     label: 'COFFEE',           emoji: '☕',
-      cost: 10, desc: 'Raises your Alertness. Brewed at some point this week.',
-      payload: { coffee: true, survivalDelta: { tiredness: -25 } } },
+      cost: 10, desc: 'A moderate Alertness bump. Brewed at some point this week.',
+      payload: { coffee: true, survivalDelta: { tiredness: -15 } } },
     { id: 'snooze',     label: 'TAKE A SNOOZE',    emoji: '😴',
-      cost: 150, desc: 'Wipes all vice bars (instant — no ad watch)', payload: { reduceVices: 0 } },
+      cost: 150, desc: 'Sleep it all off — every buzz back to zero (instant, no ad)', payload: { reduceVices: 0 } },
   ];
   // Vice unlocks are stored in the registry by ViceSystem.snapshotUnlocks
   // as a PLAIN OBJECT { sushi: true, burrito: true, gummies: true, ... },
@@ -66,6 +66,22 @@ const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
   };
   for (const id of Object.values(VICES)) {
     if (!isUnlocked(id)) continue;
+    // Caffeine PILLS are the rare, premium alertness item (owner 2026-07-17):
+    // stronger Alertness bump than coffee AND ~1.8× its price, so coffee is the
+    // cheap-moderate option and pills are the pricey-strong one. (This overrides
+    // the generic gas-station-food treatment for caffeine ONLY in the shop; the
+    // road caffeine pickup keeps its own ITEM_FX balance.)
+    if (id === 'caffeine') {
+      items.push({
+        id:    'vice_caffeine',
+        label: 'CAFFEINE PILLS',
+        icon:  VICE_TEX('caffeine'),
+        cost:  18,   // ~1.8× the $10 coffee — rare + strong
+        desc:  '+28 Alertness — the strong, rare stuff.',
+        payload: { survivalDelta: { tiredness: -28 } },
+      });
+      continue;
+    }
     // Gas-station food/drink: flat $25, fills the survival bars at HALF
     // the road-sprite amounts (2026-07-16 owner economy pass).
     const fx = ITEM_FX[id] ?? {};
@@ -168,10 +184,10 @@ const SECTIONS = {
   hunting: {
     label: '🦌  HUNTING',
     items: [
-      { id: 'coal',    label: 'DIESEL TUNE',      icon: 'weapon_coal',        cost:  800, desc: '+6 clouds — smoke out the law behind you',  payload: { f12: 'coal' } },
+      { id: 'coal',    label: 'DIESEL TUNE',      icon: 'weapon_coal',        cost:  350, desc: '+6 clouds — smoke out the law behind you',  payload: { f12: 'coal' } },
       // Fireworks ship 3 shows per purchase (full stack).  Triple-stacks
       // the F12 token via f12Count.
-      { id: 'fireworks', label: 'FIREWORKS',      icon: 'weapon_fireworks',   cost: 1000, desc: '+3 shows — scatters every cop on screen',   payload: { f12: 'fireworks', f12Count: 3 } },
+      { id: 'fireworks', label: 'FIREWORKS',      icon: 'weapon_fireworks',   cost: 500, desc: '+3 shows — scatters every cop on screen',   payload: { f12: 'fireworks', f12Count: 3 } },
       { id: 'paint',   label: 'DONUTS',           icon: 'weapon_paint_bomb',  cost:   50, desc: '+1 — all cops stop chasing 15s',            payload: { f12: 'paint_bomb' } },
       { id: 'camo',    label: '🥷  NEW PASSPORT', cost: 2000, desc: 'Single-use: clears 2 stars on resume',                                  payload: { camouflage: true } },
     ],
@@ -181,7 +197,7 @@ const SECTIONS = {
     items: [
       { id: 'hitch',    label: '🧍  PICK UP HITCHHIKER',  cost:   0, desc: 'Free — but it\'s a gamble',                              payload: { hitchhike: true } },
       { id: 'sleep',    label: '😴  NAP IT OFF',          cost:   0, desc: 'Watch ad (5s); fully restores Alertness',                 payload: { sleep: true,  survivalDelta: { tiredness: -100 } } },
-      { id: 'coffee',   label: '☕  COFFEE',                cost:   7, desc: 'Restores Alertness',                                     payload: { coffee: true, survivalDelta: { tiredness: -25 } } },
+      { id: 'coffee',   label: '☕  COFFEE',                cost:   7, desc: 'A moderate Alertness bump',                              payload: { coffee: true, survivalDelta: { tiredness: -15 } } },
       { id: 'campfix',  label: '🔧  CAMP REPAIR',          cost: 400, desc: 'Repair up to 65% HP (cheaper than dealership)',          payload: { campRepair: true } },
       // Hot Springs soak — a stacking +10 HP "bonus" (extra over max) that
       // carries into gameplay and is consumed by crash damage before regular HP.
@@ -300,7 +316,7 @@ const VIGNETTES = {
   ],
   O: [   // Othello
     'Mexican food at the truck stop — life-changing.',
-    'You missed Royal? They had cocaine.',
+    'You missed Royal? They had the good energy drinks.',
     'Watch for combines on 26 — those things are rolling roadblocks.',
   ],
   W: [   // Washtucna
@@ -1579,7 +1595,11 @@ export class RestStopScene extends Phaser.Scene {
     // TWO columns whenever one column would squeeze rows unreadably thin
     // (2026-07-16: AM/BM + camp menus were cutting descriptions off) —
     // fewer, TALLER buttons beat many crushed ones.
-    const cols  = (key === 'vices' || items.length > 6) ? 2 : 1;
+    // Two-column shops (owner 2026-07-17): vices + the ones that were still
+    // stretching buttons full-width — gas (CarGo/Huff's), hunting (CowBella),
+    // AM/BM, Park & Ride. Anything with >6 items also splits regardless.
+    const TWO_COL = new Set(['vices', 'gas', 'hunting', 'ambm', 'parkride']);
+    const cols  = (TWO_COL.has(key) || items.length > 6) ? 2 : 1;
     const rows  = Math.ceil(items.length / cols);
     const cellW = (w - (cols - 1) * 6) / cols;
     const cellH = Math.min(56, Math.max(30, (h - (rows - 1) * 6) / rows));
@@ -1652,24 +1672,26 @@ export class RestStopScene extends Phaser.Scene {
       }).setOrigin(1, 0.5);
     created.push(label, desc, cost);
 
+    // item.disabled is read LIVE (not the build-time `disabled` const) so a
+    // purchase can flip it — e.g. REFUEL greys itself out after one buy.
     const refresh = () => {
-      const ok = !disabled && this._score >= effectiveCost;
+      const ok = !item.disabled && this._score >= effectiveCost;
       bg.setFillStyle(ok ? 0x2A1808 : 0x1A0E04);
       bg.setStrokeStyle(2, ok ? 0xFFCC66 : 0x664422);
       label.setAlpha(ok ? 1 : 0.45);
       desc.setAlpha(ok ? 1 : 0.45);
-      cost.setColor(disabled ? '#886622'
+      cost.setColor(item.disabled ? '#886622'
                    : effectiveCost === 0 ? '#88FFCC'
                    : (ok ? '#FFEE00' : '#886622'));
     };
     refresh();
     this._buttonRefresh.push(refresh);
 
-    bg.on('pointerover', () => { if (!disabled && this._score >= effectiveCost) bg.setFillStyle(0x44280C); });
+    bg.on('pointerover', () => { if (!item.disabled && this._score >= effectiveCost) bg.setFillStyle(0x44280C); });
     bg.on('pointerout',  () => refresh());
     bg.on('pointerdown', (ptr) => {
       ptr.event?.stopPropagation?.();
-      if (disabled) {
+      if (item.disabled) {
         this._flash(bg, 0xFF4444);
         this._setStatus(item.disabledReason ?? 'Not available right now.', '#FF6666');
         return;
@@ -1700,6 +1722,15 @@ export class RestStopScene extends Phaser.Scene {
       }
       this._refreshScore();
       this._applyPurchase(item);
+      // REFUEL fills the tank fully and is SINGLE-USE (owner 2026-07-17):
+      // grey it out + relabel so it can't be bought again this visit.
+      if (item.payload?.refuel) {
+        item.disabled = true;
+        item.disabledReason = '⛽ Tank\'s already full.';
+        label.setText('⛽  TANK FULL');
+        desc.setText('Topped off.');
+        cost.setText('N/A');
+      }
       this._setStatus(this._purchaseConfirmation(item), '#88FF88');
       this._flash(bg, 0x44FF44);
       this._buttonRefresh.forEach(fn => fn());

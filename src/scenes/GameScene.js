@@ -10490,71 +10490,66 @@ export class GameScene extends Phaser.Scene {
     if (c.emitT >= c.emitDur && !c.puffs.length) this._coalCloud = null;
   }
 
-  /** 🍩 Throw a donut box out the driver window — it arcs onto the road just
-   *  behind the rear bumper and STAYS as debris (world-anchored, projected on
-   *  the road so it recedes as you drive on). Cops veer toward it (see the
-   *  paint_bomb case in CopSystem). Lingers ~9s then fades. */
+  /** 🍩 Throw a donut box out the driver window. Rendered in SCREEN space (a
+   *  parabolic toss that lands on the road, then sits + fades as you drive off)
+   *  — a road-anchored box behind the car sits in the engine's un-projectable
+   *  sub-1400 depth band, so it was invisible. Cops veer for it in CopSystem. */
   _throwDonutBox() {
-    const pl = this.player;
-    if (!pl) return;
-    const exhaustZ = pl.position + PLAYER_VIRTUAL_Z - CAR_LEN_Z;
+    // Driver window (left of car) → arcs out onto the road, lands ahead-bottom.
+    const side = this._leftHanded ? -1 : -1;   // always tossed from the driver (left) side
     (this._donutDebris ??= []).push({
-      z:    exhaustZ - 240,                             // lands just behind the bumper
-      lat:  (pl.x ?? 0) + (Math.random() < 0.5 ? -0.05 : 0.05),
-      arc:  1,                                          // 1 = airborne (just tossed), 0 = resting
-      age:  0,
-      life: 9,
+      x0: SCREEN_W * 0.42,                       // out the driver window
+      y0: SCREEN_H * 0.60,
+      x1: SCREEN_W * (0.50 + side * 0.05) + (Math.random() * 0.06 - 0.03) * SCREEN_W,
+      y1: SCREEN_H * 0.82,                       // onto the road, near the bottom
+      t: 0, flight: 0.55, life: 3.6,
     });
-    if (this._donutDebris.length > 6) this._donutDebris.shift();   // cap
+    if (this._donutDebris.length > 5) this._donutDebris.shift();   // cap
   }
 
-  /** Advance thrown donut boxes: settle the toss arc, then age the debris out. */
+  /** Age thrown donut boxes; drop them when their life runs out. */
   _updateDonutDebris(dt) {
     const arr = this._donutDebris;
     if (!arr || !arr.length) return;
     for (let i = arr.length - 1; i >= 0; i--) {
       const d = arr[i];
-      d.age += dt;
-      if (d.arc > 0) d.arc = Math.max(0, d.arc - dt / 0.55);   // ~0.55s to land
-      if (d.age >= d.life) arr.splice(i, 1);
+      d.t += dt;
+      if (d.t >= d.life) arr.splice(i, 1);
     }
     if (!arr.length) this._donutDebris = null;
   }
 
-  /** Draw the donut boxes on the road (far→near). A pink bakery box with a lid
-   *  seam; while airborne it rides an arc up off the pavement, then rests. */
+  /** Draw the donut box(es): a parabolic toss out the window, then a pink
+   *  bakery box resting on the road that fades as the car pulls away. Drawn on
+   *  the explosion layer (fireG), which shares the road's screen coordinates. */
   _drawDonutDebris(g) {
     const arr = this._donutDebris;
     if (!arr || !arr.length || !g) return;
-    const camPos = this._renderCamPos();
-    const order = arr.map((d, i) => [d.z - camPos, i]).sort((a, b) => b[0] - a[0]);
-    for (const [relZ, i] of order) {
-      const d = arr[i];
-      if (relZ < 260 || relZ > 60000) continue;
-      const proj = this.road.getVehicleProjection(relZ, d.lat);
-      if (!proj || proj.sw < 3) continue;
-      const w = Math.max(3, proj.sw * 0.34);     // box width scales with distance
-      const h = w * 0.55;
-      const arcLift = d.arc * proj.sw * 1.1;      // rides up off the road while airborne
-      const cx = proj.sx;
-      const cy = proj.sy - h * 0.5 - arcLift;
-      const fade = Math.min(1, (d.life - d.age) / 1.5);   // fade over the last 1.5s
+    for (const d of arr) {
+      const inFlight = d.t < d.flight;
+      const p  = Math.min(1, d.t / d.flight);          // 0→1 flight progress
+      const x  = d.x0 + (d.x1 - d.x0) * p;
+      const gy = d.y0 + (d.y1 - d.y0) * p;             // ground track
+      const hop = inFlight ? Math.sin(p * Math.PI) * SCREEN_H * 0.15 : 0;  // arc height
+      const y  = gy - hop;
+      // Sits ~0.7s after landing, then fades over the rest of its life.
+      const settled = Math.max(0, d.t - d.flight);
+      const fade = settled <= 0.7 ? 1
+                 : Math.max(0, 1 - (settled - 0.7) / (d.life - d.flight - 0.7));
       if (fade <= 0.02) continue;
-      // Pavement shadow once it's basically landed.
-      if (d.arc < 0.2) {
-        g.fillStyle(0x000000, 0.22 * fade);
-        g.fillEllipse(cx, proj.sy, w * 1.1, h * 0.45);
-      }
-      // Pink bakery box body + darker lid seam + edge outline.
+      const w = 30 * (inFlight ? 0.7 + 0.3 * p : 1);
+      const h = w * 0.6;
+      // Pavement shadow once landed.
+      if (!inFlight) { g.fillStyle(0x000000, 0.28 * fade); g.fillEllipse(x, gy + h * 0.45, w * 1.15, h * 0.5); }
+      // Pink bakery box + darker lid + outline + string tie.
       g.fillStyle(0xF2A6C4, fade);
-      g.fillRect(cx - w / 2, cy - h / 2, w, h);
+      g.fillRect(x - w / 2, y - h / 2, w, h);
       g.fillStyle(0xD9799F, fade);
-      g.fillRect(cx - w / 2, cy - h / 2, w, Math.max(1, h * 0.22));
-      g.lineStyle(Math.max(1, w * 0.05), 0x8A4A66, fade);
-      g.strokeRect(cx - w / 2, cy - h / 2, w, h);
-      // String tie across the lid.
-      g.lineStyle(Math.max(1, w * 0.05), 0xFFFFFF, 0.7 * fade);
-      g.beginPath(); g.moveTo(cx, cy - h / 2); g.lineTo(cx, cy + h / 2); g.strokePath();
+      g.fillRect(x - w / 2, y - h / 2, w, h * 0.24);
+      g.lineStyle(2, 0x8A4A66, fade);
+      g.strokeRect(x - w / 2, y - h / 2, w, h);
+      g.lineStyle(2, 0xFFFFFF, 0.7 * fade);
+      g.beginPath(); g.moveTo(x, y - h / 2); g.lineTo(x, y + h / 2); g.strokePath();
     }
   }
 

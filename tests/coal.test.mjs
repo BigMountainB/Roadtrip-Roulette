@@ -8,12 +8,11 @@
 // playerSpeed + 200), so the cop actually applying ram pressure never
 // qualified.  Coal must smoke every pursuer in the -15000..+2500 band:
 // fleeing + _fleeNoSwerve.
-// Recede is TIME-driven (owner 2026-07-16): a smoked cop HANGS ON near player
-// speed (~0.88×, "trying to keep up") but the diesel smoke swallows it — over
-// COAL_FADE_SEC (~1.8 s) its alpha fades to 0 (_fleeFade 1→0) AND it slides
-// down past the bottom edge (_fleeExit 0→1), then despawns. This works even
-// when the player holds a steady lead OR is fully stopped (rel never changes),
-// so there is never a mid-screen blink-out.
+// Recede (owner 2026-07-17): a smoked cop KEEPS PACE with the player for
+// COAL_PACE_SEC (~1.5 s), then slows to 0.45× and falls back, dropping off the
+// bottom edge the SAME WAY IT DROVE IN — pure positional recede, NO synthetic
+// bottom-slide (_fleeExit stays 0), NO in-place fade. It despawns once rel ≤
+// FLEE_DESPAWN_REL, or via the FLEE_MAX_SEC timer if the player is stopped.
 // 2026-07-16 additions: a coal use that smokes >= 1 cop suppresses ALL new
 // cop spawns for 30 s (_coalLull re-asserted onto _spawnCooldown every tick
 // so nothing shortens it), and the synthetic exit slide (FLEE_EXIT_HOLD_REL
@@ -60,18 +59,17 @@ function pursuitCop(position, laneOffset = 0) {
   check('PIT disarmed on smoked cops', !rear._pitArmed && !alongside._pitArmed);
   check('arrest counters cleared', cs.rearBumpCount === 0 && !cs.arrestPending);
 
-  // Simulate up to 8 s of chase at fixed player speed — a smoked cop HANGS
-  // ON near player speed (never EXCEEDS it, never gains), and despawns via the
-  // ~1.8 s smoke fade with its alpha at ~0 and its bottom-edge slide complete.
+  // Simulate up to 20 s of chase at fixed player speed — a smoked cop KEEPS
+  // PACE (never gains, never exceeds player speed), then slows and recedes off
+  // the bottom via PURE POSITION (rel ≤ FLEE_DESPAWN_REL), never the synthetic
+  // slide (_fleeExit stays 0).
   let pos = playerPos;
   let minGapRear = Infinity, everGained = false, everOverSpeed = false;
   let prevGap = pos - rear.position;
-  // Last observed fade/exit on the rear cop before removal — verifies it faded
-  // out (_fleeFade→0) and slid off the bottom (_fleeExit→1), not a mid pop.
-  let lastFadeRear = 1, lastExitRear = 0;
+  let maxExitRear = 0, lastRelRear = rear.position - pos;
   let despawnT = null;
   const dt = 1 / 60;
-  for (let t = 0; t < 8; t += dt) {
+  for (let t = 0; t < 20; t += dt) {
     pos += playerSpeed * dt;
     cs.update(dt, pos, playerSpeed, 0);
     if (cs.cops.includes(rear)) {
@@ -80,20 +78,19 @@ function pursuitCop(position, laneOffset = 0) {
       if (rear.speed > playerSpeed + 1e-6) everOverSpeed = true;
       minGapRear = Math.min(minGapRear, gap);
       prevGap = gap;
-      lastFadeRear = rear._fleeFade ?? lastFadeRear;
-      lastExitRear = rear._fleeExit ?? lastExitRear;
+      maxExitRear = Math.max(maxExitRear, rear._fleeExit ?? 0);
+      lastRelRear = rear.position - pos;
     }
     if (despawnT == null && !cs.cops.includes(rear) && !cs.cops.includes(alongside)) despawnT = t;
   }
   check('smoked cop never gained on the player', !everGained);
-  check('smoked cop never exceeds player speed (hangs on ~0.88x)', !everOverSpeed);
+  check('smoked cop never exceeds player speed (keeps pace, then slower)', !everOverSpeed);
   check('smoked cop never reached the player (no ram possible)', minGapRear >= 2500);
   check('smoked cops eventually despawned', despawnT != null);
-  check('smoked cops despawned via the ~1.8s smoke fade', despawnT != null && despawnT < 2.5);
-  // Time-driven removal: just before despawn the cop had faded (alpha→0) and
-  // slid down past the bottom edge (_fleeExit→1) — "lost in the black".
-  check('smoked cop faded out before removal (_fleeFade→0)', lastFadeRear <= 0.05);
-  check('smoked cop slid off the bottom before removal (_fleeExit→1)', lastExitRear >= 0.95);
+  check('smoked cops despawned only after keep-pace phase', despawnT != null && despawnT > 1.5);
+  // NO synthetic bottom-edge slide — it recedes off the bottom naturally.
+  check('smoked cop never used the synthetic exit (_fleeExit stays 0)', maxExitRear === 0);
+  check('rear cop had receded far behind when removed', lastRelRear <= -5000);
   check('unsmoked far-ahead cop survives', cs.cops.includes(farAhead));
 }
 
@@ -144,11 +141,10 @@ function pursuitCop(position, laneOffset = 0) {
   check('pursuit resumes after the lull (stars persisted)', firstSpawnT != null && firstSpawnT < 120);
 }
 
-// ── Time-driven fade despawns even a "stalled" coal cop (no blink-out) ─────
-// Player fully stopped: rel never changes.  The old positional recede would
-// never remove the cop; the new smoke fade is TIME-driven, so over ~1.8 s the
-// cop fades (alpha→0) and slides down past the bottom edge (_fleeExit→1), then
-// despawns — mid-screen but fully faded + slid off, so there is no pop.
+// ── Timer failsafe removes a "stalled" coal cop (player fully stopped) ─────
+// Player fully stopped: rel never changes, so the positional recede can't fire.
+// The FLEE_MAX_SEC lifetime timer removes the cop instead — never immortal, and
+// still no synthetic bottom-slide (_fleeExit stays 0).
 {
   const cs = new CopSystem();
   cs.stars = 2;
@@ -160,18 +156,18 @@ function pursuitCop(position, laneOffset = 0) {
   check('stalled cop smoked', stalled.fleeing === true && stalled._fleeNoSwerve === true);
 
   const dt = 1 / 60;
-  let despawnT = null, lastFade = 1, lastExit = 0;
+  let despawnT = null, maxExit = 0;
   for (let t = 0; t < 12; t += dt) {
     cs.update(dt, playerPos, 0, 0);               // player speed 0 → rel frozen
     if (cs.cops.includes(stalled)) {
-      lastFade = stalled._fleeFade ?? lastFade;
-      lastExit = stalled._fleeExit ?? lastExit;
+      maxExit = Math.max(maxExit, stalled._fleeExit ?? 0);
     } else if (despawnT == null) despawnT = t;
   }
-  check('stalled coal cop despawns on the ~1.8s fade (rel frozen)', despawnT != null && despawnT < 2.5);
-  check('faded out before removal (_fleeFade→0)', lastFade <= 0.05);
-  check('slid off the bottom before removal (_fleeExit→1)', lastExit >= 0.95);
-  // Exit-slide constants still exported + sane (used by the forward renderer).
+  // rel can't fall (player stopped), so the FLEE_MAX_SEC timer failsafe removes
+  // it — never an immortal cop, and never the synthetic slide.
+  check('stalled coal cop despawns via the FLEE_MAX_SEC timer failsafe', despawnT != null && despawnT <= 6.2);
+  check('stalled coal cop never used the synthetic exit (_fleeExit stays 0)', maxExit === 0);
+  // Exit-slide constants still exported + sane (used elsewhere by the renderer).
   check('exit constants sane (hold depth ahead of camera, span past rel 0)',
         FLEE_EXIT_HOLD_REL > 0 && FLEE_EXIT_HOLD_REL - FLEE_EXIT_SPAN < 0);
 }

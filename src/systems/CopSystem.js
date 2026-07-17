@@ -73,12 +73,11 @@ export const FLEE_EXIT_SPAN     = 7400;   // exit completes at rel ≈ -3000
 // Rolling coal that actually smokes a pursuer buys a real lull: NO new cop
 // spawns for 30 s (stars persist — pursuit just doesn't remanifest).
 const COAL_LULL_SEC = 30;
-// Rolling-coal smoke-out FADE (owner 2026-07-16): the blinded cop keeps trying
-// to keep up (near player speed, no swerve) but the diesel cloud swallows it —
-// over this many seconds its alpha fades to 0 AND it slides DOWN below the
-// bottom edge ("gets lost in the black"), then despawns. Time-driven so it
-// works even when the player holds a steady lead.
-const COAL_FADE_SEC = 1.8;
+// Rolling-coal recede (owner 2026-07-17): the smoked cop KEEPS PACE with the
+// player for this many seconds, then slows to 0.45× and falls back, dropping
+// off the bottom edge the same way it drove in (pure positional recede — no
+// synthetic slide, no in-place fade).
+const COAL_PACE_SEC = 1.5;
 
 // Normalize raw sprite token names → internal names used in useF12Token
 const TOKEN_MAP = {
@@ -838,20 +837,24 @@ export class CopSystem {
       // the smoke (lost sight — no dramatic swerve).
       if (cop.fleeing) {
         cop._fleeTimer = (cop._fleeTimer ?? FLEE_MAX_SEC) - dt;
-        // ── ROLLING COAL: keep-up-then-fade-into-the-black ──────────────
-        // The blinded cop hangs on near player speed (no swerve) but the
-        // smoke swallows it — over COAL_FADE_SEC its alpha fades to 0 AND it
-        // slides down past the bottom edge. Time-driven, so it works even
-        // when rel barely changes (player holding a steady lead).
+        // ── ROLLING COAL: keep pace, then slow and recede off the bottom ──
+        // The cop KEEPS PACE with the player for COAL_PACE_SEC, then slows so
+        // it falls back and drops off the BOTTOM edge the same way it drove in
+        // (owner 2026-07-17). PURE positional recede — NO synthetic bottom
+        // slide (`_fleeExit` stays 0) and NO in-place fade; the earlier
+        // time-driven version made the cop "jump up, shrink, and float down".
         if (cop._fleeNoSwerve) {
-          cop.speed = playerSpeed * 0.88;   // hangs on, drifts back only slightly
+          cop._coalPaceT = (cop._coalPaceT ?? 0) + dt;
+          const keepPace = cop._coalPaceT < COAL_PACE_SEC;
+          cop.speed = keepPace ? playerSpeed : playerSpeed * 0.45;
           cop.position += cop.speed * dt;
-          const ft = (cop._coalFade ?? COAL_FADE_SEC) - dt;
-          cop._coalFade = ft;
-          const k = Math.max(0, Math.min(1, ft / COAL_FADE_SEC));   // 1 → 0
-          cop._fleeFade = k;          // alpha eases out
-          cop._fleeExit = 1 - k;      // synthetic slide DOWN past the bottom edge
-          if (ft <= 0) this.cops.splice(i, 1);
+          const rel = cop.position - playerPos;
+          cop._fleeExit = 0;   // natural exit off the bottom, no synthetic push
+          // Fade only in the rear-view mirror as it gets far behind.
+          cop._fleeFade = Math.max(0, Math.min(1, (rel - FLEE_DESPAWN_REL) / FLEE_FADE_SPAN));
+          // Despawn once receded past the bottom; the FLEE_MAX_SEC timer is a
+          // failsafe for the player-stopped case (rel never falls at speed 0).
+          if (rel <= FLEE_DESPAWN_REL || cop._fleeTimer <= 0) this.cops.splice(i, 1);
           continue;
         }
         if (cop._donutLure != null) {
