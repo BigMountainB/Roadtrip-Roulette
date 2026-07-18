@@ -4099,7 +4099,19 @@
       tutCap.addEventListener('click', tutCapHit, { passive: false });
 
       const tutBoxTap = (e) => {
-        if (!tutActive || tutAwaitGenre || tutPhase !== 'submenu' || tutBox.classList.contains('tapped')) return;
+        if (!tutActive) return;
+        // Music step Phase A: tapping the box itself dismisses it too (so it's a
+        // true tap-ANYWHERE, matching the other submenus).
+        if (tutAwaitGenre) {
+          e.preventDefault(); e.stopPropagation();
+          if (!tutMusicBrowse) {
+            tutMusicBrowse = true;
+            tutBox.classList.remove('show');
+            tutCap.classList.add('pass'); tutBox.classList.add('pass');
+          }
+          return;
+        }
+        if (tutPhase !== 'submenu' || tutBox.classList.contains('tapped')) return;
         e.preventDefault(); e.stopPropagation();
         tutBox.classList.add('tapped');
         setTimeout(() => tutGotoHighlight(tutIdx + 1), 130);
