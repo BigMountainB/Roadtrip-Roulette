@@ -3114,8 +3114,10 @@
       window.addEventListener('resize',            onMusicOrientationChange);
       window.addEventListener('orientationchange', onMusicOrientationChange);
 
-      addLongTap(musicHit, () => {
-        // tap → open music modal
+      // Open the music modal to the genre grid. Named (hoisted) so the tutorial
+      // can call it directly — the music button uses addLongTap (tap/hold), which
+      // ignores a synthetic click, so dispatchEvent('click') never opened it.
+      function openMusicModal() {
         musicGenreIdx = null;
         musicModal.classList.add('open');
         renderMusic();
@@ -3127,7 +3129,8 @@
         // gesture that just opened the modal) so the first song tap
         // only has to wait on the MP3 download, not the synth setup.
         window.__music?.warmup?.();
-      }, () => {
+      }
+      addLongTap(musicHit, openMusicModal, () => {
         // long-hold → toggle mute
         window.__music?.toggleMute?.();
         applyMusicMutedIndicator();
@@ -3719,7 +3722,10 @@
 
       function tutStart(fromForced) {
         if (tutActive) return;
-        tutActive = true; tutCap.classList.add('on'); tutSkip.classList.add('on');
+        // NOTE: Skip is NOT shown yet — it only appears once the tour actually
+        // begins (tutGotoHighlight), so the forced "tap Tutorial" prompt can't
+        // be skipped before it's selected.
+        tutActive = true; tutCap.classList.add('on');
         if (fromForced) { tutIdx = -1; tutPhase = 'highlight'; tutFlashOne('tutorial'); }
         else { tutGotoHighlight(0); }
       }
@@ -3734,11 +3740,19 @@
         tutClearGenreWait();
         tutIdx = i; tutBox.classList.remove('show', 'tapped'); tutCloseModals();
         if (i >= TUT_TOUR.length) { tutFinish(); return; }
+        tutSkip.classList.add('on');   // Skip is available once the tour is underway
         tutPhase = 'highlight'; tutFlashOne(TUT_TOUR[i].a);
       }
       function tutOpenSubmenu() {
         const step = TUT_TOUR[tutIdx]; tutPhase = 'submenu'; tutClearFlash();
-        if (!step.noSub) { const el = tutQhit(step.a); if (el) el.dispatchEvent(new Event('click')); }
+        // Music step: the music button uses addLongTap (ignores synthetic
+        // clicks), so open the genre grid directly. Everything else opens via a
+        // dispatched click on its phone-hit button.
+        if (step.pickGenre) {
+          openMusicModal();
+        } else if (!step.noSub) {
+          const el = tutQhit(step.a); if (el) el.dispatchEvent(new Event('click'));
+        }
         tutBox.querySelector('.tq-text').textContent = step.q;
         tutBox.classList.add('show');
         // Music step: the player must actually PICK a genre. Let taps fall

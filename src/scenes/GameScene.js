@@ -8716,21 +8716,36 @@ export class GameScene extends Phaser.Scene {
     const pathFor = (k) => genre ? genreArtPath(k, genre) : genreDefaultPath(k);
     const targets = Object.keys(GENRE_ART).map(k => [k, pathFor(k)]).filter(([, p]) => p);
     if (!targets.length) return;
-    const carWasVisible = this.playerSprite?.visible;
+    // CRASH FIX (owner 2026-07-17): the old path did textures.remove(key) then
+    // reloaded ASYNCHRONOUSLY, so for many render frames the key was MISSING and
+    // the WebGL renderer crashed (get → batchSprite → drawBitmapMask). Instead
+    // load each new image into a TEMP key — the CURRENT texture stays valid and
+    // keeps rendering during the fetch — then swap SYNCHRONOUSLY on complete
+    // (remove + re-add in one tick, no render between), so no frame ever sees a
+    // missing texture.
+    const TMP = (k) => `__genreswap__${k}`;
     try {
-      // Hide the car during the swap so a mid-reload removed texture never
-      // renders broken; restore + re-skin on complete.
-      if (this.playerSprite) this.playerSprite.setVisible(false);
-      for (const [k] of targets) { try { if (this.textures.exists(k)) this.textures.remove(k); } catch (_) {} }
-      for (const [k, p] of targets) this.load.image(k, p);
+      for (const [k, p] of targets) {
+        try { if (this.textures.exists(TMP(k))) this.textures.remove(TMP(k)); } catch (_) {}
+        this.load.image(TMP(k), p);
+      }
       this.load.once('complete', () => {
+        for (const [k] of targets) {
+          const t = TMP(k);
+          try {
+            if (!this.textures.exists(t)) continue;   // this one failed → keep the old art
+            const img = this.textures.get(t).getSourceImage();
+            if (this.textures.exists(k)) this.textures.remove(k);
+            this.textures.addImage(k, img);           // real key gets its own GL upload from img
+            this.textures.remove(t);                  // drop the temp entry (img lives on via k)
+          } catch (_) {}
+        }
+        // Sprites hold a REFERENCE to the old Texture object — re-point the
+        // player sprite (and vehicle art) to the freshly-swapped textures.
         try { this._applyVehicleSwap?.(this.player?.vehicleId ?? 'beater'); } catch (_) {}
-        if (this.playerSprite && carWasVisible !== false) this.playerSprite.setVisible(true);
       });
       this.load.start();
-    } catch (_) {
-      if (this.playerSprite && carWasVisible !== false) this.playerSprite.setVisible(true);
-    }
+    } catch (_) {}
   }
 
   _applyVehicleSwap(vid) {

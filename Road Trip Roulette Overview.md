@@ -114,6 +114,19 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-17 (batch 7) — Genre-pick crash + tutorial fixes
+- **FIXED the genre-select crash** (`Uncaught` WebGL: `get → batchSprite → drawBitmapMask → endMask →
+  postRenderWebGL`). `_applyGenreArt` was calling `textures.remove(key)` then reloading
+  ASYNCHRONOUSLY, so the key was MISSING for many render frames → renderer crash. Now each new image
+  loads into a **temp key** (the current texture keeps rendering during the fetch), then swaps
+  **synchronously** on complete (remove + `addImage` in one tick, no render between). Player sprite is
+  re-pointed via `_applyVehicleSwap` after the swap.
+- **FIXED the tutorial Music step not opening the genre menu.** The music button uses `addLongTap`
+  (tap/hold), which ignores the synthetic `click` the tutorial dispatched — so the submenu never
+  opened and the step hung. Extracted `openMusicModal()` and call it directly for the genre step.
+- **FIXED "Hold to Skip" showing too early.** Skip is no longer shown during the forced "tap Tutorial"
+  prompt — it appears only once the tour is underway (`tutGotoHighlight`, tutIdx ≥ 0).
+
 ### 2026-07-17 (batch 6) — Tilt explainer fix + reword
 - **Fixed the tilt-steering pop-up getting stuck.** Its buttons used `onclick`, but the game's global
   touch handler `preventDefault()`s the touch, which suppresses the synthetic click — so nothing
