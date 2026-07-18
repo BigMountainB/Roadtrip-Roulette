@@ -37,6 +37,7 @@ const DIURETIC_MAX   = 20;
 // _bladderGain coefficients are ÷1.5 so bladder pace stays at the ORIGINAL.
 export const ITEM_FX = {
   water:        { t:  -1, h: +4.5, f:    0 },
+  energy:       { t:  -8, h: +1.5, f:    0, diuretic: 2.5 },   // energy shot: big Alertness jolt (owner 2026-07-17)
   coldbrew:     { t:  -4, h:   +3, f:    0, diuretic: 2 },
   caffeine:     { t:  -7, h: +1.5, f:    0, addiction: true, diuretic: 3 },
   slushie:      { t:  -2, h: +4.5, f:   +3 },

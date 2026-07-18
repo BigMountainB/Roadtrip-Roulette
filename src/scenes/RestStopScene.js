@@ -48,6 +48,14 @@ const restroomItem = (gated, freeDesc) => ({
   payload: { restroom: true, gated: !!gated },
 });
 
+// Bottled water — refills the Drinks bar. Sold at gas stations ($15) and AOK
+// campgrounds ($7) (owner 2026-07-17).
+const waterItem = (cost) => ({
+  id: 'water', emoji: '💧', label: '💧  WATER', cost,
+  desc: 'A cold bottle — refills your Drinks.',
+  payload: { survivalDelta: { hydration: 15 } },
+});
+
 const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
   const items = [
     { id: 'coffee',     label: 'COFFEE',           emoji: '☕',
@@ -519,6 +527,7 @@ export class RestStopScene extends Phaser.Scene {
       payload: { coolEngineFrac: 0.05 },
     });
 
+    gasItems.push(waterItem(15));   // bottled water at gas stations (owner 2026-07-17)
     SECTIONS.gas.items = gasItems;
 
     // ── PARK & RIDE: the (vice) Dealer hands over pre-paid phone orders ──
@@ -643,7 +652,7 @@ export class RestStopScene extends Phaser.Scene {
         return it;
       });
     }
-    SECTIONS.camp.items    = [...SECTIONS.camp.items,    ...shopViceItems('camp',    _pickupCounts)];
+    SECTIONS.camp.items    = [...SECTIONS.camp.items,    waterItem(7),    ...shopViceItems('camp',    _pickupCounts)];
     // Campgrounds always have a free restroom.
     SECTIONS.camp.items    = [...SECTIONS.camp.items,    restroomItem(false)];
     SECTIONS.dealer_acc.items = [...SECTIONS.dealer_acc.items, ...shopViceItems('dealer', _pickupCounts)];

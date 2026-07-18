@@ -10505,7 +10505,7 @@ export class GameScene extends Phaser.Scene {
       y0: SCREEN_H * 0.60,
       x1: SCREEN_W * (0.50 + side * 0.05) + (Math.random() * 0.06 - 0.03) * SCREEN_W,
       y1: SCREEN_H * 0.82,                       // onto the road, near the bottom
-      t: 0, flight: 0.55, life: 3.6,
+      t: 0, flight: 0.55, recede: 0.6, life: 0.55 + 0.6,
     });
     if (this._donutDebris.length > 5) this._donutDebris.shift();   // cap
   }
@@ -10531,19 +10531,25 @@ export class GameScene extends Phaser.Scene {
     for (const d of arr) {
       const inFlight = d.t < d.flight;
       const p  = Math.min(1, d.t / d.flight);          // 0→1 flight progress
-      const x  = d.x0 + (d.x1 - d.x0) * p;
-      const gy = d.y0 + (d.y1 - d.y0) * p;             // ground track
-      const hop = inFlight ? Math.sin(p * Math.PI) * SCREEN_H * 0.15 : 0;  // arc height
-      const y  = gy - hop;
-      // Sits ~0.7s after landing, then fades over the rest of its life.
-      const settled = Math.max(0, d.t - d.flight);
-      const fade = settled <= 0.7 ? 1
-                 : Math.max(0, 1 - (settled - 0.7) / (d.life - d.flight - 0.7));
+      let x    = d.x0 + (d.x1 - d.x0) * p;
+      let y    = d.y0 + (d.y1 - d.y0) * p;
+      let w    = 30 * (0.7 + 0.3 * p);
+      let fade = 1;
+      if (inFlight) {
+        y -= Math.sin(p * Math.PI) * SCREEN_H * 0.15;   // arc up then down onto the road
+      } else {
+        // Landed → RECEDE WITH THE ROAD: slide straight down off the bottom
+        // (and grow as it passes under the car) quickly, like the cop dropping
+        // off the lower frame — no lingering (owner 2026-07-17).
+        const r = Math.min(1, (d.t - d.flight) / d.recede);   // 0→1
+        y = d.y1 + r * (SCREEN_H + 60 - d.y1);
+        w = 30 * (1 + 0.7 * r);
+        fade = 1 - Math.max(0, (r - 0.7) / 0.3);              // fade only the last stretch
+      }
       if (fade <= 0.02) continue;
-      const w = 30 * (inFlight ? 0.7 + 0.3 * p : 1);
       const h = w * 0.6;
       // Pavement shadow once landed.
-      if (!inFlight) { g.fillStyle(0x000000, 0.28 * fade); g.fillEllipse(x, gy + h * 0.45, w * 1.15, h * 0.5); }
+      if (!inFlight) { g.fillStyle(0x000000, 0.28 * fade); g.fillEllipse(x, y + h * 0.45, w * 1.15, h * 0.5); }
       // Pink bakery box + darker lid + outline + string tie.
       g.fillStyle(0xF2A6C4, fade);
       g.fillRect(x - w / 2, y - h / 2, w, h);
@@ -10588,13 +10594,17 @@ export class GameScene extends Phaser.Scene {
     const c = this._coalCloud;
     if (!c || !g) return;
     if (c.soot > 0) {
-      // Bottom-edge soot band must span past ±HUD_OFFSET_X on wide phones
-      // (world-layer graphics — same class as the trap-light fix, 2026-07-14).
+      // Smog rolls UP from the very BOTTOM of the screen (owner 2026-07-17):
+      // a soft gradient densest at the bottom edge, fading out ~45% up. Must
+      // span past ±HUD_OFFSET_X on wide phones (world-layer graphics).
       const _sOff = (C.HUD_OFFSET_X ?? 0) + 20;
-      g.fillStyle(0x0C0C0C, 0.28 * c.soot);
-      g.fillRect(-_sOff, SCREEN_H - 46, SCREEN_W + _sOff * 2, 46);
-      g.fillStyle(0x0C0C0C, 0.16 * c.soot);
-      g.fillRect(-_sOff, SCREEN_H - 90, SCREEN_W + _sOff * 2, 44);
+      const W = SCREEN_W + _sOff * 2;
+      const topY = SCREEN_H * 0.55, bands = 6, bandH = (SCREEN_H - topY) / bands + 1;
+      for (let b = 0; b < bands; b++) {
+        const dens = (b + 1) / bands;                  // 0 → 1 toward the bottom edge
+        g.fillStyle(0x0C0C0C, 0.34 * dens * c.soot);
+        g.fillRect(-_sOff, topY + (SCREEN_H - topY) * (b / bands), W, bandH);
+      }
     }
     if (!c.puffs.length) return;
     const camPos = this._renderCamPos();
@@ -10737,18 +10747,18 @@ export class GameScene extends Phaser.Scene {
           const ang = Math.random() * Math.PI * 2;
           // ~22% bigger shells — radius (ember speed) and particle size
           // both scaled up so the bursts read fuller across the wider fan.
-          const spd = 110 + Math.random() * (r.big ? 320 : 230);
+          const spd = 220 + Math.random() * (r.big ? 640 : 460);   // 2× burst spread (owner 2026-07-17)
           show.particles.push({
             x: r.x, y: r.y,
             vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
             life: 1.0 + Math.random() * 0.7, maxLife: 1.7,
-            size: r.big ? 3.2 : 2.6,
+            size: r.big ? 6.4 : 5.2,   // 2× spark size (owner 2026-07-17)
             color: Math.random() < 0.6 ? r.color : COLORS[(Math.random() * COLORS.length) | 0],
             ember: true,
           });
         }
         // Delayed secondary crackle ring around the burst shell.
-        show.crackles.push({ at: 0.45, x: r.x, y: r.y, r: r.big ? 112 : 78 });
+        show.crackles.push({ at: 0.45, x: r.x, y: r.y, r: r.big ? 224 : 156 });   // 2× crackle ring
         // Brief white flash per detonation; the finale also shakes the camera.
         this.cameras?.main?.flash?.(r.big ? 140 : 80, 255, 255, 255);
         if (r.big) this.effects.triggerShake(320, 0.010);
@@ -12699,8 +12709,21 @@ export class GameScene extends Phaser.Scene {
       // fleeExit — the cruiser grows to near-field size, sinks off the
       // bottom of the screen and only THEN fades out (alpha hits 0 at exit
       // complete, never a mid-screen blink-out).
-      const exitT   = cop.fleeing ? (cop.fleeExit ?? 0) : 0;
-      const drawRel = exitT > 0 ? Math.max(cop.relativePos, FLEE_EXIT_HOLD_REL) : cop.relativePos;
+      // ROLLING COAL (owner 2026-07-17): drive the bottom-edge sink from the
+      // cop's OWN relativePos, clamped at the real projection floor (~1500) —
+      // NOT the far 4400 hold, which teleports a close cop forward (jump/shrink)
+      // and leaves it to vanish. While above the floor it draws naturally and
+      // recedes DOWN; at the floor it holds and sinks off the bottom edge.
+      let exitT, drawRel;
+      if (cop.coalFlee) {
+        const COAL_FLOOR = 1500;
+        exitT   = cop.relativePos >= COAL_FLOOR ? 0
+                : Math.min(1, (COAL_FLOOR - cop.relativePos) / 2600);
+        drawRel = Math.max(cop.relativePos, COAL_FLOOR);
+      } else {
+        exitT   = cop.fleeing ? (cop.fleeExit ?? 0) : 0;
+        drawRel = exitT > 0 ? Math.max(cop.relativePos, FLEE_EXIT_HOLD_REL) : cop.relativePos;
+      }
       const copFa   = exitT > 0
         ? Math.max(0, Math.min(1, (1 - exitT) / 0.3))   // fade only over the exit's last stretch
         : (cop.fleeFade ?? 1);
@@ -13430,7 +13453,7 @@ export class GameScene extends Phaser.Scene {
         const isCopRand  = sp.copEncounter === true;
         const isCopParked = sp.type === 'cop_random_parked';
         const sizeMult   = sp.sizeMult
-                         ?? (isCopParked ? 1.6             // parked roadside trap: only slightly bigger than a car (was 2.38 — too huge)
+                         ?? (isCopParked ? 3.2             // 2× larger parked speed-trap sprite (owner 2026-07-17; was 1.6)
                            : isCopRand ? 1.4
                            : isLandmark ? 5.5
                            : isTree ? 2.0
@@ -13478,10 +13501,10 @@ export class GameScene extends Phaser.Scene {
           }
         }
         const maxW = profile?.maxW
-          ?? (isCopParked ? SCREEN_W * 0.306    // 1.7× the 0.18 cap so the larger parked trap isn't clipped up close
+          ?? (isCopParked ? SCREEN_W * 0.612    // 2× cap to match the 2× parked-trap sprite (owner 2026-07-17)
             : isCopRand ? SCREEN_W * 0.18 : isTree ? SCREEN_W * 0.20 : SCREEN_W * 0.42);
         const maxH = profile?.maxH
-          ?? (isCopParked ? SCREEN_H * 0.306
+          ?? (isCopParked ? SCREEN_H * 0.612
             : isCopRand ? SCREEN_H * 0.18
             : isTree ? SCREEN_H * 0.44
             : sp.type === 'house' ? SCREEN_H * 0.36

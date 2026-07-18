@@ -849,11 +849,10 @@ export class CopSystem {
           cop.speed = keepPace ? playerSpeed : playerSpeed * 0.45;
           cop.position += cop.speed * dt;
           const rel = cop.position - playerPos;
-          cop._fleeExit = 0;   // natural exit off the bottom, no synthetic push
-          // Fade only in the rear-view mirror as it gets far behind.
+          // The RENDER drives the bottom-edge sink from relativePos (see the
+          // coalFlee branch in _renderVehicles) — CopSystem just handles the
+          // physics + despawn. FLEE_MAX_SEC timer covers the player-stopped case.
           cop._fleeFade = Math.max(0, Math.min(1, (rel - FLEE_DESPAWN_REL) / FLEE_FADE_SPAN));
-          // Despawn once receded past the bottom; the FLEE_MAX_SEC timer is a
-          // failsafe for the player-stopped case (rel never falls at speed 0).
           if (rel <= FLEE_DESPAWN_REL || cop._fleeTimer <= 0) this.cops.splice(i, 1);
           continue;
         }
@@ -1032,6 +1031,11 @@ export class CopSystem {
         // when rel drops below the projection floor.
         fleeing:     !!cop.fleeing,
         fleeExit:    cop.fleeing ? (cop._fleeExit ?? 0) : 0,
+        // Rolling-coal smoke-out: the renderer drives its own bottom-edge sink
+        // from relativePos (clamped at the REAL floor, not the far 4400 hold),
+        // so a close cop recedes straight off the bottom instead of jumping
+        // forward/shrinking then vanishing (owner 2026-07-17).
+        coalFlee:    !!(cop.fleeing && cop._fleeNoSwerve),
       }))
       // Fleeing cops stay in the render list through their whole synthetic
       // exit (even once rel drops below the projection floor / behind the
