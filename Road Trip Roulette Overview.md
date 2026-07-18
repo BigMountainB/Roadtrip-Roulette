@@ -114,6 +114,21 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-18 — Full guided tutorial (Stages 1 + 2) — LOCAL
+Extends the portrait tour into the title screen and the first run.
+- **Stage 1a — rotate-wait bridge** (index.html): after the genre pick, a LOCKED golden "Rotate Phone to
+  Enter Game Play" prompt; taps do nothing, only rotating to landscape advances (sets `rtr_tutStage1`).
+- **Stage 1b — title tutorial** (`_startTitleTutorial`): golden highlights walk Plates (pick + name via
+  the existing modal, poll advances) → Difficulty → Driving Type → Load/Save (read + tap) → START. Text
+  boxes placed clear of each highlight. START forces the first run to **Easy + Default** and sets
+  `rtr_tutStage2`.
+- **Stage 2 — paused HUD tour** (`_startHudTour`): the first run freezes on start (no pause menu) and
+  cycles all ~25 movable elements (owner-approved descriptions) with a golden highlight + a box on the
+  opposite half so it never covers the target. Ends on the **Pause** button — tapping it resumes. Bounds
+  come from `_hudElementBounds` (readouts via `_boundsOfTextObj`, controls via the editor's bound fields;
+  engine bounds enabled via `_hudTourActive`; empty weapon stash + transient toasts get fallbacks).
+- Steering/difficulty forced picks use a new `_titleForceWheels`. Build clean, 123+24 tests.
+
 ### 2026-07-18 (later) — Title driving-type: no descriptions + permission→L/R (LOCAL, not pushed)
 - **Removed the DIFFICULTY / DRIVING TYPE description blurbs** ("Less Cars, Less Cops", "Auto: shifts
   with weather", …) — they overflowed the cards. The value word (EASY / DEFAULT) is now centered on its

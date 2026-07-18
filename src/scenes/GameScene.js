@@ -3353,6 +3353,8 @@ export class GameScene extends Phaser.Scene {
       this.hudGfx.setVisible(true);
       this._setHudVisible(true);
       this._introDone = true;
+      // First guided run (from the title tutorial) → the paused HUD tour (Stage 2).
+      try { if (localStorage.getItem('rtr_tutStage2')) this.time.delayedCall(250, () => this._startHudTour?.()); } catch (_) {}
       // Re-calibrate tilt pitch zero now that the player is past the
       // intro and settled into their actual playing posture.  The
       // earlier (scene-start) calibration may have averaged title-
@@ -16023,6 +16025,152 @@ export class GameScene extends Phaser.Scene {
     for (const o of T.objs) { try { o.destroy(); } catch (_) {} }
   }
 
+  // ── Stage 2: in-game paused HUD tour ──────────────────────────────────
+  // The first guided run freezes on start and walks EVERY movable HUD element
+  // with a golden highlight + a description box placed clear of it, ending on
+  // the Pause button (tap it → resume). owner 2026-07-18.
+  _hudElementBounds(id) {
+    const textB = (o) => {
+      if (!o) return null;
+      const b = this._boundsOfTextObj?.(o);
+      if (b && b.w > 2 && b.h > 2) return b;
+      // Empty/transient toast → a small box at its parked position.
+      if (typeof o.x === 'number' && (o.x !== 0 || o.y !== 0)) return { x: o.x - 46, y: o.y - 14, w: 92, h: 28 };
+      return null;
+    };
+    const RO = {
+      speed: this.hudSpeed, hp: this.hudHP, score: this.hudScore, mult: this.hudMult,
+      dist: this.hudDist, region: this.hudRegion, stars: this.hudStars, radio: this.hudRadio,
+      popup: this.hudPopup, hpDamage: this.hudHPDamage, rearCop: this.hudRearCop,
+    };
+    if (RO[id] !== undefined) return textB(RO[id]);
+    if (id.startsWith('btn_')) {
+      const b = this._topRowButtons?.find(x => 'btn_' + x.id === id);
+      return (b && b._lsz != null) ? { x: b._lx, y: b._ly, w: b._lsz, h: b._lsz } : null;
+    }
+    if (id === 'pedalGas')   return this._pedalHitZones?.[1];
+    if (id === 'pedalBrake') return this._pedalHitZones?.[0];
+    if (id === 'wiper')      return this._wiperLiveBounds;
+    if (id === 'survA')      return this._survABounds;
+    if (id === 'survB')      return this._survBBounds;
+    if (id === 'gas')        return this._gasGaugeBounds;
+    if (id === 'engine')     return this._engineTempBounds;
+    if (id === 'weapons') {
+      const cells = Object.values(this._weaponCellBounds ?? {});
+      if (cells.length) {
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (const c of cells) { x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + c.h); }
+        return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+      }
+      return { x: SCREEN_W - 91 - 186, y: SCREEN_H - 57, w: 186, h: 56 };   // empty-stash fallback strip
+    }
+    return null;
+  }
+
+  _startHudTour() {
+    if (this._hudTour || this._hudTourStarting || this._awaitingStart) return;
+    try { localStorage.removeItem('rtr_tutStage2'); } catch (_) {}
+    this._hudTourStarting = true;
+    this._hudTourActive   = true;   // enables the edit-gated engine bounds in the HUD render
+    // Let a couple of frames render (with bounds enabled) so every element has
+    // live bounds, THEN freeze + build the tour.
+    this.time.delayedCall(180, () => { this._hudTourStarting = false; this._buildHudTour(); });
+  }
+
+  _buildHudTour() {
+    if (this._hudTour) return;
+    const STEPS = [
+      { id: 'pedalGas',   text: "The gas pedal bumps your speed up about 20 mph. Tap on, tap off." },
+      { id: 'pedalBrake', text: "Tap the brake to drop to the speed limit — great for speed traps, but once you're under 100 mph you're losing money." },
+      { id: 'speed',      text: "How fast you're moving. More speed banks more miles, but leaves less time to react." },
+      { id: 'hp',         text: "Your car's health. Crashes, sideswipes, and cop rams chip it down — hit zero and the trip's over. Patch up at rest stops. Food & Drink add health on Easy." },
+      { id: 'engine',     text: "Engine temperature. Redline it too long and it overheats — ease off, and buy oil at gas stations to keep it cool." },
+      { id: 'gas',        text: "Your fuel, F to E. Fill up at any station before you're rolling on fumes." },
+      { id: 'survB',      text: "Your Drinks (blue) and Food (orange) meters. Grab the color-coded snack and drink items off the road — blue hydrates, orange fills, yellow is a caffeine kick, red is high-risk. Keep each in its middle sweet spot (too empty or too full both bite). You might find a bad batch of sushi or gummies, but it's somewhat rare." },
+      { id: 'survA',      text: "Alertness keeps you awake — let it drain and you go drowsy, then start nodding off at the wheel. Bladder fills as you drive and eat; let it top out and you'll swerve, then puke down your own windshield. Empty it at a rest stop before that." },
+      { id: 'score',      text: "Your cash. Earn it driving, grabbing pickups, and clearing missions + trophies; spend it on gas, repairs, upgrades, and rides." },
+      { id: 'mult',       text: "Your score multiplier. Drinks in the sweet spot, Food in the sweet spot, stay Alert, empty Bladder — each adds +1, and wanted stars stack on top." },
+      { id: 'dist',       text: "Miles toward Pullman. The whole run's 293 — this is how far you've driven." },
+      { id: 'region',     text: "The town you're rolling through — each has its own scenery, rest stops, and flavor." },
+      { id: 'stars',      text: "Your wanted level. Drive reckless near cops and it climbs; the higher it is, the harder they chase. Cross a town line to shed one, or pick up a costume or passport to yeet the heat." },
+      { id: 'radio',      text: "You chose your jams, but there are plenty more to earn. Each genre has its own vehicle and item artwork." },
+      { id: 'weapons',    text: "Your stash — rolling coal, fireworks, donuts. Grab them off the road (3 max each) and deploy to shake the law." },
+      { id: 'btn_map',    text: "Your route map — rest stops ahead, and fast-travel in Custom." },
+      { id: 'btn_garage', text: "Buy upgrades with the cash you earn." },
+      { id: 'btn_genre',  text: "Shows you what you're jamming to." },
+      { id: 'btn_mute',   text: "Mute or unmute the game." },
+      { id: 'btn_ff',     text: "Skip to the next song on your playlist." },
+      { id: 'wiper',      text: "Windshield wipers — clear rain and snow so you can see in bad weather." },
+      { id: 'popup',      text: "Pickup and text-message alerts pop up here as you drive." },
+      { id: 'hpDamage',   text: "Take a hit and the HP you lost flashes here." },
+      { id: 'rearCop',    text: "When a cop's on your tail, a warning shows up here." },
+      { id: 'btn_pause',  text: "Pause anytime right here. That's the whole dashboard — hit Pause now to close this out and get driving!" },
+    ];
+    const D = 96;
+    const scrim = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 3, SCREEN_H * 3, 0x02060E, 0.5)
+      .setDepth(D).setScrollFactor(0).setInteractive();
+    const hi   = this.add.rectangle(0, 0, 10, 10, 0xFFD24D, 0).setStrokeStyle(3, 0xFFD24D, 1).setDepth(D + 2);
+    const boxG = this.add.graphics().setDepth(D + 3);
+    const boxT = this.add.text(0, 0, '', {
+      fontSize: '12px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
+      align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5, 0).setDepth(D + 4);
+    const tw = this.tweens.add({ targets: hi, alpha: { from: 1, to: 0.35 }, duration: 620, yoyo: true, repeat: -1 });
+    const objs = [scrim, hi, boxG, boxT];
+    try { this._hudObjects?.push(...objs); } catch (_) {}
+    try { this.cameras?.main?.ignore?.(objs); } catch (_) {}
+    this._paused = true;   // freeze gameplay; Phaser keeps rendering the frozen HUD (no pause menu)
+    this._hudTour = { idx: -1, steps: STEPS, scrim, hi, boxG, boxT, tw, objs };
+    scrim.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); this._hudTourTap(); });
+    let n = 0; while (n < STEPS.length && !this._hudElementBounds(STEPS[n].id)) n++;
+    this._hudTourShow(Math.min(n, STEPS.length - 1));
+  }
+
+  _hudTourShow(i) {
+    const T = this._hudTour; if (!T) return;
+    const step = T.steps[i];
+    if (!step) { this._endHudTour(); return; }
+    const b = this._hudElementBounds(step.id);
+    if (!b || !(b.w > 0) || !(b.h > 0)) {   // no bounds → skip forward
+      let n = i + 1; while (n < T.steps.length && !this._hudElementBounds(T.steps[n].id)) n++;
+      if (n >= T.steps.length) { this._endHudTour(); return; }
+      return this._hudTourShow(n);
+    }
+    T.idx = i;
+    T.hi.setPosition(b.x + b.w / 2, b.y + b.h / 2).setSize(b.w + 8, b.h + 8).setStrokeStyle(3, 0xFFD24D, 1).setVisible(true);
+    try { T.tw.restart(); } catch (_) {}
+    const bw = Math.min(360, SCREEN_W - 24);
+    T.boxT.setWordWrapWidth(bw - 24);
+    T.boxT.setText(step.text);
+    const bh = T.boxT.height + 22;
+    const ecy = b.y + b.h / 2;
+    const bx = Math.max(bw / 2 + 8, Math.min(SCREEN_W - bw / 2 - 8, b.x + b.w / 2));
+    const by = (ecy > SCREEN_H * 0.5) ? 24 : (SCREEN_H - bh - 24);   // opposite half → never covers the highlight
+    T.boxG.clear();
+    T.boxG.fillStyle(0x06101E, 0.96); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 8);
+    T.boxG.lineStyle(2, 0xFFD24D, 0.9); T.boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 8);
+    T.boxT.setPosition(bx, by + 11);
+  }
+
+  _hudTourTap() {
+    const T = this._hudTour; if (!T) return;
+    const step = T.steps[T.idx];
+    if (step && step.id === 'btn_pause') { this._endHudTour(); return; }   // pressing Pause resumes
+    let n = T.idx + 1;
+    while (n < T.steps.length && !this._hudElementBounds(T.steps[n].id)) n++;
+    if (n >= T.steps.length) { this._endHudTour(); return; }
+    this._hudTourShow(n);
+  }
+
+  _endHudTour() {
+    const T = this._hudTour; if (!T) return;
+    this._hudTour = null;
+    this._hudTourActive = false;
+    try { T.tw?.stop?.(); } catch (_) {}
+    for (const o of T.objs) { try { o.destroy(); } catch (_) {} }
+    this._paused = false;   // resume the run
+  }
+
   /** Out-of-gas → AAA tow.  Charges 50% of player's cash + delivers
    *  to the PREVIOUS rest stop (so they don't accidentally finish the
    *  game on a freebie).  If player has $0, falls back to repo logic
@@ -17213,7 +17361,7 @@ export class GameScene extends Phaser.Scene {
     // Cold engine → hidden.  Exception: the controls editor shows a warm
     // placeholder so the gauge can be grabbed (editor id `engine`).
     if (temp < 55 && !this._engineLimp) {
-      if (!this._ctrlEditMode) { this._engineTempTxt.setVisible(false); this._engineTempBounds = null; return; }
+      if (!this._ctrlEditMode && !this._hudTourActive) { this._engineTempTxt.setVisible(false); this._engineTempBounds = null; return; }
       temp = 80;   // placeholder: mid-scale, normal (blue) state
     }
     const g  = this.hudGfx;
