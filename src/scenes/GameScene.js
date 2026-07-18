@@ -2690,7 +2690,7 @@ export class GameScene extends Phaser.Scene {
       // Without this, every scene restart (crash → retry, mode swap)
       // would otherwise drop tilt until the player tapped the screen
       // once more to re-trigger the prefetch gesture path.
-      const permGranted = !!this.registry?.get?.('tiltPermissionGranted');
+      const permGranted = this._tiltGranted();
       if (permGranted) {
         this._tiltAttached = true;
         window.addEventListener('deviceorientation', this._tiltOnOrient, true);
@@ -2747,6 +2747,7 @@ export class GameScene extends Phaser.Scene {
             this._tiltAttached = true;
             window.addEventListener('deviceorientation', this._tiltOnOrient, true);
             this.registry?.set?.('tiltPermissionGranted', true);
+            try { localStorage.setItem('rtr.tiltGranted', '1'); } catch (_) {}
             if (this._tiltPrefetchCleanup) this._tiltPrefetchCleanup();
           } else if (res !== 'granted') {
             this.registry?.set?.('tiltPermissionDenied', true);
@@ -2775,9 +2776,9 @@ export class GameScene extends Phaser.Scene {
       const wantTilt = picked === 'tilt' || (Difficulty.weather?.() ?? false);
       if (!wantTilt) return;
       if (this.registry?.get?.('tiltPermissionDenied')) return;
-      // Show the custom explainer ONCE before the bare iOS prompt; its "Allow"
-      // tap is the gesture that fires the real requestPermission.
-      if (!this._tiltExplainerDone && typeof window.__tiltExplainer?.show === 'function') {
+      // Show the custom explainer ONCE, and only BEFORE permission is granted;
+      // its "Allow" tap fires the real requestPermission. Once approved, never again.
+      if (!this._tiltGranted() && !this._tiltExplainerDone && typeof window.__tiltExplainer?.show === 'function') {
         this._tiltExplainerDone = true;
         this._tiltExplainerActive = true;
         window.__tiltExplainer.show(
@@ -2857,6 +2858,15 @@ export class GameScene extends Phaser.Scene {
    *  (or cancel / no-support edge) → caller snaps the driving type to L/R.
    *  Re-runnable: cycling back onto DEFAULT re-shows the explainer (though iOS
    *  won't re-display its OWN prompt once denied — that's an OS limitation). */
+  /** True once motion permission has been confirmed/approved (this session or a
+   *  prior one). Used to suppress the "Game Feature Opportunity" explainer after
+   *  it's been granted (owner 2026-07-18 — only show it BEFORE approval). */
+  _tiltGranted() {
+    if (this._tiltAttached) return true;
+    if (this.registry?.get?.('tiltPermissionGranted')) return true;
+    try { return localStorage.getItem('rtr.tiltGranted') === '1'; } catch (_) { return false; }
+  }
+
   _titleSteerPermission(onGrant, onDeny) {
     if (this._tiltAttached) { onGrant?.(); return; }
     const W = window.DeviceOrientationEvent;
@@ -2868,6 +2878,7 @@ export class GameScene extends Phaser.Scene {
         this._tiltAttached = true;
         window.addEventListener('deviceorientation', this._tiltOnOrient, true);
         this.registry?.set?.('tiltPermissionGranted', true);
+        localStorage.setItem('rtr.tiltGranted', '1');
       } catch (_) {}
       onGrant?.();
       return;
@@ -2878,6 +2889,7 @@ export class GameScene extends Phaser.Scene {
           this._tiltAttached = true;
           window.addEventListener('deviceorientation', this._tiltOnOrient, true);
           this.registry?.set?.('tiltPermissionGranted', true);
+          try { localStorage.setItem('rtr.tiltGranted', '1'); } catch (_) {}
           onGrant?.();
         } else {
           this.registry?.set?.('tiltPermissionDenied', true);
@@ -2885,7 +2897,8 @@ export class GameScene extends Phaser.Scene {
         }
       }).catch(() => onDeny?.());
     };
-    if (typeof window.__tiltExplainer?.show === 'function') {
+    // Only show the explainer BEFORE approval — once granted, request silently.
+    if (!this._tiltGranted() && typeof window.__tiltExplainer?.show === 'function') {
       window.__tiltExplainer.show(fire, () => onDeny?.());
     } else {
       fire();
@@ -20085,6 +20098,8 @@ export class GameScene extends Phaser.Scene {
     // Reveal HUD.
     this._setHudVisible(true);
     this._introDone = true;
+    // First guided run (from the title tutorial) → the paused HUD tour (Stage 2).
+    try { if (localStorage.getItem('rtr_tutStage2')) this.time.delayedCall(350, () => this._startHudTour?.()); } catch (_) {}
     // Heads-up as the run begins: the chosen steering scheme materially
     // changes how the car handles (TAP = one-button left-pull, THUMBS = L/R
     // thumbs, TILT = analog lean), so flag the pick while the road is still
