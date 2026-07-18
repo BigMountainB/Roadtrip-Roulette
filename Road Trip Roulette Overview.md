@@ -106,6 +106,21 @@ working-tree or untracked files; see Chapter 2's pre-push checklist.
 
 ## Changelog (newest first)
 
+### 2026-07-17 (batch 5) — Asset deploys held back from batch 4 (build+tests clean)
+The three asset changes deliberately excluded from `b98d2bc`, now shipped:
+1. **Vices reskin** — the 14 default (non-genre) `vices/*.png` sprites updated to their current art.
+2. **Music folder reorg → `hiphop_phonk/`.** The old `phonk/` (8) + `rap/` (9) folders are consolidated
+   into one `assets/music/hiphop_phonk/` (17 tracks). `AudioSystem` rewired: the **HIP-HOP / PHONK**
+   station (`trackKey 'PHONK'`) now plays the full 17-track merged list; the **REGGAETON** station
+   (`trackKey 'HIP-HOP'`) keeps its same 9 tracks, repointed into the new folder so it doesn't 404.
+   Folder renamed off "Hip-Hop Phonk" (space) to `hiphop_phonk` for URL-safety + sibling/culture-key
+   consistency. `phonk/` + `rap/` deleted (fully redundant, nothing else referenced them; verified no
+   `music/rap|phonk` strings survive in the bundle). ⚠️ Reggaeton still borrows the hip-hop tracks — it
+   has no dedicated music yet; revisit if it should get its own.
+3. **Icon/webp cleanup** — deleted the dead `ui/loading_screen.webp`, `ui/title_screen.webp`, and the
+   stale favicon/icon variants (the manifest loads the `.png` versions).
+
+
 ### 2026-07-17 (batch 4) — Genre UX, motion explainer, weapon caps (build+tests clean)
 ⚠️ **Correction after deployment audit:** a prior local note claimed commit `3a4d020` shipped and
 verified the illustrated menu. Do not rely on that claim. In this checkout, `HEAD`/the local

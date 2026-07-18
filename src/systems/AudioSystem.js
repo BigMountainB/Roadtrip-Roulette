@@ -9,15 +9,26 @@
 // in per-genre subfolders.  Stations whose name doesn't appear here
 // keep their procedural sound.
 const STATION_TRACKS = {
+  // HIP-HOP / PHONK station — the merged hip-hop + phonk playlist (owner
+  // 2026-07-17: old phonk/ + rap/ folders consolidated into hiphop_phonk/).
   'PHONK': [
-    'assets/music/phonk/2_am_gas.mp3',
-    'assets/music/phonk/cocktails.mp3',
-    'assets/music/phonk/death_grip.mp3',
-    'assets/music/phonk/headlights_gone.mp3',
-    'assets/music/phonk/party_run.mp3',
-    'assets/music/phonk/passenger_princess.mp3',
-    'assets/music/phonk/smoke_sparks.mp3',
-    'assets/music/phonk/toxic_cadence.mp3',
+    'assets/music/hiphop_phonk/2_am_gas.mp3',
+    'assets/music/hiphop_phonk/clinic_cup.mp3',
+    'assets/music/hiphop_phonk/cocktails.mp3',
+    'assets/music/hiphop_phonk/death_grip.mp3',
+    'assets/music/hiphop_phonk/exit_13.mp3',
+    'assets/music/hiphop_phonk/headlights_gone.mp3',
+    'assets/music/hiphop_phonk/interstate_fever_dream.mp3',
+    'assets/music/hiphop_phonk/line_phantom.mp3',
+    'assets/music/hiphop_phonk/mushed_my_turn.mp3',
+    'assets/music/hiphop_phonk/neon_dash_foam_ghosts.mp3',
+    'assets/music/hiphop_phonk/paint_the_asphalt_pink.mp3',
+    'assets/music/hiphop_phonk/parking_lot_wizzard.mp3',
+    'assets/music/hiphop_phonk/party_run.mp3',
+    'assets/music/hiphop_phonk/passenger_princess.mp3',
+    'assets/music/hiphop_phonk/pull_up_pull_out.mp3',
+    'assets/music/hiphop_phonk/smoke_sparks.mp3',
+    'assets/music/hiphop_phonk/toxic_cadence.mp3',
   ],
   'ARCADE': [
     'assets/music/arcade/8-bit_bounce.mp3',
@@ -70,16 +81,18 @@ const STATION_TRACKS = {
     'assets/music/edm/tokyo_sideways.mp3',
     'assets/music/edm/velvet_laser.mp3',
   ],
+  // Used by the REGGAETON station (trackKey 'HIP-HOP') — keeps its existing
+  // tracks, repointed from the retired rap/ folder into hiphop_phonk/.
   'HIP-HOP': [
-    'assets/music/rap/clinic_cup.mp3',
-    'assets/music/rap/exit_13.mp3',
-    'assets/music/rap/interstate_fever_dream.mp3',
-    'assets/music/rap/line_phantom.mp3',
-    'assets/music/rap/mushed_my_turn.mp3',
-    'assets/music/rap/neon_dash_foam_ghosts.mp3',
-    'assets/music/rap/paint_the_asphalt_pink.mp3',
-    'assets/music/rap/parking_lot_wizzard.mp3',
-    'assets/music/rap/pull_up_pull_out.mp3',
+    'assets/music/hiphop_phonk/clinic_cup.mp3',
+    'assets/music/hiphop_phonk/exit_13.mp3',
+    'assets/music/hiphop_phonk/interstate_fever_dream.mp3',
+    'assets/music/hiphop_phonk/line_phantom.mp3',
+    'assets/music/hiphop_phonk/mushed_my_turn.mp3',
+    'assets/music/hiphop_phonk/neon_dash_foam_ghosts.mp3',
+    'assets/music/hiphop_phonk/paint_the_asphalt_pink.mp3',
+    'assets/music/hiphop_phonk/parking_lot_wizzard.mp3',
+    'assets/music/hiphop_phonk/pull_up_pull_out.mp3',
   ],
   'K-POP': [
     'assets/music/kpop/black_card_valkyries.mp3',
