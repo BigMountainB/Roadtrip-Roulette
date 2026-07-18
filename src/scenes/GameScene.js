@@ -803,9 +803,9 @@ export class GameScene extends Phaser.Scene {
         delete this._hudLayout.survbars;
       }
       this._hudUndoStack = [];
-      // Colorblind-safe mode: remaps the red/green score-multiplier tiers to
-      // a blue→amber→orange ramp (distinguishable across all CVD types).
-      this._colorblind = _save?.get?.('settings.colorblind', false) === true;
+      // Colorblind mode removed (owner 2026-07-17) — permanently off; the
+      // remaining `this._colorblind ? …` branches all resolve to the normal path.
+      this._colorblind = false;
     }
     // Keep per-vehicle stat routing in sync on every (re)create — a fresh
     // start, rest-stop resume, or checkpoint respawn may be on a new car.
@@ -10591,11 +10591,18 @@ export class GameScene extends Phaser.Scene {
    *  each grows toward the camera and splats at its own random-but-even spot on
    *  the windshield (~40% cover), holds ~1 mile, then slides off to its nearest
    *  corner like the wind's pushing it. The blinding IS the penalty (owner
-   *  2026-07-17). Procedural goo for now — will use vomit_1..10.png once dropped
-   *  into public/assets/ui/vomit/. */
+   *  2026-07-17). Each event uses all ten Lucky-Charms-shaped splat sprites in
+   *  shuffled positions; procedural goo remains as a missing-texture fallback. */
   _triggerVomit() {
     if (this._vomit) return;
     const blobs = [];
+    const textureKeys = Array.from({ length: 10 }, (_, n) => `vomit_${n + 1}`);
+    // Shuffle the charm-to-windshield mapping without changing the even target
+    // distribution, so repeat events never make the same splatter pattern.
+    for (let n = textureKeys.length - 1; n > 0; n--) {
+      const j = (Math.random() * (n + 1)) | 0;
+      [textureKeys[n], textureKeys[j]] = [textureKeys[j], textureKeys[n]];
+    }
     // 5×2 jittered grid of splat targets → an even-but-random spread that's
     // different every time (each cell gets one chunk, jittered inside it).
     const cols = 5, rows = 2, cw = SCREEN_W / cols, ch = SCREEN_H / rows;
@@ -10615,10 +10622,20 @@ export class GameScene extends Phaser.Scene {
       for (let k = 0; k < 3 + ((Math.random() * 3) | 0); k++) {
         chunks.push({ dx: (Math.random() - 0.5) * R, dy: (Math.random() - 0.5) * R, r: R * (0.1 + Math.random() * 0.15) });
       }
+      const texture = textureKeys[i];
+      const sprite = this.textures.exists(texture)
+        ? this.add.image(SCREEN_W / 2, SCREEN_H * 0.92, texture)
+          .setDepth(19.5).setVisible(false)
+        : null;
+      // These are windshield/HUD sprites.  They should render through the UI
+      // camera only; it was already created by the time gameplay can trigger.
+      if (sprite) this.cameras.main.ignore(sprite);
+      const size = 155 + Math.random() * 25;          // ~4% of the 800×450 view per splat
       blobs.push({
-        tx: cx, ty: cy, R, lobes, chunks,
-        cornerX: cx < SCREEN_W / 2 ? -R * 2 : SCREEN_W + R * 2,   // nearest corner for slide-off
-        cornerY: cy < SCREEN_H / 2 ? -R * 2 : SCREEN_H + R * 2,
+        tx: cx, ty: cy, R, lobes, chunks, sprite, size,
+        rotation: (Math.random() - 0.5) * 0.45,
+        cornerX: cx < SCREEN_W / 2 ? -size : SCREEN_W + size,   // nearest corner for slide-off
+        cornerY: cy < SCREEN_H / 2 ? -size : SCREEN_H + size,
         delay: i * 0.07 + Math.random() * 0.04,    // rapid-fire launch stagger (~1s total)
         t: 0, splatted: false,
       });
@@ -10643,7 +10660,11 @@ export class GameScene extends Phaser.Scene {
       if ((this._odometer ?? 0) - (v.holdMile ?? 0) >= 1) v.phase = 'slidingoff';
     } else if (v.phase === 'slidingoff') {
       v.slideT += dt;
-      if (v.slideT >= 1.6) { this._vomit = null; this._vomitGfx?.clear(); }
+      if (v.slideT >= 1.6) {
+        for (const b of v.blobs) b.sprite?.destroy();
+        this._vomit = null;
+        this._vomitGfx?.clear();
+      }
     }
   }
 
@@ -10655,7 +10676,7 @@ export class GameScene extends Phaser.Scene {
     for (const b of v.blobs) {
       let x = b.tx, y = b.ty, sc = 1, alpha = 1;
       if (v.phase === 'flying') {
-        if (v.flyT < b.delay) continue;              // not launched yet
+        if (v.flyT < b.delay) { b.sprite?.setVisible(false); continue; } // not launched yet
         if (!b.splatted) {
           const e = b.t;                             // fly car → target, growing
           x  = SCREEN_W / 2 + (b.tx - SCREEN_W / 2) * e;
@@ -10668,7 +10689,15 @@ export class GameScene extends Phaser.Scene {
         y = b.ty + (b.cornerY - b.ty) * ease;
         alpha = 1 - Math.max(0, (s - 0.5) / 0.5);    // fade over the back half of the slide
       }
-      if (alpha <= 0.02) continue;
+      if (alpha <= 0.02) { b.sprite?.setVisible(false); continue; }
+      if (b.sprite) {
+        b.sprite.setVisible(true)
+          .setPosition(x, y)
+          .setDisplaySize(b.size * sc, b.size * sc)
+          .setRotation(b.rotation)
+          .setAlpha(alpha);
+        continue;
+      }
       // Procedural goo: soft wide base → brighter core → highlight → brown chunks.
       for (const l of b.lobes) { g.fillStyle(0x6E9E2A, 0.55 * alpha); g.fillCircle(x + l.dx * sc, y + l.dy * sc, l.r * sc); }
       for (const l of b.lobes) { g.fillStyle(0x8FB53A, 0.85 * alpha); g.fillCircle(x + l.dx * sc * 0.8, y + l.dy * sc * 0.8, l.r * sc * 0.72); }

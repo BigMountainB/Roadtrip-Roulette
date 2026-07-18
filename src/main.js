@@ -791,12 +791,6 @@ const _boot = () => {
       game.registry.get('save')?.set?.('settings.shake', t);
       const s = game.scene.getScene('Game'); if (s) s._shakeMult = t;
     },
-    // Colorblind-safe mode (remaps red/green UI to blue/orange).
-    getColorblind: () => game.registry.get('save')?.get?.('settings.colorblind', false) === true,
-    setColorblind: (on) => {
-      game.registry.get('save')?.set?.('settings.colorblind', !!on);
-      const s = game.scene.getScene('Game'); if (s) s._colorblind = !!on;
-    },
     // HUD visible (true) / hidden (false).
     getHud: () => game.registry.get('save')?.get?.('settings.hud', true) !== false,
     setHud: (vis) => {

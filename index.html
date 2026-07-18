@@ -171,6 +171,32 @@
       background: rgba(255, 205, 60, 0.12);
       animation: tutFlash 1.05s ease-in-out infinite;
     }
+    /* ── Guided tutorial tour (owner 2026-07-17) ── */
+    #tut-capture { position: fixed; inset: 0; z-index: 999990; display: none; background: transparent; touch-action: none; }
+    #tut-capture.on { display: block; }
+    #tut-quote {
+      position: fixed; left: 50%; bottom: 6vh; transform: translateX(-50%);
+      width: min(86vw, 620px); max-height: 46vh; overflow: auto; z-index: 999995; display: none;
+      box-sizing: border-box; padding: 2.6vmin 2.8vmin 5vmin;
+      background: rgba(6, 16, 30, 0.94); border: 0.4vmin solid #6FB0FF; border-radius: 2.2vmin;
+      color: #EAF2FF; font: 600 clamp(15px, 3.6vmin, 21px)/1.5 "Helvetica Neue", Arial, sans-serif;
+      box-shadow: 0 1vmin 5vmin rgba(0, 0, 0, 0.55); cursor: pointer;
+      transition: background 0.12s ease, box-shadow 0.12s ease;
+    }
+    #tut-quote.show { display: block; }
+    #tut-quote.tapped { background: rgba(36, 84, 140, 0.99); box-shadow: 0 0 4vmin rgba(140, 200, 255, 0.85); }
+    #tut-quote .tq-next { position: absolute; right: 2.4vmin; bottom: 1.3vmin; color: #8FCBFF; font-weight: 900; font-size: clamp(14px, 3.1vmin, 19px); letter-spacing: 0.06em; }
+    #tut-skip {
+      position: fixed; top: calc(env(safe-area-inset-top, 0px) + 1.6vmin); right: 1.8vmin; z-index: 999996;
+      width: 26vmin; max-width: 128px; height: 9vmin; max-height: 46px; display: none;
+      align-items: center; justify-content: center; box-sizing: border-box;
+      color: #FFD24D; font: 900 clamp(10px, 2.3vmin, 13px) Arial, sans-serif; letter-spacing: 0.05em;
+      background: rgba(6, 16, 30, 0.9); border-radius: 1.6vmin; user-select: none; -webkit-user-select: none;
+      cursor: pointer; touch-action: none;
+    }
+    #tut-skip.on { display: flex; }
+    #tut-skip svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    #tut-skip rect { fill: none; stroke: #FFD24D; stroke-width: 3; }
     /* Notification dots — small red badge at a menu tile's top-right corner
        when that app has something new (new trophy, unread text, new daily…).
        Created + positioned from JS (positionNotifDots) so they track the
@@ -421,17 +447,23 @@
     }
     #phone-music .controls { display: flex; gap: 2vmin; margin: 1vmin 0 2vmin; justify-content: center; }
     #phone-music .controls button {
-      background: #11203a;
-      color: #CFE6FF;
-      border: 2px solid #39A8FF;
+      background: linear-gradient(180deg, #243A5C 0%, #0A1427 55%, #07101F 100%);
+      color: #F4FAFF;
+      border: 2px solid #59B6FF;
       border-radius: 2vmin;
       padding: 1.5vmin 3vmin;
-      font-family: "Impact", sans-serif;
+      font-family: "Impact", "Arial Black", sans-serif;
       font-size: 3.2vmin;
+      letter-spacing: 0.035em;
+      text-shadow: 0 2px 2px #000, 0 0 7px rgba(89,182,255,0.8);
       cursor: pointer;
-      box-shadow: 0 0 6px rgba(57,168,255,0.35);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -4px 8px rgba(0,0,0,0.5), 0 0 8px rgba(57,168,255,0.45);
     }
-    #phone-music .controls button.active { background: #1E5BB8; color: #FFF; }
+    #phone-music .controls button.active {
+      background: linear-gradient(180deg, #2E8EEE 0%, #164E9E 100%);
+      color: #FFF;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 12px rgba(57,168,255,0.75);
+    }
     /* Now-playing scrubber (drag to seek). */
     #phone-music-now { padding: 1vmin 1.5vmin 0; }
     #phone-music-now .pmn-name { color:#CFE4FF; font-size:2.6vmin; text-align:center; margin-bottom:1.2vmin; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:Helvetica; }
@@ -454,15 +486,17 @@
       grid-auto-rows: 1fr;          /* every tile the same height */
       gap: 2.4vmin;
     }
-    /* Dark neon card (matches the rest of the menu) — the station color is
-       the accent (border + name glow), not a full fill. */
+    /* Full-scene culture card.  Artwork is clipped inside the unchanged card
+       bounds; controls and hit areas retain their original placement. */
     #phone-music .genre {
       position: relative;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       min-height: 24vmin;
       padding: 4vmin 2vmin;
       border-radius: 2.2vmin;
-      background: rgba(10, 18, 32, 0.92);
+      background: #070D18;
+      overflow: hidden;
+      isolation: isolate;
       color: #CFE6FF;
       font-family: "Impact", sans-serif;
       text-align: center;
@@ -470,11 +504,41 @@
       border: 2px solid rgba(57,168,255,0.4);   /* station color set inline */
       box-shadow: 0 0 8px rgba(0,0,0,0.5);
     }
-    #phone-music .genre-name {
-      font-size: 4.2vmin; letter-spacing: 0.02em;
-      text-shadow: 0 0 9px currentColor, 0 1px 2px rgba(0,0,0,0.75);
+    /* Purpose-built 2:1 overlays — complete vehicle-led scenes, not sprite
+       collages.  A restrained glass vignette keeps overlaid labels readable. */
+    #phone-music .genre-art {
+      position: absolute; inset: 0;
+      z-index: 0;
+      pointer-events: none;
     }
-    #phone-music .genre-count { font-size: 2.6vmin; color: #9FC2E8; margin-top: 0.4vmin; }
+    #phone-music .genre-art img {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      filter: saturate(1.08) contrast(1.04);
+    }
+    #phone-music .genre-art::after {
+      content: ""; position: absolute; inset: 0;
+      background:
+        linear-gradient(180deg, rgba(3,7,14,0.34) 0%, rgba(3,7,14,0.04) 38%, rgba(3,7,14,0.28) 67%, rgba(3,7,14,0.76) 100%),
+        radial-gradient(ellipse at 50% 48%, transparent 25%, rgba(3,7,14,0.25) 100%);
+    }
+    #phone-music .genre-name {
+      position: relative; z-index: 2;
+      max-width: 72%;
+      font-size: 4.2vmin; line-height: 1.02; letter-spacing: 0.02em;
+      text-shadow: 0 0 9px currentColor, 0 2px 3px #000, 0 0 4px #000;
+    }
+    #phone-music .genre-name.long {
+      max-width: 78%;
+      font-size: 3.15vmin;
+      line-height: 1.05;
+    }
+    #phone-music .genre-count {
+      position: relative; z-index: 2;
+      font-size: 2.6vmin; color: #E6F2FF; margin-top: 0.8vmin;
+      text-shadow: 0 2px 3px #000, 0 0 4px #000;
+    }
     #phone-music .genre.playing { box-shadow: 0 0 14px rgba(255,255,255,0.55), 0 0 8px rgba(0,0,0,0.5); }
     /* Default-station star — top-LEFT of each tile (opposite the songs check). */
     #phone-music .genre-default {
@@ -487,7 +551,9 @@
       border-radius: 6px;
       color: #FFE066; font-size: 4vmin; line-height: 1;
       cursor: pointer; padding: 0;
+      z-index: 3;
       font-family: -apple-system, "Segoe UI Emoji", sans-serif;
+      backdrop-filter: blur(3px);
     }
     #phone-music .genre-default.on {
       background: #1E5BB8; border-color: #FFE066;
@@ -501,6 +567,7 @@
       font-size: 2.2vmin; font-weight: 800; letter-spacing: 0.08em;
       color: #FFE066; font-family: "Impact", sans-serif;
       text-shadow: 0 0 6px rgba(255,224,102,0.9), 0 1px 2px rgba(0,0,0,0.7);
+      z-index: 3;
     }
     /* Per-genre checkbox — top-right of each tile.  Toggles the
        whole station's tracks in/out of the playlist in one tap. */
@@ -518,6 +585,8 @@
       cursor: pointer;
       padding: 0;
       font-family: -apple-system, "Segoe UI Emoji", sans-serif;
+      backdrop-filter: blur(3px);
+      z-index: 3;
     }
     #phone-music .genre-check.checked { background: #1E5BB8; border-color: #FFEE00; }
     #phone-music .genre-check.partial { background: rgba(30,91,184,0.4); border-color: #FFEE00; }
@@ -550,16 +619,21 @@
       left: 4vmin;
       width: 11vmin; height: 11vmin;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.55);
-      border: 2px solid #FFEE00;
-      border-radius: 8px;
+      background: linear-gradient(180deg, #283A54 0%, #09111F 70%);
+      border: 2px solid #FFE73B;
+      border-radius: 1.6vmin;
       color: #FFFFFF;
       font-size: 6vmin;
       cursor: pointer;
       padding: 0;
       z-index: 4;
+      text-shadow: 0 2px 2px #000;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -5px 8px rgba(0,0,0,0.48), 0 0 8px rgba(255,231,59,0.4);
     }
-    #phone-music .pause-btn.paused { background: rgba(255, 238, 0, 0.85); color: #000; }
+    #phone-music .pause-btn.paused {
+      background: linear-gradient(180deg, #FFF26A 0%, #D6A900 100%);
+      color: #07101F;
+    }
     /* Shared corner close circle — identical on every menu (Garage, Maps,
        Trophies, Music, Leaderboard/Stats/Settings/Help all use this look). */
     .menu-x {
@@ -573,6 +647,13 @@
       border: 0.6vmin solid #39A8FF; color: #39A8FF;
       border-radius: 50%; font-size: 4.5vmin; line-height: 1;
       cursor: pointer;
+    }
+    #phone-music .menu-x {
+      background: radial-gradient(circle at 38% 30%, #233957 0%, #07101F 70%);
+      border-color: #59B6FF;
+      color: #7FC7FF;
+      text-shadow: 0 0 7px rgba(89,182,255,0.9);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 0 10px rgba(57,168,255,0.45);
     }
     #phone-music .song .num {
       width: 6vmin; opacity: 0.6; font-variant-numeric: tabular-nums;
@@ -626,29 +707,39 @@
        the player has tracks selected in the playlist set. */
     #phone-music .playlist-bar {
       display: flex; gap: 2vmin; align-items: center;
-      background: #2A3C5C;
-      border: 1px solid #FFEE00;
-      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(42,63,99,0.98), rgba(12,22,41,0.98));
+      border: 2px solid #FFE73B;
+      border-radius: 2vmin;
       padding: 2vmin;
       margin-bottom: 2vmin;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -6px 12px rgba(0,0,0,0.38), 0 0 8px rgba(255,231,59,0.24);
     }
     #phone-music .playlist-bar .count {
       flex: 1;
       color: #FFEE00;
-      font-family: "Impact", sans-serif;
+      font-family: "Impact", "Arial Black", sans-serif;
       font-size: 3.5vmin;
+      letter-spacing: 0.02em;
+      text-shadow: 0 2px 2px #000, 0 0 7px rgba(255,231,59,0.48);
     }
     #phone-music .playlist-bar button {
       padding: 1.5vmin 3vmin;
-      border: 1px solid #FFEE00;
-      border-radius: 6px;
-      background: #1E5BB8;
+      border: 2px solid #FFE73B;
+      border-radius: 1.4vmin;
+      background: linear-gradient(180deg, #3F72D8 0%, #183A83 100%);
       color: #FFFFFF;
-      font-family: "Impact", sans-serif;
+      font-family: "Impact", "Arial Black", sans-serif;
       font-size: 3.2vmin;
+      letter-spacing: 0.025em;
+      text-shadow: 0 2px 2px #000;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -4px 7px rgba(0,0,0,0.35);
       cursor: pointer;
     }
-    #phone-music .playlist-bar button.clear { background: #CC2244; border-color: #FFCCDD; }
+    #phone-music .playlist-bar button.clear {
+      background: linear-gradient(180deg, #DB4960 0%, #8D1730 100%);
+      border-color: #FFB4C0;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -4px 7px rgba(0,0,0,0.35), 0 0 7px rgba(219,73,96,0.35);
+    }
     #phone-music .back-btn {
       align-self: flex-start;
       padding: 1.5vmin 4vmin;
@@ -2644,11 +2735,16 @@
             const checkGlyph  = allChecked ? '✓' : (someChecked ? '–' : '');
             const checkClass  = allChecked ? 'checked' : (someChecked ? 'partial' : '');
             const isDefault   = (window.__music?.getDefaultStation?.() ?? 0) === s.index;
-            return `<div class="genre ${playing ? 'playing' : ''}" data-idx="${s.index}" style="border-color:${s.color};">
+            const culture = s.culture ?? '';
+            const cultureArt = culture ? `<div class="genre-art" aria-hidden="true">
+              <img src="assets/ui/music_genres/${culture}.png?v=vehicle-scenes-1" alt="" />
+            </div>` : '';
+            return `<div class="genre ${playing ? 'playing' : ''}" data-idx="${s.index}" style="border-color:${s.color}; box-shadow:inset 0 0 3.5vmin ${s.color}30, 0 0 8px rgba(0,0,0,0.5);">
+              ${cultureArt}
               <button class="genre-check ${checkClass}" data-idx="${s.index}" aria-label="Toggle ${s.name} songs">${checkGlyph}</button>
               <button class="genre-default ${isDefault ? 'on' : ''}" data-idx="${s.index}" aria-label="Set ${s.name} as default station">${isDefault ? '★' : '☆'}</button>
               ${isDefault ? '<span class="genre-default-lbl">DEFAULT</span>' : ''}
-              <span class="genre-name" style="color:${s.color};">${s.name}</span><br/><span class="genre-count">${tracksCount} song${tracksCount === 1 ? '' : 's'}</span>
+              <span class="genre-name ${s.name.length > 11 ? 'long' : ''}" style="color:${s.color};">${s.name}</span><br/><span class="genre-count">${tracksCount} song${tracksCount === 1 ? '' : 's'}</span>
             </div>`;
           }).join('') + `</div>`;
           musicBody.querySelectorAll('.genre').forEach(el => {
@@ -3174,7 +3270,6 @@
         const kmh   = (window.__settings?.getUnits?.() ?? 'mph') === 'kmh';
         const shkPct = Math.round((window.__settings?.getShake?.() ?? 1) * 100);
         const hudOn = window.__settings?.getHud?.() ?? true;
-        const cbOn  = window.__settings?.getColorblind?.() ?? false;
         // Escaped — plate is user text and this string goes into innerHTML.
         const curPlate = (window.__plate?.get?.() ?? '').trim()
           .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -3194,7 +3289,6 @@
           `<div class="pa-row"><span class="k">📳 Screen shake</span><input id="set-shake" type="range" min="0" max="100" value="${shkPct}"></div>` +
           `<div class="pa-row"><span class="k">🎮 Customize controls</span><button id="set-customize" class="pa-toggle on">EDIT</button></div>` +
           sSec('Accessibility') +
-          `<div class="pa-row"><span class="k">👁 Colorblind mode</span><button id="set-cb" class="pa-toggle ${cbOn ? 'on' : ''}">${cbOn ? 'ON' : 'OFF'}</button></div>` +
           `<div class="pa-row"><span class="k">📳 Haptics</span><button id="set-hap" class="pa-toggle ${g.haptics ? 'on' : ''}">${g.haptics ? 'ON' : 'OFF'}</button></div>` +
           (isIOS
             ? sSec('Appearance') +
@@ -3242,12 +3336,6 @@
             showConfirm('📱 Rotate your phone to landscape to customize your controls — drag any item, then tap DONE.')
               .then(ok => { if (!ok) window.__customizeControls?.cancel?.(); });
           }
-        });
-        const cb = document.getElementById('set-cb');
-        addTap(cb, () => {
-          const on = !cb.classList.contains('on');
-          window.__settings?.setColorblind?.(on);
-          cb.classList.toggle('on', on); cb.textContent = on ? 'ON' : 'OFF';
         });
         // App-icon switch (iOS native alternate icons).  Only present on iOS.
         const iconBtn = document.getElementById('set-icon');
@@ -3455,17 +3543,6 @@
         renderList();
       });
 
-      // Tiles without a feature yet — graceful placeholder so no dead taps.
-      // Tutorial — swipe-through carousel of the V2 with-text slides.  JPGs
-      // (≈1 MB each) keep the load light; swipe horizontally or tap a dot.
-      const TUT_BASE = 'assets/ui/tutorial_slides/JPG/';
-      const TUT_SLIDES = [
-        'tutorial_slide_01_run_bankroll.jpg',
-        'tutorial_slide_02_high_limit_multiplier.jpg',
-        'tutorial_slide_03_heat_law.jpg',
-        'tutorial_slide_04_road_survival.jpg',
-        'tutorial_slide_05_phone_mission_control.jpg',
-      ];
       // First-ever-play nudge: the Tutorial tile pulses until the player opens
       // it the first time, then never again (persisted in localStorage).
       const TUT_SEEN_KEY = 'rtr_tutorialSeen';
@@ -3474,40 +3551,126 @@
         qhit('tutorial')?.classList.remove('tut-flash');
         window.__notif?.refresh?.();   // tutorial dot reads the same flag
       };
-      try {
-        // Treat the legacy dui_tutorialSeen flag as already-seen (migration).
-        if (!localStorage.getItem(TUT_SEEN_KEY) && !localStorage.getItem('dui_tutorialSeen')) {
-          qhit('tutorial')?.classList.add('tut-flash');
-        }
-      } catch (_) {}
+      const tutSeenAlready = () => {
+        try { return !!(localStorage.getItem(TUT_SEEN_KEY) || localStorage.getItem('dui_tutorialSeen')); } catch (_) { return true; }
+      };
+      // First-open nudge: keep the Tutorial tile flashing until it's run once.
+      if (!tutSeenAlready()) qhit('tutorial')?.classList.add('tut-flash');
 
-      addTap(qhit('tutorial'), () => {
-        markTutorialSeen();
-        const cells = TUT_SLIDES.map((f, i) =>
-          `<div class="tut-cell"><img class="tut-slide" src="${TUT_BASE}${f}" alt="Tutorial slide ${i + 1}" draggable="false"></div>`).join('');
-        const dots = TUT_SLIDES.map((_, i) =>
-          `<span class="tut-dot${i === 0 ? ' on' : ''}" data-i="${i}"></span>`).join('');
-        openApp('', `<div class="tut-wrap">`
-          + `<div class="tut-track">${cells}</div>`
-          + `<div class="tut-dots">${dots}</div>`
-          + `<button class="tut-close" aria-label="Close">✕</button>`
-          + `</div>`);
-        appModal.classList.add('tut-mode');   // full-bleed: strip chrome, hide title
-        addTap(appBody.querySelector('.tut-close'), () => {
-          appModal.classList.remove('open', 'tut-mode'); markModalClosing();
-        });
-        const track  = appBody.querySelector('.tut-track');
-        const dotEls = [...appBody.querySelectorAll('.tut-dot')];
-        if (track) {
-          const sync = () => {
-            const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
-            dotEls.forEach((d, k) => d.classList.toggle('on', k === i));
-          };
-          track.addEventListener('scroll', sync, { passive: true });
-          dotEls.forEach((d, i) => addTap(d, () =>
-            track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' })));
+      // ── Guided tutorial tour (owner 2026-07-17) — replaces the old slide
+      // carousel. Tutorial is forced first; each listed button highlights, the
+      // player taps it to open its REAL submenu with a quote box, taps the box
+      // to advance, and so on through Music. Hold Skip (7s) to bail out. Only
+      // forces on first-ever open while the phone menu is visible, so it can
+      // never trap a player mid-drive.
+      const TUT_TOUR = [
+        { a: 'garage',      q: "Here you can buy upgrades for your ride — build your junk heap into a slammed sleeper… at least on the inside." },
+        { a: 'maps',        q: "This is where you see the rest stops along your journey — or even teleport, once you unlock Custom mode." },
+        { a: 'calendar',    q: "The calendar is where you'll find daily tasks and current missions. Complete them daily for big cash bonuses." },
+        { a: 'trophy',      q: "See all of your accomplishments in the game — or check whether you were a world leader." },
+        { a: 'stats',       q: "Check your miles driven, items collected, your fastest trip, and lots of other stats." },
+        { a: 'messages',    q: "Maintain your relationships, for your own sake — you'd be surprised what you can gain from a good friendship." },
+        { a: 'startover',   q: "Just like it sounds. Take a pause from your game by tilting the phone vertically — save at any point.", noSub: true },
+        { a: 'leaderboard', q: "Compare your accomplishments with your friends or world leaders — but probably not Kim Jong Un." },
+        { a: 'settings',    q: "There's a sleeper setting in here: you can actually edit your entire game layout in the Gameplay section!" },
+        { a: 'addiction',   q: "This game used to have a different… tone. That doesn't mean we should remove a good message, though." },
+        { a: 'music',       q: "We'll start with music. Choosing your genre is choosing your path in life — each genre has its own vehicle and item art." },
+      ];
+
+      const tutCap  = document.createElement('div'); tutCap.id = 'tut-capture';
+      const tutBox  = document.createElement('div'); tutBox.id = 'tut-quote';
+      tutBox.innerHTML = '<span class="tq-text"></span><span class="tq-next">next ❯</span>';
+      const tutSkip = document.createElement('div'); tutSkip.id = 'tut-skip';
+      tutSkip.innerHTML = 'HOLD TO SKIP<svg viewBox="0 0 100 40" preserveAspectRatio="none"><rect x="2" y="2" width="96" height="36" rx="6"></rect></svg>';
+      document.body.appendChild(tutCap); document.body.appendChild(tutBox); document.body.appendChild(tutSkip);
+      const tutRect = tutSkip.querySelector('rect');
+      const SKIP_PERIM = 2 * (96 + 36);
+      tutRect.style.strokeDasharray = SKIP_PERIM; tutRect.style.strokeDashoffset = SKIP_PERIM;
+
+      let tutActive = false, tutIdx = -1, tutPhase = 'highlight';   // tutIdx -1 = Tutorial starter
+      const tutQhit = (a) => document.querySelector('.phone-hit[data-action="' + a + '"]');
+      const tutClearFlash = () => document.querySelectorAll('.phone-hit.tut-flash').forEach(b => b.classList.remove('tut-flash'));
+      const tutFlashOne = (a) => { tutClearFlash(); tutQhit(a)?.classList.add('tut-flash'); };
+      const tutCloseModals = () => ['#phone-app', '#phone-map', '#phone-garage', '#phone-music', '#phone-achievements']
+        .forEach(sel => { const m = document.querySelector(sel); if (m) m.classList.remove('open', 'tut-mode'); });
+
+      function tutStart(fromForced) {
+        if (tutActive) return;
+        tutActive = true; tutCap.classList.add('on'); tutSkip.classList.add('on');
+        if (fromForced) { tutIdx = -1; tutPhase = 'highlight'; tutFlashOne('tutorial'); }
+        else { tutGotoHighlight(0); }
+      }
+      function tutGotoHighlight(i) {
+        tutIdx = i; tutBox.classList.remove('show', 'tapped'); tutCloseModals();
+        if (i >= TUT_TOUR.length) { tutFinish(); return; }
+        tutPhase = 'highlight'; tutFlashOne(TUT_TOUR[i].a);
+      }
+      function tutOpenSubmenu() {
+        const step = TUT_TOUR[tutIdx]; tutPhase = 'submenu'; tutClearFlash();
+        if (!step.noSub) { const el = tutQhit(step.a); if (el) el.dispatchEvent(new Event('click')); }
+        tutBox.querySelector('.tq-text').textContent = step.q;
+        tutBox.classList.add('show');
+      }
+      function tutFinish() {
+        tutActive = false; tutPhase = 'highlight'; tutClearFlash();
+        tutBox.classList.remove('show', 'tapped'); tutCap.classList.remove('on'); tutSkip.classList.remove('on');
+        tutCloseModals(); markTutorialSeen();
+      }
+
+      const tutPoint = (e) => (e.clientX != null) ? { x: e.clientX, y: e.clientY }
+        : (e.changedTouches && e.changedTouches[0]) ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY } : null;
+      const tutCapHit = (e) => {
+        if (!tutActive || tutPhase !== 'highlight') return;
+        e.preventDefault(); e.stopPropagation();
+        const targetA = tutIdx < 0 ? 'tutorial' : TUT_TOUR[tutIdx].a;
+        const el = tutQhit(targetA); if (!el) { tutGotoHighlight(tutIdx + 1); return; }
+        const p = tutPoint(e), r = el.getBoundingClientRect();
+        if (p && p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom) {
+          if (tutIdx < 0) tutGotoHighlight(0);   // tapped Tutorial → start at Garage
+          else tutOpenSubmenu();
         }
-      });
+        // else: ignore — must tap the glowing button.
+      };
+      tutCap.addEventListener('pointerup', tutCapHit, { passive: false });
+      tutCap.addEventListener('click', tutCapHit, { passive: false });
+
+      const tutBoxTap = (e) => {
+        if (!tutActive || tutPhase !== 'submenu' || tutBox.classList.contains('tapped')) return;
+        e.preventDefault(); e.stopPropagation();
+        tutBox.classList.add('tapped');
+        setTimeout(() => tutGotoHighlight(tutIdx + 1), 130);
+      };
+      tutBox.addEventListener('pointerup', tutBoxTap, { passive: false });
+      tutBox.addEventListener('click', tutBoxTap, { passive: false });
+
+      // Skip — hold 7s; the border draws around the perimeter and resets on release.
+      let skipRAF = null, skipStart = 0; const SKIP_MS = 7000;
+      const skipTick = (now) => {
+        const prog = Math.min(1, (now - skipStart) / SKIP_MS);
+        tutRect.style.strokeDashoffset = SKIP_PERIM * (1 - prog);
+        if (prog >= 1) { skipCancel(); tutFinish(); return; }
+        skipRAF = requestAnimationFrame(skipTick);
+      };
+      function skipCancel() { if (skipRAF) cancelAnimationFrame(skipRAF); skipRAF = null; tutRect.style.strokeDashoffset = SKIP_PERIM; }
+      tutSkip.addEventListener('pointerdown', (e) => { e.preventDefault(); if (skipRAF) return; skipStart = performance.now(); skipRAF = requestAnimationFrame(skipTick); }, { passive: false });
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => tutSkip.addEventListener(ev, skipCancel));
+
+      // Tutorial tile → run the tour (replaces the old carousel). Manual replay
+      // jumps straight to the Garage highlight.
+      addTap(qhit('tutorial'), () => tutStart(false));
+
+      // Forced first-ever open: start the tour once the phone menu is visible.
+      if (!tutSeenAlready()) {
+        const menu = document.getElementById('phone-menu');
+        let tries = 0;
+        const tryForce = () => {
+          if (tutActive || tutSeenAlready()) return;
+          const vis = menu && getComputedStyle(menu).display !== 'none' && menu.getBoundingClientRect().width > 0;
+          if (vis) tutStart(true);
+          else if (++tries < 40) setTimeout(tryForce, 500);   // give up after ~20s (safety)
+        };
+        setTimeout(tryForce, 700);
+      }
 
       // Calendar — Daily Challenge ("Run of the Day"). Read-only preview for
       // now; Play activates once the stage runner is wired (__daily.playable).
