@@ -315,20 +315,32 @@ function makePlayer() {
   };
 }
 
-// Owner's baked default HUD layout (from the 2026-07-18 editor export). These
-// are per-element {dx,dy,scale} deltas off each control's base position; applied
-// ONLY to profiles that have never customized their own layout (non-destructive
-// — existing custom layouts are untouched). PARTIAL for now: only the elements
-// the owner actually dragged are captured, so this covers the garage/map/mute
-// buttons, the Drinks/Food bars, the speed readout, and the damage popup. Swap
-// in a fuller export to extend it.
+// Owner's baked default HUD layout (2026-07-18 editor export). Per-element
+// {dx,dy,scale} deltas off each control's base position; applied ONLY to
+// profiles that have never customized their own layout (non-destructive —
+// existing custom layouts are untouched). 19 elements captured (the export
+// message truncated after `engine`); the tail — popup + any moved score / mult /
+// stars — is still pending a follow-up paste.
 const DEFAULT_HUD_LAYOUT = {
-  btn_garage: { dx: 28,  dy: 1,   scale: 1.1014028829519762 },
-  survB:      { dx: -21, dy: -11, scale: 1 },
-  btn_map:    { dx: 35,  dy: 1,   scale: 1.0889059233069553 },
-  speed:      { dx: -57, dy: 19,  scale: 1 },
-  btn_mute:   { dx: 43,  dy: 1,   scale: 1.0739683025825142 },
-  hpDamage:   { dx: 372, dy: 260, scale: 2.587326517462003 },
+  btn_pause:  { dx: -57, dy: -6,  scale: 1.1413333510707937 },
+  hpDamage:   { dx: 375, dy: 258, scale: 1.8015110070458753 },
+  btn_ff:     { dx: -64, dy: -5,  scale: 1.1477789584900153 },
+  btn_genre:  { dx: -70, dy: -5,  scale: 1.1584381965387238 },
+  survA:      { dx: 16,  dy: -5,  scale: 1.0015604625816856 },
+  radio:      { dx: -71, dy: -9,  scale: 1 },
+  hp:         { dx: -30, dy: -3,  scale: 1.6188648298531956 },
+  btn_garage: { dx: 48,  dy: 0,   scale: 1.1804039159881947 },
+  btn_map:    { dx: 54,  dy: 0,   scale: 1.16298693487994 },
+  speed:      { dx: 9,   dy: -8,  scale: 1.1493464214891864 },
+  btn_mute:   { dx: 60,  dy: 0,   scale: 1.1434981935343205 },
+  survB:      { dx: -2,  dy: -6,  scale: 0.9663047809038192 },
+  wiper:      { dx: 82,  dy: 4,   scale: 1 },
+  pedalBrake: { dx: -37, dy: -4,  scale: 1.114457990042001 },
+  gas:        { dx: -36, dy: -14, scale: 1 },
+  pedalGas:   { dx: 32,  dy: -6,  scale: 1.1008229606119881 },
+  region:     { dx: 16,  dy: -12, scale: 1.802643791583196 },
+  dist:       { dx: 45,  dy: -9,  scale: 1.4905521129083552 },
+  engine:     { dx: 92,  dy: -14, scale: 1 },
 };
 
 export class GameScene extends Phaser.Scene {
