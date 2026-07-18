@@ -42,25 +42,32 @@ forked from DUI on **2026-07-04** into its own repo and Cloudflare Pages site. R
 into an App-Store-safe survival road trip and adds the commercial glue (encounters, part
 upgrades, survival + heat/fuel pressure).
 
-## Current snapshot (as of 2026-07-14)
+## Current snapshot (as of 2026-07-17)
 
 **Built & deployed:** rest-stop encounter system (dialogue trees + npcMemory) · **MISSION SYSTEM
-complete (Ch. 8, all 7 phases — 5 types, rep ladder ×1/×2.5/×5, 109 tests)** · car stats layer ·
+complete (Ch. 8, all 7 phases — 5 types, rep ladder ×1/×2.5/×5, 123 tests)** · car stats layer ·
 part-upgrade system + garage UI · upgrades/buffs hooked into handling · survival rework
-(Alertness/Bladder/Drinks/Food + restrooms/AM-BM + rest-stop mini bars) · engine overheating ·
-analog E↔F gas gauge (75-mi tank, 1:1 burn, reserve-tank upgrades) · 🎆 fireworks weapon (spikes
-removed) · phone-menu notification dots · Hatton rest stop.
+(Alertness/Bladder/Drinks/Food + restrooms/AM-BM + rest-stop mini bars; over-eating past 75% now
+fills the bladder) · engine overheating · analog E↔F gas gauge (75-mi tank, 1:1 burn, reserve-tank
+upgrades) · 🎆 fireworks weapon (spikes removed) · phone-menu notification dots · Hatton rest stop ·
+**SOUNDTRACK CULTURE PACKS shipped** (per-plate genre reskin — vice + starter-vehicle art per genre,
+music-menu picker, tutorial genre pick, rotate-to-play prompt) · custom iOS motion-permission
+explainer · **all weapons cap at 3** (rolling coal 1/pickup) · **rolling-coal cop = touch-cloud →
+60 mph/30 s slow** · HUD-layout editor with a COPY-to-export button.
 
 **Superseded vs the original design doc:** "DUI" framing removed (speeding stops only, reckless
 heat) · portable save/checkpoint codes removed (local LAST/SAVED kept) · sex worker → Hot Springs
 soak (PG-13) · party-clock HUD hidden (mechanics intact — arrival-status direction, see changelog).
 
-**Not yet built:** economy balance w/ real playtest data (mission `recordEarn` tagging ready;
-pickups+distance income the suspected inflators) · Steam-demo cut + wishlist/tutorial (Ch3
-§13/§22) · real NPC portrait art + survival-item art · soundtrack-culture runtime/deploy finalization
-· texting-relationship layer (pinned idea) · SAVE tile replacement (owner deciding).
+**Not yet built / pending:** economy balance w/ real playtest data (mission `recordEarn` tagging
+ready; pickups+distance income the suspected inflators) · Steam-demo cut + wishlist/tutorial (Ch3
+§13/§22) · real NPC portrait art · **bake owner's custom HUD layout as the shipped default** (waiting
+on the COPY'd `controlsLayout` JSON — editor has the export button) · **genre earn/buy GATING**
+(deferred to post-dev-mode; every genre is freely selectable for now) · **Reggaeton dedicated music**
+(still borrowing the 9 hip-hop tracks; no `reggaeton/` folder yet) · texting-relationship layer
+(pinned idea) · SAVE tile replacement (owner deciding).
 
-## 📌 PINNED — Soundtrack Culture Packs (art complete locally; deployment incomplete)
+## 📌 PINNED — Soundtrack Culture Packs (SHIPPED 2026-07-17)
 
 **The pitch (Brendan's):** choosing your music genre is a *loadout decision* that reskins the
 whole run. Picking a soundtrack changes every sprite's ART (never its effect — same bars, same
@@ -98,11 +105,12 @@ each station's `culture` id. Station indices remain stable for saves via `trackK
 PHONK→HIP-HOP / PHONK, ARCADE→POP-PUNK / EMO, SYNTHWAVE→NORTEÑO, old HIP-HOP→REGGAETON;
 EDM is relabeled EDM / RAVE. Existing audio remains attached to those slots until music is moved.
 
-**Deployment status (audit 2026-07-17): NOT safely shipped from this checkout.** The menu renderer
-is present in committed `index.html`, but `src/systems/AudioSystem.js` is still modified locally and
-`public/assets/ui/music_genres/` is untracked. Without both, deployed `s.culture` is undefined and
-the renderer deliberately emits no background image. A successful `git push` does not include
-working-tree or untracked files; see Chapter 2's pre-push checklist.
+**Deployment status: SHIPPED & verified live 2026-07-17** (pushes `3a4d020` → `b98d2bc` → `fbc6ee3`).
+`AudioSystem` exposes each station's `culture`, `public/assets/ui/music_genres/` + the full
+`public/assets/culture/<genre>/` art are committed, and genre is now stored **per license plate**
+(save slot → `rtr.genre` mirror; BootScene reads it at boot). The tutorial's Music step forces a real
+genre pick, and a "Rotate Phone to Enter Game Play" prompt follows. Remaining: earn/buy GATING for any
+genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
