@@ -225,6 +225,9 @@
     }
     #rotate-play-prompt.on { display: flex; }
     #rotate-play-prompt .rpp-icon { font-size: 9vmin; line-height: 1; animation: rppSpin 1.8s ease-in-out infinite; }
+    /* Tutorial variant — golden throbbing border; taps do nothing (rotate to advance). */
+    @keyframes rppPulseGold { 0%, 100% { opacity: 0.7; box-shadow: 0 0 2vmin 0.5vmin rgba(255, 210, 77, 0.6); } 50% { opacity: 1; box-shadow: 0 0 6.5vmin 2vmin rgba(255, 210, 77, 0.98); } }
+    #rotate-play-prompt.tut { border-color: #FFD24D; cursor: default; animation: rppPulseGold 1.05s ease-in-out infinite; }
     /* During the Music/genre step the capture + quote overlays let taps fall
        through to the real genre buttons underneath. */
     #tut-capture.pass, #tut-quote.pass { pointer-events: none; }
@@ -1109,6 +1112,228 @@
     }
     #phone-app .pa-toggle.on { border-color: #39A8FF; background: #1E5BB8; color: #FFF; }
 
+    /* ── Road Trip Roulette menu chrome ────────────────────────────────
+       One visual language for the utility screens.  These rules deliberately
+       leave every modal's geometry and hit targets alone; they only improve
+       safe-area spacing, hierarchy, contrast and button treatment. */
+    #phone-app,
+    #phone-garage,
+    #phone-map,
+    #phone-achievements {
+      background:
+        radial-gradient(circle at 12% 8%, rgba(33, 136, 255, 0.20), transparent 28%),
+        radial-gradient(circle at 92% 88%, rgba(255, 42, 131, 0.12), transparent 32%),
+        linear-gradient(180deg, rgba(6, 15, 31, 0.985), rgba(3, 8, 18, 0.99));
+    }
+    #phone-app,
+    #phone-garage,
+    #phone-map {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 7vmin);
+    }
+    #phone-app .pa-head {
+      min-height: 11vmin;
+      margin-bottom: 2.5vmin;
+      padding: 0 0 1.8vmin;
+      border-bottom: 0.45vmin solid rgba(57, 168, 255, 0.46);
+      box-shadow: 0 1.4vmin 2.5vmin -2.2vmin rgba(57, 168, 255, 0.75);
+    }
+    #phone-app-title,
+    #phone-garage .title,
+    #phone-map .title,
+    #phone-achievements .title {
+      line-height: 1.08;
+      letter-spacing: 0.065em;
+      text-shadow: 0 0 1.5vmin rgba(57, 168, 255, 0.72), 0 0.4vmin 0 #07101f;
+    }
+    #phone-app-title { color: #72C9FF; }
+    #phone-garage .title,
+    #phone-map .title { color: #FFE84A; text-shadow: 0 0 1.5vmin rgba(255,232,74,0.5), 0 0.4vmin 0 #07101f; }
+    #phone-app .pa-close,
+    #phone-app .menu-x,
+    #phone-garage .menu-x,
+    #phone-map .menu-x,
+    #phone-achievements .menu-x {
+      background: radial-gradient(circle at 38% 30%, #253d5d 0%, #07101f 72%);
+      border-color: #67C2FF;
+      color: #8CD5FF;
+      text-shadow: 0 0 1.2vmin rgba(103,194,255,0.95);
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.25), 0 0 1.7vmin rgba(57,168,255,0.45);
+    }
+    #phone-app .pa-body {
+      color: #E9F3FF;
+      padding: 0 3.5vmin 4vmin 0;
+    }
+    #phone-app .pa-section {
+      color: #7ED0FF;
+      font-family: "Impact", "Arial Black", sans-serif;
+      font-size: 3.55vmin;
+      letter-spacing: 0.095em;
+      padding: 1.2vmin 1.4vmin 1.3vmin;
+      margin-top: 5vmin;
+      background: linear-gradient(90deg, rgba(36,116,205,0.26), rgba(36,116,205,0.03));
+      border-left: 0.7vmin solid #39A8FF;
+      border-bottom: 1px solid rgba(93,190,255,0.45);
+      border-radius: 0.8vmin;
+      text-shadow: 0 0 1vmin rgba(57,168,255,0.55);
+    }
+    #phone-app .pa-row {
+      min-height: 8vmin;
+      padding: 2.65vmin 1.3vmin;
+      border-bottom-color: rgba(111, 175, 230, 0.22);
+      background: linear-gradient(90deg, rgba(255,255,255,0.025), transparent 70%);
+    }
+    #phone-app .pa-row .k { color: #C0D9F4; }
+    #phone-app .pa-row .v { color: #FFFFFF; text-shadow: 0 0 0.8vmin rgba(103,194,255,0.22); }
+    #phone-app .pa-link { color: #67C9FF; text-shadow: 0 0 0.8vmin rgba(57,168,255,0.45); }
+    #phone-app .pa-lead {
+      padding: 2.4vmin 2.8vmin;
+      color: #D8E9FA;
+      background: linear-gradient(135deg, rgba(31,72,123,0.34), rgba(8,22,43,0.35));
+      border: 1px solid rgba(103,194,255,0.28);
+      border-radius: 2vmin;
+    }
+    #phone-app .pa-note { color: #8FAAC8; }
+    #phone-app .contact-row {
+      margin: 1.5vmin 0;
+      padding-left: 2.4vmin;
+      background: linear-gradient(135deg, rgba(27,60,103,0.72), rgba(10,24,46,0.72));
+      border: 1px solid rgba(88,177,244,0.3);
+      border-radius: 2vmin;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.06);
+    }
+    #phone-app .lb-tab,
+    #phone-app .pa-toggle {
+      font-family: "Impact", "Arial Black", sans-serif;
+      letter-spacing: 0.05em;
+      background: linear-gradient(180deg, #223754, #0B1528 72%);
+      border-color: #466A91;
+      color: #C7DDF2;
+      text-shadow: 0 0.3vmin 0 #000;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.15), inset 0 -0.7vmin 1.1vmin rgba(0,0,0,0.34);
+    }
+    #phone-app .lb-tab.on,
+    #phone-app .pa-toggle.on {
+      background: linear-gradient(180deg, #40B9FF, #1256B2 72%);
+      border-color: #9CDEFF;
+      color: #FFFFFF;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.35), 0 0 1.4vmin rgba(57,168,255,0.48);
+    }
+    #phone-app .pa-toggle:disabled { opacity: 0.52; filter: saturate(0.55); cursor: default; }
+    #phone-app input[type=range] {
+      height: 1.6vmin;
+      accent-color: #39A8FF;
+      filter: drop-shadow(0 0 0.7vmin rgba(57,168,255,0.6));
+    }
+
+    /* Garage: chunky arcade cards and readable upgrade hardware. */
+    #phone-garage .list { gap: 2.3vmin; padding: 1vmin 0 4vmin; }
+    #phone-garage .row {
+      background: linear-gradient(135deg, #182A43, #0B1527);
+      border-color: #416D94;
+      border-radius: 2vmin;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.09), 0 1vmin 2vmin rgba(0,0,0,0.26);
+    }
+    #phone-garage .row.current {
+      color: #FFFFFF;
+      background: linear-gradient(135deg, #197DC8, #173E86);
+      border-color: #FFE84A;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.22), 0 0 1.6vmin rgba(255,232,74,0.28);
+    }
+    #phone-garage .row .name {
+      font-family: "Impact", "Arial Black", sans-serif;
+      letter-spacing: 0.045em;
+      color: #FFFFFF;
+      text-shadow: 0 0.35vmin 0 #07101f;
+    }
+    #phone-garage .row .stats { color: #C2E3FF; line-height: 1.35; }
+    #phone-garage .row.current .acc span[style] { color: #D9E8F7 !important; }
+    #phone-garage #garage-upgrades {
+      font-family: "Helvetica Neue", Arial, sans-serif !important;
+      background: linear-gradient(160deg, rgba(13,28,51,0.98), rgba(4,10,20,0.99)) !important;
+      border: 0.5vmin solid #2F78AD !important;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.08), 0 0 2vmin rgba(57,168,255,0.18);
+    }
+    #phone-garage #garage-upgrades > div:first-child span:first-child {
+      font-family: "Impact", "Arial Black", sans-serif;
+      letter-spacing: 0.08em;
+      text-shadow: 0 0 1vmin rgba(57,217,255,0.6);
+    }
+    #phone-garage #garage-upgrades span[style*="#5b6b82"] { color: #95ABC3 !important; }
+    #phone-garage .up-buy,
+    #phone-garage .up-max {
+      font-family: "Impact", "Arial Black", sans-serif;
+      letter-spacing: 0.035em;
+      border-color: #3D5873;
+      background: linear-gradient(180deg, #263A54, #0C1525);
+      color: #8297AC;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.12), inset 0 -0.8vmin 1.1vmin rgba(0,0,0,0.35);
+    }
+    #phone-garage .up-buy.on {
+      border-color: #80D0FF;
+      background: linear-gradient(180deg, #3DB9FF, #1558B2);
+      color: #FFFFFF;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.34), 0 0 1.3vmin rgba(57,168,255,0.44);
+    }
+    #phone-garage .up-buy:disabled { opacity: 0.5; }
+    #phone-garage .up-max {
+      color: #6CFF9C;
+      border-color: #32845A;
+      background: linear-gradient(180deg, #17482E, #091B12);
+    }
+
+    /* Map and trophy callouts read as physical dashboard cards. */
+    #phone-map .sub,
+    #phone-achievements .sub {
+      color: #B9DEFF;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    #phone-map-stops {
+      padding: 2vmin;
+      background: rgba(4,12,24,0.76);
+      border: 1px solid rgba(103,194,255,0.35);
+      border-radius: 2vmin;
+      box-shadow: 0 0 1.5vmin rgba(0,0,0,0.55);
+    }
+    #phone-map-stops .np-title { color: #FFE84A; text-decoration: none; letter-spacing: 0.06em; }
+    #phone-achievements .row {
+      background: linear-gradient(135deg, rgba(27,49,78,0.9), rgba(8,18,34,0.92));
+      border-radius: 2vmin;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.07), 0 0.8vmin 1.6vmin rgba(0,0,0,0.22);
+    }
+    #phone-achievements .row.locked { opacity: 0.72; filter: saturate(0.58); }
+
+    /* Confirmation dialogs belong to the game instead of looking like an
+       unrelated operating-system popup. */
+    #phone-confirm { background: rgba(1,5,12,0.78); backdrop-filter: blur(5px); }
+    #phone-confirm .box {
+      background: linear-gradient(160deg, rgba(22,45,76,0.98), rgba(5,12,25,0.99));
+      border: 0.6vmin solid #58B9FF;
+      border-radius: 3vmin;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.16), 0 0 3vmin rgba(57,168,255,0.38), 0 3vmin 7vmin rgba(0,0,0,0.65);
+      font-family: "Helvetica Neue", Arial, sans-serif;
+    }
+    #phone-confirm .msg { color: #EEF7FF; font-weight: 700; text-shadow: 0 0.3vmin 0 #000; }
+    #phone-confirm .row { gap: 1.8vmin; padding: 2vmin; border-top-color: rgba(103,194,255,0.25); }
+    #phone-confirm .row button {
+      padding: 2.7vmin 0;
+      border: 0.45vmin solid #55718E;
+      border-radius: 1.8vmin;
+      background: linear-gradient(180deg, #293E59, #0B1628);
+      color: #D5E7F8;
+      font-family: "Impact", "Arial Black", sans-serif;
+      letter-spacing: 0.055em;
+      text-shadow: 0 0.3vmin 0 #000;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.14);
+    }
+    #phone-confirm .row button + button { border-left: 0.45vmin solid #8DD6FF; }
+    #phone-confirm .row .ok {
+      border-color: #8DD6FF;
+      background: linear-gradient(180deg, #42B8FF, #1558B5);
+      color: #FFFFFF;
+      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.3), 0 0 1.2vmin rgba(57,168,255,0.38);
+    }
+
     /* Tutorial — FULL-BLEED swipeable slide carousel.  In tut-mode the app
        chrome (header / padding) is stripped so each slide fills the whole
        phone: top-pinned and width-fit to the phone edges (bottom clipped if
@@ -1813,9 +2038,10 @@
       // portrait menu after the tutorial genre pick. Dismisses on rotate-to-
       // landscape (gameplay entry) or a tap.
       (function () {
-        let el = null, onRot = null;
+        let el = null, onRot = null, onRotateCb = null;
         function hide() {
-          if (el) el.classList.remove('on');
+          if (el) { el.classList.remove('on', 'tut'); el.style.pointerEvents = ''; }
+          onRotateCb = null;
           if (onRot) {
             window.removeEventListener('orientationchange', onRot);
             window.removeEventListener('resize', onRot);
@@ -1827,14 +2053,26 @@
           el.id = 'rotate-play-prompt';
           el.innerHTML = '<span class="rpp-icon">🔄</span><span>Rotate Phone to<br>Enter Game Play</span>';
           document.body.appendChild(el);
-          el.addEventListener('click', hide);
+          el.addEventListener('click', hide);   // non-tutorial: tap dismisses
         }
+        // show(opts): { tutorial } → golden border, taps ignored (rotate only);
+        // { onRotate } → fired once when the player actually rotates to landscape.
         window.__rotatePrompt = {
-          show() {
+          show(opts) {
+            opts = opts || {};
             if (!el) build();
+            el.classList.toggle('tut', !!opts.tutorial);
+            el.style.pointerEvents = opts.tutorial ? 'none' : '';
             el.classList.add('on');
+            onRotateCb = typeof opts.onRotate === 'function' ? opts.onRotate : null;
             if (!onRot) {
-              onRot = () => { try { if (window.matchMedia('(orientation: landscape)').matches) hide(); } catch (_) {} };
+              onRot = () => {
+                try {
+                  if (window.matchMedia('(orientation: landscape)').matches) {
+                    const cb = onRotateCb; hide(); if (cb) cb();
+                  }
+                } catch (_) {}
+              };
               window.addEventListener('orientationchange', onRot);
               window.addEventListener('resize', onRot);
             }
@@ -3714,6 +3952,7 @@
 
       let tutActive = false, tutIdx = -1, tutPhase = 'highlight';   // tutIdx -1 = Tutorial starter
       let tutAwaitGenre = false;   // Music step: waiting for the player to pick a genre
+      let tutRotateWait = false;   // Final portrait step: locked until the player ROTATES to landscape
       const tutQhit = (a) => document.querySelector('.phone-hit[data-action="' + a + '"]');
       const tutClearFlash = () => document.querySelectorAll('.phone-hit.tut-flash').forEach(b => b.classList.remove('tut-flash'));
       const tutFlashOne = (a) => { tutClearFlash(); tutQhit(a)?.classList.add('tut-flash'); };
@@ -3769,12 +4008,31 @@
         tutBox.classList.remove('show', 'tapped'); tutCap.classList.remove('on'); tutSkip.classList.remove('on');
         tutCloseModals(); markTutorialSeen();
       }
-      // Genre chosen during the Music step → close the tour and surface the
-      // "Rotate Phone to Enter Game Play" prompt on the main menu.
+      // Genre chosen during the Music step → the LAST portrait step: a locked
+      // "Rotate Phone to Enter Game Play" prompt. Taps do nothing — the player
+      // MUST rotate to landscape, which advances into the title-screen tutorial
+      // (Stage 1, picked up by the Phaser side via the rtr_tutStage1 flag).
       function tutFinishGenre() {
         if (!tutActive || !tutAwaitGenre) return;
-        tutFinish();
-        try { window.__rotatePrompt?.show?.(); } catch (_) {}
+        tutClearGenreWait();
+        tutCloseModals();
+        tutBox.classList.remove('show', 'tapped');
+        tutSkip.classList.remove('on');
+        tutClearFlash();
+        tutRotateWait = true;
+        tutCap.classList.add('on');        // keep the menu locked — no tap advances
+        markTutorialSeen();                // portrait tour complete
+        try { localStorage.setItem('rtr_tutStage1', '1'); } catch (_) {}
+        try {
+          window.__rotatePrompt?.show?.({
+            tutorial: true,
+            onRotate: () => {
+              tutRotateWait = false; tutActive = false;
+              tutCap.classList.remove('on'); tutSkip.classList.remove('on');
+              tutClearFlash();
+            },
+          });
+        } catch (_) {}
       }
       // Bridge for the music-menu genre star (index.html menu script).
       window.__tut = {
@@ -3787,6 +4045,8 @@
         : (e.changedTouches && e.changedTouches[0]) ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY } : null;
       const tutCapHit = (e) => {
         if (!tutActive) return;
+        // Rotate-wait: menu is locked, taps do NOTHING — only rotating advances.
+        if (tutRotateWait) { e.preventDefault(); e.stopPropagation(); return; }
         // Music step: don't advance on a stray tap — wait for a genre pick.
         if (tutAwaitGenre) return;
         e.preventDefault(); e.stopPropagation();
