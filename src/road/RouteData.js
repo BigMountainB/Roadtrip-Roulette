@@ -2005,7 +2005,7 @@ export function buildRoute(count = ROUTE_SEGS) {
     // type starts as 'vice-pending' so the actual vice is chosen at runtime
     // by ViceSystem.chooseAddictedVice(...) when the sprite enters the visible
     // window. That lets per-player addiction skew which vice actually shows up.
-    if (rng.bool(traits.viceDensity ?? 0.020)) {
+    if (rng.bool((traits.viceDensity ?? 0.020) * 0.8)) {   // −20% food/vice sprite population (owner 2026-07-17)
       sprites.push({
         type:            'vice-pending',
         defaultType:     pickCollectible(rng, t),

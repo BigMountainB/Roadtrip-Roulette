@@ -2082,7 +2082,13 @@ export class GameScene extends Phaser.Scene {
           // same flag.  Charge additionally sets `chargeAdMs` (handled
           // below as a black-screen ad).
           if (buys.refuelToFull) {
-            this.player.gasMi = this.player.gasMaxMi;
+            // Defer the real fill to the first update frame: by then the
+            // reserve-tank upgrade has expanded gasMaxMi to its FINAL value, so
+            // the tank tops off to the true max. Filling here used the base
+            // rangeMi, leaving the gauge reading ~2/5 on an upgraded tank
+            // ("bought gas, didn't fill" — owner 2026-07-17).
+            this._pendingFullTank = true;
+            this.player.gasMi = this.player.gasMaxMi;   // provisional
             this._strandedShown = false;
           }
           if (buys.tractionTires) {
@@ -2109,6 +2115,7 @@ export class GameScene extends Phaser.Scene {
           if (buys.emptyBladder && this.survival) {
             this.survival.bladder = 0;
             this._bladderBurstMile = null;
+            this.survival.boostFoodDrain?.();   // restroom → existing food digests 70% faster
           }
           // Encounter survival effects (food/drink/coffee) → adjust the bars,
           // and fill the bladder from whatever you ate/drank.
@@ -3661,6 +3668,14 @@ export class GameScene extends Phaser.Scene {
     this._autosaveTimer = (this._autosaveTimer ?? 0) + rawDt;
     if (this._autosaveTimer >= 3) { this._autosaveTimer = 0; this._autosaveRun(); }
 
+    // Deferred REFUEL fill — runs once now that init (incl. reserve-tank
+    // upgrade → final gasMaxMi) is complete, so a bought refuel tops off to
+    // the true tank max instead of the base rangeMi (owner 2026-07-17).
+    if (this._pendingFullTank && this.player) {
+      this.player.gasMi = this.player.gasMaxMi ?? this.player.gasMi;
+      this._pendingFullTank = false;
+    }
+
     // ── Low-HP smoke ───────────────────────────────────────────────
     // <=15 HP: light, infrequent puffs (every ~500 ms).
     // <=5 HP: heavier, larger puffs (every ~200 ms). In cockpit the
@@ -3781,6 +3796,7 @@ export class GameScene extends Phaser.Scene {
           this._bladderStopHeld = false;
           this.survival.bladder = 0;
           this._bladderBurstMile = null;
+          this.survival.boostFoodDrain?.();   // restroom → existing food digests 70% faster
           this._showPopup?.('🚻 Ahhh… sweet relief. Bladder emptied.', '#88FFCC');
         }
       } else {

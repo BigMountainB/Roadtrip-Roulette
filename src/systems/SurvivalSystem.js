@@ -65,6 +65,7 @@ export class SurvivalSystem {
     this.bladder   = 25;    // start at 25% (multiplier condition is <25, so an
                             // early restroom stop buys the 2nd multiplier)
     this.diuretic  = 0;     // caffeine "pee it out" charge → faster hydration drain
+    this.foodFastPool = 0;  // post-restroom: existing food to burn off 70% faster
     this.nausea    = 0;
     this.caffeineDep    = 0;   // hidden dependence 0–100
     this.caffeineActive = 0;   // miles of caffeine still "in system"
@@ -89,7 +90,17 @@ export class SurvivalSystem {
     // be a resting state), slower again above 75 / below 25.  If a diuretic
     // pool is pending, claw back a bit of hydration each mile until it's spent.
     const zone = (v) => (v > 25 && v < 75) ? 1.25 : 1.0;
-    this.fullness  = clamp(this.fullness  + DRIFT.fullness  * zone(this.fullness)  * dMi);
+    const _fDrain = DRIFT.fullness * zone(this.fullness) * dMi;   // this frame's normal food drain (negative)
+    this.fullness  = clamp(this.fullness  + _fDrain);
+    // Post-restroom fast-digest: the food you HAD when you used the restroom
+    // burns off 70% faster, and that boost DIMINISHES as the pool empties. New
+    // food eaten during the window isn't added to the pool, so it drains at the
+    // normal rate (owner 2026-07-17). See boostFoodDrain().
+    if (this.foodFastPool > 0) {
+      const extra = Math.min(this.foodFastPool, Math.abs(_fDrain) * 0.7);
+      this.fullness    = clamp(this.fullness - extra);
+      this.foodFastPool -= extra;
+    }
     this.hydration = clamp(this.hydration + DRIFT.hydration * zone(this.hydration) * dMi);
     if (this.diuretic > 0) {
       const d = Math.min(this.diuretic, DIURETIC_DRAIN * dMi);
@@ -175,6 +186,10 @@ export class SurvivalSystem {
     if (t >= 50) return 'drowsy';
     return 'alert';
   }
+  /** A restroom break kicks digestion into high gear: the food you're carrying
+   *  RIGHT NOW burns off 70% faster until this pool empties. New food eaten
+   *  after doesn't join the pool, so it drains normally (owner 2026-07-17). */
+  boostFoodDrain() { this.foodFastPool = this.fullness; }
   hydrationTier() {
     if (this.hydration < 25)  return 'dehydrated';
     return 'ok';
@@ -196,7 +211,8 @@ export class SurvivalSystem {
   /** Snapshot for save/HUD. */
   snapshot() {
     return { tiredness: this.tiredness, fullness: this.fullness, hydration: this.hydration,
-             bladder: this.bladder, diuretic: this.diuretic, nausea: this.nausea, caffeineDep: this.caffeineDep };
+             bladder: this.bladder, diuretic: this.diuretic, nausea: this.nausea, caffeineDep: this.caffeineDep,
+             foodFastPool: this.foodFastPool };
   }
   restore(s = {}) {
     if (!s) return;
@@ -207,6 +223,7 @@ export class SurvivalSystem {
     this.diuretic  = s.diuretic  ?? this.diuretic;
     this.nausea    = s.nausea    ?? this.nausea;
     this.caffeineDep = s.caffeineDep ?? this.caffeineDep;
+    this.foodFastPool = s.foodFastPool ?? this.foodFastPool;
     this._lastMile = null;   // re-sync on the next update — never back-charge miles
   }
 }
