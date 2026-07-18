@@ -318,9 +318,9 @@ function makePlayer() {
 // Owner's baked default HUD layout (2026-07-18 editor export). Per-element
 // {dx,dy,scale} deltas off each control's base position; applied ONLY to
 // profiles that have never customized their own layout (non-destructive —
-// existing custom layouts are untouched). 19 elements captured (the export
-// message truncated after `engine`); the tail — popup + any moved score / mult /
-// stars — is still pending a follow-up paste.
+// existing custom layouts are untouched). 20 elements — the moved set (the
+// editor only stores what you drag, so anything not here sits at its default).
+// `popup` scale defaulted to 1 (its value was cut off the export paste).
 const DEFAULT_HUD_LAYOUT = {
   btn_pause:  { dx: -57, dy: -6,  scale: 1.1413333510707937 },
   hpDamage:   { dx: 375, dy: 258, scale: 1.8015110070458753 },
@@ -341,6 +341,7 @@ const DEFAULT_HUD_LAYOUT = {
   region:     { dx: 16,  dy: -12, scale: 1.802643791583196 },
   dist:       { dx: 45,  dy: -9,  scale: 1.4905521129083552 },
   engine:     { dx: 92,  dy: -14, scale: 1 },
+  popup:      { dx: -10, dy: -50, scale: 1 },
 };
 
 export class GameScene extends Phaser.Scene {
