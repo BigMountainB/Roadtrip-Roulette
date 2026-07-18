@@ -577,9 +577,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    // TEMP DIAGNOSTIC (remove after glitch hunt): count GameScene creates so a
-    // restart LOOP is visible in the on-screen readout (see index.html).
-    if (typeof window !== 'undefined') window.__gsCreates = (window.__gsCreates || 0) + 1;
     // Registry of every top-row button — populated below as each is
     // created.  _applyTopRowHandedness() iterates this on flip to
     // mirror all buttons around SCREEN_W/2.
