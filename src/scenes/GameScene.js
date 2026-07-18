@@ -825,7 +825,10 @@ export class GameScene extends Phaser.Scene {
       // the default) invalidated every pre-existing delta — old offsets on
       // top of the new bases flung elements off-screen.  One-time reset to
       // the new defaults; the editor keeps working from there.
-      const LAYOUT_VER = 2;
+      // v3 (2026-07-18): install the owner's baked DEFAULT_HUD_LAYOUT (bigger HP /
+      // region / dist + grouped, enlarged buttons). v2 profiles held an EMPTY
+      // layout, so the default never applied and the buttons stayed small.
+      const LAYOUT_VER = 3;
       if ((_save?.get?.('controlsLayoutVer', 1) ?? 1) < LAYOUT_VER) {
         // Pre-gate profiles (incl. brand-new ones) install the owner's baked
         // default rather than an empty layout.
@@ -16125,9 +16128,9 @@ export class GameScene extends Phaser.Scene {
     const hi   = this.add.rectangle(0, 0, 10, 10, 0xFFD24D, 0).setStrokeStyle(3, 0xFFD24D, 1).setDepth(D + 2);
     const boxG = this.add.graphics().setDepth(D + 3);
     const boxT = this.add.text(0, 0, '', {
-      fontSize: '12px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
+      fontSize: '17px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
       align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
-    }).setOrigin(0.5, 0).setDepth(D + 4);
+    }).setOrigin(0.5, 0.5).setDepth(D + 4);
     const tw = this.tweens.add({ targets: hi, alpha: { from: 1, to: 0.35 }, duration: 620, yoyo: true, repeat: -1 });
     const objs = [scrim, hi, boxG, boxT];
     try { this._hudObjects?.push(...objs); } catch (_) {}
@@ -16152,17 +16155,18 @@ export class GameScene extends Phaser.Scene {
     T.idx = i;
     T.hi.setPosition(b.x + b.w / 2, b.y + b.h / 2).setSize(b.w + 8, b.h + 8).setStrokeStyle(3, 0xFFD24D, 1).setVisible(true);
     try { T.tw.restart(); } catch (_) {}
-    const bw = Math.min(360, SCREEN_W - 24);
-    T.boxT.setWordWrapWidth(bw - 24);
+    // Big, readable box (~1/3 of the screen) on the opposite half from the target.
+    const bw = Math.min(480, SCREEN_W - 28);
+    T.boxT.setWordWrapWidth(bw - 30);
     T.boxT.setText(step.text);
-    const bh = T.boxT.height + 22;
+    const bh = Math.max(148, T.boxT.height + 30);
     const ecy = b.y + b.h / 2;
     const bx = Math.max(bw / 2 + 8, Math.min(SCREEN_W - bw / 2 - 8, b.x + b.w / 2));
-    const by = (ecy > SCREEN_H * 0.5) ? 24 : (SCREEN_H - bh - 24);   // opposite half → never covers the highlight
+    const by = (ecy > SCREEN_H * 0.5) ? 16 : (SCREEN_H - bh - 16);   // opposite half → never covers the highlight
     T.boxG.clear();
-    T.boxG.fillStyle(0x06101E, 0.96); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 8);
-    T.boxG.lineStyle(2, 0xFFD24D, 0.9); T.boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 8);
-    T.boxT.setPosition(bx, by + 11);
+    T.boxG.fillStyle(0x06101E, 0.97); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 10);
+    T.boxG.lineStyle(2, 0xFFD24D, 0.9); T.boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 10);
+    T.boxT.setPosition(bx, by + bh / 2);   // vertically centered (origin 0.5,0.5)
   }
 
   _hudTourTap() {
