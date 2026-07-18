@@ -952,6 +952,19 @@ const _boot = () => {
     text:   () => game.scene.getScene('Game')?._girlText?.() ?? { ok: false },
   };
 
+  // Genre / culture art — the chosen genre reskins the vice + starter-vehicle
+  // art (owner 2026-07-17). Persisted in localStorage 'rtr.genre'; BootScene
+  // loads its art at boot, and set() swaps it live this session.
+  window.__genre = {
+    get: () => { try { return localStorage.getItem('rtr.genre') || null; } catch (_) { return null; } },
+    set: (culture) => {
+      if (!culture) return;
+      try { localStorage.setItem('rtr.genre', culture); } catch (_) {}
+      const s = game.scene?.getScene?.('Game');
+      try { s?._applyGenreArt?.(culture); } catch (_) {}
+    },
+  };
+
   // Music app — list stations and play specific tracks.
   window.__music = {
     list: () => {

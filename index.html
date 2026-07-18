@@ -2770,7 +2770,11 @@
             // Default-station star — persists settings.radio (boot default).
             const def = el.querySelector('.genre-default');
             if (def) addTap(def, () => {
-              window.__music?.setDefaultStation?.(parseInt(def.dataset.idx, 10));
+              const idx = parseInt(def.dataset.idx, 10);
+              window.__music?.setDefaultStation?.(idx);
+              // Your default station IS your genre — swap the culture art to match.
+              const st = (window.__music?.list?.() ?? [])[idx];
+              if (st && st.culture) window.__genre?.set?.(st.culture);
               renderMusic();
             });
           });

@@ -114,23 +114,37 @@ export const ASSET_MANIFEST = {
   // Art lives in public/assets/vices/; procedural placeholders fill in until
   // each PNG is dropped there.
   vices: [
-    { key: 'vice_sushi',    path: 'assets/vices/sushi.png?v=reskin-3' },
-    { key: 'vice_burrito',  path: 'assets/vices/burrito.png?v=reskin-3' },
-    { key: 'vice_energy',   path: 'assets/vices/energy_shot.png?v=reskin-3' },
-    { key: 'vice_gummies',  path: 'assets/vices/gummies.png?v=reskin-3' },
-    { key: 'vice_hotdog',   path: 'assets/vices/hotdog.png?v=reskin-3' },
-    { key: 'vice_combo',    path: 'assets/vices/combo_meal.png?v=reskin-3' },
-    { key: 'vice_coldbrew', path: 'assets/vices/cold_brew.png?v=reskin-3' },
-    { key: 'vice_coma',     path: 'assets/vices/food_coma.png?v=reskin-3' },
-    { key: 'vice_slushie',  path: 'assets/vices/slushie.png?v=reskin-3' },
-    { key: 'vice_caffeine', path: 'assets/vices/caffeine_pills.png?v=reskin-3' },
-    { key: 'vice_water',     path: 'assets/vices/water.png?v=reskin-3' },
-    { key: 'vice_dramamine', path: 'assets/vices/dramamine.png?v=reskin-3' },
+    { key: 'vice_sushi',    path: 'assets/vices/sushi.png?v=reskin-4' },
+    { key: 'vice_burrito',  path: 'assets/vices/burrito.png?v=reskin-4' },
+    { key: 'vice_energy',   path: 'assets/vices/energy_shot.png?v=reskin-4' },
+    { key: 'vice_gummies',  path: 'assets/vices/gummies.png?v=reskin-4' },
+    { key: 'vice_hotdog',   path: 'assets/vices/hotdog.png?v=reskin-4' },
+    { key: 'vice_combo',    path: 'assets/vices/combo_meal.png?v=reskin-4' },
+    { key: 'vice_coldbrew', path: 'assets/vices/cold_brew.png?v=reskin-4' },
+    { key: 'vice_coma',     path: 'assets/vices/food_coma.png?v=reskin-4' },
+    { key: 'vice_slushie',  path: 'assets/vices/slushie.png?v=reskin-4' },
+    { key: 'vice_caffeine', path: 'assets/vices/caffeine_pills.png?v=reskin-4' },
+    { key: 'vice_water',     path: 'assets/vices/water.png?v=reskin-4' },
+    { key: 'vice_dramamine', path: 'assets/vices/dramamine.png?v=reskin-4' },
   ],
   // Power-ups: Redneck Rage (invincible rampage) + Emergency Espresso (OD save).
   powerups: [
-    { key: 'powerup_rage',     path: 'assets/vices/redneck_rage.png?v=reskin-3' },
-    { key: 'powerup_espresso', path: 'assets/vices/emergency_espresso.png?v=reskin-3' },
+    { key: 'powerup_rage',     path: 'assets/vices/redneck_rage.png?v=reskin-4' },
+    { key: 'powerup_espresso', path: 'assets/vices/emergency_espresso.png?v=reskin-4' },
+  ],
+  // Windshield splats: ten matching Lucky-Charms-shaped vomit sprites.  The
+  // source PNGs are capped at 85% opacity so the road remains faintly visible.
+  effects: [
+    { key: 'vomit_1',  path: 'assets/ui/sickness/vomit_1.png?v=charms-streaked-1' },
+    { key: 'vomit_2',  path: 'assets/ui/sickness/vomit_2.png?v=charms-streaked-1' },
+    { key: 'vomit_3',  path: 'assets/ui/sickness/vomit_3.png?v=charms-streaked-1' },
+    { key: 'vomit_4',  path: 'assets/ui/sickness/vomit_4.png?v=charms-streaked-1' },
+    { key: 'vomit_5',  path: 'assets/ui/sickness/vomit_5.png?v=charms-streaked-1' },
+    { key: 'vomit_6',  path: 'assets/ui/sickness/vomit_6.png?v=charms-streaked-1' },
+    { key: 'vomit_7',  path: 'assets/ui/sickness/vomit_7.png?v=charms-streaked-1' },
+    { key: 'vomit_8',  path: 'assets/ui/sickness/vomit_8.png?v=charms-streaked-1' },
+    { key: 'vomit_9',  path: 'assets/ui/sickness/vomit_9.png?v=charms-streaked-1' },
+    { key: 'vomit_10', path: 'assets/ui/sickness/vomit_10.png?v=charms-streaked-1' },
   ],
   // NPC portraits for the rest-stop encounter cards.  Missing files fall back
   // to the procedural colored-bust placeholder (BootScene._makeNpcPlaceholder),
@@ -384,4 +398,36 @@ export const ASSET_MANIFEST = {
 
 export function flattenManifest() {
   return Object.values(ASSET_MANIFEST).flat();
+}
+
+// ── Genre / Culture art (owner 2026-07-17) ───────────────────────────────
+// When a genre is selected (a music station = a genre), these texture keys load
+// from public/assets/culture/<genre>/ instead of the defaults — reskinning the
+// vice sprites + the starting vehicle to match the chosen culture. Applied at
+// boot (BootScene) and live on selection (GameScene._applyGenreArt).
+export const GENRE_ART = {
+  vice_sushi:        'vices/sushi.png',
+  vice_burrito:      'vices/burrito.png',
+  vice_energy:       'vices/energy_shot.png',
+  vice_gummies:      'vices/gummies.png',
+  vice_hotdog:       'vices/hotdog.png',
+  vice_combo:        'vices/combo_meal.png',
+  vice_coldbrew:     'vices/cold_brew.png',
+  vice_coma:         'vices/food_coma.png',
+  vice_slushie:      'vices/slushie.png',
+  vice_caffeine:     'vices/caffeine_pills.png',
+  vice_water:        'vices/water.png',
+  vice_dramamine:    'vices/dramamine.png',
+  powerup_rage:      'vices/redneck_rage.png',
+  powerup_espresso:  'vices/emergency_espresso.png',
+  // Starting vehicle (the beater) front/back → the genre's starter art.
+  codex_beater_front: 'vehicles/starter_front.png',
+  codex_beater_back:  'vehicles/starter_back.png',
+};
+
+/** Culture-art path for a manifest key under the given genre, or null if this
+ *  key has no genre override (falls back to the default manifest path). */
+export function genreArtPath(key, genre) {
+  if (!genre || !GENRE_ART[key]) return null;
+  return `assets/culture/${genre}/${GENRE_ART[key]}?g=${genre}`;
 }

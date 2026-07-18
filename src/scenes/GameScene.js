@@ -30,6 +30,7 @@ import { SurvivalSystem } from '../systems/SurvivalSystem.js';
 import { EffectsSystem } from '../systems/EffectsSystem.js';
 import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
 import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
+import { genreArtPath, GENRE_ART } from '../systems/AssetManifest.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
 import { Difficulty }    from '../systems/Difficulty.js';
 import { TimeOfDay }     from '../world/TimeOfDay.js';
@@ -8695,6 +8696,32 @@ export class GameScene extends Phaser.Scene {
    *  the Garage modal does.  Used by Custom mode so the player can
    *  pick any vehicle without owning it.  Updates registry, player
    *  fields, gas tank, damage model, and sprite. */
+  /** Live genre/culture art swap (owner 2026-07-17): reload the vice + starter-
+   *  vehicle textures from assets/culture/<genre>/ and re-skin the visible car so
+   *  the pick shows immediately (title/garage). Boot already loads the SAVED
+   *  genre; this handles a mid-session change. Guarded — if a reload errors, the
+   *  boot-time load still applies on the next app start. */
+  _applyGenreArt(genre) {
+    if (!genre) return;
+    const keys = Object.keys(GENRE_ART).filter(k => genreArtPath(k, genre));
+    if (!keys.length) return;
+    const carWasVisible = this.playerSprite?.visible;
+    try {
+      // Hide the car during the swap so a mid-reload removed texture never
+      // renders broken; restore + re-skin on complete.
+      if (this.playerSprite) this.playerSprite.setVisible(false);
+      for (const k of keys) { try { if (this.textures.exists(k)) this.textures.remove(k); } catch (_) {} }
+      for (const k of keys) this.load.image(k, genreArtPath(k, genre));
+      this.load.once('complete', () => {
+        try { this._applyVehicleSwap?.(this.player?.vehicleId ?? 'beater'); } catch (_) {}
+        if (this.playerSprite && carWasVisible !== false) this.playerSprite.setVisible(true);
+      });
+      this.load.start();
+    } catch (_) {
+      if (this.playerSprite && carWasVisible !== false) this.playerSprite.setVisible(true);
+    }
+  }
+
   _applyVehicleSwap(vid) {
     const v = VEHICLES[vid];
     if (!v) return;
