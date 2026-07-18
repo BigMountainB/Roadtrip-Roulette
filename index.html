@@ -174,24 +174,28 @@
     /* ── Guided tutorial tour (owner 2026-07-17) ── */
     #tut-capture { position: fixed; inset: 0; z-index: 999990; display: none; background: transparent; touch-action: none; }
     #tut-capture.on { display: block; }
-    #tut-quote {
-      position: fixed; left: 50%; bottom: 6vh; transform: translateX(-50%);
-      width: min(86vw, 620px); max-height: 46vh; overflow: auto; z-index: 999995; display: none;
-      box-sizing: border-box; padding: 2.6vmin 2.8vmin 5vmin;
-      background: rgba(6, 16, 30, 0.94); border: 0.4vmin solid #6FB0FF; border-radius: 2.2vmin;
-      color: #EAF2FF; font: 600 clamp(15px, 3.6vmin, 21px)/1.5 "Helvetica Neue", Arial, sans-serif;
-      box-shadow: 0 1vmin 5vmin rgba(0, 0, 0, 0.55); cursor: pointer;
-      transition: background 0.12s ease, box-shadow 0.12s ease;
+    @keyframes tutQuoteGlow {
+      0%, 100% { box-shadow: 0 0 1.6vmin 0.3vmin rgba(255, 205, 60, 0.5); }
+      50%      { box-shadow: 0 0 5.5vmin 1.6vmin rgba(255, 205, 60, 0.95); }
     }
-    #tut-quote.show { display: block; }
-    #tut-quote.tapped { background: rgba(36, 84, 140, 0.99); box-shadow: 0 0 4vmin rgba(140, 200, 255, 0.85); }
-    #tut-quote .tq-next { position: absolute; right: 2.4vmin; bottom: 1.3vmin; color: #8FCBFF; font-weight: 900; font-size: clamp(14px, 3.1vmin, 19px); letter-spacing: 0.06em; }
+    #tut-quote {
+      position: fixed; left: 50%; bottom: 8vh; transform: translateX(-50%);
+      width: min(92vw, 740px); min-height: 30vh; max-height: 44vh; overflow: auto; z-index: 999995; display: none;
+      box-sizing: border-box; padding: 3.6vmin 3.6vmin 6.4vmin; text-align: center;
+      background: rgba(6, 16, 30, 0.95); border: 0.5vmin solid #FFD24D; border-radius: 2.4vmin;
+      color: #FFF6E0; font: 800 clamp(19px, 5vmin, 32px)/1.42 "Helvetica Neue", Arial, sans-serif;
+      cursor: pointer; animation: tutQuoteGlow 1.3s ease-in-out infinite;
+      transition: background 0.12s ease;
+    }
+    #tut-quote.show { display: flex; align-items: center; justify-content: center; }
+    #tut-quote.tapped { background: rgba(120, 92, 20, 0.99); animation: none; box-shadow: 0 0 6vmin 2vmin rgba(255, 220, 90, 1); }
+    #tut-quote .tq-next { position: absolute; right: 2.8vmin; bottom: 1.6vmin; color: #FFE08A; font-weight: 900; font-size: clamp(16px, 3.6vmin, 22px); letter-spacing: 0.06em; }
     #tut-skip {
       position: fixed; top: calc(env(safe-area-inset-top, 0px) + 1.6vmin); right: 1.8vmin; z-index: 999996;
-      width: 26vmin; max-width: 128px; height: 9vmin; max-height: 46px; display: none;
+      width: 39vmin; max-width: 192px; height: 13.5vmin; max-height: 69px; display: none;
       align-items: center; justify-content: center; box-sizing: border-box;
-      color: #FFD24D; font: 900 clamp(10px, 2.3vmin, 13px) Arial, sans-serif; letter-spacing: 0.05em;
-      background: rgba(6, 16, 30, 0.9); border-radius: 1.6vmin; user-select: none; -webkit-user-select: none;
+      color: #FFD24D; font: 900 clamp(14px, 3.4vmin, 20px) Arial, sans-serif; letter-spacing: 0.05em;
+      background: rgba(6, 16, 30, 0.9); border-radius: 1.8vmin; user-select: none; -webkit-user-select: none;
       cursor: pointer; touch-action: none;
     }
     #tut-skip.on { display: flex; }
@@ -3200,10 +3204,9 @@
           sRow('Spent',               sMoney(ses.spentThisTrip)) +
           sRow('NPC cars hit',        sNum(ses.npcHits)) +
           sRow('Damage taken',        sNum(ses.damageTaken)) +
-          sRow('Vices collected',     sNum(ses.vicesCollected)) +
+          sRow('Consumables Collected', sNum(ses.vicesCollected)) +
           sRow('Weapons collected',   sNum(ses.weaponsCollected)) +
           sRow('Hitchhikers (good/bad)', `${sNum(ses.hitchhikersGood)} / ${sNum(ses.hitchhikersBad)}`) +
-          sRow('Sex workers (bribes)',   `${sNum(ses.sexWorkers)} (${sNum(ses.sexWorkerBribes)})`) +
           sRow('Times robbed',        `${sNum(ses.robberies)} · ${sMoney(ses.robbedAmount)}`) +
           sRow('Top speed',           sNum(ses.topSpeed) + ' mph') +
           sRow('Pitstop time',        fmtTime(ses.pitstopSec)) +
@@ -3217,7 +3220,7 @@
           sRow('NPC cars hit',        sNum(L.npcHits)) +
           sRow('Wrecks',              sNum(L.wrecks)) +
           sRow('Damage taken',        sNum(L.damageTaken)) +
-          sRow('Vices collected',     sNum(L.vicesCollectedTotal)) +
+          sRow('Consumables Collected', sNum(L.vicesCollectedTotal)) +
           sRow('Weapons collected',   sNum(L.weaponsCollectedTotal)) +
           sRow('Total earned',        sMoney(L.earnedGross)) +
           sRow('Total spent',         sMoney(L.spentTotal)) +
@@ -3245,7 +3248,7 @@
           sRow('Accessories', sMoney(sp.accessories)) +
           sRow('Services',    sMoney(sp.services)) +
 
-          sSec('Vices collected (by type)') +
+          sSec('Consumables Collected (by type)') +
           sMap(s.vices?.collected, sNum) +
 
           sSec('Weapons collected (by type)') +
@@ -3567,12 +3570,12 @@
         { a: 'garage',      q: "Here you can buy upgrades for your ride — build your junk heap into a slammed sleeper… at least on the inside." },
         { a: 'maps',        q: "This is where you see the rest stops along your journey — or even teleport, once you unlock Custom mode." },
         { a: 'calendar',    q: "The calendar is where you'll find daily tasks and current missions. Complete them daily for big cash bonuses." },
-        { a: 'trophy',      q: "See all of your accomplishments in the game — or check whether you were a world leader." },
+        { a: 'trophy',      q: "To see all of your accomplishments and collections in the game, scope the Trophy section." },
         { a: 'stats',       q: "Check your miles driven, items collected, your fastest trip, and lots of other stats." },
         { a: 'messages',    q: "Maintain your relationships, for your own sake — you'd be surprised what you can gain from a good friendship." },
         { a: 'startover',   q: "Just like it sounds. Take a pause from your game by tilting the phone vertically — save at any point.", noSub: true },
         { a: 'leaderboard', q: "Compare your accomplishments with your friends or world leaders — but probably not Kim Jong Un." },
-        { a: 'settings',    q: "There's a sleeper setting in here: you can actually edit your entire game layout in the Gameplay section!" },
+        { a: 'settings',    q: "There's a sleeper setting in here. You can actually customize your entire game layout by selecting Edit under the Gameplay section!" },
         { a: 'addiction',   q: "This game used to have a different… tone. That doesn't mean we should remove a good message, though." },
         { a: 'music',       q: "We'll start with music. Choosing your genre is choosing your path in life — each genre has its own vehicle and item art." },
       ];
@@ -3620,8 +3623,10 @@
       const tutPoint = (e) => (e.clientX != null) ? { x: e.clientX, y: e.clientY }
         : (e.changedTouches && e.changedTouches[0]) ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY } : null;
       const tutCapHit = (e) => {
-        if (!tutActive || tutPhase !== 'highlight') return;
+        if (!tutActive) return;
         e.preventDefault(); e.stopPropagation();
+        // Submenu phase: a tap ANYWHERE on the screen advances to the next item.
+        if (tutPhase === 'submenu') { tutGotoHighlight(tutIdx + 1); return; }
         const targetA = tutIdx < 0 ? 'tutorial' : TUT_TOUR[tutIdx].a;
         const el = tutQhit(targetA); if (!el) { tutGotoHighlight(tutIdx + 1); return; }
         const p = tutPoint(e), r = el.getBoundingClientRect();
@@ -3644,7 +3649,7 @@
       tutBox.addEventListener('click', tutBoxTap, { passive: false });
 
       // Skip — hold 7s; the border draws around the perimeter and resets on release.
-      let skipRAF = null, skipStart = 0; const SKIP_MS = 7000;
+      let skipRAF = null, skipStart = 0; const SKIP_MS = 3000;
       const skipTick = (now) => {
         const prog = Math.min(1, (now - skipStart) / SKIP_MS);
         tutRect.style.strokeDashoffset = SKIP_PERIM * (1 - prog);
