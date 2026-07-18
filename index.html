@@ -3277,12 +3277,14 @@
         musicModal.classList.remove('open');
         releaseWakeLock();
         markModalClosing();
+        try { window.__tut?.musicClosed?.(); } catch (_) {}
       });
       // Corner ✕ — always fully closes the music app (matches every other menu).
       addTap(document.getElementById('phone-music-x'), () => {
         musicModal.classList.remove('open');
         releaseWakeLock();
         markModalClosing();
+        try { window.__tut?.musicClosed?.(); } catch (_) {}
       });
       // Music app — short tap opens the modal; long-hold toggles mute
       // without opening anything.  Visual indicator added below.
@@ -3951,7 +3953,8 @@
       tutRect.style.strokeDasharray = SKIP_PERIM; tutRect.style.strokeDashoffset = SKIP_PERIM;
 
       let tutActive = false, tutIdx = -1, tutPhase = 'highlight';   // tutIdx -1 = Tutorial starter
-      let tutAwaitGenre = false;   // Music step: waiting for the player to pick a genre
+      let tutAwaitGenre = false;   // Music step: in the genre-pick step (text box or browse)
+      let tutMusicBrowse = false;  // Music step phase B: text dismissed, player is auditioning genres
       let tutRotateWait = false;   // Final portrait step: locked until the player ROTATES to landscape
       const tutQhit = (a) => document.querySelector('.phone-hit[data-action="' + a + '"]');
       const tutClearFlash = () => document.querySelectorAll('.phone-hit.tut-flash').forEach(b => b.classList.remove('tut-flash'));
@@ -3965,6 +3968,10 @@
         // begins (tutGotoHighlight), so the forced "tap Tutorial" prompt can't
         // be skipped before it's selected.
         tutActive = true; tutCap.classList.add('on');
+        // Lock to portrait for the whole portrait tour — rotating the phone must
+        // NOT activate landscape/gameplay until the "Rotate Phone" prompt appears
+        // (owner 2026-07-18). menu-locked keeps the portrait menu up in landscape.
+        document.body.classList.add('menu-locked');
         if (fromForced) { tutIdx = -1; tutPhase = 'highlight'; tutFlashOne('tutorial'); }
         else { tutGotoHighlight(0); }
       }
@@ -3972,6 +3979,7 @@
       // overlays + the tq-next hint) so later/earlier steps behave normally.
       const tutClearGenreWait = () => {
         tutAwaitGenre = false;
+        tutMusicBrowse = false;
         tutCap.classList.remove('pass'); tutBox.classList.remove('pass');
         const n = tutBox.querySelector('.tq-next'); if (n) n.textContent = 'next ❯';
       };
@@ -3994,12 +4002,14 @@
         }
         tutBox.querySelector('.tq-text').textContent = step.q;
         tutBox.classList.add('show');
-        // Music step: the player must actually PICK a genre. Let taps fall
-        // through to the real genre grid; only a genre selection advances.
+        // Music step, Phase A: show the text box with tutCap CAPTURING (no
+        // pass-through yet) so the next tap DISMISSES the box and drops into
+        // browse mode. In browse the player auditions genres, sets a default ☆,
+        // and CLOSING the music menu advances the tutorial.
         if (step.pickGenre) {
           tutAwaitGenre = true;
-          tutCap.classList.add('pass'); tutBox.classList.add('pass');
-          const n = tutBox.querySelector('.tq-next'); if (n) n.textContent = 'pick a genre ☆';
+          tutMusicBrowse = false;
+          const n = tutBox.querySelector('.tq-next'); if (n) n.textContent = 'tap to continue';
         }
       }
       function tutFinish() {
@@ -4007,6 +4017,8 @@
         tutActive = false; tutPhase = 'highlight'; tutClearFlash();
         tutBox.classList.remove('show', 'tapped'); tutCap.classList.remove('on'); tutSkip.classList.remove('on');
         tutCloseModals(); markTutorialSeen();
+        // Restore the player's real lock preference (the tour forced portrait).
+        try { applyLock(); } catch (_) {}
       }
       // Genre chosen during the Music step → the LAST portrait step: a locked
       // "Rotate Phone to Enter Game Play" prompt. Taps do nothing — the player
@@ -4021,6 +4033,8 @@
         tutClearFlash();
         tutRotateWait = true;
         tutCap.classList.add('on');        // keep the menu locked — no tap advances
+        // NOW allow rotation to activate landscape (the whole point of this step).
+        document.body.classList.remove('menu-locked');
         markTutorialSeen();                // portrait tour complete
         try { localStorage.setItem('rtr_tutStage1', '1'); } catch (_) {}
         try {
@@ -4037,11 +4051,15 @@
           });
         } catch (_) {}
       }
-      // Bridge for the music-menu genre star (index.html menu script).
+      // Bridge for the music menu (index.html menu script).
       window.__tut = {
         active: () => tutActive,
         awaitingGenre: () => tutActive && tutAwaitGenre,
-        genrePicked: () => { tutFinishGenre(); },
+        // New flow: picking a genre ☆ sets the default but does NOT advance —
+        // the player keeps auditioning. CLOSING the music menu (in browse mode)
+        // is what advances the tutorial.
+        genrePicked: () => {},
+        musicClosed: () => { if (tutActive && tutAwaitGenre && tutMusicBrowse) tutFinishGenre(); },
       };
 
       const tutPoint = (e) => (e.clientX != null) ? { x: e.clientX, y: e.clientY }
@@ -4050,8 +4068,18 @@
         if (!tutActive) return;
         // Rotate-wait: menu is locked, taps do NOTHING — only rotating advances.
         if (tutRotateWait) { e.preventDefault(); e.stopPropagation(); return; }
-        // Music step: don't advance on a stray tap — wait for a genre pick.
-        if (tutAwaitGenre) return;
+        // Music step: the FIRST tap dismisses the text box and drops into browse
+        // mode (pass-through on) so the player can audition genres + pick a
+        // default. Closing the music menu is what advances (not a tap here).
+        if (tutAwaitGenre) {
+          e.preventDefault(); e.stopPropagation();
+          if (!tutMusicBrowse) {
+            tutMusicBrowse = true;
+            tutBox.classList.remove('show');
+            tutCap.classList.add('pass'); tutBox.classList.add('pass');
+          }
+          return;
+        }
         e.preventDefault(); e.stopPropagation();
         // Submenu phase: a tap ANYWHERE on the screen advances to the next item.
         if (tutPhase === 'submenu') { tutGotoHighlight(tutIdx + 1); return; }
