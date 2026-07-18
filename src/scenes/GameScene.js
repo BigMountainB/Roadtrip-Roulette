@@ -13798,7 +13798,7 @@ export class GameScene extends Phaser.Scene {
         const isCopRand  = sp.copEncounter === true;
         const isCopParked = sp.type === 'cop_random_parked';
         const sizeMult   = sp.sizeMult
-                         ?? (isCopParked ? 3.2             // 2× larger parked speed-trap sprite (owner 2026-07-17; was 1.6)
+                         ?? (isCopParked ? 1.6             // reverted 2026-07-18: the 3.2× made the triggered/roadway cop huge
                            : isCopRand ? 1.4
                            : isLandmark ? 5.5
                            : isTree ? 2.0
@@ -13846,10 +13846,10 @@ export class GameScene extends Phaser.Scene {
           }
         }
         const maxW = profile?.maxW
-          ?? (isCopParked ? SCREEN_W * 0.612    // 2× cap to match the 2× parked-trap sprite (owner 2026-07-17)
+          ?? (isCopParked ? SCREEN_W * 0.306    // reverted 2026-07-18 (was 0.612)
             : isCopRand ? SCREEN_W * 0.18 : isTree ? SCREEN_W * 0.20 : SCREEN_W * 0.42);
         const maxH = profile?.maxH
-          ?? (isCopParked ? SCREEN_H * 0.612
+          ?? (isCopParked ? SCREEN_H * 0.306
             : isCopRand ? SCREEN_H * 0.18
             : isTree ? SCREEN_H * 0.44
             : sp.type === 'house' ? SCREEN_H * 0.36
