@@ -15794,6 +15794,16 @@ export class GameScene extends Phaser.Scene {
     this._titleResume = savedBg;
     this._titleResumeTxt = null;
     updateSelectionText();
+    // Force the difficulty/driving wheels to specific ids — used by the guided
+    // tutorial to lock the first run to Easy + Default (owner 2026-07-18).
+    this._titleForceWheels = (steerId, diffId) => {
+      const ti = THUMBS_OPTIONS.findIndex(o => o.id === steerId);
+      if (ti >= 0) { thumbsIdx = ti; this.registry?.set?.('titleThumbsPick', steerId); }
+      const di = DIFF_OPTIONS.findIndex(o => o.id === diffId);
+      if (di >= 0) { diffIdx = di; this._wheelCursor = DIFF_OPTIONS[di].id; this.registry?.set?.('titleDiffPick', diffId); }
+      updateSelectionText();
+      diffBg._titleDraw?.(true); steeringBg._titleDraw?.(true);
+    };
 
     // ── Player-profile plates (left side) — pick / create the driver ──
     this._buildPlateSlots(d);
@@ -15913,6 +15923,104 @@ export class GameScene extends Phaser.Scene {
       // at the right edge that aren't already tracked. Cheaper: capture
       // them via setName at creation time below.
     }
+    // Expose the guided title tutorial so the DOM rotate-wait bridge can start
+    // it the moment the player rotates in from the portrait tour (owner 2026-07-18).
+    try { window.__titleTut = { start: () => this._startTitleTutorial() }; } catch (_) {}
+  }
+
+  // ── Guided title-screen tutorial (Stage 1b) ───────────────────────────
+  // Fires when the player rotates in from the portrait tour. A golden highlight
+  // + a text box (always placed clear of the highlight) walks Plates → Difficulty
+  // → Driving Type → Load/Save → START. Plates require picking a slot + naming it;
+  // the rest are read-and-tap. START forces the first run to Easy + Default and
+  // flags Stage 2 (the paused in-game HUD tour).
+  _startTitleTutorial() {
+    if (this._titleTut || !this._awaitingStart) return;
+    try { localStorage.removeItem('rtr_tutStage1'); } catch (_) {}
+    const D = 95;
+    const STEPS = [
+      { key: 'plates', b: { x: 16,  y: 104, w: 137, h: 198 }, box: { x: 590, y: 150, w: 360 },
+        text: "Here is where your saved games will be. Pick a state's plate and customize it now." },
+      { key: 'diff',   b: { x: 249, y: 349, w: 177, h: 60 },  box: { x: 400, y: 66,  w: 470 },
+        text: "Easy, medium, and hard are your options for now until you complete the drive. The Custom mode will allow you more fun at your own leisure." },
+      { key: 'drive',  b: { x: 421, y: 349, w: 191, h: 60 },  box: { x: 380, y: 66,  w: 500 },
+        text: "Default is the preferred play here, but if you'd rather switch it up, be my guest. If you accidentally declined the orientation permission, you can cycle through this until you get to default again." },
+      { key: 'load',   b: { x: 610, y: 349, w: 156, h: 49 },  box: { x: 380, y: 78,  w: 440 },
+        text: "If the game crashes on you, this is where I would start." },
+      { key: 'start',  b: { x: 73,  y: 349, w: 178, h: 49 },  box: { x: 430, y: 86,  w: 400 },
+        text: "That's your setup. Tap START to hit the road!" },
+    ];
+    const scrim = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 3, SCREEN_H * 3, 0x02060E, 0.5)
+      .setDepth(D).setScrollFactor(0).setInteractive();
+    const hi   = this.add.rectangle(0, 0, 10, 10, 0xFFD24D, 0).setStrokeStyle(3, 0xFFD24D, 1).setDepth(D + 2);
+    const boxG = this.add.graphics().setDepth(D + 3);
+    const boxT = this.add.text(0, 0, '', {
+      fontSize: '13px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
+      align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5, 0).setDepth(D + 4);
+    const tw = this.tweens.add({ targets: hi, alpha: { from: 1, to: 0.35 }, duration: 620, yoyo: true, repeat: -1 });
+    const poll = this.time.addEvent({ delay: 250, loop: true, callback: () => this._updateTitleTut() });
+    const objs = [scrim, hi, boxG, boxT];
+    try { this._hudObjects?.push(...objs); } catch (_) {}
+    try { this.cameras?.main?.ignore?.(objs); } catch (_) {}
+    this._titleTut = { idx: -1, steps: STEPS, scrim, hi, boxG, boxT, tw, poll, objs, plateWait: false };
+    scrim.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); this._titleTutTap(ptr); });
+    this._titleTutShow(0);
+  }
+
+  _titleTutShow(i) {
+    const T = this._titleTut; if (!T) return;
+    const step = T.steps[i];
+    if (!step) { this._endTitleTutorial(); return; }
+    T.idx = i;
+    const b = step.b;
+    T.hi.setPosition(b.x + b.w / 2, b.y + b.h / 2).setSize(b.w + 8, b.h + 8).setStrokeStyle(3, 0xFFD24D, 1).setVisible(true);
+    try { T.tw.restart(); } catch (_) {}
+    T.boxT.setWordWrapWidth(step.box.w - 24);
+    T.boxT.setText(step.text);
+    const bw = step.box.w, bh = T.boxT.height + 24;
+    let bx = Math.max(bw / 2 + 6, Math.min(SCREEN_W - bw / 2 - 6, step.box.x));
+    let by = Math.max(6, Math.min(SCREEN_H - bh - 6, step.box.y));
+    T.boxG.clear();
+    T.boxG.fillStyle(0x06101E, 0.96); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 8);
+    T.boxG.lineStyle(2, 0xFFD24D, 0.9); T.boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 8);
+    T.boxT.setPosition(bx, by + 12);
+    T.plateWait = (step.key === 'plates');
+  }
+
+  _titleTutTap(ptr) {
+    const T = this._titleTut; if (!T) return;
+    const step = T.steps[T.idx]; if (!step) return;
+    if (step.key === 'plates') {
+      // Route a tap on a plate slot to the real handler (opens the name modal);
+      // the poll advances once a plate is actually set.
+      const px = ptr.worldX ?? ptr.x, py = ptr.worldY ?? ptr.y;
+      for (const pw of (this._plateWidgets ?? [])) {
+        if (px >= pw.x && px <= pw.x + pw.w && py >= pw.y && py <= pw.y + pw.h) { this._onPlateSlotTap(pw.index); break; }
+      }
+      return;   // wait for name + Done (poll), don't advance on the tap
+    }
+    if (step.key === 'start') {
+      try { this._titleForceWheels?.('default', 'easy'); } catch (_) {}
+      try { localStorage.setItem('rtr_tutStage2', '1'); } catch (_) {}   // → paused HUD tour
+      this._endTitleTutorial();
+      this._fireTitleCursor?.();
+      return;
+    }
+    this._titleTutShow(T.idx + 1);   // diff / drive / load → next
+  }
+
+  _updateTitleTut() {
+    const T = this._titleTut; if (!T || !T.plateWait) return;
+    try { if (!window.__plate?.needsEntry?.()) { T.plateWait = false; this._titleTutShow(1); } } catch (_) {}
+  }
+
+  _endTitleTutorial() {
+    const T = this._titleTut; if (!T) return;
+    this._titleTut = null;
+    try { T.tw?.stop?.(); } catch (_) {}
+    try { T.poll?.remove?.(); } catch (_) {}
+    for (const o of T.objs) { try { o.destroy(); } catch (_) {} }
   }
 
   /** Out-of-gas → AAA tow.  Charges 50% of player's cash + delivers

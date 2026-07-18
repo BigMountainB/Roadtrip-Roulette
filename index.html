@@ -4030,6 +4030,9 @@
               tutRotateWait = false; tutActive = false;
               tutCap.classList.remove('on'); tutSkip.classList.remove('on');
               tutClearFlash();
+              // Hand off to the Phaser title-screen tutorial once the rotation
+              // settles and the title is interactive.
+              setTimeout(() => { try { window.__titleTut?.start?.(); } catch (_) {} }, 450);
             },
           });
         } catch (_) {}
