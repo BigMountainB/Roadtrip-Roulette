@@ -114,6 +114,17 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-17 (batch 6) — Tilt explainer fix + reword
+- **Fixed the tilt-steering pop-up getting stuck.** Its buttons used `onclick`, but the game's global
+  touch handler `preventDefault()`s the touch, which suppresses the synthetic click — so nothing
+  dismissed it. Rebound to `pointerup` (+ `click` desktop fallback) with a `done` guard, matching the
+  confirm-modal pattern already used elsewhere. The **Continue** tap still fires the native orientation
+  gate (`requestPermission`).
+- **Reworded:** title "Game Feature Opportunity" · body "If you would like to experience unique gameplay,
+  press Continue and Allow Motion for Tilt Steering in situations." · primary button "Allow Motion" →
+  **Continue**.
+
+
 ### 2026-07-17 (batch 5) — Asset deploys held back from batch 4 (build+tests clean)
 The three asset changes deliberately excluded from `b98d2bc`, now shipped:
 1. **Vices reskin** — the 14 default (non-genre) `vices/*.png` sprites updated to their current art.

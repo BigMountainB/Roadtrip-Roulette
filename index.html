@@ -1759,8 +1759,9 @@
 
       // Custom motion-permission explainer shown BEFORE the bare iOS
       // "Access Motion and Orientation" prompt (whose wording is OS-locked).
-      // The game calls show(onAllow, onCancel); the "Allow Motion" tap is the
-      // user gesture that actually fires DeviceOrientationEvent.requestPermission.
+      // The game calls show(onAllow, onCancel); the "Continue" tap is the user
+      // gesture that actually fires DeviceOrientationEvent.requestPermission
+      // (the native orientation gate).
       (function () {
         let el = null;
         function build() {
@@ -1769,12 +1770,12 @@
           el.innerHTML =
             '<div class="te-card">'
           +   '<div class="te-icon">📱</div>'
-          +   '<div class="te-title">Tilt Steering</div>'
-          +   '<div class="te-body">You picked tilt controls, so the game reads your phone’s motion to steer. '
-          +     'Tap <b>Allow Motion</b>, then choose <b>Allow</b> on the popup that follows.</div>'
+          +   '<div class="te-title">Game Feature Opportunity</div>'
+          +   '<div class="te-body">If you would like to experience unique gameplay, press '
+          +     '<b>Continue</b> and Allow Motion for Tilt Steering in situations.</div>'
           +   '<div class="te-btns">'
           +     '<button type="button" class="te-cancel">Not now</button>'
-          +     '<button type="button" class="te-allow">Allow Motion</button>'
+          +     '<button type="button" class="te-allow">Continue</button>'
           +   '</div>'
           + '</div>';
           document.body.appendChild(el);
@@ -1784,10 +1785,25 @@
             if (!el) build();
             const allow = el.querySelector('.te-allow');
             const cancel = el.querySelector('.te-cancel');
-            // Fire requestPermission SYNCHRONOUSLY inside this tap so iOS keeps
-            // the gesture context — hide first, then invoke the callback.
-            allow.onclick = () => { el.classList.remove('on'); try { onAllow && onAllow(); } catch (_) {} };
-            cancel.onclick = () => { el.classList.remove('on'); try { onCancel && onCancel(); } catch (_) {} };
+            let done = false;
+            // Bind on pointerup (NOT click): the game's tap handler
+            // preventDefault()s the touch, which suppresses the synthetic click
+            // and left the popup un-dismissable. pointerup still fires, and
+            // it's a valid user gesture for requestPermission. click is a
+            // desktop fallback; `done` guards against a double-fire.
+            const bind = (btn, cb) => {
+              const handler = (ev) => {
+                if (done) return;
+                if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+                done = true;
+                el.classList.remove('on');
+                try { cb && cb(); } catch (_) {}
+              };
+              btn.onpointerup = handler;
+              btn.onclick = handler;
+            };
+            bind(allow, onAllow);
+            bind(cancel, onCancel);
             el.classList.add('on');
           },
         };
