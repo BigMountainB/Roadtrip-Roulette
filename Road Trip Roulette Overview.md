@@ -114,6 +114,17 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-18 (later) — Title driving-type: no descriptions + permission→L/R (LOCAL, not pushed)
+- **Removed the DIFFICULTY / DRIVING TYPE description blurbs** ("Less Cars, Less Cops", "Auto: shifts
+  with weather", …) — they overflowed the cards. The value word (EASY / DEFAULT) is now centered on its
+  own (font 20→22).
+- **DEFAULT / TILT now ask for motion permission when selected** (new `_titleSteerPermission`): cycling
+  onto them shows the explainer → native orientation gate. **Denied → driving type snaps to L/R (classic)**
+  with a "→ LEFT / RIGHT STEERING" note. Cycling back onto DEFAULT re-asks (caveat: iOS won't re-show its
+  OWN prompt once denied — OS limitation; the explainer still re-appears).
+- ⚠️ These two are committed LOCALLY only — **not pushed** (owner reaffirmed: no Cloudflare pushes without
+  an explicit say-so).
+
 ### 2026-07-18 — Vehicle sizing, trophy re-theme + cash rewards
 - **Genre vehicles no longer drive too small.** The driven car is fixed to a target on-screen WIDTH, but
   the genre starter PNGs have big transparent margins (car fills ~64% metal / ~76% k-pop vs ~94% on the

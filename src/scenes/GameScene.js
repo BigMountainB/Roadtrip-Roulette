@@ -2838,6 +2838,47 @@ export class GameScene extends Phaser.Scene {
     this._tiltSteerAmt = 0;
   }
 
+  /** Title-screen motion-permission ask for the DEFAULT / TILT driving types
+   *  (owner 2026-07-18). Shows the custom explainer, then fires the native
+   *  orientation gate from that tap. onGrant → attach + keep the pick; onDeny
+   *  (or cancel / no-support edge) → caller snaps the driving type to L/R.
+   *  Re-runnable: cycling back onto DEFAULT re-shows the explainer (though iOS
+   *  won't re-display its OWN prompt once denied — that's an OS limitation). */
+  _titleSteerPermission(onGrant, onDeny) {
+    if (this._tiltAttached) { onGrant?.(); return; }
+    const W = window.DeviceOrientationEvent;
+    const P = (W && typeof W.requestPermission === 'function') ? W
+      : ((typeof window.DeviceMotionEvent?.requestPermission === 'function') ? window.DeviceMotionEvent : null);
+    if (!P) {
+      // Android / desktop — no gate; attach directly and keep the pick.
+      try {
+        this._tiltAttached = true;
+        window.addEventListener('deviceorientation', this._tiltOnOrient, true);
+        this.registry?.set?.('tiltPermissionGranted', true);
+      } catch (_) {}
+      onGrant?.();
+      return;
+    }
+    const fire = () => {
+      P.requestPermission().then((res) => {
+        if (res === 'granted') {
+          this._tiltAttached = true;
+          window.addEventListener('deviceorientation', this._tiltOnOrient, true);
+          this.registry?.set?.('tiltPermissionGranted', true);
+          onGrant?.();
+        } else {
+          this.registry?.set?.('tiltPermissionDenied', true);
+          onDeny?.();
+        }
+      }).catch(() => onDeny?.());
+    };
+    if (typeof window.__tiltExplainer?.show === 'function') {
+      window.__tiltExplainer.show(fire, () => onDeny?.());
+    } else {
+      fire();
+    }
+  }
+
   _isLeftRaw()  {
     const mode = this._activeSteeringMode?.();
     const touch = mode === 'tilt' ? false : this._touchLeft;
@@ -15651,24 +15692,19 @@ export class GameScene extends Phaser.Scene {
 
     // (DIFFICULTY / DRIVING TYPE header labels removed 2026-07-13 — the value
     // words (EASY / THUMBS / …) speak for themselves; values re-centered up.)
-    this._titleDiffValue = this.add.text(diffX + diffW / 2, panelY + 20, '', {
-      fontSize: '20px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
+    // Descriptions (blurbs) removed 2026-07-18 (owner) — they overflowed the
+    // card; the value word is now vertically centered on its own.
+    this._titleDiffValue = this.add.text(diffX + diffW / 2, panelY + 29, '', {
+      fontSize: '22px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
       color: '#37B9FF', stroke: '#07111F', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(d + 12);
-    this._titleDiffBlurb = this.add.text(diffX + diffW / 2, panelY + 45, '', {
-      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#D0D8E4',
-    }).setOrigin(0.5).setDepth(d + 12);
-    this._titleThumbsValue = this.add.text(steeringX + steeringW / 2, panelY + 20, '', {
-      fontSize: '20px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
+    this._titleThumbsValue = this.add.text(steeringX + steeringW / 2, panelY + 29, '', {
+      fontSize: '22px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
       color: '#BD70FF', stroke: '#130A1E', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(d + 12);
-    this._titleThumbsBlurb = this.add.text(steeringX + steeringW / 2, panelY + 45, '', {
-      fontSize: '12px', fontFamily: 'Arial, sans-serif', color: '#D0D8E4',
-    }).setOrigin(0.5).setDepth(d + 12);
-    this._titleDifficultyBtns.push(
-      this._titleDiffValue, this._titleDiffBlurb,
-      this._titleThumbsValue, this._titleThumbsBlurb,
-    );
+    this._titleDiffBlurb = null;
+    this._titleThumbsBlurb = null;
+    this._titleDifficultyBtns.push(this._titleDiffValue, this._titleThumbsValue);
 
     // Difficulty value tint mirrors the in-game Speed/MPH palette so
     // the player sees their selected mode's color before the run even
@@ -15713,13 +15749,31 @@ export class GameScene extends Phaser.Scene {
     }, g => dynamicFill(g, diffX, diffW));
     const steeringBg = makeTitleZone(titlePanelShape(steeringX, steeringW), 0xCE67FF, () => {
       thumbsIdx = (thumbsIdx + 1) % THUMBS_OPTIONS.length;
+      const opt = THUMBS_OPTIONS[thumbsIdx];
       // Persist the carousel pick immediately so _armTiltPrefetch's
       // next-tap listener can see whether the user is about to start
       // a tilt run.  Without this the registry only updates on START,
       // by which point we've missed the iOS gesture frame.
-      this.registry?.set?.('titleThumbsPick', THUMBS_OPTIONS[thumbsIdx].id);
+      this.registry?.set?.('titleThumbsPick', opt.id);
       updateSelectionText();
       steeringBg._titleDraw?.(true);
+      // DEFAULT + TILT need the phone's motion sensor — ask for permission the
+      // moment they're selected (owner 2026-07-18). If it's not granted, snap
+      // the driving type back to L/R (classic). Cycling onto DEFAULT again
+      // re-asks. Only prompts if not already granted this session.
+      if ((opt.id === 'default' || opt.id === 'tilt') && !this._tiltAttached) {
+        this._titleSteerPermission(
+          () => { /* granted — keep the DEFAULT/TILT pick */ },
+          () => {
+            thumbsIdx = THUMBS_OPTIONS.findIndex(o => o.id === 'classic');
+            if (thumbsIdx < 0) thumbsIdx = 0;
+            this.registry?.set?.('titleThumbsPick', THUMBS_OPTIONS[thumbsIdx].id);
+            updateSelectionText();
+            steeringBg._titleDraw?.(true);
+            this._showPopup?.('→ LEFT / RIGHT STEERING', '#FFCC44');
+          },
+        );
+      }
     }, g => dynamicFill(g, steeringX, steeringW));
     const savedBg = makeTitleZone(titlePanelShape(611, 154, compactPanelH, 12), 0x4BB7FF,
       () => this._promptForCode(last?.code ?? ''));
