@@ -4009,6 +4009,9 @@
         if (step.pickGenre) {
           tutAwaitGenre = true;
           tutMusicBrowse = false;
+          // Hide HOLD TO SKIP — it sits over the music menu's ✕ / CLOSE, which is
+          // how the player advances this step (owner 2026-07-18).
+          tutSkip.classList.remove('on');
           const n = tutBox.querySelector('.tq-next'); if (n) n.textContent = 'tap to continue';
         }
       }
