@@ -114,6 +114,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-18 — Vehicle sizing, trophy re-theme + cash rewards
+- **Genre vehicles no longer drive too small.** The driven car is fixed to a target on-screen WIDTH, but
+  the genre starter PNGs have big transparent margins (car fills ~64% metal / ~76% k-pop vs ~94% on the
+  default cars), so they rendered small. `_applyPlayerSpriteDisplaySize` now scans each texture's opaque
+  fill once (cached) and sizes by the VISIBLE body, so every vehicle drives at the default's width.
+- **Trophies fully re-themed off drugs → consumables** (`AchievementSystem`): LIQUID COURAGE→RAW DEAL,
+  WHITE LINE FEVER→WIRED, NODDING OFF→VALUE MEAL COMA, DEATH'S DOOR→FOOD COMA, K-HOLE→BRAIN FREEZE,
+  TWEAKER→THE SHAKES, PERMASTONED→THE ITIS, STONE COLD SOBER→CLEAN EATING, MAXED COKE/HEROIN/…→MAXED
+  ENERGY/COMBO/…, etc. Names + descriptions + unlock hints all reworded; mechanics (and stable ids) kept.
+- **Trophies now pay cash** (`TIER_REWARD`): Easy $5 / Normal $25 / Hard $50, paid on earning/upgrading a
+  trophy, added to the score and shown as `+$X` on the toast.
+- ⚠️ Still open: the Difficulty/Driving-type buttons overflow (need a screenshot), and the full HUD-layout
+  bake (owner's second COPY export arrived TRUNCATED mid-`popup`).
+
 ### 2026-07-18 — HUD default-layout pipeline (seeded, PARTIAL)
 - Added `DEFAULT_HUD_LAYOUT` (GameScene) — owner's baked `{dx,dy,scale}` deltas, applied ONLY to
   profiles that never customized (non-destructive; existing custom layouts untouched). The version gate

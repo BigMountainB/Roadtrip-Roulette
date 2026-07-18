@@ -8570,7 +8570,12 @@ export class GameScene extends Phaser.Scene {
    *  a dialogue. */
   _showAchievementToast(evt) {
     if (!evt?.def) return;
-    const { tier, def } = evt;
+    const { tier, def, reward = 0 } = evt;
+    // Cash reward for earning the trophy (Easy $5 / Normal $25 / Hard $50).
+    if (reward > 0) {
+      this.score += reward;
+      try { this.stats?.recordEarn?.(reward, 'trophy'); } catch (_) {}
+    }
     const tierColor = AchievementSystem.tierColor(tier);
     const tierLabel = tier?.toUpperCase() ?? '';
     const cx = SCREEN_W / 2;
@@ -8601,6 +8606,14 @@ export class GameScene extends Phaser.Scene {
       }).setOrigin(0, 0).setDepth(D + 1);
 
     const objs = [g, tierTxt, titleTxt];
+    if (reward > 0) {
+      const rewardTxt = this.add.text(cx + w / 2 - 9, cy - 1,
+        `+$${reward}`, {
+          fontSize: '12px', fontFamily: 'Impact, "Arial Black", sans-serif',
+          color: '#2BC44E', stroke: '#000', strokeThickness: 2,
+        }).setOrigin(1, 0).setDepth(D + 1);
+      objs.push(rewardTxt);
+    }
     this._addHudObjs?.(...objs);
 
     objs.forEach(o => o.setAlpha(0));
@@ -12455,6 +12468,36 @@ export class GameScene extends Phaser.Scene {
     this._applyPlayerSpriteDisplaySize();
   }
 
+  /** Fraction of a texture's frame WIDTH the opaque (non-transparent) pixels
+   *  span (0..1). Scanned once per key + cached. Used to size vehicle sprites by
+   *  their VISIBLE body, not their padded frame (owner 2026-07-18 — genre
+   *  starter art has big transparent margins and drove too small). */
+  _opaqueFillFrac(texKey) {
+    this._fillFracCache ??= {};
+    if (this._fillFracCache[texKey] != null) return this._fillFracCache[texKey];
+    let frac = 1;
+    try {
+      const src = this.textures.get(texKey)?.getSourceImage?.();
+      if (src && src.width && src.height) {
+        const cv = document.createElement('canvas');
+        cv.width = src.width; cv.height = src.height;
+        const ctx = cv.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(src, 0, 0);
+        const data = ctx.getImageData(0, 0, src.width, src.height).data;
+        let minX = src.width, maxX = -1;
+        for (let y = 0; y < src.height; y++) {
+          const row = y * src.width;
+          for (let x = 0; x < src.width; x++) {
+            if (data[(row + x) * 4 + 3] > 16) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+          }
+        }
+        if (maxX >= minX) frac = (maxX - minX + 1) / src.width;
+      }
+    } catch (_) {}
+    this._fillFracCache[texKey] = frac;
+    return frac;
+  }
+
   _applyPlayerSpriteDisplaySize(targetW = 78, fallbackH = 49) {
     if (!this.playerSprite) return;
     const texKey = this.playerSprite.texture?.key;
@@ -12469,7 +12512,11 @@ export class GameScene extends Phaser.Scene {
     const tw = src?.width || targetW;
     const th = src?.height || fallbackH;
     const ratio = tw > 0 ? th / tw : fallbackH / targetW;
-    this.playerSprite.setDisplaySize(targetW, targetW * ratio);
+    // Size by the VISIBLE car width so padded art (genre starters fill ~64-76%,
+    // default cars ~94%) all drive at the same on-screen width as the default.
+    const REF_FILL = 0.94;
+    const frameW   = targetW * (REF_FILL / Math.max(0.3, this._opaqueFillFrac(texKey)));
+    this.playerSprite.setDisplaySize(frameW, frameW * ratio);
   }
 
   /** Paint the player's license-plate handle on the back bumper of the
