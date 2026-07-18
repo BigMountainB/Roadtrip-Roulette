@@ -983,6 +983,12 @@ export class GameScene extends Phaser.Scene {
     this._hudObjects.push(this._trapLightGfx);
     this._trapLightWasOn = false;
 
+    // Windshield vomit splatter (full-bladder penalty) — screen-fixed like the
+    // trap lights, at depth 19.5 so it obscures the road view but sits UNDER
+    // the HUD readouts (20) and the control buttons (62+), which stay usable.
+    this._vomitGfx = this.add.graphics().setDepth(19.5);
+    this._hudObjects.push(this._vomitGfx);
+
     // ── Radar detector (speed-trap warning) ──────────────────────────
     // Owned globally once bought at a rest stop (save key `radarDetector`).
     // When armed, a dashboard light pulses + the radar beeps at an escalating
@@ -1469,6 +1475,7 @@ export class GameScene extends Phaser.Scene {
     // Null when idle; rebuilt per fire (same lifecycle as _fireworksShow).
     this._coalCloud      = null;
     this._donutDebris    = null;   // thrown donut boxes that land + linger on the road
+    this._vomit          = null;   // windshield vomit splatter (full-bladder penalty)
     // Seconds the diesel smokescreen still blinds roadside speed traps —
     // the trap-witnessing scan is skipped while > 0.
     this._coalBlindTimer = 0;
@@ -3768,22 +3775,26 @@ export class GameScene extends Phaser.Scene {
         this._endGame?.('overdose', { charge: 'FATIGUE' });
       }
 
-      // ── Bladder emergency: Bladder ≥ 90 = "bursting".  You get ~2 miles of
-      // squirming (steering wobble in _updatePlayer) to reach a restroom; miss
-      // that window and you're forced to pull over — lose 30s and go anyway.
-      if (this.survival.bladder >= 90 && !this._bladderStopHeld) {
-        if (this._bladderBurstMile == null) this._bladderBurstMile = this._odometer ?? 0;
-        else if ((this._odometer ?? 0) - this._bladderBurstMile >= 2) {
-          this._partyClockSec = Math.max(0, (this._partyClockSec ?? 0) - 30);
-          this._showPopup?.('💦 COULDN\'T HOLD IT — pulled over!\n−30 seconds', '#FF5C7A');
-          // Soiling yourself only relieves 40% of the bladder (2026-07-16) —
-          // you still need a real restroom to empty out.
-          this.survival.bladder = Math.max(0, this.survival.bladder * 0.6);
-          this._bladderBurstMile = null;
+      // ── Bladder → VOMIT (owner 2026-07-17): 1 mile past a FULL (100%) bladder,
+      // you throw up on the windshield — the BLINDING is the whole penalty (no
+      // time loss). 10 chunks splat across the glass (~40% cover), hold ~1 mile,
+      // then slide off to the corners like the wind's pushing them. Bladder drops
+      // to 60%. Beat it by pulling over first (voluntary stop below).
+      if (this.survival.bladder >= 100 && !this._bladderStopHeld && !this._vomit) {
+        if (this._bladderFullMile == null) this._bladderFullMile = this._odometer ?? 0;
+        else if ((this._odometer ?? 0) - this._bladderFullMile >= 1) {
+          this._triggerVomit();
+          this._showPopup?.('🤮 you couldn\'t hold it in', '#8FBF3F');
+          this.survival.bladder = 60;
+          this._bladderFullMile = null;
         }
-      } else if (this.survival.bladder < 90) {
-        this._bladderBurstMile = null;
+      } else if (this.survival.bladder < 100) {
+        this._bladderFullMile = null;
       }
+      // Squirm-wobble warning (steering wobble in _updatePlayer) stays tied to a
+      // high bladder (≥90) as the "you really need to go" cue before the vomit.
+      this._bladderBurstMile = this.survival.bladder >= 90
+        ? (this._bladderBurstMile ?? this._odometer ?? 0) : null;
 
       // ── Voluntary bathroom pull-over (owner 2026-07-16) ─────────────────
       // When "gotta go" is alerting (bladder ≥ 75), the player may CHOOSE to
@@ -4626,6 +4637,7 @@ export class GameScene extends Phaser.Scene {
     // ── Rolling-coal cloud timer (💨 weapon) ──────────────────────────
     if (this._coalCloud) this._updateCoalCloud(rawDt);
     if (this._donutDebris) this._updateDonutDebris(rawDt);
+    if (this._vomit) { this._updateVomit(rawDt); this._drawVomit(); }
     if (this._coalBlindTimer > 0) this._coalBlindTimer -= rawDt;
 
     // ── Popup timer ───────────────────────────────────────────────────
@@ -10575,6 +10587,96 @@ export class GameScene extends Phaser.Scene {
       g.strokeRect(x - w / 2, y - h / 2, w, h);
       g.lineStyle(2, 0xFFFFFF, 0.7 * fade);
       g.beginPath(); g.moveTo(x, y - h / 2); g.lineTo(x, y + h / 2); g.strokePath();
+    }
+  }
+
+  /** 🤮 Full-bladder VOMIT — 10 chunks fly out of the car in quick succession,
+   *  each grows toward the camera and splats at its own random-but-even spot on
+   *  the windshield (~40% cover), holds ~1 mile, then slides off to its nearest
+   *  corner like the wind's pushing it. The blinding IS the penalty (owner
+   *  2026-07-17). Procedural goo for now — will use vomit_1..10.png once dropped
+   *  into public/assets/ui/vomit/. */
+  _triggerVomit() {
+    if (this._vomit) return;
+    const blobs = [];
+    // 5×2 jittered grid of splat targets → an even-but-random spread that's
+    // different every time (each cell gets one chunk, jittered inside it).
+    const cols = 5, rows = 2, cw = SCREEN_W / cols, ch = SCREEN_H / rows;
+    let i = 0;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++, i++) {
+      const cx = (c + 0.5) * cw + (Math.random() - 0.5) * cw * 0.55;
+      const cy = (r + 0.5) * ch + (Math.random() - 0.5) * ch * 0.55;
+      const R  = 58 + Math.random() * 34;                 // splotch radius (~40% total cover)
+      const lobes = [];
+      const nL = 6 + ((Math.random() * 4) | 0);
+      for (let k = 0; k < nL; k++) {
+        const a = (k / nL) * Math.PI * 2 + Math.random() * 0.6;
+        const d = R * (0.30 + Math.random() * 0.5);
+        lobes.push({ dx: Math.cos(a) * d, dy: Math.sin(a) * d, r: R * (0.4 + Math.random() * 0.42) });
+      }
+      const chunks = [];
+      for (let k = 0; k < 3 + ((Math.random() * 3) | 0); k++) {
+        chunks.push({ dx: (Math.random() - 0.5) * R, dy: (Math.random() - 0.5) * R, r: R * (0.1 + Math.random() * 0.15) });
+      }
+      blobs.push({
+        tx: cx, ty: cy, R, lobes, chunks,
+        cornerX: cx < SCREEN_W / 2 ? -R * 2 : SCREEN_W + R * 2,   // nearest corner for slide-off
+        cornerY: cy < SCREEN_H / 2 ? -R * 2 : SCREEN_H + R * 2,
+        delay: i * 0.07 + Math.random() * 0.04,    // rapid-fire launch stagger (~1s total)
+        t: 0, splatted: false,
+      });
+    }
+    this._vomit = { blobs, phase: 'flying', flyT: 0, holdMile: null, slideT: 0 };
+  }
+
+  _updateVomit(dt) {
+    const v = this._vomit;
+    if (!v) return;
+    if (v.phase === 'flying') {
+      v.flyT += dt;
+      let allSplatted = true;
+      for (const b of v.blobs) {
+        if (b.splatted) continue;
+        if (v.flyT < b.delay) { allSplatted = false; continue; }
+        b.t = Math.min(1, b.t + dt / 0.22);        // ~0.22s flight per chunk
+        if (b.t >= 1) b.splatted = true; else allSplatted = false;
+      }
+      if (allSplatted) { v.phase = 'held'; v.holdMile = this._odometer ?? 0; }
+    } else if (v.phase === 'held') {
+      if ((this._odometer ?? 0) - (v.holdMile ?? 0) >= 1) v.phase = 'slidingoff';
+    } else if (v.phase === 'slidingoff') {
+      v.slideT += dt;
+      if (v.slideT >= 1.6) { this._vomit = null; this._vomitGfx?.clear(); }
+    }
+  }
+
+  _drawVomit() {
+    const v = this._vomit, g = this._vomitGfx;
+    if (!g) return;
+    g.clear();
+    if (!v) return;
+    for (const b of v.blobs) {
+      let x = b.tx, y = b.ty, sc = 1, alpha = 1;
+      if (v.phase === 'flying') {
+        if (v.flyT < b.delay) continue;              // not launched yet
+        if (!b.splatted) {
+          const e = b.t;                             // fly car → target, growing
+          x  = SCREEN_W / 2 + (b.tx - SCREEN_W / 2) * e;
+          y  = SCREEN_H * 0.92 + (b.ty - SCREEN_H * 0.92) * e;
+          sc = 0.15 + 0.85 * e;
+        }
+      } else if (v.phase === 'slidingoff') {
+        const s = Math.min(1, v.slideT / 1.6), ease = s * s;
+        x = b.tx + (b.cornerX - b.tx) * ease;
+        y = b.ty + (b.cornerY - b.ty) * ease;
+        alpha = 1 - Math.max(0, (s - 0.5) / 0.5);    // fade over the back half of the slide
+      }
+      if (alpha <= 0.02) continue;
+      // Procedural goo: soft wide base → brighter core → highlight → brown chunks.
+      for (const l of b.lobes) { g.fillStyle(0x6E9E2A, 0.55 * alpha); g.fillCircle(x + l.dx * sc, y + l.dy * sc, l.r * sc); }
+      for (const l of b.lobes) { g.fillStyle(0x8FB53A, 0.85 * alpha); g.fillCircle(x + l.dx * sc * 0.8, y + l.dy * sc * 0.8, l.r * sc * 0.72); }
+      g.fillStyle(0xB8D66A, 0.5 * alpha); g.fillCircle(x - b.R * 0.2 * sc, y - b.R * 0.2 * sc, b.R * 0.38 * sc);
+      for (const c of b.chunks) { g.fillStyle(0x5A4A24, 0.8 * alpha); g.fillCircle(x + c.dx * sc, y + c.dy * sc, c.r * sc); }
     }
   }
 
