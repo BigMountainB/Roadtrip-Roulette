@@ -315,6 +315,22 @@ function makePlayer() {
   };
 }
 
+// Owner's baked default HUD layout (from the 2026-07-18 editor export). These
+// are per-element {dx,dy,scale} deltas off each control's base position; applied
+// ONLY to profiles that have never customized their own layout (non-destructive
+// — existing custom layouts are untouched). PARTIAL for now: only the elements
+// the owner actually dragged are captured, so this covers the garage/map/mute
+// buttons, the Drinks/Food bars, the speed readout, and the damage popup. Swap
+// in a fuller export to extend it.
+const DEFAULT_HUD_LAYOUT = {
+  btn_garage: { dx: 28,  dy: 1,   scale: 1.1014028829519762 },
+  survB:      { dx: -21, dy: -11, scale: 1 },
+  btn_map:    { dx: 35,  dy: 1,   scale: 1.0889059233069553 },
+  speed:      { dx: -57, dy: 19,  scale: 1 },
+  btn_mute:   { dx: 43,  dy: 1,   scale: 1.0739683025825142 },
+  hpDamage:   { dx: 372, dy: 260, scale: 2.587326517462003 },
+};
+
 export class GameScene extends Phaser.Scene {
   constructor() { super({ key: 'Game' }); }
 
@@ -784,7 +800,13 @@ export class GameScene extends Phaser.Scene {
       this._hudHidden  = false;
       // Per-profile Customize Controls layout: { elementId: {dx,dy} } screen
       // offsets from each element's default position.  Stored per save slot.
-      this._hudLayout    = _save?.get?.('controlsLayout', {}) || {};
+      // A profile that has NEVER customized (`controlsLayout` unset → null) gets
+      // the owner's baked DEFAULT_HUD_LAYOUT; once they touch the editor their
+      // own saved layout (even an empty one from RESET) takes over.
+      const _storedLayout = _save?.get?.('controlsLayout', null);
+      this._hudLayout    = (_storedLayout && typeof _storedLayout === 'object')
+        ? _storedLayout
+        : { ...DEFAULT_HUD_LAYOUT };
       // LAYOUT VERSION GATE: saved offsets are deltas FROM THE DEFAULTS, so
       // the 2026-07-15 default-layout overhaul (owner's arrangement became
       // the default) invalidated every pre-existing delta — old offsets on
@@ -792,8 +814,10 @@ export class GameScene extends Phaser.Scene {
       // the new defaults; the editor keeps working from there.
       const LAYOUT_VER = 2;
       if ((_save?.get?.('controlsLayoutVer', 1) ?? 1) < LAYOUT_VER) {
-        this._hudLayout = {};
-        _save?.set?.('controlsLayout', {});
+        // Pre-gate profiles (incl. brand-new ones) install the owner's baked
+        // default rather than an empty layout.
+        this._hudLayout = { ...DEFAULT_HUD_LAYOUT };
+        _save?.set?.('controlsLayout', this._hudLayout);
         _save?.set?.('controlsLayoutVer', LAYOUT_VER);
       }
       // Migration: the old single 4-row 'survbars' block split into TWO

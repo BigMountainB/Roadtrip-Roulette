@@ -114,6 +114,16 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-18 — HUD default-layout pipeline (seeded, PARTIAL)
+- Added `DEFAULT_HUD_LAYOUT` (GameScene) — owner's baked `{dx,dy,scale}` deltas, applied ONLY to
+  profiles that never customized (non-destructive; existing custom layouts untouched). The version gate
+  now installs it instead of an empty layout.
+- ⚠️ **PARTIAL:** the owner's COPY export only contained 6 dragged elements (garage/map/mute buttons,
+  Drinks/Food bars, speed readout, damage popup) — NOT the big target-image redesign (no hp / score /
+  mult / mission-readout). The editor only records elements you actually drag, and the layout clears on
+  RESET / new run / profile switch, so the full arrangement was lost. To finish: re-arrange EVERYTHING in
+  one editor sitting → SAVE → reopen editor → COPY → paste the fuller JSON to replace the constant.
+
 ### 2026-07-17 (batch 7) — Genre-pick crash + tutorial fixes
 - **FIXED the genre-select crash** (`Uncaught` WebGL: `get → batchSprite → drawBitmapMask → endMask →
   postRenderWebGL`). `_applyGenreArt` was calling `textures.remove(key)` then reloading
