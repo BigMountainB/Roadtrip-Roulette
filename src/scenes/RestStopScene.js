@@ -192,7 +192,7 @@ const SECTIONS = {
   hunting: {
     label: '🦌  HUNTING',
     items: [
-      { id: 'coal',    label: 'DIESEL TUNE',      icon: 'weapon_coal',        cost:  350, desc: '+6 clouds — smoke out the law behind you',  payload: { f12: 'coal' } },
+      { id: 'coal',    label: 'DIESEL TUNE',      icon: 'weapon_coal',        cost:  350, desc: '+3 clouds — smoke out the law behind you',  payload: { f12: 'coal', f12Count: 3 } },
       // Fireworks ship 3 shows per purchase (full stack).  Triple-stacks
       // the F12 token via f12Count.
       { id: 'fireworks', label: 'FIREWORKS',      icon: 'weapon_fireworks',   cost: 500, desc: '+3 shows — scatters every cop on screen',   payload: { f12: 'fireworks', f12Count: 3 } },

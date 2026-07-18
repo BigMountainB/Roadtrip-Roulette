@@ -201,6 +201,33 @@
     #tut-skip.on { display: flex; }
     #tut-skip svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
     #tut-skip rect { fill: none; stroke: #FFD24D; stroke-width: 3; }
+    /* ── Tilt-steering motion-permission explainer (owner 2026-07-17) ── */
+    #tilt-explainer { position: fixed; inset: 0; z-index: 999997; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.62); padding: 4vmin; }
+    #tilt-explainer.on { display: flex; }
+    #tilt-explainer .te-card { max-width: min(90vw, 460px); box-sizing: border-box; background: #0a1626; border: 0.4vmin solid #6FB0FF; border-radius: 2.6vmin; padding: 4.5vmin 4.5vmin 3.4vmin; text-align: center; box-shadow: 0 1vmin 6vmin rgba(0, 0, 0, 0.6); }
+    #tilt-explainer .te-icon { font-size: 9vmin; line-height: 1; }
+    #tilt-explainer .te-title { color: #EAF2FF; font: 800 clamp(18px, 4.6vmin, 26px)/1.3 "Helvetica Neue", Arial, sans-serif; margin: 1.6vmin 0; }
+    #tilt-explainer .te-body { color: #C4D8F2; font: 500 clamp(14px, 3.5vmin, 19px)/1.5 "Helvetica Neue", Arial, sans-serif; margin-bottom: 3.4vmin; }
+    #tilt-explainer .te-btns { display: flex; gap: 2vmin; }
+    #tilt-explainer button { flex: 1; border: none; border-radius: 1.8vmin; padding: 2.4vmin 1vmin; font: 800 clamp(14px, 3.4vmin, 18px) Arial, sans-serif; cursor: pointer; }
+    #tilt-explainer .te-allow { background: #39A8FF; color: #041018; }
+    #tilt-explainer .te-cancel { background: #1b2a3d; color: #9FC2E8; }
+    /* ── "Rotate Phone to Enter Game Play" prompt after genre pick (owner 2026-07-17) ── */
+    @keyframes rppPulse { 0%, 100% { opacity: 0.6; box-shadow: 0 0 2vmin 0.4vmin rgba(57, 168, 255, 0.5); } 50% { opacity: 1; box-shadow: 0 0 6vmin 1.6vmin rgba(57, 168, 255, 0.95); } }
+    @keyframes rppSpin { 0% { transform: rotate(0); } 45% { transform: rotate(90deg); } 55% { transform: rotate(90deg); } 100% { transform: rotate(0); } }
+    #rotate-play-prompt {
+      position: fixed; left: 50%; bottom: 12vh; transform: translateX(-50%); z-index: 999994; display: none;
+      flex-direction: column; align-items: center; gap: 1.4vmin; box-sizing: border-box;
+      width: min(88vw, 560px); padding: 4vmin 5vmin; text-align: center; cursor: pointer;
+      background: rgba(6, 16, 30, 0.96); border: 0.5vmin solid #39A8FF; border-radius: 3vmin;
+      color: #EAF2FF; font: 800 clamp(17px, 4.6vmin, 26px)/1.3 "Helvetica Neue", Arial, sans-serif;
+      animation: rppPulse 1.25s ease-in-out infinite;
+    }
+    #rotate-play-prompt.on { display: flex; }
+    #rotate-play-prompt .rpp-icon { font-size: 9vmin; line-height: 1; animation: rppSpin 1.8s ease-in-out infinite; }
+    /* During the Music/genre step the capture + quote overlays let taps fall
+       through to the real genre buttons underneath. */
+    #tut-capture.pass, #tut-quote.pass { pointer-events: none; }
     /* Notification dots — small red badge at a menu tile's top-right corner
        when that app has something new (new trophy, unread text, new daily…).
        Created + positioned from JS (positionNotifDots) so they track the
@@ -1730,6 +1757,76 @@
         refresh: () => refreshNotifDots(),
       };
 
+      // Custom motion-permission explainer shown BEFORE the bare iOS
+      // "Access Motion and Orientation" prompt (whose wording is OS-locked).
+      // The game calls show(onAllow, onCancel); the "Allow Motion" tap is the
+      // user gesture that actually fires DeviceOrientationEvent.requestPermission.
+      (function () {
+        let el = null;
+        function build() {
+          el = document.createElement('div');
+          el.id = 'tilt-explainer';
+          el.innerHTML =
+            '<div class="te-card">'
+          +   '<div class="te-icon">📱</div>'
+          +   '<div class="te-title">Tilt Steering</div>'
+          +   '<div class="te-body">You picked tilt controls, so the game reads your phone’s motion to steer. '
+          +     'Tap <b>Allow Motion</b>, then choose <b>Allow</b> on the popup that follows.</div>'
+          +   '<div class="te-btns">'
+          +     '<button type="button" class="te-cancel">Not now</button>'
+          +     '<button type="button" class="te-allow">Allow Motion</button>'
+          +   '</div>'
+          + '</div>';
+          document.body.appendChild(el);
+        }
+        window.__tiltExplainer = {
+          show(onAllow, onCancel) {
+            if (!el) build();
+            const allow = el.querySelector('.te-allow');
+            const cancel = el.querySelector('.te-cancel');
+            // Fire requestPermission SYNCHRONOUSLY inside this tap so iOS keeps
+            // the gesture context — hide first, then invoke the callback.
+            allow.onclick = () => { el.classList.remove('on'); try { onAllow && onAllow(); } catch (_) {} };
+            cancel.onclick = () => { el.classList.remove('on'); try { onCancel && onCancel(); } catch (_) {} };
+            el.classList.add('on');
+          },
+        };
+      })();
+
+      // "Rotate Phone to Enter Game Play" — a blinking prompt shown on the
+      // portrait menu after the tutorial genre pick. Dismisses on rotate-to-
+      // landscape (gameplay entry) or a tap.
+      (function () {
+        let el = null, onRot = null;
+        function hide() {
+          if (el) el.classList.remove('on');
+          if (onRot) {
+            window.removeEventListener('orientationchange', onRot);
+            window.removeEventListener('resize', onRot);
+            onRot = null;
+          }
+        }
+        function build() {
+          el = document.createElement('div');
+          el.id = 'rotate-play-prompt';
+          el.innerHTML = '<span class="rpp-icon">🔄</span><span>Rotate Phone to<br>Enter Game Play</span>';
+          document.body.appendChild(el);
+          el.addEventListener('click', hide);
+        }
+        window.__rotatePrompt = {
+          show() {
+            if (!el) build();
+            el.classList.add('on');
+            if (!onRot) {
+              onRot = () => { try { if (window.matchMedia('(orientation: landscape)').matches) hide(); } catch (_) {} };
+              window.addEventListener('orientationchange', onRot);
+              window.addEventListener('resize', onRot);
+            }
+          },
+          hide,
+        };
+      })();
+
       // Run on load, on resize, on orientation change.
       if (bgImg.complete) layoutHitZones();
       else bgImg.addEventListener('load', layoutHitZones);
@@ -2776,6 +2873,8 @@
               const st = (window.__music?.list?.() ?? [])[idx];
               if (st && st.culture) window.__genre?.set?.(st.culture);
               renderMusic();
+              // If the tutorial is waiting on a genre pick, this completes it.
+              try { window.__tut?.genrePicked?.(); } catch (_) {}
             });
           });
         } else {
@@ -3581,7 +3680,7 @@
         { a: 'leaderboard', q: "Compare your accomplishments with your friends or world leaders — but probably not Kim Jong Un." },
         { a: 'settings',    q: "There's a sleeper setting in here. You can actually customize your entire game layout by selecting Edit under the Gameplay section!" },
         { a: 'addiction',   q: "This game used to have a different… tone. That doesn't mean we should remove a good message, though." },
-        { a: 'music',       q: "We'll start with music. Choosing your genre is choosing your path in life — each genre has its own vehicle and item art." },
+        { a: 'music',       q: "We'll start with music. Choosing your genre is choosing your path in life — each genre has its own vehicle and item art. Tap a genre's ☆ to lock it in.", pickGenre: true },
       ];
 
       const tutCap  = document.createElement('div'); tutCap.id = 'tut-capture';
@@ -3595,6 +3694,7 @@
       tutRect.style.strokeDasharray = SKIP_PERIM; tutRect.style.strokeDashoffset = SKIP_PERIM;
 
       let tutActive = false, tutIdx = -1, tutPhase = 'highlight';   // tutIdx -1 = Tutorial starter
+      let tutAwaitGenre = false;   // Music step: waiting for the player to pick a genre
       const tutQhit = (a) => document.querySelector('.phone-hit[data-action="' + a + '"]');
       const tutClearFlash = () => document.querySelectorAll('.phone-hit.tut-flash').forEach(b => b.classList.remove('tut-flash'));
       const tutFlashOne = (a) => { tutClearFlash(); tutQhit(a)?.classList.add('tut-flash'); };
@@ -3607,7 +3707,15 @@
         if (fromForced) { tutIdx = -1; tutPhase = 'highlight'; tutFlashOne('tutorial'); }
         else { tutGotoHighlight(0); }
       }
+      // Clear the Music-step "waiting for a genre pick" state (pass-through
+      // overlays + the tq-next hint) so later/earlier steps behave normally.
+      const tutClearGenreWait = () => {
+        tutAwaitGenre = false;
+        tutCap.classList.remove('pass'); tutBox.classList.remove('pass');
+        const n = tutBox.querySelector('.tq-next'); if (n) n.textContent = 'next ❯';
+      };
       function tutGotoHighlight(i) {
+        tutClearGenreWait();
         tutIdx = i; tutBox.classList.remove('show', 'tapped'); tutCloseModals();
         if (i >= TUT_TOUR.length) { tutFinish(); return; }
         tutPhase = 'highlight'; tutFlashOne(TUT_TOUR[i].a);
@@ -3617,17 +3725,40 @@
         if (!step.noSub) { const el = tutQhit(step.a); if (el) el.dispatchEvent(new Event('click')); }
         tutBox.querySelector('.tq-text').textContent = step.q;
         tutBox.classList.add('show');
+        // Music step: the player must actually PICK a genre. Let taps fall
+        // through to the real genre grid; only a genre selection advances.
+        if (step.pickGenre) {
+          tutAwaitGenre = true;
+          tutCap.classList.add('pass'); tutBox.classList.add('pass');
+          const n = tutBox.querySelector('.tq-next'); if (n) n.textContent = 'pick a genre ☆';
+        }
       }
       function tutFinish() {
+        tutClearGenreWait();
         tutActive = false; tutPhase = 'highlight'; tutClearFlash();
         tutBox.classList.remove('show', 'tapped'); tutCap.classList.remove('on'); tutSkip.classList.remove('on');
         tutCloseModals(); markTutorialSeen();
       }
+      // Genre chosen during the Music step → close the tour and surface the
+      // "Rotate Phone to Enter Game Play" prompt on the main menu.
+      function tutFinishGenre() {
+        if (!tutActive || !tutAwaitGenre) return;
+        tutFinish();
+        try { window.__rotatePrompt?.show?.(); } catch (_) {}
+      }
+      // Bridge for the music-menu genre star (index.html menu script).
+      window.__tut = {
+        active: () => tutActive,
+        awaitingGenre: () => tutActive && tutAwaitGenre,
+        genrePicked: () => { tutFinishGenre(); },
+      };
 
       const tutPoint = (e) => (e.clientX != null) ? { x: e.clientX, y: e.clientY }
         : (e.changedTouches && e.changedTouches[0]) ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY } : null;
       const tutCapHit = (e) => {
         if (!tutActive) return;
+        // Music step: don't advance on a stray tap — wait for a genre pick.
+        if (tutAwaitGenre) return;
         e.preventDefault(); e.stopPropagation();
         // Submenu phase: a tap ANYWHERE on the screen advances to the next item.
         if (tutPhase === 'submenu') { tutGotoHighlight(tutIdx + 1); return; }
@@ -3644,7 +3775,7 @@
       tutCap.addEventListener('click', tutCapHit, { passive: false });
 
       const tutBoxTap = (e) => {
-        if (!tutActive || tutPhase !== 'submenu' || tutBox.classList.contains('tapped')) return;
+        if (!tutActive || tutAwaitGenre || tutPhase !== 'submenu' || tutBox.classList.contains('tapped')) return;
         e.preventDefault(); e.stopPropagation();
         tutBox.classList.add('tapped');
         setTimeout(() => tutGotoHighlight(tutIdx + 1), 130);

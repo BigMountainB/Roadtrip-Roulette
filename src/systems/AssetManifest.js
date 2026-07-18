@@ -431,3 +431,11 @@ export function genreArtPath(key, genre) {
   if (!genre || !GENRE_ART[key]) return null;
   return `assets/culture/${genre}/${GENRE_ART[key]}?g=${genre}`;
 }
+
+// Default (non-culture) manifest path for each GENRE_ART key — used to REVERT
+// the reskin to base art when a plate has no genre selected (owner 2026-07-17).
+const _MANIFEST_BY_KEY = Object.fromEntries(flattenManifest().map(e => [e.key, e.path]));
+/** Base manifest path for a GENRE_ART key, or null if unknown. */
+export function genreDefaultPath(key) {
+  return GENRE_ART[key] ? (_MANIFEST_BY_KEY[key] ?? null) : null;
+}

@@ -953,15 +953,34 @@ const _boot = () => {
   };
 
   // Genre / culture art — the chosen genre reskins the vice + starter-vehicle
-  // art (owner 2026-07-17). Persisted in localStorage 'rtr.genre'; BootScene
-  // loads its art at boot, and set() swaps it live this session.
+  // art (owner 2026-07-17). Genre is PER LICENSE PLATE: stored in the active
+  // save slot ('genre') and mirrored to localStorage 'rtr.genre', which
+  // BootScene reads at boot. set() swaps it live; syncActive() re-mirrors when
+  // the active profile/plate changes.
   window.__genre = {
-    get: () => { try { return localStorage.getItem('rtr.genre') || null; } catch (_) { return null; } },
+    get: () => {
+      const g = game.registry.get('save')?.get?.('genre', null);
+      if (g) return g;
+      try { return localStorage.getItem('rtr.genre') || null; } catch (_) { return null; }
+    },
     set: (culture) => {
       if (!culture) return;
-      try { localStorage.setItem('rtr.genre', culture); } catch (_) {}
+      try { game.registry.get('save')?.set?.('genre', culture); } catch (_) {}  // per-plate
+      try { localStorage.setItem('rtr.genre', culture); } catch (_) {}          // boot mirror
       const s = game.scene?.getScene?.('Game');
       try { s?._applyGenreArt?.(culture); } catch (_) {}
+    },
+    // Profile/plate switched → mirror that plate's stored genre to rtr.genre and
+    // reskin live (null genre reverts to base art).
+    syncActive: () => {
+      const g = game.registry.get('save')?.get?.('genre', null) || null;
+      try {
+        if (g) localStorage.setItem('rtr.genre', g);
+        else   localStorage.removeItem('rtr.genre');
+      } catch (_) {}
+      const s = game.scene?.getScene?.('Game');
+      try { s?._applyGenreArt?.(g); } catch (_) {}
+      return g;
     },
   };
 

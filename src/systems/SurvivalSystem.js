@@ -142,6 +142,12 @@ export class SurvivalSystem {
     // caffeine/quad-shot are diuretics and fill it extra.  Only a restroom
     // empties it (see GameScene: buys.emptyBladder / bladder-burst pull-over).
     this.bladder = clamp(this.bladder + this._bladderGain(id, fx));
+    // Over-eating: once you're past the 75% food mark, every additional food
+    // sprite adds a flat +2% bladder (owner 2026-07-17 — the bladder was
+    // filling too slowly; a stuffed stomach should make you need to go).
+    if (typeof fx.f === 'number' && fx.f > 0 && this.fullness > 75) {
+      this.bladder = clamp(this.bladder + 2);
+    }
     // Diuretic: ~half of the hydration this drink added is "borrowed" and drains
     // back off over the next couple miles.
     if (fx.diuretic) this.diuretic = Math.min(DIURETIC_MAX, this.diuretic + Math.max(0, fx.h || 0) * DIURETIC_FRAC);

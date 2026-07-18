@@ -57,20 +57,25 @@ soak (PG-13) · party-clock HUD hidden (mechanics intact — arrival-status dire
 
 **Not yet built:** economy balance w/ real playtest data (mission `recordEarn` tagging ready;
 pickups+distance income the suspected inflators) · Steam-demo cut + wishlist/tutorial (Ch3
-§13/§22) · real NPC portrait art + survival-item art · 📌 Soundtrack Culture Packs (pinned below)
+§13/§22) · real NPC portrait art + survival-item art · soundtrack-culture runtime/deploy finalization
 · texting-relationship layer (pinned idea) · SAVE tile replacement (owner deciding).
 
-## 📌 PINNED — Soundtrack Culture Packs (idea locked 2026-07-13, candidate for next build)
+## 📌 PINNED — Soundtrack Culture Packs (art complete locally; deployment incomplete)
 
 **The pitch (Brendan's):** choosing your music genre is a *loadout decision* that reskins the
 whole run. Picking a soundtrack changes every sprite's ART (never its effect — same bars, same
 values, pure cosmetics) AND the starting vehicle, to match that music's culture:
 
-- **Country** → big 80's diesel beater truck · sprites: gas-station Coffee, Chewing Tobacco tin,
-  "Manster" Energy, jerky, biscuits-and-gravy burrito.
-- **Hip-hop** → older Acura sedan or beat-up Cadillac · sprites: "Ghust" Energy, "Gumbie Cluster"
-  gummies, honey bun, Arizona-style tallboy tea.
-- (Future packs: Phonk, Metal, Pop-punk, Norteño… each = 1 vehicle + ~8–10 sprite reskins.)
+- **Final ten cultures:** Hip-Hop / Phonk · Pop-Punk / Emo · Norteño · Reggaeton ·
+  Classic Rock · EDM / Rave · Country · Reggae · K-Pop · Metal.
+- Each culture has 14 fixed-ID vice badges plus a matching front/back starter vehicle under
+  `public/assets/culture/<culture>/`. Gameplay category colors remain invariant at distance:
+  blue hydration, orange food, yellow caffeine, red special/high-risk.
+- Metal's vehicle is the battered black tour van from its menu art (roof amp wall, touring
+  lights, chains, grille skull), stored at `public/assets/culture/metal/vehicles/starter_*.png`.
+- The portrait Music screen uses ten dedicated edge-to-edge, vehicle-led scene overlays under
+  `public/assets/ui/music_genres/`. These are complete scenes—not vice-sprite collages—and are
+  clipped under the existing star, checkmark, title, count, border, and hit target.
 
 Snacks and drinks that genuinely resonate with each musical culture — the parody brand names are
 part of the joke. Rolling-coal-style flavor (e.g. a smoke weapon reading as diesel ROLLING COAL)
@@ -87,10 +92,95 @@ NecroDancer / Audiosurf / Beat Hazard (music drives *mechanics*, not culture ski
 skin packs (no music link). Genre-as-selectable-culture-reskin looks genuinely novel — a
 marketable hook.
 
-**Status:** PINNED — not scheduled; likely next major build after mission-system playtest. Art
-volume is the long pole (each pack = vehicle art + ~10 sprite images).
+**Implementation:** [index.html](index.html) renders
+`assets/ui/music_genres/${culture}.png`; [AudioSystem.js](src/systems/AudioSystem.js) must expose
+each station's `culture` id. Station indices remain stable for saves via `trackKey`. Slot mapping:
+PHONK→HIP-HOP / PHONK, ARCADE→POP-PUNK / EMO, SYNTHWAVE→NORTEÑO, old HIP-HOP→REGGAETON;
+EDM is relabeled EDM / RAVE. Existing audio remains attached to those slots until music is moved.
+
+**Deployment status (audit 2026-07-17): NOT safely shipped from this checkout.** The menu renderer
+is present in committed `index.html`, but `src/systems/AudioSystem.js` is still modified locally and
+`public/assets/ui/music_genres/` is untracked. Without both, deployed `s.culture` is undefined and
+the renderer deliberately emits no background image. A successful `git push` does not include
+working-tree or untracked files; see Chapter 2's pre-push checklist.
 
 ## Changelog (newest first)
+
+### 2026-07-17 (batch 4) — Genre UX, motion explainer, weapon caps (build+tests clean)
+⚠️ **Correction after deployment audit:** a prior local note claimed commit `3a4d020` shipped and
+verified the illustrated menu. Do not rely on that claim. In this checkout, `HEAD`/the local
+`origin/main` tracking ref is `e333ed2`, `AudioSystem.js` still contains unstaged genre mappings,
+and the ten `public/assets/ui/music_genres/*` files remain untracked. The observed live menu is also
+still the old version. Treat the illustrated menu and Metal starter-van pair as **LOCAL / NOT DEPLOYED**
+until a commit containing the exact assets + mappings is visible on GitHub and Cloudflare reports
+that same SHA. A redundant Cloudflare "Workers Builds" integration may still paint a red ❌, but the
+authoritative delivery path is the GitHub Action described in Chapter 2.
+
+Then the genre/UX batch (this entry):
+- **Custom motion-permission explainer** (`#tilt-explainer` + `window.__tiltExplainer`, index.html) shows
+  ONCE before the bare iOS "Access Motion and Orientation" prompt (whose wording is OS-locked and can't be
+  changed). Its "Allow Motion" tap is the user-gesture that fires the real `requestPermission`.
+  `GameScene._armTiltPrefetch` split the request into `_doTiltRequest()` so the explainer can front it.
+- **Genre = per license plate.** Genre now stored in the active save slot (`save.set('genre', …)`) and
+  mirrored to `localStorage 'rtr.genre'` (BootScene reads it at boot). Switching profiles on the title
+  screen (`_onPlateSlotTap`) calls `window.__genre.syncActive()` → re-mirrors that plate's genre and
+  reskins live. `_applyGenreArt(null)` now REVERTS to base art (new `genreDefaultPath()` in AssetManifest)
+  for a plate with no genre yet.
+- **Tutorial Music step now requires a real genre pick.** `pickGenre:true` on the Music tour step lets
+  taps fall through the tut overlays (`.pass` = pointer-events:none) to the actual genre grid; tapping a
+  genre's ☆ (which sets `__genre`) calls `window.__tut.genrePicked()` → completes the tour.
+- **"Rotate Phone to Enter Game Play"** blinking prompt (`#rotate-play-prompt` + `window.__rotatePrompt`)
+  shows on the portrait menu after the genre pick; dismisses on rotate-to-landscape (gameplay entry) or tap.
+- **All weapons cap at 3 each.** Rolling coal was the outlier (6 per pickup, cap 18) — now **1 per road
+  sprite, cap 3** like everything else (`CopSystem` + every resume/restore clamp: `18→3`). Rest-stop
+  **DIESEL TUNE** now grants +3 (fills to cap, `f12Count:3`) and is relabeled "+3 clouds". Coal test
+  updated + a cap assertion added (coal.test now 29).
+- **Fireworks ROCKET bodies 2× bigger** (`_drawFireworks`): head streak 2→4px, tail 3→6px, head dot
+  2.2→4.4r. (The bursts were already doubled in batch 3; this is the launched rocket sprite itself.)
+- **Asset deploy with this push:** committed the full `public/assets/culture/` (all 10 genres' vice +
+  vehicle art — REQUIRED for the genre reskin to not 404) and `public/assets/ui/sickness/` (the 10 vomit
+  sprites — the vomit feature shipped earlier but its art was never committed, so it was 404ing live).
+  NOT included (separable, left local): the `vices/*.png` default reskin, the `music/Hip-Hop Phonk/`
+  rename (AudioSystem still points at `music/rap/`, so those mp3s must NOT be deleted yet), and the stale
+  icon/webp deletions.
+- **Bladder from over-eating** (`SurvivalSystem.applyItem`): once fullness is past 75%, every additional
+  FOOD sprite (`fx.f > 0`) adds a flat +2% bladder (the bladder was filling too slowly).
+- **Rolling-coal cop rework → TOUCH + slow** (replaces the instant flee/despawn). Firing now lays a
+  world-anchored smoke cloud behind the car (`CopSystem._coalCloud`, region backZ = pos-10000 … frontZ =
+  pos+1500, lives ~5 s). A cop is only affected once it DRIVES INTO the cloud, then its top speed is
+  capped at **60 mph for 30 s** (`coalSlowT`) — it keeps chasing, just slow enough that the player pulls
+  away. Barricades immune; the 30 s spawn lull + arrest-counter clear stay. Visually the smoke now sits
+  low (puff cy `−r*0.55`→`−r*0.1`) and the bottom soot lingers (~3.5 s fade) so the cloud fills to the
+  screen bottom as it blows back down the road. coal.test rewritten for the new model (24 assertions).
+- **HUD-editor EXPORT button:** the DRAG-TO-MOVE panel now has a 4th **COPY** button (`_copyHudLayout`)
+  that copies the saved `controlsLayout` JSON to the clipboard (+ a prompt() fallback for iOS). Flow:
+  arrange your HUD → COPY → paste the JSON to me → I bake it into a shipped `DEFAULT_HUD_LAYOUT`. (The
+  bake itself is PENDING the owner's pasted JSON.)
+- **DEFERRED (post-dev-mode, per owner):** earn/buy GATING for any genre past the first. Right now every
+  genre is freely selectable in the picker. Revisit when dev mode is turned off for release.
+
+### 2026-07-17 (batch 3) — Coal/donut render, speed-trap+fireworks size, energy/water (DEPLOYED)
+Pushes `4d38920`..`e367607` (+ a TEMP on-screen FPS/error/perf-toggle overlay in index.html for a
+live glitch hunt — REMOVE once FPS is resolved). Build clean, 123+27 tests.
+- **Rolling Coal cop** finally receding right: the renderer now drives the bottom-edge sink from the
+  cop's OWN `relativePos`, clamped at the real projection floor (~1500) — NOT the far 4400 hold that
+  teleports a close cop forward (the "jump up + shrink") and then lets it vanish. Added a `coalFlee`
+  flag on the render list; CopSystem just does keep-pace(1.5s)→slow physics + despawn. It now slows
+  and drops straight off the lower frame the way it entered.
+- **Speed-trap parked cop 2× larger** (`sizeMult` 1.6→3.2; on-screen caps 0.306→0.612).
+- **Donuts** land then **slide off the bottom quickly** (recede with the road) instead of lingering
+  and fading in place.
+- **Fireworks 2× bigger**: burst spread (spd), spark size, and crackle-ring radius all doubled.
+- **ENERGY** vice had **no `ITEM_FX` entry** → did nothing; added `energy: {t:-8,h:+1.5,diuretic:2.5}`
+  so it's a big Alertness jolt.
+- **Rolling-coal SMOG** now rolls up from the very bottom edge (a gradient over the lower ~45% of the
+  screen), instead of a thin bottom band.
+- **WATER** sold at **gas stations ($15)** and **AOK camp ($7)** (new `waterItem` factory).
+- **Gas refuel**: verified — cost already = perGal × gallons-to-full (`GAS_USD_PER_MI`=0.50 → $15/gal),
+  and `refuelToFull` fills the tank. A $20 charge = a ~85%-full tank top-up, not a bug.
+- **PERF**: driving ~12-13 FPS, rest stop 60 FPS, `creates`=1 (no restart loop), no JS error — so
+  it's render cost in the driving scene, NOT a logic regression (audio/lifecycle untouched). Awaiting
+  the tap-toggle result (effects/sprites/mirror) to find the hog.
 
 ### 2026-07-17 (later) — Reskin cleanup, shop balance/layout, donut+coal visual fixes (DEPLOYED)
 Push `fe2c47f`. Build clean, 123 mission + 27 coal tests green.
@@ -348,6 +438,19 @@ git push origin main       # GitHub Action builds + deploys to Cloudflare Pages
 
 ## Gotchas (inherited from DUI, still true)
 
+- **`git push` sends commits only.** Before announcing a deploy, run `git status --short` and
+  explicitly stage every new binary-asset directory. Generated PNGs are commonly `??` (untracked)
+  and are invisible to GitHub/Cloudflare until `git add` + `git commit`. For the illustrated Music
+  menu, the minimum deployment set is:
+  `src/systems/AudioSystem.js` + `public/assets/ui/music_genres/`. Add
+  `public/assets/culture/metal/vehicles/starter_front.png` and `starter_back.png` for the Metal van.
+- **Verify the deployed SHA, not just a green/successful push.** After pushing, confirm the new
+  commit appears on GitHub, confirm the GitHub Actions Pages job built that exact SHA, and request
+  one known new asset URL (for example
+  `/assets/ui/music_genres/metal.png?v=vehicle-scenes-1`) before marking the work live.
+- **Music-menu dependency:** committed `index.html` already expects `s.culture`; if the matching
+  `AudioSystem.js` mapping is missing, `cultureArt` is empty even when the HTML/CSS deployed cleanly.
+  If the PNG directory is missing, the mapping exists but image requests 404. Ship both together.
 - **`dist/` is build output** — never edit or commit it; CI runs `npm run build` itself.
 - **`ios/App/App/public/`** is the Capacitor sync target (`npx cap sync ios`) — don't hand-edit.
 - **`Images/`** at the repo root is a local-only art archive (large PSDs) — don't ship it; keep it gitignored so `git pack-objects` doesn't choke on push.

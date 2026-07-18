@@ -30,7 +30,7 @@ import { SurvivalSystem } from '../systems/SurvivalSystem.js';
 import { EffectsSystem } from '../systems/EffectsSystem.js';
 import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
 import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
-import { genreArtPath, GENRE_ART } from '../systems/AssetManifest.js';
+import { genreArtPath, genreDefaultPath, GENRE_ART } from '../systems/AssetManifest.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
 import { Difficulty }    from '../systems/Difficulty.js';
 import { TimeOfDay }     from '../world/TimeOfDay.js';
@@ -2055,7 +2055,7 @@ export class GameScene extends Phaser.Scene {
           }
           if (Array.isArray(buys.f12)) {
             if (buys.weaponsOnResume && this.cops) {
-              this.cops.coalAmmo = Math.max(0, Math.min(18, buys.weaponsOnResume.coal || 0));
+              this.cops.coalAmmo = Math.max(0, Math.min(3, buys.weaponsOnResume.coal || 0));
               this.cops.f12Tokens = [];
               if (this.cops.coalAmmo > 0) this.cops.f12Tokens.push('coal');
               const add = (tok, n) => {
@@ -2698,20 +2698,10 @@ export class GameScene extends Phaser.Scene {
     if (!P) return;
     this._tiltPrefetchInstalled = true;
 
-    const onGesture = (e) => {
+    // The ACTUAL native permission request — split out so the custom explainer's
+    // "Allow" tap (a fresh user gesture) can fire it (owner 2026-07-17).
+    this._doTiltRequest = () => {
       if (this._tiltAttached || this._tiltRequestInFlight) return;
-      const confirm = e?.target?.closest?.('#phone-confirm');
-      if (confirm && !e?.target?.closest?.('#phone-confirm-ok')) return;
-      // Request at the START of the run for the chosen tilt mode OR any run
-      // that can hit snow (Normal+ → Weather), so tilt is ready before the
-      // snow zone auto-engages it — no mid-drive permission interruption.
-      // Don't re-prompt once the player has denied.
-      const picked = this.registry?.get?.('titleThumbsPick')
-                  ?? this.registry?.get?.('steeringMode');
-      const wantTilt = picked === 'tilt' || (Difficulty.weather?.() ?? false);
-      if (!wantTilt) return;
-      if (this.registry?.get?.('tiltPermissionDenied')) return;
-
       this._tiltRequestInFlight = true;
       P.requestPermission()
         .then((res) => {
@@ -2719,15 +2709,9 @@ export class GameScene extends Phaser.Scene {
           if (res === 'granted' && !this._tiltAttached) {
             this._tiltAttached = true;
             window.addEventListener('deviceorientation', this._tiltOnOrient, true);
-            // Remember the grant so future scene starts (after a crash
-            // restart, mode swap, etc.) can attach the listener
-            // directly without waiting for another user gesture.
             this.registry?.set?.('tiltPermissionGranted', true);
             if (this._tiltPrefetchCleanup) this._tiltPrefetchCleanup();
           } else if (res !== 'granted') {
-            // Remember the denial so the prefetch stops re-prompting on
-            // every tap (iOS returns the remembered 'denied' silently, but
-            // skipping the call entirely is cleaner).
             this.registry?.set?.('tiltPermissionDenied', true);
             if (this._tiltPrefetchCleanup) this._tiltPrefetchCleanup();
           }
@@ -2741,6 +2725,31 @@ export class GameScene extends Phaser.Scene {
           this._tiltPendingCbs = [];
           for (const cb of cbs) cb?.('denied');
         });
+    };
+
+    const onGesture = (e) => {
+      if (this._tiltAttached || this._tiltRequestInFlight || this._tiltExplainerActive) return;
+      const confirm = e?.target?.closest?.('#phone-confirm');
+      if (confirm && !e?.target?.closest?.('#phone-confirm-ok')) return;
+      // Request at the START of the run for the chosen tilt mode OR any run that
+      // can hit snow (Normal+ → Weather). Don't re-prompt once denied.
+      const picked = this.registry?.get?.('titleThumbsPick')
+                  ?? this.registry?.get?.('steeringMode');
+      const wantTilt = picked === 'tilt' || (Difficulty.weather?.() ?? false);
+      if (!wantTilt) return;
+      if (this.registry?.get?.('tiltPermissionDenied')) return;
+      // Show the custom explainer ONCE before the bare iOS prompt; its "Allow"
+      // tap is the gesture that fires the real requestPermission.
+      if (!this._tiltExplainerDone && typeof window.__tiltExplainer?.show === 'function') {
+        this._tiltExplainerDone = true;
+        this._tiltExplainerActive = true;
+        window.__tiltExplainer.show(
+          () => { this._tiltExplainerActive = false; this._doTiltRequest(); },
+          () => { this._tiltExplainerActive = false; },
+        );
+        return;
+      }
+      this._doTiltRequest();
     };
 
     const targets = Array.from(new Set([this.game?.canvas, document].filter(Boolean)));
@@ -8702,16 +8711,18 @@ export class GameScene extends Phaser.Scene {
    *  genre; this handles a mid-session change. Guarded — if a reload errors, the
    *  boot-time load still applies on the next app start. */
   _applyGenreArt(genre) {
-    if (!genre) return;
-    const keys = Object.keys(GENRE_ART).filter(k => genreArtPath(k, genre));
-    if (!keys.length) return;
+    // genre truthy → reskin to that culture; genre falsy → REVERT to base art
+    // (a plate that hasn't chosen a genre yet).
+    const pathFor = (k) => genre ? genreArtPath(k, genre) : genreDefaultPath(k);
+    const targets = Object.keys(GENRE_ART).map(k => [k, pathFor(k)]).filter(([, p]) => p);
+    if (!targets.length) return;
     const carWasVisible = this.playerSprite?.visible;
     try {
       // Hide the car during the swap so a mid-reload removed texture never
       // renders broken; restore + re-skin on complete.
       if (this.playerSprite) this.playerSprite.setVisible(false);
-      for (const k of keys) { try { if (this.textures.exists(k)) this.textures.remove(k); } catch (_) {} }
-      for (const k of keys) this.load.image(k, genreArtPath(k, genre));
+      for (const [k] of targets) { try { if (this.textures.exists(k)) this.textures.remove(k); } catch (_) {} }
+      for (const [k, p] of targets) this.load.image(k, p);
       this.load.once('complete', () => {
         try { this._applyVehicleSwap?.(this.player?.vehicleId ?? 'beater'); } catch (_) {}
         if (this.playerSprite && carWasVisible !== false) this.playerSprite.setVisible(true);
@@ -10486,7 +10497,9 @@ export class GameScene extends Phaser.Scene {
     const c = this._coalCloud;
     if (!c) return;
     c.emitT += dt;
-    c.soot   = Math.max(0, c.soot - dt * 0.7);
+    // Bottom-edge soot holds full while belching, then fades slowly (~3.5 s) so
+    // the dark wall lingers at the bottom as the cloud blows back down the road.
+    c.soot   = (c.emitT < c.emitDur) ? 1 : Math.max(0, c.soot - dt * 0.28);
     // Belch phase — ~26 puffs/sec dropped at the exhaust's CURRENT road
     // position (rear bumper of the visible car), two mouths (left/right
     // of the bumper) so the wall reads wide.  The array is naturally
@@ -10792,7 +10805,9 @@ export class GameScene extends Phaser.Scene {
       if (r < 1) continue;
       const { shade, a } = this._coalPuffStyle(p);
       if (a <= 0.01) continue;
-      const cy = proj.sy - r * 0.55;              // smoke hangs just above the pavement
+      // Sit the smoke LOW so the near cloud fills right down to the bottom edge
+      // of the screen as it blows back down the road (owner 2026-07-17).
+      const cy = proj.sy - r * 0.1;
       g.fillStyle(shade, a * 0.45);               // wide soft skirt
       g.fillCircle(proj.sx, cy, r * 1.45);
       g.fillStyle(shade, a);                      // dense core
@@ -10981,11 +10996,12 @@ export class GameScene extends Phaser.Scene {
     if (!show || !g) return;
     for (const r of show.rockets) {
       if (!r.launched || r.burst) continue;
-      g.lineStyle(2, 0xFFFFFF, 0.95);
+      // 2× bigger rocket body — line widths + head doubled (owner 2026-07-17).
+      g.lineStyle(4, 0xFFFFFF, 0.95);
       g.beginPath(); g.moveTo(r.x, r.y); g.lineTo(r.x - r.vx * 0.05, r.y - r.vy * 0.05); g.strokePath();
-      g.lineStyle(3, r.color, 0.45);
+      g.lineStyle(6, r.color, 0.45);
       g.beginPath(); g.moveTo(r.x - r.vx * 0.05, r.y - r.vy * 0.05); g.lineTo(r.x - r.vx * 0.12, r.y - r.vy * 0.12); g.strokePath();
-      g.fillStyle(0xFFFFFF, 1); g.fillCircle(r.x, r.y, 2.2);
+      g.fillStyle(0xFFFFFF, 1); g.fillCircle(r.x, r.y, 4.4);
     }
     for (const p of show.particles) {
       let a = Math.max(0, p.life / p.maxLife);
@@ -17777,7 +17793,7 @@ export class GameScene extends Phaser.Scene {
 
     const counts = {};
     for (const t of tokens) counts[t] = (counts[t] ?? 0) + 1;
-    // Rolling coal is charge-counted (6 clouds per pickup) so its count is
+    // Rolling coal is charge-counted (1 cloud per pickup) so its count is
     // the raw cloud total, not the number of stacked tokens.
     counts.coal = this.cops.coalAmmo ?? 0;
     const topTok = tokens.length ? tokens[tokens.length - 1] : null;
@@ -18301,7 +18317,7 @@ export class GameScene extends Phaser.Scene {
         if (s.weapons) {
           // (Old saves carry `weapons.gun` — silently dropped; the gun was
           // replaced by rolling coal.)
-          this.cops.coalAmmo = Math.max(0, Math.min(18, s.weapons.coal || 0));
+          this.cops.coalAmmo = Math.max(0, Math.min(3, s.weapons.coal || 0));
           this.cops.f12Tokens = [];
           if (this.cops.coalAmmo > 0) this.cops.f12Tokens.push('coal');
           const add = (tok, n) => { for (let i = 0; i < Math.min(3, n || 0); i++) this.cops.f12Tokens.push(tok); };
@@ -18809,6 +18825,18 @@ export class GameScene extends Phaser.Scene {
     try { this.registry.get('save')?.set?.('controlsLayout', this._hudLayout); } catch (_) {}
   }
 
+  /** Export the current custom HUD layout as JSON so it can be baked into the
+   *  shipped DEFAULT_HUD_LAYOUT (owner 2026-07-17). Copies to the clipboard and
+   *  drops it in a prompt() as a fallback so it can be read/selected on iOS. */
+  _copyHudLayout() {
+    const json = JSON.stringify(this._hudLayout || {});
+    let copied = false;
+    try { navigator.clipboard?.writeText?.(json); copied = true; } catch (_) {}
+    // Fallback surface so the value is always readable/selectable on device.
+    try { window.prompt?.('HUD layout — copy this and paste it to Claude:', json); } catch (_) {}
+    this._showPopup?.(copied ? '📋 Layout copied — paste it to Claude' : '📋 Layout ready — copy from the box', '#F2A73B');
+  }
+
   _resetControlsLayout() {
     this._hudLayout    = {};
     this._hudUndoStack = [];
@@ -18882,23 +18910,24 @@ export class GameScene extends Phaser.Scene {
     const D = 70;
     const cx = SCREEN_W / 2, cy = SCREEN_H / 2;
     const mk = [];
-    const panel = this.add.rectangle(cx, cy, 320, 90, 0x0A0E18, 0.9).setOrigin(0.5).setDepth(D);
+    const panel = this.add.rectangle(cx, cy, 420, 90, 0x0A0E18, 0.9).setOrigin(0.5).setDepth(D);
     panel.setStrokeStyle?.(1, 0x39A8FF, 0.7);
     mk.push(panel);
     mk.push(this.add.text(cx, cy - 25, 'DRAG TO MOVE', {
       fontFamily: 'Arial', fontSize: '15px', color: '#CFE4FF', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(D + 1));
     const mkBtn = (bx, text, color, cb) => {
-      const b = this.add.rectangle(bx, cy + 16, 92, 30, color, 1).setOrigin(0.5).setDepth(D + 1)
+      const b = this.add.rectangle(bx, cy + 16, 96, 30, color, 1).setOrigin(0.5).setDepth(D + 1)
         .setInteractive({ useHandCursor: true });
       b.on('pointerdown', cb);
       mk.push(b);
-      mk.push(this.add.text(bx, cy + 16, text, { fontFamily: 'Arial', fontSize: '14px', color: '#FFFFFF', fontStyle: 'bold' })
+      mk.push(this.add.text(bx, cy + 16, text, { fontFamily: 'Arial', fontSize: '13px', color: '#FFFFFF', fontStyle: 'bold' })
         .setOrigin(0.5).setDepth(D + 2));
     };
-    mkBtn(cx - 100, 'RESET', 0xFF39AF, () => this._resetControlsLayout());    // neon pink (like BRAKE)
-    mkBtn(cx,       'UNDO',  0x2BC44E, () => this._undoControlsLayout());      // green (like the $)
-    mkBtn(cx + 100, 'SAVE',  0x39A8FF, () => this._exitControlsEditor());      // neon blue (like ACCEL); saves the layout on exit
+    mkBtn(cx - 153, 'RESET', 0xFF39AF, () => this._resetControlsLayout());    // neon pink (like BRAKE)
+    mkBtn(cx - 51,  'UNDO',  0x2BC44E, () => this._undoControlsLayout());      // green (like the $)
+    mkBtn(cx + 51,  'COPY',  0xF2A73B, () => this._copyHudLayout());          // amber — export layout JSON
+    mkBtn(cx + 153, 'SAVE',  0x39A8FF, () => this._exitControlsEditor());     // neon blue (like ACCEL); saves the layout on exit
     this._ctrlEditObjs = mk;
     this._hudObjects?.push(...mk);
     this.cameras?.main?.ignore?.(mk);           // UI-camera only
@@ -19113,6 +19142,9 @@ export class GameScene extends Phaser.Scene {
     const selectAndRefresh = () => {
       save.selectSlot?.(i);
       this.registry.get('stats')?.reload?.();
+      // Each plate carries its own starting genre — mirror the newly-active
+      // plate's genre into rtr.genre and reskin the art (owner 2026-07-17).
+      try { window.__genre?.syncActive?.(); } catch (_) {}
       this._refreshPlateSlots();
     };
     if (save.slotUsed?.(i)) {
@@ -19588,7 +19620,7 @@ export class GameScene extends Phaser.Scene {
       // every deployable and the disguise so all slots show and are usable.
       if (this.cops) {
         this.cops.f12Tokens = [];
-        this.cops.coalAmmo  = 18;
+        this.cops.coalAmmo  = 3;
         this.cops.f12Tokens.push('coal');
         for (const w of ['fireworks', 'paint_bomb', 'disguise']) {
           for (let i = 0; i < 3; i++) this.cops.f12Tokens.push(w);
