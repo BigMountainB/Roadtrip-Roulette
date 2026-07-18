@@ -110,10 +110,11 @@ const STATION_TRACKS = {
 };
 
 const STATIONS = [
-  // ── PHONK — drift-phonk MP3s, default station (index 0) for new runs ─
-  // Procedural fallback fields are silent; real MP3s drive playback.
+  // Culture-pack station names replace the retired Arcade/Synthwave grid while
+  // retaining every station index and its current audio slot.  This preserves
+  // saved defaults until the matching music folders are reorganized.
   {
-    name: 'PHONK', color: '#E11D48', bpm: 145,
+    name: 'HIP-HOP / PHONK', culture: 'hiphop_phonk', trackKey: 'PHONK', color: '#A855F7', bpm: 145,
     melody: { type: 'triangle', notes: [0,0,0,0], gain: 0.0 },
     bass:   { notes: [0], gain: 0.0 },
     drums:  { kick: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -121,10 +122,9 @@ const STATIONS = [
               hat:  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] },
   },
 
-  // ── ARCADE — chiptune-style instrumentals ──────────────────────────
-  // Procedural fallback fields are silent; real MP3s drive playback.
+  // Former ARCADE slot.
   {
-    name: 'ARCADE', color: '#33DD66', bpm: 132,
+    name: 'POP-PUNK / EMO', culture: 'pop_punk_emo', trackKey: 'ARCADE', color: '#FF4D9D', bpm: 132,
     melody: { type: 'triangle', notes: [0,0,0,0], gain: 0.0 },
     bass:   { notes: [0], gain: 0.0 },
     drums:  { kick: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -132,9 +132,9 @@ const STATIONS = [
               hat:  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] },
   },
 
-  // ── SYNTHWAVE — detuned saw chorus, 80s Am-F-C-G progression ─────────
+  // Former SYNTHWAVE slot.
   {
-    name: 'SYNTHWAVE', color: '#FF6EC7', bpm: 118,
+    name: 'NORTEÑO', culture: 'norteno', trackKey: 'SYNTHWAVE', color: '#20D7C5', bpm: 118,
     melody: {
       chorus: true, detune: 12, harmony: 1.498, reverb: 0.45, stereo: 0.7,
       notes: [
@@ -174,11 +174,11 @@ const STATIONS = [
     },
   },
 
-  // ── HIP-HOP — triangle piano, sub-bass 808 kick, trap hats ───────────
+  // Former standalone HIP-HOP slot.
   // 4 melody phrases cycled per-bar so the loop doesn't feel like a 4-second
   // jingle. This is the default / startup station.
   {
-    name: 'HIP-HOP', color: '#AA44FF', bpm: 88,
+    name: 'REGGAETON', culture: 'reggaeton', trackKey: 'HIP-HOP', color: '#FFB000', bpm: 88,
     melody: {
       type: 'triangle', reverb: 0.55, stereo: 0.5,
       notes: [
@@ -239,7 +239,7 @@ const STATIONS = [
 
   // ── CLASSIC ROCK — distorted sawtooth, E-minor pentatonic riff ────────
   {
-    name: 'CLASSIC ROCK', color: '#FF8800', bpm: 130,
+    name: 'CLASSIC ROCK', culture: 'classic_rock', color: '#FF7A1A', bpm: 130,
     melody: {
       type: 'sawtooth', distort: true, powerChord: true, reverb: 0.3, stereo: 0.6,
       notes: [
@@ -281,7 +281,7 @@ const STATIONS = [
 
   // ── EDM — 5-oscillator supersaw, 4-on-floor, open hats ───────────────
   {
-    name: 'EDM', color: '#00EEFF', bpm: 128,
+    name: 'EDM / RAVE', culture: 'edm_rave', trackKey: 'EDM', color: '#00EEFF', bpm: 128,
     melody: {
       supersaw: true, reverb: 0.6, stereo: 0.85,
       notes: [
@@ -323,7 +323,7 @@ const STATIONS = [
 
   // ── COUNTRY — triangle twang, G major, boom-chick bass ───────────────
   {
-    name: 'COUNTRY', color: '#AADD44', bpm: 104,
+    name: 'COUNTRY', culture: 'country', color: '#E7A83E', bpm: 104,
     melody: {
       type: 'triangle', reverb: 0.35, stereo: 0.4,
       notes: [
@@ -365,7 +365,7 @@ const STATIONS = [
 
   // ── REGGAE — off-beat skank, deep bass walks ────────────────────────
   {
-    name: 'REGGAE', color: '#22BB44', bpm: 78,
+    name: 'REGGAE', culture: 'reggae', color: '#36C95B', bpm: 78,
     melody: {
       type: 'triangle', reverb: 0.5, stereo: 0.6,
       notes: [
@@ -402,7 +402,7 @@ const STATIONS = [
 
   // ── K-POP — real-track only.  Procedural fields silent fallback. ────
   {
-    name: 'K-POP', color: '#FF44AA', bpm: 110,
+    name: 'K-POP', culture: 'k_pop', color: '#FF5CB8', bpm: 110,
     melody: { type: 'triangle', notes: [0,0,0,0], gain: 0.0 },
     bass:   { notes: [0], gain: 0.0 },
     drums:  { kick: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -414,7 +414,7 @@ const STATIONS = [
   // Appended last so existing station indices (PHONK=0 default, etc.) are
   // unchanged.
   {
-    name: 'METAL', color: '#9FB2C4', bpm: 150,
+    name: 'METAL', culture: 'metal', color: '#C4CFDA', bpm: 150,
     melody: { type: 'triangle', notes: [0,0,0,0], gain: 0.0 },
     bass:   { notes: [0], gain: 0.0 },
     drums:  { kick: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -426,7 +426,7 @@ const STATIONS = [
 // Annotate each station with its track list (if any).  Procedural-only
 // stations (Synthwave, Classic Rock, Ancient Chinese) get an empty list.
 for (const st of STATIONS) {
-  st.tracks = STATION_TRACKS[st.name] ?? [];
+  st.tracks = STATION_TRACKS[st.trackKey ?? st.name] ?? [];
 }
 
 export class AudioSystem {
@@ -671,6 +671,7 @@ export class AudioSystem {
       index:  i,
       name:   s.name,
       color:  s.color,
+      culture: s.culture,
       tracks: (s.tracks ?? []).slice(),
     }));
   }
