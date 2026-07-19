@@ -4469,7 +4469,9 @@ export class GameScene extends Phaser.Scene {
         + Math.max(0, this._curGrade ?? 0) * FUEL_BURN_CLIMB
         + (this._isBoost() ? FUEL_BURN_BOOST : 0)
         + (this._engineLimp ? FUEL_BURN_HOT : 0);
-      this.player.gasMi = Math.max(0, this.player.gasMi - _odoDelta * burnMul);
+      // Genre-vehicle fuel: burn × (owner 2026-07-19); +range reads as less burn.
+      const _fuelMul = this._traitMod('fuelBurnMult') / Math.max(0.1, this._traitMod('fuelRangeMult'));
+      this.player.gasMi = Math.max(0, this.player.gasMi - _odoDelta * burnMul * _fuelMul);
       if (this.player.gasMi <= 0 && !this._strandedShown) {
         this._strandedShown = true;
         this._showPopup?.('⛽ OUT OF GAS — calling tow…', '#FF4444');
@@ -4483,7 +4485,16 @@ export class GameScene extends Phaser.Scene {
     const passed     = currentSeg - this.lastSegIdx;
     if (passed > 0) {
       const _distBase = passed * PTS_DIST;
-      const _distEarn = _distBase * this._scoreMult();
+      // Genre-vehicle driving-cash modifiers (owner 2026-07-19): flat rate ×
+      // bonus-earnings (reggae 0.80) × hi-speed bonus above its gate (classic-
+      // rock +30% over 120 mph) × low-HP bonus under its gate (pop-punk +50%
+      // below 25 HP).
+      let _gvCash = this._traitMod('drivingCashMult') * this._traitMod('drivingBonusEarningsMult');
+      const _hiGate = this._traitMod('hiSpeedCashMinMph');
+      if (_hiGate > 0 && this._displayMPH() > _hiGate) _gvCash *= this._traitMod('drivingCashHiSpeedMult');
+      const _hpGate = this._traitMod('lowHpBonusHp');
+      if (_hpGate > 0 && (this.damage?.getDurability?.() ?? 999) < _hpGate) _gvCash *= this._traitMod('lowHpBonusMult');
+      const _distEarn = _distBase * this._scoreMult() * _gvCash;
       this.score    += _distEarn;
       this.stats?.recordEarn(_distEarn, 'distance', _distBase);
       this.lastSegIdx = currentSeg;
@@ -4515,10 +4526,12 @@ export class GameScene extends Phaser.Scene {
       const trafficStop = this._trapPursuitActive || this._trapStopping || this._trapStopHeld;
       let penalty   = 0;
 
-      if (dispMph < 80 && !fentActive && !weedHigh && !viceSlowing && !trafficStop) {
-        // 80 mph and below = "slow".  -$5/sec floor at 20 mph, linear up to 0
-        // at 80 mph (same penalty slope as before, just the threshold moved).
-        const slowness = Math.min(1, (80 - dispMph) / 60);
+      // Genre-vehicle low-speed full-earn (reggae: 70–99 mph earns the full rate
+      // → the slow-penalty threshold drops from 80 to 70). owner 2026-07-19.
+      const _slowThresh = this._traitMod('lowSpeedFullEarnMinMph') || 80;
+      if (dispMph < _slowThresh && !fentActive && !weedHigh && !viceSlowing && !trafficStop) {
+        // -$5/sec floor at 20 mph, linear up to 0 at the threshold.
+        const slowness = Math.min(1, (_slowThresh - dispMph) / Math.max(1, _slowThresh - 20));
         penalty += 5 * slowness * mult;
       }
       if (Math.abs(this.player.x) > 1 && !trafficStop) {
@@ -4929,8 +4942,15 @@ export class GameScene extends Phaser.Scene {
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
     const nosBonus  = nosTier * 5;
     const upMph     = this._upgradeFx?.topMph ?? 0;   // engine/tire upgrades + buffs
-    const cruiseMph = _vehSpec.topMph + cokeBonus + methBonus + nosBonus + upMph;
-    const boostMph  = _vehSpec.topMph + (_vehSpec.boostMph ?? 20) + cokeBonus + methBonus + nosBonus + upMph;
+    // Genre-vehicle top speed (owner 2026-07-19): a trait's topSpeedMph is the
+    // PEDAL-DOWN (boost) top; caffeine/upgrade bonuses stack ON TOP. Cruise sits
+    // one boost-delta below it. Non-genre vehicles keep their VEHICLES.topMph.
+    const _gvt        = this._activeGenreTrait();
+    const _boostDelta = _vehSpec.boostMph ?? 20;
+    const _cruiseBase = _gvt ? Math.max(0, _gvt.topSpeedMph - _boostDelta) : _vehSpec.topMph;
+    const _boostBase  = _gvt ? _gvt.topSpeedMph : (_vehSpec.topMph + _boostDelta);
+    const cruiseMph = _cruiseBase + cokeBonus + methBonus + nosBonus + upMph;
+    const boostMph  = _boostBase  + cokeBonus + methBonus + nosBonus + upMph;
     const slowMph   = 60;
     const mphToUnits = (mph) => MAX_SPEED * (mph / 120);
 
@@ -5073,7 +5093,8 @@ export class GameScene extends Phaser.Scene {
 
     if (p.speed < targetSpeed) {
       // Weed (when alone) reduces ACCEL — slower throttle response.
-      p.speed = Math.min(targetSpeed, p.speed + ACCEL * (phys.accelMul ?? 1) * dt * 60);
+      // Genre-vehicle acceleration modifier (owner 2026-07-19).
+      p.speed = Math.min(targetSpeed, p.speed + ACCEL * (phys.accelMul ?? 1) * this._traitMod('accelerationMult') * dt * 60);
     } else if (p.speed > targetSpeed) {
       // Brake decel scales with weather grip — wet/snowy roads lengthen
       // the stopping distance.  Quick local peek at Weather so the
@@ -5088,7 +5109,8 @@ export class GameScene extends Phaser.Scene {
       if (_wState === 'rain') brakeGrip = 1 - 0.25 * _wInten * _wSev;
       if (_wState === 'snow') brakeGrip = 1 - 0.45 * _wInten * _wSev;
       brakeGrip = Math.max(0.20, brakeGrip);   // floor so brake never fully fails
-      p.speed = Math.max(targetSpeed, p.speed - BRAKE * brakeGrip * dt * 60);
+      // Genre-vehicle braking modifier (<1 ⇒ longer stopping distance).
+      p.speed = Math.max(targetSpeed, p.speed - BRAKE * brakeGrip * this._traitMod('brakingMult') * dt * 60);
     }
 
     // Steering with momentum — digital L/R input is EASED by the steer-input
@@ -5397,13 +5419,17 @@ export class GameScene extends Phaser.Scene {
     const DIGITAL_SNOW_SENS = 1.2;   // up to +120% sensitivity at full snow
     // Only twitch-punish digital steering when tilt is a real alternative
     // (_tiltCoax) — otherwise (tilt unavailable) keep L/R + tap responsive.
+    // Genre-vehicle snow/hazard steering-penalty modifier (owner 2026-07-19):
+    // scales the EXTRA snow twitch (hazardSteeringPenaltyMult × snow-specific).
+    const _hazSteer = this._traitMod('hazardSteeringPenaltyMult') * this._traitMod('snowSteeringPenaltyMult');
     const _snowSensMul = (wState === 'snow' && _mode !== 'tilt' && _tiltCoax)
-      ? 1 + DIGITAL_SNOW_SENS * _snowRamp
+      ? 1 + DIGITAL_SNOW_SENS * _snowRamp * _hazSteer
       : 1;
     const desiredLateral = effectiveSteerDir * TURN_SPEED
                          * (phys.steerSensitivity ?? 1)
                          * vehicleTurnRate
-                         * _snowSensMul;
+                         * _snowSensMul
+                         * this._traitMod('steeringMult');   // genre-vehicle steering response
 
     // Heroin "input lag" — slows the settle in both directions.
     // steerReturnSlow further slows the release (when the driver isn't
@@ -8757,6 +8783,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     let adj = amount * (Difficulty.damageMul() ?? 1);
+    // Genre-vehicle damage modifiers (owner 2026-07-19): all-source × source-
+    // specific. metal's collision+police −30% rides damageTakenMult; k-pop/
+    // reggaeton/edm boost collisionDamageMult; pop-punk boosts sceneryDamageMult.
+    adj *= this._traitMod('damageTakenMult');
+    if (isCollision) {
+      const _scenerySrc = source === 'tree_wall' || source === 'utility_pole'
+        || source === 'wind_sign_pole' || source === 'shrub_glance'
+        || source === 'scenery_crash' || (typeof source === 'string' && source.includes('rail'));
+      adj *= _scenerySrc ? this._traitMod('sceneryDamageMult') : this._traitMod('collisionDamageMult');
+    }
 
     if (isCollision) {
       // Meth's "+1 per crash" is a per-IMPACT penalty.  Six damage sources are
@@ -8940,6 +8976,13 @@ export class GameScene extends Phaser.Scene {
   _refreshGenreTrait() {
     const genre = this.registry?.get?.('save')?.get?.('genre', null) ?? null;
     this._genreTrait = genreTraitFor(genre, this.player?.vehicleId);
+    // Push cop-side modifiers to CopSystem (no genre dependency there) so its
+    // own decay/ticket/warning logic reads them without a conditional.
+    if (this.cops) {
+      this.cops._traitWantedDecayMult = this._traitMod('wantedDecayMult');
+      this.cops._traitTicketSurcharge = this._traitMod('ticketSurcharge');
+      this.cops._traitNoWarning       = !!this._traitMod('noPoliceWarning');
+    }
     return this._genreTrait;
   }
   _activeGenreTrait() {
@@ -20513,6 +20556,9 @@ export class GameScene extends Phaser.Scene {
     let fine = Math.min(COP_TICKET_SPEEDING_CAP,
       Math.round(Math.max(0, this.score) * COP_TICKET_SPEEDING_FRAC));
     if (hasLawyer) fine = 0;
+    // Genre-vehicle ticket surcharge (reggae +$200) — added AFTER the lawyer
+    // discount, so every ticket still costs it (owner 2026-07-19).
+    fine += this._traitMod('ticketSurcharge');
 
     this.score = Math.max(0, this.score - fine);
     this.stats?.recordTrafficStop({ dui: false, amountPaid: fine, busted: false });

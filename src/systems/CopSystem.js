@@ -766,7 +766,9 @@ export class CopSystem {
       // is overhead and the wanted level is LOCKED.  Only a rest-stop
       // paint job (`clearStars`) drops the player out of 5★.
       if (this.starTimer <= 0 && !this.helicopterActive) {
-        this.stars = Math.max(0, this.stars - dt / 60);
+        // Genre-vehicle wanted-decay modifier (<1 ⇒ slower). Pushed from
+        // GameScene._refreshGenreTrait; neutral (×1) for non-genre vehicles.
+        this.stars = Math.max(0, this.stars - (dt / 60) * (this._traitWantedDecayMult ?? 1));
         if (this.stars < 0.5) {
           this.bumpCount = this.rearBumpCount = this.headOnCount = this.pitCount = 0;
           this.arrestPending = false;
