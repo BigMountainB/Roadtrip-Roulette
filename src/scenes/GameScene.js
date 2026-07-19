@@ -19978,7 +19978,20 @@ export class GameScene extends Phaser.Scene {
     // First-ever run: ask the player to set their license plate (their
     // name on the leaderboard).  DOM popup so the native keyboard is used;
     // only shows when no plate is saved yet, so it appears exactly once.
-    if (window.__plate?.needsEntry?.()) window.showPlateModal?.();
+    // BUT NOT during the guided tutorial: it has its OWN plate step (the
+    // landscape title, step 0, which the tour's poll gates on). A run that
+    // starts mid-tutorial (e.g. a Calendar test-run tapped during the portrait
+    // tour) was auto-popping this modal BEFORE the tutorial reached the plate
+    // section (owner 2026-07-19). Let the tutorial own plate entry; normal
+    // (non-tutorial) first runs still prompt here.
+    let _tutBusy = !!this._titleTut;
+    try {
+      _tutBusy = _tutBusy
+        || !!window.__tut?.active?.()
+        || !!localStorage.getItem('rtr_tutStage1')
+        || !!localStorage.getItem('rtr_tutStage2');
+    } catch (_) {}
+    if (!_tutBusy && window.__plate?.needsEntry?.()) window.showPlateModal?.();
     // Grace window — the START button's own pointerdown is currently
     // mid-dispatch, so any once-listener attached now would fire for
     // the same event and clear the flag immediately.  Delay listener
