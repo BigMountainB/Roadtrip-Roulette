@@ -1786,7 +1786,10 @@
         // border overflows into the black letterbox where it's invisible.
         // coverState stays the full-image transform, so all data-px math is
         // untouched.
-        const EDGE = 15;
+        // 18px margin (was 15) — owner 2026-07-19 wanted the menu art ~3px
+        // smaller on every side so the bottom rotate strip clears the iPhone's
+        // home-indicator bar.
+        const EDGE = 18;
         // VISIBLE content box (luminance-measured, identical on all skins):
         // bright art spans rows 106–1711 / cols 41–813 of the 853×1844 file.
         // The earlier {t:100,b:37} box included ~95px of essentially-black
