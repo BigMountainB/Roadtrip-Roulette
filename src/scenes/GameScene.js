@@ -42,7 +42,7 @@ import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
 import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '../utils/Colors.js';
 import { getUpgradeEffects, getInstalledUpgrade } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
-import { genreTraitFor, mult as traitMult, rollWeaponBonusUse } from '../data/genreVehicleTraits.js';
+import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs } from '../data/genreVehicleTraits.js';
 
 const CAM_DEPTH = 0.84;
 const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
@@ -499,6 +499,7 @@ export class GameScene extends Phaser.Scene {
     this._engineTemp          = ENGINE_TEMP_START;
     this._engineLimp          = false;
     this._overheatIgnoredLeg  = false;   // classic-rock: 1 shrugged overheat / leg
+    this._cargoShieldUsed     = false;   // norteño: cargo survives 1 minor collision
     this._curGrade            = 0;
     this._playerCopCrashes    = 0;
     this._copCrashCount       = 0;
@@ -8857,7 +8858,17 @@ export class GameScene extends Phaser.Scene {
       this._noDamageFlags = { '1m': false, '2m': false, '3m': false, '5m': false };
       // Fragile cargo + passenger comfort track crash damage; over the cap
       // (or one HARD hit for a nervous rider) = failed.
-      const _mFailed = this.missions?.onDamage?.(adj, source) ?? [];
+      // Norteño cargo shield: the FIRST minor collision on a delivery run is
+      // shrugged off (consumed once; the flag resets on scene restart so it
+      // can't double-apply) — owner 2026-07-19.
+      let _mFailed = [];
+      if (isCollision && this.missions?.hasActiveOfType?.('delivery')
+          && cargoShieldAbsorbs(this._activeGenreTrait(), this._cargoShieldUsed, adj)) {
+        this._cargoShieldUsed = true;
+        this._showPopup?.('📦 CARGO HELD — shrugged off a hit!', '#39FF8A');
+      } else {
+        _mFailed = this.missions?.onDamage?.(adj, source) ?? [];
+      }
       for (const _m of _mFailed) {
         this._showPopup?.(_m.type === 'passenger'
           ? `🧍 ${_m.passenger?.name ?? 'Passenger'} bailed — ${_m.failReason === 'passenger_sick' ? 'too carsick to go on' : 'that crash was the last straw'}. No fare.`

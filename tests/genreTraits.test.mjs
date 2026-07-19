@@ -10,6 +10,7 @@
 import {
   GENRE_VEHICLE_TRAITS, MODIFIER_DEFAULTS, STARTER_VEHICLE_ID,
   genreTraitFor, traitMods, mult, traitTopSpeedMph, rollWeaponBonusUse,
+  cargoShieldAbsorbs, CARGO_MINOR_DMG,
 } from '../src/data/genreVehicleTraits.js';
 
 let passed = 0, failed = 0;
@@ -89,6 +90,16 @@ check('metal bonus-use skips at rng = 0.20', rollWeaponBonusUse(_metal, () => 0.
 check('metal bonus-use skips when rng high', rollWeaponBonusUse(_metal, () => 0.99) === false);
 check('non-metal never bonus-uses', rollWeaponBonusUse(genreTraitFor('country', 'beater'), () => 0.0) === false);
 check('null trait never bonus-uses', rollWeaponBonusUse(null, () => 0.0) === false);
+
+// ── 7. Norteño cargo collision shield (consume-once) ─────────────────────
+const _nor = genreTraitFor('norteno', 'beater');
+check('norteño absorbs a minor collision when unused', cargoShieldAbsorbs(_nor, false, 8) === true);
+check('norteño does NOT absorb once used (consume-once)', cargoShieldAbsorbs(_nor, true, 8) === false);
+check('norteño does NOT absorb a heavy hit', cargoShieldAbsorbs(_nor, false, CARGO_MINOR_DMG + 1) === false);
+check('norteño absorbs exactly at the minor threshold', cargoShieldAbsorbs(_nor, false, CARGO_MINOR_DMG) === true);
+check('norteño ignores zero/negative damage', cargoShieldAbsorbs(_nor, false, 0) === false);
+check('non-norteño never absorbs', cargoShieldAbsorbs(genreTraitFor('metal', 'beater'), false, 8) === false);
+check('null trait never absorbs', cargoShieldAbsorbs(null, false, 8) === false);
 
 console.log(`\ngenreTraits.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

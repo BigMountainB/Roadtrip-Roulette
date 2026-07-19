@@ -340,3 +340,13 @@ export function traitTopSpeedMph(trait) {
 export function rollWeaponBonusUse(trait, rng = Math.random) {
   return rng() < mult(trait, 'weaponBonusUseChance');
 }
+
+/** Damage below this counts as a "minor" collision for the Norteño cargo shield. */
+export const CARGO_MINOR_DMG = 12;
+
+/** Norteño Custom Pickup: does this collision get ABSORBED by the cargo shield?
+ *  Cargo survives ONE minor collision per run — pure/testable, the caller owns
+ *  the `alreadyUsed` flag (reset on scene restart so it can't double-apply). */
+export function cargoShieldAbsorbs(trait, alreadyUsed, damageAmount, minorThreshold = CARGO_MINOR_DMG) {
+  return !alreadyUsed && mult(trait, 'cargoCollisionShield') > 0 && damageAmount > 0 && damageAmount <= minorThreshold;
+}
