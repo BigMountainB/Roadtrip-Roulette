@@ -85,12 +85,17 @@ export class SurvivalSystem {
     this._lastMile = mile ?? 0;
     if (dMi <= 0) return;
 
+    // Genre-vehicle survival-drain modifier (owner 2026-07-19): scales the RATE
+    // of food/drink/alertness change this frame. GameScene folds the general,
+    // low-speed and while-boosting mults into ctx.drainMul; neutral (×1) else.
+    const drainMul = ctx.drainMul ?? 1;
+
     // Fullness + hydration drain toward empty/dry.  Inside the 25–75 sweet
     // zone they drain 25% FASTER (2026-07-15: the multiplier window shouldn't
     // be a resting state), slower again above 75 / below 25.  If a diuretic
     // pool is pending, claw back a bit of hydration each mile until it's spent.
     const zone = (v) => (v > 25 && v < 75) ? 1.25 : 1.0;
-    const _fDrain = DRIFT.fullness * zone(this.fullness) * dMi;   // this frame's normal food drain (negative)
+    const _fDrain = DRIFT.fullness * zone(this.fullness) * dMi * drainMul;   // this frame's normal food drain (negative)
     this.fullness  = clamp(this.fullness  + _fDrain);
     // Post-restroom fast-digest: the food you HAD when you used the restroom
     // burns off 70% faster, and that boost DIMINISHES as the pool empties. New
@@ -101,7 +106,7 @@ export class SurvivalSystem {
       this.fullness    = clamp(this.fullness - extra);
       this.foodFastPool -= extra;
     }
-    this.hydration = clamp(this.hydration + DRIFT.hydration * zone(this.hydration) * dMi);
+    this.hydration = clamp(this.hydration + DRIFT.hydration * zone(this.hydration) * dMi * drainMul);
     if (this.diuretic > 0) {
       const d = Math.min(this.diuretic, DIURETIC_DRAIN * dMi);
       this.hydration = clamp(this.hydration - d);
@@ -118,7 +123,7 @@ export class SurvivalSystem {
     if (this.hydration < 25) mult *= 1.5;                       // dehydrated
     if (this.fullness  > 75) mult *= 1 + 0.4 * ((this.fullness - 75) / 25); // food coma ramp
     if (this.inWithdrawal()) mult *= 1.25;
-    this.tiredness = clamp(this.tiredness + DRIFT.tiredness * dMi * mult);
+    this.tiredness = clamp(this.tiredness + DRIFT.tiredness * dMi * mult * drainMul);
 
     // Nausea: winding road induces motion sickness; empty road lets it settle.
     const curve = ctx.curvature ?? 0;

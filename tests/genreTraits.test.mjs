@@ -9,7 +9,7 @@
 
 import {
   GENRE_VEHICLE_TRAITS, MODIFIER_DEFAULTS, STARTER_VEHICLE_ID,
-  genreTraitFor, traitMods, mult, traitTopSpeedMph,
+  genreTraitFor, traitMods, mult, traitTopSpeedMph, rollWeaponBonusUse,
 } from '../src/data/genreVehicleTraits.js';
 
 let passed = 0, failed = 0;
@@ -81,6 +81,14 @@ for (const k of KEYS) {
     check(`${k}.${field} is a known modifier`, Object.prototype.hasOwnProperty.call(MODIFIER_DEFAULTS, field));
   }
 }
+
+// ── 6. Metal bonus-use with controlled randomness ────────────────────────
+const _metal = genreTraitFor('metal', 'beater');
+check('metal bonus-use fires when rng < 0.20', rollWeaponBonusUse(_metal, () => 0.19) === true);
+check('metal bonus-use skips at rng = 0.20', rollWeaponBonusUse(_metal, () => 0.20) === false);
+check('metal bonus-use skips when rng high', rollWeaponBonusUse(_metal, () => 0.99) === false);
+check('non-metal never bonus-uses', rollWeaponBonusUse(genreTraitFor('country', 'beater'), () => 0.0) === false);
+check('null trait never bonus-uses', rollWeaponBonusUse(null, () => 0.0) === false);
 
 console.log(`\ngenreTraits.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

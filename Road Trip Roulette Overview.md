@@ -114,6 +114,30 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-19 (pt 4) — Genre Vehicle Traits system + playtest fixes — LOCAL (unpushed)
+Data-driven gameplay identity for the 10 culture STARTER vehicles (the re-skinned beater); purchased
+non-culture vehicles keep normal VEHICLES stats.
+- **Config** `src/data/genreVehicleTraits.js`: each of the 10 with explicit modifier fields (neutral
+  defaults), 2–3 strengths, 1–2 weaknesses, a unique top-speed, player-facing name. `genreTraitFor(genre,
+  vehicleId)` resolves ONLY on the beater with a culture set (else null); `traitMods()/mult()` read with
+  neutral fallbacks. Trait is DERIVED (never stored) so it can't double-apply on resume/restart. Accessor
+  in GameScene: `_activeGenreTrait()` / `_traitMod(field)`.
+- **Integrated so far**: top-speed (pedal-DOWN top; caffeine/upgrades stack; cruise one boost-delta below),
+  accel/brake/steering mults, snow-steering penalty (hazard × snow), damage (all × collision/scenery),
+  fuel (burn × 1/range), max-HP, wanted-decay (pushed to CopSystem), ticket surcharge, driving cash (flat ×
+  bonus-earnings × hi-speed>gate × low-HP<gate), reggae low-speed full-earn, survival drains (general ×
+  <100mph × boosting via ctx), engine "ignore first overheat / leg" (per-leg flag, resets on region change
+  + restart), metal weapon bonus-use (rng-injectable helper). Tests: 148 (config, resolution, top-speeds,
+  multiplier math, bonus-use RNG).
+- **Still to wire**: mission payouts (passenger/timed/cargo) + cargo collision shield (cross-scene via a
+  published trait-mods object), F12 effect duration, pickup radius, survival BENEFITS (drink/caffeine/
+  overfill at applyItem), boost strength/duration, hazard instability, repair/upgrade cost, no-warning +
+  first-violation-star, the garage trait panel, and the long-hold strengths/weaknesses popup (target
+  surface TBD with owner).
+- **Playtest fixes (shipped in the same batch of commits)**: region gold-pulse (dropped NOW ENTERING),
+  gold invincibility flash, coal first-fire slow, donut in-lane 1s hold + straight recede, one NPC per rest
+  stop, invisible pedals w/ gold throbbing glow, "COP HIT +1 ⭐" + lowered Pursuit/cop-hit HUD.
+
 ### 2026-07-19 (pt 3) — Vendors, CarGo rework, mission dialogue, editor reset — SHIPPED 2026-07-19
 - **Gas at Gas-N-Sip + AM/BM** (`RestStopScene`): both convenience stops now offer the same REFUEL as the
   gas tab (shared item ⇒ topping off anywhere fills the tank once). CarGo/Huff's already sold gas.

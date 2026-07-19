@@ -42,7 +42,7 @@ import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
 import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '../utils/Colors.js';
 import { getUpgradeEffects, getInstalledUpgrade } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
-import { genreTraitFor, mult as traitMult } from '../data/genreVehicleTraits.js';
+import { genreTraitFor, mult as traitMult, rollWeaponBonusUse } from '../data/genreVehicleTraits.js';
 
 const CAM_DEPTH = 0.84;
 const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
@@ -498,6 +498,7 @@ export class GameScene extends Phaser.Scene {
     // by the Cooling stat; >92 = limp mode (see _updatePlayer).
     this._engineTemp          = ENGINE_TEMP_START;
     this._engineLimp          = false;
+    this._overheatIgnoredLeg  = false;   // classic-rock: 1 shrugged overheat / leg
     this._curGrade            = 0;
     this._playerCopCrashes    = 0;
     this._copCrashCount       = 0;
@@ -3864,7 +3865,11 @@ export class GameScene extends Phaser.Scene {
     if (this.survival && !this._awaitingStart) {
       const _seg = this.road.getSegment?.(this.player.position);
       const _curv = Math.min(1, Math.abs(_seg?.curve ?? 0) * 220);
-      this.survival.update(this._odometer ?? 0, { curvature: _curv });
+      // Genre-vehicle survival-drain modifier: general × below-100mph × boosting.
+      let _drainMul = this._traitMod('survivalDrainMult');
+      if (this._displayMPH() < 100) _drainMul *= this._traitMod('survivalDrainLoSpeedMult');
+      if (this._isBoost())          _drainMul *= this._traitMod('survivalDrainBoostMult');
+      this.survival.update(this._odometer ?? 0, { curvature: _curv, drainMul: _drainMul });
       this._checkViceUnlocks();
 
       // ── Effect bridge: drive the legacy EffectsSystem visuals from survival
@@ -4739,6 +4744,7 @@ export class GameScene extends Phaser.Scene {
     const region = this._regionIndex(progress);
     if (region !== this._prevRegion) {
       this._prevRegion = region;
+      this._overheatIgnoredLeg = false;   // new leg → classic-rock's free overheat resets
       this.cops.clearStarsAtStateLine();
       // Owner 2026-07-19: no more "NOW ENTERING" banner — just pulse the
       // lower-right location gold for 3s. (Star drop still shows on the HUD.)
@@ -5023,7 +5029,18 @@ export class GameScene extends Phaser.Scene {
       this._engineTemp  = Math.max(0, Math.min(120, this._engineTemp));
       // Limp hysteresis: engage at LIMP_TEMP, release only under LIMP_CLEAR.
       if (this._engineLimp) { if (this._engineTemp < ENGINE_LIMP_CLEAR) this._engineLimp = false; }
-      else if (this._engineTemp >= ENGINE_LIMP_TEMP) this._engineLimp = true;
+      else if (this._engineTemp >= ENGINE_LIMP_TEMP) {
+        // Genre-vehicle "ignore first overheat per leg" (classic-rock): the
+        // FIRST would-be limp of the route leg is shrugged off — vent below the
+        // limp threshold instead of engaging. The per-leg flag resets on a
+        // region change + scene restart, so it can't double-apply (owner 2026-07-19).
+        if (this._traitMod('ignoreFirstOverheatPerLeg') && !this._overheatIgnoredLeg) {
+          this._overheatIgnoredLeg = true;
+          this._engineTemp = ENGINE_LIMP_CLEAR - 1;
+        } else {
+          this._engineLimp = true;
+        }
+      }
       if (this._engineLimp) {
         targetSpeed *= ENGINE_LIMP_MULT;
         // Normal/Hard: flogging a redlined engine (moving, not braking) hurts it.
@@ -9588,6 +9605,11 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       this.cops.addF12Token(sprite.type);
+      // Metal War Van: 20% chance a weapon pickup grants a BONUS use.
+      if (rollWeaponBonusUse(this._activeGenreTrait())) {
+        this.cops.addF12Token(sprite.type);
+        this._showPopup?.('🎸 BONUS AMMO!', '#FFD24D');
+      }
       this.stats?.recordWeaponCollected(invType ?? sprite.type);
       const labels = {
         f12_coal:      '💨 ROLLING COAL',

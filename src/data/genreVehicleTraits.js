@@ -334,3 +334,9 @@ export function mult(trait, field) {
 export function traitTopSpeedMph(trait) {
   return trait?.topSpeedMph ?? null;
 }
+
+/** Metal War Van: roll whether a weapon pickup grants a BONUS use.
+ *  Pure + rng-injectable so it's unit-testable with controlled randomness. */
+export function rollWeaponBonusUse(trait, rng = Math.random) {
+  return rng() < mult(trait, 'weaponBonusUseChance');
+}
