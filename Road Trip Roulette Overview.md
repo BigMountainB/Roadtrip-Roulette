@@ -114,6 +114,24 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-18 — Responsive layout: menu fill + gameplay HUD safety — LOCAL (unpushed)
+Two device-size fixes from the iPad screenshots (bottom red line clipped; gameplay HUD cut on both sides).
+- **Phone menu** (`index.html` `recomputeCover`): was CONTAIN (`Math.min` + 15px margin → letterboxed all
+  four sides). Now **height-pinned fill** (`scale = vh / ch`): the visible content box always fills the
+  viewport top-to-bottom, so the weather widget (top) and rotate strip (bottom) are NEVER cropped —
+  pinning the height *is* the crop cap that keeps tablet aspect correct. The crop budget goes to WIDTH:
+  modern phones (aspect ~0.46) COVER edge-to-edge (~8px side crop), wider/tablet aspects letterbox the
+  sides only. Whole composite (art + hit zones share `coverState`) lifts **5px** so the bottom red line
+  clears the edge/Safari bar; the near-black bottom dead-border trails below to fill the vacated 5px (no
+  visible gap). Verified via math at SE/15/Pro Max/iPad-portrait.
+- **Gameplay canvas** (`src/constants.js` `setWorldWidth`): the HUD is an 800-wide band centered via
+  `HUD_OFFSET_X`, but edge controls bleed past it (brake x−39, accel x834, **garage x854 ≈ 54px past**).
+  `WORLD_W` floored at `SCREEN_W`=800, so a 4:3 iPad (aspect floors WORLD_W at 800) had `HUD_OFFSET_X`=0 =
+  ZERO margin → the bleed clipped off both edges. New **`HUD_SAFE_FLOOR = 940`** (800 band + 70px/side)
+  keeps the full HUD on-canvas everywhere; sub-2.09 aspect screens trade a little top/bottom letterbox for
+  it. Modern phones (≥2.09 aspect) unaffected (0 letterbox). NOTE it's the fixed-width HUD *bleeding past
+  its band*, not a scale bug — Phaser FIT was already correct. 147 tests pass.
+
 ### 2026-07-18 — Full guided tutorial (Stages 1 + 2) — LOCAL
 Extends the portrait tour into the title screen and the first run.
 - **Stage 1a — rotate-wait bridge** (index.html): after the genre pick, a LOCKED golden "Rotate Phone to
