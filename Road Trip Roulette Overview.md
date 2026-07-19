@@ -129,11 +129,17 @@ non-culture vehicles keep normal VEHICLES stats.
   <100mph × boosting via ctx), engine "ignore first overheat / leg" (per-leg flag, resets on region change
   + restart), metal weapon bonus-use (rng-injectable helper). Tests: 148 (config, resolution, top-speeds,
   multiplier math, bonus-use RNG).
-- **Still to wire**: mission payouts (passenger/timed/cargo) + cargo collision shield (cross-scene via a
-  published trait-mods object), F12 effect duration, pickup radius, survival BENEFITS (drink/caffeine/
-  overfill at applyItem), boost strength/duration, hazard instability, repair/upgrade cost, no-warning +
-  first-violation-star, the garage trait panel, and the long-hold strengths/weaknesses popup (target
-  surface TBD with owner).
+- **Now also integrated** (pt3–pt6, commits `39b4a27`→`942eef4`): mission payouts (passenger/timed/cargo,
+  cross-scene via a registry-published `genreTraitMods`), weapon effect duration (coal slow), survival
+  BENEFITS (reggae over-fill penalty, edm caffeine boost, reggaeton drink/caffeine hi-speed boost via an
+  `applyItem` mods param), pickup radius (widened collect window), hazard instability (crosswind pull), edm
+  ACCEL boost strength + duration (accel-charge drain), norteño cargo collision shield (consume-once,
+  restart-reset, `cargoShieldAbsorbs` helper + 7 tests). **155 genre tests.**
+- **Deliberately NOT wired (3):** (a) **repair/upgrade discount** (pop-punk) — needs display + affordability
+  + charge kept consistent in RestStopScene, more surgery than its value; (b) **first-violation instant
+  star** (reggaeton) — no clean "moving violation" hook + ambiguous vs the existing star grace; (c)
+  **no-police-warning** (reggae) — **N/A**: there's no warning-vs-ticket branch in the current stop flow
+  (every stop already tickets), so the flag is pushed to CopSystem but has nothing to suppress yet.
 - **Playtest fixes (shipped in the same batch of commits)**: region gold-pulse (dropped NOW ENTERING),
   gold invincibility flash, coal first-fire slow, donut in-lane 1s hold + straight recede, one NPC per rest
   stop, invisible pedals w/ gold throbbing glow, "COP HIT +1 ⭐" + lowered Pursuit/cop-hit HUD.
