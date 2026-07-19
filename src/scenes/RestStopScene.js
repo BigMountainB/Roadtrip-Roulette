@@ -1285,13 +1285,14 @@ export class RestStopScene extends Phaser.Scene {
       if (open.length > 1) choices.push({ label: 'What else you got?', next: 'greet' });
       choices.push({ label: 'Thank them and leave', effects: {}, end: true });
       if (o.type === 'passenger') {
-        // The passenger makes their own ask — their face, their voice.
+        // ONE NPC per rest stop (owner 2026-07-19): the contact RELAYS the rider
+        // instead of a second character (portrait/face) popping up. Keeps the
+        // rider's own line + quirk for flavor, just in the contact's mouth.
         const p = o.passenger ?? {};
+        const riderName = p.name ? `${p.name} ` : '';
         nodes[`offer${i}`] = {
-          speaker: p.name ?? 'Passenger',
-          portrait: p.portrait,
-          line: `${p.ask ?? 'I need a ride.'} Drop me at ${dropAt(o)}, ${o.routeMiles} miles. `
-              + `${quirkLine[p.quirk] ?? ''} $${o.payout} when we get there.`
+          line: `Got a rider — ${riderName}needs ${dropAt(o)}, ${o.routeMiles} miles. `
+              + `"${p.ask ?? 'I need a ride.'}" ${quirkLine[p.quirk] ?? ''} $${o.payout} on arrival.`
               + (busy ? " …Looks like your passenger seat's spoken for, though." : ''),
           choices,
         };

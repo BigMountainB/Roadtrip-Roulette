@@ -324,9 +324,9 @@ function makePlayer() {
 // `wiper` is dragged to the bottom-left (left of coal): its base hugs the
 // top-right edge, hence the large −dx/+dy.
 const DEFAULT_HUD_LAYOUT = {
-  popup:      { dx: -1,   dy: -60, scale: 1.1262099400177235 },   // lowered 10px (owner 2026-07-19)
+  popup:      { dx: -1,   dy: -45, scale: 1.1262099400177235 },   // lowered 10px + 15px (owner 2026-07-19)
   hpDamage:   { dx: 387,  dy: 242, scale: 1.7479561886682102 },   // lowered 10px (owner 2026-07-19)
-  rearCop:    { dx: 1,    dy: -39, scale: 1.1811808179050012 },   // lowered 10px (owner 2026-07-19)
+  rearCop:    { dx: 1,    dy: -24, scale: 1.1811808179050012 },   // lowered 10px + 15px (owner 2026-07-19)
   mission:    { dx: -25,  dy: -11, scale: 1.1191991029950916 },
   radio:      { dx: -75,  dy: -8,  scale: 1.002349011885947  },
   btn_pause:  { dx: -49,  dy: 1,   scale: 1 },
@@ -833,7 +833,8 @@ export class GameScene extends Phaser.Scene {
       // rearCop placed, wiper moved bottom-left, engine repositioned) — reinstall.
       // v5 (2026-07-19): lowered Pursuit(rearCop)/Pickup(popup)/Damage(hpDamage)
       // ~10px — reinstall so it's the new default AND the reset target.
-      const LAYOUT_VER = 5;
+      // v6 (2026-07-19): lowered Pursuit(rearCop) + the cop-hit popup another 15px.
+      const LAYOUT_VER = 6;
       if ((_save?.get?.('controlsLayoutVer', 1) ?? 1) < LAYOUT_VER) {
         // Pre-gate profiles (incl. brand-new ones) install the owner's baked
         // default rather than an empty layout.
@@ -9095,7 +9096,7 @@ export class GameScene extends Phaser.Scene {
         isHeadOn ? 420 + impact.severity * 360 : 260 + impact.severity * 280,
         isHeadOn ? 0.014 + impact.severity * 0.012 : 0.010 + impact.severity * 0.010,
       );
-      const label = car.isCop ? 'COP CAR RAMMED!\n⭐+1'
+      const label = car.isCop ? 'COP HIT +1 ⭐'
                   : isHeadOn   ? 'HEAD-ON!'
                   :              'REAR-END!';
       this._showPopup(label, isHeadOn ? '#FF2222' : '#FF8800');
@@ -15425,43 +15426,61 @@ export class GameScene extends Phaser.Scene {
     // The texture stays legible in both states. Engaged pedals brighten to
     // full opacity and gain a white outer stroke; idle pedals retain their
     // blue/magenta identity stroke at slightly lower opacity.
+    // Invisible pedals (owner 2026-07-19): the button rects are transparent —
+    // the ACCEL/BRAKE ART image IS the pedal. On press we don't restyle a box;
+    // we throb a GOLD border that feathers ~6px outward from the art edge.
+    const drawPedalGlow = (gfx, art, throbRef, on) => {
+      if (!gfx) return;
+      const stop = () => { try { this[throbRef]?.remove?.(); } catch (_) {} this[throbRef] = null; };
+      if (!on || !art) { stop(); gfx.clear(); gfx.setVisible(false); return; }
+      const w = art.displayWidth || PEDAL_W, h = art.displayHeight || PEDAL_H;
+      const x = art.x - w / 2, y = art.y - h;   // art origin (0.5, 1)
+      gfx.clear();
+      // Concentric gold strokes fading outward → a soft 6px feathered border.
+      for (let i = 0; i < 4; i++) {
+        const grow = 1 + i * 1.7;                        // ~1 → ~6px out
+        gfx.lineStyle(2, 0xFFD24D, (1 - i / 4.5) * 0.95);
+        gfx.strokeRoundedRect(x - grow, y - grow, w + grow * 2, h + grow * 2, 8 + grow);
+      }
+      gfx.setVisible(true); gfx.setAlpha(1);
+      if (!this[throbRef]) {
+        this[throbRef] = this.tweens.add({
+          targets: gfx, alpha: { from: 1, to: 0.4 }, duration: 340, yoyo: true, repeat: -1,
+        });
+      }
+    };
     const refreshGas = () => {
       const on = this._touchBoost;
-      this._gasBtn
-        ?.setFillStyle?.(0x050812, 0.12)
-        ?.setStrokeStyle?.(on ? 3 : 2, on ? 0xFFFFFF : 0x39A8FF, on ? 1 : 0.88);
       this._gasArt?.setAlpha(on ? 1 : 0.86);
       this._gasLbl?.setColor?.('#F4F7FF');
       this._gasLbl?.setStroke?.(on ? '#0B3D63' : '#39A8FF', 2);
+      drawPedalGlow(this._gasGlow, this._gasArt, '_gasGlowTween', on);
     };
     const refreshBrake = () => {
       if (this._lastPedalModeIsTilt) {
-        // RE-ZERO button: steady styling, no toggle highlight.
-        this._brakeBtn
-          ?.setFillStyle?.(0x050812, 0.12)
-          ?.setStrokeStyle?.(2, 0xFFD23A, 0.88);
+        // RE-ZERO button: no press-glow.
         this._brakeArt?.setAlpha(0.86);
         this._brakeLbl?.setColor?.('#F4F7FF');
         this._brakeLbl?.setStroke?.('#6B5600', 2);
+        drawPedalGlow(this._brakeGlow, this._brakeArt, '_brakeGlowTween', false);
         return;
       }
       const on = this._touchBrake;
-      this._brakeBtn
-        ?.setFillStyle?.(0x050812, 0.12)
-        ?.setStrokeStyle?.(on ? 3 : 2, on ? 0xFFFFFF : 0xFF39AF, on ? 1 : 0.88);
       this._brakeArt?.setAlpha(on ? 1 : 0.86);
       this._brakeLbl?.setColor?.('#F4F7FF');
       this._brakeLbl?.setStroke?.(on ? '#7A124E' : '#FF39AF', 2);
+      drawPedalGlow(this._brakeGlow, this._brakeArt, '_brakeGlowTween', on);
     };
     this._refreshPedals = () => { refreshGas(); refreshBrake(); };
 
     const gasBtn = this.add.rectangle(
-      this._accelPedalX, PEDAL_ROW_Y, PEDAL_W, PEDAL_H, 0x050812, 0.72,
-    ).setOrigin(0.5, 1).setDepth(d + 1).setStrokeStyle(2, 0x39A8FF, 0.88);
+      this._accelPedalX, PEDAL_ROW_Y, PEDAL_W, PEDAL_H, 0x000000, 0,   // invisible tap target
+    ).setOrigin(0.5, 1).setDepth(d + 1);
     this._gasBtn = gasBtn;
     const gasArt = this.add.image(this._accelPedalX, PEDAL_ROW_Y, 'ui_control_accel')
       .setOrigin(0.5, 1).setDisplaySize(PEDAL_W, PEDAL_H).setDepth(d + 1.25).setAlpha(0.86);
     this._gasArt = gasArt;
+    this._gasGlow = this.add.graphics().setDepth(d + 1.4).setVisible(false);
     const gasLbl = this.add.text(this._accelPedalX, PEDAL_ROW_Y - PEDAL_H / 2,
       'GAS\n▲', {
         fontSize: '17px', fontFamily: IMPACT,
@@ -15482,12 +15501,13 @@ export class GameScene extends Phaser.Scene {
     });
 
     const brakeBtn = this.add.rectangle(
-      this._brakePedalX, PEDAL_ROW_Y, PEDAL_W, PEDAL_H, 0x050812, 0.72,
-    ).setOrigin(0.5, 1).setDepth(d + 1).setStrokeStyle(2, 0xFF39AF, 0.88);
+      this._brakePedalX, PEDAL_ROW_Y, PEDAL_W, PEDAL_H, 0x000000, 0,   // invisible tap target
+    ).setOrigin(0.5, 1).setDepth(d + 1);
     this._brakeBtn = brakeBtn;
     const brakeArt = this.add.image(this._brakePedalX, PEDAL_ROW_Y, 'ui_control_brake')
       .setOrigin(0.5, 1).setDisplaySize(PEDAL_W, PEDAL_H).setDepth(d + 1.25).setAlpha(0.86);
     this._brakeArt = brakeArt;
+    this._brakeGlow = this.add.graphics().setDepth(d + 1.4).setVisible(false);
     const brakeLbl = this.add.text(this._brakePedalX, PEDAL_ROW_Y - PEDAL_H / 2,
       'BRAKE\n▼', {
         fontSize: '17px', fontFamily: IMPACT,
@@ -15551,7 +15571,7 @@ export class GameScene extends Phaser.Scene {
     // Apply the fixed bottom-flanking positions + publish steer-exclusion
     // zones + anchor the wiper beside the brake.
     this._layoutPedalsToText();
-    this._hudObjects?.push(gasBtn, gasArt, gasLbl, brakeBtn, brakeArt, brakeLbl);
+    this._hudObjects?.push(gasBtn, gasArt, gasLbl, brakeBtn, brakeArt, brakeLbl, this._gasGlow, this._brakeGlow);
 
     // ── Pause button — upper-right area, but moved LEFT of the speed
     //    cluster so it never overlaps the MPH readout.  Tappable on

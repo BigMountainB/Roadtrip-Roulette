@@ -623,8 +623,8 @@ export class CopSystem {
           if (cop.kind !== 'barricade' && rel < 3000 && rel > -15000) {
             cop.fleeing        = true;
             cop._fleeNoSwerve  = false;     // uses the positional recede, not coal's fade
-            cop._donutLure     = 0;         // veer toward the donuts (road centre) on the way out
-            cop._donutFleeDelay = 2;        // hold on-screen 2s before receding (owner 2026-07-19)
+            cop._donutLure     = 0;         // marks a donut flee (no shoulder swerve); NOT steered anymore
+            cop._donutFleeDelay = 1;        // hold on-screen 1s before dropping back (owner 2026-07-19)
             cop._fleeTimer     = FLEE_MAX_SEC;
             cop.trapPursuit   = false;
             cop.parked        = false;
@@ -852,15 +852,13 @@ export class CopSystem {
       // the smoke (lost sight — no dramatic swerve).
       if (cop.fleeing) {
         cop._fleeTimer = (cop._fleeTimer ?? FLEE_MAX_SEC) - dt;
-        // ── DONUT 2s beat: hold the cop ON-SCREEN briefly after the box is
-        // thrown before it peels off (owner 2026-07-19). Keep pace with the
-        // player so `rel` stays constant (no recede yet) while it veers toward
-        // the donuts; once the delay elapses the normal recede below takes over.
+        // ── DONUT 1s beat: hold the cop ON-SCREEN, IN LANE, keeping pace for 1s
+        // after the box is thrown (owner 2026-07-19). NO left/right movement —
+        // it should read as the cop still locked on you, then drop straight back
+        // toward the donuts behind you (the recede below), not veer off.
         if (cop._donutFleeDelay > 0) {
           cop._donutFleeDelay -= dt;
-          const d = (cop._donutLure ?? 0) - cop.laneOffset;
-          cop.laneOffset += Math.sign(d) * Math.min(Math.abs(d), 2.4 * dt);
-          cop.speed = playerSpeed;
+          cop.speed = playerSpeed;          // hold position (rel constant), in lane
           cop.position += cop.speed * dt;
           cop._fleeFade = 1;                // stay fully visible during the hold
           continue;
@@ -885,10 +883,9 @@ export class CopSystem {
           continue;
         }
         if (cop._donutLure != null) {
-          // Donut lure — steer TOWARD the donuts (lure lane) while receding,
-          // instead of the fireworks swerve toward the shoulder.
-          const d = cop._donutLure - cop.laneOffset;
-          cop.laneOffset += Math.sign(d) * Math.min(Math.abs(d), 2.4 * dt);
+          // Donut: NO left/right movement — the cop drops STRAIGHT back (in its
+          // lane) toward the donut box behind you, so it reads as chasing the
+          // donuts rather than fleeing to the shoulder (owner 2026-07-19).
         } else {
           cop.laneOffset += (cop.laneOffset >= 0 ? 1 : -1) * 2.4 * dt;
         }
