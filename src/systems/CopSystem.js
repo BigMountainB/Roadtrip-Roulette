@@ -611,7 +611,7 @@ export class CopSystem {
             cop.fleeing        = true;
             cop._fleeNoSwerve  = false;     // uses the positional recede, not coal's fade
             cop._donutLure     = 0;         // veer toward the donuts (road centre) on the way out
-            cop._donutFleeDelay = 1.5;      // hold on-screen 1.5s before receding (owner 2026-07-19)
+            cop._donutFleeDelay = 2;        // hold on-screen 2s before receding (owner 2026-07-19)
             cop._fleeTimer     = FLEE_MAX_SEC;
             cop.trapPursuit   = false;
             cop.parked        = false;
@@ -839,7 +839,7 @@ export class CopSystem {
       // the smoke (lost sight — no dramatic swerve).
       if (cop.fleeing) {
         cop._fleeTimer = (cop._fleeTimer ?? FLEE_MAX_SEC) - dt;
-        // ── DONUT 1.5s beat: hold the cop ON-SCREEN briefly after the box is
+        // ── DONUT 2s beat: hold the cop ON-SCREEN briefly after the box is
         // thrown before it peels off (owner 2026-07-19). Keep pace with the
         // player so `rel` stays constant (no recede yet) while it veers toward
         // the donuts; once the delay elapses the normal recede below takes over.
