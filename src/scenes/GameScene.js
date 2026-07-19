@@ -3539,8 +3539,10 @@ export class GameScene extends Phaser.Scene {
     // Touch pedals — hidden on the title screen so they don't compete with
     // the "TAP TO START" prompt; shown only once gameplay actually begins.
     this._gasBtn?.setVisible(v);
+    this._gasArt?.setVisible(v);
     this._gasLbl?.setVisible(v);
     this._brakeBtn?.setVisible(v);
+    this._brakeArt?.setVisible(v);
     this._brakeLbl?.setVisible(v);
     // Re-apply tilt-mode pedal UI after the uniform toggle above — in
     // tilt mode the ACCEL slot stays hidden even when the rest of the
@@ -4039,6 +4041,7 @@ export class GameScene extends Phaser.Scene {
       // Icon is the custom wiper-blade drawing in drawWiper() above;
       // the text label here shows the current mode (OFF / ON).
       if (this.hudWiperBtn) this.hudWiperBtn.setVisible(showWeatherBtn);
+      if (this.hudWiperArt) this.hudWiperArt.setVisible(showWeatherBtn);
       if (this.hudWiperLbl) {
         this.hudWiperLbl.setVisible(showWeatherBtn);
         if (showWeatherBtn) {
@@ -9772,8 +9775,10 @@ export class GameScene extends Phaser.Scene {
     const rowY = this._pedalRowY ?? (SCREEN_H - 4);
     const bx = this._brakePedalX, ax = this._accelPedalX;
     this._brakeBtn.setPosition?.(bx, rowY);
+    this._brakeArt?.setPosition?.(bx, rowY);
     this._brakeLbl?.setPosition?.(bx, rowY - PH / 2);
     this._gasBtn.setPosition?.(ax, rowY);
+    this._gasArt?.setPosition?.(ax, rowY);
     this._gasLbl?.setPosition?.(ax, rowY - PH / 2);
     // Two steer-exclusion zones (top-left-corner form; the pointer handler
     // adds 6 px of finger slop).
@@ -15141,8 +15146,8 @@ export class GameScene extends Phaser.Scene {
 
     // Weather / wiper button — right edge, below the top-right button
     // strip.  Fixed (does NOT mirror with handedness, same as the pedals).
-    // Icon is a custom windshield-with-single-wiper symbol; red border
-    // signals a negative weather effect for both rain and snow.
+    // Automotive dashboard button art; its red rim signals a negative
+    // weather effect for both rain and snow.
     // Owner layout: the wiper hugs the PHYSICAL right edge, just below
     // the top-right (speaker/map/garage) button strip (y2–58).  On wide
     // phones it sits in the margin band (~x827–883); on desktop
@@ -15155,48 +15160,19 @@ export class GameScene extends Phaser.Scene {
     this.hudWiperBtn = this.add.graphics().setDepth(62).setVisible(false);
     const drawWiper = (alpha = 0.85) => {
       this.hudWiperBtn.clear();
-      this.hudWiperBtn.fillStyle(0x222222, alpha);
+      // Invisible painted body retains the reliable absolute-coordinate hit
+      // area used by the original Graphics control. The authored PNG above it
+      // owns all visible detail.
+      this.hudWiperBtn.fillStyle(0x000000, 0.001);
       this.hudWiperBtn.fillRoundedRect(wiperLeft, wiperTop, muteSize, muteSize, 10);
-      // Red stroke — weather is a NEGATIVE effect.
-      this.hudWiperBtn.lineStyle(3, 0xFF3333, 1);
-      this.hudWiperBtn.strokeRoundedRect(wiperLeft + 1.5, wiperTop + 1.5, muteSize - 3, muteSize - 3, 10);
-      // Conventional windshield wiper warning icon: a curved windshield
-      // outline plus one swept blade and pivot. Drawn directly so the
-      // small HUD mark stays crisp without adding another image asset.
-      const cx = wiperLeft + muteSize / 2;
-      const topY = wiperTop + 14;
-      const lowerY = wiperTop + 35;
-      const icon = 0xF1F3F4;
-      // Windshield frame: faceted curves stay legible at a 56 px button.
-      this.hudWiperBtn.lineStyle(3, icon, 0.96);
-      this.hudWiperBtn.beginPath();
-      this.hudWiperBtn.moveTo(cx - 18, topY + 5);
-      this.hudWiperBtn.lineTo(cx - 10, topY + 1);
-      this.hudWiperBtn.lineTo(cx, topY);
-      this.hudWiperBtn.lineTo(cx + 10, topY + 1);
-      this.hudWiperBtn.lineTo(cx + 18, topY + 5);
-      this.hudWiperBtn.lineTo(cx + 12, lowerY);
-      this.hudWiperBtn.lineTo(cx + 5, lowerY - 2);
-      this.hudWiperBtn.lineTo(cx - 5, lowerY - 2);
-      this.hudWiperBtn.lineTo(cx - 12, lowerY);
-      this.hudWiperBtn.closePath();
-      this.hudWiperBtn.strokePath();
-      // One visible swept blade, like a dashboard windshield-wiper icon.
-      const pivotX = cx;
-      const pivotY = lowerY + 4;
-      const bladeX = cx - 9;
-      const bladeY = topY + 7;
-      this.hudWiperBtn.lineStyle(4, icon, 0.98);
-      this.hudWiperBtn.beginPath();
-      this.hudWiperBtn.moveTo(pivotX, pivotY);
-      this.hudWiperBtn.lineTo(bladeX, bladeY);
-      this.hudWiperBtn.strokePath();
-      this.hudWiperBtn.fillStyle(icon, 1);
-      this.hudWiperBtn.fillCircle(pivotX, pivotY, 3);
+      this.hudWiperArt?.setAlpha(alpha);
     };
     drawWiper();
     this.hudWiperBtn.setInteractive(new Phaser.Geom.Rectangle(wiperLeft, wiperTop, muteSize, muteSize), Phaser.Geom.Rectangle.Contains);
     this.hudWiperBtn.input.cursor = 'pointer';
+    this.hudWiperArt = this.add.image(
+      wiperLeft + muteSize / 2, wiperTop + muteSize / 2, 'ui_control_wiper',
+    ).setDisplaySize(muteSize, muteSize).setDepth(62.5).setVisible(false).setAlpha(0.85);
     // Mode-indicator text in the lower-right corner of the button —
     // shows "OFF" / "SLOW" / "FAST" so the player knows which speed
     // the wipers are at.  Tiny so it doesn't crowd the wiper icon.
@@ -15216,6 +15192,8 @@ export class GameScene extends Phaser.Scene {
         this.hudWiperBtn.input.hitArea = new Phaser.Geom.Rectangle(wiperLeft, wiperTop, muteSize, muteSize);
         this.hudWiperBtn.input.hitAreaCallback = Phaser.Geom.Rectangle.Contains;
       }
+      this.hudWiperArt?.setPosition(wiperLeft + muteSize / 2, wiperTop + muteSize / 2);
+      this.hudWiperArt?.setDisplaySize(muteSize, muteSize);
       this.hudWiperLbl?.setPosition(wiperLeft + muteSize - 4, wiperTop + muteSize - 4);
       drawWiper();
     };
@@ -15228,7 +15206,7 @@ export class GameScene extends Phaser.Scene {
       // good-enough clear without the player picking a speed.
       this._wiperMode = this._wiperMode ? 0 : 1;
     });
-    this._hudObjects?.push(this.hudWiperBtn, this.hudWiperLbl);
+    this._hudObjects?.push(this.hudWiperBtn, this.hudWiperArt, this.hudWiperLbl);
     // NOT registered with _topRowButtons — it has its own editor id
     // (`wiper`) and a fixed edge-hugging default via _layoutWiperButton().
 
@@ -15397,32 +15375,36 @@ export class GameScene extends Phaser.Scene {
     // the current steering mode via _applyPedalModeUI().  This avoids
     // a stale snapshot when the user picks TILT after _buildHUD has
     // already run (e.g. switching modes from the title carousel).
-    // Active = INVERTED colours (per spec): the dark panel + light accent
-    // text flips to a SOLID accent fill (blue ACCEL / magenta BRAKE) with
-    // dark text, so an engaged pedal visibly lights up instead of just
-    // dimming a shade.  Idle state is the original dark panel.
+    // The texture stays legible in both states. Engaged pedals brighten to
+    // full opacity and gain a white outer stroke; idle pedals retain their
+    // blue/magenta identity stroke at slightly lower opacity.
     const refreshGas = () => {
       const on = this._touchBoost;
       this._gasBtn
-        ?.setFillStyle?.(on ? 0x39A8FF : 0x050812, on ? 1 : 0.72)
+        ?.setFillStyle?.(0x050812, 0.12)
         ?.setStrokeStyle?.(on ? 3 : 2, on ? 0xFFFFFF : 0x39A8FF, on ? 1 : 0.88);
-      this._gasLbl?.setColor?.(on ? '#04101F' : '#F4F7FF');
-      this._gasLbl?.setStroke?.(on ? '#EAF4FF' : '#39A8FF', 2);
+      this._gasArt?.setAlpha(on ? 1 : 0.86);
+      this._gasLbl?.setColor?.('#F4F7FF');
+      this._gasLbl?.setStroke?.(on ? '#0B3D63' : '#39A8FF', 2);
     };
     const refreshBrake = () => {
       if (this._lastPedalModeIsTilt) {
         // RE-ZERO button: steady styling, no toggle highlight.
         this._brakeBtn
-          ?.setFillStyle?.(0x050812, 0.72)
+          ?.setFillStyle?.(0x050812, 0.12)
           ?.setStrokeStyle?.(2, 0xFFD23A, 0.88);
+        this._brakeArt?.setAlpha(0.86);
+        this._brakeLbl?.setColor?.('#F4F7FF');
+        this._brakeLbl?.setStroke?.('#6B5600', 2);
         return;
       }
       const on = this._touchBrake;
       this._brakeBtn
-        ?.setFillStyle?.(on ? 0xFF39AF : 0x050812, on ? 1 : 0.72)
+        ?.setFillStyle?.(0x050812, 0.12)
         ?.setStrokeStyle?.(on ? 3 : 2, on ? 0xFFFFFF : 0xFF39AF, on ? 1 : 0.88);
-      this._brakeLbl?.setColor?.(on ? '#1A0410' : '#F4F7FF');
-      this._brakeLbl?.setStroke?.(on ? '#FFE6F5' : '#FF39AF', 2);
+      this._brakeArt?.setAlpha(on ? 1 : 0.86);
+      this._brakeLbl?.setColor?.('#F4F7FF');
+      this._brakeLbl?.setStroke?.(on ? '#7A124E' : '#FF39AF', 2);
     };
     this._refreshPedals = () => { refreshGas(); refreshBrake(); };
 
@@ -15430,9 +15412,12 @@ export class GameScene extends Phaser.Scene {
       this._accelPedalX, PEDAL_ROW_Y, PEDAL_W, PEDAL_H, 0x050812, 0.72,
     ).setOrigin(0.5, 1).setDepth(d + 1).setStrokeStyle(2, 0x39A8FF, 0.88);
     this._gasBtn = gasBtn;
+    const gasArt = this.add.image(this._accelPedalX, PEDAL_ROW_Y, 'ui_control_accel')
+      .setOrigin(0.5, 1).setDisplaySize(PEDAL_W, PEDAL_H).setDepth(d + 1.25).setAlpha(0.86);
+    this._gasArt = gasArt;
     const gasLbl = this.add.text(this._accelPedalX, PEDAL_ROW_Y - PEDAL_H / 2,
-      '▲\nACCEL', {
-        fontSize: '16px', fontFamily: IMPACT,
+      'GAS\n▲', {
+        fontSize: '17px', fontFamily: IMPACT,
         color: '#F4F7FF', stroke: '#39A8FF', strokeThickness: 2, align: 'center',
       }).setOrigin(0.5).setDepth(d + 2);
     this._gasLbl = gasLbl;
@@ -15453,6 +15438,9 @@ export class GameScene extends Phaser.Scene {
       this._brakePedalX, PEDAL_ROW_Y, PEDAL_W, PEDAL_H, 0x050812, 0.72,
     ).setOrigin(0.5, 1).setDepth(d + 1).setStrokeStyle(2, 0xFF39AF, 0.88);
     this._brakeBtn = brakeBtn;
+    const brakeArt = this.add.image(this._brakePedalX, PEDAL_ROW_Y, 'ui_control_brake')
+      .setOrigin(0.5, 1).setDisplaySize(PEDAL_W, PEDAL_H).setDepth(d + 1.25).setAlpha(0.86);
+    this._brakeArt = brakeArt;
     const brakeLbl = this.add.text(this._brakePedalX, PEDAL_ROW_Y - PEDAL_H / 2,
       'BRAKE\n▼', {
         fontSize: '17px', fontFamily: IMPACT,
@@ -15496,6 +15484,7 @@ export class GameScene extends Phaser.Scene {
         if (isTilt) this._gasBtn.disableInteractive?.();
         else        this._gasBtn.setInteractive({ useHandCursor: true });
       }
+      this._gasArt?.setVisible(!isTilt);
       if (this._gasLbl) this._gasLbl.setVisible(!isTilt);
       // BRAKE slot: relabel + restyle for RE-ZERO when tilt is on.
       if (this._brakeLbl) {
@@ -15515,7 +15504,7 @@ export class GameScene extends Phaser.Scene {
     // Apply the fixed bottom-flanking positions + publish steer-exclusion
     // zones + anchor the wiper beside the brake.
     this._layoutPedalsToText();
-    this._hudObjects?.push(gasBtn, gasLbl, brakeBtn, brakeLbl);
+    this._hudObjects?.push(gasBtn, gasArt, gasLbl, brakeBtn, brakeArt, brakeLbl);
 
     // ── Pause button — upper-right area, but moved LEFT of the speed
     //    cluster so it never overlaps the MPH readout.  Tappable on
@@ -18222,11 +18211,11 @@ export class GameScene extends Phaser.Scene {
     // edge.  Disguise is broken out to its OWN button on the opposite
     // edge (tucked under the Mute button) — handled separately below.
     const WEAPONS = [
-      { id: 'coal',        color: 0x555555, label: '💨', tex: 'weapon_coal'       },
-      { id: 'paint_bomb',  color: 0xFFEE00, label: '🍩', tex: 'weapon_paint_bomb' },
-      { id: 'fireworks',   color: 0xE04455, label: '🎆', tex: 'weapon_fireworks'  },
+      { id: 'coal',        color: 0x55218F, label: '💨', tex: 'weapon_coal'       },
+      { id: 'paint_bomb',  color: 0x55218F, label: '🍩', tex: 'weapon_paint_bomb' },
+      { id: 'fireworks',   color: 0x55218F, label: '🎆', tex: 'weapon_fireworks'  },
     ];
-    const DISGUISE = { id: 'disguise', color: 0xFFCC00, label: '🎭', tex: 'weapon_disguise' };
+    const DISGUISE = { id: 'disguise', color: 0x55218F, label: '🎭', tex: 'weapon_disguise' };
 
     const counts = {};
     for (const t of tokens) counts[t] = (counts[t] ?? 0) + 1;
@@ -19040,15 +19029,16 @@ export class GameScene extends Phaser.Scene {
     if (this._gasBtn && this._brakeBtn && this._brakePedalX != null && this._accelPedalX != null) {
       const PW = this._pedalDim?.w ?? 70, PH = this._pedalDim?.h ?? 50;
       const rowY = this._pedalRowY ?? (SCREEN_H - 4);
-      const place = (btn, lbl, baseX, id) => {
+      const place = (btn, art, lbl, baseX, id) => {
         const o  = this._ctrlOff(id);
         const cx = baseX + o.dx, cy = rowY + o.dy;
         btn.setPosition?.(cx, cy);  btn.setScale?.(o.s);
+        art?.setPosition?.(cx, cy);  art?.setDisplaySize?.(PW * o.s, PH * o.s);
         lbl?.setPosition?.(cx, cy - (PH * o.s) / 2);  lbl?.setScale?.(o.s);
         return { x: cx - (PW * o.s) / 2, y: cy - PH * o.s, w: PW * o.s, h: PH * o.s };
       };
-      const bz = place(this._brakeBtn, this._brakeLbl, this._brakePedalX, 'pedalBrake');
-      const gz = place(this._gasBtn,   this._gasLbl,   this._accelPedalX, 'pedalGas');
+      const bz = place(this._brakeBtn, this._brakeArt, this._brakeLbl, this._brakePedalX, 'pedalBrake');
+      const gz = place(this._gasBtn,   this._gasArt,   this._gasLbl,   this._accelPedalX, 'pedalGas');
       this._pedalHitZones = [bz, gz];
     }
     // ── Mirror (offset via _mirrorGeom, scale folded into the zoom path) ──
@@ -19061,6 +19051,8 @@ export class GameScene extends Phaser.Scene {
       const bl = this._wiperBaseLeft, bt = this._wiperBaseTop, sz = this._wiperSize;
       this.hudWiperBtn.setScale(o.s);
       this.hudWiperBtn.setPosition(o.dx + bl * (1 - o.s), o.dy + bt * (1 - o.s));
+      this.hudWiperArt?.setPosition(bl + o.dx + (sz * o.s) / 2, bt + o.dy + (sz * o.s) / 2);
+      this.hudWiperArt?.setDisplaySize(sz * o.s, sz * o.s);
       this.hudWiperLbl?.setScale(o.s);
       this.hudWiperLbl?.setPosition(bl + o.dx + (sz - 4) * o.s, bt + o.dy + (sz - 4) * o.s);
       this._wiperLiveBounds = { x: bl + o.dx, y: bt + o.dy, w: sz * o.s, h: sz * o.s };
@@ -19321,6 +19313,7 @@ export class GameScene extends Phaser.Scene {
     // Wiper only shows in rain/snow normally — force it visible here so it can
     // be positioned (per Brendan).  Restored to weather-driven on DONE.
     this.hudWiperBtn?.setVisible(true);
+    this.hudWiperArt?.setVisible(true);
     this.hudWiperLbl?.setVisible(true);
     // Transient pop-ups: show placeholders BEFORE the draggable loop so they're
     // visible (Phaser disables input on hidden objects) and thus grabbable.
@@ -19453,6 +19446,7 @@ export class GameScene extends Phaser.Scene {
     // Wiper goes back to weather-driven (the gameplay update re-shows it in
     // rain/snow; hidden otherwise).
     this.hudWiperBtn?.setVisible(false);
+    this.hudWiperArt?.setVisible(false);
     this.hudWiperLbl?.setVisible(false);
     this._hideEditorPopupPlaceholders();   // pop-ups return to transient (timer-driven)
     // Stop the grab listener + take the movable group members back out of input

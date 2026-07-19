@@ -108,14 +108,12 @@ export class BootScene extends Phaser.Scene {
     // texture; tinting an orange body just gives muddy orange).
     this._makeCarTexture('npc_car_white', 0xFFFFFF, 0xDDDDDD);
 
-    // 🎆 Fireworks weapon pickup — fully procedural (no PNG in the
-    // manifest): a bundle of bottle rockets with star sparks, matching the
-    // other weapon pickups' hand-drawn scale.
-    this._makeFireworksSprite('weapon_fireworks');
+    // 🎆 Retain the procedural fireworks bundle only as a missing-asset
+    // fallback; production builds load the circular medallion PNG.
+    if (!this.textures.exists('weapon_fireworks')) this._makeFireworksSprite('weapon_fireworks');
 
-    // 💨 Rolling-coal weapon pickup — fully procedural: a chrome exhaust
-    // stack belching a clump of black diesel smoke.
-    this._makeCoalSprite('weapon_coal');
+    // 💨 Same fallback policy for the Rolling Coal medallion.
+    if (!this.textures.exists('weapon_coal')) this._makeCoalSprite('weapon_coal');
 
     // For any manifest key whose PNG is missing, synthesize a placeholder
     // so downstream code can reference manifest keys safely.

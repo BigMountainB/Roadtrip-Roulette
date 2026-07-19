@@ -335,8 +335,9 @@ export const ASSET_MANIFEST = {
     { key: 'tree_generic',        path: 'assets/trees/tree1.png' },
   ],
   weapons: [
-    // weapon_coal + weapon_fireworks have no PNG — BootScene generates
-    // them procedurally.
+    // Circular medallions shared by road pickups, shops and F12 HUD cells.
+    { key: 'weapon_coal',        path: 'assets/weapons/rolling_coal.png' },
+    { key: 'weapon_fireworks',   path: 'assets/weapons/fireworks.png' },
     { key: 'weapon_paint_bomb',  path: 'assets/weapons/paint_bomb.png' },
     { key: 'weapon_disguise',    path: 'assets/weapons/disguise.png' },
   ],
@@ -382,6 +383,11 @@ export const ASSET_MANIFEST = {
     { key: 'ui_top_btn_ff_active', path: 'assets/ui/top_btn_ff_active.png' },
     { key: 'ui_top_btn_pause',   path: 'assets/ui/top_btn_pause.png' },
     { key: 'ui_top_btn_pause_active', path: 'assets/ui/top_btn_pause_active.png' },
+    // Tactile driving-control faces. Runtime keeps the existing hit areas,
+    // labels, toggle feedback, and controls-editor sizing around this art.
+    { key: 'ui_control_wiper',   path: 'assets/ui/control_wiper.png?v=automotive-1' },
+    { key: 'ui_control_accel',   path: 'assets/ui/control_accel.png?v=automotive-1' },
+    { key: 'ui_control_brake',   path: 'assets/ui/control_brake.png?v=automotive-1' },
     // Portrait phone-as-menu background.  Rotating the device to
     // portrait (or pressing M on desktop) launches PhoneMenuScene with
     // this PNG as the full-screen letterboxed background.
