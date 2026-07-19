@@ -487,21 +487,17 @@ export class RestStopScene extends Phaser.Scene {
     const _isCharger  = hasCharger(this._stop?.id);
     const _vehFuel    = VEHICLES[this._vehicleId]?.fuel ?? 'gas';
     const gasItems = [];
-    if (_missingMi > 0) {
-      gasItems.push({
-        id: 'refuel', label: '⛽  REFUEL',
-        cost: _refuelCost,
-        desc: `${_galDisplay} gal @ $${_perGal.toFixed(2)}/gal`,
-        payload: { refuel: true, refuelMi: _missingMi },
-      });
-    } else {
-      gasItems.push({
-        id: 'refuel', label: '⛽  TANK FULL',
-        cost: 0,
-        desc: 'No refuel needed.',
-        payload: {},
-      });
-    }
+    // Shared REFUEL item — added to the gas tab AND to Gas-N-Sip / AM/BM below
+    // (owner 2026-07-19: those convenience stops pump gas too). ONE object so
+    // topping off at any of them disables it at all of them (single-use / tank
+    // fills once, per the buy handler that sets item.disabled).
+    const refuelItem = (_missingMi > 0)
+      ? { id: 'refuel', label: '⛽  REFUEL', cost: _refuelCost,
+          desc: `${_galDisplay} gal @ $${_perGal.toFixed(2)}/gal`,
+          payload: { refuel: true, refuelMi: _missingMi } }
+      : { id: 'refuel', label: '⛽  TANK FULL', cost: 0,
+          desc: 'No refuel needed.', payload: {} };
+    gasItems.push(refuelItem);
     if (_isCharger) {
       gasItems.push({
         id: 'charge', label: '🔌  FAST CHARGE',
@@ -529,6 +525,13 @@ export class RestStopScene extends Phaser.Scene {
 
     gasItems.push(waterItem(15));   // bottled water at gas stations (owner 2026-07-17)
     SECTIONS.gas.items = gasItems;
+
+    // Gas-N-Sip (vices) and AM/BM pump gas too (owner 2026-07-19): give both the
+    // SAME refuel item as the gas tab, at the top of their menu, so the player
+    // can fill up at those convenience-store stops. Built here (after the fuel
+    // cost is known) since the vices/ambm item lists were assembled earlier.
+    SECTIONS.vices.items = [refuelItem, ...(SECTIONS.vices.items ?? [])];
+    SECTIONS.ambm.items  = [refuelItem, ...(SECTIONS.ambm.items  ?? [])];
 
     // ── PARK & RIDE: the (vice) Dealer hands over pre-paid phone orders ──
     // One free pickup item per vice ordered (phone → Messages → Dealer).
