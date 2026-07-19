@@ -854,9 +854,17 @@ export class RestStopScene extends Phaser.Scene {
     this._contentW = SCREEN_W - 80;
     this._contentH = contentH;
 
+    // Genre-vehicle payout modifiers (owner 2026-07-19): reggaeton passenger
+    // fares +30%, k-pop timed on-time +25%, norteño cargo +25%. Published to the
+    // registry by GameScene._refreshGenreTrait; ×1 for non-genre vehicles.
+    const _gtm = this.registry.get('genreTraitMods') ?? {};
+    const _payMultFor = (type) => type === 'passenger' ? (_gtm.passengerPayMult ?? 1)
+                                : type === 'timed'     ? (_gtm.timedPayMult ?? 1)
+                                : type === 'heat'      ? 1
+                                :                        (_gtm.cargoPayMult ?? 1);
     this._readyJobs.forEach((m, i) => {
       const ry    = 110 + i * (_readyRowH + _readyGap);
-      const total = m.payout + (m.tip ?? 0);
+      const total = Math.round((m.payout + (m.tip ?? 0)) * _payMultFor(m.type));
       const label = m.type === 'passenger'
         ? `🧍 DROP OFF ${(m.passenger?.name ?? 'PASSENGER').toUpperCase()} — $${total.toLocaleString()}`
         : m.type === 'heat'
@@ -874,7 +882,7 @@ export class RestStopScene extends Phaser.Scene {
         ptr.event?.stopPropagation?.();
         const paid = _missionsSys?.collect?.(m.id);
         if (!paid) return;                       // double-tap / rewind safe
-        const pay = paid.payout + (paid.tip ?? 0);
+        const pay = Math.round((paid.payout + (paid.tip ?? 0)) * _payMultFor(paid.type));
         this._score += pay;
         this._stats?.recordEarn?.(pay, 'mission');
         this._refreshScore();

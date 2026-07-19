@@ -9005,7 +9005,17 @@ export class GameScene extends Phaser.Scene {
       this.cops._traitWantedDecayMult = this._traitMod('wantedDecayMult');
       this.cops._traitTicketSurcharge = this._traitMod('ticketSurcharge');
       this.cops._traitNoWarning       = !!this._traitMod('noPoliceWarning');
+      this.cops._traitWeaponDurationMult = this._traitMod('weaponDurationMult');
     }
+    // Publish the economy mods to the registry so RestStopScene (a SEPARATE
+    // scene) can read them for mission payouts + repair/upgrade pricing without
+    // a genre dependency of its own.
+    this.registry?.set?.('genreTraitMods', {
+      passengerPayMult:      this._traitMod('passengerPayMult'),
+      timedPayMult:          this._traitMod('timedPayMult'),
+      cargoPayMult:          this._traitMod('cargoPayMult'),
+      repairUpgradeCostMult: this._traitMod('repairUpgradeCostMult'),
+    });
     return this._genreTrait;
   }
   _activeGenreTrait() {

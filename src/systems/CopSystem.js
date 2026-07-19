@@ -546,7 +546,7 @@ export class CopSystem {
           if (cop && cop.kind !== 'barricade'
               && cop.position >= this._coalCloud.backZ
               && cop.position <= this._coalCloud.frontZ) {
-            cop.coalSlowT = COAL_SLOW_SEC;
+            cop.coalSlowT = COAL_SLOW_SEC * (this._traitWeaponDurationMult ?? 1);
           }
         }
         // Any arrest that was mid-progress is broken the moment the wall of
@@ -842,7 +842,7 @@ export class CopSystem {
       // slow. Re-armed each frame it stays in the smoke.
       if (this._coalCloud && cop.kind !== 'barricade'
           && cop.position >= this._coalCloud.backZ && cop.position <= this._coalCloud.frontZ) {
-        cop.coalSlowT = COAL_SLOW_SEC;
+        cop.coalSlowT = COAL_SLOW_SEC * (this._traitWeaponDurationMult ?? 1);
       }
 
       // Fireworks scatter / coal smoke-out — the cop breaks pursuit and
