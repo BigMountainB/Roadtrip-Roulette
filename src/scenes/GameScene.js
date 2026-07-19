@@ -15720,6 +15720,17 @@ export class GameScene extends Phaser.Scene {
     };
     const diffX = 249, diffW = 177;
     const steeringX = 422, steeringW = 190;
+    // The hit-zone panels above are WIDER than the baked card art (and the
+    // driving-type panel sits ~9px right of its card), so the dark fill button
+    // overhung + wasn't centered. These pass CARD-fitted bounds to dynamicFill
+    // so the dark button is narrower and centered INSIDE each card image (owner
+    // 2026-07-18). dynamicFill draws at (x+14 … x+w-14), so a passed width `pw`
+    // yields a fill `pw-28` wide centered at x + pw/2.
+    const CARD_FILL_W = 122;                          // dark-button width (fits inside the ~150px card)
+    const CARD_PANEL_W = CARD_FILL_W + 28;            // → 150 (dynamicFill insets 14 each side)
+    const diffCardCX  = 337, driveCardCX = 508;       // card centers (baked-label centers)
+    const diffFillX   = diffCardCX  - CARD_PANEL_W / 2;   // → 262
+    const driveFillX  = driveCardCX - CARD_PANEL_W / 2;   // → 433
 
     // (DIFFICULTY / DRIVING TYPE header labels removed 2026-07-13 — the value
     // words (EASY / THUMBS / …) speak for themselves; values re-centered up.)
@@ -15729,7 +15740,7 @@ export class GameScene extends Phaser.Scene {
       fontSize: '22px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
       color: '#37B9FF', stroke: '#07111F', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(d + 12);
-    this._titleThumbsValue = this.add.text(steeringX + steeringW / 2, panelY + 29, '', {
+    this._titleThumbsValue = this.add.text(driveCardCX, panelY + 29, '', {
       fontSize: '22px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
       color: '#BD70FF', stroke: '#130A1E', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(d + 12);
@@ -15777,7 +15788,7 @@ export class GameScene extends Phaser.Scene {
       this._wheelCursor = DIFF_OPTIONS[diffIdx].id;
       updateSelectionText();
       diffBg._titleDraw?.(true);
-    }, g => dynamicFill(g, diffX, diffW));
+    }, g => dynamicFill(g, diffFillX, CARD_PANEL_W));
     const steeringBg = makeTitleZone(titlePanelShape(steeringX, steeringW), 0xCE67FF, () => {
       thumbsIdx = (thumbsIdx + 1) % THUMBS_OPTIONS.length;
       const opt = THUMBS_OPTIONS[thumbsIdx];
@@ -15805,7 +15816,7 @@ export class GameScene extends Phaser.Scene {
           },
         );
       }
-    }, g => dynamicFill(g, steeringX, steeringW));
+    }, g => dynamicFill(g, driveFillX, CARD_PANEL_W));
     const savedBg = makeTitleZone(titlePanelShape(611, 154, compactPanelH, 12), 0x4BB7FF,
       () => this._promptForCode(last?.code ?? ''));
     this._titleDifficultyBtns.push(startBg, diffBg, steeringBg, savedBg);
@@ -15959,9 +15970,9 @@ export class GameScene extends Phaser.Scene {
     const STEPS = [
       { key: 'plates', b: { x: 16,  y: 104, w: 137, h: 198 }, box: { x: 590, y: 150, w: 360 },
         text: "Here is where your saved games will be. Pick a state's plate and customize it now." },
-      { key: 'diff',   b: { x: 249, y: 349, w: 177, h: 60 },  box: { x: 400, y: 66,  w: 470 },
+      { key: 'diff',   b: { x: 262, y: 351, w: 150, h: 56 },  box: { x: 400, y: 66,  w: 470 },
         text: "Easy, medium, and hard are your options for now until you complete the drive. The Custom mode will allow you more fun at your own leisure." },
-      { key: 'drive',  b: { x: 421, y: 349, w: 191, h: 60 },  box: { x: 380, y: 66,  w: 500 },
+      { key: 'drive',  b: { x: 433, y: 351, w: 150, h: 56 },  box: { x: 380, y: 66,  w: 500 },
         text: "Default is the preferred play here, but if you'd rather switch it up, be my guest. If you accidentally declined the orientation permission, you can cycle through this until you get to default again." },
       { key: 'load',   b: { x: 610, y: 349, w: 156, h: 49 },  box: { x: 380, y: 78,  w: 440 },
         text: "If the game crashes on you, this is where I would start." },
