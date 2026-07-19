@@ -608,10 +608,11 @@ export class CopSystem {
         for (const cop of this.cops) {
           const rel = cop.position - playerPos;
           if (cop.kind !== 'barricade' && rel < 3000 && rel > -15000) {
-            cop.fleeing       = true;
-            cop._fleeNoSwerve = false;      // uses the positional recede, not coal's fade
-            cop._donutLure    = 0;          // veer toward the donuts (road centre) on the way out
-            cop._fleeTimer    = FLEE_MAX_SEC;
+            cop.fleeing        = true;
+            cop._fleeNoSwerve  = false;     // uses the positional recede, not coal's fade
+            cop._donutLure     = 0;         // veer toward the donuts (road centre) on the way out
+            cop._donutFleeDelay = 1.5;      // hold on-screen 1.5s before receding (owner 2026-07-19)
+            cop._fleeTimer     = FLEE_MAX_SEC;
             cop.trapPursuit   = false;
             cop.parked        = false;
             cop._pitProgress  = 0;
@@ -838,6 +839,19 @@ export class CopSystem {
       // the smoke (lost sight — no dramatic swerve).
       if (cop.fleeing) {
         cop._fleeTimer = (cop._fleeTimer ?? FLEE_MAX_SEC) - dt;
+        // ── DONUT 1.5s beat: hold the cop ON-SCREEN briefly after the box is
+        // thrown before it peels off (owner 2026-07-19). Keep pace with the
+        // player so `rel` stays constant (no recede yet) while it veers toward
+        // the donuts; once the delay elapses the normal recede below takes over.
+        if (cop._donutFleeDelay > 0) {
+          cop._donutFleeDelay -= dt;
+          const d = (cop._donutLure ?? 0) - cop.laneOffset;
+          cop.laneOffset += Math.sign(d) * Math.min(Math.abs(d), 2.4 * dt);
+          cop.speed = playerSpeed;
+          cop.position += cop.speed * dt;
+          cop._fleeFade = 1;                // stay fully visible during the hold
+          continue;
+        }
         // ── ROLLING COAL: keep pace, then slow and recede off the bottom ──
         // The cop KEEPS PACE with the player for COAL_PACE_SEC, then slows so
         // it falls back and drops off the BOTTOM edge the same way it drove in
