@@ -42,7 +42,7 @@ import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
 import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '../utils/Colors.js';
 import { getUpgradeEffects, getInstalledUpgrade } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
-import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs } from '../data/genreVehicleTraits.js';
+import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs, policeWarningChance } from '../data/genreVehicleTraits.js';
 
 const CAM_DEPTH = 0.84;
 const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
@@ -20632,6 +20632,14 @@ export class GameScene extends Phaser.Scene {
     const t = this._trapTicket;
     this._trapTicket = null;
     if (!t) { this._showPopup('✅ Ticket issued. Drive safe.', '#88FF88'); return; }
+
+    // 25% of low-level stops (≤1★) end in a WARNING, not a ticket — unless the
+    // vehicle's trait removes warnings entirely (reggae) — owner 2026-07-19.
+    if (Math.random() < policeWarningChance(this._activeGenreTrait(), this.cops?.stars ?? 0)) {
+      this.stats?.recordTrafficStop?.({ dui: false, amountPaid: 0, busted: false, warning: true });
+      this._showPopup('⚠️ WARNING\nLet you off this time — drive safe.', '#FFDD44');
+      return;
+    }
 
     const hasLawyer = this.registry.get('save')?.get?.('lawyerRetained') === true;
     // Fine = a fraction of current cash, capped at a dollar ceiling (speeding =

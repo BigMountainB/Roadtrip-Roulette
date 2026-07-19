@@ -141,9 +141,10 @@ non-culture vehicles keep normal VEHICLES stats.
 - **First-violation instant star (reggaeton) — DONE**: the FIRST moving violation (speeding / crossed the
   double-yellow while clocked) lands a wanted star instantly, skipping the 0★ civil-stop grace. Per-run flag
   resets on restart → no double-apply.
-- **Only NOT wired (1): no-police-warning** (reggae) — **N/A**: there's no warning-vs-ticket branch in the
-  current stop flow (every stop already tickets), so the flag is pushed to CopSystem but has nothing to
-  suppress yet. **39/40 modifiers now integrated.**
+- **Police warnings + reggae no-warning — DONE (owner 2026-07-19)**: a low-level traffic stop (≤1★) now has
+  a **25% chance of a WARNING** (no fine) instead of a ticket (`policeWarningChance` helper + 5 tests).
+  Reggae's `noPoliceWarning` trait zeroes that chance, so it always eats the ticket — the trait finally has
+  something to suppress. **40/40 modifiers integrated.**
 - **Playtest fixes (shipped in the same batch of commits)**: region gold-pulse (dropped NOW ENTERING),
   gold invincibility flash, coal first-fire slow, donut in-lane 1s hold + straight recede, one NPC per rest
   stop, invisible pedals w/ gold throbbing glow, "COP HIT +1 ⭐" + lowered Pursuit/cop-hit HUD.

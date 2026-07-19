@@ -10,7 +10,7 @@
 import {
   GENRE_VEHICLE_TRAITS, MODIFIER_DEFAULTS, STARTER_VEHICLE_ID,
   genreTraitFor, traitMods, mult, traitTopSpeedMph, rollWeaponBonusUse,
-  cargoShieldAbsorbs, CARGO_MINOR_DMG,
+  cargoShieldAbsorbs, CARGO_MINOR_DMG, policeWarningChance, POLICE_WARNING_CHANCE,
 } from '../src/data/genreVehicleTraits.js';
 
 let passed = 0, failed = 0;
@@ -100,6 +100,15 @@ check('norteño absorbs exactly at the minor threshold', cargoShieldAbsorbs(_nor
 check('norteño ignores zero/negative damage', cargoShieldAbsorbs(_nor, false, 0) === false);
 check('non-norteño never absorbs', cargoShieldAbsorbs(genreTraitFor('metal', 'beater'), false, 8) === false);
 check('null trait never absorbs', cargoShieldAbsorbs(null, false, 8) === false);
+
+// ── 8. Police warning chance (reggae no-warning) ─────────────────────────
+const _reg = genreTraitFor('reggae', 'beater');
+const _cnt = genreTraitFor('country', 'beater');
+near('normal vehicle: 25% warning at 1★', policeWarningChance(_cnt, 1), 0.25);
+near('normal vehicle: 25% warning at 0★', policeWarningChance(_cnt, 0), 0.25);
+check('reggae NEVER gets a warning (its trait removes them)', policeWarningChance(_reg, 1) === 0);
+check('no warning above 1★', policeWarningChance(_cnt, 2) === 0);
+near('null trait gets the base warning chance', policeWarningChance(null, 1), POLICE_WARNING_CHANCE);
 
 console.log(`\ngenreTraits.test: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

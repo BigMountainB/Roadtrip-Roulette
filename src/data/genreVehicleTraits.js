@@ -344,6 +344,16 @@ export function rollWeaponBonusUse(trait, rng = Math.random) {
 /** Damage below this counts as a "minor" collision for the Norteño cargo shield. */
 export const CARGO_MINOR_DMG = 12;
 
+/** Base chance a low-level traffic stop (≤1★) is just a WARNING, not a ticket. */
+export const POLICE_WARNING_CHANCE = 0.25;
+
+/** Chance THIS stop is a warning: the 25% base at ≤1★, but ZERO if the vehicle's
+ *  trait removes warnings (reggae) or the wanted level is above 1★. Pure/testable. */
+export function policeWarningChance(trait, stars, base = POLICE_WARNING_CHANCE) {
+  if ((stars ?? 0) > 1) return 0;
+  return mult(trait, 'noPoliceWarning') ? 0 : base;
+}
+
 /** Norteño Custom Pickup: does this collision get ABSORBED by the cargo shield?
  *  Cargo survives ONE minor collision per run — pure/testable, the caller owns
  *  the `alreadyUsed` flag (reset on scene restart so it can't double-apply). */
