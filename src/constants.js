@@ -22,17 +22,30 @@ export let WORLD_W      = SCREEN_W;
 export let WORLD_CX     = SCREEN_W / 2;
 export let HUD_OFFSET_X = 0;
 
-/** Set the decoupled world render width.  Clamped to [SCREEN_W, 1600] — never
- *  narrower than the 800 design (that would crop the road / HUD), and capped at
- *  1600 (aspect 3.56) so a 32:9 desktop doesn't blow up the scenery field while
- *  every phone/foldable fills with no side bars (e.g. a 2.99 landscape iPhone
- *  needs ~1347).  The road renderer's MARGIN scales with HUD_OFFSET_X so
- *  sky/ground fills always span the widened canvas.  The world is centered by
- *  scrolling the main camera −HUD_OFFSET_X (rather than re-deriving every
- *  projection origin), so this width only needs to widen scenery culling/tiling,
- *  not the projection math. */
+// The HUD is an 800-wide (SCREEN_W) band centered in the canvas via HUD_OFFSET_X,
+// but a few edge controls bleed PAST that band under the shipped layout: the
+// BRAKE pedal reaches x≈−39, the ACCEL pedal x≈834, and the garage button x≈854
+// (≈54px past 800).  On a wide phone WORLD_W naturally exceeds 800, so the
+// centered band has margin and those controls stay on-canvas.  On a narrow-
+// landscape screen (a 4:3 iPad's aspect floors WORLD_W at SCREEN_W=800) the
+// margin is ZERO, so the bleed clips off the canvas edges — the reported iPad
+// "HUD cut off on both sides" (owner 2026-07-18).  Floor the width at 940 = the
+// 800 band + 70px of margin per side so the full HUD is ALWAYS on-canvas; the
+// trade is a little extra top/bottom letterbox on sub-2.09 aspect screens, which
+// is correct — keep every button reachable over an edge-to-edge fill.
+export const HUD_SAFE_FLOOR = 940;
+
+/** Set the decoupled world render width.  Clamped to [HUD_SAFE_FLOOR, 1600] —
+ *  never narrower than the HUD-safe floor (below it the edge controls crop off
+ *  the canvas, see above), and capped at 1600 (aspect 3.56) so a 32:9 desktop
+ *  doesn't blow up the scenery field while every phone/foldable fills with no
+ *  side bars (e.g. a 2.99 landscape iPhone needs ~1347).  The road renderer's
+ *  MARGIN scales with HUD_OFFSET_X so sky/ground fills always span the widened
+ *  canvas.  The world is centered by scrolling the main camera −HUD_OFFSET_X
+ *  (rather than re-deriving every projection origin), so this width only needs to
+ *  widen scenery culling/tiling, not the projection math. */
 export function setWorldWidth(w) {
-  WORLD_W      = Math.max(SCREEN_W, Math.min(1600, Math.round(w)));
+  WORLD_W      = Math.max(HUD_SAFE_FLOOR, Math.min(1600, Math.round(w)));
   WORLD_CX     = WORLD_W / 2;
   HUD_OFFSET_X = (WORLD_W - SCREEN_W) / 2;
   return WORLD_W;
