@@ -536,6 +536,19 @@ export class CopSystem {
           frontZ: playerPos + COAL_CLOUD_FRONT,
           life:   COAL_CLOUD_LIFE,
         };
+        // Slow any cop ALREADY inside the cloud band this instant — a cop
+        // chasing from behind is in the band the moment you belch. The per-
+        // frame touch check (update loop) keeps catching new arrivals, but the
+        // cloud is set AFTER this frame's cop update, so without this the first
+        // fire didn't slow the current pursuer until a frame later / at all
+        // (owner 2026-07-19: "coal didn't work on the cop the first time").
+        for (const cop of this.cops) {
+          if (cop && cop.kind !== 'barricade'
+              && cop.position >= this._coalCloud.backZ
+              && cop.position <= this._coalCloud.frontZ) {
+            cop.coalSlowT = COAL_SLOW_SEC;
+          }
+        }
         // Any arrest that was mid-progress is broken the moment the wall of
         // smoke goes up (nobody can line up the bust through it).
         this.bumpCount     = 0;
