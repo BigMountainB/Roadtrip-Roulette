@@ -1786,7 +1786,6 @@
         // border overflows into the black letterbox where it's invisible.
         // coverState stays the full-image transform, so all data-px math is
         // untouched.
-        const EDGE = 15;
         // VISIBLE content box (luminance-measured, identical on all skins):
         // bright art spans rows 106–1711 / cols 41–813 of the 853×1844 file.
         // The earlier {t:100,b:37} box included ~95px of essentially-black
@@ -1794,16 +1793,24 @@
         // which pushed the visible art up — the "not centered vertically" bug.
         const INS = { l: 41, r: 853 - 813, t: 106, b: 1844 - 1712 };
         const cw = imgW - INS.l - INS.r, ch = imgH - INS.t - INS.b;
-        const scale = Math.min((vw - EDGE * 2) / cw, (vh - EDGE * 2) / ch);
+        // RESPONSIVE FILL (owner 2026-07-18).  Was CONTAIN (Math.min + a 15px
+        // margin), which letterboxed the art on all four sides.  Now PIN THE
+        // HEIGHT: the visible content box always fills the viewport top-to-
+        // bottom, so the weather widget (top) and the rotate strip (bottom) are
+        // NEVER cropped — pinning the height IS the crop cap that "keeps iPad
+        // correct".  The crop budget is spent on the WIDTH instead:
+        //   • phone aspect (art ≈ 0.48, device narrower): width overflows → the
+        //     art COVERS the screen, only side padding crops (fills edge-to-edge).
+        //   • tablet aspect (3:4, device wider): width underflows → the art
+        //     letterboxes at the SIDES only, losing nothing vertically.
+        const scale = vh / ch;
         const offX = (vw - cw * scale) / 2 - INS.l * scale;
-        // CENTERED (final, owner-approved via the 2026-07-15 green-box
-        // screenshot).  NOTE the black strip at the very bottom of the glass
-        // in standalone mode is iOS'S OWN — the OS does not composite the
-        // bottom ~62px of Home-Screen web apps (bottom-flush proved it: art
-        // pushed there gets masked, not shown).  Centering parks the
-        // letterbox slack under that mask, which is the best any layout can
-        // do; the strip itself is not removable by the page.
-        const offY = (vh - ch * scale) / 2 - INS.t * scale;
+        // Height is pinned (ch*scale === vh), so the vertical centring term is 0.
+        // Lift the whole composite (art + hit zones, which share this transform)
+        // UP 5px so the bottom red line clears the edge / Safari bar.  The near-
+        // black bottom dead-border (INS.b) trails below the content and fills the
+        // 5px it vacates, so there's no visible gap — just the red line revealed.
+        const offY = -INS.t * scale - 5;
         coverState = { scale, offX, offY };
         // Size/position the art itself with the SAME transform the hit zones
         // use, so buttons stay glued to the artwork at any scale.
