@@ -463,7 +463,7 @@ export function getLastSignTown(currentMile) {
 // at Colfax, and finishes on WA-270 into Pullman (we reuse hwy_wa270 for
 // WA-271 since the same green WA-state badge fits visually).
 const _REST_STOP_DEF = [
-  { id: 'S',  name: 'Seattle, WA',         mileage:    4, exit: 'Exit 4',     hwy: 'hwy_i90',   amenities: ['gas', 'vices', 'dealer'] },
+  { id: 'S',  name: 'Seattle, WA',         mileage:    4, exit: 'Exit 4',     hwy: 'hwy_i90',   amenities: ['gas', 'cargo', 'vices', 'dealer'] },
   // Mercer Island sits between the Mercer Island Lid Tunnel (8.5–9.0)
   // and the East Channel Bridge (10–11.5).  Mile 9.5 keeps the entire
   // 1-mi ramp window (8.5–9.5) on dry road only after the player exits
@@ -475,10 +475,10 @@ const _REST_STOP_DEF = [
   { id: 'B',  name: 'Bellevue, WA',        mileage: 12.5, exit: 'Exit 10',    hwy: 'hwy_i90',   amenities: ['dealer', 'vices'] },
   { id: 'I',  name: 'Issaquah, WA',        mileage:   18, exit: 'Exit 18',    hwy: 'hwy_i90',   amenities: ['hunting', 'camp'] },
   { id: 'SQ', name: 'Snoqualmie, WA',      mileage:   25, exit: 'Exit 25',    hwy: 'hwy_i90',   amenities: ['dealer'] },
-  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'vices', 'parkride', 'ambm'] },
-  { id: 'SP', name: 'Snoqualmie Pass, WA', mileage:   53, exit: 'Exit 53',    hwy: 'hwy_i90',   amenities: ['camp', 'gas'] },
+  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['gas', 'cargo', 'hunting', 'vices', 'parkride', 'ambm'] },
+  { id: 'SP', name: 'Snoqualmie Pass, WA', mileage:   53, exit: 'Exit 53',    hwy: 'hwy_i90',   amenities: ['camp', 'gas', 'cargo'] },
   { id: 'EA', name: 'Easton, WA',          mileage:   70, exit: 'Exit 70',    hwy: 'hwy_i90',   amenities: ['camp'] },
-  { id: 'C',  name: 'Cle Elum, WA',        mileage:   84, exit: 'Exit 84',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting'] },
+  { id: 'C',  name: 'Cle Elum, WA',        mileage:   84, exit: 'Exit 84',    hwy: 'hwy_i90',   amenities: ['gas', 'cargo', 'hunting'] },
   { id: 'TH', name: 'Thorp, WA',           mileage:  101, exit: 'Exit 101',   hwy: 'hwy_i90',   amenities: ['camp'] },
   { id: 'E',  name: 'Ellensburg, WA',      mileage:  109, exit: 'Exit 109',   hwy: 'hwy_i90',   amenities: ['dealer', 'gas', 'parkride'] },
   { id: 'V',  name: 'Vantage, WA',         mileage:  137, exit: 'Exit 137',   hwy: 'hwy_i90',   amenities: ['gas'] },

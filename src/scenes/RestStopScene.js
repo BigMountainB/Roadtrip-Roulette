@@ -189,6 +189,13 @@ const SECTIONS = {
     // a function of the player's current gas tank.
     items: [],
   },
+  // CarGo — co-located with Huff's at the west gas stops. Huff's is gas-only, so
+  // the EV FAST CHARGER lives here now; past Issaquah it's also the gig hub
+  // (hitchhikers + ready drop-offs). Items populated dynamically in create().
+  cargo: {
+    label: '📦  CARGO',
+    items: [],
+  },
   hunting: {
     label: '🦌  HUNTING',
     items: [
@@ -249,8 +256,8 @@ const SECTIONS_PRISTINE = Object.fromEntries(
 
 // Landing tab order (brand placards).  dealer_acc / dealer_cars are
 // reached via the Dealer chooser, not the landing.
-const TAB_ORDER = ['gas', 'hunting', 'camp', 'dealer', 'parkride', 'vices', 'ambm'];
-const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'parkride', 'vices', 'ambm'];
+const TAB_ORDER = ['gas', 'cargo', 'hunting', 'camp', 'dealer', 'parkride', 'vices', 'ambm'];
+const ALL_SECTIONS = ['gas', 'cargo', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'parkride', 'vices', 'ambm'];
 
 // Charger availability — west-side rest stops carry the CarGo brand
 // which sells both gas AND charging.  East-side stops are Huff's,
@@ -269,9 +276,11 @@ function hasCharger(stopId) {
 function brandsForStop(stop) {
   const isWest = (stop?.mileage ?? 0) < 100;
   return {
-    gas: isWest
-      ? { name: 'CarGo',       logo: 'biz_cargo' }
-      : { name: "Huff's Gas",  logo: 'biz_huffs' },
+    // Huff's pumps gas at EVERY gas stop now (owner 2026-07-19): "there can be
+    // Huff's without CarGo, but no CarGo without Huff's." CarGo is its own
+    // co-located vendor (below) — the EV charger + the gig hub, no gas.
+    gas:   { name: "Huff's Gas", logo: 'biz_huffs' },
+    cargo: { name: 'CarGo',      logo: 'biz_cargo' },
     hunting: { name: 'CowBella',   logo: 'biz_cowbellas' },
     camp:    { name: 'AOK Camp',   logo: 'biz_aok' },
     dealer:  isWest
@@ -498,22 +507,7 @@ export class RestStopScene extends Phaser.Scene {
       : { id: 'refuel', label: '⛽  TANK FULL', cost: 0,
           desc: 'No refuel needed.', payload: {} };
     gasItems.push(refuelItem);
-    if (_isCharger) {
-      gasItems.push({
-        id: 'charge', label: '🔌  FAST CHARGE',
-        cost: _chargeCost,
-        desc: _vehFuel === 'electric'
-          ? `Watch ad (5s) + party-clock penalty. Cheaper but slower.`
-          : `Available — but your vehicle is gas-powered.`,
-        payload: _vehFuel === 'electric' ? { charge: true, chargeMi: _missingMi } : {},
-      });
-    } else {
-      gasItems.push({
-        id: 'charge', label: '🔌  NO CHARGER',
-        cost: 0, desc: 'This stop has gas only.',
-        payload: {},
-      });
-    }
+    // (EV FAST CHARGE moved to the CarGo tab below — Huff's is gas-only now.)
 
     // ── Pint of oil — knocks 5% off the engine heat (2026-07-16). ──
     gasItems.push({
@@ -533,6 +527,30 @@ export class RestStopScene extends Phaser.Scene {
     // item lists were assembled earlier.
     SECTIONS.vices.items = [refuelItem, waterItem(10), ...(SECTIONS.vices.items ?? [])];
     SECTIONS.ambm.items  = [refuelItem, waterItem(10), ...(SECTIONS.ambm.items  ?? [])];
+
+    // ── CarGo tab (owner 2026-07-19): the EV FAST CHARGER lives here now (Huff's
+    // is gas-only), and past Issaquah (mi 18) it's the gig hub — hitchhikers to
+    // pick up. Ready drop-offs still collect via their own Ch.8 panel. ──
+    if (SECTIONS.cargo) {
+      const cargoItems = [];
+      cargoItems.push(_isCharger
+        ? { id: 'charge', label: '🔌  FAST CHARGE', cost: _chargeCost,
+            desc: _vehFuel === 'electric'
+              ? 'Watch ad (5s) + party-clock penalty. Cheaper but slower.'
+              : 'Available — but your vehicle is gas-powered.',
+            payload: _vehFuel === 'electric' ? { charge: true, chargeMi: _missingMi } : {} }
+        : { id: 'charge', label: '🔌  NO CHARGER', cost: 0,
+            desc: 'This CarGo has no charger.', payload: {} });
+      // Gig hub opens past Issaquah — early stops are charge-only.
+      if ((this._stop?.mileage ?? 0) > 18) {
+        cargoItems.push({
+          id: 'hitch', label: '🧍  PICK UP HITCHHIKER',
+          cost: 0, desc: "Free — but it's a gamble.",
+          payload: { hitchhike: true },
+        });
+      }
+      SECTIONS.cargo.items = cargoItems;
+    }
 
     // ── PARK & RIDE: the (vice) Dealer hands over pre-paid phone orders ──
     // One free pickup item per vice ordered (phone → Messages → Dealer).
@@ -921,7 +939,7 @@ export class RestStopScene extends Phaser.Scene {
         img.setDisplaySize(baseW * k, baseH * k);
         this._landingObjs.push(img);
       } else {
-        const accentFor = { gas: 0xFFCC22, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, vices: 0x9A36CC, parkride: 0x1E5BB8 };
+        const accentFor = { gas: 0xFFCC22, cargo: 0x0E9488, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, vices: 0x9A36CC, parkride: 0x1E5BB8 };
         const accent = accentFor[key] ?? 0x888888;
         const strip = this.add.rectangle(logoArea.x, logoArea.y, logoArea.w, logoArea.h, accent, 1)
           .setOrigin(0, 0);
