@@ -4807,7 +4807,9 @@ export class GameScene extends Phaser.Scene {
       const ACCEL_DRAIN_PER_SEC  = 100 / (5 * 60);
       const ACCEL_REFILL_PER_SEC = 100 / (20 * 60);
       if (this._isBoost()) {
-        this._accelCharge = Math.max(0, (this._accelCharge ?? 100) - ACCEL_DRAIN_PER_SEC * rawDt);
+        // edm boostDurationMult (1.25) → the charge drains slower, so the boost
+        // lasts ~25% longer (owner 2026-07-19).
+        this._accelCharge = Math.max(0, (this._accelCharge ?? 100) - ACCEL_DRAIN_PER_SEC / Math.max(0.1, this._traitMod('boostDurationMult')) * rawDt);
         if (this._accelCharge <= 0 && this._touchBoost) {
           this._touchBoost = false;
           this._refreshPedals?.();
@@ -5110,8 +5112,10 @@ export class GameScene extends Phaser.Scene {
 
     if (p.speed < targetSpeed) {
       // Weed (when alone) reduces ACCEL — slower throttle response.
-      // Genre-vehicle acceleration modifier (owner 2026-07-19).
-      p.speed = Math.min(targetSpeed, p.speed + ACCEL * (phys.accelMul ?? 1) * this._traitMod('accelerationMult') * dt * 60);
+      // Genre-vehicle acceleration modifier + edm's stronger ACCEL boost (only
+      // while boosting) — owner 2026-07-19.
+      const _boostStr = this._isBoost() ? this._traitMod('boostStrengthMult') : 1;
+      p.speed = Math.min(targetSpeed, p.speed + ACCEL * (phys.accelMul ?? 1) * this._traitMod('accelerationMult') * _boostStr * dt * 60);
     } else if (p.speed > targetSpeed) {
       // Brake decel scales with weather grip — wet/snowy roads lengthen
       // the stopping distance.  Quick local peek at Weather so the
