@@ -190,6 +190,27 @@
     #tut-quote.show { display: flex; align-items: center; justify-content: center; }
     #tut-quote.tapped { background: rgba(120, 92, 20, 0.8); animation: none; box-shadow: 0 0 6vmin 2vmin rgba(255, 220, 90, 1); }
     #tut-quote .tq-next { position: absolute; right: 2.8vmin; bottom: 1.6vmin; color: #FFE08A; font-weight: 900; font-size: clamp(16px, 3.6vmin, 22px); letter-spacing: 0.06em; }
+    /* Genre-vehicle trait PEEK popup (long-hold the Music icon). */
+    #vehtrait-pop {
+      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.96);
+      width: min(86vw, 560px); z-index: 999996; display: none;
+      box-sizing: border-box; padding: 3vmin 3.4vmin;
+      background: rgba(6, 16, 30, 0.92); border: 0.5vmin solid #FFD24D; border-radius: 2.4vmin;
+      color: #FFF6E0; font-family: "Helvetica Neue", Arial, sans-serif;
+      box-shadow: 0 0 6vmin rgba(255, 210, 77, 0.35); pointer-events: none;
+      opacity: 0; transition: opacity 0.12s ease, transform 0.12s ease;
+    }
+    #vehtrait-pop.show { display: block; opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    #vehtrait-pop .vt-name { font-weight: 900; font-size: clamp(20px, 5vmin, 30px); color: #FFD24D; text-align: center; }
+    #vehtrait-pop .vt-top { text-align: center; color: #9FD0FF; font-weight: 700; font-size: clamp(13px, 3.2vmin, 18px); margin-bottom: 1.4vmin; letter-spacing: 0.06em; }
+    #vehtrait-pop .vt-list { list-style: none; margin: 0; padding: 0; }
+    #vehtrait-pop .vt-list li { font-size: clamp(14px, 3.4vmin, 19px); line-height: 1.5; }
+    #vehtrait-pop .vt-hint { text-align: center; color: #FFE08A; font-size: clamp(11px, 2.6vmin, 15px); margin-top: 1.6vmin; opacity: 0.8; }
+    /* Genre-vehicle trait panel inside the Garage app. */
+    #garage-trait { margin-top: 2vmin; padding: 2.5vmin; background: #0b0716; border: 2px solid #4a2f6e; border-radius: 2vmin; color: #F4F7FF; }
+    #garage-trait .gt-name { color: #FFD24D; font-weight: bold; font-size: 6.4vmin; text-align: center; margin-bottom: 1.4vmin; }
+    #garage-trait .gt-list { list-style: none; margin: 0; padding: 0; }
+    #garage-trait .gt-list li { font-size: 5.2vmin; line-height: 1.55; }
     #tut-skip {
       position: fixed; top: calc(env(safe-area-inset-top, 0px) + 1.6vmin); right: 1.8vmin; z-index: 999996;
       width: 39vmin; max-width: 192px; height: 13.5vmin; max-height: 69px; display: none;
@@ -2205,7 +2226,7 @@
       // arrives before the timer fires, `onTap` runs.  If the timer
       // fires first, `onHold` runs and the subsequent pointerup is
       // swallowed so the tap handler doesn't also trigger.
-      const addLongTap = (el, onTap, onHold, holdMs = 500) => {
+      const addLongTap = (el, onTap, onHold, holdMs = 500, onHoldEnd = null) => {
         if (!el) return;
         let holdTimer = null;
         let holdFired = false;
@@ -2222,7 +2243,9 @@
         const endHold = (e) => {
           if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
           e.preventDefault(); e.stopPropagation();
-          if (holdFired) { holdFired = false; return; }
+          // A hold fired → release just ENDS the hold (e.g. dismiss a peek
+          // popup), never the tap action.
+          if (holdFired) { holdFired = false; if (onHoldEnd) onHoldEnd(); return; }
           const now = Date.now();
           if (now - lastFire < 350) return;
           lastFire = now;
@@ -2230,6 +2253,7 @@
         };
         const cancel = () => {
           if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+          if (holdFired && onHoldEnd) onHoldEnd();
           holdFired = false;
         };
         el.addEventListener('pointerup',     endHold, { passive: false });
@@ -2703,7 +2727,19 @@
             + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4vmin;margin-bottom:2vmin;">${statsHtml}</div>`
             + slotsHtml + `</div>`;
         }
-        garageList.innerHTML = carsHtml + panelHtml;
+        // Genre-vehicle trait panel (owner 2026-07-19): the starter/beater
+        // drives differently per selected culture — surface its identity here.
+        let traitHtml = '';
+        {
+          const _curCar = cars.find(c => c.current);
+          const _trait = (_curCar && _curCar.id === 'beater') ? (window.__vehTraits?.current?.()) : null;
+          if (_trait) {
+            const li = (arr, icon) => (arr || []).map(s => `<li>${icon} ${s}</li>`).join('');
+            traitHtml = `<div id="garage-trait"><div class="gt-name">${_trait.vehicleName} · ${_trait.topSpeedMph} MPH TOP</div>`
+              + `<ul class="gt-list">${li(_trait.strengths, '✅')}${li(_trait.weaknesses, '⚠️')}</ul></div>`;
+          }
+        }
+        garageList.innerHTML = carsHtml + traitHtml + panelHtml;
 
         garageList.querySelectorAll('.row').forEach(row => {
           row.addEventListener('click', (e) => {
@@ -3373,11 +3409,24 @@
         // only has to wait on the MP3 download, not the synth setup.
         window.__music?.warmup?.();
       }
-      addLongTap(musicHit, openMusicModal, () => {
-        // long-hold → toggle mute
-        window.__music?.toggleMute?.();
-        applyMusicMutedIndicator();
-      });
+      // Long-hold the MUSIC icon → PEEK the current genre vehicle's traits
+      // (owner 2026-07-19). Short tap still opens the genre submenu; releasing
+      // the hold just dismisses the popup (never opens the submenu).
+      let _traitPop = null;
+      const showTraitPopup = () => {
+        const t = window.__vehTraits?.current?.();
+        if (!t) return;   // no genre chosen yet → nothing to peek
+        if (!_traitPop) { _traitPop = document.createElement('div'); _traitPop.id = 'vehtrait-pop'; document.body.appendChild(_traitPop); }
+        const li = (arr, icon) => (arr || []).map(s => `<li>${icon} ${s}</li>`).join('');
+        _traitPop.innerHTML =
+          `<div class="vt-name">${t.vehicleName}</div>` +
+          `<div class="vt-top">${t.topSpeedMph} MPH TOP</div>` +
+          `<ul class="vt-list">${li(t.strengths, '✅')}${li(t.weaknesses, '⚠️')}</ul>` +
+          `<div class="vt-hint">release to close</div>`;
+        _traitPop.classList.add('show');
+      };
+      const hideTraitPopup = () => { _traitPop?.classList.remove('show'); };
+      addLongTap(musicHit, openMusicModal, showTraitPopup, 500, hideTraitPopup);
 
       // ── Achievements modal ───────────────────────────────────────────
       const achModal = document.getElementById('phone-achievements');

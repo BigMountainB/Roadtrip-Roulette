@@ -6,6 +6,7 @@ import { GameOverScene } from './scenes/GameOverScene.js';
 import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, VICES, VICE_CONFIG, REST_STOPS, setWorldWidth } from './constants.js';
 import { Weather } from './world/Weather.js';
 import { VICE_PRICE } from './scenes/RestStopScene.js';
+import { GENRE_VEHICLE_TRAITS } from './data/genreVehicleTraits.js';
 import { AchievementSystem } from './systems/AchievementSystem.js';
 import { getVehicleDisplayStats } from './systems/VehicleStats.js';
 import {
@@ -957,6 +958,15 @@ const _boot = () => {
   // save slot ('genre') and mirrored to localStorage 'rtr.genre', which
   // BootScene reads at boot. set() swaps it live; syncActive() re-mirrors when
   // the active profile/plate changes.
+  // Genre Vehicle Traits bridge for the DOM (phone-menu Music long-hold popup +
+  // Garage panel). Returns the trait for a culture's STARTER vehicle, or null.
+  window.__vehTraits = {
+    forGenre: (g) => (g && GENRE_VEHICLE_TRAITS[g]) ? GENRE_VEHICLE_TRAITS[g] : null,
+    current:  () => {
+      const g = (() => { try { return window.__genre?.get?.(); } catch (_) { return null; } })();
+      return (g && GENRE_VEHICLE_TRAITS[g]) ? GENRE_VEHICLE_TRAITS[g] : null;
+    },
+  };
   window.__genre = {
     get: () => {
       const g = game.registry.get('save')?.get?.('genre', null);
