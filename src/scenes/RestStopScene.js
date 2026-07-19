@@ -523,15 +523,16 @@ export class RestStopScene extends Phaser.Scene {
       payload: { coolEngineFrac: 0.05 },
     });
 
-    gasItems.push(waterItem(15));   // bottled water at gas stations (owner 2026-07-17)
+    gasItems.push(waterItem(10));   // bottled water, $10 at every gas vendor (owner 2026-07-19)
     SECTIONS.gas.items = gasItems;
 
     // Gas-N-Sip (vices) and AM/BM pump gas too (owner 2026-07-19): give both the
-    // SAME refuel item as the gas tab, at the top of their menu, so the player
-    // can fill up at those convenience-store stops. Built here (after the fuel
-    // cost is known) since the vices/ambm item lists were assembled earlier.
-    SECTIONS.vices.items = [refuelItem, ...(SECTIONS.vices.items ?? [])];
-    SECTIONS.ambm.items  = [refuelItem, ...(SECTIONS.ambm.items  ?? [])];
+    // SAME refuel item as the gas tab, plus a $10 water, at the top of their
+    // menu, so the player can fill up (and grab a bottle) at those convenience-
+    // store stops. Built here (after the fuel cost is known) since the vices/ambm
+    // item lists were assembled earlier.
+    SECTIONS.vices.items = [refuelItem, waterItem(10), ...(SECTIONS.vices.items ?? [])];
+    SECTIONS.ambm.items  = [refuelItem, waterItem(10), ...(SECTIONS.ambm.items  ?? [])];
 
     // ── PARK & RIDE: the (vice) Dealer hands over pre-paid phone orders ──
     // One free pickup item per vice ordered (phone → Messages → Dealer).
