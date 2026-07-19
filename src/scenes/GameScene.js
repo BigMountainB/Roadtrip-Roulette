@@ -8860,50 +8860,44 @@ export class GameScene extends Phaser.Scene {
         // Only swap keys whose fresh art actually arrived.
         const ready = targets.map(([k]) => k).filter(k => this.textures.exists(TMP(k)));
         if (!ready.length) return;
-        const readySet = new Set(ready);
-        // SWAP EVERYTHING LIVE (owner 2026-07-19): removing + re-adding a texture
-        // key DESTROYS the old Texture OBJECT, so every live GameObject still
-        // referencing it (pickups, weapons, the headlight bitmap-masks, any
-        // pooled sprite) would render a dead texture next frame — the reported
-        // batchSprite / drawBitmapMask crash when the genre is changed mid-run.
-        // So: (1) collect every live user of each swapped key by walking the
-        // display list, (2) swap the textures, (3) re-point every collected
-        // sprite to the fresh key. Bitmap masks follow automatically once their
-        // masking sprite is re-pointed (the mask re-renders it each frame).
-        const usersByKey = {};
-        for (const k of ready) usersByKey[k] = [];
-        const walk = (list) => {
-          if (!list) return;
-          for (const go of list) {
-            const key = go?.texture?.key;
-            if (key && readySet.has(key)) usersByKey[key].push(go);
-            if (go?.list) walk(go.list);   // recurse into Containers
-          }
-        };
-        try { walk(this.children?.list); } catch (_) {}
-        // Atomic swap: real key takes the temp image's source; temp entry dropped.
+        // IN-PLACE SWAP (owner 2026-07-19): the remove+re-add path DESTROYED the
+        // old Texture object, so any live sprite / bitmap-mask still holding it
+        // rendered a dead texture → the get/batchSprite/drawBitmapMask crash on a
+        // mid-run genre change. Instead keep each texture's SAME object and just
+        // replace its source image + re-upload to the GPU. Object identity never
+        // changes, so EVERY reference (pooled sprites, weapons, the headlight
+        // masks) stays valid — nothing to re-point, nothing to miss.
         for (const k of ready) {
           try {
-            const img = this.textures.get(TMP(k)).getSourceImage();
-            if (this.textures.exists(k)) this.textures.remove(k);
-            this.textures.addImage(k, img);
-            this.textures.remove(TMP(k));
+            const newImg = this.textures.get(TMP(k)).getSourceImage();
+            const tex = this.textures.get(k);
+            const src = tex?.source?.[0];
+            if (!newImg) { this.textures.remove(TMP(k)); continue; }
+            if (!src) {
+              // No existing texture to update in place → first-time add.
+              if (!this.textures.exists(k)) this.textures.addImage(k, newImg);
+              this.textures.remove(TMP(k));
+              continue;
+            }
+            // Free the old GPU texture, repoint the source at the new image, and
+            // re-upload (src.init recreates src.glTexture from src.image).
+            try { src.renderer?.deleteTexture?.(src.glTexture); } catch (_) {}
+            src.glTexture = null;
+            src.image  = newImg;
+            src.width  = newImg.width;
+            src.height = newImg.height;
+            src.init(this.game);
+            // Resize every frame on this source so its UVs match the new image.
+            for (const fname of tex.getFrameNames(true)) {
+              const f = tex.frames[fname];
+              if (!f) continue;
+              f.source.width = newImg.width; f.source.height = newImg.height;
+              try { f.setSize(newImg.width, newImg.height, f.cutX || 0, f.cutY || 0); } catch (_) {}
+            }
+            this.textures.remove(TMP(k));   // drop the temp (frees its own glTexture)
           } catch (_) {}
         }
-        // Re-point every live sprite that was on an old (now-destroyed) texture,
-        // preserving its on-screen size (setTexture otherwise snaps it back to
-        // the art's native pixel size).
-        for (const k of ready) {
-          for (const go of usersByKey[k]) {
-            try {
-              const dw = go.displayWidth, dh = go.displayHeight;
-              go.setTexture(k);
-              if (dw > 0 && dh > 0) go.setDisplaySize(dw, dh);
-            } catch (_) {}
-          }
-        }
-        // Player sprite + vehicle-specific sizing/tint (belt-and-suspenders on
-        // top of the generic re-point above).
+        // Re-apply the player's vehicle sizing — the new art may differ in aspect.
         try { this._applyVehicleSwap?.(this.player?.vehicleId ?? 'beater'); } catch (_) {}
       });
       this.load.start();
@@ -12595,39 +12589,6 @@ export class GameScene extends Phaser.Scene {
     this._applyPlayerSpriteDisplaySize();
   }
 
-  /** Fraction of a texture's frame WIDTH the opaque (non-transparent) pixels
-   *  span (0..1). Scanned once per key + cached. Used to size vehicle sprites by
-   *  their VISIBLE body, not their padded frame — the new-vehicle / genre-starter
-   *  art has big transparent margins, so pinning the frame width alone drove them
-   *  tiny (owner 2026-07-19). */
-  _opaqueFillFrac(texKey) {
-    this._fillFracCache ??= {};
-    if (this._fillFracCache[texKey] != null) return this._fillFracCache[texKey];
-    let frac = 1, measured = false;
-    try {
-      const src = this.textures.get(texKey)?.getSourceImage?.();
-      if (src && src.width && src.height) {
-        const cv = document.createElement('canvas');
-        cv.width = src.width; cv.height = src.height;
-        const ctx = cv.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(src, 0, 0);
-        const data = ctx.getImageData(0, 0, src.width, src.height).data;
-        let minX = src.width, maxX = -1;
-        for (let y = 0; y < src.height; y++) {
-          const row = y * src.width;
-          for (let x = 0; x < src.width; x++) {
-            if (data[(row + x) * 4 + 3] > 16) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
-          }
-        }
-        if (maxX >= minX) { frac = (maxX - minX + 1) / src.width; measured = true; }
-      }
-    } catch (_) {}
-    // Only cache a REAL measurement — if the source image wasn't ready yet we'd
-    // otherwise lock in the 1.0 fallback forever and size that car wrong.
-    if (measured) this._fillFracCache[texKey] = frac;
-    return frac;
-  }
-
   _applyPlayerSpriteDisplaySize(targetW = 78, fallbackH = 49) {
     if (!this.playerSprite) return;
     const texKey = this.playerSprite.texture?.key;
@@ -12642,15 +12603,10 @@ export class GameScene extends Phaser.Scene {
     const tw = src?.width || targetW;
     const th = src?.height || fallbackH;
     const ratio = tw > 0 ? th / tw : fallbackH / targetW;
-    // Every vehicle drives at the SAME VISIBLE body width as the BEATER (owner
-    // 2026-07-19: "all cars the same width as the beater"). Reference = the
-    // beater's OWN opaque-fill fraction, so the beater sits at its natural
-    // width (targetW) and every other car — however much transparent margin its
-    // art carries — is scaled until its visible body matches the beater's.
-    const beaterKey = VEHICLES.beater?.spriteBack;
-    const refFill = (beaterKey ? this._opaqueFillFrac(beaterKey) : 0.94) || 0.94;
-    const frameW  = targetW * (refFill / Math.max(0.3, this._opaqueFillFrac(texKey)));
-    this.playerSprite.setDisplaySize(frameW, frameW * ratio);
+    // Every vehicle drives at the SAME on-road WIDTH as the default car (owner
+    // 2026-07-19). The art is now cropped tight — no transparent margins — so a
+    // plain frame-width pin gives equal VISIBLE widths; height follows aspect.
+    this.playerSprite.setDisplaySize(targetW, targetW * ratio);
   }
 
   /** Paint the player's license-plate handle on the back bumper of the
