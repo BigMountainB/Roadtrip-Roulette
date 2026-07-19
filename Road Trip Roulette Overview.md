@@ -114,7 +114,7 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
-### 2026-07-19 (pt 3) — Vendors, CarGo rework, mission dialogue, editor reset — LOCAL (unpushed)
+### 2026-07-19 (pt 3) — Vendors, CarGo rework, mission dialogue, editor reset — SHIPPED 2026-07-19
 - **Gas at Gas-N-Sip + AM/BM** (`RestStopScene`): both convenience stops now offer the same REFUEL as the
   gas tab (shared item ⇒ topping off anywhere fills the tank once). CarGo/Huff's already sold gas.
 - **$10 water at every gas vendor**: gas tab dropped $15→$10; Gas-N-Sip + AM/BM each get a $10 water.
@@ -133,7 +133,7 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 - **Lowered 3 HUD elements ~10px** in the default (`LAYOUT_VER` 4→5, so it's both the start default and the
   reset target): Pursuit warning (`rearCop`), Pickup/Text alerts (`popup`), Damage-taken flash (`hpDamage`).
 
-### 2026-07-19 (pt 2) — Fixes from on-device testing — LOCAL (unpushed)
+### 2026-07-19 (pt 2) — Fixes from on-device testing — SHIPPED 2026-07-19
 Follow-up batch, all committed locally, awaiting push.
 - **Plate modal no longer forced pre-tutorial** (`GameScene` `_startGameplay`): a run starting mid-tutorial
   (a Calendar "Test any run" PLAY → `__daily.start` → scene restart → `_startGameplay`) auto-popped the
@@ -156,7 +156,7 @@ Follow-up batch, all committed locally, awaiting push.
 - **Local test URL**: `http://192.168.86.180:3000` (vite dev, `server.host:true`; iOS tilt needs the HTTPS
   variant).
 
-### 2026-07-19 — Menu-size revert + HUD relayout + tutorial polish — LOCAL
+### 2026-07-19 — Menu-size revert + HUD relayout + tutorial polish — SHIPPED 2026-07-19
 Batch off owner feedback (iPhone menu shot: `docs/screenshots/2026-07-19-iphone-menu-overcrop.png`
 — WEST SEATTLE header + rotate strip clipped by the 2026-07-18 height-pin fill).
 - **Menu size REVERTED** (`index.html` `recomputeCover`): back to CONTAIN (`Math.min` + 15px margin,
