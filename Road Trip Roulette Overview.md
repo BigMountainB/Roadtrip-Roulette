@@ -114,6 +114,29 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-19 (pt 2) — Fixes from on-device testing — LOCAL (unpushed)
+Follow-up batch, all committed locally, awaiting push.
+- **Plate modal no longer forced pre-tutorial** (`GameScene` `_startGameplay`): a run starting mid-tutorial
+  (a Calendar "Test any run" PLAY → `__daily.start` → scene restart → `_startGameplay`) auto-popped the
+  first-run DRIVER PLATE modal before the tutorial's own plate step. Guarded so it stays quiet while any
+  guided stage is active (`__tut.active`, `rtr_tutStage1/2`, `_titleTut`); normal first runs still prompt.
+- **Genre-change crash fixed** (`_applyGenreArt`): changing genre mid-run removed+re-added each genre
+  texture key (destroys the Texture OBJECT), but only the player sprite was re-pointed → every other live
+  user (pickups, weapons, headlight bitmap-masks, pooled cars) rendered a dead texture →
+  `get`/`batchSprite`/`drawBitmapMask` WebGL crash. Now walk the display list to collect every live user of
+  each swapped key, swap, then re-point them all (preserving on-screen size). Owner chose "swap everything
+  live." Bitmap masks follow once their masking sprite is re-pointed.
+- **All vehicles = the beater's visible width** (`_applyPlayerSpriteDisplaySize`): a prior "pin frame width
+  to 78" shrank the new/genre cars (their art has big transparent margins). Reverted to visible-body sizing
+  referenced to the **beater's** own opaque-fill fraction (beater = natural size, others scale up to match).
+  `_opaqueFillFrac` now only caches a REAL measurement, so a car sized before its texture loaded self-corrects.
+- **Donut 1.5s hold** (`CopSystem`): after the donut box is thrown, affected cops hold on-screen for 1.5s
+  (keep pace with the player, veer toward the donuts) before the recede off-screen kicks in.
+- **Menu art −3px per side** (`index.html` `recomputeCover`, `EDGE` 15→18): the iPhone rotate strip still
+  tucked under the home-indicator bar; added 3px of margin per side to the CONTAIN fit.
+- **Local test URL**: `http://192.168.86.180:3000` (vite dev, `server.host:true`; iOS tilt needs the HTTPS
+  variant).
+
 ### 2026-07-19 — Menu-size revert + HUD relayout + tutorial polish — LOCAL
 Batch off owner feedback (iPhone menu shot: `docs/screenshots/2026-07-19-iphone-menu-overcrop.png`
 — WEST SEATTLE header + rotate strip clipped by the 2026-07-18 height-pin fill).
