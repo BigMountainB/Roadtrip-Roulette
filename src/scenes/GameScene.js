@@ -5255,6 +5255,8 @@ export class GameScene extends Phaser.Scene {
                 : _m <= 177 ? 1                              // full plateau (= held left arrow)
                 : Math.max(0, 1 - (_m - 177) / 6);           // ease out by mile 183
     }
+    // Genre-vehicle crosswind instability (classic-rock +30%, norteño +25%).
+    _windPull *= this._traitMod('hazardInstabilityMult');
     if (_windPull > 0) {
       this._windActive = true;     // for tree sway / tumbleweeds
       if (effectiveSteerDir <= 0.01) {
@@ -6825,8 +6827,10 @@ export class GameScene extends Phaser.Scene {
         if (sp.collected || !sp.isCollectible) continue;
         if (customMode && sp.collectibleType === 'vice') continue;
         // Lateral overlap (~half a lane) — required for visual touch.
+        // Genre-vehicle pickup-radius modifier (k-pop +30%) widens the window.
+        const _pr = this._traitMod('pickupRadiusMult');
         const dX = Math.abs(sp.offset * ROAD_WIDTH - p.x * ROAD_WIDTH);
-        if (dX >= 700) continue;
+        if (dX >= 700 * _pr) continue;
         // Project the pickup to screen and check the vertical band against
         // the player sprite's bounding box.  Collect when the pickup's
         // base sits inside the car rect (give or take a small margin so
@@ -6834,8 +6838,8 @@ export class GameScene extends Phaser.Scene {
         const relZ = di * SEG_LENGTH + SEG_LENGTH / 2;
         const proj = this.road.getVehicleProjection(relZ, sp.offset);
         if (!proj) continue;
-        if (proj.sy < carTop - 6) continue;   // pickup still ABOVE the car
-        if (proj.sy > carBot + 24) continue;  // pickup already past below
+        if (proj.sy < carTop - 6 * _pr) continue;    // pickup still ABOVE the car
+        if (proj.sy > carBot + 24 * _pr) continue;   // pickup already past below
         sp.collected = true;
         this._onCollect(sp);
       }
@@ -9027,6 +9031,19 @@ export class GameScene extends Phaser.Scene {
     return traitMult(this._activeGenreTrait(), field);
   }
 
+  /** Genre-vehicle survival BENEFIT mods for SurvivalSystem.applyItem (owner
+   *  2026-07-19): reggae over-fill penalty, edm caffeine boost, and reggaeton's
+   *  drink/caffeine hi-speed boost (gated above the trait's mph threshold). */
+  _survivalItemMods() {
+    const hiSpeed = this._displayMPH() > this._traitMod('drinkBenefitHiSpeedMph');
+    const hiBoost = hiSpeed ? this._traitMod('drinkBenefitHiSpeedMult') : 1;
+    return {
+      overfillMult: this._traitMod('overfillGainMult'),
+      caffeineMult: this._traitMod('caffeineBenefitMult') * hiBoost,
+      drinkMult:    hiBoost,
+    };
+  }
+
   /** Pulse the lower-right location readout GOLD for ~3s on a region change
    *  (owner 2026-07-19 — replaces the old "NOW ENTERING" popup banner). */
   _pulseRegionGold() {
@@ -9594,14 +9611,14 @@ export class GameScene extends Phaser.Scene {
       this._showPopup?.('🤬 REDNECK RAGE!\nUNSTOPPABLE — 1 MILE', '#FF3322');
       this.cameras?.main?.flash?.(500, 255, 205, 60);  // GOLD flash on consume (owner 2026-07-19)
       this.effects?.triggerShake?.(260, 0.012);
-      this.survival?.applyItem('rage');                 // energy-drink: +hydration/+fullness
+      this.survival?.applyItem('rage', undefined, this._survivalItemMods());                 // energy-drink: +hydration/+fullness
       try { this.audio?.playHorn?.(); } catch (_) {}    // no-op if cue absent
       return;
     }
 
     if (type === 'narcan') {
       // QUAD SHOT — instantly clears the Tiredness bar (the panic button).
-      this.survival?.applyItem('quadshot');
+      this.survival?.applyItem('quadshot', undefined, this._survivalItemMods());
       this._showPopup?.('☕ QUAD SHOT!\nWIDE AWAKE — tiredness cleared', '#42A5F5');
       this.cameras?.main?.flash?.(300, 120, 90, 40);
       return;
@@ -9676,7 +9693,7 @@ export class GameScene extends Phaser.Scene {
       }
       // ── Survival model: apply the item to the survival bars. ──────────
       const itemId = sprite.type;
-      const ev = this.survival.applyItem(itemId);
+      const ev = this.survival.applyItem(itemId, undefined, this._survivalItemMods());
       this.stats?.recordViceCollected(itemId);
       if (this._dailyTracker) {
         this._dailyTracker.viceTypes.add(itemId);

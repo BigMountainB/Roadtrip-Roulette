@@ -133,25 +133,37 @@ export class SurvivalSystem {
 
   // ── Consume an item.  Returns an events object the caller can react to
   //    (popups / visuals): { badFish?, oddGummy?, asleep? }. ──────────────
-  applyItem(id, rng = Math.random) {
+  applyItem(id, rng = Math.random, mods = {}) {
     const fx = ITEM_FX[id];
     if (!fx) return {};
     const ev = {};
+    // Genre-vehicle survival BENEFIT mods (owner 2026-07-19), passed by GameScene:
+    //   overfillMult — reggae: food/bladder gains ABOVE 75% halved.
+    //   caffeineMult — edm: caffeine Alertness kick boosted.
+    const _overMult = mods.overfillMult ?? 1;
+    const _caffMult = mods.caffeineMult ?? 1;
 
     if (fx.clearTiredness) this.tiredness = 0;
-    else if (typeof fx.t === 'number') this.tiredness = clamp(this.tiredness + fx.t);
-    if (typeof fx.h === 'number') this.hydration = clamp(this.hydration + fx.h);
-    if (typeof fx.f === 'number') this.fullness  = clamp(this.fullness  + fx.f);
+    else if (typeof fx.t === 'number') {
+      // Caffeine's Alertness kick is a NEGATIVE tiredness delta — boost it.
+      const _tGain = (fx.t < 0 && fx.addiction) ? fx.t * _caffMult : fx.t;
+      this.tiredness = clamp(this.tiredness + _tGain);
+    }
+    if (typeof fx.h === 'number') this.hydration = clamp(this.hydration + fx.h * (mods.drinkMult ?? 1));
+    if (typeof fx.f === 'number') {
+      const _fGain = (this.fullness > 75) ? fx.f * _overMult : fx.f;   // over-fill penalty
+      this.fullness = clamp(this.fullness + _fGain);
+    }
 
     // Eating AND drinking fill the bladder (scaled by how much they add);
     // caffeine/quad-shot are diuretics and fill it extra.  Only a restroom
     // empties it (see GameScene: buys.emptyBladder / bladder-burst pull-over).
-    this.bladder = clamp(this.bladder + this._bladderGain(id, fx));
+    this.bladder = clamp(this.bladder + this._bladderGain(id, fx) * (this.bladder > 75 ? _overMult : 1));
     // Over-eating: once you're past the 75% food mark, every additional food
-    // sprite adds a flat +2% bladder (owner 2026-07-17 — the bladder was
-    // filling too slowly; a stuffed stomach should make you need to go).
+    // sprite adds a flat +2% bladder (owner 2026-07-17), halved by the genre
+    // over-fill penalty when it applies.
     if (typeof fx.f === 'number' && fx.f > 0 && this.fullness > 75) {
-      this.bladder = clamp(this.bladder + 2);
+      this.bladder = clamp(this.bladder + 2 * _overMult);
     }
     // Diuretic: ~half of the hydration this drink added is "borrowed" and drains
     // back off over the next couple miles.
