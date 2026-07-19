@@ -435,7 +435,12 @@ export const GENRE_ART = {
  *  key has no genre override (falls back to the default manifest path). */
 export function genreArtPath(key, genre) {
   if (!genre || !GENRE_ART[key]) return null;
-  return `assets/culture/${genre}/${GENRE_ART[key]}?g=${genre}`;
+  // Vehicle art gets its own revision so an installed/PWA build cannot keep
+  // the former Metal/Reggae roof-speaker versions after refresh.
+  const vehicleRev = key === 'codex_beater_front' || key === 'codex_beater_back'
+    ? '&v=roof-clear-2'
+    : '';
+  return `assets/culture/${genre}/${GENRE_ART[key]}?g=${genre}${vehicleRev}`;
 }
 
 // Default (non-culture) manifest path for each GENRE_ART key — used to REVERT
