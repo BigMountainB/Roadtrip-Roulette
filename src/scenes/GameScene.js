@@ -42,6 +42,7 @@ import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
 import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '../utils/Colors.js';
 import { getUpgradeEffects, getInstalledUpgrade } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
+import { genreTraitFor, mult as traitMult } from '../data/genreVehicleTraits.js';
 
 const CAM_DEPTH = 0.84;
 const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
@@ -4725,13 +4726,9 @@ export class GameScene extends Phaser.Scene {
     if (region !== this._prevRegion) {
       this._prevRegion = region;
       this.cops.clearStarsAtStateLine();
-      const dropped  = this.cops._lastStateLineReduction ?? 1;
-      const key      = REGION_ORDER[region]?.key ?? '';
-      const display  = REGION_PALETTES[key]?.name ?? key.replace(/_/g, ' ');
-      const subtitle = dropped > 0
-        ? `Stars −${dropped}`
-        : '🚁 Chopper still on you — buy a paint job!';
-      this._showPopup(`NOW ENTERING\n${display.toUpperCase()}!\n${subtitle}`, '#44FF88');
+      // Owner 2026-07-19: no more "NOW ENTERING" banner — just pulse the
+      // lower-right location gold for 3s. (Star drop still shows on the HUD.)
+      this._pulseRegionGold();
     }
 
     // ── Explosions / wrecks timer ─────────────────────────────────────
@@ -8910,11 +8907,14 @@ export class GameScene extends Phaser.Scene {
     this.registry?.set?.('vehicleId', vid);
     if (this.player) {
       this.player.vehicleId = vid;
+      this._refreshGenreTrait();          // vehicle changed → active trait may change
       if (vid !== 'beater') this._leaveCockpitView?.();
       this.player.gasMaxMi = v.rangeMi;
       this.player.gasMi    = v.rangeMi;
-      this.damage?.setMax?.(v.hp);
-      this.damage?.setDurability?.(v.hp);
+      // Genre-vehicle max-HP modifier (pop-punk −15%); neutral (×1) otherwise.
+      const maxHp = Math.max(1, Math.round(v.hp * this._traitMod('maxHpMult')));
+      this.damage?.setMax?.(maxHp);
+      this.damage?.setDurability?.(maxHp);
     }
     if (this.playerSprite) {
       this.playerSprite.clearTint();
@@ -8930,6 +8930,40 @@ export class GameScene extends Phaser.Scene {
     // Re-skin the phone menu to the new car (covers custom-mode picks and
     // mid-run unlocks — the garage path re-skins via its own HTML handler).
     try { window.__syncMenuBg?.(); } catch (_) {}
+  }
+
+  /** The ACTIVE genre-vehicle trait (or null) — DERIVED from the selected
+   *  culture + current vehicle, never stored in save (so it can't drift or
+   *  double-apply on resume/restart). Cached in `this._genreTrait`; refreshed
+   *  on vehicle swap, genre change, and lazily on first read. */
+  _refreshGenreTrait() {
+    const genre = this.registry?.get?.('save')?.get?.('genre', null) ?? null;
+    this._genreTrait = genreTraitFor(genre, this.player?.vehicleId);
+    return this._genreTrait;
+  }
+  _activeGenreTrait() {
+    return (this._genreTrait !== undefined) ? this._genreTrait : this._refreshGenreTrait();
+  }
+  /** Read ONE trait modifier at its consumption point (neutral default if no
+   *  trait / field). Central accessor so no genre conditionals leak elsewhere. */
+  _traitMod(field) {
+    return traitMult(this._activeGenreTrait(), field);
+  }
+
+  /** Pulse the lower-right location readout GOLD for ~3s on a region change
+   *  (owner 2026-07-19 — replaces the old "NOW ENTERING" popup banner). */
+  _pulseRegionGold() {
+    const r = this.hudRegion;
+    if (!r) return;
+    try { this._regionPulseTween?.remove?.(); } catch (_) {}
+    try {
+      r.setTint?.(0xFFD24D);   // gold
+      this._regionPulseTween = this.tweens.add({
+        targets: r, alpha: { from: 1, to: 0.35 },
+        duration: 300, yoyo: true, repeat: 4,   // 5 half-cycles ≈ 3s
+        onComplete: () => { try { r.clearTint?.(); r.setAlpha(1); } catch (_) {} },
+      });
+    } catch (_) {}
   }
 
   /** Set / merge accessory state for the currently-driven vehicle. */
@@ -9481,7 +9515,7 @@ export class GameScene extends Phaser.Scene {
       this._steroidUntilMile = (this._odometer ?? 0) + 1.0;
       this._steroidWasActive = true;
       this._showPopup?.('🤬 REDNECK RAGE!\nUNSTOPPABLE — 1 MILE', '#FF3322');
-      this.cameras?.main?.flash?.(500, 220, 20, 20);   // red rage flash
+      this.cameras?.main?.flash?.(500, 255, 205, 60);  // GOLD flash on consume (owner 2026-07-19)
       this.effects?.triggerShake?.(260, 0.012);
       this.survival?.applyItem('rage');                 // energy-drink: +hydration/+fullness
       try { this.audio?.playHorn?.(); } catch (_) {}    // no-op if cue absent
