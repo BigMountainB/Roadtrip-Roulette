@@ -520,6 +520,14 @@ const _boot = () => {
 
   // Part-upgrade + player-facing-stats bridge for the phone-menu garage.
   // cash lives on the live GameScene (score); upgrades persist in the save.
+  // Genre-vehicle upgrade discount (pop-punk −25%): applies to garage part-
+  // upgrade prices while the pop-punk starter is the active vehicle. Reads the
+  // trait mods GameScene publishes to the registry; ×1 for every other vehicle.
+  const _upgradeDiscountCost = (c) => {
+    const m = game.registry.get('genreTraitMods');
+    const mult = (m && m.repairUpgradeCostMult) ? m.repairUpgradeCostMult : 1;
+    return Math.max(0, Math.round((c ?? 0) * mult));
+  };
   window.__upgrades = {
     cash: () => Math.max(0, Math.round(game.scene.getScene('Game')?.score ?? 0)),
 
@@ -549,7 +557,7 @@ const _boot = () => {
           installedLevel: curLvl,
           maxLevel:       tiers.length,
           next: next ? {
-            id: next.id, label: next.label, cost: next.cost,
+            id: next.id, label: next.label, cost: _upgradeDiscountCost(next.cost),
             tradeoff: next.tradeoff ?? '', desc: next.desc ?? '',
           } : null,
         };
@@ -563,8 +571,9 @@ const _boot = () => {
       const up    = getUpgradeById(upgradeId);
       if (!up)    return { ok: false, reason: 'unknown-upgrade', cash: Math.round(scene?.score ?? 0) };
       const cash  = Math.round(scene?.score ?? 0);
-      if (cash < up.cost) return { ok: false, reason: 'insufficient', cash };
-      if (scene) scene.score -= up.cost;
+      const cost  = _upgradeDiscountCost(up.cost);   // pop-punk −25% (else ×1)
+      if (cash < cost) return { ok: false, reason: 'insufficient', cash };
+      if (scene) scene.score -= cost;
       const res = installUpgrade(save, vehicleId, upgradeId);
       // Refresh the live handling modifiers so the upgrade affects the drive
       // immediately (not just the stat bars).

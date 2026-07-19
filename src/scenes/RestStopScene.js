@@ -1720,7 +1720,13 @@ export class RestStopScene extends Phaser.Scene {
     // (the player chose their starting vice levels via the slider, so
     // there's no $ to spend and the shop shouldn't gate them out).
     const freeMode = Difficulty.noScore?.() === true;
-    const effectiveCost = freeMode ? 0 : item.cost;
+    // Genre-vehicle repair discount (pop-punk −25%): applied to the effective
+    // cost so display, affordability, and charge all stay consistent. Only
+    // REPAIR items here; garage part-upgrades are discounted in UpgradeSystem.
+    const _repairMult = (item.payload?.repair || item.payload?.campRepair)
+      ? ((this.registry.get('genreTraitMods') ?? {}).repairUpgradeCostMult ?? 1)
+      : 1;
+    const effectiveCost = freeMode ? 0 : Math.max(0, Math.round((item.cost ?? 0) * _repairMult));
     const disabled = !!item.disabled;            // set per-item when the
                                                   // purchase would be a
                                                   // no-op or downgrade.

@@ -500,6 +500,7 @@ export class GameScene extends Phaser.Scene {
     this._engineLimp          = false;
     this._overheatIgnoredLeg  = false;   // classic-rock: 1 shrugged overheat / leg
     this._cargoShieldUsed     = false;   // norteño: cargo survives 1 minor collision
+    this._firstViolationStarred = false; // reggaeton: 1st moving violation = instant star
     this._curGrade            = 0;
     this._playerCopCrashes    = 0;
     this._copCrashCount       = 0;
@@ -4211,6 +4212,18 @@ export class GameScene extends Phaser.Scene {
             // silently eaten: once that stop clears it can still pull you over.
             const isParkedTrap = sp.type === 'cop_random_parked';
             if (speeding || oncoming) {
+              // Reggaeton: the FIRST moving violation lands a wanted star
+              // INSTANTLY — no civil-stop grace to pull over and avoid it. Once
+              // per run; the flag resets on restart so it can't double-apply
+              // (owner 2026-07-19).
+              if (this.cops.stars < 1 && !this._firstViolationStarred
+                  && this._traitMod('firstViolationInstantStar')) {
+                this._firstViolationStarred = true;
+                sp.triggered = true;
+                this.cops.addStar?.(1);
+                this._showPopup('🚨 CAUGHT SLIPPIN\' — +1★', '#FF4444');
+                continue;   // star's on you; no civil-stop offer for this one
+              }
               if (this.cops.stars >= 1) {
                 // Already wanted = an active warrant.  Either cop kind that
                 // clocks you JOINS the pursuit; no civil stop is offered.

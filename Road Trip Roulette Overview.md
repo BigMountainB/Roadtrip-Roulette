@@ -135,11 +135,15 @@ non-culture vehicles keep normal VEHICLES stats.
   `applyItem` mods param), pickup radius (widened collect window), hazard instability (crosswind pull), edm
   ACCEL boost strength + duration (accel-charge drain), norteño cargo collision shield (consume-once,
   restart-reset, `cargoShieldAbsorbs` helper + 7 tests). **155 genre tests.**
-- **Deliberately NOT wired (3):** (a) **repair/upgrade discount** (pop-punk) — needs display + affordability
-  + charge kept consistent in RestStopScene, more surgery than its value; (b) **first-violation instant
-  star** (reggaeton) — no clean "moving violation" hook + ambiguous vs the existing star grace; (c)
-  **no-police-warning** (reggae) — **N/A**: there's no warning-vs-ticket branch in the current stop flow
-  (every stop already tickets), so the flag is pushed to CopSystem but has nothing to suppress yet.
+- **Repair/upgrade discount (pop-punk) — DONE**: RestStopScene repairs discount `effectiveCost` (display +
+  affordability + charge stay consistent); garage part-upgrades discount in the `__upgrades` bridge
+  (`slots()` display + `buy()` charge), reading the published `repairUpgradeCostMult`.
+- **First-violation instant star (reggaeton) — DONE**: the FIRST moving violation (speeding / crossed the
+  double-yellow while clocked) lands a wanted star instantly, skipping the 0★ civil-stop grace. Per-run flag
+  resets on restart → no double-apply.
+- **Only NOT wired (1): no-police-warning** (reggae) — **N/A**: there's no warning-vs-ticket branch in the
+  current stop flow (every stop already tickets), so the flag is pushed to CopSystem but has nothing to
+  suppress yet. **39/40 modifiers now integrated.**
 - **Playtest fixes (shipped in the same batch of commits)**: region gold-pulse (dropped NOW ENTERING),
   gold invincibility flash, coal first-fire slow, donut in-lane 1s hold + straight recede, one NPC per rest
   stop, invisible pedals w/ gold throbbing glow, "COP HIT +1 ⭐" + lowered Pursuit/cop-hit HUD.
