@@ -8382,8 +8382,14 @@ export class GameScene extends Phaser.Scene {
         color: '#F4F7FF',
         stroke: isCurrent ? '#39A8FF' : '#071224', strokeThickness: isCurrent ? 2 : 3,
       }).setOrigin(0, 0).setDepth(D + 3);
-      const stats = this.add.text(rx + 40, ry + 24,
-        `${v.hp} HP · ${v.rangeMi} mi · ${v.topMph} mph`, {
+      // Genre starter identity (owner 2026-07-19): the beater's row shows its
+      // culture trait's name + top speed. Full strengths/weaknesses live in the
+      // phone Garage panel + the Music long-hold peek.
+      const _rowTrait = genreTraitFor(this.registry?.get?.('save')?.get?.('genre', null), vid);
+      const _statsTxt = _rowTrait
+        ? `${_rowTrait.vehicleName} · ${v.hp} HP · ${v.rangeMi} mi · ${_rowTrait.topSpeedMph} mph`
+        : `${v.hp} HP · ${v.rangeMi} mi · ${v.topMph} mph`;
+      const stats = this.add.text(rx + 40, ry + 24, _statsTxt, {
         fontSize: '12px', fontFamily: 'Arial', color: '#A9DFFF',
       }).setOrigin(0, 0).setDepth(D + 3);
       const tag = this.add.text(rx + colW - 6, ry + rowH - 5,
