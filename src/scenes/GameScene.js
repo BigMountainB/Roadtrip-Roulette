@@ -323,9 +323,9 @@ function makePlayer() {
 // `wiper` is dragged to the bottom-left (left of coal): its base hugs the
 // top-right edge, hence the large −dx/+dy.
 const DEFAULT_HUD_LAYOUT = {
-  popup:      { dx: -1,   dy: -70, scale: 1.1262099400177235 },
-  hpDamage:   { dx: 387,  dy: 232, scale: 1.7479561886682102 },
-  rearCop:    { dx: 1,    dy: -49, scale: 1.1811808179050012 },
+  popup:      { dx: -1,   dy: -60, scale: 1.1262099400177235 },   // lowered 10px (owner 2026-07-19)
+  hpDamage:   { dx: 387,  dy: 242, scale: 1.7479561886682102 },   // lowered 10px (owner 2026-07-19)
+  rearCop:    { dx: 1,    dy: -39, scale: 1.1811808179050012 },   // lowered 10px (owner 2026-07-19)
   mission:    { dx: -25,  dy: -11, scale: 1.1191991029950916 },
   radio:      { dx: -75,  dy: -8,  scale: 1.002349011885947  },
   btn_pause:  { dx: -49,  dy: 1,   scale: 1 },
@@ -830,7 +830,9 @@ export class GameScene extends Phaser.Scene {
       // layout, so the default never applied and the buttons stayed small.
       // v4 (2026-07-19): owner re-exported the layout (score/mult/stars/mission/
       // rearCop placed, wiper moved bottom-left, engine repositioned) — reinstall.
-      const LAYOUT_VER = 4;
+      // v5 (2026-07-19): lowered Pursuit(rearCop)/Pickup(popup)/Damage(hpDamage)
+      // ~10px — reinstall so it's the new default AND the reset target.
+      const LAYOUT_VER = 5;
       if ((_save?.get?.('controlsLayoutVer', 1) ?? 1) < LAYOUT_VER) {
         // Pre-gate profiles (incl. brand-new ones) install the owner's baked
         // default rather than an empty layout.

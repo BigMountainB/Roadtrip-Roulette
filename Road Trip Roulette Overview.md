@@ -114,6 +114,25 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-19 (pt 3) — Vendors, CarGo rework, mission dialogue, editor reset — LOCAL (unpushed)
+- **Gas at Gas-N-Sip + AM/BM** (`RestStopScene`): both convenience stops now offer the same REFUEL as the
+  gas tab (shared item ⇒ topping off anywhere fills the tank once). CarGo/Huff's already sold gas.
+- **$10 water at every gas vendor**: gas tab dropped $15→$10; Gas-N-Sip + AM/BM each get a $10 water.
+- **Huff's = universal gas; CarGo = its own vendor** (owner: "no CarGo without Huff's"). Huff's pumps gas
+  at every gas stop. New `cargo` amenity/brand/tab at the same 4 west stops (Seattle, North Bend,
+  Snoqualmie Pass, Cle Elum). CarGo no longer sells gas — the **EV FAST CHARGE moved** off the gas tab into
+  CarGo, and past **Issaquah (mi>18)** CarGo adds the **hitchhiker** pickup. (Ready drop-offs still collect
+  via their own panel — callout added but the collect UI wasn't relocated; the job-offer NPC is still
+  roaming, not pinned to CarGo — both easy follow-ups.)
+- **Mission dialogue**: opener is a **10-line pool** picked stably per stop (was the same "doesn't ask
+  questions" line everywhere); reply buttons are now **statements, not questions** (fixes the irony);
+  cargo/passenger offers **name the drop-off** — "the CarGo in <city>" when the destination has a CarGo lot.
+- **Donut hold**: 1.5s → **2s** on-screen before the cop peels off.
+- **Controls-editor RESET** (`_resetControlsLayout`): now restores the **shipped `DEFAULT_HUD_LAYOUT`** (the
+  layout the game starts with), not the empty/base layout it used to snap to.
+- **Lowered 3 HUD elements ~10px** in the default (`LAYOUT_VER` 4→5, so it's both the start default and the
+  reset target): Pursuit warning (`rearCop`), Pickup/Text alerts (`popup`), Damage-taken flash (`hpDamage`).
+
 ### 2026-07-19 (pt 2) — Fixes from on-device testing — LOCAL (unpushed)
 Follow-up batch, all committed locally, awaiting push.
 - **Plate modal no longer forced pre-tutorial** (`GameScene` `_startGameplay`): a run starting mid-tutorial
