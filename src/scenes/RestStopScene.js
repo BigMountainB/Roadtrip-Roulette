@@ -1198,6 +1198,13 @@ export class RestStopScene extends Phaser.Scene {
       if (o.terms?.no_chains)  t.push("the DARE: no chains — strap them on and the deal's dead");
       return t.length ? `The catch: ${t.join('; ')}.` : 'No strings. Easy money.';
     };
+    // Drop-off vendor callout (owner 2026-07-19): if the destination has a
+    // CarGo lot, name it — that's where deliveries + riders are handed off.
+    const dropAt = (o) => {
+      const t = REST_STOPS.find(r => r.id === o.targetStopId);
+      const hasCargo = Array.isArray(t?.amenities) && t.amenities.includes('cargo');
+      return hasCargo ? `the CarGo in ${o.targetName}` : o.targetName;
+    };
     // Passenger quirk warning — the rider states their own terms.
     const quirkLine = {
       nervous:       "One hard crash and I'm walking, deal's off.",
@@ -1230,23 +1237,38 @@ export class RestStopScene extends Phaser.Scene {
     };
 
     const nodes = {};
+    // The contact wants "a driver who doesn't ask questions", so the replies are
+    // STATEMENTS, not questions (owner 2026-07-19 flagged the irony).
     const greetChoices = open.map((o, i) => ({
       label: o.type === 'passenger'
-        ? `"Who's the rider for ${o.targetName}?"`
+        ? `Size up the ${o.targetName} rider`
         : o.type === 'heat'
-          ? '"About all this heat I\'m wearing…"'
-        : (open.length > 1 ? `"What's the ${o.targetName} job?"` : '"What\'s the job?"'),
+          ? "Bring up the heat you're wearing"
+        : (open.length > 1 ? `Hear out the ${o.targetName} run` : 'Hear out the job'),
       next:  `offer${i}`,
       ...(ackFail ? { setMemory: { failAckPending: false } } : {}),
     }));
     greetChoices.push({ label: 'Thank them and leave', effects: {}, end: true,
       ...(ackFail ? { setMemory: { failAckPending: false } } : {}) });
+    // Varied opener so the contact isn't reciting the SAME line at every stop
+    // (owner 2026-07-19). Stable per stop via the stopId hash `h`.
+    const GREETS = [
+      "Got a run that needs a driver who doesn't ask questions.",
+      "You've got a trunk and a lead foot. I've got a problem. Let's talk.",
+      "Word is you drive fast and forget faces. That's the whole job.",
+      "No badge, no paperwork, no questions — my kind of driver.",
+      "You didn't hear this from me, and we never met after.",
+      "Quiet type? Good. The loud ones end up in a ditch out here.",
+      "I need something gone, and I need to never think about it again.",
+      "You look like someone who needs cash more than answers.",
+      "Don't nod too hard, someone's always watching. Just listen.",
+      "Half up front's not a thing I do. All of it on delivery, though.",
+    ];
+    const _greet = GREETS[Math.abs(h) % GREETS.length];
     nodes.greet = {
       line: memLine ?? (anyBusy
         ? "You're already hauling for somebody — I can see it in how you parked. Hear me out anyway."
-        : (open.length > 1
-          ? `Got ${open.length} runs that need a driver who doesn't ask questions.`
-          : "Got a run that needs a driver who doesn't ask questions.")),
+        : (open.length > 1 ? `${_greet} Got ${open.length} of them, actually.` : _greet)),
       choices: greetChoices,
     };
     open.forEach((o, i) => {
@@ -1268,7 +1290,7 @@ export class RestStopScene extends Phaser.Scene {
         nodes[`offer${i}`] = {
           speaker: p.name ?? 'Passenger',
           portrait: p.portrait,
-          line: `${p.ask ?? 'I need a ride.'} ${o.targetName}, ${o.routeMiles} miles. `
+          line: `${p.ask ?? 'I need a ride.'} Drop me at ${dropAt(o)}, ${o.routeMiles} miles. `
               + `${quirkLine[p.quirk] ?? ''} $${o.payout} when we get there.`
               + (busy ? " …Looks like your passenger seat's spoken for, though." : ''),
           choices,
@@ -1286,7 +1308,7 @@ export class RestStopScene extends Phaser.Scene {
       } else {
         const verb = o.type === 'timed' ? 'Run' : 'Haul';
         nodes[`offer${i}`] = {
-          line: `${tierIntro(o)}${verb} ${o.cargo} to ${o.targetName} — ${o.routeMiles} miles up the road. `
+          line: `${tierIntro(o)}${verb} ${o.cargo} to ${dropAt(o)} — ${o.routeMiles} miles up the road. `
               + `${termLine(o)} $${o.payout} on delivery, cash.`
               + (busy ? " …But your trunk's full. Come back when it isn't." : ''),
           choices,
