@@ -182,13 +182,13 @@
       position: fixed; left: 50%; bottom: 8vh; transform: translateX(-50%);
       width: min(92vw, 740px); min-height: 30vh; max-height: 44vh; overflow: auto; z-index: 999995; display: none;
       box-sizing: border-box; padding: 3.6vmin 3.6vmin 6.4vmin; text-align: center;
-      background: rgba(6, 16, 30, 0.95); border: 0.5vmin solid #FFD24D; border-radius: 2.4vmin;
+      background: rgba(6, 16, 30, 0.8); border: 0.5vmin solid #FFD24D; border-radius: 2.4vmin;
       color: #FFF6E0; font: 800 clamp(19px, 5vmin, 32px)/1.42 "Helvetica Neue", Arial, sans-serif;
       cursor: pointer; animation: tutQuoteGlow 1.3s ease-in-out infinite;
       transition: background 0.12s ease;
     }
     #tut-quote.show { display: flex; align-items: center; justify-content: center; }
-    #tut-quote.tapped { background: rgba(120, 92, 20, 0.99); animation: none; box-shadow: 0 0 6vmin 2vmin rgba(255, 220, 90, 1); }
+    #tut-quote.tapped { background: rgba(120, 92, 20, 0.8); animation: none; box-shadow: 0 0 6vmin 2vmin rgba(255, 220, 90, 1); }
     #tut-quote .tq-next { position: absolute; right: 2.8vmin; bottom: 1.6vmin; color: #FFE08A; font-weight: 900; font-size: clamp(16px, 3.6vmin, 22px); letter-spacing: 0.06em; }
     #tut-skip {
       position: fixed; top: calc(env(safe-area-inset-top, 0px) + 1.6vmin); right: 1.8vmin; z-index: 999996;
@@ -1786,6 +1786,7 @@
         // border overflows into the black letterbox where it's invisible.
         // coverState stays the full-image transform, so all data-px math is
         // untouched.
+        const EDGE = 15;
         // VISIBLE content box (luminance-measured, identical on all skins):
         // bright art spans rows 106–1711 / cols 41–813 of the 853×1844 file.
         // The earlier {t:100,b:37} box included ~95px of essentially-black
@@ -1793,24 +1794,16 @@
         // which pushed the visible art up — the "not centered vertically" bug.
         const INS = { l: 41, r: 853 - 813, t: 106, b: 1844 - 1712 };
         const cw = imgW - INS.l - INS.r, ch = imgH - INS.t - INS.b;
-        // RESPONSIVE FILL (owner 2026-07-18).  Was CONTAIN (Math.min + a 15px
-        // margin), which letterboxed the art on all four sides.  Now PIN THE
-        // HEIGHT: the visible content box always fills the viewport top-to-
-        // bottom, so the weather widget (top) and the rotate strip (bottom) are
-        // NEVER cropped — pinning the height IS the crop cap that "keeps iPad
-        // correct".  The crop budget is spent on the WIDTH instead:
-        //   • phone aspect (art ≈ 0.48, device narrower): width overflows → the
-        //     art COVERS the screen, only side padding crops (fills edge-to-edge).
-        //   • tablet aspect (3:4, device wider): width underflows → the art
-        //     letterboxes at the SIDES only, losing nothing vertically.
-        const scale = vh / ch;
+        // CONTAIN — fit the whole visible art inside the viewport with a 15px
+        // margin, centered (owner-approved 2026-07-15).  DO NOT change the SIZE
+        // here (a height-pinned "fill" was tried 2026-07-18 and cropped the
+        // WEST SEATTLE header + rotate strip — owner: "just shift up 5px").
+        const scale = Math.min((vw - EDGE * 2) / cw, (vh - EDGE * 2) / ch);
         const offX = (vw - cw * scale) / 2 - INS.l * scale;
-        // Height is pinned (ch*scale === vh), so the vertical centring term is 0.
-        // Lift the whole composite (art + hit zones, which share this transform)
-        // UP 5px so the bottom red line clears the edge / Safari bar.  The near-
-        // black bottom dead-border (INS.b) trails below the content and fills the
-        // 5px it vacates, so there's no visible gap — just the red line revealed.
-        const offY = -INS.t * scale - 5;
+        // CENTERED, then lifted UP 5px (owner 2026-07-18) so the bottom red line
+        // clears the edge / Safari bar.  ONLY a translation — the scale above is
+        // untouched, so the art is the same size it always was.
+        const offY = (vh - ch * scale) / 2 - INS.t * scale - 5;
         coverState = { scale, offX, offY };
         // Size/position the art itself with the SAME transform the hit zones
         // use, so buttons stay glued to the artwork at any scale.

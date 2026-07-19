@@ -114,6 +114,26 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-19 — Menu-size revert + HUD relayout + tutorial polish — LOCAL
+Batch off owner feedback (iPhone menu shot: `docs/screenshots/2026-07-19-iphone-menu-overcrop.png`
+— WEST SEATTLE header + rotate strip clipped by the 2026-07-18 height-pin fill).
+- **Menu size REVERTED** (`index.html` `recomputeCover`): back to CONTAIN (`Math.min` + 15px margin,
+  centered) — the height-pinned "fill" enlarged the art and cropped it. Kept ONLY the **−5px** upward
+  shift the owner actually asked for (a pure translation; scale untouched).
+- **HUD default relayout** (`DEFAULT_HUD_LAYOUT`, `LAYOUT_VER` 3→4): reinstalled the owner's fresh
+  editor export — score/mult/stars/mission/rearCop placed, engine repositioned, and the **wiper dragged
+  to the bottom-left (left of the coal weapon)**. Bumping the version reinstalls it over the old default.
+- **Wiper = permanent fixture** (`GameScene`): no longer rain/snow-gated — always on the HUD in gameplay
+  (hidden on title / when HUD hidden), label reads OFF when there's nothing to wipe. Still editor-movable.
+- **Tutorial boxes 20% transparent**: DOM `#tut-quote` + Phaser title-tutorial & HUD-tour boxes → bg
+  alpha 0.8.
+- **Tutorial handoff extra-tap fixed** (`main.js` `applyOrientation`): rotating from the portrait tour to
+  landscape left the Game scene paused (tap-to-resume), eating the first tap so the plate highlight didn't
+  show. On the TITLE screen (`_awaitingStart`) we now resume immediately — no throwaway tap.
+- **All vehicles same width** (`_applyPlayerSpriteDisplaySize`): pin every driving sprite to one fixed
+  width (78), height scales to each art's aspect. Dropped the visible-fill normalization (+ dead
+  `_opaqueFillFrac`). 147 tests pass.
+
 ### 2026-07-18 — Responsive layout: menu fill + gameplay HUD safety — LOCAL (unpushed)
 Two device-size fixes from the iPad screenshots (bottom red line clipped; gameplay HUD cut on both sides).
 - **Phone menu** (`index.html` `recomputeCover`): was CONTAIN (`Math.min` + 15px margin → letterboxed all

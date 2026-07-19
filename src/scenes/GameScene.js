@@ -315,33 +315,33 @@ function makePlayer() {
   };
 }
 
-// Owner's baked default HUD layout (2026-07-18 editor export). Per-element
+// Owner's baked default HUD layout (2026-07-19 editor export). Per-element
 // {dx,dy,scale} deltas off each control's base position; applied ONLY to
 // profiles that have never customized their own layout (non-destructive —
-// existing custom layouts are untouched). 20 elements — the moved set (the
-// editor only stores what you drag, so anything not here sits at its default).
-// `popup` scale defaulted to 1 (its value was cut off the export paste).
+// existing custom layouts are untouched). The moved set — the editor only
+// stores what you drag, so anything not here sits at its default base.
+// `wiper` is dragged to the bottom-left (left of coal): its base hugs the
+// top-right edge, hence the large −dx/+dy.
 const DEFAULT_HUD_LAYOUT = {
-  btn_pause:  { dx: -57, dy: -6,  scale: 1.1413333510707937 },
-  hpDamage:   { dx: 375, dy: 258, scale: 1.8015110070458753 },
-  btn_ff:     { dx: -64, dy: -5,  scale: 1.1477789584900153 },
-  btn_genre:  { dx: -70, dy: -5,  scale: 1.1584381965387238 },
-  survA:      { dx: 16,  dy: -5,  scale: 1.0015604625816856 },
-  radio:      { dx: -71, dy: -9,  scale: 1 },
-  hp:         { dx: -30, dy: -3,  scale: 1.6188648298531956 },
-  btn_garage: { dx: 48,  dy: 0,   scale: 1.1804039159881947 },
-  btn_map:    { dx: 54,  dy: 0,   scale: 1.16298693487994 },
-  speed:      { dx: 9,   dy: -8,  scale: 1.1493464214891864 },
-  btn_mute:   { dx: 60,  dy: 0,   scale: 1.1434981935343205 },
-  survB:      { dx: -2,  dy: -6,  scale: 0.9663047809038192 },
-  wiper:      { dx: 82,  dy: 4,   scale: 1 },
-  pedalBrake: { dx: -37, dy: -4,  scale: 1.114457990042001 },
-  gas:        { dx: -36, dy: -14, scale: 1 },
-  pedalGas:   { dx: 32,  dy: -6,  scale: 1.1008229606119881 },
-  region:     { dx: 16,  dy: -12, scale: 1.802643791583196 },
-  dist:       { dx: 45,  dy: -9,  scale: 1.4905521129083552 },
-  engine:     { dx: 92,  dy: -14, scale: 1 },
-  popup:      { dx: -10, dy: -50, scale: 1 },
+  popup:      { dx: -1,   dy: -70, scale: 1.1262099400177235 },
+  hpDamage:   { dx: 387,  dy: 232, scale: 1.7479561886682102 },
+  rearCop:    { dx: 1,    dy: -49, scale: 1.1811808179050012 },
+  mission:    { dx: -25,  dy: -11, scale: 1.1191991029950916 },
+  radio:      { dx: -75,  dy: -8,  scale: 1.002349011885947  },
+  btn_pause:  { dx: -49,  dy: 1,   scale: 1 },
+  btn_ff:     { dx: -57,  dy: 2,   scale: 1 },
+  btn_genre:  { dx: -66,  dy: 1,   scale: 1 },
+  mult:       { dx: 41,   dy: 6,   scale: 1 },
+  score:      { dx: 2,    dy: -2,  scale: 1.0853674898138321 },
+  btn_garage: { dx: 49,   dy: 2,   scale: 1 },
+  btn_map:    { dx: 59,   dy: 3,   scale: 1 },
+  btn_mute:   { dx: 68,   dy: 3,   scale: 1 },
+  wiper:      { dx: -796, dy: 329, scale: 1.0209912313575047 },
+  engine:     { dx: 114,  dy: -4,  scale: 0.9143488304331294 },
+  stars:      { dx: -67,  dy: 12,  scale: 1.7379492932183374 },
+  hp:         { dx: -30,  dy: -4,  scale: 1.6998563397117201 },
+  survB:      { dx: 0,    dy: -9,  scale: 1.090525255208019  },
+  speed:      { dx: 24,   dy: -4,  scale: 1 },
 };
 
 export class GameScene extends Phaser.Scene {
@@ -828,7 +828,9 @@ export class GameScene extends Phaser.Scene {
       // v3 (2026-07-18): install the owner's baked DEFAULT_HUD_LAYOUT (bigger HP /
       // region / dist + grouped, enlarged buttons). v2 profiles held an EMPTY
       // layout, so the default never applied and the buttons stayed small.
-      const LAYOUT_VER = 3;
+      // v4 (2026-07-19): owner re-exported the layout (score/mult/stars/mission/
+      // rearCop placed, wiper moved bottom-left, engine repositioned) — reinstall.
+      const LAYOUT_VER = 4;
       if ((_save?.get?.('controlsLayoutVer', 1) ?? 1) < LAYOUT_VER) {
         // Pre-gate profiles (incl. brand-new ones) install the owner's baked
         // default rather than an empty layout.
@@ -3527,6 +3529,12 @@ export class GameScene extends Phaser.Scene {
     this.hudRegion?.setVisible(v);
     this.hudStars?.setVisible(v);
     this.hudRadio?.setVisible(v);
+    // Wiper is a permanent HUD fixture now (not rain/snow-gated), so it hides
+    // with the rest of the HUD on the title screen and reappears in gameplay /
+    // the controls editor. Per-frame visibility is re-asserted in update().
+    this.hudWiperBtn?.setVisible(v);
+    this.hudWiperArt?.setVisible(v);
+    this.hudWiperLbl?.setVisible(v);
     this.hudF12hint?.setVisible(v);
     // Title screen also hides HP / gas / party clock / damage popup so
     // the player car + title buttons own the screen.
@@ -4040,14 +4048,19 @@ export class GameScene extends Phaser.Scene {
       // Weather / wiper indicator — visible during BOTH rain AND snow.
       // Icon is the custom wiper-blade drawing in drawWiper() above;
       // the text label here shows the current mode (OFF / ON).
-      if (this.hudWiperBtn) this.hudWiperBtn.setVisible(showWeatherBtn);
-      if (this.hudWiperArt) this.hudWiperArt.setVisible(showWeatherBtn);
+      // PERMANENT FIXTURE (owner 2026-07-19): the wiper button is always on the
+      // HUD now (moved next to the coal weapon), not just during rain/snow —
+      // shown whenever the HUD is up (hidden only on the title / when HUD is
+      // hidden). Its FUNCTION still only matters in precipitation (mode was
+      // parked above when clear), so the label just reads OFF when there's
+      // nothing to wipe.
+      const wiperShown = !this._awaitingStart && !this._hudHidden;
+      if (this.hudWiperBtn) this.hudWiperBtn.setVisible(wiperShown);
+      if (this.hudWiperArt) this.hudWiperArt.setVisible(wiperShown);
       if (this.hudWiperLbl) {
-        this.hudWiperLbl.setVisible(showWeatherBtn);
-        if (showWeatherBtn) {
-          const modeLbl = this._wiperMode ? 'ON' : 'OFF';
-          if (this.hudWiperLbl.text !== modeLbl) this.hudWiperLbl.setText(modeLbl);
-        }
+        this.hudWiperLbl.setVisible(wiperShown);
+        const modeLbl = this._wiperMode ? 'ON' : 'OFF';
+        if (this.hudWiperLbl.text !== modeLbl) this.hudWiperLbl.setText(modeLbl);
       }
     }
     // Snow steering cue — tell the player WHAT scheme is live in the snow
@@ -12545,36 +12558,6 @@ export class GameScene extends Phaser.Scene {
     this._applyPlayerSpriteDisplaySize();
   }
 
-  /** Fraction of a texture's frame WIDTH the opaque (non-transparent) pixels
-   *  span (0..1). Scanned once per key + cached. Used to size vehicle sprites by
-   *  their VISIBLE body, not their padded frame (owner 2026-07-18 — genre
-   *  starter art has big transparent margins and drove too small). */
-  _opaqueFillFrac(texKey) {
-    this._fillFracCache ??= {};
-    if (this._fillFracCache[texKey] != null) return this._fillFracCache[texKey];
-    let frac = 1;
-    try {
-      const src = this.textures.get(texKey)?.getSourceImage?.();
-      if (src && src.width && src.height) {
-        const cv = document.createElement('canvas');
-        cv.width = src.width; cv.height = src.height;
-        const ctx = cv.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(src, 0, 0);
-        const data = ctx.getImageData(0, 0, src.width, src.height).data;
-        let minX = src.width, maxX = -1;
-        for (let y = 0; y < src.height; y++) {
-          const row = y * src.width;
-          for (let x = 0; x < src.width; x++) {
-            if (data[(row + x) * 4 + 3] > 16) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
-          }
-        }
-        if (maxX >= minX) frac = (maxX - minX + 1) / src.width;
-      }
-    } catch (_) {}
-    this._fillFracCache[texKey] = frac;
-    return frac;
-  }
-
   _applyPlayerSpriteDisplaySize(targetW = 78, fallbackH = 49) {
     if (!this.playerSprite) return;
     const texKey = this.playerSprite.texture?.key;
@@ -12589,11 +12572,10 @@ export class GameScene extends Phaser.Scene {
     const tw = src?.width || targetW;
     const th = src?.height || fallbackH;
     const ratio = tw > 0 ? th / tw : fallbackH / targetW;
-    // Size by the VISIBLE car width so padded art (genre starters fill ~64-76%,
-    // default cars ~94%) all drive at the same on-screen width as the default.
-    const REF_FILL = 0.94;
-    const frameW   = targetW * (REF_FILL / Math.max(0.3, this._opaqueFillFrac(texKey)));
-    this.playerSprite.setDisplaySize(frameW, frameW * ratio);
+    // Pin EVERY vehicle to the SAME on-road WIDTH (owner 2026-07-19); height
+    // scales to each art's own aspect so nothing is stretched. (Was a visible-
+    // fill normalization that let padded art read wider or narrower than others.)
+    this.playerSprite.setDisplaySize(targetW, targetW * ratio);
   }
 
   /** Paint the player's license-plate handle on the back bumper of the
@@ -16000,7 +15982,7 @@ export class GameScene extends Phaser.Scene {
     let bx = Math.max(bw / 2 + 6, Math.min(SCREEN_W - bw / 2 - 6, step.box.x));
     let by = Math.max(6, Math.min(SCREEN_H - bh - 6, step.box.y));
     T.boxG.clear();
-    T.boxG.fillStyle(0x06101E, 0.96); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 8);
+    T.boxG.fillStyle(0x06101E, 0.8); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 8);
     T.boxG.lineStyle(2, 0xFFD24D, 0.9); T.boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 8);
     T.boxT.setPosition(bx, by + 12);
     T.plateWait = (step.key === 'plates');
@@ -16164,7 +16146,7 @@ export class GameScene extends Phaser.Scene {
     const bx = Math.max(bw / 2 + 8, Math.min(SCREEN_W - bw / 2 - 8, b.x + b.w / 2));
     const by = (ecy > SCREEN_H * 0.5) ? 16 : (SCREEN_H - bh - 16);   // opposite half → never covers the highlight
     T.boxG.clear();
-    T.boxG.fillStyle(0x06101E, 0.97); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 10);
+    T.boxG.fillStyle(0x06101E, 0.8); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 10);
     T.boxG.lineStyle(2, 0xFFD24D, 0.9); T.boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 10);
     T.boxT.setPosition(bx, by + bh / 2);   // vertically centered (origin 0.5,0.5)
   }

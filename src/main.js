@@ -1132,6 +1132,15 @@ const _boot = () => {
         if (key === 'Game' && scene._editorArmed) {
           game.scene.resume(key);
           pendingTapResume = false;
+        } else if (key === 'Game' && scene._awaitingStart) {
+          // TITLE screen: there's no run to "resume", so the tap-to-unpause
+          // hold makes no sense here — it just eats the first tap. Rotating in
+          // should make the title (and the guided title tutorial) immediately
+          // live, so the plate highlight shows WITHOUT an extra tap (owner
+          // 2026-07-19: "the vertical→horizontal handoff needs an extra tap
+          // before the plates highlight").
+          game.scene.resume(key);
+          pendingTapResume = false;
         } else {
           // Don't resume immediately — arm a "first tap unpauses" hold.
           pendingTapResume = true;
