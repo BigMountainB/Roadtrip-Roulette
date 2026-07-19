@@ -19322,16 +19322,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   _resetControlsLayout() {
-    this._hudLayout    = {};
+    // RESET = the game's STARTING default (the owner's baked DEFAULT_HUD_LAYOUT),
+    // NOT an empty/base layout (owner 2026-07-19: "reset should produce the
+    // default the game starts with" — the empty layout was an older look).
+    this._hudLayout    = { ...DEFAULT_HUD_LAYOUT };
     this._hudUndoStack = [];
+    // Snap every movable group back to base first; the apply passes below then
+    // re-place each element per the default layout (elements NOT in the default
+    // stay at base = a zero offset).
     for (const [, objs] of this._hudMovableGroups()) for (const obj of objs) {
       if (obj._hudBaseX !== undefined) {
         obj.x = obj._hudBaseX;  obj.y = obj._hudBaseY;
         obj.setScale(obj._hudBaseSX ?? 1, obj._hudBaseSY ?? 1);
       }
     }
-    // Non-readout controls reset by recomputing from the now-empty layout;
-    // rebuild their proxies so the handles snap back to the defaults.
+    // Apply BOTH groups from the default: readouts (money/HP/speed/…) and the
+    // non-readout controls (buttons/pedals/mirror/wiper). Then rebuild proxies
+    // so the editor handles snap onto the defaulted positions.
+    this._applyHudLayout();
     this._applyControlLayout();
     if (this._ctrlEditMode) this._buildControlProxies();
     this._saveHudLayout();
