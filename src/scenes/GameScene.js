@@ -8855,18 +8855,53 @@ export class GameScene extends Phaser.Scene {
         this.load.image(TMP(k), p);
       }
       this.load.once('complete', () => {
-        for (const [k] of targets) {
-          const t = TMP(k);
+        // Only swap keys whose fresh art actually arrived.
+        const ready = targets.map(([k]) => k).filter(k => this.textures.exists(TMP(k)));
+        if (!ready.length) return;
+        const readySet = new Set(ready);
+        // SWAP EVERYTHING LIVE (owner 2026-07-19): removing + re-adding a texture
+        // key DESTROYS the old Texture OBJECT, so every live GameObject still
+        // referencing it (pickups, weapons, the headlight bitmap-masks, any
+        // pooled sprite) would render a dead texture next frame — the reported
+        // batchSprite / drawBitmapMask crash when the genre is changed mid-run.
+        // So: (1) collect every live user of each swapped key by walking the
+        // display list, (2) swap the textures, (3) re-point every collected
+        // sprite to the fresh key. Bitmap masks follow automatically once their
+        // masking sprite is re-pointed (the mask re-renders it each frame).
+        const usersByKey = {};
+        for (const k of ready) usersByKey[k] = [];
+        const walk = (list) => {
+          if (!list) return;
+          for (const go of list) {
+            const key = go?.texture?.key;
+            if (key && readySet.has(key)) usersByKey[key].push(go);
+            if (go?.list) walk(go.list);   // recurse into Containers
+          }
+        };
+        try { walk(this.children?.list); } catch (_) {}
+        // Atomic swap: real key takes the temp image's source; temp entry dropped.
+        for (const k of ready) {
           try {
-            if (!this.textures.exists(t)) continue;   // this one failed → keep the old art
-            const img = this.textures.get(t).getSourceImage();
+            const img = this.textures.get(TMP(k)).getSourceImage();
             if (this.textures.exists(k)) this.textures.remove(k);
-            this.textures.addImage(k, img);           // real key gets its own GL upload from img
-            this.textures.remove(t);                  // drop the temp entry (img lives on via k)
+            this.textures.addImage(k, img);
+            this.textures.remove(TMP(k));
           } catch (_) {}
         }
-        // Sprites hold a REFERENCE to the old Texture object — re-point the
-        // player sprite (and vehicle art) to the freshly-swapped textures.
+        // Re-point every live sprite that was on an old (now-destroyed) texture,
+        // preserving its on-screen size (setTexture otherwise snaps it back to
+        // the art's native pixel size).
+        for (const k of ready) {
+          for (const go of usersByKey[k]) {
+            try {
+              const dw = go.displayWidth, dh = go.displayHeight;
+              go.setTexture(k);
+              if (dw > 0 && dh > 0) go.setDisplaySize(dw, dh);
+            } catch (_) {}
+          }
+        }
+        // Player sprite + vehicle-specific sizing/tint (belt-and-suspenders on
+        // top of the generic re-point above).
         try { this._applyVehicleSwap?.(this.player?.vehicleId ?? 'beater'); } catch (_) {}
       });
       this.load.start();
