@@ -42,7 +42,7 @@ forked from DUI on **2026-07-04** into its own repo and Cloudflare Pages site. R
 into an App-Store-safe survival road trip and adds the commercial glue (encounters, part
 upgrades, survival + heat/fuel pressure).
 
-## Current snapshot (as of 2026-07-17)
+## Current snapshot (as of 2026-07-19)
 
 **Built & deployed:** rest-stop encounter system (dialogue trees + npcMemory) · **MISSION SYSTEM
 complete (Ch. 8, all 7 phases — 5 types, rep ladder ×1/×2.5/×5, 123 tests)** · car stats layer ·
@@ -113,6 +113,32 @@ genre pick, and a "Rotate Phone to Enter Game Play" prompt follows. Remaining: e
 genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
+
+### 2026-07-19 (pt 5) — One-vehicle model + explicit speed table + survival reworks — LOCAL (unpushed, commit `55d8914`)
+Owner batch during traits playtest. **The game now has ONE vehicle — the beater** — whose look + traits come
+from the SELECTED genre; you "choose" a car by choosing/unlocking a genre and you upgrade that single car.
+- **Purchased vehicles REMOVED**: the 7 buyable types (`suv4x4`, `usedTruck`, `newTruck`, `evTruck`,
+  `sportsCar`, `bestlaRoadster`, `playdoutS3X`) deleted from `VEHICLES` (only `beater` remains). The rest-stop
+  Dealer no longer sells cars — its tile opens **ACCESSORIES/upgrades** (`dealer_acc`) directly instead of the
+  old Cars/Accessories chooser. `dealerVehicleItems()` build + `_showDealerChooser` are now unreachable (inert
+  dead code, left for a focused sweep). GameScene `create()` migrates old saves: any `vehicleId`/`ownedVehicles`
+  pointing at a deleted car resets to `beater` (garage `list()` already `.filter(Boolean)`s, picker uses
+  `Object.keys(VEHICLES)` = `['beater']`). This also fixed the owner's "220/250 mph classic-rock" report — that
+  was the roadster (a purchased car), not the genre beater.
+- **Explicit top + cruise speeds** (owner table): each genre trait now carries BOTH `topSpeedMph` (pedal-DOWN
+  max, no caffeine) and `cruiseMph` (no-pedal cruise) — no more 75%/boost-delta approximation. Values: EDM
+  165/145 · Classic-Rock 150/135 · K-Pop 145/125 · Hip-Hop 140/120 · Reggaeton 135/115 · Norteño 130/110 ·
+  Pop-Punk 125/105 · Country 120/100 · Metal 110/90 · Reggae 100/80. Speed model reads `_gvt.cruiseMph`/
+  `_gvt.topSpeedMph`; caffeine + upgrades stack on both. Garage panel + trait popup show **TOP / CRUISE**.
+  (Brake speed is still a flat 60-mph floor for every car — `slowMph=60`; `brakingMult` only changes decel rate.
+  Per-car brake floors await an owner column.) **180 genre tests** (added cruise + cruise<top checks).
+- **Bladder = digestion-driven**: fills over the miles by +40% of the food-bar drop + 20% of the drink-bar drop
+  each frame (SurvivalSystem `update()`), NOT at the moment of eating. Consume-time fill + `_bladderGain()`
+  removed; bad-fish emergency + diuretic claw-back retained (the claw-back feeds the drink-drop).
+- **Gas-station water → +3%** hydration (was +15%): a bottle is a sip, not a tank.
+- **Overheat tied to the ACCELERATOR**: engine-temp target now = accel-pedal load (boost=1.0 / coast=0.40 /
+  brake=0, analog in tilt) × speed, + ambient + topography (climbLoad) + cooling upgrades (coolFactor) — the
+  four inputs the owner named. Replaces the old speed²+boost `speedLoad`.
 
 ### 2026-07-19 (pt 4) — Genre Vehicle Traits system + playtest fixes — LOCAL (unpushed)
 Data-driven gameplay identity for the 10 culture STARTER vehicles (the re-skinned beater); purchased
