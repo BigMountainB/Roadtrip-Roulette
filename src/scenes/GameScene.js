@@ -19484,15 +19484,104 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Export the current custom HUD layout as JSON so it can be baked into the
-   *  shipped DEFAULT_HUD_LAYOUT (owner 2026-07-17). Copies to the clipboard and
-   *  drops it in a prompt() as a fallback so it can be read/selected on iOS. */
+   *  shipped DEFAULT_HUD_LAYOUT (owner 2026-07-17). Tries the clipboard, then
+   *  always shows a full-text selectable overlay (prompt() truncates long
+   *  strings on iOS, and clipboard.writeText REJECTS on iOS Safari when there's
+   *  no transient user-activation — that rejection was unhandled and crashed
+   *  the game to the error screen). */
   _copyHudLayout() {
     const json = JSON.stringify(this._hudLayout || {});
-    let copied = false;
-    try { navigator.clipboard?.writeText?.(json); copied = true; } catch (_) {}
-    // Fallback surface so the value is always readable/selectable on device.
-    try { window.prompt?.('HUD layout — copy this and paste it to Claude:', json); } catch (_) {}
-    this._showPopup?.(copied ? '📋 Layout copied — paste it to Claude' : '📋 Layout ready — copy from the box', '#F2A73B');
+    // Auto-copy the FULL string, synchronously inside the tap gesture — the
+    // iOS-reliable execCommand('copy') path (clipboard.writeText REJECTS in
+    // iOS Safari here, which also crashed the game).  Only if that fails do we
+    // fall back to a selectable box; success needs no manual selection.
+    const ok = this._copyTextToClipboard(json);
+    // Bonus attempt via the async API, rejection swallowed so it can't bubble.
+    try { navigator.clipboard?.writeText?.(json)?.then?.(() => {}, () => {}); } catch (_) {}
+    if (ok) {
+      this._showPopup?.('📋 Layout copied — paste it to Claude', '#F2A73B');
+    } else {
+      this._showHudLayoutBox(json);
+      this._showPopup?.('📋 Copy blocked — grab it from the box', '#F2A73B');
+    }
+  }
+
+  /** Copy text to the clipboard using the iOS-Safari-reliable hidden-textarea
+   *  + execCommand('copy') trick (must run synchronously in a user gesture).
+   *  Returns true on success. */
+  _copyTextToClipboard(text) {
+    try {
+      if (typeof document === 'undefined' || !document.body) return false;
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.contentEditable = 'true';
+      ta.readOnly = false;
+      // On-screen but invisible — iOS won't copy from a display:none/hidden node.
+      ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;' +
+        'border:0;outline:0;opacity:0;-webkit-user-select:text;';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(ta);
+        const sel = window.getSelection?.();
+        sel?.removeAllRanges?.();
+        sel?.addRange?.(range);
+      } catch (_) {}
+      try { ta.setSelectionRange(0, text.length); } catch (_) {}
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+      ta.remove();
+      return ok;
+    } catch (_) { return false; }
+  }
+
+  /** DOM overlay that shows the full HUD-layout JSON in a selectable textarea
+   *  with Copy / Close buttons. Reliable on iOS where prompt() truncates and
+   *  the async clipboard write may be blocked. */
+  _showHudLayoutBox(json) {
+    try {
+      if (typeof document === 'undefined' || !document.body) {
+        try { window.prompt?.('HUD layout — copy this:', json); } catch (_) {}
+        return;
+      }
+      document.getElementById('hud-layout-box')?.remove();
+      const wrap = document.createElement('div');
+      wrap.id = 'hud-layout-box';
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.88);' +
+        'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+        'padding:16px;box-sizing:border-box;font-family:sans-serif;';
+      const label = document.createElement('div');
+      label.textContent = 'HUD layout — tap the box, Select All, Copy, then paste to Claude:';
+      label.style.cssText = 'color:#fff;font-size:14px;line-height:1.3;margin-bottom:10px;text-align:center;max-width:640px;';
+      const ta = document.createElement('textarea');
+      ta.value = json;
+      ta.readOnly = true;
+      ta.style.cssText = 'width:92%;max-width:640px;height:45%;font-size:12px;padding:8px;' +
+        'border-radius:8px;border:1px solid #F2A73B;background:#111;color:#eee;box-sizing:border-box;';
+      const row = document.createElement('div');
+      row.style.cssText = 'margin-top:12px;display:flex;gap:12px;';
+      const copyBtn = document.createElement('button');
+      copyBtn.textContent = 'Copy';
+      copyBtn.style.cssText = 'padding:12px 22px;font-size:16px;border:0;border-radius:8px;background:#F2A73B;color:#000;';
+      copyBtn.onclick = () => {
+        ta.focus(); ta.select();
+        try { ta.setSelectionRange(0, json.length); } catch (_) {}
+        try { document.execCommand('copy'); } catch (_) {}
+        try { navigator.clipboard?.writeText?.(json)?.catch?.(() => {}); } catch (_) {}
+      };
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = 'Close';
+      closeBtn.style.cssText = 'padding:12px 22px;font-size:16px;border:0;border-radius:8px;background:#888;color:#fff;';
+      closeBtn.onclick = () => wrap.remove();
+      row.append(copyBtn, closeBtn);
+      wrap.append(label, ta, row);
+      document.body.appendChild(wrap);
+      ta.focus(); ta.select();
+    } catch (_) {
+      try { window.prompt?.('HUD layout — copy this:', json); } catch (_) {}
+    }
   }
 
   _resetControlsLayout() {
