@@ -26,8 +26,13 @@ const KEYS = [
   'classic_rock', 'edm_rave', 'reggae', 'pop_punk_emo', 'norteno',
 ];
 const TOP_SPEEDS = {
-  hiphop_phonk: 140, country: 120, reggaeton: 135, k_pop: 150, metal: 110,
-  classic_rock: 160, edm_rave: 175, reggae: 100, pop_punk_emo: 125, norteno: 130,
+  hiphop_phonk: 140, country: 120, reggaeton: 135, k_pop: 145, metal: 110,
+  classic_rock: 150, edm_rave: 165, reggae: 100, pop_punk_emo: 125, norteno: 130,
+};
+// Explicit no-pedal cruise per car (owner 2026-07-19 table).
+const CRUISE_SPEEDS = {
+  hiphop_phonk: 120, country: 100, reggaeton: 115, k_pop: 125, metal: 90,
+  classic_rock: 135, edm_rave: 145, reggae: 80, pop_punk_emo: 105, norteno: 110,
 };
 
 // ── 1. Resolution for all 10 keys (only on the starter/beater) ────────────
@@ -45,9 +50,11 @@ check('no trait when culture is null', genreTraitFor(null, 'beater') === null);
 check('no trait when culture is empty', genreTraitFor('', 'beater') === null);
 check('unknown culture → null', genreTraitFor('polka', 'beater') === null);
 
-// ── 3. Each top-speed cap ─────────────────────────────────────────────────
+// ── 3. Each top-speed cap + explicit cruise speed ─────────────────────────
 for (const k of KEYS) {
   eq(`${k} top speed`, traitTopSpeedMph(genreTraitFor(k, 'beater')), TOP_SPEEDS[k]);
+  eq(`${k} cruise speed`, genreTraitFor(k, 'beater').cruiseMph, CRUISE_SPEEDS[k]);
+  check(`${k} cruise < top`, genreTraitFor(k, 'beater').cruiseMph < genreTraitFor(k, 'beater').topSpeedMph);
 }
 check('no cap for a non-genre vehicle', traitTopSpeedMph(genreTraitFor('metal', 'sportsCar')) === null);
 

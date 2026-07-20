@@ -33,8 +33,9 @@ const DIURETIC_MAX   = 20;
 // back over the following miles instead of subtracting immediately.
 // BITE-SIZED (2026-07-12): each road sprite is a bite/sip, not a meal.
 // FILLING ×1.5 (2026-07-14 playtest): ×2.5 overshot ("too much"), reduced by
-// 40% → 1.5× the original bite values.  Tiredness and diuretic unchanged;
-// _bladderGain coefficients are ÷1.5 so bladder pace stays at the ORIGINAL.
+// 40% → 1.5× the original bite values.  Tiredness and diuretic unchanged.
+// Bladder is filled by DIGESTION over the miles now (see update()), not on the
+// bite — so these food/drink values indirectly drive the bladder pace.
 export const ITEM_FX = {
   water:        { t:  -1, h: +4.5, f:    0 },
   energy:       { t:  -8, h: +1.5, f:    0, diuretic: 2.5 },   // energy shot: big Alertness jolt (owner 2026-07-17)
@@ -95,6 +96,7 @@ export class SurvivalSystem {
     // be a resting state), slower again above 75 / below 25.  If a diuretic
     // pool is pending, claw back a bit of hydration each mile until it's spent.
     const zone = (v) => (v > 25 && v < 75) ? 1.25 : 1.0;
+    const _fBefore = this.fullness, _hBefore = this.hydration;   // for bladder-from-digestion
     const _fDrain = DRIFT.fullness * zone(this.fullness) * dMi * drainMul;   // this frame's normal food drain (negative)
     this.fullness  = clamp(this.fullness  + _fDrain);
     // Post-restroom fast-digest: the food you HAD when you used the restroom
@@ -112,6 +114,13 @@ export class SurvivalSystem {
       this.hydration = clamp(this.hydration - d);
       this.diuretic  = Math.max(0, this.diuretic - d);
     }
+
+    // Bladder fills as food + drink DIGEST (owner 2026-07-19): +40% of the
+    // food-bar drop and +20% of the drink-bar drop this frame — digestion, not
+    // the act of eating/drinking, is what fills you. Only a restroom empties it.
+    const _foodDrop  = Math.max(0, _fBefore - this.fullness);
+    const _drinkDrop = Math.max(0, _hBefore - this.hydration);
+    this.bladder = clamp(this.bladder + 0.40 * _foodDrop + 0.20 * _drinkDrop);
 
     // Caffeine wears off with distance; dependence slowly decays.
     this.caffeineActive = Math.max(0, this.caffeineActive - dMi);
@@ -155,16 +164,9 @@ export class SurvivalSystem {
       this.fullness = clamp(this.fullness + _fGain);
     }
 
-    // Eating AND drinking fill the bladder (scaled by how much they add);
-    // caffeine/quad-shot are diuretics and fill it extra.  Only a restroom
-    // empties it (see GameScene: buys.emptyBladder / bladder-burst pull-over).
-    this.bladder = clamp(this.bladder + this._bladderGain(id, fx) * (this.bladder > 75 ? _overMult : 1));
-    // Over-eating: once you're past the 75% food mark, every additional food
-    // sprite adds a flat +2% bladder (owner 2026-07-17), halved by the genre
-    // over-fill penalty when it applies.
-    if (typeof fx.f === 'number' && fx.f > 0 && this.fullness > 75) {
-      this.bladder = clamp(this.bladder + 2 * _overMult);
-    }
+    // Bladder is no longer filled at the moment of eating/drinking — it fills as
+    // food + drinks DIGEST over the miles (see update(): +40% food-drop / +20%
+    // drink-drop). Only a restroom empties it.
     // Diuretic: ~half of the hydration this drink added is "borrowed" and drains
     // back off over the next couple miles.
     if (fx.diuretic) this.diuretic = Math.min(DIURETIC_MAX, this.diuretic + Math.max(0, fx.h || 0) * DIURETIC_FRAC);
@@ -181,17 +183,6 @@ export class SurvivalSystem {
     if (fx.tripRoll && rng() < ODD_GUMMY_CHANCE) ev.oddGummy = true;
 
     return ev;
-  }
-
-  /** How much a consumed item fills the bladder: scaled by the drink/food it
-   *  adds, plus a diuretic bump for caffeine and the quad-shot. */
-  _bladderGain(id, fx = {}) {
-    const posH = Math.max(0, fx.h || 0), posF = Math.max(0, fx.f || 0);
-    // Coefficients ÷1.5 alongside the FILLING ×1.5 bite buff so the bladder
-    // fills at its ORIGINAL pace (owner call 2026-07-14).
-    let g = posH * 0.0467 + posF * 0.04;
-    if (fx.diuretic) g += 0.8;   // diuretics make you go more
-    return g;
   }
 
   /** External bladder fill (e.g. encounter food/drink that bypasses applyItem).

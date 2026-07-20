@@ -564,55 +564,11 @@ export const VEHICLES = {
     sprite: 'car_player', spriteBack: 'codex_beater_back', spriteFront: 'codex_beater_front',
     tint: 0xEEEEEE,    // off-white (swatch only — PNG isn't tinted at render time)
   },
-  suv4x4: {
-    id: 'suv4x4', label: 'Used 4x4 SUV', hp: 70, rangeMi: 300, topMph: 115, boostMph: 15,
-    grip: 1.02, turnRate: 0.88, stability: 1.15, offroadGrip: 1.25,
-    drive: '4x4', fuel: 'gas', heat: 0.95, priceUsd: 5000,
-    sprite: 'car_player', spriteBack: 'codex_suv4x4_back', spriteFront: 'codex_suv4x4_front',
-    tint: 0x3A78D6,    // mid blue (swatch only)
-  },
-  usedTruck: {
-    id: 'usedTruck', label: 'Used Truck', hp: 90, rangeMi: 350, topMph: 117, boostMph: 10,
-    grip: 0.96, turnRate: 0.78, stability: 1.18, offroadGrip: 1.18,
-    drive: '4x4', fuel: 'gas', heat: 1.00, priceUsd: 10000,
-    sprite: 'car_player', spriteBack: 'codex_used_truck_back', spriteFront: 'codex_used_truck_front',
-    tint: 0x224488,    // deeper truck blue (swatch only)
-  },
-  newTruck: {
-    id: 'newTruck', label: 'New Truck', hp: 100, rangeMi: 400, topMph: 120, boostMph: 12,
-    grip: 0.98, turnRate: 0.80, stability: 1.20, offroadGrip: 1.20,
-    drive: '4x4', fuel: 'gas', heat: 1.10, priceUsd: 25000,
-    sprite: 'car_player', spriteBack: 'codex_new_truck_back', spriteFront: 'codex_new_truck_front',
-    tint: 0x1F1F1F,         // shiny black (swatch only)
-  },
-  evTruck: {
-    id: 'evTruck', label: 'Electric Truck', hp: 85, rangeMi: 300, topMph: 118, boostMph: 18,
-    grip: 1.00, turnRate: 0.82, stability: 1.15, offroadGrip: 1.20,
-    drive: '4x4', fuel: 'electric', heat: 1.05, priceUsd: 40000,
-    sprite: 'car_player', spriteBack: 'codex_ev_truck_back', spriteFront: 'codex_ev_truck_front',
-    tint: 0xEE7733,    // orange (swatch only)
-  },
-  sportsCar: {
-    id: 'sportsCar', label: 'Sports Car', hp: 75, rangeMi: 500, topMph: 165, boostMph: 25,
-    grip: 1.18, turnRate: 1.14, stability: 0.92, offroadGrip: 0.65,
-    drive: '2WD', fuel: 'gas', heat: 1.25, priceUsd: 55000,
-    sprite: 'car_player', spriteBack: 'codex_sports_car_back', spriteFront: 'codex_sports_car_front',
-    tint: 0xFFC107,         // canary yellow (swatch only)
-  },
-  bestlaRoadster: {
-    id: 'bestlaRoadster', label: 'Electric Roadster', hp: 85, rangeMi: 250, topMph: 200, boostMph: 50,
-    grip: 1.22, turnRate: 1.17, stability: 0.88, offroadGrip: 0.62,
-    drive: '2WD', fuel: 'electric', heat: 1.30, priceUsd: 75000,
-    sprite: 'car_player', spriteBack: 'codex_bestla_roadster_back', spriteFront: 'codex_bestla_roadster_front',
-    tint: 0x33AA55,    // emerald green (swatch only)
-  },
-  playdoutS3X: {
-    id: 'playdoutS3X', label: 'Bestla Play\'dOut S3X', hp: 125, rangeMi: 400, topMph: 190, boostMph: 30,
-    grip: 1.18, turnRate: 1.08, stability: 1.08, offroadGrip: 0.90,
-    drive: '4x4', fuel: 'electric', heat: 1.40, priceUsd: 100000,
-    sprite: 'car_player', spriteBack: 'codex_playdout_s3x_back', spriteFront: 'codex_playdout_s3x_front',
-    tint: 0x55AAEE,    // lighter sky blue (swatch only)
-  },
+  // Purchased vehicle types (SUV / trucks / sports / EVs) were REMOVED
+  // 2026-07-19: the game now has ONE vehicle — the beater — whose look + traits
+  // come from the SELECTED CULTURE (see genreVehicleTraits.js). You "choose" a
+  // vehicle by choosing/unlocking a genre; you upgrade the single car. The
+  // dealer no longer sells cars (dealerVehicleItems filters priceUsd>0 → empty).
 };
 
 // Gas pricing — $10 per 30 mi of tank (per spec).  Charging is 35% of

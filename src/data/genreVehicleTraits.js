@@ -90,7 +90,8 @@ export const GENRE_VEHICLE_TRAITS = {
   hiphop_phonk: {
     key: 'hiphop_phonk',
     vehicleName: 'VIP Sedan',
-    topSpeedMph: 140,
+    topSpeedMph: 140,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   120,   // no-pedal cruise
     strengths: [
       'Reaches top speed 20% faster',
       'Driving-bonus grace period lasts 50% longer',
@@ -110,7 +111,8 @@ export const GENRE_VEHICLE_TRAITS = {
   country: {
     key: 'country',
     vehicleName: 'Mud Truck',
-    topSpeedMph: 120,
+    topSpeedMph: 120,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   100,   // no-pedal cruise
     strengths: [
       'Traffic, scenery & weather damage −25%',
       'Snow & crosswind steering penalty −50%',
@@ -132,7 +134,8 @@ export const GENRE_VEHICLE_TRAITS = {
   reggaeton: {
     key: 'reggaeton',
     vehicleName: 'Lowrider',
-    topSpeedMph: 135,
+    topSpeedMph: 135,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   115,   // no-pedal cruise
     strengths: [
       'Passenger fares +30%',
       'Drinks & caffeine +25% above 110 mph',
@@ -154,7 +157,8 @@ export const GENRE_VEHICLE_TRAITS = {
   k_pop: {
     key: 'k_pop',
     vehicleName: 'Idol EV',
-    topSpeedMph: 150,
+    topSpeedMph: 145,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   125,   // no-pedal cruise
     strengths: [
       'Roadside pickup radius +30%',
       'On-time bonus +25% on timed jobs',
@@ -174,7 +178,8 @@ export const GENRE_VEHICLE_TRAITS = {
   metal: {
     key: 'metal',
     vehicleName: 'War Van',
-    topSpeedMph: 110,
+    topSpeedMph: 110,   // pedal-DOWN max (no caffeine)
+    cruiseMph:    90,   // no-pedal cruise
     strengths: [
       'Collision & police damage −30%',
       'Weapons last +25%; 20% chance of a bonus use',
@@ -197,7 +202,8 @@ export const GENRE_VEHICLE_TRAITS = {
   classic_rock: {
     key: 'classic_rock',
     vehicleName: 'Muscle Car',
-    topSpeedMph: 160,
+    topSpeedMph: 150,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   135,   // no-pedal cruise
     strengths: [
       'Driving cash above 120 mph +30%',
       'Shrugs off the first overheat each leg',
@@ -218,7 +224,8 @@ export const GENRE_VEHICLE_TRAITS = {
   edm_rave: {
     key: 'edm_rave',
     vehicleName: 'Laser Supercar',
-    topSpeedMph: 175,
+    topSpeedMph: 165,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   145,   // no-pedal cruise
     strengths: [
       'ACCEL boost +35% & 25% longer',
       'Caffeine +35% Alertness, delayed crash',
@@ -240,7 +247,8 @@ export const GENRE_VEHICLE_TRAITS = {
   reggae: {
     key: 'reggae',
     vehicleName: 'Easy-Rider Van',
-    topSpeedMph: 100,
+    topSpeedMph: 100,   // pedal-DOWN max (no caffeine)
+    cruiseMph:    80,   // no-pedal cruise
     strengths: [
       '70–99 mph earns the full 100-mph rate',
       'Alertness, Food & Bladder drain −25% below 100 mph',
@@ -264,7 +272,8 @@ export const GENRE_VEHICLE_TRAITS = {
   pop_punk_emo: {
     key: 'pop_punk_emo',
     vehicleName: 'Tour Hatchback',
-    topSpeedMph: 125,
+    topSpeedMph: 125,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   105,   // no-pedal cruise
     strengths: [
       'Repairs & basic upgrades −25%',
       'Driving bonus +50% below 25 HP',
@@ -287,7 +296,8 @@ export const GENRE_VEHICLE_TRAITS = {
   norteno: {
     key: 'norteno',
     vehicleName: 'Custom Pickup',
-    topSpeedMph: 130,
+    topSpeedMph: 130,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   110,   // no-pedal cruise
     strengths: [
       'Delivery/cargo missions pay +25%',
       'Cargo survives one minor collision',

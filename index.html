@@ -2735,7 +2735,7 @@
           const _trait = (_curCar && _curCar.id === 'beater') ? (window.__vehTraits?.current?.()) : null;
           if (_trait) {
             const li = (arr, icon) => (arr || []).map(s => `<li>${icon} ${s}</li>`).join('');
-            traitHtml = `<div id="garage-trait"><div class="gt-name">${_trait.vehicleName} · ${_trait.topSpeedMph} MPH TOP</div>`
+            traitHtml = `<div id="garage-trait"><div class="gt-name">${_trait.vehicleName} · ${_trait.topSpeedMph} TOP / ${_trait.cruiseMph} CRUISE MPH</div>`
               + `<ul class="gt-list">${li(_trait.strengths, '✅')}${li(_trait.weaknesses, '⚠️')}</ul></div>`;
           }
         }
@@ -3420,7 +3420,7 @@
         const li = (arr, icon) => (arr || []).map(s => `<li>${icon} ${s}</li>`).join('');
         _traitPop.innerHTML =
           `<div class="vt-name">${t.vehicleName}</div>` +
-          `<div class="vt-top">${t.topSpeedMph} MPH TOP</div>` +
+          `<div class="vt-top">${t.topSpeedMph} TOP / ${t.cruiseMph} CRUISE MPH</div>` +
           `<ul class="vt-list">${li(t.strengths, '✅')}${li(t.weaknesses, '⚠️')}</ul>` +
           `<div class="vt-hint">release to close</div>`;
         _traitPop.classList.add('show');

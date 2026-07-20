@@ -48,12 +48,13 @@ const restroomItem = (gated, freeDesc) => ({
   payload: { restroom: true, gated: !!gated },
 });
 
-// Bottled water — refills the Drinks bar. Sold at gas stations ($15) and AOK
-// campgrounds ($7) (owner 2026-07-17).
+// Bottled water — refills the Drinks bar. Sold at gas stations and AOK
+// campgrounds. Fill is a modest +3% (owner 2026-07-19): a single bottle is a
+// sip, not a full tank — real hydration comes from stocking up over many stops.
 const waterItem = (cost) => ({
   id: 'water', emoji: '💧', label: '💧  WATER', cost,
-  desc: 'A cold bottle — refills your Drinks.',
-  payload: { survivalDelta: { hydration: 15 } },
+  desc: 'A cold bottle — a small Drinks top-up.',
+  payload: { survivalDelta: { hydration: 3 } },
 });
 
 const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
@@ -574,13 +575,8 @@ export class RestStopScene extends Phaser.Scene {
     // Park & Ride always has a free public restroom.
     SECTIONS.parkride.items = [...SECTIONS.parkride.items, restroomItem(false, 'Nasty, but free.')];
 
-    // ── DEALER_CARS: build region-filtered vehicle catalog ──────────
-    const _stopBrands = brandsForStop(this._stop);
-    const _carFuel    = _stopBrands.dealer.carFuel;
-    SECTIONS.dealer_cars.items = dealerVehicleItems(_carFuel).filter(
-      it => !this._ownedVehicles.includes(it.payload.buyVehicle)
-    );
-    SECTIONS.dealer_cars.label = `🚗  CARS — ${_stopBrands.dealer.name}`;
+    // (DEALER_CARS removed 2026-07-19 — no car sales; the Dealer tile opens
+    // ACCESSORIES/upgrades directly. See the `dealer` tile handler.)
 
     // ── DEALER_ACC: per-vehicle accessory shop ──────────────────────
     // Repair + Paint are always available.  Bumper, Traction, and NOS
@@ -970,9 +966,10 @@ export class RestStopScene extends Phaser.Scene {
       card.on('pointerout',  () => card.setFillStyle(0xFFFFFF));
       card.on('pointerdown', (ptr) => {
         ptr.event?.stopPropagation?.();
-        // DEALER tile opens the Cars / Accessories chooser instead of
-        // a flat sub-menu; everything else drills directly into its list.
-        if (key === 'dealer') this._showDealerChooser();
+        // DEALER no longer sells CARS (owner 2026-07-19 — one vehicle, the
+        // genre beater), so its tile opens ACCESSORIES/upgrades directly rather
+        // than the old Cars/Accessories chooser.
+        if (key === 'dealer') this._showSection('dealer_acc');
         else                  this._showSection(key);
       });
     });

@@ -785,6 +785,12 @@ export class GameScene extends Phaser.Scene {
     // registry; defaults to the Beater on first boot.
     const _savedVehId = this.registry.get('vehicleId');
     this.player.vehicleId = (_savedVehId && VEHICLES[_savedVehId]) ? _savedVehId : 'beater';
+    // Purchased vehicles removed (2026-07-19): drop any owned/active IDs that no
+    // longer exist (old saves), so the garage/picker never hit an undefined
+    // vehicle. Also keep the active id migrated to the beater above.
+    if (_savedVehId && !VEHICLES[_savedVehId]) this.registry.set('vehicleId', 'beater');
+    const _ownedNow = (this.registry.get('ownedVehicles') ?? ['beater']).filter(id => VEHICLES[id]);
+    this.registry.set('ownedVehicles', _ownedNow.length ? _ownedNow : ['beater']);
     const _veh = VEHICLES[this.player.vehicleId];
     // Active per-run buffs (from encounter choices, restored on resume below).
     this._activeBuffs = [];
@@ -4969,8 +4975,12 @@ export class GameScene extends Phaser.Scene {
     // one boost-delta below it. Non-genre vehicles keep their VEHICLES.topMph.
     const _gvt        = this._activeGenreTrait();
     const _boostDelta = _vehSpec.boostMph ?? 20;
-    const _cruiseBase = _gvt ? Math.max(0, _gvt.topSpeedMph - _boostDelta) : _vehSpec.topMph;
+    // Owner 2026-07-19: each genre car has an EXPLICIT pedal-DOWN max
+    // (topSpeedMph) and no-pedal cruise (cruiseMph) — see genreVehicleTraits.js.
+    // Caffeine + upgrades add on top of both. Non-genre beater falls back to its
+    // own topMph + boost for the max and 75% of that for cruise.
     const _boostBase  = _gvt ? _gvt.topSpeedMph : (_vehSpec.topMph + _boostDelta);
+    const _cruiseBase = _gvt ? _gvt.cruiseMph   : (_vehSpec.topMph + _boostDelta) * 0.75;
     const cruiseMph = _cruiseBase + cokeBonus + methBonus + nosBonus + upMph;
     const boostMph  = _boostBase  + cokeBonus + methBonus + nosBonus + upMph;
     const slowMph   = 60;
@@ -5025,7 +5035,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Engine heat / overheating ─────────────────────────────────────────
     // engineTemp lerps toward a target driven by ambient desert heat, the
-    // current climb, and how hard the engine is working (speed/boost).  The
+    // current climb, and how hard you're working the ACCELERATOR.  The
     // Cooling stat (vehicle heat + cooling upgrades) lowers the target and
     // speeds recovery.  Above ENGINE_LIMP_TEMP the car limps; on Normal/Hard
     // it also takes slow HP damage if you keep flogging it.
@@ -5036,8 +5046,18 @@ export class GameScene extends Phaser.Scene {
       const vehHeat    = VEHICLES[this.player.vehicleId]?.heat ?? 1;
       const coolFactor = 1.45 - vehHeat + (this._upgradeFx?.cooling ?? 0);
       const climbLoad  = Math.max(0, curGrade) * speedRatio * 520;
-      const speedLoad  = speedRatio * speedRatio * 22 + (this._isBoost() ? 10 : 0);
-      let target = 30 + ambient * 46 + climbLoad + speedLoad - (coolFactor - 0.8) * 46;
+      // Accelerator drives the engine's work-heat (owner 2026-07-19): flooring
+      // it (boost / full tilt throttle) heats hardest, coasting adds mild heat,
+      // braking almost none — amplified by how fast you're actually going. So
+      // engine temp tracks ACCEL-PEDAL use + ambient + topography (climbLoad) +
+      // cooling upgrades (coolFactor), exactly the four inputs the owner named.
+      let pedal;
+      if (this._isBrake())      pedal = 0;
+      else if (_tiltThr > 0)    pedal = 0.40 + 0.60 * _tiltThr;
+      else if (this._isBoost()) pedal = 1.0;
+      else                      pedal = 0.40;
+      const accelLoad  = pedal * (12 + speedRatio * 34);
+      let target = 30 + ambient * 46 + climbLoad + accelLoad - (coolFactor - 0.8) * 46;
       target = Math.max(20, Math.min(115, target));
       // Rise slowly, fall faster when cooling is good.
       const rate = (target > this._engineTemp ? 0.16 : 0.22 * Math.max(0.6, coolFactor)) * dt;
