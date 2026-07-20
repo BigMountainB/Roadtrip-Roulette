@@ -48,6 +48,8 @@ export const MISSION_TIERS = [
 // Tuned against the 2026-07-13 upgrade reprice: Legend jobs ≈ $900–1,500.
 export const PAYOUT_BASE   = 30;
 export const PAYOUT_PER_MI = 3.5;
+// Global payout scalar — bumps every mission's take (owner 2026-07-19: 5×).
+export const PAYOUT_MULT   = 5;
 export const TERM_BONUS    = {
   fragile: 40, perishable: 30, illegal: 60,
   // Phase 4 — Timed premium + passenger quirk bonuses (the quirk IS the term).
@@ -241,7 +243,7 @@ export function riskBonus(fromMile, toMile) {
 export function computePayout({ routeMiles, risk = 0, terms = {}, repMult = 1 }) {
   let cond = 0;
   for (const k of Object.keys(TERM_BONUS)) if (terms[k]) cond += TERM_BONUS[k];
-  const raw = (PAYOUT_BASE + routeMiles * PAYOUT_PER_MI + risk + cond) * repMult;
+  const raw = (PAYOUT_BASE + routeMiles * PAYOUT_PER_MI + risk + cond) * repMult * PAYOUT_MULT;
   return Math.max(5, Math.round(raw / 5) * 5);
 }
 

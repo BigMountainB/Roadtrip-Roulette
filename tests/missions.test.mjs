@@ -10,7 +10,7 @@
 import {
   MissionSystem, MISSION_TIERS, tierFor, computePayout, riskBonus,
   contactIdFor, contactGreeting,
-  PAYOUT_BASE, PAYOUT_PER_MI, TERM_BONUS,
+  PAYOUT_BASE, PAYOUT_PER_MI, PAYOUT_MULT, TERM_BONUS,
   FRAGILE_MAX_DAMAGE, TIMED_SEC_PER_MI, TIMED_GRACE_SEC,
   HARD_CRASH_HP, CARSICK_MAX_DAMAGE, FUGITIVE_MAX_STARS, THRILL_TIP,
   HEAT_ESCAPE_MIN_STARS, HEAT_ESCAPE_MILES, WEATHER_CONTRACTS,
@@ -88,19 +88,19 @@ function deliver(m, stopId, mile = 0, stars = 0) {
 // ── Payout math per tier ──────────────────────────────────────────────────
 {
   const r5 = (x) => Math.max(5, Math.round(x / 5) * 5);
-  // Plain delivery, Rookie: 20 mi, no risk, no terms.
+  // Plain delivery, Rookie: 20 mi, no risk, no terms.  (× PAYOUT_MULT global scalar.)
   check('rookie plain payout', computePayout({ routeMiles: 20 })
-    === r5(PAYOUT_BASE + 20 * PAYOUT_PER_MI));
+    === r5((PAYOUT_BASE + 20 * PAYOUT_PER_MI) * PAYOUT_MULT));
   // Timed rush, Known ×2.5: 30 mi + rush bonus.
   check('known rush payout', computePayout({ routeMiles: 30, terms: { rush: { budgetSec: 355 } }, repMult: 2.5 })
-    === r5((PAYOUT_BASE + 30 * PAYOUT_PER_MI + TERM_BONUS.rush) * 2.5));
+    === r5((PAYOUT_BASE + 30 * PAYOUT_PER_MI + TERM_BONUS.rush) * 2.5 * PAYOUT_MULT));
   // Rush premium beats a plain delivery on the same route/tier.
   check('rush pays a premium over plain', computePayout({ routeMiles: 30, terms: { rush: true } })
     > computePayout({ routeMiles: 30 }));
   // Fugitive passenger, Legend ×5: 40 mi + wind-corridor risk.
   const risk = riskBonus(109, 149);
   check('legend fugitive payout', computePayout({ routeMiles: 40, risk, terms: { fugitive: true }, repMult: 5 })
-    === r5((PAYOUT_BASE + 40 * PAYOUT_PER_MI + risk + TERM_BONUS.fugitive) * 5));
+    === r5((PAYOUT_BASE + 40 * PAYOUT_PER_MI + risk + TERM_BONUS.fugitive) * 5 * PAYOUT_MULT));
   check('tier thresholds', tierFor(0).mult === 1 && tierFor(3).mult === 2.5 && tierFor(8).mult === 5
     && MISSION_TIERS.length === 3);
 }
