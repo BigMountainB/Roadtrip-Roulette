@@ -1104,7 +1104,8 @@ export class RestStopScene extends Phaser.Scene {
 
     // ── Status line ─────────────────────────────────────────────────────
     this._statusText = this.add.text(CX, SCREEN_H - 56, '', {
-      fontSize: '11px', fontFamily: 'Arial', color: '#88FF88',
+      fontSize: '34px', fontFamily: 'Arial', color: '#88FF88',
+      align: 'center', wordWrap: { width: SCREEN_W - 60 },
     }).setOrigin(0.5);
 
     // Keyboard shortcuts
@@ -2188,15 +2189,16 @@ export class RestStopScene extends Phaser.Scene {
   }
 
   _setStatus(msg, color, big = false) {
-    // `big` = attention-grabbing variant (e.g. CUSTOMERS ONLY): ~4x the base
-    // 11px, bold, longer hold - the base size is unreadable on phones.
+    // `big` = attention-grabbing variant (e.g. CUSTOMERS ONLY): 40px, thicker
+    // stroke, longer hold.  Normal buy/mission feedback is 34px — just under
+    // the big variant and much larger than the old 11px (owner 2026-07-19).
     this._statusText.setText(msg).setColor(color)
-      .setFontSize(big ? 40 : 11)
-      .setFontStyle(big ? 'bold' : 'normal')
-      .setStroke(big ? '#000000' : '', big ? 6 : 0);
+      .setFontSize(big ? 40 : 34)
+      .setFontStyle('bold')
+      .setStroke('#000000', big ? 6 : 4);
     if (this._statusTimer) this._statusTimer.remove();
     this._statusTimer = this.time.delayedCall(big ? 3200 : 2400, () => {
-      this._statusText.setText('').setFontSize(11).setFontStyle('normal').setStroke('', 0);
+      this._statusText.setText('').setFontSize(34).setFontStyle('normal').setStroke('#000000', 4);
     });
   }
 
