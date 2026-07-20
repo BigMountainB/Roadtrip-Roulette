@@ -1,5 +1,28 @@
 import { defineConfig } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
+import fs from 'fs';
+
+// Dev-only endpoint: the in-game HUD-layout COPY button POSTs the layout JSON
+// here so it lands in a file on the dev machine (hud-layout-dump.json) — no
+// clipboard needed, which is unreliable on iOS over plain-http LAN testing.
+function hudLayoutDump() {
+  return {
+    name: 'hud-layout-dump',
+    configureServer(server) {
+      server.middlewares.use('/__hudlayout', (req, res) => {
+        if (req.method !== 'POST') { res.statusCode = 405; res.end('POST only'); return; }
+        let body = '';
+        req.on('data', (c) => { body += c; });
+        req.on('end', () => {
+          try {
+            fs.writeFileSync('hud-layout-dump.json', body);
+            res.statusCode = 200; res.setHeader('Access-Control-Allow-Origin', '*'); res.end('ok');
+          } catch (e) { res.statusCode = 500; res.end(String(e)); }
+        });
+      });
+    },
+  };
+}
 
 // HTTPS is REQUIRED on iPhone Safari for DeviceOrientationEvent
 // (tilt steer) to be allowed — even on the local LAN.  basicSsl
@@ -12,7 +35,7 @@ const useHttp = process.env.DUI_HTTP === '1';
 
 export default defineConfig({
   base: './',
-  plugins: useHttp ? [] : [basicSsl()],
+  plugins: useHttp ? [hudLayoutDump()] : [basicSsl(), hudLayoutDump()],
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

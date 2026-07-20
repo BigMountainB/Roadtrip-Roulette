@@ -25,3 +25,4 @@ Images/Codex_Concepts/
 # Local Cloudflare deploy secrets — never commit (sourced by scripts/deploy.sh)
 .cloudflare.env
 .dev.vars
+hud-layout-dump.json
