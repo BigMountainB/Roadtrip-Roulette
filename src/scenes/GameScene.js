@@ -319,18 +319,18 @@ function makePlayer() {
   };
 }
 
-// Owner's baked default HUD layout (2026-07-19 editor export). Per-element
+// Owner's baked default HUD layout (2026-07-20 editor export, v8). Per-element
 // {dx,dy,scale} deltas off each control's base position; applied ONLY to
 // profiles that have never customized their own layout (non-destructive —
 // existing custom layouts are untouched). The moved set — the editor only
 // stores what you drag, so anything not here sits at its default base.
-// `wiper` is dragged to the bottom-left (left of coal): its base hugs the
-// top-right edge, hence the large −dx/+dy.
+// `wiper` is dragged to the bottom-left (left of coal); rearCop rides its
+// y73 top-anchored base (15px below the mirror bottom) + this dy.
 const DEFAULT_HUD_LAYOUT = {
-  popup:      { dx: -1,   dy: -25, scale: 1.1262099400177235 },   // v7: lowered another 20px (owner 2026-07-19)
-  hpDamage:   { dx: 400,  dy: 262, scale: 1.7479561886682102 },   // v7: centered on car (x=400) + down 20px (owner 2026-07-19)
-  rearCop:    { dx: 0,    dy: 0,   scale: 1.1811808179050012 },   // v7: base moved to y73 (15px below mirror bottom), top-anchored (owner 2026-07-19)
-  mission:    { dx: -25,  dy: -11, scale: 1.1191991029950916 },
+  popup:      { dx: -1,   dy: -25, scale: 1.1262099400177235 },
+  hpDamage:   { dx: 396,  dy: 275, scale: 1.7629642295565735 },
+  rearCop:    { dx: 1,    dy: 33,  scale: 1.1811808179050012 },
+  mission:    { dx: 5,    dy: -14, scale: 1.151805693372507  },
   radio:      { dx: -75,  dy: -8,  scale: 1.002349011885947  },
   btn_pause:  { dx: -49,  dy: 1,   scale: 1 },
   btn_ff:     { dx: -57,  dy: 2,   scale: 1 },
@@ -340,12 +340,15 @@ const DEFAULT_HUD_LAYOUT = {
   btn_garage: { dx: 49,   dy: 2,   scale: 1 },
   btn_map:    { dx: 59,   dy: 3,   scale: 1 },
   btn_mute:   { dx: 68,   dy: 3,   scale: 1 },
-  wiper:      { dx: -796, dy: 329, scale: 1.0209912313575047 },
+  wiper:      { dx: -67,  dy: 320, scale: 1.033918411681667  },
   engine:     { dx: 114,  dy: -4,  scale: 0.9143488304331294 },
   stars:      { dx: -67,  dy: 12,  scale: 1.7379492932183374 },
-  hp:         { dx: -30,  dy: -4,  scale: 1.6998563397117201 },
+  hp:         { dx: -34,  dy: -6,  scale: 1.5039041829382487 },
   survB:      { dx: 0,    dy: -9,  scale: 1.090525255208019  },
-  speed:      { dx: 24,   dy: -4,  scale: 1 },
+  speed:      { dx: 12,   dy: -7,  scale: 0.9799315746863045 },
+  pedalGas:   { dx: 11,   dy: -1,  scale: 1.189370694901077  },
+  region:     { dx: -60,  dy: -16, scale: 1.6803687420946247 },
+  dist:       { dx: -27,  dy: -12, scale: 1.3669611258918117 },
 };
 
 export class GameScene extends Phaser.Scene {
@@ -850,7 +853,9 @@ export class GameScene extends Phaser.Scene {
       // v7 (2026-07-19): Pursuit(rearCop) re-anchored 15px below the mirror
       // (new top-anchored base y73, dy 0); Damage(hpDamage) centered on the car
       // (x400) + down 20px; Pickup(popup) down another 20px.
-      const LAYOUT_VER = 7;
+      // v8 (2026-07-20): full owner re-export — pursuit nudged lower, damage/HP/
+      // speed/mission/region/dist/wiper/pedalGas repositioned + resized.
+      const LAYOUT_VER = 8;
       if ((_save?.get?.('controlsLayoutVer', 1) ?? 1) < LAYOUT_VER) {
         // Pre-gate profiles (incl. brand-new ones) install the owner's baked
         // default rather than an empty layout.
@@ -16365,10 +16370,38 @@ export class GameScene extends Phaser.Scene {
     try { this._hudObjects?.push(...objs); } catch (_) {}
     try { this.cameras?.main?.ignore?.(objs); } catch (_) {}
     this._paused = true;   // freeze gameplay; Phaser keeps rendering the frozen HUD (no pause menu)
-    this._hudTour = { idx: -1, steps: STEPS, scrim, hi, boxG, boxT, tw, objs };
+    // Reveal the normally-hidden transient readouts (pickup/text popup, damage,
+    // pursuit, multiplier) + wanted stars with demo content so the tour points
+    // at something VISIBLE instead of an empty highlight.  update() returns at
+    // the _paused guard BEFORE _renderHUD, so these placeholders persist for the
+    // whole tour and are recomputed the instant the run resumes (see _endHudTour).
+    this._showEditorPopupPlaceholders();
+    this.hudStars?.setText('★★☆☆☆').setColor('#FFD24D').setVisible(true);
+    // Walk the dashboard in on-screen reading order (top→bottom rows, left→right
+    // within a row); Pause stays LAST because tapping it ends the tour.
+    const STEPS_ORDERED = this._orderTourSteps(STEPS);
+    this._hudTour = { idx: -1, steps: STEPS_ORDERED, scrim, hi, boxG, boxT, tw, objs };
     scrim.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); this._hudTourTap(); });
-    let n = 0; while (n < STEPS.length && !this._hudElementBounds(STEPS[n].id)) n++;
-    this._hudTourShow(Math.min(n, STEPS.length - 1));
+    let n = 0; while (n < STEPS_ORDERED.length && !this._hudElementBounds(STEPS_ORDERED[n].id)) n++;
+    this._hudTourShow(Math.min(n, STEPS_ORDERED.length - 1));
+  }
+
+  /** Order tour steps into on-screen reading order from each element's live
+   *  bounds: top→bottom by row, left→right within a row.  Pause is forced last
+   *  (tapping it ends the tour); any step still lacking bounds is appended just
+   *  before Pause so it's never dropped. */
+  _orderTourSteps(steps) {
+    const pause = steps.filter(s => s.id === 'btn_pause');
+    const rest  = steps.filter(s => s.id !== 'btn_pause');
+    const withB = [], noB = [];
+    for (const s of rest) {
+      const b = this._hudElementBounds(s.id);
+      if (b && b.w > 0 && b.h > 0) withB.push({ s, cx: b.x + b.w / 2, cy: b.y + b.h / 2 });
+      else noB.push(s);
+    }
+    const ROW_TOL = 48;   // elements within ~48px vertically read as the same row
+    withB.sort((A, B) => (Math.abs(A.cy - B.cy) > ROW_TOL) ? (A.cy - B.cy) : (A.cx - B.cx));
+    return withB.map(x => x.s).concat(noB, pause);
   }
 
   _hudTourShow(i) {
@@ -16414,6 +16447,10 @@ export class GameScene extends Phaser.Scene {
     this._hudTourActive = false;
     try { T.tw?.stop?.(); } catch (_) {}
     for (const o of T.objs) { try { o.destroy(); } catch (_) {} }
+    // Drop the demo placeholders; _renderHUD recomputes real popup/damage/
+    // pursuit/stars visibility the moment the run resumes below.
+    this._hideEditorPopupPlaceholders();
+    this.hudStars?.setText('').setVisible(false);
     this._paused = false;   // resume the run
   }
 
@@ -19491,19 +19528,30 @@ export class GameScene extends Phaser.Scene {
    *  the game to the error screen). */
   _copyHudLayout() {
     const json = JSON.stringify(this._hudLayout || {});
-    // Auto-copy the FULL string, synchronously inside the tap gesture — the
-    // iOS-reliable execCommand('copy') path (clipboard.writeText REJECTS in
-    // iOS Safari here, which also crashed the game).  Only if that fails do we
-    // fall back to a selectable box; success needs no manual selection.
+    // Primary path when testing on the dev server: POST the layout so it lands
+    // in a file on the dev machine (see vite hud-layout-dump plugin).  iOS over
+    // plain-http LAN has no clipboard, so this is the reliable channel.
+    let sentToServer = false;
+    try {
+      fetch('/__hudlayout', { method: 'POST', body: json })
+        .then((r) => {
+          if (r && r.ok) {
+            sentToServer = true;
+            this._showPopup?.('📤 Layout sent to Claude (dev)', '#8FE38F');
+          }
+        })
+        .catch(() => {});
+    } catch (_) {}
+    // Also try the iOS-reliable execCommand copy (secure contexts) so the value
+    // is on the clipboard when possible.
     const ok = this._copyTextToClipboard(json);
-    // Bonus attempt via the async API, rejection swallowed so it can't bubble.
     try { navigator.clipboard?.writeText?.(json)?.then?.(() => {}, () => {}); } catch (_) {}
     if (ok) {
       this._showPopup?.('📋 Layout copied — paste it to Claude', '#F2A73B');
-    } else {
-      this._showHudLayoutBox(json);
-      this._showPopup?.('📋 Copy blocked — grab it from the box', '#F2A73B');
     }
+    // Always offer the selectable box too (harmless if the POST/clipboard also
+    // worked) so there's a manual path on the hosted build.
+    this._showHudLayoutBox(json);
   }
 
   /** Copy text to the clipboard using the iOS-Safari-reliable hidden-textarea
@@ -19547,38 +19595,63 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       document.getElementById('hud-layout-box')?.remove();
+      // Phaser attaches touch listeners that preventDefault at the document
+      // level, which swallows clicks on DOM buttons over the canvas (that's why
+      // Close didn't respond).  We stopPropagation on the overlay and fire
+      // actions on touchend/click directly so taps always register.
+      const stop = (e) => { e.stopPropagation(); };
       const wrap = document.createElement('div');
       wrap.id = 'hud-layout-box';
-      wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.88);' +
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.9);' +
         'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
-        'padding:16px;box-sizing:border-box;font-family:sans-serif;';
+        'padding:16px;box-sizing:border-box;font-family:sans-serif;touch-action:manipulation;';
+      ['touchstart', 'touchmove', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'click']
+        .forEach((ev) => wrap.addEventListener(ev, stop, { passive: false }));
+
       const label = document.createElement('div');
-      label.textContent = 'HUD layout — tap the box, Select All, Copy, then paste to Claude:';
-      label.style.cssText = 'color:#fff;font-size:14px;line-height:1.3;margin-bottom:10px;text-align:center;max-width:640px;';
+      label.textContent = 'Tap the box, Select All, Copy — then paste to Claude. (Or tap Copy.)';
+      label.style.cssText = 'color:#fff;font-size:14px;line-height:1.35;margin-bottom:10px;text-align:center;max-width:640px;';
+
       const ta = document.createElement('textarea');
       ta.value = json;
-      ta.readOnly = true;
-      ta.style.cssText = 'width:92%;max-width:640px;height:45%;font-size:12px;padding:8px;' +
-        'border-radius:8px;border:1px solid #F2A73B;background:#111;color:#eee;box-sizing:border-box;';
-      const row = document.createElement('div');
-      row.style.cssText = 'margin-top:12px;display:flex;gap:12px;';
-      const copyBtn = document.createElement('button');
-      copyBtn.textContent = 'Copy';
-      copyBtn.style.cssText = 'padding:12px 22px;font-size:16px;border:0;border-radius:8px;background:#F2A73B;color:#000;';
-      copyBtn.onclick = () => {
-        ta.focus(); ta.select();
-        try { ta.setSelectionRange(0, json.length); } catch (_) {}
-        try { document.execCommand('copy'); } catch (_) {}
-        try { navigator.clipboard?.writeText?.(json)?.catch?.(() => {}); } catch (_) {}
+      ta.spellcheck = false; ta.autocapitalize = 'off'; ta.setAttribute('autocomplete', 'off');
+      ta.style.cssText = 'width:94%;max-width:640px;height:42%;font-size:13px;padding:10px;' +
+        'border-radius:8px;border:1px solid #F2A73B;background:#111;color:#eee;box-sizing:border-box;' +
+        '-webkit-user-select:text;user-select:text;';
+
+      const status = document.createElement('div');
+      status.style.cssText = 'font-size:13px;height:18px;margin-top:8px;color:#8FE38F;';
+
+      const mkBtn = (text, bg, fg, fn) => {
+        const b = document.createElement('button');
+        b.textContent = text;
+        b.style.cssText = 'padding:14px 26px;font-size:16px;border:0;border-radius:8px;' +
+          `background:${bg};color:${fg};touch-action:manipulation;`;
+        const run = (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
+        b.addEventListener('touchend', run, { passive: false });
+        b.addEventListener('click', run);
+        return b;
       };
-      const closeBtn = document.createElement('button');
-      closeBtn.textContent = 'Close';
-      closeBtn.style.cssText = 'padding:12px 22px;font-size:16px;border:0;border-radius:8px;background:#888;color:#fff;';
-      closeBtn.onclick = () => wrap.remove();
+
+      const copyBtn = mkBtn('Copy', '#F2A73B', '#000', () => {
+        ta.focus();
+        try { ta.setSelectionRange(0, json.length); } catch (_) {}
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (_) {}
+        try { navigator.clipboard?.writeText?.(json)?.then?.(() => {}, () => {}); } catch (_) {}
+        status.style.color = ok ? '#8FE38F' : '#FFC24D';
+        status.textContent = ok
+          ? 'Copied! Paste it to Claude.'
+          : "Couldn't auto-copy — long-press the text, Select All, Copy.";
+      });
+      const closeBtn = mkBtn('Close', '#888', '#fff', () => wrap.remove());
+
+      const row = document.createElement('div');
+      row.style.cssText = 'margin-top:12px;display:flex;gap:14px;';
       row.append(copyBtn, closeBtn);
-      wrap.append(label, ta, row);
+      wrap.append(label, ta, status, row);
       document.body.appendChild(wrap);
-      ta.focus(); ta.select();
+      setTimeout(() => { try { ta.focus(); ta.setSelectionRange(0, json.length); } catch (_) {} }, 40);
     } catch (_) {
       try { window.prompt?.('HUD layout — copy this:', json); } catch (_) {}
     }
