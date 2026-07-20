@@ -56,6 +56,9 @@ const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
 const DEPART_MIN       = 14 * 60;    // 2:00 PM depart
 const DRIVE_SPAN_MIN   = 300;        // 5 in-world hours across the whole route
 const STOP_CLOCK_SCALE = 300 / 45;   // ≈ 6.67 in-world seconds per real second at a stop
+// Minimum miles between the Friend's speed-trap warning texts, so clustered
+// traps don't all text you on the same clock minute (~1 mi ≈ 1 clock min).
+const TRAP_WARN_GAP_MI = 3;
 const PLAYER_CAR_VISUAL_H = 49;
 // Bottom-anchored Y for chase-view popups + speed-trap sign — just ABOVE the
 // mile/town location line (SCREEN_H-8) and its wanted-stars row (SCREEN_H-26).
@@ -324,9 +327,9 @@ function makePlayer() {
 // `wiper` is dragged to the bottom-left (left of coal): its base hugs the
 // top-right edge, hence the large −dx/+dy.
 const DEFAULT_HUD_LAYOUT = {
-  popup:      { dx: -1,   dy: -45, scale: 1.1262099400177235 },   // lowered 10px + 15px (owner 2026-07-19)
-  hpDamage:   { dx: 387,  dy: 242, scale: 1.7479561886682102 },   // lowered 10px (owner 2026-07-19)
-  rearCop:    { dx: 1,    dy: -24, scale: 1.1811808179050012 },   // lowered 10px + 15px (owner 2026-07-19)
+  popup:      { dx: -1,   dy: -25, scale: 1.1262099400177235 },   // v7: lowered another 20px (owner 2026-07-19)
+  hpDamage:   { dx: 400,  dy: 262, scale: 1.7479561886682102 },   // v7: centered on car (x=400) + down 20px (owner 2026-07-19)
+  rearCop:    { dx: 0,    dy: 0,   scale: 1.1811808179050012 },   // v7: base moved to y73 (15px below mirror bottom), top-anchored (owner 2026-07-19)
   mission:    { dx: -25,  dy: -11, scale: 1.1191991029950916 },
   radio:      { dx: -75,  dy: -8,  scale: 1.002349011885947  },
   btn_pause:  { dx: -49,  dy: 1,   scale: 1 },
@@ -522,6 +525,7 @@ export class GameScene extends Phaser.Scene {
     // MOMENT of pulling over; it's resolved when the hold ends.
     this._trapTicket          = null;
     this._trapWarnSent        = new Set();   // trap miles a friend has already texted about
+    this._lastTrapWarnMile     = -Infinity;   // gate: space friend trap-warning texts apart
     // Flavor contacts (The Ex / Mom / The Boss / The Unknown) text you on the
     // road — pure tone, no gameplay effect.  Per-run threads + a cadence timer.
     this._buddyThreads        = { friend: [], ex: [], mom: [], boss: [], unknown: [], spam: [] };
@@ -843,7 +847,10 @@ export class GameScene extends Phaser.Scene {
       // v5 (2026-07-19): lowered Pursuit(rearCop)/Pickup(popup)/Damage(hpDamage)
       // ~10px — reinstall so it's the new default AND the reset target.
       // v6 (2026-07-19): lowered Pursuit(rearCop) + the cop-hit popup another 15px.
-      const LAYOUT_VER = 6;
+      // v7 (2026-07-19): Pursuit(rearCop) re-anchored 15px below the mirror
+      // (new top-anchored base y73, dy 0); Damage(hpDamage) centered on the car
+      // (x400) + down 20px; Pickup(popup) down another 20px.
+      const LAYOUT_VER = 7;
       if ((_save?.get?.('controlsLayoutVer', 1) ?? 1) < LAYOUT_VER) {
         // Pre-gate profiles (incl. brand-new ones) install the owner's baked
         // default rather than an empty layout.
@@ -892,12 +899,8 @@ export class GameScene extends Phaser.Scene {
         const n = Math.round(amount * 10) / 10;
         const txt = (n === Math.floor(n)) ? `-${n.toFixed(0)}` : `-${n.toFixed(1)}`;
         this.hudHPDamage.setText(txt).setVisible(true);
-        // Position just BELOW the live HP text (y36, set at build) —
-        // aligned to HP's outer edge for the current handedness.
-        const hb = this.hudHP?.getBounds?.();
-        if (hb) {
-          this.hudHPDamage.x = this._leftHanded ? hb.left : hb.right;
-        }
+        // Position (centered on the car, x400) + scale come from the baked
+        // HUD layout, re-applied every frame by _applyHudLayout.
         this._hpDamageUntil = (this.time?.now ?? 0) + 1500;
       }
     });
@@ -4141,15 +4144,25 @@ export class GameScene extends Phaser.Scene {
     const _trapMiles = this.road?.segments?.trapMiles;
     if (_trapMiles?.length && !this._awaitingFirstGameTap) {
       const curMile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
-      for (const tm of _trapMiles) {
-        const ahead = tm - curMile;
-        if (ahead <= 0 || this._trapWarnSent.has(tm)) continue;
-        const lead = 15 + (Math.floor(tm * 7) % 6);   // per-trap 15-20 mi lead
-        if (ahead > lead) continue;
-        this._trapWarnSent.add(tm);
-        const city = getLocationName(tm / TOTAL_ROUTE_MILES) || 'up ahead';
-        this._logBuddyText('friend', 'The Friend',
-          'Speed trap in ' + city + ' around mile ' + Math.round(tm) + ' — slow down before you hit it!');
+      // Release at most ONE warning at a time, spaced ≥ TRAP_WARN_GAP_MI apart
+      // (~1 mi ≈ 1 clock min), so clustered traps don't dump several texts on
+      // the same clock minute.  Pick the NEAREST eligible unsent trap each time.
+      if (curMile - (this._lastTrapWarnMile ?? -Infinity) >= TRAP_WARN_GAP_MI) {
+        let next = null;
+        for (const tm of _trapMiles) {
+          const ahead = tm - curMile;
+          if (ahead <= 0 || this._trapWarnSent.has(tm)) continue;
+          const lead = 15 + (Math.floor(tm * 7) % 6);   // per-trap 15-20 mi lead
+          if (ahead > lead) continue;
+          if (next === null || tm < next) next = tm;     // nearest eligible
+        }
+        if (next !== null) {
+          this._trapWarnSent.add(next);
+          this._lastTrapWarnMile = curMile;
+          const city = getLocationName(next / TOTAL_ROUTE_MILES) || 'up ahead';
+          this._logBuddyText('friend', 'The Friend',
+            'Speed trap in ' + city + ' around mile ' + Math.round(next) + ' — slow down before you hit it!');
+        }
       }
     }
 
@@ -4862,7 +4875,7 @@ export class GameScene extends Phaser.Scene {
       if (this.hudMult)       { this.hudMult.x       = mx_(READOUT_CASH_X_); this.hudMult.setOrigin(0.5, 0); }
       if (this.hudScore)      { this.hudScore.x      = mx_(READOUT_CASH_X_); this.hudScore.setOrigin(0.5, 0); }
       if (this.hudHP)         { this.hudHP.x         = mx_(READOUT_HP_X_);   this.hudHP.setOrigin(mox_(0), 0); }
-      if (this.hudHPDamage)   { this.hudHPDamage.setOrigin(mox_(0), 0); }
+      if (this.hudHPDamage)   { this.hudHPDamage.setOrigin(0.5, 0); }   // centered on car (x set by baked layout)
       // Speed cluster: Speed + MPH sublabel.  The gas gauge, survival
       // bars, mission chip and weapon row recompute their handed bases
       // themselves each frame in their own draw passes.
@@ -15186,13 +15199,13 @@ export class GameScene extends Phaser.Scene {
       color: '#FF39AF', stroke: '#000000', strokeThickness: 4,
     }).setOrigin(mox(0), 0).setDepth(d);
 
-    // Floating "-X" damage popup — appears just BELOW the HP readout
-    // for 1.5 s after each hit.  X is positioned dynamically in the
-    // damage listener so it tracks the live HP text bounds.
+    // Floating "-X" damage popup — appears for 1.5 s after each hit,
+    // centered on the car.  Position + scale come from the baked HUD
+    // layout (hpDamage), re-applied every frame by _applyHudLayout.
     this.hudHPDamage = this.add.text(0, 36, '', {
       fontSize: '17px', fontFamily: IMPACT,
       color: '#FF2244', stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(mox(0), 0).setDepth(d).setVisible(false);
+    }).setOrigin(0.5, 0).setDepth(d).setVisible(false);
     this._hpDamageUntil = 0;
 
     // ── Gas gauge (bottom-left, directly above the BRAKE pedal) ─────
@@ -15770,12 +15783,15 @@ export class GameScene extends Phaser.Scene {
     this._hudObjects?.push(pauseBtn, pauseLbl);
     registerTopBtn({ id: 'pause', bg: pauseBtn, lbl: pauseLbl, artType: 'pause', baseLeft: pauseLeft, size: pauseSize });
 
-    // ── REAR-COP indicator (cop behind the player; visible only when active)
-    this.hudRearCop = this.add.text(SCREEN_W / 2, SCREEN_H - 32, '', {
+    // ── REAR-COP indicator (cop behind the player; visible only when active).
+    // Base sits 15px below the rear-view mirror's bottom (mirror top y2 +
+    // height 56 = 58; +15 = 73), top-anchored so the gap is measured from the
+    // text's top edge.  DEFAULT_HUD_LAYOUT.rearCop keeps dy 0 off this base.
+    this.hudRearCop = this.add.text(SCREEN_W / 2, 73, '', {
       fontSize: '14px', fontFamily: IMPACT,
       color: this._colorblind ? '#FFB000' : '#FF3333', stroke: '#000000', strokeThickness: 4,
       align: 'center',
-    }).setOrigin(0.5, 1).setDepth(d).setVisible(false);
+    }).setOrigin(0.5, 0).setDepth(d).setVisible(false);
 
     // ── 5★ helicopter overlay — ASCII chopper that hovers high above the
     // road centre and pulses red+blue rotor flash.  Decorative only —
