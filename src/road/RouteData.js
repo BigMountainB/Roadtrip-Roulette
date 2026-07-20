@@ -2433,11 +2433,17 @@ export function buildRoute(count = ROUTE_SEGS) {
         collected:    false,
         copEncounter: true,                          // GameScene flag
         triggered:    false,
+        trapMile:     mile,                          // self-report for the final trapMiles rebuild
       });
       _trapMiles.push(mile);
     }
 
     // Expose the trap mile markers for GameScene's advance friend-warning.
+    // NOTE: this is a PRELIMINARY list — later scenery-culling passes (e.g.
+    // clearRightSceneryAround, which strips the exit-lane corridor near rest
+    // stops) can delete a parked cop whose right-shoulder offset lands in the
+    // cull band, which would leave a warned "trap" with no police at it.  The
+    // list is rebuilt from the SURVIVING cop sprites at the end of buildRoute.
     _trapMiles.sort((a, b) => a - b);
     segments.trapMiles = _trapMiles;
   }
@@ -3040,6 +3046,27 @@ export function buildRoute(count = ROUTE_SEGS) {
       baseH:          4380,           // matches 1388:779 source aspect at baseW 7800
       collected:      false,
     });
+  }
+
+  // ── Rebuild trapMiles from the SURVIVING parked cops ──────────────────
+  // The friend's advance warning + the radar detector both key off
+  // segments.trapMiles.  Scenery-culling passes above can delete a placed
+  // trap cop (a right-shoulder offset caught by the exit-corridor clear near
+  // a rest stop), so recompute the list from cops that ACTUALLY remain on the
+  // road — otherwise the friend warns about "speed traps" with no police at
+  // them.  Each trap cop self-reports its mile via `trapMile`.
+  {
+    const survivors = [];
+    for (const seg of segments) {
+      if (!seg?.sprites) continue;
+      for (const sp of seg.sprites) {
+        if (sp.type === 'cop_random_parked' && typeof sp.trapMile === 'number') {
+          survivors.push(sp.trapMile);
+        }
+      }
+    }
+    survivors.sort((a, b) => a - b);
+    segments.trapMiles = survivors;
   }
 
   return segments;
