@@ -540,21 +540,16 @@ export class GameScene extends Phaser.Scene {
     // same trip.  The buddy threads above already reset per run; the Friend
     // then re-populates with THIS run's (re-randomized) trap miles.
     //   • Crush (the Girl) — text her again from scratch each game.
-    //   • Lawyer retainer — re-hire the $15k lawyer each game (fits the
-    //     per-run economy: money == this run's score).
-    //   • Dealer orders — unfilled orders don't carry into the next game.
     // `_titleResumeSnap` (clean-quit boot → title with a pending LAST resume)
     // is NOT a fresh game — the run is still resumable, and these fields live
-    // in the persistent save.  Wiping them here would clear the crush/lawyer/
-    // dealer state out from under the LAST resume, so guard against it too.
+    // in the persistent save.  Wiping them here would clear the crush state
+    // out from under the LAST resume, so guard against it too.
     if (!this._resumeFromStop && this._resumeFromPosition == null && !this._resumeLive && !this._titleResumeSnap) {
       const _save = this.registry.get('save');
       _save?.set?.('girlResponded',    false);
       _save?.set?.('girlTexts',        0);
       _save?.set?.('girlSkips',        0);
       _save?.set?.('girlGone',         false);
-      _save?.set?.('lawyerRetained',   false);
-      _save?.set?.('dealerOrders',     []);
     }
     // Crush per-run scene state.  `_girlTextPending`: they're awaiting a text
     // in the CURRENT town (cleared when you text; re-armed on entering a new
@@ -17515,6 +17510,7 @@ export class GameScene extends Phaser.Scene {
       this._missionChipTxt?.setVisible(false);
       this._missionBadgeTxt?.setVisible(false);
       this._gasGaugeTxts?.forEach(l => l.setVisible(false));
+      this._hudGasIcon?.setVisible(false);
       return;
     }
     this._drawSurvivalBars();
@@ -17921,10 +17917,38 @@ export class GameScene extends Phaser.Scene {
     place(1, 0.5, 6, 9);    // ½
     place(2, 1,   7, 11);   // F
     this._gasGaugeTxts[0].setColor(low ? '#FF6A5C' : '#9FB7D6');
-    this._gasGaugeTxts[3]
-      .setFontSize(fontPx(13))
-      .setPosition(cx, cy - 12 * sc)
-      .setVisible(true);
+    // Gas warning icon (restored from DUI, owner 2026-07-21): the
+    // ui_gas_full / ui_gas_empty image sits where the ⛽ glyph did and swaps to
+    // the empty (lit) state at/below the low-fuel threshold, blinking when
+    // critical.  Falls back to the ⛽ text glyph if the art isn't loaded.
+    if (this._hudGasIcon === undefined) {
+      this._hudGasIcon = this.textures.exists('ui_gas_full')
+        ? this.add.image(cx, cy, 'ui_gas_full').setOrigin(0.5).setDepth(21).setVisible(false)
+        : null;
+      if (this._hudGasIcon) {
+        this._hudObjects?.push(this._hudGasIcon);
+        this.cameras?.main?.ignore?.([this._hudGasIcon]);
+      }
+    }
+    if (this._hudGasIcon) {
+      this._gasGaugeTxts[3].setVisible(false);   // image replaces the emoji stand-in
+      const _gasMi   = p.gasMi ?? 0;
+      const _wantKey = _gasMi <= C.GAS_LIGHT_AT_MI ? 'ui_gas_empty' : 'ui_gas_full';
+      if (this._hudGasIcon.texture.key !== _wantKey && this.textures.exists(_wantKey)) {
+        this._hudGasIcon.setTexture(_wantKey);
+      }
+      const _iconSz = 17 * sc;
+      this._hudGasIcon
+        .setDisplaySize(_iconSz, _iconSz)
+        .setPosition(cx, cy - 12 * sc)
+        .setAlpha(crit && !blinkOn ? 0.35 : 1)
+        .setVisible(true);
+    } else {
+      this._gasGaugeTxts[3]
+        .setFontSize(fontPx(13))
+        .setPosition(cx, cy - 12 * sc)
+        .setVisible(true);
+    }
     // Publish live bounds for the controls-editor drag handle (+ the accel
     // charge bar, which parks itself under this plate in _renderHUD).
     this._gasGaugeBounds = { x: bx, y: by, w: bw, h: bh };
@@ -20832,8 +20856,6 @@ export class GameScene extends Phaser.Scene {
     const cp         = this._lastCheckpoint ?? { scoreAtCP: 0, position: 0 };
     const earnedSince = Math.max(0, this.score - cp.scoreAtCP);
     let   lost        = Math.floor(earnedSince / 2);
-    // Lawyer on retainer → busted fine cut in half.
-    if (this.registry.get('save')?.get?.('lawyerRetained')) lost = Math.floor(lost * 0.5);
     // Tow-insurance buff (from the Washtucna tow driver) cushions the loss too.
     if (hasSpecialBuff(this._activeBuffs ?? [], 'cheaper_wreck')) lost = Math.floor(lost * 0.5);
     this.score       -= lost;
@@ -20873,8 +20895,8 @@ export class GameScene extends Phaser.Scene {
     return { speeding: true };
   }
 
-  /** Resolve the held traffic stop (Stage 3): a plain speeding ticket — apply
-   *  the lawyer discount, charge the fine, record the stat, and drive off.
+  /** Resolve the held traffic stop (Stage 3): a plain speeding ticket — charge
+   *  the fine, record the stat, and drive off.
    *  (Money == persisted score, so fines subtract from score.) */
   _issueTrafficTicket() {
     const t = this._trapTicket;
@@ -20889,21 +20911,18 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const hasLawyer = this.registry.get('save')?.get?.('lawyerRetained') === true;
     // Fine = a fraction of current cash, capped at a dollar ceiling (speeding =
-    // 50% of cash, max $300).  Lawyer on retainer gets it dropped.
+    // 50% of cash, max $300).
     let fine = Math.min(COP_TICKET_SPEEDING_CAP,
       Math.round(Math.max(0, this.score) * COP_TICKET_SPEEDING_FRAC));
-    if (hasLawyer) fine = 0;
-    // Genre-vehicle ticket surcharge (reggae +$200) — added AFTER the lawyer
-    // discount, so every ticket still costs it (owner 2026-07-19).
+    // Genre-vehicle ticket surcharge (reggae +$200).
     fine += this._traitMod('ticketSurcharge');
 
     this.score = Math.max(0, this.score - fine);
     this.stats?.recordTrafficStop({ dui: false, amountPaid: fine, busted: false });
     this._showPopup(
       fine > 0 ? `🎫 Speeding ticket — −$${fine.toLocaleString()}\nDrive safe.`
-               : '⚖️ Lawyer got the speeding ticket dropped.\nDrive safe.',
+               : '✅ Ticket issued. Drive safe.',
       fine > 0 ? '#FFDD44' : '#88FF88');
   }
 
@@ -21042,8 +21061,6 @@ export class GameScene extends Phaser.Scene {
       const cp = this._lastCheckpoint ?? { position: 0, scoreAtCP: 0 };
       const earnedSince = Math.max(0, this.score - (cp.scoreAtCP ?? 0));
       let   lost        = Math.floor(earnedSince / 2);
-      // Lawyer on retainer → busted fine cut in half.
-      if (this.registry.get('save')?.get?.('lawyerRetained')) lost = Math.floor(lost * 0.5);
       this.score        = Math.max(0, this.score - lost);
       this._showPopup(`💀 Cash penalty: −$${lost.toLocaleString()}`, '#FF4444');
       // Open slider modal in restart mode after a brief beat.

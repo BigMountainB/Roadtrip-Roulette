@@ -3803,13 +3803,11 @@
       addTap(qhit('addiction'), () => openApp('GET HELP', ADDICTION_HTML));
 
       // Contacts — a tappable contact LIST; pick a person to see their
-      // info + action.  The Lawyer is a phone CALL (retainer); The Dealer
-      // takes an order delivered to the next rest stop.
+      // info + action.
       addTap(qhit('messages'), () => {
         const backBtn = '<button id="msg-back" class="pa-toggle" style="margin-bottom:1.4vmin">‹ Contacts</button>';
 
         const renderList = () => {
-          const st = window.__lawyer?.status?.() ?? { retained: false };
           const g  = window.__girl?.status?.() ?? { gone: false, responded: false, everTexted: false };
           const tx = window.__buddytexts?.threads?.() ?? {};
           const lastOf = (id) => {
@@ -3820,8 +3818,6 @@
           };
           const rows = [
             { id: 'girl',   name: '💕 The Crush',  sub: g.gone ? 'Found someone else 💔' : (g.everTexted ? (g.responded ? 'Replied 😘 — text them each town' : '… they\'re going quiet') : 'Invited you to the party!') },
-            { id: 'lawyer', name: '⚖️ The Lawyer', sub: st.retained ? 'On retainer ✓' : 'Better Phone Saul' },
-            { id: 'dealer', name: '🔌 The Plug',   sub: 'Delivers to the next rest stop' },
             { id: 'friend',  name: '🚨 The Friend',  sub: lastOf('friend') },
             { id: 'ex',      name: '🖤 The Ex',      sub: lastOf('ex') },
             { id: 'mom',     name: '👜 The Mom',     sub: lastOf('mom') },
@@ -3838,53 +3834,6 @@
                </div>`).join(''));
           appBody.querySelectorAll('.contact-row').forEach(row =>
             addTap(row, () => requestAnimationFrame(() => renderContact(row.dataset.cid))));
-        };
-
-        const renderLawyer = () => {
-          const st = window.__lawyer?.status?.() ?? { retained: false, cash: 0, cost: 15000 };
-          const afford = st.cash >= st.cost;
-          const lawyerBtn = st.retained
-            ? `<button class="pa-toggle on" disabled>✓ ON RETAINER</button>`
-            : `<button id="msg-lawyer-call" class="pa-toggle ${afford ? 'on' : ''}">📞 CALL · $${st.cost.toLocaleString()}</button>`;
-          openApp('CONTACTS',
-            backBtn +
-            sSec('⚖️ The Lawyer') +
-            `<p class="pa-lead">"Better Phone Saul." Put me on retainer and I'll cut every future <b>BUSTED</b> fine in half — one-time fee, good for the rest of your life.</p>` +
-            sRow('Status', st.retained ? '<span style="color:#44FF88;font-weight:800;">On retainer ✓</span>' : '<span class="pa-dim">Not retained</span>') +
-            sRow('Your cash', '$' + st.cash.toLocaleString()) +
-            `<div class="pa-row"><span class="k">Retainer</span>${lawyerBtn}</div>` +
-            (st.retained
-              ? '<p class="pa-note">Every busted fine is now halved. Drive however you like.</p>'
-              : (afford ? '' : `<p class="pa-note">Need $${(st.cost - st.cash).toLocaleString()} more — earn it on the road, then call back.</p>`)));
-          addTap(document.getElementById('msg-back'), () => requestAnimationFrame(renderList));
-          if (!st.retained && afford) {
-            const call = document.getElementById('msg-lawyer-call');
-            if (call) addTap(call, () => { const r = window.__lawyer?.retain?.(); if (r?.ok) requestAnimationFrame(renderLawyer); });
-          }
-        };
-
-        const renderDealer = () => {
-          const cash = window.__lawyer?.status?.()?.cash ?? 0;
-          const dl = window.__dealer?.status?.() ?? { cash, orders: [], vices: [] };
-          const pending = dl.orders.length
-            ? dl.orders.map(id => window.__dealer?.label?.(id) ?? id).join(', ')
-            : '<span class="pa-dim">none</span>';
-          const viceRows = dl.vices.length
-            ? dl.vices.map(d =>
-                `<div class="pa-row"><span class="k">${d.label}</span><button class="msg-order pa-toggle ${dl.cash >= d.price ? 'on' : ''}" data-vice="${d.id}" ${dl.cash < d.price ? 'disabled' : ''}>$${d.price.toLocaleString()}</button></div>`
-              ).join('')
-            : `<div class="pa-row"><span class="k pa-dim">No vices unlocked yet — pick some up on the road first.</span><span class="v"></span></div>`;
-          openApp('CONTACTS',
-            backBtn +
-            sSec('🔌 The Plug') +
-            `<p class="pa-lead">Call ahead and your order's waiting <b>FREE</b> at the next rest stop. You pay now — pickup or not.</p>` +
-            sRow('Pending pickup', pending) +
-            viceRows);
-          addTap(document.getElementById('msg-back'), () => requestAnimationFrame(renderList));
-          appBody.querySelectorAll('.msg-order').forEach(b => {
-            if (b.disabled) return;
-            addTap(b, () => { const r = window.__dealer?.order?.(b.dataset.vice); if (r?.ok) requestAnimationFrame(renderDealer); });
-          });
         };
 
         const renderGirl = () => {
@@ -3952,9 +3901,7 @@
 
         const renderContact = (cid) => {
           window.__notif?.ackMsg?.(cid);   // reading the thread clears its unread dot
-          if (cid === 'lawyer') renderLawyer();
-          else if (cid === 'dealer') renderDealer();
-          else if (cid === 'girl') renderGirl();
+          if (cid === 'girl') renderGirl();
           else if (BUDDY_NAMES[cid]) renderBuddy(cid);
         };
         renderList();

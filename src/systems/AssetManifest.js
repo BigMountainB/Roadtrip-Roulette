@@ -388,6 +388,9 @@ export const ASSET_MANIFEST = {
     { key: 'ui_control_wiper',   path: 'assets/ui/control_wiper.png?v=automotive-1' },
     { key: 'ui_control_accel',   path: 'assets/ui/control_accel.png?v=automotive-1' },
     { key: 'ui_control_brake',   path: 'assets/ui/control_brake.png?v=automotive-1' },
+    // Gas-gauge warning icon (from DUI) — full/empty swap on the analog gauge.
+    { key: 'ui_gas_full',        path: 'assets/ui/gas_full.png' },
+    { key: 'ui_gas_empty',       path: 'assets/ui/gas_empty.png' },
     // Portrait phone-as-menu background.  Rotating the device to
     // portrait (or pressing M on desktop) launches PhoneMenuScene with
     // this PNG as the full-screen letterboxed background.

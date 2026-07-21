@@ -3,9 +3,8 @@ import { BootScene }    from './scenes/BootScene.js';
 import { GameScene }    from './scenes/GameScene.js';
 import { RestStopScene } from './scenes/RestStopScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
-import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, VICES, VICE_CONFIG, REST_STOPS, setWorldWidth } from './constants.js';
+import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, REST_STOPS, setWorldWidth } from './constants.js';
 import { Weather } from './world/Weather.js';
-import { VICE_PRICE } from './scenes/RestStopScene.js';
 import { GENRE_VEHICLE_TRAITS } from './data/genreVehicleTraits.js';
 import { AchievementSystem } from './systems/AchievementSystem.js';
 import { getVehicleDisplayStats } from './systems/VehicleStats.js';
@@ -886,68 +885,10 @@ const _boot = () => {
     },
   };
 
-  // The Lawyer (phone → Messages).  One-time $15k retainer, paid from the
-  // run's current cash (score), halves all future "busted" fines for good.
   // Flavor contacts (The Ex / Mom / The Boss / The Unknown) — pure-tone texters.
   // GameScene logs their messages per run; the Messages app reads the threads.
   window.__buddytexts = {
     threads: () => game.scene.getScene('Game')?._buddyThreads ?? { ex: [], mom: [], boss: [], unknown: [] },
-  };
-
-  window.__lawyer = {
-    status: () => {
-      const save  = game.registry.get('save');
-      const scene = game.scene.getScene('Game');
-      return {
-        retained: save?.get?.('lawyerRetained', false) === true,
-        cash:     Math.max(0, Math.round(scene?.score ?? 0)),
-        cost:     15000,
-      };
-    },
-    retain: () => {
-      const save  = game.registry.get('save');
-      const scene = game.scene.getScene('Game');
-      if (save?.get?.('lawyerRetained', false) === true) return { ok: false, reason: 'already' };
-      const cash = Math.round(scene?.score ?? 0);
-      if (cash < 15000) return { ok: false, reason: 'funds', need: 15000 - cash };
-      if (scene) scene.score -= 15000;
-      save?.set?.('lawyerRetained', true);
-      return { ok: true };
-    },
-  };
-
-  // The Dealer (phone → Messages).  Order a vice, pay now from the run's
-  // cash (score); it's waiting FREE at the next rest stop's vice menu.
-  const _dealerLabel = (id) => (VICE_CONFIG[id]?.label ?? id).replace(/^[^A-Za-z]+/, '').trim();
-  window.__dealer = {
-    status: () => {
-      const save    = game.registry.get('save');
-      const scene   = game.scene.getScene('Game');
-      const unlocks = game.registry.get('viceUnlocks');
-      const isUnlocked = (id) => (unlocks && typeof unlocks === 'object')
-        ? !!unlocks[id] : !!VICE_CONFIG[id]?.unlocked;
-      return {
-        cash:   Math.max(0, Math.round(scene?.score ?? 0)),
-        orders: (save?.get?.('dealerOrders', []) || []).slice(),
-        vices:  Object.values(VICES).filter(isUnlocked).map(id => ({
-          id, label: _dealerLabel(id), price: VICE_PRICE[id] ?? 200,
-        })),
-      };
-    },
-    label: (id) => _dealerLabel(id),
-    order: (id) => {
-      const save  = game.registry.get('save');
-      const scene = game.scene.getScene('Game');
-      const price = VICE_PRICE[id];
-      if (price == null) return { ok: false, reason: 'badid' };
-      const cash = Math.round(scene?.score ?? 0);
-      if (cash < price) return { ok: false, reason: 'funds', need: price - cash };
-      if (scene) scene.score -= price;
-      const orders = (save?.get?.('dealerOrders', []) || []).slice();
-      orders.push(id);
-      save?.set?.('dealerOrders', orders);
-      return { ok: true };
-    },
   };
 
   // The Crush (phone → Contacts).  Gender-neutral (they/them) — they invited

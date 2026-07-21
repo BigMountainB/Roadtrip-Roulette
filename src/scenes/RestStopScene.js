@@ -236,9 +236,8 @@ const SECTIONS = {
     label: '🚗  CARS',
     items: [],   // populated dynamically per-stop in create()
   },
-  // Park & Ride — only at stops whose amenities include 'parkride'.  Where
-  // the (vice) Dealer meets you: pre-paid phone orders are picked up here
-  // FREE.  Items populated dynamically in create() from save.dealerOrders.
+  // Park & Ride — only at stops whose amenities include 'parkride'.  A free
+  // public restroom stop; items populated in create().
   parkride: {
     label: '🅿️  PARK & RIDE',
     items: [],
@@ -378,9 +377,6 @@ export class RestStopScene extends Phaser.Scene {
     this._stats = this.registry?.get?.('stats');
     this._stats?.restStopEnter(this._stop.id);
     try { window.__notif?.bump?.('maps'); } catch (_) {}   // new stop reached → Maps dot
-    // Pre-paid Dealer orders — vices already paid for via the phone, redeemed
-    // FREE in the vice menu here (claimed on purchase).
-    this._dealerOrders = (this.registry?.get?.('save')?.get?.('dealerOrders', []) || []).slice();
     // Vice-bar snapshot — vice status pauses at the rest stop and resumes
     // from these levels.  COFFEE / SNOOZE multiply, vice top-ups stack on
     // top.  Just stopping doesn't change anything anymore.
@@ -553,27 +549,8 @@ export class RestStopScene extends Phaser.Scene {
       SECTIONS.cargo.items = cargoItems;
     }
 
-    // ── PARK & RIDE: the (vice) Dealer hands over pre-paid phone orders ──
-    // One free pickup item per vice ordered (phone → Messages → Dealer).
-    // Buying it grants the vice for free and consumes that order.
-    SECTIONS.parkride.items = (this._dealerOrders || []).map((id, i) => ({
-      id:    `pickup_${id}_${i}`,
-      label: `${VICE_DISPLAY(id).toUpperCase()}  ·  PRE-PAID`,
-      icon:  VICE_TEX(id),
-      cost:  0,
-      desc:  'Pre-paid via the dealer — +10 % to this bar (cap 80 %)',
-      payload: { viceTopUp: id, amount: 0.10, dealerClaim: id },
-    }));
-    if (!SECTIONS.parkride.items.length) {
-      SECTIONS.parkride.items = [{
-        id: 'parkride_empty', label: '— nothing waiting —', cost: 0,
-        desc: 'Call the dealer first (phone → Messages) and your order meets you here.',
-        disabled: true, disabledReason: 'No pre-paid orders. Call the dealer from your phone.',
-        payload: {},
-      }];
-    }
-    // Park & Ride always has a free public restroom.
-    SECTIONS.parkride.items = [...SECTIONS.parkride.items, restroomItem(false, 'Nasty, but free.')];
+    // ── PARK & RIDE: a free public restroom stop. ──
+    SECTIONS.parkride.items = [restroomItem(false, 'Nasty, but free.')];
 
     // (DEALER_CARS removed 2026-07-19 — no car sales; the Dealer tile opens
     // ACCESSORIES/upgrades directly. See the `dealer` tile handler.)
@@ -1731,7 +1708,6 @@ export class RestStopScene extends Phaser.Scene {
 
     const cost = this.add.text(x + w - 8, y + h / 2,
       disabled              ? 'N/A' :
-      item.payload?.dealerClaim ? 'PREPAID' :
       effectiveCost > 0     ? `$${effectiveCost}` : 'FREE', {
         fontSize: compact ? '11px' : '13px', fontFamily: IMPACT,
         color: '#FFEE00', stroke: '#000', strokeThickness: 2,
@@ -1779,12 +1755,6 @@ export class RestStopScene extends Phaser.Scene {
         if (bizKey) this._boughtAt.add(bizKey);   // unlocks THIS business's restroom only
         const _si = this._statsSpendInfo(item);
         this._stats?.recordSpend(effectiveCost, _si.category, _si.subId);
-      }
-      // Park & Ride pickup → consume one matching pre-paid Dealer order.
-      if (item.payload?.dealerClaim) {
-        const _oi = this._dealerOrders.indexOf(item.payload.dealerClaim);
-        if (_oi !== -1) this._dealerOrders.splice(_oi, 1);
-        this.registry.get('save')?.set?.('dealerOrders', this._dealerOrders);
       }
       this._refreshScore();
       this._applyPurchase(item);

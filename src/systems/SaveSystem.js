@@ -104,12 +104,6 @@ const DEFAULT_PROFILE = {
   // all money/progress.  Shape: { snap: <full _collectSaveSnapshot>, ts }.
   // Cleared on a clean trip-end / Start Over / Main Menu / death.
   liveRun:         null,
-  // One-time $15k retainer (phone → Messages → The Lawyer).  Halves every
-  // future "busted" fine.  Per-profile progress, so Reset Progress clears it.
-  lawyerRetained:  false,
-  // Pre-paid Dealer orders (phone → Messages → The Dealer): a list of vice
-  // ids paid for up front, redeemed FREE at the next rest stop's vice menu.
-  dealerOrders:    [],
   // Per-vehicle accessory state.  Shape:
   //   accessories: { [vehicleId]: { bumper: bool, traction: bool, nos: 0|1|2|3 } }
   // Bumper / traction are one-shot purchases (boolean).  NOS is a tier
@@ -411,10 +405,6 @@ export class SaveSystem {
     p.missionProgress = finiteNum(src.missionProgress, 0, 0);
     p.lastRestStop = this._sanitizeRestStopSnapshot(src.lastRestStop);
     p.restStopSaves = this._sanitizeRestStopSaves(src.restStopSaves);
-    p.lawyerRetained = src.lawyerRetained === true;
-    p.dealerOrders = Array.isArray(src.dealerOrders)
-      ? src.dealerOrders.filter(v => typeof v === 'string' && v.trim()).slice(0, 50)
-      : [];
     p.accessories = this._sanitizeAccessories(src.accessories);
     p.controlsLayout = this._sanitizeControlsLayout(src.controlsLayout);
     // Layout-version gate (GameScene resets stale pre-v2 offsets once) — must
