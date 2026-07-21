@@ -324,8 +324,9 @@ function makePlayer() {
 // profiles that have never customized their own layout (non-destructive —
 // existing custom layouts are untouched). The moved set — the editor only
 // stores what you drag, so anything not here sits at its default base.
-// `wiper` is dragged to the bottom-left (left of coal); rearCop rides its
-// y73 top-anchored base (15px below the mirror bottom) + this dy.
+// `wiper` sits in the bottom gap between the location/mileage readout and the
+// accelerator (its base hugs the top-right edge, hence the large −dx/+dy);
+// rearCop rides its y73 top-anchored base (15px below the mirror bottom) + dy.
 const DEFAULT_HUD_LAYOUT = {
   popup:      { dx: -1,   dy: -25, scale: 1.1262099400177235 },
   hpDamage:   { dx: 396,  dy: 275, scale: 1.7629642295565735 },
@@ -340,7 +341,7 @@ const DEFAULT_HUD_LAYOUT = {
   btn_garage: { dx: 49,   dy: 2,   scale: 1 },
   btn_map:    { dx: 59,   dy: 3,   scale: 1 },
   btn_mute:   { dx: 68,   dy: 3,   scale: 1 },
-  wiper:      { dx: -67,  dy: 320, scale: 1.033918411681667  },
+  wiper:      { dx: -150, dy: 320, scale: 1.033918411681667  },   // shifted left off the accelerator into the location↔pedal gap (owner 2026-07-20)
   engine:     { dx: 114,  dy: -4,  scale: 0.9143488304331294 },
   stars:      { dx: -67,  dy: 12,  scale: 1.7379492932183374 },
   hp:         { dx: -34,  dy: -6,  scale: 1.5039041829382487 },
@@ -741,8 +742,8 @@ export class GameScene extends Phaser.Scene {
     // arrest/death/respawn within the same play session.  See "viceUnlocks"
     // writes after _viceUpdate (below).
     this.vices.hydrateUnlocks?.(this.registry.get('viceUnlocks'));
-    // Also restore partial-unlock progress (e.g. meth Phase 1) so a rest
-    // stop or arrest doesn't wipe the cocaine-peak flag the gate depends on.
+    // Also restore partial-unlock progress (e.g. caffeine Phase 1) so a rest
+    // stop or arrest doesn't wipe the energy-peak flag the gate depends on.
     this.vices.hydrateProgress?.(this.registry.get('viceProgress'));
     this.effects = new EffectsSystem(this);
     this.cops    = new CopSystem();
@@ -855,7 +856,9 @@ export class GameScene extends Phaser.Scene {
       // (x400) + down 20px; Pickup(popup) down another 20px.
       // v8 (2026-07-20): full owner re-export — pursuit nudged lower, damage/HP/
       // speed/mission/region/dist/wiper/pedalGas repositioned + resized.
-      const LAYOUT_VER = 8;
+      // v9 (2026-07-20): wiper shifted left off the accelerator into the
+      // location↔pedal gap.
+      const LAYOUT_VER = 9;
       if ((_save?.get?.('controlsLayoutVer', 1) ?? 1) < LAYOUT_VER) {
         // Pre-gate profiles (incl. brand-new ones) install the owner's baked
         // default rather than an empty layout.
@@ -3761,25 +3764,25 @@ export class GameScene extends Phaser.Scene {
     // The survival model reuses the legacy EffectsSystem for VISUALS only (via
     // the synthetic-vice bridge below).  Its drug PHYSICS must NOT leak into
     // handling — kill the acid steering-flip, drunk swerve/overcorrection,
-    // phantom road curve, drug steer-sensitivity, and the cocaine wanted-star
+    // phantom road curve, drug steer-sensitivity, and the energy wanted-star
     // multiplier.  Fatigue/hunger drive their own bespoke effects instead.
     phys.invertSteering   = false;
     phys.steerDrift       = 0;
     phys.extraCurve       = 0;
     phys.alcoholHoldover  = 0;
     phys.steerSensitivity = 1;
-    phys.cocaineStarMul   = 1;
+    phys.energyStarMul   = 1;
     const dt    = rawDt * phys.dtMultiplier;
-    // Cocaine accelerates wanted-level gain — stamp the multiplier on
+    // Energy accelerates wanted-level gain — stamp the multiplier on
     // CopSystem so addStar(amount) reads it without touching call sites.
-    if (this.cops) this.cops._starGainMul = phys.cocaineStarMul ?? 1;
+    if (this.cops) this.cops._starGainMul = phys.energyStarMul ?? 1;
     // Steroid power-up upkeep — suppress all wanted-star attraction while
     // active (you're untouchable, not a target), handle the spawn timer, and
     // fire a one-shot "worn off" popup the frame it expires.
     this._updateSteroid(rawDt);
     this._updateNarcan(rawDt);
-    // Cocaine high-freq tremor: fire a micro-shake every ~3 frames while
-    // coke is active.  cameraTremor maxes at 1.5 (full bar) → 0.0012 amp.
+    // Energy high-freq tremor: fire a micro-shake every ~3 frames while
+    // energy is active.  cameraTremor maxes at 1.5 (full bar) → 0.0012 amp.
     this._tremorTick = (this._tremorTick ?? 0) + 1;
     if ((phys.cameraTremor ?? 0) > 0.05 && this._tremorTick % 3 === 0) {
       this.effects.triggerShake(60, phys.cameraTremor * 0.0008);
@@ -3902,7 +3905,7 @@ export class GameScene extends Phaser.Scene {
       const _hyp = _t >= 70 ? Math.min(1, (_t - 70) / 25) : 0;
       _L[VICES.GUMMIES] = _oddGummy ? 1 : _hyp;
       _L[VICES.HOTDOG]  = _oddGummy ? 1 : (_t >= 70 ? 0.6 + _hyp * 0.4 : 0);
-      // Hangry tremor (reuse ENERGY/cocaine jitter) when Fullness < 25.
+      // Hangry tremor (reuse ENERGY/energy jitter) when Fullness < 25.
       _L[VICES.ENERGY]  = _ful < 25 ? Math.min(1, (25 - _ful) / 25) : 0;
       // (Dehydration/nausea/bladder/withdrawal use bespoke overlays — _drawSurvivalFx.)
 
@@ -4533,8 +4536,11 @@ export class GameScene extends Phaser.Scene {
       // rock +30% over 120 mph) × low-HP bonus under its gate (pop-punk +50%
       // below 25 HP).
       let _gvCash = this._traitMod('drivingCashMult') * this._traitMod('drivingBonusEarningsMult');
-      const _hiGate = this._traitMod('hiSpeedCashMinMph');
-      if (_hiGate > 0 && this._displayMPH() > _hiGate) _gvCash *= this._traitMod('drivingCashHiSpeedMult');
+      // Hi-speed cash bonus now gates on 15% ABOVE the car's baseline cruise
+      // (owner 2026-07-20), not a fixed mph — so it's the same "push past
+      // cruise" ask for every genre car.
+      const _hiMult = this._traitMod('drivingCashHiSpeedMult');
+      if (_hiMult !== 1 && this._displayMPH() > this._baselineCruiseMph() * 1.15) _gvCash *= _hiMult;
       const _hpGate = this._traitMod('lowHpBonusHp');
       if (_hpGate > 0 && (this.damage?.getDurability?.() ?? 999) < _hpGate) _gvCash *= this._traitMod('lowHpBonusMult');
       const _distEarn = _distBase * this._scoreMult() * _gvCash;
@@ -4569,9 +4575,10 @@ export class GameScene extends Phaser.Scene {
       const trafficStop = this._trapPursuitActive || this._trapStopping || this._trapStopHeld;
       let penalty   = 0;
 
-      // Genre-vehicle low-speed full-earn (reggae: 70–99 mph earns the full rate
-      // → the slow-penalty threshold drops from 80 to 70). owner 2026-07-19.
-      const _slowThresh = this._traitMod('lowSpeedFullEarnMinMph') || 80;
+      // Slow-driving penalty now kicks in below 15% UNDER the car's baseline
+      // cruise (owner 2026-07-20), per-car off its inherent cruise — so no car
+      // is taxed for its own natural cruising speed.
+      const _slowThresh = this._baselineCruiseMph() * 0.85;
       if (dispMph < _slowThresh && !fentActive && !weedHigh && !viceSlowing && !trafficStop) {
         // -$5/sec floor at 20 mph, linear up to 0 at the threshold.
         const slowness = Math.min(1, (_slowThresh - dispMph) / Math.max(1, _slowThresh - 20));
@@ -4833,7 +4840,7 @@ export class GameScene extends Phaser.Scene {
     // game" from the menu — see MenuScene.
     if (newUnlock) this.registry.set('viceUnlocks', this.vices.snapshotUnlocks?.());
     // Persist partial-unlock progress every frame — cheap, and ensures
-    // meth Phase 1 survives a rest stop / arrest mid-gate.
+    // caffeine Phase 1 survives a rest stop / arrest mid-gate.
     if (this.vices.snapshotProgress) {
       this.registry.set('viceProgress', this.vices.snapshotProgress());
     }
@@ -4973,18 +4980,28 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** The active car's INHERENT no-pedal cruise speed (mph), ignoring
+   *  caffeine/NOS/upgrade boosts.  The speed-bonus band (cruise ×1.15 bonus,
+   *  ×0.85 penalty) is measured off this fixed per-car baseline. */
+  _baselineCruiseMph() {
+    const gvt = this._activeGenreTrait?.();
+    if (gvt) return gvt.cruiseMph;
+    const veh = VEHICLES[this.player.vehicleId] ?? VEHICLES.beater;
+    return (veh.topMph + (veh.boostMph ?? 20)) * 0.75;
+  }
+
   // ─── Player movement ──────────────────────────────────────────────────
   _updatePlayer(dt, phys) {
     const p = this.player;
 
     // Speed: cruise at the vehicle's topMph; boost adds vehicle.boostMph
-    // on top.  Cocaine + meth pickups raise both cruise + boost by 4 mph
+    // on top.  Energy + caffeine pickups raise both cruise + boost by 4 mph
     // each.  NOS tier (per-vehicle accessory) adds +5 mph per tier.
     // Pass-3 change: cruise / boost are now PER-VEHICLE instead of
     // hardcoded 120 / 140 — sports cars cruise faster, trucks slower.
     const _vehSpec  = VEHICLES[this.player.vehicleId] ?? VEHICLES.beater;
-    const cokeBonus = this.vices.getCocaineSpeedBonusMPH?.() ?? 0;
-    const methBonus = this.vices.getMethSpeedBonusMPH?.() ?? 0;
+    const energyBonus = this.vices.getEnergySpeedBonusMPH?.() ?? 0;
+    const caffeineBonus = this.vices.getCaffeineSpeedBonusMPH?.() ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
     const nosBonus  = nosTier * 5;
     const upMph     = this._upgradeFx?.topMph ?? 0;   // engine/tire upgrades + buffs
@@ -4999,8 +5016,8 @@ export class GameScene extends Phaser.Scene {
     // own topMph + boost for the max and 75% of that for cruise.
     const _boostBase  = _gvt ? _gvt.topSpeedMph : (_vehSpec.topMph + _boostDelta);
     const _cruiseBase = _gvt ? _gvt.cruiseMph   : (_vehSpec.topMph + _boostDelta) * 0.75;
-    const cruiseMph = _cruiseBase + cokeBonus + methBonus + nosBonus + upMph;
-    const boostMph  = _boostBase  + cokeBonus + methBonus + nosBonus + upMph;
+    const cruiseMph = _cruiseBase + energyBonus + caffeineBonus + nosBonus + upMph;
+    const boostMph  = _boostBase  + energyBonus + caffeineBonus + nosBonus + upMph;
     const slowMph   = 60;
     const mphToUnits = (mph) => MAX_SPEED * (mph / 120);
 
@@ -7502,7 +7519,7 @@ export class GameScene extends Phaser.Scene {
    *    • Beer    ≥ 100% → 50% chance to no-op on glancing hits (sideswipes,
    *                        corner clips) — head-on / rear / PIT / ram still bite.
    *    • Difficulty.damageMul scales every hit (Easy 0.7, Normal 1.0, Hard 1.5).
-   *    • Meth active     → +1 hp damage on every collision.
+   *    • Caffeine active     → +1 hp damage on every collision.
    *    • Heroin ≥ 15%    → discrete crash hits drop by 2 hp (replaces the
    *                        older 50%/85% numbness rules per user spec).
    *  Continuous offroad bleed (source 'offroad_bleed', amount < 1) skips
@@ -8878,9 +8895,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (isCollision) {
-      // Meth's "+1 per crash" is a per-IMPACT penalty.  Six damage sources are
+      // Caffeine's "+1 per crash" is a per-IMPACT penalty.  Six damage sources are
       // CONTINUOUS per-frame scrapes (called ~60×/sec) — applying +1 to each
-      // frame would be ~+60 HP/sec (instant death).  So meth's +1 fires on
+      // frame would be ~+60 HP/sec (instant death).  So caffeine's +1 fires on
       // discrete crashes ONLY; continuous scrapes bleed at their normal rate.
       // (Heroin's -2 is already inert on scrapes via the adj >= 1 guard.)
       const isContinuousScrape =
@@ -8888,8 +8905,8 @@ export class GameScene extends Phaser.Scene {
         || source.endsWith('_rail')    // bridge_rail, fence_rail
         || source === 'water_shoulder'
         || source === 'tunnel_wall';
-      const meth = vices?.get?.(VICES.CAFFEINE) ?? 0;
-      if (meth > 0.05 && !isContinuousScrape) adj += 1;
+      const caffeine = vices?.get?.(VICES.CAFFEINE) ?? 0;
+      if (caffeine > 0.05 && !isContinuousScrape) adj += 1;
       const hero = vices?.get?.(VICES.COMBO) ?? 0;
       if (hero >= 0.15 && adj >= 1) adj = Math.max(0, adj - 2);
     }
@@ -9669,16 +9686,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (type === 'steroid') {
-      // REDNECK RAGE — invincible battering-ram for 1 mile, with a whole-screen
-      // spectacle: red flash, hard shake, blaring horn, and a pulsing red rage
-      // vignette (maintained in _updateSteroid while active).
-      this._steroidUntilMile = (this._odometer ?? 0) + 1.0;
-      this._steroidWasActive = true;
-      this._showPopup?.('🤬 REDNECK RAGE!\nUNSTOPPABLE — 1 MILE', '#FF3322');
-      this.cameras?.main?.flash?.(500, 255, 205, 60);  // GOLD flash on consume (owner 2026-07-19)
-      this.effects?.triggerShake?.(260, 0.012);
-      this.survival?.applyItem('rage', undefined, this._survivalItemMods());                 // energy-drink: +hydration/+fullness
-      try { this.audio?.playHorn?.(); } catch (_) {}    // no-op if cue absent
+      this._startRedneckRage();
       return;
     }
 
@@ -11806,7 +11814,7 @@ export class GameScene extends Phaser.Scene {
       tankFrac = tri;
     } else {
       // Speedometer — use existing display-MPH so the dial matches
-      // the HUD speedo (cocaine / meth boosts included).
+      // the HUD speedo (energy / caffeine boosts included).
       const mph = Math.max(0, Math.min(C.speedo.mphAtMax, this._displayMPH?.() ?? 0));
       speedT = mph / C.speedo.mphAtMax;
       tankFrac = Math.max(0, Math.min(1,
@@ -13131,9 +13139,21 @@ export class GameScene extends Phaser.Scene {
       // otherwise gets covered by the wall polygon despite being on the
       // drivable pavement.
       const baseDepth = 9.5 - Math.max(0, Math.min(1, relZ / 76000)) * 2.5;
-      const depth = (cameraInTunnel && inTunnel)
+      let depth = (cameraInTunnel && inTunnel)
         ? 9.83
         : (inTunnel ? Math.min(baseDepth, 9.80) : baseDepth);
+      // Player-relative painter's sort (owner 2026-07-20): NPC sprites are
+      // origin (0.5, 1), so their bumper sits at proj.sy.  A car whose bumper
+      // is at or BELOW the player's bumper (proj.sy >= player y) is nearer the
+      // camera than the player — i.e. BEHIND the player car — so it must paint
+      // OVER the player (depth > the player's 9.95).  A car whose bumper is
+      // HIGHER on screen is AHEAD, so it stays behind the player.  Nearer
+      // (lower-on-screen) behind-cars get a higher depth so they still sort
+      // correctly among themselves.
+      const _pBotY = this.playerSprite?.y ?? (SCREEN_H - 130);
+      if (proj.sy >= _pBotY) {
+        depth = 9.96 + Math.min(0.5, (proj.sy - _pBotY) / Math.max(1, SCREEN_H));
+      }
       s.setPosition(proj.sx, proj.sy)
         .setDisplaySize(targetW, targetH)
         .setTint(color)
@@ -16526,7 +16546,7 @@ export class GameScene extends Phaser.Scene {
     const progress = p.position / (ROUTE_SEGS * SEG_LENGTH);
 
     // ── HUD alpha modulation ─────────────────────────────────────
-    // Fentanyl fades the readouts down ("screen shutting down"); meth +
+    // Fentanyl fades the readouts down ("screen shutting down"); caffeine +
     // LSD jitter the alpha each frame for the wired/glitchy feel.
     {
       const _phys  = this.effects?.getPhysics?.(this.vices);
@@ -16540,7 +16560,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Top speed: 120 MPH base + 5 MPH per cocaine pickup (capped at OD).
+    // Top speed: 120 MPH base + 5 MPH per energy pickup (capped at OD).
     // ceil so a car actually rolling (< 0.5 mph) doesn't read as "0 MPH".
     const rawMph   = this._displayMPH();
     const _spd     = this._unitsKmh ? rawMph * 1.60934 : rawMph;
@@ -18022,7 +18042,7 @@ export class GameScene extends Phaser.Scene {
       slushie: 'vice_slushie',
       caffeine:     'vice_caffeine',
     };
-    // Colorblind: recolor the confusable bar-fill pairs (weed↔meth both greenish,
+    // Colorblind: recolor the confusable bar-fill pairs (weed↔caffeine both greenish,
     // lsd reddish — fentanyl keeps its lethal red) and stamp an authoritative
     // one-letter badge on each card so the vice is read by LETTER, not hue.
     const CB_FILL   = { burrito: 0x3A9BFF, caffeine: 0xFF9A3D, hotdog: 0xFFD23D, coma: 0xFF2222 };
@@ -19122,7 +19142,7 @@ export class GameScene extends Phaser.Scene {
         gasMaxMi:       this.player.gasMaxMi,
         ownedVehicles:  this.registry.get('ownedVehicles') ?? ['beater'],
         // Per-vice exposure history — gates per-shop vice menus.  Camp
-        // sells fent/ket/meth ONLY if the player has sampled them on
+        // sells fent/ket/caffeine ONLY if the player has sampled them on
         // the road first.
         vicePickupCounts: { ...(this.vices?.pickupCounts ?? {}) },
         weaponsAtEntry:   { ...(snap.weapons ?? {}) },
@@ -20591,15 +20611,43 @@ export class GameScene extends Phaser.Scene {
     return (this._steroidUntilMile ?? -1) > (this._odometer ?? 0);
   }
 
+  /** Start a 1-mile Redneck / Road Rage (invincible battering-ram) with the
+   *  full spectacle.  Fired by the powerup pickup and by maxing Alertness
+   *  (fromAlertness) — the latter drops Alertness to 75% when it wears off. */
+  _startRedneckRage({ fromAlertness = false } = {}) {
+    this._steroidUntilMile  = (this._odometer ?? 0) + 1.0;
+    this._steroidWasActive  = true;
+    this._rageFromAlertness = fromAlertness;
+    this._showPopup?.(
+      fromAlertness ? '🤬 ROAD RAGE!\nUNSTOPPABLE — 1 MILE' : '🤬 REDNECK RAGE!\nUNSTOPPABLE — 1 MILE',
+      '#FF3322');
+    this.cameras?.main?.flash?.(500, 255, 205, 60);   // GOLD flash on trigger
+    this.effects?.triggerShake?.(260, 0.012);
+    this.survival?.applyItem('rage', undefined, this._survivalItemMods());   // +hydration/+fullness
+    try { this.audio?.playHorn?.(); } catch (_) {}    // no-op if cue absent
+  }
+
   /** Per-frame Steroid upkeep: heat suppression, HUD readout, expiry popup,
    *  and the rare standalone spawn timer.  Called from update(). */
   _updateSteroid(rawDt) {
+    // Road-rage trigger: maxing Alertness (tiredness hits 0 → 100% alert)
+    // launches a 1-mile Road Rage; it drops Alertness to 75% when it wears
+    // off (see the worn-off block below).  Owner 2026-07-20.
+    if (!this._awaitingStart && !this._steroidActive()
+        && (this.survival?.tiredness ?? 99) <= 0) {
+      this._startRedneckRage({ fromAlertness: true });
+    }
     const active = this._steroidActive();
     // Untouchable while active — zero out wanted-star attraction so the
     // rampage doesn't bury you in heat the instant it wears off.
     if (active && this.cops) this.cops._starGainMul = 0;
     if (!active && this._steroidWasActive) {
       this._showPopup?.('🤬 RAGE WORN OFF', '#FFAA33');
+      // Road Rage (alertness-triggered) crashes you back down to 75% alert.
+      if (this._rageFromAlertness && this.survival) {
+        this.survival.tiredness = 25;   // Alertness → 75%
+      }
+      this._rageFromAlertness = false;
     }
     this._steroidWasActive = active;
     if (this.hudSteroid) {
@@ -20739,22 +20787,22 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Top speed in internal units, accounting for cocaine + meth pickup boosts + NOS.
+  // Top speed in internal units, accounting for energy + caffeine pickup boosts + NOS.
   _maxSpeedWithBoost() {
-    const cokeBonus = this.vices.getCocaineSpeedBonusMPH?.() ?? 0;
-    const methBonus = this.vices.getMethSpeedBonusMPH?.()    ?? 0;
+    const energyBonus = this.vices.getEnergySpeedBonusMPH?.() ?? 0;
+    const caffeineBonus = this.vices.getCaffeineSpeedBonusMPH?.()    ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
-    const topMph    = 120 + cokeBonus + methBonus + nosTier * 5;
+    const topMph    = 120 + energyBonus + caffeineBonus + nosTier * 5;
     return MAX_SPEED * (topMph / 120);
   }
 
   // Displayed MPH = (current speed / current top-speed) × top-MPH.
   _displayMPH() {
-    // +4 mph per coke bag, +4 mph per meth pickup, +5 mph per NOS tier.
-    const cokeBonus = this.vices?.getCocaineSpeedBonusMPH?.() ?? 0;
-    const methBonus = this.vices?.getMethSpeedBonusMPH?.()    ?? 0;
+    // +4 mph per energy bag, +4 mph per caffeine pickup, +5 mph per NOS tier.
+    const energyBonus = this.vices?.getEnergySpeedBonusMPH?.() ?? 0;
+    const caffeineBonus = this.vices?.getCaffeineSpeedBonusMPH?.()    ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
-    const topMph   = 120 + cokeBonus + methBonus + nosTier * 5;
+    const topMph   = 120 + energyBonus + caffeineBonus + nosTier * 5;
     const topUnits = MAX_SPEED * (topMph / 120);
     const trueMph  = (this.player.speed / topUnits) * topMph;
     // LSD ≥ 60% — time distortion: world keeps scrolling at the player's
