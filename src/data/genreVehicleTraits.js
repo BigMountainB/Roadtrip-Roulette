@@ -46,14 +46,12 @@ export const MODIFIER_DEFAULTS = Object.freeze({
   policeDamageMult:          1,   // police contact only (stacks on damageTaken)
   // ── Economy / driving cash / bonus ──
   drivingCashMult:           1,   // flat driving-cash rate
-  drivingCashHiSpeedMult:    1,   // extra cash multiplier above `hiSpeedCashMinMph`
-  hiSpeedCashMinMph:         0,   // speed gate for drivingCashHiSpeedMult
+  drivingCashHiSpeedMult:    1,   // extra cash multiplier above cruise ×1.15
   drivingBonusBuildMult:     1,   // how fast the driving bonus ramps
   drivingBonusGraceMult:     1,   // grace period before the bonus resets
   drivingBonusEarningsMult:  1,   // payout scale on the driving bonus
   lowHpBonusMult:            1,   // driving-bonus scale below `lowHpBonusHp`
   lowHpBonusHp:              0,   // HP gate for lowHpBonusMult
-  lowSpeedFullEarnMinMph:    0,   // ≥ this speed earns the full 100-mph rate (reggae)
   // ── Fuel / repairs / upgrades ──
   fuelBurnMult:              1,   // fuel drained per distance
   fuelRangeMult:             1,   // tank range (applied to burn as 1/range)
@@ -214,7 +212,6 @@ export const GENRE_VEHICLE_TRAITS = {
     ],
     modifiers: {
       drivingCashHiSpeedMult:    1.30,
-      hiSpeedCashMinMph:         120,
       ignoreFirstOverheatPerLeg: true,
       brakingMult:               0.80,
       hazardInstabilityMult:     1.30,
@@ -260,7 +257,6 @@ export const GENRE_VEHICLE_TRAITS = {
     // Dark satire about profiling attached to a FICTIONAL vehicle trait — not a
     // claim about real people.
     modifiers: {
-      lowSpeedFullEarnMinMph:   70,
       survivalDrainLoSpeedMult:  0.75,
       noPoliceWarning:           true,
       ticketSurcharge:           200,
