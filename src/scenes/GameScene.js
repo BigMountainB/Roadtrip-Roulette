@@ -4579,7 +4579,9 @@ export class GameScene extends Phaser.Scene {
       // cruise (owner 2026-07-20), per-car off its inherent cruise — so no car
       // is taxed for its own natural cruising speed.
       const _slowThresh = this._baselineCruiseMph() * 0.85;
-      if (dispMph < _slowThresh && !fentActive && !weedHigh && !viceSlowing && !trafficStop) {
+      // Reggae (noSlowDrivePenalty) earns its normal rate even below the band.
+      if (dispMph < _slowThresh && !fentActive && !weedHigh && !viceSlowing && !trafficStop
+          && !this._traitMod('noSlowDrivePenalty')) {
         // -$5/sec floor at 20 mph, linear up to 0 at the threshold.
         const slowness = Math.min(1, (_slowThresh - dispMph) / Math.max(1, _slowThresh - 20));
         penalty += 5 * slowness * mult;

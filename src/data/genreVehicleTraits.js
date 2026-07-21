@@ -52,6 +52,7 @@ export const MODIFIER_DEFAULTS = Object.freeze({
   drivingBonusEarningsMult:  1,   // payout scale on the driving bonus
   lowHpBonusMult:            1,   // driving-bonus scale below `lowHpBonusHp`
   lowHpBonusHp:              0,   // HP gate for lowHpBonusMult
+  noSlowDrivePenalty:        false, // exempt from the slow-driving (< cruise ×0.85) cash penalty
   // ── Fuel / repairs / upgrades ──
   fuelBurnMult:              1,   // fuel drained per distance
   fuelRangeMult:             1,   // tank range (applied to burn as 1/range)
@@ -247,7 +248,7 @@ export const GENRE_VEHICLE_TRAITS = {
     topSpeedMph: 100,   // pedal-DOWN max (no caffeine)
     cruiseMph:    80,   // no-pedal cruise
     strengths: [
-      '70–99 mph earns the full 100-mph rate',
+      'No slow-driving penalty — earns the normal rate at any speed',
       'Alertness, Food & Bladder drain −25% below 100 mph',
     ],
     weaknesses: [
@@ -257,6 +258,7 @@ export const GENRE_VEHICLE_TRAITS = {
     // Dark satire about profiling attached to a FICTIONAL vehicle trait — not a
     // claim about real people.
     modifiers: {
+      noSlowDrivePenalty:        true,
       survivalDrainLoSpeedMult:  0.75,
       noPoliceWarning:           true,
       ticketSurcharge:           200,
