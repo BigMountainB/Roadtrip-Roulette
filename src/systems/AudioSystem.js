@@ -1299,7 +1299,7 @@ export class AudioSystem {
    *    Depressants (alc / weed / her / fent / ket / rx) — drop the lowpass
    *      cutoff and slow the tempo.  At full ketamine the audio is a
    *      muffled rumble at half-tempo.
-   *    Uppers (cocaine / meth) — raise the highpass to thin out the lows
+   *    Uppers (energy / caffeine) — raise the highpass to thin out the lows
    *      and nudge tempo faster.  Tinny + jittery feel.
    *    Psychedelics (lsd / shrooms) — push the reverb wet send so the
    *      whole mix washes into a long tail. */
@@ -1316,7 +1316,7 @@ export class AudioSystem {
       if (lvl < TH) return 0;
       return (lvl - TH) / (1 - TH);
     };
-    const alc = get('sushi'), weed = get('burrito'), coke = get('energy');
+    const alc = get('sushi'), weed = get('burrito'), energy = get('energy');
     const lsd = get('hotdog'),     shr  = get('gummies');
     const her = get('combo'),  fnt  = get('coma');
     const ket = get('slushie'), mth = get('caffeine'), rx = get('coldbrew');
@@ -1334,7 +1334,7 @@ export class AudioSystem {
 
     // Highpass — uppers thin out the bass for a wired, tinny feel.
     let hp = 20;
-    if (coke > 0) hp = Math.max(hp, 20 + coke * 280);        // → 300 Hz
+    if (energy > 0) hp = Math.max(hp, 20 + energy * 280);        // → 300 Hz
     if (mth  > 0) hp = Math.max(hp, 20 + mth  * 480);        // → 500 Hz
 
     // Tempo nudge applied alongside the per-bar humanizing factor.
@@ -1344,7 +1344,7 @@ export class AudioSystem {
     tempoMul -= her  * 0.20;
     tempoMul -= fnt  * 0.30;
     tempoMul -= ket  * 0.35;
-    tempoMul += coke * 0.10;
+    tempoMul += energy * 0.10;
     tempoMul += mth  * 0.18;
     tempoMul = Math.max(0.5, Math.min(1.45, tempoMul));
 

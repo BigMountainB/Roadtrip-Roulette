@@ -143,7 +143,7 @@ export const FOG_DENSITY  = 4;
 export const ACCEL        = 195;
 export const BRAKE        = 340;
 export const DECEL        = 76;
-export const MAX_SPEED    = 27000; // internal world-units/sec; speedometer reads 120 MPH at this top (raised by cocaine pickups)
+export const MAX_SPEED    = 27000; // internal world-units/sec; speedometer reads 120 MPH at this top (raised by energy pickups)
 export const TURN_SPEED   = 2.8;
 export const OFFROAD_SLOW = 0.6;
 export const CENTRIFUGAL  = 0.3;
@@ -188,23 +188,23 @@ export const FULL_BAR_THRESHOLD = 0.80;
 export const VICES = {
   SUSHI:    'sushi',     // was alcohol — gas-station sushi (food-poisoning woozy)
   BURRITO:  'burrito',   // was weed — greasy burrito (food coma)
-  ENERGY:   'energy',    // was cocaine — energy shot (jittery rush)
+  ENERGY:   'energy',    // was energy — energy shot (jittery rush)
   GUMMIES:  'gummies',   // was shrooms — sugar gummies (color trip)
   HOTDOG:   'hotdog',    // was lsd — roller-grill hot dog (fever dream)
   COMBO:    'combo',     // was heroin — combo meal (heavy food coma)
   COLDBREW: 'coldbrew',  // was rx — cold brew (steady caffeine)
   COMA:     'coma',      // was fentanyl — 3AM buffet coma (lethal 2-hit)
   SLUSHIE:  'slushie',   // was ketamine — brain-freeze slushie (dizzy)
-  CAFFEINE: 'caffeine',  // was meth — caffeine pills (wired for hours)
+  CAFFEINE: 'caffeine',  // was caffeine — caffeine pills (wired for hours)
 };
 
 // Vice config — decayRate (per second, linear) tuned 2026-06-20 to match the
 // REAL relative duration-of-effects ordering, compressed to a ~30s–4min game
-// range (cocaine shortest → LSD longest).  odThreshold 1.0001 on every OD-capable
+// range (energy shortest → LSD longest).  odThreshold 1.0001 on every OD-capable
 // vice means OD fires only when a pickup OVERFILLS a maxed bar (the pickup OD
 // check compares the uncapped prev+dose).  Non-OD vices keep canOD:false.
-//   full-life ≈ 1/decayRate sec:  coke 30s, ket 36s, fent 42s, weed/beer 65s,
-//   heroin 112s, shrooms 123s, rx 135s, meth 205s, lsd 240s.
+//   full-life ≈ 1/decayRate sec:  energy 30s, ket 36s, fent 42s, weed/beer 65s,
+//   heroin 112s, shrooms 123s, rx 135s, caffeine 205s, lsd 240s.
 export const VICE_CONFIG = {
   sushi:    { label: '🍣 Sushi',     color: 0x9ACD32, hexCss: '#9ACD32', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
   burrito:  { label: '🌯 Burrito',   color: 0xC8862B, hexCss: '#C8862B', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
@@ -542,7 +542,7 @@ export const PASS_THROUGH_CITIES = _PASS_THROUGH_CITY_DEF.map(c => ({
 //   label        — display name
 //   hp           — durability cap (max HP)
 //   rangeMi      — full-tank/charge range, in miles
-//   topMph       — base CRUISE speed at +0 cocaine/meth pickups
+//   topMph       — base CRUISE speed at +0 energy/caffeine pickups
 //   boostMph     — extra MPH added on top of topMph when boosting
 //                  (per-vehicle: sports cars rev harder than trucks)
 //   grip         — tire grip multiplier (1.00 baseline; 1.20+ sports, <1 truck)

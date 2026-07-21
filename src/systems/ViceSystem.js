@@ -7,11 +7,11 @@
  * Weed is the exception — cannot OD, just makes you very slow.
  *
  * Unlock tree (checked each update):
- *   cocaine   → alcohol > 0.3 for > 30s total
+ *   energy   → alcohol > 0.3 for > 30s total
  *   shrooms   → alcohol > 0.4 AND weed > 0.4 simultaneously
  *   lsd       → shrooms bar ever reached >= 0.75
  *   heroin    → distance > 50% of route
- *   rx        → cocaine > 0.5 (simulates "calming down")
+ *   rx        → energy > 0.5 (simulates "calming down")
  *   fentanyl  → heroin bar ever reached >= 0.6
  *   ketamine  → lsd bar ever reached >= 0.5
  */
@@ -47,7 +47,7 @@ export class ViceSystem {
     this.routeProgress    = 0; // 0–1, updated by GameScene
     // Lifetime NPC-crash counter — feeds the rx unlock gate.
     this.npcCrashesTotal   = 0;
-    this.cocainePickupCount = 0; // each pickup permanently raises top speed +4 mph
+    this.energyPickupCount = 0; // each pickup permanently raises top speed +4 mph
     this.pickupCounts       = {};
     // Vices that crossed their unlock gate THIS frame — GameScene drains this
     // to force a guaranteed "first line" of the new vice so the player can
@@ -81,24 +81,27 @@ export class ViceSystem {
   }
 
   /** Restore meta-progress that gates partial unlocks across scene
-   *  restarts.  Right now this is just the meth Phase-1 flag (cocaine has
-   *  ever peaked ≥0.40) — without this, taking a rest stop after a coke
+   *  restarts.  Right now this is just the caffeine Phase-1 flag (energy has
+   *  ever peaked ≥0.40) — without this, taking a rest stop after a energy
    *  spike resets the gate and the player can never get to Phase 2's
    *  30-second clean window. */
   hydrateProgress(saved) {
     if (!saved || typeof saved !== 'object') return;
-    if (saved.methPhase1) this._methPhase1 = true;
-    if (typeof saved.cocainePeak === 'number') {
+    // `?? old-key` = one-time migration from the pre-rename save fields
+    // (methPhase1 / cocainePeak) so existing progress isn't lost.
+    if (saved.caffeinePhase1 ?? saved.methPhase1) this._caffeinePhase1 = true;
+    const _peak = saved.energyPeak ?? saved.cocainePeak;
+    if (typeof _peak === 'number') {
       this.maxReached[VICES.ENERGY] = Math.max(
-        this.maxReached[VICES.ENERGY] ?? 0, saved.cocainePeak);
+        this.maxReached[VICES.ENERGY] ?? 0, _peak);
     }
   }
 
   /** Snapshot meta-progress for the registry. */
   snapshotProgress() {
     return {
-      methPhase1:  !!this._methPhase1,
-      cocainePeak: this.maxReached[VICES.ENERGY] ?? 0,
+      caffeinePhase1: !!this._caffeinePhase1,
+      energyPeak:     this.maxReached[VICES.ENERGY] ?? 0,
     };
   }
 
@@ -120,7 +123,7 @@ export class ViceSystem {
 
   update(dt) {
     let anyActive = false;
-    const cokeLevel = this.levels[VICES.ENERGY] ?? 0;
+    const energyLevel = this.levels[VICES.ENERGY] ?? 0;
     // Custom mode — vice levels are user-set sandbox values, so they
     // hold steady (no decay).  Still tally maxReached + anyActive so
     // bar rendering and combo detection work normally.
@@ -160,15 +163,15 @@ export class ViceSystem {
             decay *= 0.6 + (2.5 - 0.6) * t;       // 0.6 → 2.5
           }
         }
-        // Cocaine speeds up alcohol metabolism (~2× faster at full coke bar)
-        if (id === VICES.SUSHI && cokeLevel > 0.1) {
-          decay *= 1 + cokeLevel * 1.2;
+        // Energy speeds up alcohol metabolism (~2× faster at full energy bar)
+        if (id === VICES.SUSHI && energyLevel > 0.1) {
+          decay *= 1 + energyLevel * 1.2;
         }
         this.levels[id] = Math.max(0, level - decay * dt);
       }
     }
 
-    // Drunk-time tracking (for cocaine unlock)
+    // Drunk-time tracking (for energy unlock)
     if (this.levels[VICES.SUSHI] > 0.3) {
       this.totalDrunkTime += dt;
     }
@@ -210,14 +213,14 @@ export class ViceSystem {
   isPermastoned() { return !!this._weedPermastonedLocked; }
 
   /** Per-frame unlock check.  Updated thresholds per player spec:
-   *    cocaine   → 30s drunk
+   *    energy   → 30s drunk
    *    shrooms   → both alcohol AND weed have ever been ingested (any pickup)
    *    lsd       → shrooms bar ever hit 0.30
    *    heroin    → 20% route progress
-   *    rx        → cocaine bar ever hit 0.30
+   *    rx        → energy bar ever hit 0.30
    *    fentanyl  → heroin bar ever hit 0.50
    *    ketamine  → lsd bar ever hit 0.40
-   *    meth      → cocaine bar hit 0.40 then dropped back to 0 for 30s
+   *    caffeine      → energy bar hit 0.40 then dropped back to 0 for 30s
    *
    *  Once unlocked, vices stay unlocked for the rest of the run — even
    *  through arrests/deaths.  Unlocks persist via the Phaser registry
@@ -280,19 +283,19 @@ export class ViceSystem {
       this._unlock(VICES.SLUSHIE);
     }
 
-    // Meth — special two-phase gate.  Phase 1 fires once cocaine bar
+    // Caffeine — special two-phase gate.  Phase 1 fires once energy bar
     // peaks ≥ 0.40.  Phase 2 then waits for the player to clean out
-    // (cocaine = 0) and stay clean for 30 sustained seconds.
+    // (energy = 0) and stay clean for 30 sustained seconds.
     if (!u[VICES.CAFFEINE]) {
       if (this.maxReached[VICES.ENERGY] >= 0.40) {
-        this._methPhase1 = true;
+        this._caffeinePhase1 = true;
       }
-      if (this._methPhase1) {
+      if (this._caffeinePhase1) {
         if ((this.levels[VICES.ENERGY] ?? 0) <= 0.0001) {
-          this._methCleanTime = (this._methCleanTime ?? 0) + dt;
-          if (this._methCleanTime >= 30) this._unlock(VICES.CAFFEINE);
+          this._caffeineCleanTime = (this._caffeineCleanTime ?? 0) + dt;
+          if (this._caffeineCleanTime >= 30) this._unlock(VICES.CAFFEINE);
         } else {
-          this._methCleanTime = 0;       // reset if any coke shows up again
+          this._caffeineCleanTime = 0;       // reset if any energy shows up again
         }
       }
     }
@@ -352,7 +355,7 @@ export class ViceSystem {
     // ── Cross-vice pickup effects ─────────────────────────────────────
     // Beer lowers each OTHER vice by 5 percentage points only while that
     // bar is above 45%, so it can curb dangerous highs without wiping
-    // early-stage effects. Cocaine burns 7 points off alcohol. Rx
+    // early-stage effects. Energy burns 7 points off alcohol. Rx
     // multiplies every OTHER vice bar by 0.9 (10% off its current amount).
     const dropBy = (other, delta) => {
       this.levels[other] = Math.max(0, (this.levels[other] ?? 0) - delta);
@@ -374,9 +377,9 @@ export class ViceSystem {
     }
 
     // Per-pickup permanent stat counters — read by GameScene for cumulative
-    // top-speed bonuses (+4 mph / cocaine bag, +4 mph / meth pickup) and
+    // top-speed bonuses (+4 mph / energy bag, +4 mph / caffeine pickup) and
     // for Rx-driven NPC traffic-speed shifts (+/-7 mph / Rx pickup).
-    if (id === VICES.ENERGY) this.cocainePickupCount += 1;
+    if (id === VICES.ENERGY) this.energyPickupCount += 1;
     this.pickupCounts[id] = (this.pickupCounts[id] ?? 0) + 1;
 
     // Immediate OD check (2026-06-20) — every OD-capable vice now uses
@@ -392,17 +395,17 @@ export class ViceSystem {
     return { overdose: false, vice: id };
   }
 
-  /** Cocaine speed boost in MPH (additive on top of 120 base).  +4 mph per
+  /** Energy speed boost in MPH (additive on top of 120 base).  +4 mph per
    *  bag picked up, scaled by the CURRENT bar so the boost fades to 0 as the
    *  vice leaves your system (effect is tied to the active high, not lifetime
    *  count). */
-  getCocaineSpeedBonusMPH() {
-    return this.cocainePickupCount * 4 * (this.levels[VICES.ENERGY] ?? 0);
+  getEnergySpeedBonusMPH() {
+    return this.energyPickupCount * 4 * (this.levels[VICES.ENERGY] ?? 0);
   }
 
-  /** Meth speed boost in MPH (+4 mph per pickup), scaled by the current meth
+  /** Caffeine speed boost in MPH (+4 mph per pickup), scaled by the current caffeine
    *  bar so it dissipates as the bar empties. */
-  getMethSpeedBonusMPH() {
+  getCaffeineSpeedBonusMPH() {
     return (this.pickupCounts[VICES.CAFFEINE] ?? 0) * 4 * (this.levels[VICES.CAFFEINE] ?? 0);
   }
 

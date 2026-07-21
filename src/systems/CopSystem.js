@@ -328,7 +328,7 @@ export class CopSystem {
     // WEAPON on a cop is the sole path into 4-5★.  Never reduces below the
     // current level (a low sourceCap can't pull a weapon-earned 5★ down).
     const hardCap = (this.starCapMax != null) ? this.starCapMax : MAX_STARS;
-    // Cocaine "sloppy" multiplier — GameScene stamps phys.cocaineStarMul
+    // Energy "sloppy" multiplier — GameScene stamps phys.energyStarMul
     // onto this._starGainMul each frame so we don't have to plumb the
     // multiplier through every addStar call site.
     // Difficulty.starGainMul (Easy 0.5×) only softens FRACTIONAL drip heat
@@ -336,7 +336,7 @@ export class CopSystem {
     // events — "Failed to pull over! +1★", "WANTED LEVEL ACTIVATED", the
     // fireworks spectacle star — and must land a full DISPLAY star: halving
     // them made the popup promise +1★ while floor(stars) never moved
-    // (2026-07-14 playtest bug).  _starGainMul (cocaine >1× / steroid 0×)
+    // (2026-07-14 playtest bug).  _starGainMul (energy >1× / steroid 0×)
     // still applies to everything.
     const mul  = (this._starGainMul ?? 1)
                * (amount >= 1 ? 1 : Difficulty.starGainMul());

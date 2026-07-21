@@ -5,7 +5,7 @@
  *   - Screen sway / scrollX drift  (alcohol)
  *   - Double vision ghost pass     (alcohol > 0.8)
  *   - Green tint overlay           (weed)
- *   - White flash pulse            (cocaine)
+ *   - White flash pulse            (energy)
  *   - Hue-cycling color overlay    (shrooms / lsd)
  *   - Liquefying world projection  (shrooms > 0.7)
  *   - Dark vignette + drooping lids (heroin / fentanyl)
@@ -86,14 +86,14 @@ export class EffectsSystem {
 
     const alc  = d.get(VICES.SUSHI);
     const weed = d.get(VICES.BURRITO);
-    const coke = d.get(VICES.ENERGY);
+    const energy = d.get(VICES.ENERGY);
     const shrooms = d.get(VICES.GUMMIES);
     const lsd  = d.get(VICES.HOTDOG);
     const hero = d.get(VICES.COMBO);
     const rx   = d.get(VICES.COLDBREW);
     const fent = d.get(VICES.COMA);
     const ket  = d.get(VICES.SLUSHIE);
-    const meth = d.get(VICES.CAFFEINE);
+    const caffeine = d.get(VICES.CAFFEINE);
 
     // High-dose mushrooms: smoothly feed a visual-only liquid-world warp
     // into Road.render(). Keeping this in the projection pass bends pavement,
@@ -120,32 +120,32 @@ export class EffectsSystem {
     }
 
     // ── Combo detection ─────────────────────────────────────────────
-    this._comboSnowCone    = (alc > 0.3 && coke > 0.3);
+    this._comboSnowCone    = (alc > 0.3 && energy > 0.3);
     this._comboTranq       = (hero > 0.3 && ket > 0.3);
     this._comboPsychedelic = (shrooms > 0.3 && lsd > 0.3);
-    this._comboSpeedball   = (coke > 0.3 && hero > 0.3);
+    this._comboSpeedball   = (energy > 0.3 && hero > 0.3);
     let _activeCount = 0;
     if (alc     > 0.3) _activeCount++;
     if (weed    > 0.3) _activeCount++;
-    if (coke    > 0.3) _activeCount++;
+    if (energy    > 0.3) _activeCount++;
     if (shrooms > 0.3) _activeCount++;
     if (lsd     > 0.3) _activeCount++;
     if (hero    > 0.3) _activeCount++;
     if (rx      > 0.3) _activeCount++;
     if (fent    > 0.3) _activeCount++;
     if (ket     > 0.3) _activeCount++;
-    if (meth    > 0.3) _activeCount++;
+    if (caffeine    > 0.3) _activeCount++;
     this._comboApocalypse = (_activeCount >= 4);
 
-    // ── Double Vision (cocaine partially cuts through it) ──────────────
+    // ── Double Vision (energy partially cuts through it) ──────────────
     // Threshold lowered from 0.60 → 0.45 and the ramp tightened so the
     // effect peaks well before the bar is full — at 80%+ alcohol the
     // doubling should be unmistakable, not subtle.
-    const alcNet = Math.max(0, alc - coke * 0.5);  // coke sobers you up some
+    const alcNet = Math.max(0, alc - energy * 0.5);  // energy sobers you up some
     this.doubleVision = alcNet > 0.45 ? clamp((alcNet - 0.45) / 0.30, 0, 1) : 0;
 
-    // ── Camera Sway (alcohol, reduced by cocaine) ─────────────────────
-    const swayAlc = Math.max(0, alc - coke * 0.6);
+    // ── Camera Sway (alcohol, reduced by energy) ─────────────────────
+    const swayAlc = Math.max(0, alc - energy * 0.6);
     if (swayAlc > 0.08) {
       const swayAmp  = swayAlc * 55;
       const swayFreq = 0.8 + swayAlc * 0.8;
@@ -154,8 +154,8 @@ export class EffectsSystem {
       camera.setScroll(lerp(camera.scrollX, 0, 0.1), 0);
     }
 
-    // ── Screen Shake (cocaine burst / crash) ──────────────────────────
-    if (coke > 0.7 && Math.random() < 0.02) {
+    // ── Screen Shake (energy burst / crash) ──────────────────────────
+    if (energy > 0.7 && Math.random() < 0.02) {
       this.triggerShake(80, 0.006);
     }
 
@@ -187,17 +187,17 @@ export class EffectsSystem {
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
-      // Cocaine: pulsing white flash
-      if (coke > 0.15) {
-        const pulse = Math.abs(Math.sin(t * 4.5)) * coke * 0.18;
+      // Energy: pulsing white flash
+      if (energy > 0.15) {
+        const pulse = Math.abs(Math.sin(t * 4.5)) * energy * 0.18;
         this.overlay.fillStyle(0xFFFFFF, pulse);
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
-      // Meth: subtle white contrast pop above 0.4 — sells the wired/sharp
+      // Caffeine: subtle white contrast pop above 0.4 — sells the wired/sharp
       // feel without flashing the player.  Peaks at ~0.024 alpha.
-      if (meth > 0.4) {
-        this.overlay.fillStyle(0xFFFFFF, (meth - 0.4) * 0.04);
+      if (caffeine > 0.4) {
+        this.overlay.fillStyle(0xFFFFFF, (caffeine - 0.4) * 0.04);
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
@@ -1106,30 +1106,30 @@ export class EffectsSystem {
   getPhysics(vices) {
     const alc   = vices.get(VICES.SUSHI);
     const weed  = vices.get(VICES.BURRITO);
-    const coke  = vices.get(VICES.ENERGY);
+    const energy  = vices.get(VICES.ENERGY);
     const shrooms = vices.get(VICES.GUMMIES);
     const lsd   = vices.get(VICES.HOTDOG);
     const hero  = vices.get(VICES.COMBO);
     const fent  = vices.get(VICES.COMA);
     const ket   = vices.get(VICES.SLUSHIE);
     const rx    = vices.get(VICES.COLDBREW);
-    const meth  = vices.get(VICES.CAFFEINE);
+    const caffeine  = vices.get(VICES.CAFFEINE);
 
     const t = this.time;
 
-    // Cocaine burns off some of alcohol's debuffs
-    const alcCokeNet = Math.max(0, alc - coke * 0.55);
+    // Energy burns off some of alcohol's debuffs
+    const alcEnergyNet = Math.max(0, alc - energy * 0.55);
     // Effective alcohol for STEER DRIFT only — first beer (0.07) shouldn't
     // feel impaired.  Deadzone of 0.10 means drift kicks in around the 2nd
     // beer (0.14 → effective 0.04).  Overall magnitude reduced by ⅓
     // vs the pre-deadzone baseline (rescale 1/0.90 × 2/3 ≈ 0.741) so even
     // a full bar drifts gentler than before.
-    const alcDriftAmt = Math.max(0, alcCokeNet - 0.10) * (1 / 0.90) * (2 / 3);
+    const alcDriftAmt = Math.max(0, alcEnergyNet - 0.10) * (1 / 0.90) * (2 / 3);
 
     // Weed only slows the car when it's the ONLY vice active
     const weedAlone  = weed > 0.05
-      && alc < 0.05 && coke < 0.05 && hero < 0.05 && fent < 0.05
-      && shrooms < 0.05 && lsd < 0.05 && rx < 0.05 && ket < 0.05 && meth < 0.05;
+      && alc < 0.05 && energy < 0.05 && hero < 0.05 && fent < 0.05
+      && shrooms < 0.05 && lsd < 0.05 && rx < 0.05 && ket < 0.05 && caffeine < 0.05;
     const weedSpeedPenalty = weedAlone ? weed * 0.22 : 0;
     const weedTimePenalty  = weedAlone ? weed * 0.18 : 0;
 
@@ -1138,8 +1138,8 @@ export class EffectsSystem {
     // multiplier by ~0.083 (10/120).  Applied as a smooth proportional
     // subtraction — no hard cap.
     const baseSpeedMult = clamp(
-      1 + coke * 0.55
-        + meth * 0.45                   // meth: speed boost (jittery wired)
+      1 + energy * 0.55
+        + caffeine * 0.45                   // caffeine: speed boost (jittery wired)
         - hero * 0.5
         - fent * (10 / 12)              // -10 mph per 10 % fent (from 120 mph cap)
         - weedSpeedPenalty
@@ -1150,30 +1150,30 @@ export class EffectsSystem {
     let _speedMult = baseSpeedMult;
     // Tranq combo (hero + ket): final speed × 0.85.
     if (this._comboTranq) _speedMult *= 0.85;
-    // Speedball combo (coke + hero): cocaine pulse fights heroin nod —
+    // Speedball combo (energy + hero): energy pulse fights heroin nod —
     // brief speed boost at nod TROUGH (when nodAmount low), no boost at
     // peak.  Drives the "fighting" sensation.
     if (this._comboSpeedball) {
       const _nod = this._heroNodAmount ?? 0;
-      _speedMult += 0.25 * coke * (1 - _nod);
+      _speedMult += 0.25 * energy * (1 - _nod);
     }
     const speedMult = _speedMult;
 
     return {
       speedMult,
 
-      // Cocaine bumped from +0.2 → +0.45 (sharper, brittle precision).
+      // Energy bumped from +0.2 → +0.45 (sharper, brittle precision).
       steerSensitivity: clamp(
-        1 - alcCokeNet * 0.4
+        1 - alcEnergyNet * 0.4
           - hero * 0.6
           - fent * 0.8
           - ket  * 0.5
-          + coke * 0.45
-          + meth * 0.35,
+          + energy * 0.45
+          + caffeine * 0.35,
         0.1, 1.7
       ),
 
-      // Snow-Cone (alc + coke) suppresses alcohol's swerve 50% but adds
+      // Snow-Cone (alc + energy) suppresses alcohol's swerve 50% but adds
       // a high-freq tremor.  Rx jitter roll bumps swerve too.
       steerDrift: (
           Math.sin(t * 2.1 + 0.5) * alcDriftAmt * 0.80
@@ -1181,20 +1181,20 @@ export class EffectsSystem {
         + Math.sin(t * 0.7 + 1.2) * hero  * 0.3
         + Math.sin(t * 3.2 + 0.9) * fent  * 0.4
         + Math.sin(t * 1.5 + 2.1) * ket   * 0.25
-        + Math.sin(t * 12.0 + 0.3) * meth * 0.55
-        + Math.sin(t * 17.5 + 1.7) * meth * 0.35
-        + (this._comboSnowCone ? Math.sin(t * 8) * 0.2 * alc * coke : 0)
+        + Math.sin(t * 12.0 + 0.3) * caffeine * 0.55
+        + Math.sin(t * 17.5 + 1.7) * caffeine * 0.35
+        + (this._comboSnowCone ? Math.sin(t * 8) * 0.2 * alc * energy : 0)
         + ((this._rxRoll === 2) ? Math.sin(t * 9) * 0.4 * rx : 0)
       ),
 
       // Shrooms back at 0.005 (user wanted the higher road sway restored).
       // Snow-Cone suppresses alcohol curve; Psychedelic combo boosts
       // shrooms 2x.
-      extraCurve: Math.sin(t * 1.8) * alcCokeNet * 0.003
+      extraCurve: Math.sin(t * 1.8) * alcEnergyNet * 0.003
                     * (this._comboSnowCone ? 0.5 : 1.0)
                 + Math.sin(t * 0.6) * shrooms * 0.005
                     * (this._comboPsychedelic ? 2.0 : 1.0)
-                + Math.sin(t * 9.0) * meth    * 0.004,
+                + Math.sin(t * 9.0) * caffeine    * 0.004,
 
       invertSteering: lsd > 0.72,
 
@@ -1213,12 +1213,12 @@ export class EffectsSystem {
       // and a reduced 0.30 scale so 4-beer drift isn't catastrophic.
       alcoholHoldover: alcDriftAmt * 0.30,
 
-      // ── Cocaine wired ──────────────────────────────────────────
-      cameraTremor:   coke * 1.5,           // tiny per-frame shake amplitude
-      cocaineStarMul: 1 + coke * 0.5,       // CopSystem.addStar multiplier
+      // ── Energy wired ──────────────────────────────────────────
+      cameraTremor:   energy * 1.5,           // tiny per-frame shake amplitude
+      energyStarMul: 1 + energy * 0.5,       // CopSystem.addStar multiplier
 
-      // ── Meth + LSD HUD flicker (additive) ──────────────────────
-      hudFlicker: (meth > 0.5 ? (meth - 0.5) * 0.20 : 0)
+      // ── Caffeine + LSD HUD flicker (additive) ──────────────────────
+      hudFlicker: (caffeine > 0.5 ? (caffeine - 0.5) * 0.20 : 0)
                 + (lsd  > 0.5 ? (lsd  - 0.5) * 0.15 : 0),
 
       // ── Weed cushion ───────────────────────────────────────────

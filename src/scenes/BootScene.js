@@ -119,9 +119,6 @@ export class BootScene extends Phaser.Scene {
     // so downstream code can reference manifest keys safely.
     this._fillMissingPlaceholders();
 
-    // (Removed: vice_energy procedural override.  The user is shipping a
-    // real cocaine sprite under public/assets/vices/cocaine.webp now and
-    // the override was clobbering it on every boot.)
 
     // Shared singletons live on the registry.  (Garage / UpgradeShop /
     // BodyShop / TimeOfDay / MissionManager were here previously but
@@ -398,76 +395,6 @@ export class BootScene extends Phaser.Scene {
     g.destroy();
   }
 
-  /** Custom cocaine sprite — clear plastic baggie of white powder with a
-   *  pinched red zip-tie at the top. Far more "vice pickup" than the plain
-   *  white circle the procedural fallback was producing. */
-  _makeCocaineSprite(key) {
-    const w = 64, h = 64;
-    const g = this.make.graphics({ x: 0, y: 0, add: false });
-
-    // Drop shadow
-    g.fillStyle(0x000000, 0.35);
-    g.fillEllipse(w / 2, h - 6, w * 0.7, 6);
-
-    // Baggie body — slightly translucent grey-blue to read as plastic.
-    // Trapezoid shape (narrower at the top where the zip is pinched).
-    g.fillStyle(0xC8DCEA, 0.35);
-    g.fillPoints([
-      { x: w * 0.18, y: h * 0.32 },
-      { x: w * 0.82, y: h * 0.32 },
-      { x: w * 0.92, y: h * 0.92 },
-      { x: w * 0.08, y: h * 0.92 },
-    ], true);
-
-    // White powder filling the bottom 65% of the baggie (settled at base)
-    g.fillStyle(0xFFFFFF, 1);
-    g.fillPoints([
-      { x: w * 0.22, y: h * 0.42 },
-      { x: w * 0.78, y: h * 0.42 },
-      { x: w * 0.88, y: h * 0.88 },
-      { x: w * 0.12, y: h * 0.88 },
-    ], true);
-
-    // Powder texture — soft highlight + lump
-    g.fillStyle(0xF4F4F4, 1);
-    g.fillEllipse(w * 0.36, h * 0.62, w * 0.30, h * 0.16);
-    g.fillStyle(0xE6E6E6, 1);
-    g.fillEllipse(w * 0.62, h * 0.74, w * 0.22, h * 0.10);
-
-    // Top edge of the powder line (slightly curved, gives volume)
-    g.lineStyle(2, 0xCCCCCC, 0.7);
-    g.strokeRect(w * 0.22, h * 0.42, w * 0.56, 1);
-
-    // Plastic highlight running down the right side of the bag
-    g.fillStyle(0xFFFFFF, 0.45);
-    g.fillRect(w * 0.74, h * 0.36, 3, h * 0.50);
-
-    // Pinched neck at the top
-    g.fillStyle(0xC8DCEA, 0.6);
-    g.fillRect(w * 0.34, h * 0.18, w * 0.32, h * 0.16);
-
-    // Red zip-tie / twist closure
-    g.fillStyle(0xC8141C, 1);
-    g.fillRect(w * 0.30, h * 0.18, w * 0.40, h * 0.06);
-    g.fillStyle(0xFF3344, 1);
-    g.fillRect(w * 0.30, h * 0.18, w * 0.40, 2);
-
-    // Tiny shine on the zip
-    g.fillStyle(0xFFFFFF, 0.6);
-    g.fillRect(w * 0.34, h * 0.20, w * 0.06, 1);
-
-    // Outline so it pops against any background
-    g.lineStyle(1, 0x111111, 0.85);
-    g.strokePoints([
-      { x: w * 0.18, y: h * 0.32 },
-      { x: w * 0.82, y: h * 0.32 },
-      { x: w * 0.92, y: h * 0.92 },
-      { x: w * 0.08, y: h * 0.92 },
-    ], true, true);
-
-    g.generateTexture(key, w, h);
-    g.destroy();
-  }
 
   _makeCopPlaceholder(key) {
     // Only cop_police is shipped as a real PNG now; everything else

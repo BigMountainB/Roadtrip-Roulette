@@ -38,7 +38,7 @@ export class CarPhysics {
 
   // ── External controls ────────────────────────────────────────────────────
 
-  /** Vices that boost top speed call this (e.g. cocaine) */
+  /** Vices that boost top speed call this (e.g. energy) */
   setMaxSpeedMultiplier(m) {
     this._maxSpeedMult = m
   }
