@@ -493,11 +493,17 @@ export class EffectsSystem {
         // run, so this never affects the wipers-OFF look).  WIPERS OFF ⇒ the
         // drizzle builds into the heavy, hard-to-see-through sheet.
         const wiperOn = !!ctx.wiperActive;
+        // Wiper POWER (owner 2026-07-21): stock blades barely smear (0.2); the
+        // "New Wiper Blades" upgrade restores full clearing (1.0).  Each wiper-on
+        // clearing multiplier eases from its full-clear value toward 1 (= no
+        // effect) as power drops.
+        const wp  = Math.max(0, Math.min(1, ctx.wiperPower ?? 1));
+        const wOn = (fullMul) => wiperOn ? (1 - (1 - fullMul) * wp) : 1;
         // Fine drizzle — the layer that actually fogs the glass.  Scales with
         // weatherInt/sevT so LIGHT rain stays light; gutted when wipers run.
-        const TARGET_DROPS = Math.floor((40 + 320 * sevT) * weatherInt * (wiperOn ? 0.12 : 1));
+        const TARGET_DROPS = Math.floor((40 + 320 * sevT) * weatherInt * wOn(0.12));
         const MAX_DROPS    = 380;
-        const SPAWN_PER_SEC = (8 + 52 * sevT) * Math.max(0.2, weatherInt) * (wiperOn ? 0.30 : 1);
+        const SPAWN_PER_SEC = (8 + 52 * sevT) * Math.max(0.2, weatherInt) * wOn(0.30);
         this._wsSpawnT += dt;
         const spawnInterval = 1 / Math.max(0.1, SPAWN_PER_SEC);
         // Full-screen coverage (was 110–420, which left a bare strip at
@@ -525,7 +531,7 @@ export class EffectsSystem {
         // read as character, not as the thing that makes it hard to see.  A few
         // per second at the storm peak; slightly fewer while wiping.
         this._wsBigT += dt;
-        const bigPerSec   = (1.0 + 3.5 * sevT) * Math.max(0.25, weatherInt) * (wiperOn ? 0.7 : 1);
+        const bigPerSec   = (1.0 + 3.5 * sevT) * Math.max(0.25, weatherInt) * wOn(0.7);
         const bigInterval = 1 / Math.max(0.05, bigPerSec);
         while (this._wsBigT >= bigInterval && this._wsDrops.length < MAX_DROPS) {
           this._wsBigT -= bigInterval;
@@ -547,7 +553,7 @@ export class EffectsSystem {
         if (ctx.wiperSweepPulse) {
           const survivors = [];
           for (const d of this._wsDrops) {
-            if (Math.random() < 0.80) continue;     // remove the bulk each sweep
+            if (Math.random() < 0.80 * wp) continue;   // stock blades clear far fewer
             d.r     *= 0.55;
             d.alpha *= 0.60;
             d.trail  = (d.trail || 0) * 0.50;        // runners' tails shrink too

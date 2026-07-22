@@ -4068,7 +4068,9 @@ export class GameScene extends Phaser.Scene {
       const wiperSweepPulse = !!this._wiperSweepPulse;
       this._wiperSweepPulse = false;   // one-shot
       if (!this._perf?.noEffects) {
-        this.effects.update(rawDt, this.vices, this.cameras.main, { mile, wiperActive, wiperSweepPulse });
+        // Stock blades are weak (0.2); the "New Wiper Blades" upgrade = full.
+        const wiperPower = this._wiperUpgraded ? 1 : 0.2;
+        this.effects.update(rawDt, this.vices, this.cameras.main, { mile, wiperActive, wiperSweepPulse, wiperPower });
       }
       // Weather / wiper indicator — visible during BOTH rain AND snow.
       // Icon is the custom wiper-blade drawing in drawWiper() above;
@@ -20808,6 +20810,13 @@ export class GameScene extends Phaser.Scene {
     // banners when fresh pursuit/roadblocks spawn (see _updateScannerAlert).
     const polLvl = getInstalledUpgrade?.(save, vehId, 'police')?.level ?? 0;
     this._hasScanner = polLvl >= 2;
+    // Lights & Glass à-la-carte installs (owner 2026-07-21) — cached for the
+    // render/effects hooks: wipers (full clearing), fog lights, headlights,
+    // windshield (crack-free glass).
+    this._wiperUpgraded    = !!getInstalledUpgrade?.(save, vehId, 'wipers');
+    this._hasFogLights     = !!getInstalledUpgrade?.(save, vehId, 'foglights');
+    this._hasNewHeadlights = !!getInstalledUpgrade?.(save, vehId, 'headlights');
+    this._hasNewWindshield = !!getInstalledUpgrade?.(save, vehId, 'windshield');
     return merged;
   }
 
