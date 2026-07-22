@@ -13178,6 +13178,29 @@ export class GameScene extends Phaser.Scene {
         .setAlpha(_fa)
         .setVisible(true);
 
+      // ── TEMP tailgate depth probe (remove after diagnosis) ──────────────
+      // Fires for any NPC lined up horizontally with the player and within
+      // ~130px of its bumper — the tailgating case.  Shows the NPC's contact
+      // Y vs the player bumper Y (_pBotY), whether the crossover FIRED (which
+      // lifts the car above the player), and the real draw order.  If an AHEAD
+      // car (footY < _pBotY) still reads onTop=NPC, the base sort is the issue;
+      // if crossoverFired is true for an ahead car, _pBotY is miscalibrated.
+      if (this.playerSprite) {
+        const _ps = this.playerSprite;
+        if (Math.abs(proj.sx - _ps.x) < (proj.sw + _ps.displayWidth) * 0.5
+            && Math.abs(proj.sy - _pBotY) < 130) {
+          const dl = this.children ?? this.sys.displayList;
+          const nIdx = dl.getIndex(s), pIdx = dl.getIndex(_ps);
+          console.log('[depthdbg]',
+            'NPC', useTex, 'footY', proj.sy.toFixed(0), 'depth', s.depth.toFixed(3), 'idx', nIdx,
+            '|| player _pBotY', _pBotY.toFixed(0), 'depth', _ps.depth.toFixed(3), 'idx', pIdx,
+            '|| crossoverFired', (proj.sy >= _pBotY),
+            '|| ahead?', (proj.sy < _pBotY),
+            '|| onTop', nIdx > pIdx ? 'NPC' : 'PLAYER',
+            '|| sortFlag', dl.sortChildrenFlag);
+        }
+      }
+
       // Per-slot masked headlight Graphics — clear it for THIS frame.
       // (Same-direction traffic gets beams drawn here; oncoming /
       // cops / wrecks just leave it empty.)  The Graphics has a
@@ -20100,8 +20123,15 @@ export class GameScene extends Phaser.Scene {
     };
     if (save.slotUsed?.(i)) {
       selectAndRefresh();
+    } else if (!this._titleTut) {
+      // Tutorial skipped — just activate the blank slot + its music; the plate
+      // NAME is asked once at START (see _startGameplay's plate guard), so
+      // picking your driver/music doesn't interrupt you with a name prompt
+      // (owner 2026-07-21).
+      selectAndRefresh();
     } else {
-      // Blank slot → name it via the DOM modal, then make it active.
+      // Inside the guided tutorial: name it now via the DOM modal so the
+      // tutorial's plate step (which polls needsEntry) can advance.
       window.showPlateModal?.({
         current: '',
         onDone: (name) => {
