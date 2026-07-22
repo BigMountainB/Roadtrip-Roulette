@@ -114,6 +114,44 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-22 — Rest-stop business map, dealer split, EV-charging removal, NPC depth fix, plate mandatory + uniqueness Worker — SHIPPED 2026-07-22
+Batch pushed together with the 4 earlier local commits (money double-spend fix `eb1a625`, plate defer `a7b79c5`,
+plate mandatory + worker scaffold `397c335`/`8ee00fb`).
+- **Per-stop business list (owner table)**: all 19 `REST_STOPS.amenities` in [constants.js](src/constants.js)
+  now carry the exact businesses the owner specified per stop (e.g. Seattle = CarGo·Lord·Sam's·Park&Ride·
+  Gas-N-Sip·AM/BM; Hatton = Huff's·AM/BM). Amenity keys: `gas`(Huff's) `cargo`(CarGo) `hunting`(CowBella)
+  `camp`(AOK) `lord` `suck` `parkride` `vices`(Gas-N-Sip) `ambm`.
+- **Dealers split into two businesses**: `lord` (Lord Motors) + `suck` (Sam's Used Car Kingdom) are separate
+  landing placards — a stop can have either or BOTH (Seattle/Bellevue have both). Both tiles open the shared
+  ACCESSORIES menu; header titles itself with the tapped brand (`_activeDealerBrand` in
+  [RestStopScene.js](src/scenes/RestStopScene.js)). Regional `dealer` key kept only as vestigial fallback.
+  Owner then added Lord Motors to Cle Elum (west side, mile 84). Phone-map `BIZ_LOGO` in [index.html](index.html)
+  switched to the explicit per-amenity mapping (isWest now unused).
+- **EV charging REMOVED** (car is always gas): FAST CHARGE/NO CHARGER item, `hasCharger()`, the `charge`
+  buy-handler + its ad path (`chargeAdMs`), `SHOP_VICES.charge` pool, and `CHARGE_COST_FACTOR`/
+  `CHARGE_AD_SECONDS` constants all deleted. CarGo tab = gig hub (hitchhikers past mi 18) + bottled water
+  (water added so the tab is never empty at early west stops). Gas refuel untouched. NOTE: Lord Motors still
+  *branded* EV (`carFuel: 'electric'` metadata on the vestigial dealer path) — cosmetic only.
+- **NPC-over-player layering FIX** (owner: "in-front cars display on top of the player, persisted since the
+  DUI fork"): removed the 2026-07-20 screen-Y painter's crossover in `_renderVehicles`
+  ([GameScene.js](src/scenes/GameScene.js) ~L13160). The forward pass culls everything behind the player
+  (`relZ < nearCull`), so every car it draws is AHEAD in world space — the crossover's "bumper below player's
+  bumper ⇒ behind ⇒ paint over (depth 9.96+)" misfired on close tailgated cars + downhill-compressed
+  projections. NPC bodies now always ≤9.83 < player 9.95; behind-cars exist only in the mirror pass. Verified
+  outline rim (depth−0.005), ghost (−0.01), headlight gfx (5), cop lights (9.75) all sit under the player.
+  TEMP tailgate console-log probe deleted. **Playtest check: tailgate closely + follow a car downhill.**
+- **Plate mandatory**: `showPlateModal({required:true})` (CANCEL hidden, Escape/backdrop blocked) at first-run
+  START + tutorial plate step — no blank/default name can reach a run. Settings rename stays dismissible.
+- **Plate-uniqueness backend scaffold** in `worker/`: CF Worker + D1 (`plate_norm` UNIQUE = uppercase
+  alphanumeric ≤8) matching the CloudSave.js contract (save/plate/leaderboard). **NOT deployed** — saved
+  Pages token can't do Workers/D1 (auth error 10000); owner must `wrangler login` + follow worker/README.md,
+  or drop a scoped token in worker/.cloudflare.env. Until then uniqueness is NOT enforced.
+- **Music files renamed on disk** to lowercase/snake_case (`Norteno/Almas de la Orilla.mp3` →
+  `norteno/almas_de_la_orilla.mp3`, 39 files); AudioSystem paths verified to match, no stale refs.
+- Also in this push from earlier sessions: missions pay 5× (`PAYOUT_MULT`), donut-cop slower recede, gas-light
+  icon on analog gauge, upgrade rebalance HP wiring, speed-bonus band (cruise ±15%), road-rage at alertness 0,
+  Lawyer/Plug removal, coffee/caffeine rename, tutorial reorder, wiper-next-to-accel, HUD layout v9.
+
 ### 2026-07-19 (pt 5) — One-vehicle model + explicit speed table + survival reworks — LOCAL (unpushed, commit `55d8914`)
 Owner batch during traits playtest. **The game now has ONE vehicle — the beater** — whose look + traits come
 from the SELECTED genre; you "choose" a car by choosing/unlocking a genre and you upgrade that single car.

@@ -624,6 +624,10 @@ export class CopSystem {
             cop.fleeing        = true;
             cop._fleeNoSwerve  = false;     // uses the positional recede, not coal's fade
             cop._donutLure     = 0;         // marks a donut flee (no shoulder swerve); NOT steered anymore
+            // Freeze the cruiser's on-screen SIZE at the moment the box lands
+            // (clamped to the projection floor). The render pins draw depth here
+            // so the cop slides straight DOWN without shrinking (owner 2026-07-21).
+            cop._donutHoldRel  = Math.max(rel, 1500);
             cop._donutFleeDelay = 1;        // hold on-screen 1s before dropping back (owner 2026-07-19)
             cop._fleeTimer     = FLEE_MAX_SEC;
             cop.trapPursuit   = false;
@@ -1073,6 +1077,10 @@ export class CopSystem {
         // so a close cop recedes straight off the bottom instead of jumping
         // forward/shrinking then vanishing (owner 2026-07-17).
         coalFlee:    !!(cop.fleeing && cop._fleeNoSwerve),
+        // Donut flee: the render pins draw depth at donutHoldRel so the cruiser
+        // keeps its size and slides straight off the bottom (owner 2026-07-21).
+        donutFlee:    !!(cop.fleeing && cop._donutLure != null),
+        donutHoldRel: cop._donutHoldRel ?? 1500,
       }))
       // Fleeing cops stay in the render list through their whole synthetic
       // exit (even once rel drops below the projection floor / behind the

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {
   SCREEN_W, SCREEN_H, VICES, VICE_CONFIG,
   VEHICLES, REST_STOPS,
-  GAS_USD_PER_MI, CHARGE_COST_FACTOR, GAS_ROBBERY_CHANCE, GAS_ROBBERY_FRAC,
+  GAS_USD_PER_MI, GAS_ROBBERY_CHANCE, GAS_ROBBERY_FRAC,
   HUD_OFFSET_X,
 } from '../constants.js';
 import { ITEM_FX } from '../systems/SurvivalSystem.js';
@@ -124,7 +124,6 @@ const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
 const SHOP_VICES = {
   gas:     ['sushi', 'burrito'],                       // Beer + weed at the pump
   hunting: [],                                       // Cowbellas = hunting gear only, no food
-  charge:  ['gummies', 'hotdog', 'burrito'],                // Hippie EV crowd
   camp:    ['coma', 'slushie', 'caffeine'],          // Sketchy back-country
   dealer:  ['energy'],                               // Dealership = blow
 };
@@ -192,9 +191,8 @@ const SECTIONS = {
     // a function of the player's current gas tank.
     items: [],
   },
-  // CarGo — co-located with Huff's at the west gas stops. Huff's is gas-only, so
-  // the EV FAST CHARGER lives here now; past Issaquah it's also the gig hub
-  // (hitchhikers + ready drop-offs). Items populated dynamically in create().
+  // CarGo — the gig hub: past Issaquah it carries hitchhikers + ready
+  // drop-offs (plus a bottled water). Items populated dynamically in create().
   cargo: {
     label: '📦  CARGO',
     items: [],
@@ -230,6 +228,16 @@ const SECTIONS = {
     label: '🏬  DEALER',
     items: [],
   },
+  // Lord Motors / Sam's — two landing placards that both open ACCESSORIES
+  // (dealer_acc) directly; items:[] since they're entry tiles, not menus.
+  lord: {
+    label: '🏬  DEALER',
+    items: [],
+  },
+  suck: {
+    label: '🏬  DEALER',
+    items: [],
+  },
   dealer_acc: {
     label: '🔧  ACCESSORIES',
     items: [],   // populated dynamically per-vehicle in create()
@@ -258,17 +266,8 @@ const SECTIONS_PRISTINE = Object.fromEntries(
 
 // Landing tab order (brand placards).  dealer_acc / dealer_cars are
 // reached via the Dealer chooser, not the landing.
-const TAB_ORDER = ['gas', 'cargo', 'hunting', 'camp', 'dealer', 'parkride', 'vices', 'ambm'];
+const TAB_ORDER = ['gas', 'cargo', 'hunting', 'camp', 'lord', 'suck', 'parkride', 'vices', 'ambm'];
 const ALL_SECTIONS = ['gas', 'cargo', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'parkride', 'vices', 'ambm'];
-
-// Charger availability — west-side rest stops carry the CarGo brand
-// which sells both gas AND charging.  East-side stops are Huff's,
-// gas only (per user spec).  REST_STOPS is canonical order; west = the
-// first three (Bellevue / Issaquah / North Bend) by mile.
-function hasCharger(stopId) {
-  const rs = REST_STOPS.find(r => r.id === stopId);
-  return !!(rs && rs.mileage < 100);
-}
 
 // Per-stop brand catalog — west-side gets the cleaner brands (CarGo +
 // Lord Motors EV), east-side the dustier set (Huff's + Sam's gas).
@@ -285,6 +284,13 @@ function brandsForStop(stop) {
     cargo: { name: 'CarGo',      logo: 'biz_cargo' },
     hunting: { name: 'CowBella',   logo: 'biz_cowbellas' },
     camp:    { name: 'AOK Camp',   logo: 'biz_aok' },
+      // Two distinct dealerships now (owner 2026-07-22): a stop can carry
+    // either or both, listed explicitly per-stop in REST_STOPS.amenities.
+    // Lord Motors (EV) and Sam's Used Car Kingdom (gas) are no longer
+    // auto-picked by region.  `dealer` (regional) kept only as a fallback
+    // for the vestigial Cars chooser, which the landing tiles bypass.
+    lord:    { name: 'Lord Motors',           logo: 'biz_lord', carFuel: 'electric' },
+    suck:    { name: "Sam's Used Car Kingdom", logo: 'biz_suck', carFuel: 'gas' },
     dealer:  isWest
       ? { name: 'Lord Motors',          logo: 'biz_lord', carFuel: 'electric' }
       : { name: "Sam's Used Car Kingdom", logo: 'biz_suck', carFuel: 'gas' },
@@ -476,8 +482,7 @@ export class RestStopScene extends Phaser.Scene {
     SECTIONS.ambm.items  = [...viceItems(this.registry?.get?.('viceUnlocks')), restroomItem(true)];
 
     // ── GAS section: dynamic pricing ─────────────────────────────────
-    // Refuel cost = missing miles × $0.333.  Charge cost = 35% of that
-    // (only at chargers — every other rest stop).  Pre-tax preview;
+    // Refuel cost = missing miles × $0.333.  Pre-tax preview;
     // robbery roll happens on confirm.
     const _missingMi = Math.max(0, this._gasMaxMi - this._gasMi);
     // Per-gallon price DRIFTS along the trip (±14%, deterministic per stop —
@@ -491,9 +496,6 @@ export class RestStopScene extends Phaser.Scene {
     const _galRaw     = _missingMi / 30;
     const _galDisplay = Math.ceil(_galRaw * 4) / 4;
     const _refuelCost = Math.max(1, Math.round(_galDisplay * _perGal));
-    const _chargeCost = Math.max(1, Math.round(_refuelCost * CHARGE_COST_FACTOR));
-    const _isCharger  = hasCharger(this._stop?.id);
-    const _vehFuel    = VEHICLES[this._vehicleId]?.fuel ?? 'gas';
     const gasItems = [];
     // Shared REFUEL item — added to the gas tab AND to Gas-N-Sip / AM/BM below
     // (owner 2026-07-19: those convenience stops pump gas too). ONE object so
@@ -506,7 +508,6 @@ export class RestStopScene extends Phaser.Scene {
       : { id: 'refuel', label: '⛽  TANK FULL', cost: 0,
           desc: 'No refuel needed.', payload: {} };
     gasItems.push(refuelItem);
-    // (EV FAST CHARGE moved to the CarGo tab below — Huff's is gas-only now.)
 
     // ── Pint of oil — knocks 5% off the engine heat (2026-07-16). ──
     gasItems.push({
@@ -527,20 +528,13 @@ export class RestStopScene extends Phaser.Scene {
     SECTIONS.vices.items = [refuelItem, waterItem(10), ...(SECTIONS.vices.items ?? [])];
     SECTIONS.ambm.items  = [refuelItem, waterItem(10), ...(SECTIONS.ambm.items  ?? [])];
 
-    // ── CarGo tab (owner 2026-07-19): the EV FAST CHARGER lives here now (Huff's
-    // is gas-only), and past Issaquah (mi 18) it's the gig hub — hitchhikers to
-    // pick up. Ready drop-offs still collect via their own Ch.8 panel. ──
+    // ── CarGo tab (owner 2026-07-22): EV charging removed — CarGo is now the
+    // gig hub (hitchhikers, past Issaquah mi 18) plus a bottled water so the
+    // tab is never empty at the early west stops. Ready drop-offs still
+    // collect via their own Ch.8 panel. ──
     if (SECTIONS.cargo) {
-      const cargoItems = [];
-      cargoItems.push(_isCharger
-        ? { id: 'charge', label: '🔌  FAST CHARGE', cost: _chargeCost,
-            desc: _vehFuel === 'electric'
-              ? 'Watch ad (5s) + party-clock penalty. Cheaper but slower.'
-              : 'Available — but your vehicle is gas-powered.',
-            payload: _vehFuel === 'electric' ? { charge: true, chargeMi: _missingMi } : {} }
-        : { id: 'charge', label: '🔌  NO CHARGER', cost: 0,
-            desc: 'This CarGo has no charger.', payload: {} });
-      // Gig hub opens past Issaquah — early stops are charge-only.
+      const cargoItems = [waterItem(10)];
+      // Gig hub opens past Issaquah.
       if ((this._stop?.mileage ?? 0) > 18) {
         cargoItems.push({
           id: 'hitch', label: '🧍  PICK UP HITCHHIKER',
@@ -679,17 +673,6 @@ export class RestStopScene extends Phaser.Scene {
     // Campgrounds always have a free restroom.
     SECTIONS.camp.items    = [...SECTIONS.camp.items,    restroomItem(false)];
     SECTIONS.dealer_acc.items = [...SECTIONS.dealer_acc.items, ...shopViceItems('dealer', _pickupCounts)];
-    // Charging-station vices only appear if the stop actually has a
-    // charger (CarGo west-side stops); add to the gas tab so they
-    // sit alongside refuel/charge.
-    if (_isCharger) {
-      // Dedupe against gas shop's own vices — weed overlaps both pools
-      // and the user was seeing it listed twice at chargers.
-      const _alreadyListed = new Set(SECTIONS.gas.items.map(it => it.id));
-      const _chargeExtras  = shopViceItems('charge', _pickupCounts)
-        .filter(it => !_alreadyListed.has(it.id));
-      SECTIONS.gas.items = [...SECTIONS.gas.items, ..._chargeExtras];
-    }
 
     // ── Background — blue highway services sign ─────────────────────
     // Mimics the real-world blue services placard (the user's reference
@@ -948,7 +931,7 @@ export class RestStopScene extends Phaser.Scene {
         img.setDisplaySize(baseW * k, baseH * k);
         this._landingObjs.push(img);
       } else {
-        const accentFor = { gas: 0xFFCC22, cargo: 0x0E9488, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, vices: 0x9A36CC, parkride: 0x1E5BB8 };
+        const accentFor = { gas: 0xFFCC22, cargo: 0x0E9488, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, lord: 0xCC1122, suck: 0x8A5A2B, vices: 0x9A36CC, parkride: 0x1E5BB8 };
         const accent = accentFor[key] ?? 0x888888;
         const strip = this.add.rectangle(logoArea.x, logoArea.y, logoArea.w, logoArea.h, accent, 1)
           .setOrigin(0, 0);
@@ -972,10 +955,15 @@ export class RestStopScene extends Phaser.Scene {
       card.on('pointerdown', (ptr) => {
         ptr.event?.stopPropagation?.();
         // DEALER no longer sells CARS (owner 2026-07-19 — one vehicle, the
-        // genre beater), so its tile opens ACCESSORIES/upgrades directly rather
-        // than the old Cars/Accessories chooser.
-        if (key === 'dealer') this._showSection('dealer_acc');
-        else                  this._showSection(key);
+        // genre beater), so a dealer tile opens ACCESSORIES/upgrades directly
+        // rather than the old Cars/Accessories chooser.  Both Lord Motors and
+        // Sam's route here; remember which so the header shows that brand.
+        if (key === 'dealer' || key === 'lord' || key === 'suck') {
+          this._activeDealerBrand = stopBrands[key]?.name ?? null;
+          this._showSection('dealer_acc');
+        } else {
+          this._showSection(key);
+        }
       });
     });
 
@@ -1639,6 +1627,9 @@ export class RestStopScene extends Phaser.Scene {
   /** Brand (shop) name for a section key, or null where no brand exists
    *  (e.g. dealer_acc).  dealer_cars titles itself as the dealer brand. */
   _shopNameFor(key) {
+    // ACCESSORIES is shared by both dealerships — title it with whichever
+    // dealer placard was tapped (Lord Motors / Sam's), set on tile click.
+    if (key === 'dealer_acc') return this._activeDealerBrand ?? null;
     const brandKey = key === 'dealer_cars' ? 'dealer' : key;
     return this._brands?.[brandKey]?.name ?? null;
   }
@@ -1973,11 +1964,6 @@ export class RestStopScene extends Phaser.Scene {
         this._refreshScore();
         this._setStatus?.('💀 You were robbed when counting your cash', '#FF4444', true);
       }
-    }
-    if (p.charge) {
-      this._purchases.refuelToFull = true;     // tank fills the same way
-      this._purchases.chargeAdMs   = 5000;     // 5-sec ad screen on resume
-      this._purchases.partyClockPenalty = (this._purchases.partyClockPenalty ?? 0) + 60;
     }
     if (p.sleep) {
       // NAP IT OFF: alertness-only now (owner 2026-07-16). No vice cut, no

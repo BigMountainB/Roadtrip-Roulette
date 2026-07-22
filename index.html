@@ -2451,13 +2451,17 @@
       // rest-stop screens: CarGo/Huff's gas, Lord/SUCK dealer, etc.).
       // Filenames + display names mirror RestStopScene's brandsForStop()
       // and AssetManifest (biz_* keys → public/assets/businesses/*.png).
+      // Explicit per-amenity logo map (matches the game's brandsForStop).
+      // Each business is its own amenity key now — gas is always Huff's,
+      // cargo is CarGo, and the two dealerships (lord / suck) are listed
+      // per-stop rather than auto-picked by region.  isWest unused.
       const BIZ_LOGO = (a, isWest) => ({
-        gas:     isWest ? { file: 'cargo.png', name: 'CarGo' }
-                        : { file: 'huffs.png', name: "Huff's Gas" },
+        gas:     { file: 'huffs.png',          name: "Huff's Gas" },
+        cargo:   { file: 'cargo.png',          name: 'CarGo' },
         hunting: { file: 'cowbellas.png',      name: 'CowBella' },
         camp:    { file: 'aok.png',            name: 'AOK Camp' },
-        dealer:  isWest ? { file: 'lord.png',  name: 'Lord Motors' }
-                        : { file: 'suck.png',  name: "Sam's Used Car Kingdom" },
+        lord:    { file: 'lord.png',           name: 'Lord Motors' },
+        suck:    { file: 'suck.png',           name: "Sam's Used Car Kingdom" },
         vices:   { file: 'gasnsip.png',        name: 'Gas-N-Sip' },
         ambm:    { file: 'am_bm.png',          name: 'AM/BM' },
         parkride: { file: 'park-and-ride.png', name: 'Metro Park & Ride' },

@@ -2149,9 +2149,7 @@ export class GameScene extends Phaser.Scene {
           // recompute handling modifiers so it affects the drive immediately.
           if (buys.upgradeRecompute) this._recomputeUpgradeFx();
           // ── Phase 2-4 effects on resume ─────────────────────────
-          // Refuel / charge — fill the tank.  Both purchases set the
-          // same flag.  Charge additionally sets `chargeAdMs` (handled
-          // below as a black-screen ad).
+          // Refuel — fill the tank via the refuelToFull flag.
           if (buys.refuelToFull) {
             // Defer the real fill to the first update frame: by then the
             // reserve-tank upgrade has expanded gasMaxMi to its FINAL value, so
@@ -2261,11 +2259,11 @@ export class GameScene extends Phaser.Scene {
               this._strandedShown = false;
             }
           }
-          // Sleep / charge ad — show a black-screen ad for buys.sleepAdMs
-          // or buys.chargeAdMs ms, then resume gameplay.  Pause input
-          // during the ad.  Ad time is in REAL ms but is gated by the
-          // game pause flag so it doesn't progress the world either.
-          const adMs = (buys.sleepAdMs ?? 0) + (buys.chargeAdMs ?? 0);
+          // Sleep ad — show a black-screen ad for buys.sleepAdMs ms, then
+          // resume gameplay.  Pause input during the ad.  Ad time is in REAL
+          // ms but is gated by the game pause flag so it doesn't progress
+          // the world either.
+          const adMs = (buys.sleepAdMs ?? 0);
           if (adMs > 0) {
             this._showAdScreen?.(adMs);
           }
@@ -13161,18 +13159,13 @@ export class GameScene extends Phaser.Scene {
       let depth = (cameraInTunnel && inTunnel)
         ? 9.83
         : (inTunnel ? Math.min(baseDepth, 9.80) : baseDepth);
-      // Player-relative painter's sort (owner 2026-07-20): NPC sprites are
-      // origin (0.5, 1), so their bumper sits at proj.sy.  A car whose bumper
-      // is at or BELOW the player's bumper (proj.sy >= player y) is nearer the
-      // camera than the player — i.e. BEHIND the player car — so it must paint
-      // OVER the player (depth > the player's 9.95).  A car whose bumper is
-      // HIGHER on screen is AHEAD, so it stays behind the player.  Nearer
-      // (lower-on-screen) behind-cars get a higher depth so they still sort
-      // correctly among themselves.
-      const _pBotY = this.playerSprite?.y ?? (SCREEN_H - 130);
-      if (proj.sy >= _pBotY) {
-        depth = 9.96 + Math.min(0.5, (proj.sy - _pBotY) / Math.max(1, SCREEN_H));
-      }
+      // NO player-relative crossover (owner 2026-07-22): this render pass
+      // culls everything behind the player (relZ < nearCull), so every car
+      // drawn here is AHEAD in world space and must paint UNDER the player
+      // sprite (depth 9.95).  The old screen-Y crossover ("bumper below the
+      // player's bumper ⇒ behind ⇒ paint over") misfired on close tailgated
+      // cars and downhill-compressed projections, stamping in-front cars on
+      // top of the player.  Cars actually behind exist only in the mirror.
       s.setPosition(proj.sx, proj.sy)
         .setDisplaySize(targetW, targetH)
         .setTint(color)
@@ -13180,29 +13173,6 @@ export class GameScene extends Phaser.Scene {
         .setDepth(depth)
         .setAlpha(_fa)
         .setVisible(true);
-
-      // ── TEMP tailgate depth probe (remove after diagnosis) ──────────────
-      // Fires for any NPC lined up horizontally with the player and within
-      // ~130px of its bumper — the tailgating case.  Shows the NPC's contact
-      // Y vs the player bumper Y (_pBotY), whether the crossover FIRED (which
-      // lifts the car above the player), and the real draw order.  If an AHEAD
-      // car (footY < _pBotY) still reads onTop=NPC, the base sort is the issue;
-      // if crossoverFired is true for an ahead car, _pBotY is miscalibrated.
-      if (this.playerSprite) {
-        const _ps = this.playerSprite;
-        if (Math.abs(proj.sx - _ps.x) < (proj.sw + _ps.displayWidth) * 0.5
-            && Math.abs(proj.sy - _pBotY) < 130) {
-          const dl = this.children ?? this.sys.displayList;
-          const nIdx = dl.getIndex(s), pIdx = dl.getIndex(_ps);
-          console.log('[depthdbg]',
-            'NPC', useTex, 'footY', proj.sy.toFixed(0), 'depth', s.depth.toFixed(3), 'idx', nIdx,
-            '|| player _pBotY', _pBotY.toFixed(0), 'depth', _ps.depth.toFixed(3), 'idx', pIdx,
-            '|| crossoverFired', (proj.sy >= _pBotY),
-            '|| ahead?', (proj.sy < _pBotY),
-            '|| onTop', nIdx > pIdx ? 'NPC' : 'PLAYER',
-            '|| sortFlag', dl.sortChildrenFlag);
-        }
-      }
 
       // Per-slot masked headlight Graphics — clear it for THIS frame.
       // (Same-direction traffic gets beams drawn here; oncoming /
@@ -13344,6 +13314,14 @@ export class GameScene extends Phaser.Scene {
         exitT   = cop.relativePos >= COAL_FLOOR ? 0
                 : Math.min(1, (COAL_FLOOR - cop.relativePos) / 2600);
         drawRel = Math.max(cop.relativePos, COAL_FLOOR);
+      } else if (cop.donutFlee) {
+        // Donut flee (owner 2026-07-21): keep the cruiser's on-screen SIZE fixed
+        // and slide it straight DOWN off the bottom — no perspective shrink.
+        // Draw depth is pinned at the size it had when the box landed; the
+        // existing fleeExit drives the downward slide (and matches the
+        // despawn/cull, so there's no mid-screen pop).
+        exitT   = cop.fleeExit ?? 0;
+        drawRel = cop.donutHoldRel ?? FLEE_EXIT_HOLD_REL;
       } else {
         exitT   = cop.fleeing ? (cop.fleeExit ?? 0) : 0;
         drawRel = exitT > 0 ? Math.max(cop.relativePos, FLEE_EXIT_HOLD_REL) : cop.relativePos;
@@ -15174,18 +15152,64 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Stock-windshield wear (owner 2026-07-21): a few rock chips scattered high
-   *  on the glass + a jagged crack running along the bottom.  Subtle, so it
-   *  reads as an old beater's glass, not damage — cleared by New Windshield. */
+  /** Stock-windshield wear (owner 2026-07-21): one smooth, organic hairline
+   *  crack + two rock chips, styled after a real windshield.  The crack runs
+   *  up from the lower-left, then curves right to the upper-right, and carries
+   *  a faint parallel "ghost" line — the slight double-image light makes as it
+   *  refracts through split glass.  Subtle; cleared by the New Windshield. */
   _drawStockGlassChips(g) {
-    // Rock chips — small radiating stars with a bright pit at the center.
+    // Glass bounds inside the 800×450 view (above the dashboard).
+    const L = 42, R = 760, T = 48, B = 388;
+    const H = B - T;
+
+    // ── Long crack path ───────────────────────────────────────────────
+    // Lower-left corner → straight up ~20% of the glass → slow rightward
+    // curve → ends in the (middle) upper-right.  Sampled from a cubic Bézier
+    // so the sweep is smooth, not jagged.
+    const startX = L + 14,  startY = B - 6;      // lower-left corner
+    const upY    = startY - H * 0.20;            // top of the straight run (~20%)
+    const endX   = R - 120, endY = T + 26;       // middle upper-right
+    const c1x = startX + 78, c1y = upY - H * 0.26;
+    const c2x = endX - 250,  c2y = T + 74;
+    const pts = [{ x: startX, y: startY }, { x: startX + 3, y: upY }];
+    const p0x = startX + 3, p0y = upY;
+    const STEPS = 46;
+    for (let i = 1; i <= STEPS; i++) {
+      const t = i / STEPS, u = 1 - t;
+      pts.push({
+        x: u*u*u*p0x + 3*u*u*t*c1x + 3*u*t*t*c2x + t*t*t*endX,
+        y: u*u*u*p0y + 3*u*u*t*c1y + 3*u*t*t*c2y + t*t*t*endY,
+      });
+    }
+
+    // Stroke the path, optionally shifted along its local normal so a second
+    // pass reads as a parallel line (the double-vision ghost).
+    const strokePath = (offset, w, col, alpha) => {
+      g.lineStyle(w, col, alpha);
+      g.beginPath();
+      for (let i = 0; i < pts.length; i++) {
+        let ox = pts[i].x, oy = pts[i].y;
+        if (offset) {
+          const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+          const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+          ox += (-dy / len) * offset;
+          oy += ( dx / len) * offset;
+        }
+        if (i === 0) g.moveTo(ox, oy); else g.lineTo(ox, oy);
+      }
+      g.strokePath();
+    };
+    strokePath(0.6, 2.2, 0x141B26, 0.32);   // dark fracture shadow (slightly offset)
+    strokePath(0,   1.0, 0xEAF6FF, 0.52);   // bright main fracture line
+    strokePath(2.4, 0.8, 0xCFE6FF, 0.22);   // faint parallel ghost → double vision
+
+    // ── Rock chips — upper-right and lower-right ───────────────────────
     const chips = [
-      { x: 250, y: 122, r: 9, arms: 6 },
-      { x: 566, y: 92,  r: 7, arms: 5 },
-      { x: 402, y: 168, r: 6, arms: 5 },
+      { x: R - 72, y: T + 48, r: 8, arms: 6 },   // upper-right
+      { x: R - 46, y: B - 60, r: 7, arms: 5 },   // lower-right
     ];
     for (const c of chips) {
-      g.lineStyle(1, 0x1A222E, 0.45);
+      g.lineStyle(1, 0x1A222E, 0.42);
       for (let a = 0; a < c.arms; a++) {
         const ang = a * (Math.PI * 2 / c.arms) + c.x * 0.017;
         g.beginPath();
@@ -15193,27 +15217,10 @@ export class GameScene extends Phaser.Scene {
         g.lineTo(c.x + Math.cos(ang) * c.r, c.y + Math.sin(ang) * c.r);
         g.strokePath();
       }
-      g.fillStyle(0xDDE8F2, 0.38); g.fillCircle(c.x, c.y, 1.6);
-      g.fillStyle(0x1A222E, 0.30); g.fillCircle(c.x, c.y, 0.9);
+      g.fillStyle(0xDDE8F2, 0.40); g.fillCircle(c.x, c.y, 1.8);   // bright pit
+      g.fillStyle(0x1A222E, 0.32); g.fillCircle(c.x, c.y, 0.9);   // dark core
+      g.lineStyle(0.8, 0xCFE6FF, 0.20); g.strokeCircle(c.x, c.y, c.r * 0.5);  // glassy ring
     }
-    // Bottom crack — a jagged line wandering across the lower glass, with a
-    // couple of short offshoots, drawn dark-then-bright like a real fracture.
-    const cy = 372, x0 = 118, x1 = 604, segs = 11;
-    const pts = [];
-    for (let i = 0; i <= segs; i++) {
-      const t = i / segs;
-      pts.push({ x: x0 + (x1 - x0) * t, y: cy + Math.sin(i * 2.3) * 7 + Math.sin(i * 0.7) * 4 });
-    }
-    const stroke = (w, col, alpha) => {
-      g.lineStyle(w, col, alpha);
-      g.beginPath(); g.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
-      g.strokePath();
-      g.beginPath(); g.moveTo(pts[3].x, pts[3].y); g.lineTo(pts[3].x + 14, pts[3].y - 22); g.strokePath();
-      g.beginPath(); g.moveTo(pts[7].x, pts[7].y); g.lineTo(pts[7].x - 12, pts[7].y - 18); g.strokePath();
-    };
-    stroke(2.2, 0x161D28, 0.40);   // dark base
-    stroke(1,   0xEAF6FF, 0.48);   // bright fracture
   }
 
   _projectVehicle(relativeZ, laneOffset, playerX) {

@@ -30,28 +30,44 @@ const STATION_TRACKS = {
     'assets/music/hiphop_phonk/smoke_sparks.mp3',
     'assets/music/hiphop_phonk/toxic_cadence.mp3',
   ],
-  'ARCADE': [
-    'assets/music/arcade/8-bit_bounce.mp3',
-    'assets/music/arcade/90s_kid.mp3',
-    'assets/music/arcade/ass_fault.mp3',
-    'assets/music/arcade/curbside_chaos.mp3',
-    'assets/music/arcade/drop_coin.mp3',
-    'assets/music/arcade/drop_the_soap.mp3',
-    'assets/music/arcade/electric_gerbil.mp3',
-    'assets/music/arcade/final_boss.mp3',
-    'assets/music/arcade/neon_pursuit.mp3',
-    'assets/music/arcade/side_quest.mp3',
-    'assets/music/arcade/sidewalk_slide.mp3',
-    'assets/music/arcade/static_punch.mp3',
+  // POP-PUNK / EMO station — dedicated pop_punk_emo/ folder (owner
+  // 2026-07-22: retired the borrowed arcade/ playlist now that the genre
+  // has its own tracks).
+  'POP-PUNK / EMO': [
+    'assets/music/pop_punk_emo/airplane_mode.mp3',
+    'assets/music/pop_punk_emo/blow_the_speakers.mp3',
+    'assets/music/pop_punk_emo/brand_new_machine.mp3',
+    'assets/music/pop_punk_emo/code_yellow.mp3',
+    'assets/music/pop_punk_emo/five_times.mp3',
+    'assets/music/pop_punk_emo/no_brakes.mp3',
+    'assets/music/pop_punk_emo/number_two.mp3',
+    'assets/music/pop_punk_emo/one_way_track.mp3',
+    'assets/music/pop_punk_emo/red_and_blue.mp3',
+    'assets/music/pop_punk_emo/shoulder_of_the_road.mp3',
+    'assets/music/pop_punk_emo/smoke_and_sparks.mp3',
+    'assets/music/pop_punk_emo/spin.mp3',
+    'assets/music/pop_punk_emo/sugar_crash.mp3',
+    'assets/music/pop_punk_emo/wide_awake.mp3',
+    'assets/music/pop_punk_emo/windows_down.mp3',
   ],
-  'SYNTHWAVE': [
-    'assets/music/80s/arcade_renegades.mp3',
-    'assets/music/80s/concrete_animal.mp3',
-    'assets/music/80s/crystal_speedway.mp3',
-    'assets/music/80s/mall_riot_summer.mp3',
-    'assets/music/80s/nitro_saints.mp3',
-    'assets/music/80s/perms_pistols.mp3',
-    'assets/music/80s/powder_vision.mp3',
+  // NORTEÑO station — dedicated norteno/ folder (owner 2026-07-22: retired
+  // the borrowed 80s/ synthwave playlist).
+  'NORTEÑO': [
+    'assets/music/norteno/almas_de_la_orilla.mp3',
+    'assets/music/norteno/azucar_y_gasolina.mp3',
+    'assets/music/norteno/bocinas_al_tope.mp3',
+    'assets/music/norteno/buzon_lleno.mp3',
+    'assets/music/norteno/cafeina_hirviendo.mp3',
+    'assets/music/norteno/cielo_abierto.mp3',
+    'assets/music/norteno/cinco_coronas.mp3',
+    'assets/music/norteno/doscientas_noventa.mp3',
+    'assets/music/norteno/el_taller.mp3',
+    'assets/music/norteno/humo_y_lumbre.mp3',
+    'assets/music/norteno/la_ultima_salida.mp3',
+    'assets/music/norteno/ojos_rojos.mp3',
+    'assets/music/norteno/por_cinco.mp3',
+    'assets/music/norteno/sirenas_y_polvo.mp3',
+    'assets/music/norteno/todo_al_rojo.mp3',
   ],
   'CLASSIC ROCK': [
     'assets/music/classic_rock/2000_miles_to_mexico.mp3',
@@ -81,18 +97,21 @@ const STATION_TRACKS = {
     'assets/music/edm/tokyo_sideways.mp3',
     'assets/music/edm/velvet_laser.mp3',
   ],
-  // Used by the REGGAETON station (trackKey 'HIP-HOP') — keeps its existing
-  // tracks, repointed from the retired rap/ folder into hiphop_phonk/.
-  'HIP-HOP': [
-    'assets/music/hiphop_phonk/clinic_cup.mp3',
-    'assets/music/hiphop_phonk/exit_13.mp3',
-    'assets/music/hiphop_phonk/interstate_fever_dream.mp3',
-    'assets/music/hiphop_phonk/line_phantom.mp3',
-    'assets/music/hiphop_phonk/mushed_my_turn.mp3',
-    'assets/music/hiphop_phonk/neon_dash_foam_ghosts.mp3',
-    'assets/music/hiphop_phonk/paint_the_asphalt_pink.mp3',
-    'assets/music/hiphop_phonk/parking_lot_wizzard.mp3',
-    'assets/music/hiphop_phonk/pull_up_pull_out.mp3',
+  // REGGAETON station — dedicated reggaeton/ folder (owner 2026-07-22:
+  // retired the borrowed hiphop_phonk/ tracks now that the genre has its own).
+  'REGGAETON': [
+    'assets/music/reggaeton/aguantate.mp3',
+    'assets/music/reggaeton/cinco_estrellas.mp3',
+    'assets/music/reggaeton/comida_chatarra.mp3',
+    'assets/music/reggaeton/donas_y_fuegos.mp3',
+    'assets/music/reggaeton/la_cima.mp3',
+    'assets/music/reggaeton/la_ruleta.mp3',
+    'assets/music/reggaeton/los_del_camino.mp3',
+    'assets/music/reggaeton/mejoras.mp3',
+    'assets/music/reggaeton/mensajes.mp3',
+    'assets/music/reggaeton/sin_domir.mp3',
+    'assets/music/reggaeton/sin_remordimiento.mp3',
+    'assets/music/reggaeton/sube_el_volumen.mp3',
   ],
   'K-POP': [
     'assets/music/kpop/black_card_valkyries.mp3',
@@ -137,7 +156,7 @@ const STATIONS = [
 
   // Former ARCADE slot.
   {
-    name: 'POP-PUNK / EMO', culture: 'pop_punk_emo', trackKey: 'ARCADE', color: '#FF4D9D', bpm: 132,
+    name: 'POP-PUNK / EMO', culture: 'pop_punk_emo', color: '#FF4D9D', bpm: 132,
     melody: { type: 'triangle', notes: [0,0,0,0], gain: 0.0 },
     bass:   { notes: [0], gain: 0.0 },
     drums:  { kick: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -147,7 +166,7 @@ const STATIONS = [
 
   // Former SYNTHWAVE slot.
   {
-    name: 'NORTEÑO', culture: 'norteno', trackKey: 'SYNTHWAVE', color: '#20D7C5', bpm: 118,
+    name: 'NORTEÑO', culture: 'norteno', color: '#20D7C5', bpm: 118,
     melody: {
       chorus: true, detune: 12, harmony: 1.498, reverb: 0.45, stereo: 0.7,
       notes: [
@@ -191,7 +210,7 @@ const STATIONS = [
   // 4 melody phrases cycled per-bar so the loop doesn't feel like a 4-second
   // jingle. This is the default / startup station.
   {
-    name: 'REGGAETON', culture: 'reggaeton', trackKey: 'HIP-HOP', color: '#FFB000', bpm: 88,
+    name: 'REGGAETON', culture: 'reggaeton', color: '#FFB000', bpm: 88,
     melody: {
       type: 'triangle', reverb: 0.55, stereo: 0.5,
       notes: [
