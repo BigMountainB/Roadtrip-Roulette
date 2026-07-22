@@ -11561,7 +11561,9 @@ export class GameScene extends Phaser.Scene {
       const step = (TUNNEL_DIM_MAX / FADE_SEC) * dt;
       if (this._tunnelDim < target)      this._tunnelDim = Math.min(target, this._tunnelDim + step);
       else if (this._tunnelDim > target) this._tunnelDim = Math.max(target, this._tunnelDim - step);
-      this.tunnelDimGfx?.setAlpha(this._tunnelDim).setVisible(this._tunnelDim > 0.002);
+      // New Headlights upgrade lightens the tunnel bore ~25%.
+      const _tunA = this._tunnelDim * (this._hasNewHeadlights ? 0.75 : 1);
+      this.tunnelDimGfx?.setAlpha(_tunA).setVisible(_tunA > 0.002);
     }
     this.road.renderSignOverlay(this._signGfxPool);
     this._renderSignText();       // text labels on top of green/brown signs
@@ -12976,7 +12978,14 @@ export class GameScene extends Phaser.Scene {
     // backdrop so nothing stays crisp in the haze (near clear → far dissolves).
     // Depth-fog: distant cars/cops/wrecks DISSOLVE into the fog backdrop
     // (alpha fade) so they wash out into the haze instead of staying crisp.
-    const _fogP = Weather.fogParams((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
+    let _fogP = Weather.fogParams((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
+    // Fog Lights upgrade (owner 2026-07-21) thins the fog in the forward view
+    // so you can see further down the headlight path.  Approximates the beam
+    // wedge as a ~40% density cut ahead (a literal wedge is a bigger render
+    // job — flagged for tuning).
+    if (this._hasFogLights && _fogP && _fogP.density > 0) {
+      _fogP = { ..._fogP, density: _fogP.density * 0.6 };
+    }
     const nearCull = cockpit ? 100 : 300;
     const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1, exitT = 0) => {
       if (relZ < nearCull || relZ > 76000 || alphaMul <= 0.01) return;
@@ -13833,7 +13842,9 @@ export class GameScene extends Phaser.Scene {
     // night without going pitch-black.  Slight cool bias on the blue
     // channel for moonlight feel.
     const _mileNowScn = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
-    const _darknessScn = TimeOfDay.darkness?.(_mileNowScn) ?? 0;
+    // New Headlights upgrade (owner 2026-07-21) lifts night scenery brightness
+    // ~25% by shaving the night-tint darkness.
+    const _darknessScn = (TimeOfDay.darkness?.(_mileNowScn) ?? 0) * (this._hasNewHeadlights ? 0.75 : 1);
     // Depth-fog (Phase 1): distant scenery (trees/buildings/houses/cops/signs)
     // dissolves into the fog backdrop, matching the road + cars.
     const _fogPScn = Weather.fogParams(_mileNowScn);
@@ -15071,6 +15082,11 @@ export class GameScene extends Phaser.Scene {
     if (!g) return;
     g.clear();
 
+    // Stock windshield wear — a couple of rock chips + a crack along the bottom,
+    // always present in-game until the New Windshield upgrade replaces the glass
+    // (owner 2026-07-21).  Stacks under any critical-HP cracks below.
+    if (!this._hasNewWindshield && !this._awaitingStart) this._drawStockGlassChips(g);
+
     const hp = this.damage?.getDurability?.() ?? 100;
     if (hp > 10) return;
 
@@ -15130,6 +15146,48 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0xD9EEFF, (severity - 0.60) * 0.10);
       g.fillRect(-_cOff, 0, SCREEN_W + _cOff * 2, SCREEN_H);
     }
+  }
+
+  /** Stock-windshield wear (owner 2026-07-21): a few rock chips scattered high
+   *  on the glass + a jagged crack running along the bottom.  Subtle, so it
+   *  reads as an old beater's glass, not damage — cleared by New Windshield. */
+  _drawStockGlassChips(g) {
+    // Rock chips — small radiating stars with a bright pit at the center.
+    const chips = [
+      { x: 250, y: 122, r: 9, arms: 6 },
+      { x: 566, y: 92,  r: 7, arms: 5 },
+      { x: 402, y: 168, r: 6, arms: 5 },
+    ];
+    for (const c of chips) {
+      g.lineStyle(1, 0x1A222E, 0.45);
+      for (let a = 0; a < c.arms; a++) {
+        const ang = a * (Math.PI * 2 / c.arms) + c.x * 0.017;
+        g.beginPath();
+        g.moveTo(c.x, c.y);
+        g.lineTo(c.x + Math.cos(ang) * c.r, c.y + Math.sin(ang) * c.r);
+        g.strokePath();
+      }
+      g.fillStyle(0xDDE8F2, 0.38); g.fillCircle(c.x, c.y, 1.6);
+      g.fillStyle(0x1A222E, 0.30); g.fillCircle(c.x, c.y, 0.9);
+    }
+    // Bottom crack — a jagged line wandering across the lower glass, with a
+    // couple of short offshoots, drawn dark-then-bright like a real fracture.
+    const cy = 372, x0 = 118, x1 = 604, segs = 11;
+    const pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      pts.push({ x: x0 + (x1 - x0) * t, y: cy + Math.sin(i * 2.3) * 7 + Math.sin(i * 0.7) * 4 });
+    }
+    const stroke = (w, col, alpha) => {
+      g.lineStyle(w, col, alpha);
+      g.beginPath(); g.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
+      g.strokePath();
+      g.beginPath(); g.moveTo(pts[3].x, pts[3].y); g.lineTo(pts[3].x + 14, pts[3].y - 22); g.strokePath();
+      g.beginPath(); g.moveTo(pts[7].x, pts[7].y); g.lineTo(pts[7].x - 12, pts[7].y - 18); g.strokePath();
+    };
+    stroke(2.2, 0x161D28, 0.40);   // dark base
+    stroke(1,   0xEAF6FF, 0.48);   // bright fracture
   }
 
   _projectVehicle(relativeZ, laneOffset, playerX) {
