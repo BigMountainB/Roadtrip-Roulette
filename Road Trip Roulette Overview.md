@@ -114,6 +114,55 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-22 (pt 2) — NPC-over-player ROOT CAUSE fixed (UI-cam double-draw), Coal smoke-out, title-zone alignment, one-tap LOAD SAVE, 50/50 tap steering, resume-music fix — SHIPPED 2026-07-22
+- **Title bottom-menu zones traced to the baked art** (owner: "buttons should match the image"): all four
+  zones (START / DIFFICULTY / DRIVING TYPE / LOAD SAVE) now use art-measured rects via `titleRectShape`
+  (slanted `titlePanelShape` deleted) — START (18,345 237×74), DIFF (265,346 157×75), DRIVE (429,346
+  146×75), LOAD SAVE (585,345 193×74, owner-nudged) — so the full plate is tappable and the hover outline
+  hugs the frame.  Tutorial highlight rects match.  Plate bounds measured from title_screen.png (1672×941,
+  2.09× the 800-space) by scanning the dark inter-plate gaps.
+- **LOAD SAVE = one-tap resume, NEVER the code popup** (owner): phone-menu Save now also writes a durable
+  per-profile `manualSave` (rolling autosaves can't clobber it), and `_titleLoadSave` resumes priority
+  manualSave → autosave (`latestLiveRun(key)`) → lastRestStop → red "NO SAVE FOUND" toast.  The wheel's
+  'saved' branch routes the same way.  Pause-menu FROM CHECKPOINT keeps its code-modal last resort
+  (different flow, untouched).
+- **Tap steering: line down the middle** (owner): classic/THUMBS halves were 30%/70% — the middle 40% was
+  dead (top part a hidden center-tap weapon shortcut).  Now sx < SCREEN_W/2 = left, else right, on tap AND
+  drag; center-tap F12 shortcut removed (weapons fire from their buttons; F key still works).
+- **Resume runs had NO music** (owner: "music isn't playing by default"): `_kickRadio` only fired in
+  `_startGameplay` (fresh runs) — LOAD SAVE / auto-resume / checkpoint boots skipped it, so a session
+  booted into a resume stayed silent.  Both resume dispatchers now kick inside their tap's gesture frame
+  + a first-input fallback on any non-title boot.  Also registered 7 unregistered metal tracks
+  (arcade_renegades, concrete_animal, crystal_speedway, mall_riot_summer, nitro_saints, perms_pistols,
+  powder_vision) → 108 tracks, all verified on disk.
+- Also in this batch (parallel session): phone-menu safe-area bottom inset CSS, `?dev=1` gating for dev
+  affordances (Calendar "Test any run" list empty for beta testers), GameOver plate/save tweaks.
+- **NPC-over-player layering — REAL root cause** (owner confirmed FIXED after repro): NOT a depth/sort
+  problem.  GameScene splits rendering across two cameras (main = world, `_uiCam` = HUD); every world
+  object must be listed in `_worldObjects` so `_uiCam.ignore()` skips it.  **`_carOutlinePool` (the
+  enlarged same-texture outline-rim copy of every car) and `_npcHeadlightGfxPool` were missing from that
+  list** → the UI camera re-drew each car's outline copy ON TOP of the whole world.  Pixel-aligned with
+  the body, so invisible everywhere EXCEPT where the car should be occluded — i.e. overlapping the player
+  ("car in front renders on top of my car", present since the DUI fork; same bug class as the old
+  tire-shadow/headlight double-draw fixed in the comment right above).  Fix = the two missing entries in
+  the `_worldObjects` block ([GameScene.js](src/scenes/GameScene.js) ~L2323).  Diagnosis trail: earlier
+  screen-Y crossover removal (pt 1, still correct) → temp on-screen depth probe showed depths/list order
+  CORRECT while pixels inverted → camera-level re-draw was the only remaining mechanism → `_uiCam.ignore`
+  audit found the gap.  Probe was temporary and is REMOVED.  **⚠ DUI has the same bug** (outline pool +
+  camera split predate the fork) — port the two-line fix there.
+- **Rolling Coal reworked to SMOKE-OUT (Option 1 — coal ENDS the chase)**: a cop caught in the cloud (at
+  fire, or driving into it within its life) now BREAKS PURSUIT via the existing `_fleeNoSwerve` flee
+  (keep pace 1.5 s → sink straight back into the smoke → despawn).  Replaces the 60 mph/30 s slow-cap,
+  which kept the cop visibly chasing — at player speeds ≤60 it read as "the first cop withstood the coal"
+  (owner's report; the FIRST cop of a run comes off the first speed trap at low speed).  Coal during the
+  PULL OVER comply window now QUIETLY cancels the civil stop (no "+1★ failed to pull over" after a landed
+  smokescreen); a HELD stop stays non-cancelable.  Metal's "Weapons last +25%" (weaponDurationMult) now
+  stretches cloud life (5→6.25 s) + spawn lull (30→37.5 s) since its old consumer (the slow timer) is
+  gone.  coal.test.mjs rewritten to smoke-out semantics incl. a 55-mph regression case (25 tests).
+  KNOWN REMAINING (owner deferred): trap tripped DURING the 30 s coal lull mis-tags a random cop as trap
+  pursuer (`_spawnTrapPursuit` grabs `cops[last]` after the lull-gated spawn silently no-ops) → phantom
+  PULL OVER window.
+
 ### 2026-07-22 — Rest-stop business map, dealer split, EV-charging removal, NPC depth fix, plate mandatory + uniqueness Worker — SHIPPED 2026-07-22
 Batch pushed together with the 4 earlier local commits (money double-spend fix `eb1a625`, plate defer `a7b79c5`,
 plate mandatory + worker scaffold `397c335`/`8ee00fb`).

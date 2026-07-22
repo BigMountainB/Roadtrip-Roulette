@@ -274,6 +274,12 @@ const _boot = () => {
   // app.  Data comes from the DailyChallenges registry; per-profile completion
   // from the save.  `start()` is stubbed until the stage runner lands, so the
   // Calendar shows a full read-only preview now (Play flips on next increment).
+  // Dev/QA flag — `?dev=1` in the URL enables dev-only affordances (the
+  // Calendar's "Test any run" launcher, in-game route warps, debug overlay).
+  // Beta testers on a plain URL never see them.  Single source of truth,
+  // read here and by the inline Calendar script in index.html.
+  try { window.__DEV = new URLSearchParams(window.location.search).get('dev') === '1'; }
+  catch (_) { window.__DEV = false; }
   window.__daily = {
     today() {
       const c = challengeForDate();
@@ -291,10 +297,12 @@ const _boot = () => {
       }));
     },
     weeklyBonus: DAILY_WEEKLY_BONUS,
-    // DEV: full challenge list for the Calendar's "Test any run" launcher
-    // (lets us play any challenge regardless of the weekday). Remove before
-    // release alongside the dev section in index.html.
+    // DEV-only: full challenge list for the Calendar's "Test any run" launcher
+    // (lets us play any challenge regardless of the weekday).  Gated behind
+    // `?dev=1` (window.__DEV) so it's empty for beta testers; the index.html
+    // Calendar section keys off the same flag.
     all() {
+      if (!window.__DEV) return [];
       return DAILY_CHALLENGES.map(c => ({ id: c.id, name: c.name, from: c.from, to: c.to }));
     },
     playable: true,

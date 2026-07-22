@@ -1,20 +1,20 @@
 // ── Rolling Coal ("coal" F12 weapon) — node CLI unit tests ────────────────
 // Run: node tests/coal.test.mjs   (also `npm test`)
 //
-// TOUCH model (owner 2026-07-17): firing rolling coal no longer instantly
-// affects anyone. It lays down a world-anchored SMOKE CLOUD region behind the
-// car (backZ = playerPos - COAL_CLOUD_BACK … frontZ = playerPos + COAL_CLOUD_FRONT)
-// that lives COAL_CLOUD_LIFE seconds. A cop is only affected once it DRIVES
-// INTO the cloud, at which point its top speed is capped at 60 mph
-// (COAL_SLOW_UNITS) for 30 s (COAL_SLOW_SEC) — it keeps chasing, just slow, so
-// the player pulls away. Barricade rows (not chasing by sight) are immune.
-// Firing still clears any in-progress arrest and arms the 30 s spawn lull.
+// SMOKE-OUT model (owner 2026-07-22, Option 1 — coal ENDS the chase): firing
+// lays a world-anchored SMOKE CLOUD region behind the car (backZ = playerPos -
+// COAL_CLOUD_BACK … frontZ = playerPos + COAL_CLOUD_FRONT) that lives
+// COAL_CLOUD_LIFE seconds. A cop caught in the cloud (at fire, or by driving
+// into it while it lives) BREAKS PURSUIT: the `_fleeNoSwerve` flee — keep pace
+// briefly, then sink straight back into the smoke and despawn. Replaces the
+// old 60 mph slow-cap, which kept the cop visibly chasing ("the first cop
+// withstood the coal" at player speeds ≤60). Barricade rows + parked held-stop
+// troopers are immune. Firing still clears any in-progress arrest and arms the
+// 30 s spawn lull.
 
 import { CopSystem, FLEE_EXIT_HOLD_REL, FLEE_EXIT_SPAN } from '../src/systems/CopSystem.js';
 import { MAX_SPEED } from '../src/constants.js';
 import { readFileSync } from 'node:fs';
-
-const COAL_SLOW_UNITS = MAX_SPEED * (60 / 120);   // 60 mph cap (mirrors CopSystem)
 
 let passed = 0, failed = 0;
 function check(name, cond) {
@@ -32,7 +32,7 @@ function pursuitCop(position, laneOffset = 0) {
   };
 }
 
-// ── Firing lays a cloud; only cops that TOUCH it get slowed ───────────────
+// ── Firing smoke-outs every cop in the cloud; outsiders untouched ─────────
 {
   const cs = new CopSystem();
   cs.stars = 2;
@@ -42,21 +42,25 @@ function pursuitCop(position, laneOffset = 0) {
   const rear      = pursuitCop(playerPos - 3000);   // in the cloud, behind
   const alongside = pursuitCop(playerPos + 800);    // in the +front slack band
   const farAhead  = pursuitCop(playerPos + 20000);  // way ahead, outside the cloud
-  cs.cops.push(rear, alongside, farAhead);
+  const trap      = pursuitCop(playerPos - 2500);   // civil-stop pursuer in the cloud
+  trap.trapPursuit = true;
+  cs.cops.push(rear, alongside, farAhead, trap);
 
   const res = cs.useF12Token('coal', playerPos);
   check('coal fire ok', res.ok === true);
   check('coal consumed a cloud', cs.coalAmmo === 0);
-  check('coal does NOT instantly flee cops (hangs a cloud)', !rear.fleeing && !alongside.fleeing);
+  check('rear pursuer in the cloud breaks pursuit (fleeing)', rear.fleeing === true);
+  check('smoke-out uses the straight-back recede (_fleeNoSwerve)', rear._fleeNoSwerve === true);
+  check('alongside rammer smoked too (front slack band)', alongside.fleeing === true);
+  check('far-ahead cop untouched (outside the cloud)', !farAhead.fleeing);
+  check('smoked trap pursuer sheds its trapPursuit tag', trap.fleeing === true && trap.trapPursuit === false);
+  check('smoked cop disarmed (no PIT possible)', !rear._pitArmed && (rear._pitProgress ?? 0) === 0);
   check('arrest counters cleared on fire', cs.rearBumpCount === 0 && !cs.arrestPending);
 
-  // One tick: cops inside the cloud region pick up the slow; far-ahead doesn't.
+  // A tick must not re-arm the flee timers for cops still inside the band.
+  const tBefore = rear._fleeTimer;
   cs.update(1 / 60, playerPos, playerSpeed, 0);
-  check('rear pursuer touched the cloud (slowed)', (rear.coalSlowT ?? 0) > 0);
-  check('alongside rammer touched too (front slack band)', (alongside.coalSlowT ?? 0) > 0);
-  check('far-ahead cop untouched (outside the cloud)', !(farAhead.coalSlowT > 0));
-  check('slowed cop capped at 60 mph', rear.speed <= COAL_SLOW_UNITS + 1e-6);
-  check('untouched cop is NOT speed-capped', farAhead.speed > COAL_SLOW_UNITS);
+  check('touch check does not re-arm an already-fleeing cop', rear._fleeTimer < tBefore + 1e-9);
 }
 
 // ── Coal caps at 3 (1 per pickup, same as every other weapon) ─────────────
@@ -67,33 +71,34 @@ function pursuitCop(position, laneOffset = 0) {
   check('coal canCarryMore false at cap', capCs.canCarryMore('coal') === false);
 }
 
-// ── The slow holds ~30 s and the player pulls away (no ram possible) ───────
+// ── The smoked cop recedes and despawns; the chase is OVER ─────────────────
+// Player speed is a slow 55 mph — the case the old 60 mph cap failed on
+// ("the first cop withstood the coal"): the smoke-out must shake the cop
+// regardless of how slow the player is going.
 {
   const cs = new CopSystem();
   cs.stars = 2;
   cs.addF12Token('coal');
-  const playerSpeed = MAX_SPEED * 0.75;
+  const playerSpeed = MAX_SPEED * (55 / 120);
   let pos = 100000;
   const rear = pursuitCop(pos - 2000);
   cs.cops.push(rear);
   cs.useF12Token('coal', pos);
 
   const dt = 1 / 60;
-  let everOverCapWhileSlowed = false, everGained = false, despawnT = null;
+  let everGained = false, despawnT = null;
   let prevGap = pos - rear.position;
   for (let t = 0; t < 40; t += dt) {
     pos += playerSpeed * dt;
     cs.update(dt, pos, playerSpeed, 0);
     if (cs.cops.includes(rear)) {
-      if ((rear.coalSlowT ?? 0) > 0 && rear.speed > COAL_SLOW_UNITS + 1e-6) everOverCapWhileSlowed = true;
       const gap = pos - rear.position;
       if (gap < prevGap - 1e-6) everGained = true;   // cop closed the gap
       prevGap = gap;
     } else if (despawnT == null) despawnT = t;
   }
-  check('slowed cop never exceeds 60 mph while the timer runs', !everOverCapWhileSlowed);
-  check('player pulls away — cop never closes the gap', !everGained);
-  check('slowed cop falls back and despawns', despawnT != null);
+  check('smoked cop never closes the gap — even on a slow player', !everGained);
+  check('smoked cop recedes into the smoke and despawns', despawnT != null);
 }
 
 // ── Barricade rows are immune (not chasing by sight) ──────────────────────
@@ -106,10 +111,10 @@ function pursuitCop(position, laneOffset = 0) {
   cs.cops.push(block);
   cs.useF12Token('coal', playerPos);
   cs.update(1 / 60, playerPos, MAX_SPEED * 0.75, 0);
-  check('barricade cop immune to smoke (not slowed)', !(block.coalSlowT > 0));
+  check('barricade cop immune to smoke (does not flee)', !block.fleeing);
 }
 
-// ── The cloud expires (~5 s) — a cop arriving late is not slowed ──────────
+// ── The cloud expires (~5 s) — a cop arriving late is not smoked ──────────
 {
   const cs = new CopSystem();
   cs.addF12Token('coal');
@@ -120,7 +125,21 @@ function pursuitCop(position, laneOffset = 0) {
   const late = pursuitCop(playerPos - 3000);                        // now IN the region…
   cs.cops.push(late);
   cs.update(dt, playerPos, MAX_SPEED * 0.75, 0);
-  check('expired cloud no longer slows a late arrival', !(late.coalSlowT > 0));
+  check('expired cloud no longer smokes a late arrival', !late.fleeing);
+}
+
+// ── A live cloud DOES smoke a cop that drives into it (touch check) ───────
+{
+  const cs = new CopSystem();
+  cs.addF12Token('coal');
+  const playerPos = 100000;
+  cs.useF12Token('coal', playerPos);                 // nobody around at fire
+  const dt = 1 / 60;
+  cs.update(dt, playerPos, 0, 0);                    // cloud alive (~5 s life)
+  const arrival = pursuitCop(playerPos - 3000);      // drives into the smoke
+  cs.cops.push(arrival);
+  cs.update(dt, playerPos, MAX_SPEED * 0.75, 0);
+  check('live cloud smokes a late arrival (touch)', arrival.fleeing === true && arrival._fleeNoSwerve === true);
 }
 
 // ── 30 s spawn suppression after firing ───────────────────────────────────

@@ -78,13 +78,13 @@ const COAL_LULL_SEC = 30;
 // off the bottom edge the same way it drove in (pure positional recede — no
 // synthetic slide, no in-place fade).
 const COAL_PACE_SEC = 1.5;
-// Rolling-coal TOUCH model (owner 2026-07-17): the smokescreen hangs on the
-// road behind the car; a cop is only affected once it DRIVES INTO the cloud.
-// On contact its top speed is capped at 60 mph for 30 s (it keeps chasing, just
-// slow — the player pulls away). The cloud's road region is captured at fire
-// and stays world-anchored, so it recedes down the road as the car drives off.
-const COAL_SLOW_SEC   = 30;                       // slow duration after touch
-const COAL_SLOW_UNITS = MAX_SPEED * (60 / 120);   // 60 mph cap
+// Rolling-coal TOUCH model (owner 2026-07-22): the smokescreen hangs on the
+// road behind the car; a cop is affected once it's IN the cloud (at fire, or
+// by driving into it while it lives). On contact the cop BREAKS PURSUIT and
+// smoke-outs — the _fleeNoSwerve flee: keeps pace COAL_PACE_SEC, then sinks
+// straight back into the smoke and despawns (lost sight of you entirely).
+// Replaces the old 60 mph / 30 s slow-cap, which kept the cop visibly on the
+// player's tail — at ≤60 mph it read as "the first cop withstood the coal".
 const COAL_CLOUD_LIFE = 5;                        // s the hanging smoke can still catch a pursuer
 const COAL_CLOUD_BACK = 10000;                    // road length of smoke BEHIND the belch point
 const COAL_CLOUD_FRONT = 1500;                    // slack ahead (alongside rammers in the plume)
@@ -195,6 +195,20 @@ export class CopSystem {
    *  cop (so it keeps chasing as the player enters the 1★ system). */
   promoteTrapPursuit() {
     for (const c of this.cops) if (c.trapPursuit) c.trapPursuit = false;
+  }
+
+  /** Rolling-coal smoke-out — the cop caught in the cloud breaks pursuit and
+   *  recedes straight back into the smoke (the `_fleeNoSwerve` flee: keep
+   *  pace COAL_PACE_SEC, then sink off the bottom edge and despawn).  Clears
+   *  any trap/PIT state so a smoked trooper can't still line up a bust. */
+  _coalSmokeOut(cop) {
+    cop.fleeing       = true;
+    cop._fleeNoSwerve = true;      // straight-back recede, no shoulder swerve
+    cop._fleeTimer    = FLEE_MAX_SEC;
+    cop.trapPursuit   = false;
+    cop.parked        = false;
+    cop._pitProgress  = 0;
+    cop._pitArmed     = false;
   }
 
   /** 5★ roadblock maze — strings of parked cruisers spanning the drivable
@@ -524,29 +538,34 @@ export class CopSystem {
     switch (type) {
       case 'coal': {
         // Rolling coal — a rear diesel smokescreen that HANGS on the road
-        // behind the car (owner 2026-07-17).  Firing no longer instantly
-        // affects anyone: it lays down a world-anchored cloud region.  A cop
-        // is only slowed once it DRIVES INTO the cloud (see the touch check in
-        // update()), at which point its top speed is capped at 60 mph for 30 s
-        // — it keeps chasing, just slow enough that the player pulls away.
-        // STEALTHY: no kills, no stars, no escalation.  Parked / roadside
-        // encounter sprites are untouched (smoke isn't a weapon).
+        // behind the car.  A cop caught in the cloud BREAKS PURSUIT and
+        // smoke-outs (owner 2026-07-22 — Option 1: coal ends the chase; the
+        // old 60 mph slow-cap kept the cop visibly on the tail and read as
+        // "the first cop withstood it").  The cloud stays world-anchored for
+        // COAL_CLOUD_LIFE s, so late arrivals that drive into it smoke-out
+        // too (touch check in update()).  STEALTHY: no kills, no stars, no
+        // escalation.  Parked held-stop troopers + roadside encounter
+        // sprites are untouched (smoke isn't a weapon).
+        // Metal's "Weapons last +25%" (weaponDurationMult) stretches the
+        // durations coal still has: the hanging cloud's life + the spawn
+        // lull.  (Its old consumer — the 60 mph slow timer — is gone.)
+        const _durMult = this._traitWeaponDurationMult ?? 1;
         this._coalCloud = {
           backZ:  playerPos - COAL_CLOUD_BACK,
           frontZ: playerPos + COAL_CLOUD_FRONT,
-          life:   COAL_CLOUD_LIFE,
+          life:   COAL_CLOUD_LIFE * _durMult,
         };
-        // Slow any cop ALREADY inside the cloud band this instant — a cop
-        // chasing from behind is in the band the moment you belch. The per-
-        // frame touch check (update loop) keeps catching new arrivals, but the
-        // cloud is set AFTER this frame's cop update, so without this the first
-        // fire didn't slow the current pursuer until a frame later / at all
-        // (owner 2026-07-19: "coal didn't work on the cop the first time").
+        // Smoke-out any cop ALREADY inside the cloud band this instant — a
+        // cop chasing from behind is in the band the moment you belch.  The
+        // per-frame touch check (update loop) keeps catching new arrivals,
+        // but the cloud is set AFTER this frame's cop update, so without
+        // this the first fire missed the current pursuer (owner 2026-07-19:
+        // "coal didn't work on the cop the first time").
         for (const cop of this.cops) {
-          if (cop && cop.kind !== 'barricade'
+          if (cop && cop.kind !== 'barricade' && !cop.parked && !cop.fleeing
               && cop.position >= this._coalCloud.backZ
               && cop.position <= this._coalCloud.frontZ) {
-            cop.coalSlowT = COAL_SLOW_SEC * (this._traitWeaponDurationMult ?? 1);
+            this._coalSmokeOut(cop);
           }
         }
         // Any arrest that was mid-progress is broken the moment the wall of
@@ -557,9 +576,9 @@ export class CopSystem {
         this.pitCount      = 0;
         this.arrestPending = false;
         // 30-second spawn lull — the smokescreen holds off fresh pursuers so
-        // the slow actually buys an escape window.
-        this._coalLull      = Math.max(this._coalLull ?? 0, COAL_LULL_SEC);
-        this._spawnCooldown = Math.max(this._spawnCooldown ?? 0, COAL_LULL_SEC);
+        // the smoke-out actually buys an escape window.
+        this._coalLull      = Math.max(this._coalLull ?? 0, COAL_LULL_SEC * _durMult);
+        this._spawnCooldown = Math.max(this._spawnCooldown ?? 0, COAL_LULL_SEC * _durMult);
         break;
       }
 
@@ -841,12 +860,13 @@ export class CopSystem {
       const dist  = cop.position - playerPos;
       const aDist = Math.abs(dist);
 
-      // ── ROLLING-COAL TOUCH: a cop that's inside the hanging cloud (and can
-      // be chasing — not a stationary barricade) picks up the 60 mph / 30 s
-      // slow. Re-armed each frame it stays in the smoke.
-      if (this._coalCloud && cop.kind !== 'barricade'
+      // ── ROLLING-COAL TOUCH: a cop that drives into the hanging cloud (and
+      // can be chasing — not a stationary barricade or a parked held-stop
+      // trooper) breaks pursuit and smoke-outs.  Gated on !fleeing so a cop
+      // lingering in the band doesn't get its pace/flee timers re-armed.
+      if (this._coalCloud && cop.kind !== 'barricade' && !cop.parked && !cop.fleeing
           && cop.position >= this._coalCloud.backZ && cop.position <= this._coalCloud.frontZ) {
-        cop.coalSlowT = COAL_SLOW_SEC * (this._traitWeaponDurationMult ?? 1);
+        this._coalSmokeOut(cop);
       }
 
       // Fireworks scatter / coal smoke-out — the cop breaks pursuit and
@@ -1010,12 +1030,6 @@ export class CopSystem {
           default:
             cop.speed = playerSpeed;
         }
-      }
-      // Rolling-coal slow — while the 30 s timer runs, the cop's top speed is
-      // capped at 60 mph so the player pulls away (owner 2026-07-17).
-      if ((cop.coalSlowT ?? 0) > 0) {
-        cop.coalSlowT -= dt;
-        if (cop.speed > COAL_SLOW_UNITS) cop.speed = COAL_SLOW_UNITS;
       }
       cop.position += cop.speed * dt;
 

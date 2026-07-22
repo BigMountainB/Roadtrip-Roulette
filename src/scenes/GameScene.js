@@ -1081,6 +1081,14 @@ export class GameScene extends Phaser.Scene {
     // Mercer house hitbox, tunnel see-through).  Zero per-frame cost
     // when off — _renderDebugOverlay early-returns on this._debugOn.
     this._debugOn  = false;
+    // Dev/QA affordances (route warps, debug overlay, camera + cockpit-calib
+    // toggles) are gated behind a URL flag so beta testers never trigger them
+    // by accident — add `?dev=1` to the URL to enable.  The handlers are still
+    // wired below but no-op unless this is true.
+    this._devEnabled = (() => {
+      try { return new URLSearchParams(window.location.search).get('dev') === '1'; }
+      catch (_) { return false; }
+    })();
     this._debugGfx = this.add.graphics().setDepth(19).setVisible(false);
     // F2 painted-edge overlay — independent of F3.  Lives on its own
     // graphics layer so the user can see ONLY the yellow / magenta /
@@ -1363,6 +1371,7 @@ export class GameScene extends Phaser.Scene {
       9: 220,   // Palouse hills
     };
     this._devWarpHandler = (ev) => {
+      if (!this._devEnabled) return;
       const n = Number(ev.key);
       if (!Number.isInteger(n) || n < 1 || n > 9) return;
       const mile = _DEV_WARP_MILES[n];
@@ -1379,6 +1388,7 @@ export class GameScene extends Phaser.Scene {
     // through without restarting the run.  Pure position rewind — no
     // gas drain, no cop reset (matches DEV WARP convention).
     this._backWarpHandler = (ev) => {
+      if (!this._devEnabled) return;
       if (ev.key !== 'b' && ev.key !== 'B') return;
       if (!this.player) return;
       const dPos = (0.25 / TOTAL_ROUTE_MILES) * ROUTE_SEGS * SEG_LENGTH;
@@ -1394,6 +1404,7 @@ export class GameScene extends Phaser.Scene {
     // cop/state reset.  Capped at the final mile so we don't overshoot
     // the Pullman finish.
     this._fwdWarpHandler = (ev) => {
+      if (!this._devEnabled) return;
       if (ev.key !== 'n' && ev.key !== 'N') return;
       if (!this.player) return;
       const dPos = (0.25 / TOTAL_ROUTE_MILES) * ROUTE_SEGS * SEG_LENGTH;
@@ -1414,6 +1425,7 @@ export class GameScene extends Phaser.Scene {
     // at world X=0 so scenery stays put and the player visibly slides
     // across the road instead.  Tested side-by-side via this key.
     this._cameraToggleHandler = (ev) => {
+      if (!this._devEnabled) return;
       if (ev.code !== 'F4' && ev.key !== 'F4') return;
       ev.preventDefault?.();
       if (this.road) {
@@ -1443,6 +1455,7 @@ export class GameScene extends Phaser.Scene {
     // be visually confirmed without driving / refueling / pausing.
     // Off by default; only fires in cockpit view.
     this._cockpitCalibHandler = (ev) => {
+      if (!this._devEnabled) return;
       if (ev.code !== 'KeyK' && ev.key !== 'k' && ev.key !== 'K') return;
       ev.preventDefault?.();
       this._cockpitCalibrate = !this._cockpitCalibrate;
@@ -1453,6 +1466,7 @@ export class GameScene extends Phaser.Scene {
     this.events.once('destroy',  () => this.input.keyboard?.off('keydown', this._cockpitCalibHandler));
 
     this._debugToggleHandler = (ev) => {
+      if (!this._devEnabled) return;
       if (ev.code !== 'F3' && ev.key !== 'F3') return;
       ev.preventDefault?.();
       this._debugOn = !this._debugOn;
@@ -2321,6 +2335,15 @@ export class GameScene extends Phaser.Scene {
         // and headlight beams doubled.  They belong to the world camera only.
         this._tireShadowGfx, this.headlightGfx, this.headlightFixtureGfx,
         ...this._carSpritePool,
+        // Car OUTLINE rims + per-NPC headlight gfx were MISSING here (owner
+        // 2026-07-22): the UI camera re-drew every car's enlarged outline
+        // copy ON TOP of the whole world.  The double-draw is pixel-aligned
+        // so it's invisible — except where the car should be occluded, i.e.
+        // overlapping the player: "NPC in front renders on top of my car"
+        // (persisted since the DUI fork).  Same bug class as the tire-shadow
+        // /headlight fix above.
+        ...this._carOutlinePool,
+        ...(this._npcHeadlightGfxPool ?? []),
         ...this._viceSpritePool,
         this._viceHaloGfx,
         ...this._sceneSpritePool,
@@ -2533,11 +2556,13 @@ export class GameScene extends Phaser.Scene {
         this._tapLatchValid = true;
         return;
       }
-      // Classic mode keeps the explicit left/right halves + center-tap
-      // weapon shortcut.
-      if (sx < SCREEN_W * 0.30)      { this._touchLeft  = true; }
-      else if (sx > SCREEN_W * 0.70) { this._touchRight = true; }
-      else if (p.y < SCREEN_H * 0.35) { this._touchF12   = true; }
+      // Classic mode — line straight down the middle (owner 2026-07-22):
+      // ANY tap left of center steers left, any tap right of center steers
+      // right — no dead band.  (The old 30%/70% halves left the middle 40%
+      // of the screen inert; the center-tap weapon shortcut is gone with it —
+      // weapons fire from their own buttons, excluded above.)
+      if (sx < SCREEN_W / 2) { this._touchLeft  = true; }
+      else                   { this._touchRight = true; }
       this._tapLatchValid = (this._touchLeft || this._touchRight);
     });
     this.input.on('pointerup', () => {
@@ -2553,6 +2578,18 @@ export class GameScene extends Phaser.Scene {
     // A release that lands OFF the canvas (finger lifts past the edge)
     // doesn't fire 'pointerup' — catch it so the mirror can't stick zoomed.
     this.input.on('pointerupoutside', () => { this._setMirrorZoom(1); });
+    // Resume-boot radio kick (owner 2026-07-22): fresh runs kick the radio in
+    // _startGameplay, but a scene booted directly into a resumed run (LOAD
+    // SAVE / auto-resume / checkpoint respawn) skips it — leaving the whole
+    // run silent when audio hadn't been inited yet this session.  The resume
+    // dispatchers kick inside their own tap's gesture frame; this first-input
+    // fallback covers boots that bypassed them and iOS gesture-frame misses.
+    // No-ops when music is already running; gated off title boots so the
+    // title stays silent until START.
+    if (!this._awaitingStart) {
+      this.time.delayedCall(180, () =>
+        this.input.once('pointerdown', () => this._kickRadio()));
+    }
     this.input.on('pointermove', (p) => {
       if (this._anyModalOpen()) return;
       if (!p.isDown) return;
@@ -2576,12 +2613,13 @@ export class GameScene extends Phaser.Scene {
         if (this._tapLatchValid) this._touchRight = true;
         return;
       }
-      // Classic mode — position-tracked left/right zones during drag.
+      // Classic mode — position-tracked halves during drag, split at the
+      // same center line as the tap (owner 2026-07-22: no middle dead band).
       // Convert canvas → scene space so the halves stay centered on the car
       // under the decoupled width (see the pointerdown handler's `sx`).
       const sx = p.x - C.HUD_OFFSET_X;
-      this._touchLeft  = sx < SCREEN_W * 0.30;
-      this._touchRight = sx > SCREEN_W * 0.70;
+      this._touchLeft  = sx < SCREEN_W / 2;
+      this._touchRight = sx >= SCREEN_W / 2;
     });
   }
 
@@ -4049,17 +4087,9 @@ export class GameScene extends Phaser.Scene {
     }
     {
       const mile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
-      // The control only exists during precipitation. If the player drove
-      // out of rain/snow while it was on, park it immediately rather than
-      // leaving active blades with no visible way to switch them off.
-      const wState = Weather.state?.(mile);
-      const showWeatherBtn = (wState === 'rain' || wState === 'snow');
-      if (!showWeatherBtn) {
-        this._wiperMode = 0;
-        this._wiperPhase = 0;
-        this._cockpitWiperPhase = 0;
-        this._wiperSweepPulse = false;
-      }
+      // Wiper works in ALL weather now (per user): the blades keep whatever
+      // state the player set and are NEVER force-parked on leaving rain/snow,
+      // so a tap sweeps them even on a dry windshield (like a real car).
       // Mode > 0 = wipers actively sweeping.
       const wiperActive = (this._wiperMode ?? 0) > 0;
       // Sweep pulse — true for exactly ONE frame each time a wiper
@@ -10758,6 +10788,18 @@ export class GameScene extends Phaser.Scene {
         // survives as a live chaser, no head start.
         this.cops.weaponPulledAtTrap(this.player.position, base === 'fireworks' ? 2 : 0);
       }
+      // Rolling coal during the comply window QUIETLY cancels the civil stop
+      // (owner 2026-07-22): the trooper can't see who to pull over through
+      // the smoke, so the PULL OVER countdown can't fairly keep ticking
+      // toward +1★ after a landed smokescreen.  No escalation, no star —
+      // the smoked trooper itself breaks off via CopSystem's smoke-out.
+      // A HELD stop (already pulled over, trooper parked alongside) is NOT
+      // cancelable — you've been seen and stopped.
+      if (base === 'coal' && (this._trapPursuitActive || this._trapStopping)) {
+        this._trapPursuitActive = false;
+        this._trapStopping      = false;
+        this._trapComplyTimer   = 0;
+      }
       // Some weapons roll a 25% wanted-star chance on fire (witnesses,
       // acoustic flags, etc).  Custom mode bypasses since cops are
       // typically off there.  Disguise + paint_bomb don't make noise /
@@ -13174,6 +13216,25 @@ export class GameScene extends Phaser.Scene {
         .setAlpha(_fa)
         .setVisible(true);
 
+      // ── TEMP tailgate probe (remove after diagnosis) ────────────────────
+      // Auto-fires for any NPC that both overlaps the player horizontally AND
+      // is within ~120px of its bumper — the close/tailgate case that every
+      // earlier capture missed.  Shows the real depths, display-list indices,
+      // the pending-sort flag, and which one the LIST says is on top.  If the
+      // player's index is higher yet the NPC still paints over it on screen,
+      // it's a camera/render-pass issue, not a depth-sort one.
+      if (this.playerSprite
+          && Math.abs(proj.sx - this.playerSprite.x) < (proj.sw + this.playerSprite.displayWidth) * 0.5
+          && Math.abs(proj.sy - this.playerSprite.y) < 120) {
+        const dl = this.children ?? this.sys.displayList;
+        const nIdx = dl.getIndex(s), pIdx = dl.getIndex(this.playerSprite);
+        console.log('[depthdbg2]',
+          'NPC', useTex, 'depth', s.depth.toFixed(3), 'idx', nIdx, 'footY', proj.sy.toFixed(0),
+          '|| PLAYER depth', this.playerSprite.depth.toFixed(3), 'idx', pIdx, 'footY', this.playerSprite.y.toFixed(0),
+          '|| sortFlag', dl.sortChildrenFlag,
+          '|| listSaysOnTop', nIdx > pIdx ? 'NPC' : 'PLAYER');
+      }
+
       // Per-slot masked headlight Graphics — clear it for THIS frame.
       // (Same-direction traffic gets beams drawn here; oncoming /
       // cops / wrecks just leave it empty.)  The Graphics has a
@@ -15203,24 +15264,71 @@ export class GameScene extends Phaser.Scene {
     strokePath(0,   1.0, 0xEAF6FF, 0.52);   // bright main fracture line
     strokePath(2.4, 0.8, 0xCFE6FF, 0.22);   // faint parallel ghost → double vision
 
-    // ── Rock chips — upper-right and lower-right ───────────────────────
+    // ── Rock chips — big star-break impact pits (owner: ~5× bigger, and
+    // clear of the survival bars).  Both sit in the open centre glass so no
+    // HUD element (Drinks/Food bars, money, mirror) is ever behind them.
+    // {x, y} = pit centre, s = size scale, seed = crack pattern.  Tunable.
     const chips = [
-      { x: R - 72, y: T + 48, r: 8, arms: 6 },   // upper-right
-      { x: R - 46, y: B - 60, r: 7, arms: 5 },   // lower-right
+      { x: 335, y: 216, s: 1.10, seed: 1 },
+      { x: 500, y: 274, s: 0.95, seed: 2 },
     ];
-    for (const c of chips) {
-      g.lineStyle(1, 0x1A222E, 0.42);
-      for (let a = 0; a < c.arms; a++) {
-        const ang = a * (Math.PI * 2 / c.arms) + c.x * 0.017;
-        g.beginPath();
-        g.moveTo(c.x, c.y);
-        g.lineTo(c.x + Math.cos(ang) * c.r, c.y + Math.sin(ang) * c.r);
-        g.strokePath();
-      }
-      g.fillStyle(0xDDE8F2, 0.40); g.fillCircle(c.x, c.y, 1.8);   // bright pit
-      g.fillStyle(0x1A222E, 0.32); g.fillCircle(c.x, c.y, 0.9);   // dark core
-      g.lineStyle(0.8, 0xCFE6FF, 0.20); g.strokeCircle(c.x, c.y, c.r * 0.5);  // glassy ring
+    for (const c of chips) this._drawRockChip(g, c.x, c.y, c.s, c.seed);
+  }
+
+  /** Draw one star-break windshield chip: a crystalline impact pit ringed by a
+   *  faint stress halo, with sharp tapered glass splinters (a couple extra-long,
+   *  light-catching) radiating out — styled after the owner's reference photos. */
+  _drawRockChip(g, cx, cy, scale, seed) {
+    const TAU = Math.PI * 2;
+    // Deterministic per-chip pseudo-random so a chip's shape is stable.
+    const R = (i) => { const v = Math.sin(seed * 37.13 + i * 91.7) * 43758.5453; return v - Math.floor(v); };
+    const arms = 9 + Math.floor(R(0) * 4);   // 9–12 splinters
+
+    // Faint concentric stress rings — the "bullseye" pit halo.
+    g.lineStyle(1, 0xC3D6E8, 0.16);
+    g.strokeCircle(cx, cy, 15 * scale);
+    g.lineStyle(1, 0x92A9BD, 0.10);
+    g.strokeCircle(cx, cy, 26 * scale);
+
+    // Radiating splinters (tapered triangles: wide at the pit, sharp tip).
+    // Sized ~5× the old tiny chips: dominant splinters ~40px, a few longer
+    // light-catching glints — big enough to read, not swallowing the glass.
+    for (let a = 0; a < arms; a++) {
+      const ang   = (a / arms) * TAU + (R(a) - 0.5) * 0.5;
+      const glint = (a % 4 === 1);                       // a few long bright ones
+      const len   = (16 + R(a + 50) * 20) * scale * (glint ? 1.6 : 1);
+      const half  = (2.2 + R(a + 90) * 1.2) * scale;
+      const nx = Math.cos(ang + Math.PI / 2), ny = Math.sin(ang + Math.PI / 2);
+      const tipX = cx + Math.cos(ang) * len, tipY = cy + Math.sin(ang) * len;
+      // Dark under-splinter for depth (slightly wider + longer).
+      g.fillStyle(0x0A121C, 0.40);
+      g.fillTriangle(
+        cx + nx * (half + 1.2), cy + ny * (half + 1.2),
+        cx - nx * (half + 1.2), cy - ny * (half + 1.2),
+        tipX + Math.cos(ang) * 2.5, tipY + Math.sin(ang) * 2.5,
+      );
+      // Bright glass splinter on top.
+      g.fillStyle(glint ? 0xFFFFFF : 0xE6F1FC, glint ? 0.90 : 0.72);
+      g.fillTriangle(
+        cx + nx * half, cy + ny * half,
+        cx - nx * half, cy - ny * half,
+        tipX, tipY,
+      );
     }
+
+    // Crystalline impact pit — dark core + bright shattered facets.
+    g.fillStyle(0x101A26, 0.72);
+    g.fillCircle(cx, cy, 7 * scale);
+    for (let f = 0; f < 6; f++) {
+      const fa = R(f + 200) * TAU;
+      const fr = (2.5 + R(f + 210) * 5) * scale;
+      const fx = cx + Math.cos(fa) * fr, fy = cy + Math.sin(fa) * fr;
+      const fs = (1.8 + R(f + 220) * 2.4) * scale;
+      g.fillStyle(f % 2 ? 0xF2F8FF : 0x9FB6C9, 0.85);
+      g.fillTriangle(fx, fy - fs, fx + fs, fy + fs, fx - fs, fy + fs);
+    }
+    g.fillStyle(0xFFFFFF, 0.90);
+    g.fillCircle(cx, cy, 2.4 * scale);
   }
 
   _projectVehicle(relativeZ, laneOffset, playerX) {
@@ -15978,28 +16086,19 @@ export class GameScene extends Phaser.Scene {
     this._titleDifficultyBtns = [];
     this._titleWheelMap = {};
 
-    const titlePanelShape = (x, w, h = panelH, slant = 12) => ({
-      points: [
-        new Phaser.Geom.Point(x + slant, panelY),
-        new Phaser.Geom.Point(x + w, panelY),
-        new Phaser.Geom.Point(x + w - slant, panelY + h),
-        new Phaser.Geom.Point(x, panelY + h),
-      ],
-      outline: [
-        new Phaser.Geom.Point(x + slant + 5, panelY),
-        new Phaser.Geom.Point(x + w - 5, panelY),
-        new Phaser.Geom.Point(x + w - 2, panelY + 1),
-        new Phaser.Geom.Point(x + w, panelY + 5),
-        new Phaser.Geom.Point(x + w - slant + 2, panelY + h - 5),
-        new Phaser.Geom.Point(x + w - slant, panelY + h - 2),
-        new Phaser.Geom.Point(x + w - slant - 4, panelY + h),
-        new Phaser.Geom.Point(x + 5, panelY + h),
-        new Phaser.Geom.Point(x + 2, panelY + h - 1),
-        new Phaser.Geom.Point(x, panelY + h - 5),
-        new Phaser.Geom.Point(x + slant - 2, panelY + 5),
-        new Phaser.Geom.Point(x + slant, panelY + 2),
-      ],
-    });
+    // Plain rectangle zone traced to each BAKED plate/card frame (owner
+    // 2026-07-22): all four bottom menu zones (START / DIFFICULTY / DRIVING
+    // TYPE / LOAD SAVE) pass art-measured x/w/h/y so the tap area and hover
+    // outline hug the artwork exactly — no parallelogram skew.
+    const titleRectShape = (x, w, h = panelH, y = panelY) => {
+      const pts = [
+        new Phaser.Geom.Point(x,     y),
+        new Phaser.Geom.Point(x + w, y),
+        new Phaser.Geom.Point(x + w, y + h),
+        new Phaser.Geom.Point(x,     y + h),
+      ];
+      return { points: pts, outline: pts };
+    };
     const makeTitleZone = (shape, glow, onTap, paintInterior = null) => {
       const g = this.add.graphics().setDepth(d + 10);
       const draw = (hover = false) => {
@@ -16122,15 +16221,18 @@ export class GameScene extends Phaser.Scene {
     };
     this._refreshDifficultyHighlights = updateSelectionText;
 
-    const startBg = makeTitleZone(titlePanelShape(74, 176, compactPanelH, 11), 0xFF5FCC,
+    // Full-plate zone (owner 2026-07-22): the baked START plate spans
+    // ~(18,345) 246×74 — the old 176×47 zone missed the plate's edges and
+    // the hover outline drew a small box inside the big plate.
+    const startBg = makeTitleZone(titleRectShape(18, 237, 74, 345), 0xFF5FCC,
       () => this._fireTitleCursor?.());
-    const diffBg = makeTitleZone(titlePanelShape(diffX, diffW), 0x3CCBFF, () => {
+    const diffBg = makeTitleZone(titleRectShape(265, 157, 75, 346), 0x3CCBFF, () => {
       diffIdx = (diffIdx + 1) % DIFF_OPTIONS.length;
       this._wheelCursor = DIFF_OPTIONS[diffIdx].id;
       updateSelectionText();
       diffBg._titleDraw?.(true);
     }, g => dynamicFill(g, diffFillX, CARD_PANEL_W));
-    const steeringBg = makeTitleZone(titlePanelShape(steeringX, steeringW), 0xCE67FF, () => {
+    const steeringBg = makeTitleZone(titleRectShape(429, 146, 75, 346), 0xCE67FF, () => {
       thumbsIdx = (thumbsIdx + 1) % THUMBS_OPTIONS.length;
       const opt = THUMBS_OPTIONS[thumbsIdx];
       // Persist the carousel pick immediately so _armTiltPrefetch's
@@ -16158,8 +16260,10 @@ export class GameScene extends Phaser.Scene {
         );
       }
     }, g => dynamicFill(g, driveFillX, CARD_PANEL_W));
-    const savedBg = makeTitleZone(titlePanelShape(611, 154, compactPanelH, 12), 0x4BB7FF,
-      () => this._promptForCode(last?.code ?? ''));
+    // Full-plate zone (owner 2026-07-22): baked LOAD SAVE plate spans
+    // ~(576,345) 182×74 (same reason as START above).
+    const savedBg = makeTitleZone(titleRectShape(585, 193, 74, 345), 0x4BB7FF,
+      () => this._titleLoadSave());
     this._titleDifficultyBtns.push(startBg, diffBg, steeringBg, savedBg);
     this._titleResume = savedBg;
     this._titleResumeTxt = null;
@@ -16243,7 +16347,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       if (cur === 'saved') {
-        this._promptForCode(last?.code ?? '');
+        this._titleLoadSave();   // one-tap resume — never the code popup (owner 2026-07-22)
         return;
       }
       this._startGameplay();
@@ -16311,13 +16415,13 @@ export class GameScene extends Phaser.Scene {
     const STEPS = [
       { key: 'plates', b: { x: 16,  y: 104, w: 137, h: 198 }, box: { x: 590, y: 150, w: 360 },
         text: "Here is where your saved games will be. Pick a state's plate and customize it now." },
-      { key: 'diff',   b: { x: 262, y: 351, w: 150, h: 56 },  box: { x: 400, y: 66,  w: 470 },
+      { key: 'diff',   b: { x: 265, y: 346, w: 157, h: 75 },  box: { x: 400, y: 66,  w: 470 },
         text: "Easy, medium, and hard are your options for now until you complete the drive. The Custom mode will allow you more fun at your own leisure." },
-      { key: 'drive',  b: { x: 433, y: 351, w: 150, h: 56 },  box: { x: 380, y: 66,  w: 500 },
+      { key: 'drive',  b: { x: 429, y: 346, w: 146, h: 75 },  box: { x: 380, y: 66,  w: 500 },
         text: "Default is the preferred play here, but if you'd rather switch it up, be my guest. If you accidentally declined the orientation permission, you can cycle through this until you get to default again." },
-      { key: 'load',   b: { x: 610, y: 349, w: 156, h: 49 },  box: { x: 380, y: 78,  w: 440 },
+      { key: 'load',   b: { x: 585, y: 345, w: 193, h: 74 },  box: { x: 380, y: 78,  w: 440 },
         text: "If the game crashes on you, this is where I would start." },
-      { key: 'start',  b: { x: 73,  y: 349, w: 178, h: 49 },  box: { x: 430, y: 86,  w: 400 },
+      { key: 'start',  b: { x: 18,  y: 345, w: 237, h: 74 },  box: { x: 430, y: 86,  w: 400 },
         text: "That's your setup. Tap START to hit the road!" },
     ];
     const scrim = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 3, SCREEN_H * 3, 0x02060E, 0.5)
@@ -20158,6 +20262,8 @@ export class GameScene extends Phaser.Scene {
    *  shape persisted by `_saveRestStop`.  Difficulty is restored from the
    *  snapshot first so the next scene boots in the matching mode. */
   _resumeFromSavedSnapshot(snap) {
+    // Same resume-path radio kick as _resumeFromLiveSnapshot (see there).
+    this._kickRadio();
     if (snap?.difficulty) Difficulty.set(snap.difficulty, this.registry);
     this.scene.start('Game', {
       resumeFromStop: snap.id,
@@ -20171,6 +20277,45 @@ export class GameScene extends Phaser.Scene {
    *  the per-device code map, and resume from the matching snapshot.
    *  `defaultCode` pre-fills the prompt — pass the most recent save code
    *  so the player can either accept it (Enter) or erase + type another. */
+  /** Title-screen LOAD SAVE handler — one tap resumes the slot's last
+   *  DELIBERATE save point (phone-menu Save button), with money / location /
+   *  vehicles / vices / weapons / survival bars all restored via the
+   *  live-snapshot path.  NEVER pops the type-a-code modal (owner 2026-07-22):
+   *  fallback order is manual phone save → rolling autosave → last rest-stop
+   *  checkpoint → a "NO SAVE FOUND" toast. */
+  _titleLoadSave() {
+    const save = this.registry.get('save');
+    // Read the freshest save from the CURRENTLY-selected slot's storage.
+    // (Slots can be switched on the title without a scene restart, so an
+    // init-time cached snapshot can be stale — go straight to the store.)
+    // Prefer the durable phone-menu save point over the rolling autosave.
+    const latest   = save?.latestLiveRun?.('manualSave') ?? save?.latestLiveRun?.();
+    const liveSnap = (latest?.snap?.position != null) ? latest.snap : null;
+    if (liveSnap) {
+      // Restore the steering mode / profile bucket the run was saved under so
+      // the resumed run — and its future autosaves — hit the same profile.
+      if (latest?.mode) {
+        save?.setMode?.(latest.mode);
+        const uiId = { tap: 'flappy', classic: 'classic', tilt: 'tilt' }[latest.mode] ?? 'default';
+        this.registry?.set?.('titleThumbsPick', uiId);
+        this.registry?.set?.('steeringMode',    uiId);
+      }
+      this._resumeFromLiveSnapshot(liveSnap);
+      return;
+    }
+    // No phone save / autosave — try the last rest-stop checkpoint.
+    const savedSnap = (() => { const r = save?.get?.('lastRestStop'); return (r && r.id) ? r : null; })();
+    if (savedSnap) { this._resumeFromSavedSnapshot(savedSnap); return; }
+    // Nothing saved for this slot — say so on the title (no code popup).
+    const t = this.add.text(667, 334, 'NO SAVE FOUND', {
+      fontSize: '15px', fontFamily: 'Impact, "Arial Black", sans-serif',
+      color: '#FF6666', stroke: '#000', strokeThickness: 4,
+    }).setOrigin(0.5, 1).setDepth(200);
+    this._addHudObjs?.(t);
+    this.tweens.add({ targets: t, alpha: 0, delay: 1200, duration: 400,
+                      onComplete: () => t.destroy() });
+  }
+
   _promptForCode(defaultCode = '') {
     // Three load sources, chosen by what the player types:
     //   LAST  — the in-progress run (live autosave / clean-quit snapshot),
@@ -20347,6 +20492,10 @@ export class GameScene extends Phaser.Scene {
       const snap = this._collectSaveSnapshot(null);
       if (!save || !snap) return { ok: false };
       save.set('liveRun', { snap, ts: Date.now(), manual: true }); // local exact-spot resume
+      // Durable phone-menu save point — unlike liveRun, later autosaves never
+      // overwrite it, so the title LOAD SAVE returns to THIS spot (the last
+      // place the player deliberately hit Save) even after driving on.
+      save.set('manualSave', { snap, ts: Date.now() });
       try {
         CloudSave.put({                                          // cross-device (best-effort)
           playerId: save.activePlayerId, plate: save.activePlate,
@@ -20361,6 +20510,11 @@ export class GameScene extends Phaser.Scene {
    *  penalties, no "lost you" modal.  Routed through the _resumeLive branch. */
   _resumeFromLiveSnapshot(snap) {
     if (!snap || typeof snap.position !== 'number') return;
+    // Kick the radio NOW — we're inside the LOAD SAVE tap's gesture frame,
+    // the first legal moment for audio.  Fresh runs kick in _startGameplay,
+    // but resume boots skip it, which left resumed runs with NO music
+    // (owner 2026-07-22: "music isn't playing by default").
+    this._kickRadio();
     if (snap.difficulty) Difficulty.set(snap.difficulty, this.registry);
     this.scene.start('Game', { resumeLiveSnapshot: snap });
   }

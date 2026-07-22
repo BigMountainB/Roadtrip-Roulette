@@ -473,8 +473,9 @@
       z-index: 2;
       flex-direction: column;
       /* Pad the top by the iOS safe-area inset so the MUSIC title
-         clears the Dynamic Island / notch on modern iPhones. */
-      padding: calc(env(safe-area-inset-top, 0px) + 5vmin) 4% 4%;
+         clears the Dynamic Island / notch, and the BOTTOM inset so the
+         close button clears the home-indicator "black bar". */
+      padding: calc(env(safe-area-inset-top, 0px) + 5vmin) 4% calc(env(safe-area-inset-bottom, 0px) + 4%);
       /* No overflow on the container — the inner body owns scrolling
          so the header + close button stay pinned. */
       overflow: hidden;
@@ -487,8 +488,10 @@
       -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
       /* Room at the bottom so the last row clears the floating
-         CLOSE / BACK button. */
-      padding-bottom: 14vmin;
+         CLOSE / BACK button AND the iOS home-indicator safe-area
+         (the bottom "black bar") — otherwise the final rows are hidden
+         under it and can't be scrolled into view. */
+      padding-bottom: calc(14vmin + env(safe-area-inset-bottom, 0px));
     }
     #phone-music.open { display: flex; }
     #phone-music .title {

@@ -308,6 +308,27 @@ export class SaveSystem {
     return g;
   }
 
+  /** Newest saved run across the ACTIVE slot's steering-mode profiles.
+   *  The title-screen LOAD SAVE button resumes the slot's latest save in one
+   *  tap, regardless of which steering mode it was saved under.  Saves live
+   *  per-mode, so scan all modes and return the freshest one.
+   *  `key` picks the slot scanned: 'manualSave' (phone-menu Save — survives
+   *  later autosaves) or 'liveRun' (rolling autosave, default).
+   *  Returns { snap, ts, mode } or null when the slot has no such save. */
+  latestLiveRun(key = 'liveRun') {
+    const slot = this._slot;
+    let best = null;
+    for (const mode of VALID_MODES) {
+      const lr  = slot.profiles?.[mode]?.[key];
+      const pos = lr?.snap?.position;
+      if (!lr || typeof pos !== 'number') continue;
+      if (!best || (lr.ts ?? 0) > (best.ts ?? 0)) {
+        best = { snap: lr.snap, ts: lr.ts ?? 0, mode };
+      }
+    }
+    return best;
+  }
+
   _load() {
     try {
       const rawV3 = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_DUI_V3);
