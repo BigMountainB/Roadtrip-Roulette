@@ -527,8 +527,26 @@ const _boot = () => {
     const mult = (m && m.repairUpgradeCostMult) ? m.repairUpgradeCostMult : 1;
     return Math.max(0, Math.round((c ?? 0) * mult));
   };
+  // Money source of truth (owner 2026-07-21): while a rest stop is open it owns
+  // the LIVE cash (RestStopScene._score) — the GameScene is stopped with a stale
+  // .score.  Garage (iPhone menu) spends must hit whichever is live, or the same
+  // dollars can be spent again in the rest-stop store (double-earn exploit).
+  const _moneyCtx = () => {
+    const rest = game.scene.getScene('RestStop');
+    if (rest && rest.scene?.isActive?.() && typeof rest._score === 'number') {
+      return {
+        get:   () => Math.max(0, Math.round(rest._score ?? 0)),
+        spend: (c) => { rest._score = Math.max(0, (rest._score ?? 0) - c); try { rest._refreshScore?.(); } catch (_) {} },
+      };
+    }
+    const gs = game.scene.getScene('Game');
+    return {
+      get:   () => Math.max(0, Math.round(gs?.score ?? 0)),
+      spend: (c) => { if (gs) gs.score = Math.max(0, (gs.score ?? 0) - c); },
+    };
+  };
   window.__upgrades = {
-    cash: () => Math.max(0, Math.round(game.scene.getScene('Game')?.score ?? 0)),
+    cash: () => _moneyCtx().get(),
 
     // 8 player-facing stats as { key: {bars, note} } for the current build.
     stats: (vehicleId) => {
@@ -568,16 +586,17 @@ const _boot = () => {
       const scene = game.scene.getScene('Game');
       const save  = game.registry.get('save');
       const up    = getUpgradeById(upgradeId);
-      if (!up)    return { ok: false, reason: 'unknown-upgrade', cash: Math.round(scene?.score ?? 0) };
-      const cash  = Math.round(scene?.score ?? 0);
+      const money = _moneyCtx();                       // live cash (rest stop or game)
+      if (!up)    return { ok: false, reason: 'unknown-upgrade', cash: money.get() };
+      const cash  = money.get();
       const cost  = _upgradeDiscountCost(up.cost);   // pop-punk −25% (else ×1)
       if (cash < cost) return { ok: false, reason: 'insufficient', cash };
-      if (scene) scene.score -= cost;
+      money.spend(cost);
       const res = installUpgrade(save, vehicleId, upgradeId);
       // Refresh the live handling modifiers so the upgrade affects the drive
       // immediately (not just the stat bars).
       try { scene?._recomputeUpgradeFx?.(); } catch (_) {}
-      return { ok: res.ok, reason: res.reason, cash: Math.max(0, Math.round(scene?.score ?? 0)) };
+      return { ok: res.ok, reason: res.reason, cash: money.get() };
     },
   };
 

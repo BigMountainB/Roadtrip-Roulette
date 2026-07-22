@@ -1181,6 +1181,21 @@ export class RestStopScene extends Phaser.Scene {
       if (o.terms?.no_chains)  t.push("the DARE: no chains — strap them on and the deal's dead");
       return t.length ? `The catch: ${t.join('; ')}.` : 'No strings. Easy money.';
     };
+    // Condensed terms for the scannable deal-summary row (owner 2026-07-21):
+    // the SAME terms as termLine, tagged + dot-separated so they read at a
+    // glance instead of buried in prose.
+    const catchLine = (o) => {
+      const t = [];
+      if (o.terms?.fragile)    t.push(`FRAGILE · over ${o.terms.fragile.maxDamage} dmg = trash`);
+      if (o.terms?.perishable) t.push('PERISHABLE · dawdle and it spoils');
+      if (o.terms?.illegal)    t.push('HOT · heat climbs harder while carrying');
+      if (o.terms?.rush)       t.push(`RUSH · ${mmss(o.terms.rush.budgetSec)} on the clock`);
+      if (o.terms?.weather_run) t.push(o.terms.weather_run.tag === 'wind'
+        ? 'WIND · Vantage gusts the whole way'
+        : 'STORM · rain into snow over the pass');
+      if (o.terms?.no_chains)  t.push('DARE · no chains allowed');
+      return t.length ? t.join('  ·  ') : 'No strings — easy money';
+    };
     // Drop-off vendor callout (owner 2026-07-19): if the destination has a
     // CarGo lot, name it — that's where deliveries + riders are handed off.
     const dropAt = (o) => {
@@ -1227,7 +1242,7 @@ export class RestStopScene extends Phaser.Scene {
         ? `Size up the ${o.targetName} rider`
         : o.type === 'heat'
           ? "Bring up the heat you're wearing"
-        : (open.length > 1 ? `Hear out the ${o.targetName} run` : 'Hear out the job'),
+        : (open.length > 1 ? `Hear out the ${o.targetName} job` : 'Hear the job out'),
       next:  `offer${i}`,
       ...(ackFail ? { setMemory: { failAckPending: false } } : {}),
     }));
@@ -1260,7 +1275,7 @@ export class RestStopScene extends Phaser.Scene {
       if (!busy) {
         // Acceptance is idempotent (MissionSystem.accept is double-tap safe).
         choices.push({
-          label: o.type === 'passenger' ? `Take them aboard ($${o.payout})` : `Take the job ($${o.payout})`,
+          label: o.type === 'passenger' ? `Take the rider — $${o.payout}` : `Take the job — $${o.payout}`,
           effects: {}, end: true, missionAccept: o.id,
         });
       }
@@ -1272,29 +1287,53 @@ export class RestStopScene extends Phaser.Scene {
         // instead of a second character (portrait/face) popping up. Keeps the
         // rider's own line + quirk for flavor, just in the contact's mouth.
         const p = o.passenger ?? {};
-        const riderName = p.name ? `${p.name} ` : '';
+        const riderName = p.name ? `${p.name}` : 'A rider';
         nodes[`offer${i}`] = {
-          line: `Got a rider — ${riderName}needs ${dropAt(o)}, ${o.routeMiles} miles. `
-              + `"${p.ask ?? 'I need a ride.'}" ${quirkLine[p.quirk] ?? ''} $${o.payout} on arrival.`
+          line: (`${tierIntro(o)}Got someone who needs a lift. `
+              + `"${p.ask ?? 'I need a ride.'}" ${quirkLine[p.quirk] ?? ''}`).trim()
               + (busy ? " …Looks like your passenger seat's spoken for, though." : ''),
+          deal: {
+            head: 'JOB · RIDER',
+            rows: [
+              ['Take',  `${riderName} → ${dropAt(o)}`],
+              ['Trip',  `${o.routeMiles} mi`],
+              ['Pay',   `$${o.payout} on arrival`],
+              ['Catch', quirkLine[p.quirk] ? quirkLine[p.quirk] : 'No strings — easy money'],
+            ],
+          },
           choices,
         };
       } else if (o.type === 'heat') {
         // Heat escape — however you shed the stars counts (paid clears too;
         // their price is penalty enough — 2026-07-13 decision).
         nodes[`offer${i}`] = {
-          line: `${tierIntro(o)}You're glowing, friend. Lose the tail and pull into ${o.targetName} `
-              + `CLEAN — ${o.routeMiles} miles, zero stars when you land. `
-              + `$${o.payout}, and I don't care how you shake them. Get busted, we never met.`
+          line: `${tierIntro(o)}You're glowing, friend — and I don't care how you shake them. `
+              + `Get busted and we never met.`
               + (busy ? " …Except you're already running from something for someone." : ''),
+          deal: {
+            head: 'JOB · SHAKE THE HEAT',
+            rows: [
+              ['Go',    `${o.targetName}`],
+              ['Trip',  `${o.routeMiles} mi`],
+              ['Pay',   `$${o.payout} on arrival`],
+              ['Catch', 'land with ZERO stars — busted = deal off'],
+            ],
+          },
           choices,
         };
       } else {
-        const verb = o.type === 'timed' ? 'Run' : 'Haul';
         nodes[`offer${i}`] = {
-          line: `${tierIntro(o)}${verb} ${o.cargo} to ${dropAt(o)} — ${o.routeMiles} miles up the road. `
-              + `${termLine(o)} $${o.payout} on delivery, cash.`
+          line: `${tierIntro(o)}Something needs to get up the road and stay off paper. You in?`
               + (busy ? " …But your trunk's full. Come back when it isn't." : ''),
+          deal: {
+            head: o.type === 'timed' ? 'JOB · RUSH DELIVERY' : 'JOB · DELIVERY',
+            rows: [
+              ['Haul',  `${o.cargo} → ${dropAt(o)}`],
+              ['Trip',  `${o.routeMiles} mi`],
+              ['Pay',   `$${o.payout} on delivery`],
+              ['Catch', catchLine(o)],
+            ],
+          },
           choices,
         };
       }
@@ -1408,7 +1447,16 @@ export class RestStopScene extends Phaser.Scene {
       { dlg: 16, spk: 14, fct: 10, ch: 13, bh: 28 },   // pre-2026-07-15 sizes
     ];
     let T = TYPE_TIERS[TYPE_TIERS.length - 1];
-    let dlgText = null, factText = null, botH = 0;
+    // Deal-summary block (mission offers only) — a scannable "JOB · TYPE"
+    // header plus label/value rows, rendered as its own boxed panel below the
+    // contact's spoken line so the facts (what · where · pay · catch) read at
+    // a glance instead of buried in prose.  Monospace keeps the columns aligned.
+    const dealStr = node.deal
+      ? node.deal.head + '\n'
+        + node.deal.rows.map(([k, v]) => `${(k + '      ').slice(0, 6)}${v}`).join('\n')
+      : null;
+
+    let dlgText = null, factText = null, dealText = null, botH = 0;
     for (const t of TYPE_TIERS) {
       const d = this.add.text(tx, py + 34, `"${node.line}"`, {
         fontSize: `${t.dlg}px`, fontFamily: 'Georgia, serif', color: '#F4F7FF',
@@ -1418,15 +1466,31 @@ export class RestStopScene extends Phaser.Scene {
         fontSize: `${t.fct}px`, fontFamily: 'Arial', color: '#9FB7D6',
         fontStyle: 'italic', wordWrap: { width: tw }, lineSpacing: 1,
       }).setDepth(D + 4).setVisible(false) : null;
+      const dl = dealStr ? this.add.text(0, 0, dealStr, {
+        fontSize: `${t.fct + 3}px`, fontFamily: 'Menlo, Consolas, monospace',
+        color: '#DCE9FB', lineSpacing: 4, wordWrap: { width: tw - 16 },
+      }).setDepth(D + 5).setVisible(false) : null;
+      const dH = dl ? dl.height + 26 : 0;
       const bot = (t.spk + 8) + (f ? f.height + 6 : 0) + choices.length * (t.bh + 6) + 8;
       const last = t === TYPE_TIERS[TYPE_TIERS.length - 1];
-      if (py + 34 + d.height + 10 <= py + ph - bot || last) {
-        T = t; dlgText = d; factText = f; botH = bot;
+      if (py + 34 + d.height + dH + 10 <= py + ph - bot || last) {
+        T = t; dlgText = d; factText = f; dealText = dl; botH = bot;
         break;
       }
-      d.destroy(); f?.destroy();
+      d.destroy(); f?.destroy(); dl?.destroy();
     }
     add(dlgText);
+    // Boxed panel behind the deal rows.
+    if (dealText) {
+      const dyTop = py + 34 + dlgText.height + 12;
+      const dpad = 9;
+      const dbg = this.add.rectangle(
+        tx - dpad, dyTop - dpad,
+        Math.min(tw, dealText.width + dpad * 2), dealText.height + dpad * 2,
+        0x0C1A32, 0.94,
+      ).setOrigin(0, 0).setStrokeStyle(1.5, 0x39A8FF, 0.7).setDepth(D + 4);
+      add(dbg, dealText.setPosition(tx, dyTop).setVisible(true));
+    }
     add(this.add.text(tx, py + ph - botH, (node.speaker ?? enc.speaker ?? port.name).toUpperCase(), {
       fontSize: `${T.spk}px`, fontFamily: IMPACT, color: '#FFD23D',
     }).setDepth(D + 4));
