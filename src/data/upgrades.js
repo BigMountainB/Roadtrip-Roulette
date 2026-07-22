@@ -21,12 +21,17 @@
 
 export const UPGRADE_SLOTS = [
   'tires', 'brakes', 'suspension', 'engine',
-  'cooling', 'fuel', 'body', 'visibility', 'police',
+  'cooling', 'fuel', 'body',
+  // Lights & Glass — à-la-carte singular buys (owner 2026-07-21), each a
+  // one-time purchase (single-tier slot) rather than a level ladder.
+  'wipers', 'foglights', 'headlights', 'windshield',
+  'police',
 ];
 
 export const SLOT_LABELS = {
   tires: 'Tires', brakes: 'Brakes', suspension: 'Suspension', engine: 'Engine',
-  cooling: 'Cooling', fuel: 'Fuel System', body: 'Body', visibility: 'Lights & Glass',
+  cooling: 'Cooling', fuel: 'Fuel System', body: 'Body',
+  wipers: 'Wiper Blades', foglights: 'Fog Lights', headlights: 'Headlights', windshield: 'Windshield',
   police: 'Police Avoidance',
 };
 
@@ -93,14 +98,26 @@ export const UPGRADE_CATALOG = {
       desc: 'Now you are the hazard.', effects: { hp: +30, steer: -0.04, persistent: true },
       tradeoff: 'Heavier nose (−steering)' },
   ],
-  visibility: [
-    { id: 'vis_1', slot: 'visibility', level: 1, label: 'New Wiper Blades', cost: 40,
-      desc: 'You can see the rain now.', effects: { visibility: +1, persistent: true } },
-    { id: 'vis_2', slot: 'visibility', level: 2, label: 'LED Bulbs', cost: 120,
-      desc: 'Not two dying candles anymore.', effects: { visibility: +1, persistent: true } },
-    { id: 'vis_3', slot: 'visibility', level: 3, label: 'Rally Light Bar', cost: 500,
-      desc: 'Turns night into slightly-less-night.', effects: { visibility: +2, heatAtNight: +0.05, persistent: true },
-      tradeoff: 'More police attention at night' },
+  // ── Lights & Glass — à-la-carte, each bought once (single-tier slots) ──
+  wipers: [
+    { id: 'wipers_1', slot: 'wipers', level: 1, label: 'New Wiper Blades', cost: 40,
+      desc: 'Actually clear the rain + snow now (stock blades barely smear).',
+      effects: { visibility: +1, persistent: true } },
+  ],
+  foglights: [
+    { id: 'foglights_1', slot: 'foglights', level: 1, label: 'Fog Lights', cost: 150,
+      desc: 'Punch a clearer wedge through fog in the headlight path.',
+      effects: { visibility: +1, persistent: true } },
+  ],
+  headlights: [
+    { id: 'headlights_1', slot: 'headlights', level: 1, label: 'New Headlights', cost: 300,
+      desc: 'Electric-truck LEDs — brighter beam + the whole night/tunnel reads lighter.',
+      effects: { visibility: +1, persistent: true } },
+  ],
+  windshield: [
+    { id: 'windshield_1', slot: 'windshield', level: 1, label: 'New Windshield', cost: 500,
+      desc: 'Fresh glass — clears the chips + crack, and +5 HP.',
+      effects: { hp: +5, visibility: +1, persistent: true } },
   ],
   police: [
     { id: 'pol_1', slot: 'police', level: 1, label: 'Radar Detector', cost: 250,
