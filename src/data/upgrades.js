@@ -11,7 +11,8 @@
 //   cooling                                     cooling headroom (heat-scale, + = cooler)
 //   visibility                                  visibility bars (0–5 scale)
 //   rangeMi                                     fuel/electric range
-//   topMph                                      top-speed delta (usually the tradeoff)
+//   topMph                                      flat top-speed delta (buffs)
+//   topMphPct, accelPct                         engine: % top-speed / % acceleration
 //   rainGrip, snowGrip, offroad                 contextual grip (hooked to weather later)
 //   heatAtNight                                 + = draws more police attention at night
 //   persistent (bool)                           true = permanent; false = temporary repair
@@ -32,39 +33,37 @@ export const SLOT_LABELS = {
 export const UPGRADE_CATALOG = {
   tires: [
     { id: 'tires_1', slot: 'tires', level: 1, label: 'Used All-Seasons', cost: 250,
-      desc: 'Round-ish. Technically tires.', effects: { grip: +0.04, persistent: true },
-      tradeoff: 'Wears faster' },
+      desc: 'Round-ish. Technically tires.', effects: { grip: +0.10, hp: +5, persistent: true } },
     { id: 'tires_2', slot: 'tires', level: 2, label: 'Good All-Seasons', cost: 600,
-      desc: 'Real grip, real money.', effects: { grip: +0.08, rainGrip: +0.12, persistent: true } },
+      desc: 'Real grip, real money.', effects: { grip: +0.20, rainGrip: +0.12, hp: +10, persistent: true } },
     { id: 'tires_3', slot: 'tires', level: 3, label: 'Snow Tires', cost: 1200,
-      desc: 'Ugly, loud, and technically round.', effects: { grip: +0.05, snowGrip: +0.22, topMph: -3, persistent: true },
-      tradeoff: '−3 mph dry top speed' },
+      desc: 'Ugly, loud, and technically round.', effects: { grip: +0.30, snowGrip: +0.22, hp: +15, persistent: true } },
   ],
   brakes: [
     { id: 'brakes_1', slot: 'brakes', level: 1, label: 'New Pads', cost: 300,
-      desc: 'They stop the car. Mostly.', effects: { braking: +0.05, persistent: true } },
+      desc: 'They stop the car. Mostly.', effects: { braking: +0.05, grip: +0.05, persistent: true } },
     { id: 'brakes_2', slot: 'brakes', level: 2, label: 'Slotted Rotors', cost: 700,
-      desc: 'Fade-resistant on the pass.', effects: { braking: +0.10, persistent: true } },
+      desc: 'Fade-resistant on the pass.', effects: { braking: +0.10, grip: +0.10, persistent: true } },
     { id: 'brakes_3', slot: 'brakes', level: 3, label: 'Big Brake Kit', cost: 1800,
-      desc: 'Overkill is a personality.', effects: { braking: +0.16, stability: +0.03, persistent: true } },
+      desc: 'Overkill is a personality.', effects: { braking: +0.16, grip: +0.15, stability: +0.03, persistent: true } },
   ],
   suspension: [
     { id: 'susp_1', slot: 'suspension', level: 1, label: 'Fresh Shocks', cost: 800,
-      desc: 'No longer a pogo stick.', effects: { stability: +0.05, persistent: true } },
+      desc: 'No longer a pogo stick.', effects: { stability: +0.05, hp: +5, persistent: true } },
     { id: 'susp_2', slot: 'suspension', level: 2, label: 'Rally Springs', cost: 1200,
-      desc: 'Soaks up the shoulder.', effects: { stability: +0.08, offroad: +0.10, persistent: true } },
+      desc: 'Soaks up the shoulder.', effects: { stability: +0.08, offroad: +0.10, hp: +15, persistent: true } },
     { id: 'susp_3', slot: 'suspension', level: 3, label: 'Lowering Kit', cost: 1500,
-      desc: 'Sharp on-road, scrapes everything else.', effects: { steer: +0.10, stability: +0.04, offroad: -0.15, persistent: true },
+      desc: 'Sharp on-road, scrapes everything else.', effects: { steer: +0.10, stability: +0.04, offroad: -0.15, hp: +25, persistent: true },
       tradeoff: 'Worse off-road / water approach' },
   ],
   engine: [
     { id: 'eng_1', slot: 'engine', level: 1, label: 'Tune-Up', cost: 250,
-      desc: 'Runs like it means it.', effects: { topMph: +3, persistent: true } },
+      desc: 'Runs like it means it.', effects: { topMphPct: +0.03, accelPct: +0.05, persistent: true } },
     { id: 'eng_2', slot: 'engine', level: 2, label: 'Cold Air Intake', cost: 450,
-      desc: 'Louder, angrier, faster.', effects: { topMph: +5, cooling: -0.04, persistent: true },
+      desc: 'Louder, angrier, faster.', effects: { topMphPct: +0.05, accelPct: +0.10, cooling: -0.04, persistent: true },
       tradeoff: 'Runs a bit hotter' },
     { id: 'eng_3', slot: 'engine', level: 3, label: 'ECU Tune', cost: 900,
-      desc: 'Warranty? Never heard of her.', effects: { topMph: +9, cooling: -0.08, persistent: true },
+      desc: 'Warranty? Never heard of her.', effects: { topMphPct: +0.10, accelPct: +0.20, cooling: -0.08, persistent: true },
       tradeoff: 'Runs hot — pair with cooling' },
   ],
   cooling: [
@@ -87,12 +86,11 @@ export const UPGRADE_CATALOG = {
   ],
   body: [
     { id: 'body_1', slot: 'body', level: 1, label: 'Zip-Tied Bumper', cost: 25,
-      desc: 'Held on by hope.', effects: { hp: +8, persistent: false },
-      tradeoff: 'Temporary — falls off eventually' },
+      desc: 'Held on by hope.', effects: { hp: +5, persistent: true } },
     { id: 'body_2', slot: 'body', level: 2, label: 'Reinforced Bumper', cost: 600,
-      desc: 'Takes a hit, keeps rolling.', effects: { hp: +18, persistent: true } },
+      desc: 'Takes a hit, keeps rolling.', effects: { hp: +15, persistent: true } },
     { id: 'body_3', slot: 'body', level: 3, label: 'Bash Bar', cost: 1000,
-      desc: 'Now you are the hazard.', effects: { hp: +32, steer: -0.04, persistent: true },
+      desc: 'Now you are the hazard.', effects: { hp: +30, steer: -0.04, persistent: true },
       tradeoff: 'Heavier nose (−steering)' },
   ],
   visibility: [

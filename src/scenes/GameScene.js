@@ -806,9 +806,10 @@ export class GameScene extends Phaser.Scene {
     this.player.gasMaxMi = _veh.rangeMi + _rangeUp;
 
     // ── New overhaul systems ──────────────────────────────────────────
-    // HP cap pulls from the chosen vehicle's spec so a Truck can soak
-    // more damage than a Beater out of the box.
-    this.damage  = new DamageModel({ max: _veh.hp, durability: _veh.hp });
+    // HP cap = vehicle base HP + summed part-upgrade HP (bumper / suspension /
+    // tires / windshield).  Beater base 25 → up to 100 fully upgraded.
+    const _maxHp = this._runMaxHp(_veh);
+    this.damage  = new DamageModel({ max: _maxHp, durability: _maxHp });
     this.wallet  = this.registry.get('wallet');
     // Career stats tracker (registry singleton).  Hot-path methods mutate
     // in-memory; tripStart/Complete/End + rest-stop transitions flush.
@@ -1681,8 +1682,9 @@ export class GameScene extends Phaser.Scene {
             // starts fresh, not at whatever durability they crashed at.
             const _vehId = this.registry?.get?.('vehicleId') ?? 'beater';
             const _veh   = VEHICLES[_vehId] ?? VEHICLES.beater;
-            this.damage?.setMax?.(_veh.hp);
-            this.damage?.setDurability?.(_veh.hp);
+            const _mhp   = this._runMaxHp(_veh);
+            this.damage?.setMax?.(_mhp);
+            this.damage?.setDurability?.(_mhp);
             this.scene.start('Game', {});
           },
         );
@@ -2235,8 +2237,8 @@ export class GameScene extends Phaser.Scene {
               this.registry.set('vehicleId', newId);
               this.player.gasMaxMi = newVeh.rangeMi;
               this.player.gasMi    = Math.round(newVeh.rangeMi * 0.5);   // half tank
-              if (this.damage?.setMax)        this.damage.setMax(newVeh.hp);
-              if (this.damage?.setDurability) this.damage.setDurability(newVeh.hp);
+              if (this.damage?.setMax)        this.damage.setMax(this._runMaxHp(newVeh));
+              if (this.damage?.setDurability) this.damage.setDurability(this._runMaxHp(newVeh));
               // Apply the new sprite (or fall back to tint) immediately
               // so the player visibly sees the swap on resume.
               if (this.playerSprite) {
@@ -5013,8 +5015,12 @@ export class GameScene extends Phaser.Scene {
     // own topMph + boost for the max and 75% of that for cruise.
     const _boostBase  = _gvt ? _gvt.topSpeedMph : (_vehSpec.topMph + _boostDelta);
     const _cruiseBase = _gvt ? _gvt.cruiseMph   : (_vehSpec.topMph + _boostDelta) * 0.75;
-    const cruiseMph = _cruiseBase + energyBonus + caffeineBonus + nosBonus + upMph;
-    const boostMph  = _boostBase  + energyBonus + caffeineBonus + nosBonus + upMph;
+    // Engine top-speed upgrade is a PERCENT of the base top speed (owner
+    // 2026-07-21): Tune-Up/Cold Air/ECU = +3/+5/+10%.  Flat upMph (buffs) still
+    // stacks on top.
+    const _topPct   = 1 + Math.max(0, this._upgradeFx?.topMphPct ?? 0);
+    const cruiseMph = _cruiseBase * _topPct + energyBonus + caffeineBonus + nosBonus + upMph;
+    const boostMph  = _boostBase  * _topPct + energyBonus + caffeineBonus + nosBonus + upMph;
     const slowMph   = 60;
     const mphToUnits = (mph) => MAX_SPEED * (mph / 120);
 
@@ -5181,7 +5187,7 @@ export class GameScene extends Phaser.Scene {
       // Genre-vehicle acceleration modifier + edm's stronger ACCEL boost (only
       // while boosting) — owner 2026-07-19.
       const _boostStr = this._isBoost() ? this._traitMod('boostStrengthMult') : 1;
-      p.speed = Math.min(targetSpeed, p.speed + ACCEL * (phys.accelMul ?? 1) * this._traitMod('accelerationMult') * _boostStr * dt * 60);
+      p.speed = Math.min(targetSpeed, p.speed + ACCEL * (phys.accelMul ?? 1) * this._traitMod('accelerationMult') * (1 + Math.max(0, this._upgradeFx?.accelPct ?? 0)) * _boostStr * dt * 60);
     } else if (p.speed > targetSpeed) {
       // Brake decel scales with weather grip — wet/snowy roads lengthen
       // the stopping distance.  Quick local peek at Weather so the
@@ -8489,8 +8495,8 @@ export class GameScene extends Phaser.Scene {
           if (vid !== 'beater') this._leaveCockpitView?.();
           this.player.gasMaxMi  = v.rangeMi;
           this.player.gasMi     = v.rangeMi;       // full tank on title swap
-          if (this.damage?.setMax)        this.damage.setMax(v.hp);
-          if (this.damage?.setDurability) this.damage.setDurability(v.hp);
+          if (this.damage?.setMax)        this.damage.setMax(this._runMaxHp(v));
+          if (this.damage?.setDurability) this.damage.setDurability(this._runMaxHp(v));
         }
         if (this.playerSprite) {
           this.playerSprite.clearTint();
@@ -9056,7 +9062,9 @@ export class GameScene extends Phaser.Scene {
       this.player.gasMaxMi = v.rangeMi;
       this.player.gasMi    = v.rangeMi;
       // Genre-vehicle max-HP modifier (pop-punk −15%); neutral (×1) otherwise.
-      const maxHp = Math.max(1, Math.round(v.hp * this._traitMod('maxHpMult')));
+      // Part-upgrade HP (bumper/suspension/tires/windshield) adds on top.
+      const maxHp = Math.max(1, Math.round(v.hp * this._traitMod('maxHpMult'))
+                              + Math.max(0, this._upgradeFx?.hp ?? 0));
       this.damage?.setMax?.(maxHp);
       this.damage?.setDurability?.(maxHp);
     }
@@ -19355,19 +19363,26 @@ export class GameScene extends Phaser.Scene {
     }
     // ── Mirror (offset via _mirrorGeom, scale folded into the zoom path) ──
     this._applyMirrorOffset();
-    // ── Wiper (weather button) — independent move+scale.  The icon is drawn at
-    // absolute coords, so we transform the whole Graphics: scale around its base
-    // top-left, then offset.  hitArea (local) + label follow the same transform. ──
+    // ── Wiper (weather button) — PINNED 3px LEFT of the ACCEL pedal, vertically
+    // centered on it (owner 2026-07-21).  Anchors to the pedal column (ACCEL's
+    // live zone), not the screen edge, so it stays glued beside the pedal on any
+    // screen width.  Only the saved SCALE still applies; position is pinned.  The
+    // icon is drawn at absolute coords, so we scale the Graphics around its base
+    // top-left then translate so the drawn box lands at the target. ──
     if (this.hudWiperBtn && this._wiperBaseLeft != null) {
-      const o  = this._ctrlOff('wiper');
-      const bl = this._wiperBaseLeft, bt = this._wiperBaseTop, sz = this._wiperSize;
+      const o   = this._ctrlOff('wiper');
+      const bl  = this._wiperBaseLeft, bt = this._wiperBaseTop, sz = this._wiperSize;
+      const wsz = sz * o.s;
+      const gz  = this._pedalHitZones?.[1];                 // ACCEL zone {x,y,w,h}
+      const wLeft = gz ? (gz.x - 3 - wsz)            : (bl + o.dx);
+      const wTop  = gz ? (gz.y + gz.h / 2 - wsz / 2) : (bt + o.dy);
       this.hudWiperBtn.setScale(o.s);
-      this.hudWiperBtn.setPosition(o.dx + bl * (1 - o.s), o.dy + bt * (1 - o.s));
-      this.hudWiperArt?.setPosition(bl + o.dx + (sz * o.s) / 2, bt + o.dy + (sz * o.s) / 2);
-      this.hudWiperArt?.setDisplaySize(sz * o.s, sz * o.s);
+      this.hudWiperBtn.setPosition(wLeft - bl * o.s, wTop - bt * o.s);
+      this.hudWiperArt?.setPosition(wLeft + wsz / 2, wTop + wsz / 2);
+      this.hudWiperArt?.setDisplaySize(wsz, wsz);
       this.hudWiperLbl?.setScale(o.s);
-      this.hudWiperLbl?.setPosition(bl + o.dx + (sz - 4) * o.s, bt + o.dy + (sz - 4) * o.s);
-      this._wiperLiveBounds = { x: bl + o.dx, y: bt + o.dy, w: sz * o.s, h: sz * o.s };
+      this.hudWiperLbl?.setPosition(wLeft + (sz - 4) * o.s, wTop + (sz - 4) * o.s);
+      this._wiperLiveBounds = { x: wLeft, y: wTop, w: wsz, h: wsz };
     }
   }
 
@@ -20794,6 +20809,14 @@ export class GameScene extends Phaser.Scene {
     const polLvl = getInstalledUpgrade?.(save, vehId, 'police')?.level ?? 0;
     this._hasScanner = polLvl >= 2;
     return merged;
+  }
+
+  /** Max HP for the current run = vehicle base HP + summed part-upgrade HP
+   *  (bumper / suspension / tires / windshield).  Single source of truth so
+   *  every DamageModel max stays consistent with the installed upgrades. */
+  _runMaxHp(veh) {
+    const _veh = veh ?? VEHICLES[this.player?.vehicleId ?? 'beater'] ?? VEHICLES.beater;
+    return (_veh?.hp ?? 25) + Math.max(0, this._upgradeFx?.hp ?? 0);
   }
 
   /** Police-scanner alert — with the Scanner upgrade installed, any NEW cop

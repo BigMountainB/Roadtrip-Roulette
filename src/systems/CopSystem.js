@@ -891,7 +891,11 @@ export class CopSystem {
         } else {
           cop.laneOffset += (cop.laneOffset >= 0 ? 1 : -1) * 2.4 * dt;
         }
-        cop.speed = Math.max(0, playerSpeed * 0.5);
+        // Donut flees ease back GENTLY (owner 2026-07-21): a higher keep-pace
+        // fraction = slower positional recede, so the cop shrinks away smoothly
+        // instead of snapping back.  (Purely the recede SPEED — no size/scale
+        // change.)  Regular flees keep the original 0.5.
+        cop.speed = Math.max(0, playerSpeed * (cop._donutLure != null ? 0.8 : 0.5));
         cop.position += cop.speed * dt;
         const rel = cop.position - playerPos;
         // Alpha eases with POSITION, not time — full while still up-screen,

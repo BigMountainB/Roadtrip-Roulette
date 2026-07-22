@@ -66,7 +66,7 @@ export function getVehicleDisplayStats(vehicleId, saveState = {}) {
     steering:   toBars(steering,   0.72, 1.20),
     stability:  toBars(stability,  0.82, 1.25),
     braking:    toBars(braking,    0.68, 1.22),
-    durability: toBars(durability, 38,   135),
+    durability: toBars(durability, 25,   100),
     cooling:    toBars(cooling,    0.05, 0.62),
     visibility: Math.min(5, 2 + visBonus + visUp),         // base 2 + light upgrades
     range:      toBars(range,      200,  520),
