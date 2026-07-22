@@ -148,8 +148,8 @@ export class BootScene extends Phaser.Scene {
     this.registry.set('stats',        stats);
 
     // Apply the player's chosen default radio station (Music app) on boot.
-    const _defStation = save.get('settings.radio', 0);
-    if (Number.isInteger(_defStation) && _defStation > 0) {
+    const _defStation = save.get('settings.radio', null);
+    if (Number.isInteger(_defStation) && _defStation >= 0) {   // 0 = HIP-HOP is a real choice
       this.registry.get('audio')?.setStation?.(_defStation);
     }
     this.registry.get('audio')?.setBackgroundRadioEnabled?.(

@@ -20686,8 +20686,16 @@ export class GameScene extends Phaser.Scene {
   _kickRadio() {
     const a = this.audio;
     if (!a) return;
-    if (!a.ready)                          a.init();             // first ever → inits + starts default station
-    else if (a._ctx?.state !== 'running') { a._enablePlayback?.(); a.play?.(); }  // resume after an autoplay block
+    if (!a.ready) {
+      // First start of the session — honor the Music app's saved DEFAULT
+      // genre (owner 2026-07-22: resumed runs inited the radio here with a
+      // RANDOM station, so "default Reggaeton" booted playing classic rock).
+      // settings.radio is a station index; any in-range integer is a real
+      // choice (index 0 = HIP-HOP counts too — no `> 0` gate).
+      const _defSt = this.registry?.get?.('save')?.get?.('settings.radio', null);
+      if (Number.isInteger(_defSt) && _defSt >= 0) a.setStation?.(_defSt);
+      a.init();             // first ever → inits + starts the chosen station
+    } else if (a._ctx?.state !== 'running') { a._enablePlayback?.(); a.play?.(); }  // resume after an autoplay block
   }
 
   _startGameplay() {
@@ -20800,8 +20808,10 @@ export class GameScene extends Phaser.Scene {
       // Implicit start = a random song from the FULL catalogue (station
       // weighted by track count, track randomized within it) — unless the
       // player saved a default station in the Music app settings.
-      const _defSt = this.registry?.get?.('save')?.get?.('settings.radio', 0);
-      const _station = (Number.isInteger(_defSt) && _defSt > 0)
+      const _defSt = this.registry?.get?.('save')?.get?.('settings.radio', null);
+      // Any in-range index is a real choice — index 0 (HIP-HOP) included;
+      // the old `> 0` gate silently ignored a HIP-HOP default (2026-07-22).
+      const _station = (Number.isInteger(_defSt) && _defSt >= 0)
         ? _defSt : (this.audio.randomStationIndex?.() ?? 0);
       if (!this.audio._inited) {
         // First-ever init.

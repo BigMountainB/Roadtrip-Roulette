@@ -1045,7 +1045,7 @@ const _boot = () => {
     },
     // Default station (genre) that auto-plays on boot — persisted in the
     // save's settings.radio.  Setting it also switches to it now as feedback.
-    getDefaultStation: () => game.registry.get('save')?.get?.('settings.radio', 0),
+    getDefaultStation: () => game.registry.get('save')?.get?.('settings.radio', -1),   // -1 = no default set (so index 0 isn't falsely starred)
     setDefaultStation: (idx) => {
       const i = parseInt(idx, 10) || 0;
       game.registry.get('save')?.set?.('settings.radio', i);
