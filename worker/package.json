@@ -1,0 +1,13 @@
+{
+  "name": "roadtrip-api",
+  "private": true,
+  "description": "Road Trip Roulette backend — plate uniqueness, cloud saves, leaderboard (Cloudflare Worker + D1).",
+  "scripts": {
+    "db:create": "wrangler d1 create rtr",
+    "db:init": "wrangler d1 execute rtr --remote --file=schema.sql",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.113.0"
+  }
+}
