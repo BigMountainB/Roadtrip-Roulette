@@ -1,0 +1,12 @@
+# Road Trip Roulette backend Worker.
+# The `name` MUST stay "roadtrip-api" so the deployed URL matches the API_BASE
+# in ../src/systems/CloudSave.js (https://roadtrip-api.<subdomain>.workers.dev).
+name = "roadtrip-api"
+main = "src/index.js"
+compatibility_date = "2026-07-21"
+
+# D1 database binding. Fill database_id in from `wrangler d1 create rtr`.
+[[d1_databases]]
+binding = "DB"
+database_name = "rtr"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

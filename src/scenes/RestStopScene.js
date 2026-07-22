@@ -14,6 +14,8 @@ import {
 import { getPortrait } from '../data/npcPortraits.js';
 import { nextTownFact } from '../data/townFacts.js';
 import { MISSION_TIERS, tierFor, contactIdFor, contactGreeting } from '../systems/MissionSystem.js';
+import { getInstalled, buyUpgrade } from '../systems/UpgradeSystem.js';
+import { UPGRADE_SLOTS, SLOT_LABELS, getSlotTiers } from '../data/upgrades.js';
 
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
@@ -616,6 +618,32 @@ export class RestStopScene extends Phaser.Scene {
         desc: '−40% slide penalty on any car (−100% with 4x4).',
         payload: { vehicleAccessory: 'traction' },
       });
+    }
+    // ── Slot part-upgrades (owner 2026-07-21): the CAR SHOP is now the ONLY
+    // place to BUY tiered part-upgrades (tires / brakes / engine / …). The
+    // phone Garage is read-only (browse tiers + "save for" goals). Each
+    // non-maxed slot lists its NEXT tier as a buyable item; buying installs it
+    // into the save and spends the single rest-stop wallet (this._score), so
+    // the old dual-wallet double-spend is gone. Cost carries the same genre
+    // discount the garage used to apply (handled in _repairMult below).
+    {
+      const _installed = getInstalled(_save, this._vehicleId);
+      for (const _slot of UPGRADE_SLOTS) {
+        const _tiers = getSlotTiers(_slot);
+        if (!_tiers.length) continue;
+        const _curId  = _installed[_slot];
+        const _curLvl = _curId ? (_tiers.find(t => t.id === _curId)?.level ?? 0) : 0;
+        const _next   = _tiers.find(t => t.level === _curLvl + 1);
+        if (!_next) continue;   // maxed on this vehicle — nothing to sell
+        const _slotLbl = (SLOT_LABELS[_slot] ?? _slot).toUpperCase();
+        accItems.push({
+          id: `up_${_slot}`,
+          label: `🔩  ${_slotLbl} — ${_next.label}`,
+          cost: _next.cost,
+          desc: (_next.desc ?? '') + (_next.tradeoff ? `  ⚠ ${_next.tradeoff}` : ''),
+          payload: { upgradeInstall: _next.id },
+        });
+      }
     }
     SECTIONS.dealer_acc.items = accItems;
 
@@ -1762,7 +1790,7 @@ export class RestStopScene extends Phaser.Scene {
     // Genre-vehicle repair discount (pop-punk −25%): applied to the effective
     // cost so display, affordability, and charge all stay consistent. Only
     // REPAIR items here; garage part-upgrades are discounted in UpgradeSystem.
-    const _repairMult = (item.payload?.repair || item.payload?.campRepair)
+    const _repairMult = (item.payload?.repair || item.payload?.campRepair || item.payload?.upgradeInstall)
       ? ((this.registry.get('genreTraitMods') ?? {}).repairUpgradeCostMult ?? 1)
       : 1;
     const effectiveCost = freeMode ? 0 : Math.max(0, Math.round((item.cost ?? 0) * _repairMult));
@@ -1829,6 +1857,15 @@ export class RestStopScene extends Phaser.Scene {
         item.disabledReason = '⛽ Tank\'s already full.';
         label.setText('⛽  TANK FULL');
         desc.setText('Topped off.');
+        cost.setText('N/A');
+      }
+      // Slot upgrade installed — grey it out for this visit; the next tier
+      // shows up on the next stop (matches the NOS tiering behavior).
+      if (item.payload?.upgradeInstall) {
+        item.disabled = true;
+        item.disabledReason = '✓ Installed on this car.';
+        label.setText('✓  INSTALLED');
+        desc.setText('Next tier available at the next shop.');
         cost.setText('N/A');
       }
       this._setStatus(this._purchaseConfirmation(item), '#88FF88');
@@ -2024,6 +2061,15 @@ export class RestStopScene extends Phaser.Scene {
       for (let _i = 0; _i < _f12N; _i++) this._purchases.f12.push(p.f12);
     }
     if (p.upgrade)    this._purchases.upgrade.push(p.upgrade);
+    if (p.upgradeInstall) {
+      // Slot part-upgrade bought in the car shop — install straight into the
+      // save (payment already deducted from this._score in the buy handler).
+      // GameScene re-reads the save via _recomputeUpgradeFx on resume; the
+      // flag forces that recompute so the upgrade affects the drive at once.
+      const save = this.registry?.get?.('save');
+      if (save) buyUpgrade(save, this._vehicleId, p.upgradeInstall);
+      this._purchases.upgradeRecompute = true;
+    }
     if (p.viceTopUp) {
       // Per-vice top-up: each click ADDS p.amount (+10%) up to a cap of
       // 0.80.  Multiple clicks accumulate — the GameScene reads the

@@ -1672,12 +1672,16 @@
       const errEl = document.getElementById('plate-err');
       if (!modal || !input || !done) return;
       let pendingDone = null;
+      // `required` = mandatory entry (first run / leaderboard identity): the
+      // modal can't be dismissed, only submitted with a valid name — no blank
+      // plate can reach a run (owner 2026-07-21).
+      let modalRequired = false;
       // Mirrors main.js _sanitizePlate: any printable ASCII except HTML-context
       // hazards (< > & " ' ` \) — keep the two in sync.
       const sanitize = (v) => String(v || '').toUpperCase()
         .replace(/[^\x20-\x7E]/g, '').replace(/[<>&"'`\\]/g, '').slice(0, 8);
       const showErr = (m) => { if (errEl) errEl.textContent = m || ''; };
-      const close = () => { modal.classList.remove('open'); pendingDone = null; showErr(''); };
+      const close = () => { if (modalRequired) return; modal.classList.remove('open'); pendingDone = null; showErr(''); };
       input.addEventListener('input', () => { input.value = sanitize(input.value); showErr(''); });
       let submitting = false;
       const submit = async () => {
@@ -1722,6 +1726,10 @@
       window.showPlateModal = (opts) => {
         opts = opts || {};
         pendingDone = (typeof opts.onDone === 'function') ? opts.onDone : null;
+        modalRequired = !!opts.required;
+        // When required, hide CANCEL and block backdrop/Escape dismissal so a
+        // plate MUST be chosen before playing.
+        if (cancel) cancel.style.display = modalRequired ? 'none' : '';
         const cur = (opts.current != null) ? opts.current
                   : ((window.__plate && window.__plate.get) ? window.__plate.get() : '');
         input.value = sanitize(cur || '');
@@ -2663,6 +2671,9 @@
       const garageModal = document.getElementById('phone-garage');
       const garageList  = document.getElementById('phone-garage-list');
       const garageClose = document.getElementById('phone-garage-close');
+      // Read-only garage browse state: which slot is expanded, which tier is
+      // being studied.  Persists across the innerHTML rebuilds renderGarage does.
+      let _garageOpenSlot = null, _garageSelTier = null;
       const renderGarage = () => {
         const cars = window.__garage?.list?.() ?? [];
         const carsHtml = cars.map(c => {
@@ -2692,7 +2703,6 @@
         if (curId && window.__upgrades) {
           const cash  = window.__upgrades.cash();
           const stats = window.__upgrades.stats(curId);
-          const slots = window.__upgrades.slots(curId);
           const ORDER = ['grip','steering','stability','braking','durability','cooling','visibility','range'];
           const bar = (n) => `<span style="letter-spacing:1px;color:#39D9FF">${'▮'.repeat(n)}</span>`
                             + `<span style="letter-spacing:1px;color:#26384a">${'▮'.repeat(5-n)}</span>`;
@@ -2701,29 +2711,54 @@
           // so the two-column grid still fits; the modal already scrolls.
           const statsHtml = ORDER.map(k => `<div style="display:flex;justify-content:space-between;gap:6px;font-size:4.6vmin;">`
             + `<span style="color:#9fb7d6;text-transform:capitalize;">${k}</span><span>${bar(stats[k]?.bars ?? 0)}</span></div>`).join('');
-          const slotsHtml = slots.map(s => {
-            const owned = s.installedLabel
-              ? `<span style="color:#66FF99">L${s.installedLevel} · ${s.installedLabel}</span>`
-              : `<span style="color:#5b6b82">stock</span>`;
-            let action;
-            if (!s.next) action = `<span class="up-max">MAX</span>`;
-            else {
-              const afford = cash >= s.next.cost;
-              action = `<button class="up-buy ${afford?'on':''}" data-veh="${curId}" data-up="${s.next.id}" `
-                     + `${afford?'':'disabled'}>$${s.next.cost.toLocaleString()}</button>`;
+          // Read-only tier browser (owner 2026-07-21): tap a slot to expand its
+          // tiers, tap a tier to study its benefit.  Buying lives in the car
+          // shop now, so there are NO buy buttons here — just what's installed
+          // and what to save toward.
+          const browse = window.__upgrades.browse ? window.__upgrades.browse(curId) : [];
+          const slotsHtml = browse.map(s => {
+            const open = _garageOpenSlot === s.slot;
+            const cur  = s.installedLabel ? `L${s.installedLevel} · ${s.installedLabel}` : 'stock';
+            let tiersHtml = '';
+            if (open) {
+              tiersHtml = s.tiers.map(t => {
+                const sel   = _garageSelTier === t.id;
+                const state = t.isCurrent ? `<span style="color:#66FF99">✓ installed</span>`
+                            : t.installed ? `<span style="color:#4a8a5f">passed</span>`
+                            : `<span style="color:#FFD23D">$${t.cost.toLocaleString()}</span>`;
+                return `<div class="g-tier" data-slot="${s.slot}" data-tier="${t.id}" `
+                  + `style="display:flex;justify-content:space-between;gap:2vmin;padding:1.6vmin 2vmin;`
+                  + `border-radius:1.4vmin;margin:0.6vmin 0;cursor:pointer;`
+                  + `background:${sel?'#123049':'#0a1626'};border:1px solid ${sel?'#39A8FF':'#16283a'};">`
+                  + `<span style="color:#F4F7FF;font-size:5.4vmin;">L${t.level} · ${t.label}</span>${state}</div>`;
+              }).join('');
+              const selTier = s.tiers.find(t => t.id === _garageSelTier);
+              if (selTier) {
+                tiersHtml += `<div style="margin:0.8vmin 0 1.4vmin;padding:2vmin;background:#081019;`
+                  + `border-left:3px solid #39A8FF;border-radius:1vmin;font-size:5vmin;">`
+                  + `<div style="color:#CFE0F5;">${selTier.benefit || 'No stat change.'}</div>`
+                  + (selTier.desc ? `<div style="color:#8fa6c0;font-style:italic;margin-top:0.6vmin;">${selTier.desc}</div>` : '')
+                  + (selTier.tradeoff ? `<div style="color:#d9a15a;margin-top:0.6vmin;">⚠ ${selTier.tradeoff}</div>` : '')
+                  + `<div style="color:#FFD23D;margin-top:0.6vmin;font-weight:bold;">`
+                  + (selTier.installed ? '✓ Already on this car' : `Save for → $${selTier.cost.toLocaleString()}`)
+                  + `</div></div>`;
+              }
             }
-            return `<div style="padding:2vmin 0;border-top:1px solid #16283a;">`
-              + `<div style="display:flex;justify-content:space-between;align-items:center;gap:2vmin;">`
-              + `<span style="color:#F4F7FF;font-size:7vmin;">${s.slotLabel}</span>${action}</div>`
-              + `<div style="font-size:5.6vmin;">${owned}${s.next?` <span style="color:#5b6b82">→ ${s.next.label}</span>`:''}</div>`
-              + (s.next && s.next.tradeoff ? `<div style="font-size:5.2vmin;color:#d9a15a;">⚠ ${s.next.tradeoff}</div>` : '')
-              + `</div>`;
+            return `<div style="border-top:1px solid #16283a;padding:1.4vmin 0;">`
+              + `<div class="g-slot" data-slot="${s.slot}" style="display:flex;justify-content:space-between;`
+              + `align-items:center;gap:2vmin;cursor:pointer;">`
+              + `<span style="color:#F4F7FF;font-size:6.4vmin;">${s.slotLabel}</span>`
+              + `<span style="display:flex;gap:1.6vmin;align-items:center;">`
+              + `<span style="color:#66FF99;font-size:5vmin;">${cur}</span>`
+              + `<span style="color:#5b6b82;font-size:5vmin;">${open?'▾':'▸'}</span></span></div>`
+              + tiersHtml + `</div>`;
           }).join('');
           panelHtml = `<div id="garage-upgrades" style="margin-top:2vmin;padding:2.5vmin;background:#080c16;`
             + `border:2px solid #163550;border-radius:2vmin;">`
-            + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5vmin;">`
+            + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5vmin;">`
             + `<span style="color:#39D9FF;font-weight:bold;font-size:7vmin;">UPGRADES</span>`
             + `<span style="color:#FFD23D;font-size:6.4vmin;">$${cash.toLocaleString()}</span></div>`
+            + `<div style="color:#8fa6c0;font-size:4.4vmin;margin-bottom:2vmin;">🔧 Study only — buy these at any Car Shop</div>`
             + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4vmin;margin-bottom:2vmin;">${statsHtml}</div>`
             + slotsHtml + `</div>`;
         }
@@ -2753,11 +2788,21 @@
             requestAnimationFrame(renderGarage);   // re-paint with new "current"
           });
         });
-        // Buy-upgrade buttons — deduct cash, install, re-render.
-        garageList.querySelectorAll('.up-buy').forEach(btn => {
-          btn.addEventListener('click', (e) => {
+        // Read-only garage: tap a slot to expand its tiers, tap a tier to
+        // study its benefit. No buying here — that's the car shop's job.
+        garageList.querySelectorAll('.g-slot').forEach(el => {
+          el.addEventListener('click', (e) => {
             e.preventDefault(); e.stopPropagation();
-            window.__upgrades?.buy?.(btn.dataset.veh, btn.dataset.up);
+            const slot = el.dataset.slot;
+            _garageOpenSlot = (_garageOpenSlot === slot) ? null : slot;
+            _garageSelTier = null;
+            requestAnimationFrame(renderGarage);
+          });
+        });
+        garageList.querySelectorAll('.g-tier').forEach(el => {
+          el.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            _garageSelTier = (_garageSelTier === el.dataset.tier) ? null : el.dataset.tier;
             requestAnimationFrame(renderGarage);
           });
         });

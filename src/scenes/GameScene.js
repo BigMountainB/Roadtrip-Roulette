@@ -2145,6 +2145,9 @@ export class GameScene extends Phaser.Scene {
           if (Array.isArray(buys.upgrade) && buys.upgrade.length) {
             this._upgrades = new Set([...(this._upgrades ?? []), ...buys.upgrade]);
           }
+          // Slot part-upgrade bought at the car shop wrote straight to the save;
+          // recompute handling modifiers so it affects the drive immediately.
+          if (buys.upgradeRecompute) this._recomputeUpgradeFx();
           // ── Phase 2-4 effects on resume ─────────────────────────
           // Refuel / charge — fill the tank.  Both purchases set the
           // same flag.  Charge additionally sets `chargeAdMs` (handled
@@ -20131,9 +20134,11 @@ export class GameScene extends Phaser.Scene {
       selectAndRefresh();
     } else {
       // Inside the guided tutorial: name it now via the DOM modal so the
-      // tutorial's plate step (which polls needsEntry) can advance.
+      // tutorial's plate step (which polls needsEntry) can advance.  Required
+      // (non-dismissible) so no blank plate slips through.
       window.showPlateModal?.({
         current: '',
+        required: true,
         onDone: (name) => {
           save.setSlotPlate?.(i, name);
           selectAndRefresh();
@@ -20559,7 +20564,7 @@ export class GameScene extends Phaser.Scene {
         || !!localStorage.getItem('rtr_tutStage1')
         || !!localStorage.getItem('rtr_tutStage2');
     } catch (_) {}
-    if (!_tutBusy && window.__plate?.needsEntry?.()) window.showPlateModal?.();
+    if (!_tutBusy && window.__plate?.needsEntry?.()) window.showPlateModal?.({ required: true });
     // Grace window — the START button's own pointerdown is currently
     // mid-dispatch, so any once-listener attached now would fire for
     // the same event and clear the flag immediately.  Delay listener

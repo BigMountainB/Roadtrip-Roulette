@@ -545,8 +545,56 @@ const _boot = () => {
       spend: (c) => { if (gs) gs.score = Math.max(0, (gs.score ?? 0) - c); },
     };
   };
+  // Human-readable effect summary for the read-only garage tier browser.
+  const _EFFECT_LABELS = {
+    grip: 'Grip', rainGrip: 'Wet grip', snowGrip: 'Snow grip', braking: 'Braking',
+    stability: 'Stability', steer: 'Steering', offroad: 'Off-road', cooling: 'Cooling',
+    hp: 'Durability', rangeMi: 'Range', topMphPct: 'Top speed', accelPct: 'Acceleration',
+  };
+  const _PCT_KEYS = new Set(['grip','rainGrip','snowGrip','braking','stability','steer','offroad','cooling','topMphPct','accelPct']);
+  const _fmtEffects = (eff) => Object.entries(eff ?? {})
+    .filter(([k]) => _EFFECT_LABELS[k])
+    .map(([k, v]) => {
+      const sign = v > 0 ? '+' : '';
+      const val = _PCT_KEYS.has(k) ? `${sign}${Math.round(v * 100)}%`
+                : k === 'rangeMi'  ? `${sign}${v} mi`
+                : k === 'hp'       ? `${sign}${v} HP`
+                : `${sign}${v}`;
+      return `${_EFFECT_LABELS[k]} ${val}`;
+    }).join(' · ');
+
   window.__upgrades = {
     cash: () => _moneyCtx().get(),
+
+    // Read-only tier browser for the GARAGE (owner 2026-07-21): the garage no
+    // longer BUYS — it studies. Returns every slot with ALL its tiers, each
+    // tagged installed / current / next, plus a human benefit line + the price
+    // to save toward. Buying happens only at the rest-stop car shop.
+    browse: (vehicleId) => {
+      const save = game.registry.get('save');
+      const installed = getInstalled(save, vehicleId);
+      return UPGRADE_SLOTS.map(slot => {
+        const tiers  = getSlotTiers(slot);
+        const curId  = installed[slot];
+        const curUp  = curId ? tiers.find(t => t.id === curId) : null;
+        const curLvl = curUp?.level ?? 0;
+        return {
+          slot,
+          slotLabel:      SLOT_LABELS[slot] ?? slot,
+          installedLevel: curLvl,
+          installedLabel: curUp?.label ?? null,
+          maxLevel:       tiers.length,
+          tiers: tiers.map(t => ({
+            id: t.id, level: t.level, label: t.label,
+            cost: _upgradeDiscountCost(t.cost),
+            benefit: _fmtEffects(t.effects),
+            desc: t.desc ?? '', tradeoff: t.tradeoff ?? '',
+            installed: t.level <= curLvl,   // this tier is on the car (or surpassed)
+            isCurrent: t.level === curLvl,  // the exact tier currently fitted
+          })),
+        };
+      });
+    },
 
     // 8 player-facing stats as { key: {bars, note} } for the current build.
     stats: (vehicleId) => {
@@ -581,23 +629,10 @@ const _boot = () => {
       });
     },
 
-    // Buy → deduct live cash, install into the save.  Returns { ok, reason, cash }.
-    buy: (vehicleId, upgradeId) => {
-      const scene = game.scene.getScene('Game');
-      const save  = game.registry.get('save');
-      const up    = getUpgradeById(upgradeId);
-      const money = _moneyCtx();                       // live cash (rest stop or game)
-      if (!up)    return { ok: false, reason: 'unknown-upgrade', cash: money.get() };
-      const cash  = money.get();
-      const cost  = _upgradeDiscountCost(up.cost);   // pop-punk −25% (else ×1)
-      if (cash < cost) return { ok: false, reason: 'insufficient', cash };
-      money.spend(cost);
-      const res = installUpgrade(save, vehicleId, upgradeId);
-      // Refresh the live handling modifiers so the upgrade affects the drive
-      // immediately (not just the stat bars).
-      try { scene?._recomputeUpgradeFx?.(); } catch (_) {}
-      return { ok: res.ok, reason: res.reason, cash: money.get() };
-    },
+    // Buying moved OUT of the garage (owner 2026-07-21): the car shop is the
+    // single purchase path, so the same dollars can't be spent in two wallets.
+    // Kept as a hard no-op in case any stale caller still invokes it.
+    buy: () => ({ ok: false, reason: 'buy-at-car-shop', cash: _moneyCtx().get() }),
   };
 
   // Checkpoint warp — restart the live run at the player's last reached
