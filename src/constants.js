@@ -475,7 +475,7 @@ const _REST_STOP_DEF = [
   // the ramp window (11.5–12.5) lands on dry Bellevue shoreline rather
   // than half-on the floating bridge.
   { id: 'B',  name: 'Bellevue, WA',        mileage: 12.5, exit: 'Exit 10',    hwy: 'hwy_i90',   amenities: ['cargo', 'lord', 'suck', 'parkride', 'vices', 'ambm'] },
-  { id: 'I',  name: 'Issaquah, WA',        mileage:   18, exit: 'Exit 18',    hwy: 'hwy_i90',   amenities: ['cargo', 'hunting', 'camp', 'parkride', 'vices'] },
+  { id: 'I',  name: 'Issaquah, WA',        mileage:   18, exit: 'Exit 18',    hwy: 'hwy_i90',   amenities: ['cargo', 'hunting', 'camp', 'lord', 'parkride', 'vices'] },
   { id: 'SQ', name: 'Snoqualmie, WA',      mileage:   25, exit: 'Exit 25',    hwy: 'hwy_i90',   amenities: ['parkride', 'vices', 'ambm'] },
   { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['cargo', 'camp', 'lord', 'parkride', 'vices', 'ambm'] },
   { id: 'SP', name: 'Snoqualmie Pass, WA', mileage:   53, exit: 'Exit 53',    hwy: 'hwy_i90',   amenities: ['cargo', 'camp', 'ambm'] },

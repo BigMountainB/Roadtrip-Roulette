@@ -39,7 +39,7 @@ import { AchievementSystem } from '../systems/AchievementSystem.js';
 import { DamageModel }   from '../car/DamageModel.js';
 import { CloudSave }     from '../systems/CloudSave.js';
 import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
-import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '../utils/Colors.js';
+import { getPaletteAtProgress, lerpColor } from '../utils/Colors.js';
 import { getUpgradeEffects, getInstalledUpgrade } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
 import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs, policeWarningChance } from '../data/genreVehicleTraits.js';
@@ -1239,7 +1239,7 @@ export class GameScene extends Phaser.Scene {
       this._viceSpritePool.push(s);
     }
     // Pickup glow halo — a soft gold/amber aura painted UNDER every
-    // collectible (vices, weapons, steroid) so pickups read as "grab me"
+    // collectible (vices, weapons, rage) so pickups read as "grab me"
     // and never get mistaken for traffic.  Depth 6.9 sits below the
     // minimum z-banded pickup depth (~7.0) so the glow is always behind
     // its pickup regardless of distance.
@@ -1522,6 +1522,12 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => this._disableTiltSteer());
     this.events.once('destroy',  () => this._disableTiltSteer());
 
+    // Custom = throwaway sandbox: route all run-progress save keys to an
+    // in-memory bucket (fresh start, zero persistence, zero leakage into
+    // the real profile).  Set BEFORE any save reads below; re-checked in
+    // _startGameplay since the title switches mode without a scene restart.
+    this.registry.get('save')?.setSandbox?.(Difficulty.mode?.() === 'custom');
+
     // ── State ─────────────────────────────────────────────────────────
     this.score           = 0;
     // Persistent WALLET — money stays with the player across runs.  A fresh
@@ -1530,7 +1536,10 @@ export class GameScene extends Phaser.Scene {
     // paths overwrite this below with their snapshot's exact score.  Custom
     // is a sandbox (seeds $100k later) and never reads or writes the wallet.
     if (Difficulty.mode?.() !== 'custom') {
-      const _bank = this.registry?.get?.('save')?.get?.('wallet', 0);
+      // walletStore = the PLATE's global money (shared across steering-mode
+      // profiles).  The old per-profile 'wallet' key was dropped by the save
+      // sanitizer on every load — that's why runs started with $0 (2026-07-23).
+      const _bank = this.registry?.get?.('save')?.walletStore?.money ?? 0;
       if (Number.isFinite(_bank) && _bank > 0) this.score = Math.round(_bank);
     }
     this.gameTime        = 0;
@@ -1570,7 +1579,7 @@ export class GameScene extends Phaser.Scene {
     this._crashRollStartAt = 0;
     this.traffic         = [];
     this._trafficTimer   = 0;
-    this._prevRegion     = 0;
+    this._prevTown       = 0;   // town-line star cooldown tracker (CHECKPOINTS index)
     this._announcedUnlocks = {};
     this._touchLeft      = false;
     this._touchRight     = false;
@@ -1583,16 +1592,16 @@ export class GameScene extends Phaser.Scene {
     // Accumulated in-world minutes from rest-stop/shop time (scaled real time).
     // Persisted in the live snapshot so it survives Game↔RestStop scene swaps.
     this._restStopClockMin = 0;
-    // Steroid power-up — invincible "Mario star" lasting 1 mile of road
+    // Rage power-up — invincible "Mario star" lasting 2 miles of road
     // (distance-based, so higher speeds cover more ground in the same buff).
-    // Active while _odometer < _steroidUntilMile.  -1 = inactive.
-    this._steroidUntilMile = -1;
-    this._steroidSpawnTimer = 70 + Math.random() * 60;  // sec to first chance
-    this._steroidWasActive  = false;
-    // Narcan — inventory item (max 3) that auto-reverses an OPIOID overdose
+    // Active while _odometer < _rageUntilMile.  -1 = inactive.
+    this._rageUntilMile = -1;
+    this._rageSpawnTimer = 70 + Math.random() * 60;  // sec to first chance
+    this._rageWasActive  = false;
+    // Espresso — inventory item (max 3) that auto-reverses an OPIOID overdose
     // (fentanyl/heroin/rx) the instant it would kill you.
-    this._narcanCount       = 0;
-    this._narcanSpawnTimer  = 90 + Math.random() * 60;
+    this._espressoCount       = 0;
+    this._espressoSpawnTimer  = 90 + Math.random() * 60;
 
     // ── Checkpoint system ─────────────────────────────────────────────
     // Start at Seattle with no score yet
@@ -1678,8 +1687,8 @@ export class GameScene extends Phaser.Scene {
             this._resumeStars        = 0;
             this._lastCheckpoint     = null;
             this._odometer           = 0;
-            this._steroidUntilMile   = -1;
-            this._narcanCount        = 0;
+            this._rageUntilMile   = -1;
+            this._espressoCount        = 0;
             this.score               = 0;
             // Wipe Custom-mode opt-ins so a Custom run's noPolice /
             // noNpcDamage / starting stars can't bleed into the fresh
@@ -2436,6 +2445,17 @@ export class GameScene extends Phaser.Scene {
       }
       return false;
     };
+    // Survival STATUS bars — draggable in custom mode (drag-to-set), so a
+    // press starting on one must not also steer.  12px pad matches the drag
+    // handler's touch pad.
+    const overSurvBar = (p) => {
+      if (Difficulty.mode?.() !== 'custom') return false;
+      const hits = this._survBarHits;
+      if (!hits || !hits.length) return false;
+      const px = p.x - C.HUD_OFFSET_X;
+      return hits.some(h => px >= h.x - 12 && px <= h.x + h.w + 12
+                         && p.y >= h.y - 12 && p.y <= h.y + h.h + 12);
+    };
 
     // Tap-to-resume — Phaser fires `gameobjectdown` BEFORE the
     // scene-level `pointerdown` for any interactive object that was
@@ -2481,6 +2501,8 @@ export class GameScene extends Phaser.Scene {
       // HUD vice bars (custom mode) — let the bar drag handler own
       // this pointer without also veering the car.
       if (overViceBar(p)) return;
+      // Same for the survival STATUS bars (custom-mode drag-to-set).
+      if (overSurvBar(p)) return;
       // Top-row UI band + weapon stack — initial tap must NOT
       // start on these zones (so buttons work), but once a valid
       // steer-tap has started, the player can drag across them.
@@ -2601,8 +2623,8 @@ export class GameScene extends Phaser.Scene {
         this._touchLeft = this._touchRight = false;
         return;
       }
-      // While dragging a vice bar, never steer.
-      if (this._draggingViceId) {
+      // While dragging a vice OR status bar, never steer.
+      if (this._draggingViceId || this._draggingSurvKey) {
         this._touchLeft = this._touchRight = false;
         return;
       }
@@ -3812,11 +3834,11 @@ export class GameScene extends Phaser.Scene {
     // Energy accelerates wanted-level gain — stamp the multiplier on
     // CopSystem so addStar(amount) reads it without touching call sites.
     if (this.cops) this.cops._starGainMul = phys.energyStarMul ?? 1;
-    // Steroid power-up upkeep — suppress all wanted-star attraction while
+    // Rage power-up upkeep — suppress all wanted-star attraction while
     // active (you're untouchable, not a target), handle the spawn timer, and
     // fire a one-shot "worn off" popup the frame it expires.
-    this._updateSteroid(rawDt);
-    this._updateNarcan(rawDt);
+    this._updateRage(rawDt);
+    this._updateEspresso(rawDt);
     // Energy high-freq tremor: fire a micro-shake every ~3 frames while
     // energy is active.  cameraTremor maxes at 1.5 (full bar) → 0.0012 amp.
     this._tremorTick = (this._tremorTick ?? 0) + 1;
@@ -4289,6 +4311,20 @@ export class GameScene extends Phaser.Scene {
                 this.cops._spawnRearFromEncounter?.(this.player.position);
                 this._showPopup('SPOTTED!\nYou\'ve got a warrant — they\'re on you!', '#FF4444');
               } else if (isParkedTrap && !this._trapPursuitActive) {
+                // Rolling-coal lull (owner 2026-07-23, option b): while the
+                // 30 s no-spawn window runs, the trap still CLOCKS you — a
+                // quiet +1★ — but NO pull-over sequence starts.  The lull
+                // blocks the trooper spawn, so opening the comply window here
+                // used to run a PHANTOM "PULL OVER" (no trooper, or a random
+                // existing cop teleported into the role) that always ended in
+                // "failed to pull over +1★".  Pursuit manifests when the lull
+                // expires (spawn cooldown ≥ lull), so the heat isn't free.
+                if ((this.cops._coalLull ?? 0) > 0) {
+                  sp.triggered = true;
+                  this.cops.addStar?.(1);
+                  this._showPopup('📸 Trap clocked you through the smoke — +1★', '#FF8844');
+                  continue;
+                }
                 // 0★ civil stop — PARKED TRAPS ONLY.  A pursuer peels out and
                 // a comply window opens.  No star yet — pull to the right
                 // shoulder in time to avoid it.
@@ -4817,10 +4853,15 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // ── Region crossing ───────────────────────────────────────────────
-    const region = this._regionIndex(progress);
-    if (region !== this._prevRegion) {
-      this._prevRegion = region;
+    // ── Town-line crossing (owner 2026-07-23) ─────────────────────────
+    // The −1★ cooldown keys off the TOWN list (CHECKPOINTS — the same list
+    // that drives the HUD location label), NOT the visual palette regions:
+    // the palette treats each floating bridge as its own region, so
+    // Seattle→Bellevue held FOUR boundaries in 5 miles and pursuit heat
+    // melted away just crossing the lake.
+    const town = this._townIndex(progress);
+    if (town !== this._prevTown) {
+      this._prevTown = town;
       this._overheatIgnoredLeg = false;   // new leg → classic-rock's free overheat resets
       this.cops.clearStarsAtStateLine();
       // Owner 2026-07-19: no more "NOW ENTERING" banner — just pulse the
@@ -6221,7 +6262,11 @@ export class GameScene extends Phaser.Scene {
       this._radarBeepTimer = 0;
       this._radarBlinkOn   = false;
     };
-    const armed = this._hasRadar && !this._awaitingFirstGameTap && !this._customFlags?.noPolice;
+    // Quiet at 3★+ (owner 2026-07-23): once the pursuit is full-on, speed
+    // traps are the least of your problems — the constant beeping was just
+    // noise on top of sirens.  Detector re-arms when heat drops below 3★.
+    const armed = this._hasRadar && !this._awaitingFirstGameTap && !this._customFlags?.noPolice
+               && (this.cops?.starDisplay ?? this.cops?.stars ?? 0) < 3;
     const trapMiles = this.road?.segments?.trapMiles;
     if (!armed || !trapMiles?.length) { hide(); return; }
 
@@ -8883,10 +8928,10 @@ export class GameScene extends Phaser.Scene {
     // Crash i-frames — silently absorb any incoming damage (collision or
     // offroad bleed alike) until the invincibility window expires.
     if ((this.time?.now ?? 0) < this._invincibleUntil) return 0;
-    // Steroid power-up — fully invincible (no injury from any source).  The
+    // Rage power-up — fully invincible (no injury from any source).  The
     // car can still be physically stopped/sunk by walls/water; those systems
     // own the blocking behaviour, this only zeroes the HP loss.
-    if (this._steroidActive?.()) return 0;
+    if (this._rageActive?.()) return 0;
     const vices = this.vices;
     const isCollision = source && source !== 'offroad_bleed';
 
@@ -9222,10 +9267,10 @@ export class GameScene extends Phaser.Scene {
     const sx   = proj?.sx ?? SCREEN_W / 2;
     const sy   = proj?.sy ?? SCREEN_H / 2;
     const sw   = proj?.sw ?? 32;
-    // Steroid power-up — bulldoze straight through traffic AND cops: knock the
+    // Rage power-up — bulldoze straight through traffic AND cops: knock the
     // car out, no damage, no slow-down, no crash/heat tally.  (Runs before the
     // NPC-crash counters below so free kills don't feed the wanted gate.)
-    if (this._steroidActive?.()) {
+    if (this._rageActive?.()) {
       this._spawnExplosion(sx, sy, sw);
       car.alive = false;
       const gain = Math.round(15 * (this._scoreMult?.() ?? 1));
@@ -9723,12 +9768,12 @@ export class GameScene extends Phaser.Scene {
       if (hpBonus > 0) this.damage?.repair?.(hpBonus);
     }
 
-    if (type === 'steroid') {
+    if (type === 'rage') {
       this._startRedneckRage();
       return;
     }
 
-    if (type === 'narcan') {
+    if (type === 'espresso') {
       // QUAD SHOT — instantly clears the Tiredness bar (the panic button).
       this.survival?.applyItem('quadshot', undefined, this._survivalItemMods());
       this._showPopup?.('☕ QUAD SHOT!\nWIDE AWAKE — tiredness cleared', '#42A5F5');
@@ -11130,7 +11175,10 @@ export class GameScene extends Phaser.Scene {
       if ((this._odometer ?? 0) - (v.holdMile ?? 0) >= 1) v.phase = 'slidingoff';
     } else if (v.phase === 'slidingoff') {
       v.slideT += dt;
-      if (v.slideT >= 1.6) {
+      // 3.2s slide-off (owner 2026-07-23: was 1.6s — "100% slower", the
+      // chunks should ooze off, not flick away).  Keep in sync with the
+      // matching /3.2 easing divisor in _drawVomit.
+      if (v.slideT >= 3.2) {
         for (const b of v.blobs) b.sprite?.destroy();
         this._vomit = null;
         this._vomitGfx?.clear();
@@ -11154,7 +11202,7 @@ export class GameScene extends Phaser.Scene {
           sc = 0.15 + 0.85 * e;
         }
       } else if (v.phase === 'slidingoff') {
-        const s = Math.min(1, v.slideT / 1.6), ease = s * s;
+        const s = Math.min(1, v.slideT / 3.2), ease = s * s;   // 3.2s — matches _updateVomit
         x = b.tx + (b.cornerX - b.tx) * ease;
         y = b.ty + (b.cornerY - b.ty) * ease;
         alpha = 1 - Math.max(0, (s - 0.5) / 0.5);    // fade over the back half of the slide
@@ -13021,14 +13069,10 @@ export class GameScene extends Phaser.Scene {
     // backdrop so nothing stays crisp in the haze (near clear → far dissolves).
     // Depth-fog: distant cars/cops/wrecks DISSOLVE into the fog backdrop
     // (alpha fade) so they wash out into the haze instead of staying crisp.
-    let _fogP = Weather.fogParams((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
-    // Fog Lights upgrade (owner 2026-07-21) thins the fog in the forward view
-    // so you can see further down the headlight path.  Approximates the beam
-    // wedge as a ~40% density cut ahead (a literal wedge is a bigger render
-    // job — flagged for tuning).
-    if (this._hasFogLights && _fogP && _fogP.density > 0) {
-      _fogP = { ..._fogP, density: _fogP.density * 0.6 };
-    }
+    // (Fog Lights thinning moved INTO Weather.fogParams via setFogClarity —
+    // owner 2026-07-22 — so the screen haze, distance fog, and every sprite
+    // fade thin together instead of only this vehicle pass.)
+    const _fogP = Weather.fogParams((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
     const nearCull = cockpit ? 100 : 300;
     const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1, exitT = 0) => {
       if (relZ < nearCull || relZ > 76000 || alphaMul <= 0.01) return;
@@ -14948,7 +14992,7 @@ export class GameScene extends Phaser.Scene {
           const invType = { f12_coal: 'coal', f12_fireworks: 'fireworks', f12_paint: 'paint_bomb' }[sp.type];
           if (invType && !this.cops.canCarryMore(invType)) continue;
           texKey = sp.texKey;
-        } else if (sp.collectibleType === 'steroid' || sp.collectibleType === 'narcan') {
+        } else if (sp.collectibleType === 'rage' || sp.collectibleType === 'espresso') {
           texKey = sp.texKey;          // 'powerup_rage' / 'powerup_espresso'
         } else {
           continue;
@@ -15043,7 +15087,7 @@ export class GameScene extends Phaser.Scene {
     const PURPLE = [0x7A3FD9, 0x9A5FE8, 0xD8B8FF];
     const FESTIVE = [0xE03A3A, 0xFF8C2E, 0xFFD24D];   // red→gold — fireworks only
     const CHARCOAL = [0x3A3A3A, 0x5A5A5A, 0x8C8C8C];  // smoke-gray — rolling coal only
-    if (sp.collectibleType === 'steroid' || sp.collectibleType === 'narcan') return GOLD;   // invincibility / quad shot
+    if (sp.collectibleType === 'rage' || sp.collectibleType === 'espresso') return GOLD;   // invincibility / quad shot
     if (sp.collectibleType === 'f12') {
       // Fireworks get their own festive red/gold halo, rolling coal a
       // charcoal smoke halo — each reads differently from the standard
@@ -15408,16 +15452,16 @@ export class GameScene extends Phaser.Scene {
       fontSize: '13px', color: '#FFDD00', stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5, 0).setDepth(d);
 
-    // Steroid power-up readout — sits just above the stars line, hidden
-    // unless the buff is active (toggled in _updateSteroid).
-    this.hudSteroid = this.add.text(SCREEN_W / 2, SCREEN_H - 84, '', {
+    // Rage power-up readout — sits just above the stars line, hidden
+    // unless the buff is active (toggled in _updateRage).
+    this.hudRage = this.add.text(SCREEN_W / 2, SCREEN_H - 84, '', {
       fontSize: '14px', fontFamily: IMPACT, color: '#FFD23D',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5, 1).setDepth(d).setVisible(false);
 
-    // Narcan inventory readout — sits just above the steroid line, shown
-    // only while you're carrying at least one (toggled in _updateNarcan).
-    this.hudNarcan = this.add.text(SCREEN_W / 2, SCREEN_H - 100, '', {
+    // Espresso inventory readout — sits just above the rage line, shown
+    // only while you're carrying at least one (toggled in _updateEspresso).
+    this.hudEspresso = this.add.text(SCREEN_W / 2, SCREEN_H - 100, '', {
       fontSize: '14px', fontFamily: IMPACT, color: '#42A5F5',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5, 1).setDepth(d).setVisible(false);
@@ -16152,31 +16196,17 @@ export class GameScene extends Phaser.Scene {
     if (diffIdx < 0) diffIdx = 0;        // default → Easy
     this._wheelCursor = DIFF_OPTIONS[diffIdx].id;
 
-    const dynamicFill = (g, x, w) => {
-      g.fillStyle(0x070B14, 0.92);
-      // Inset well inside the baked art frame (2026-07-15: the old 8/6
-      // insets spilled past the frame art and covered its baked header).
-      g.fillRoundedRect(x + 14, panelY + 14, w - 28, panelH - 22, 6);
-    };
-    const diffX = 249, diffW = 177;
-    const steeringX = 422, steeringW = 190;
-    // The hit-zone panels above are WIDER than the baked card art (and the
-    // driving-type panel sits ~9px right of its card), so the dark fill button
-    // overhung + wasn't centered. These pass CARD-fitted bounds to dynamicFill
-    // so the dark button is narrower and centered INSIDE each card image (owner
-    // 2026-07-18). dynamicFill draws at (x+14 … x+w-14), so a passed width `pw`
-    // yields a fill `pw-28` wide centered at x + pw/2.
-    const CARD_FILL_W = 122;                          // dark-button width (fits inside the ~150px card)
-    const CARD_PANEL_W = CARD_FILL_W + 28;            // → 150 (dynamicFill insets 14 each side)
-    const diffCardCX  = 337, driveCardCX = 508;       // card centers (baked-label centers)
-    const diffFillX   = diffCardCX  - CARD_PANEL_W / 2;   // → 262
-    const driveFillX  = driveCardCX - CARD_PANEL_W / 2;   // → 433
+    // (Dark dynamicFill interiors REMOVED — owner 2026-07-23: the selector
+    // value words sit directly on the baked card art now, no black box.)
+    // Card centers measured from the baked art frames (DIFF 265-422,
+    // DRIVE 429-575) — the value text centers on these.
+    const diffCardCX  = 343, driveCardCX = 502;
 
     // (DIFFICULTY / DRIVING TYPE header labels removed 2026-07-13 — the value
     // words (EASY / THUMBS / …) speak for themselves; values re-centered up.)
     // Descriptions (blurbs) removed 2026-07-18 (owner) — they overflowed the
     // card; the value word is now vertically centered on its own.
-    this._titleDiffValue = this.add.text(diffX + diffW / 2, panelY + 29, '', {
+    this._titleDiffValue = this.add.text(diffCardCX, panelY + 29, '', {
       fontSize: '22px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
       color: '#37B9FF', stroke: '#07111F', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(d + 12);
@@ -16231,7 +16261,7 @@ export class GameScene extends Phaser.Scene {
       this._wheelCursor = DIFF_OPTIONS[diffIdx].id;
       updateSelectionText();
       diffBg._titleDraw?.(true);
-    }, g => dynamicFill(g, diffFillX, CARD_PANEL_W));
+    });
     const steeringBg = makeTitleZone(titleRectShape(429, 146, 75, 346), 0xCE67FF, () => {
       thumbsIdx = (thumbsIdx + 1) % THUMBS_OPTIONS.length;
       const opt = THUMBS_OPTIONS[thumbsIdx];
@@ -16259,7 +16289,7 @@ export class GameScene extends Phaser.Scene {
           },
         );
       }
-    }, g => dynamicFill(g, driveFillX, CARD_PANEL_W));
+    });
     // Full-plate zone (owner 2026-07-22): baked LOAD SAVE plate spans
     // ~(576,345) 182×74 (same reason as START above).
     const savedBg = makeTitleZone(titleRectShape(585, 193, 74, 345), 0x4BB7FF,
@@ -16350,6 +16380,20 @@ export class GameScene extends Phaser.Scene {
         this._titleLoadSave();   // one-tap resume — never the code popup (owner 2026-07-22)
         return;
       }
+      // Offer to resume when this profile already has a save (owner: ask the
+      // player, showing the saved wallet + location so they decide).  Local
+      // check only — instant, so START stays snappy; the explicit LOAD SAVE
+      // button does the fuller local-vs-server newest-wins resolve.
+      const localSave = this._getLocalSave();
+      if (localSave) {
+        this._buildSavePrompt(
+          localSave,
+          () => { this._applyResumeMode(localSave); this._resumeFromLiveSnapshot(localSave.snap); },
+          () => this._startGameplay(),
+          () => {},   // Cancel — stay on the title
+        );
+        return;
+      }
       this._startGameplay();
     };
 
@@ -16382,7 +16426,7 @@ export class GameScene extends Phaser.Scene {
       // (reading 'isParent')".
       this._hudObjects.push(
         ...[
-          this.hudScore, this.hudMult, this.hudDist, this.hudRegion, this.hudStars, this.hudSteroid, this.hudNarcan, this.hudHP, this.hudHPDamage, this.hudAccelBar,
+          this.hudScore, this.hudMult, this.hudDist, this.hudRegion, this.hudStars, this.hudRage, this.hudEspresso, this.hudHP, this.hudHPDamage, this.hudAccelBar,
           this.hudSpeed, this.hudRadio, this.hudPopup, this._trapSign,
           this.hudRearCop, this.hudRestStop, this.hudHelicopter, this.hudHelicopterImg,
           this._titleScrim, this._titleBackdrop, this._titleMain, this._titleSub, this._titleRoute, this._titleTap,
@@ -17953,6 +17997,13 @@ export class GameScene extends Phaser.Scene {
     // Base X's are written for the default LEFT-handed mode and mirror
     // when handedness flips.
     const lh   = !!this._leftHanded;
+    // Custom-mode drag targets — one rect per status bar, rebuilt every
+    // frame so they track the controls-editor offsets (owner 2026-07-23:
+    // drag a bar to SET it in custom; degradation + the bladder system
+    // keep running on the new value).
+    if (!this._survBarHits) this._survBarHits = [];
+    this._survBarHits.length = 0;
+    this._ensureSurvBarDragHandler();
     const off  = C.HUD_OFFSET_X ?? 0;
     const SURV_ROW_Y  = 77;                        // rows y77 + y104
     const A_LEFT_LH   = 73;                        // bars 73→257 (labels end x65)
@@ -18004,6 +18055,7 @@ export class GameScene extends Phaser.Scene {
           g.fillRect(bx + 1 + 0.75 * (bw - 2), y, 2, bh);
         }
         g.lineStyle(1.5, 0x315173, 1); g.strokeRoundedRect(bx, y, bw, bh, 3);
+        this._survBarHits.push({ key: r.key, x: bx, y, w: bw, h: bh });
         const lbl = this._survLabels[li++];
         lbl.setText(r.key).setFontSize(fontPx).setPosition(bx - 8 * sc, y - 1).setVisible(true);   // left of the bar
         if (r.danger) lbl.setColor('#FF6A5C'); else lbl.setColor('#9FB7D6');
@@ -18629,6 +18681,61 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerupoutside', endDrag);
   }
 
+  /** Custom-mode STATUS-bar drag (owner 2026-07-23) — sandbox control of the
+   *  survival bars, mirroring the vice-bar drag: press a bar (Drinks / Food /
+   *  Alertness / Bladder) and drag HORIZONTALLY to set it (bars fill left to
+   *  right).  Only the VALUE is set — SurvivalSystem keeps draining/filling
+   *  from there, so degradation and the bladder pipeline stay fully intact.
+   *  Alertness is stored inverted (tiredness), mapped accordingly. */
+  _ensureSurvBarDragHandler() {
+    if (this._survBarDragWired) return;
+    this._survBarDragWired = true;
+    this._draggingSurvKey = null;
+
+    const setFromPointer = (px) => {
+      const key = this._draggingSurvKey;
+      const s   = this.survival;
+      if (!key || !s) return;
+      const hit = this._survBarHits?.find(h => h.key === key);
+      if (!hit) return;
+      const frac = Math.max(0, Math.min(1, (px - hit.x) / Math.max(1, hit.w)));
+      const v    = frac * 100;
+      if (key === 'Drinks')         s.hydration = v;
+      else if (key === 'Food')      s.fullness  = v;
+      else if (key === 'Alertness') s.tiredness = 100 - v;   // bar shows 100 - tiredness
+      else if (key === 'Bladder')   s.bladder   = v;
+    };
+
+    const isCustom = () => Difficulty.mode?.() === 'custom';
+    const PAD = 12;
+
+    this.input.on('pointerdown', (ptr) => {
+      // _ctrlEditMode: the Customize-Controls editor owns these blocks
+      // (survA/survB are editor-movable) — value-scrubbing must not fight
+      // a layout drag.
+      if (!isCustom() || this._draggingViceId || this._ctrlEditMode) return;
+      const hits = this._survBarHits;
+      if (!hits?.length) return;
+      const px = ptr.x - (C.HUD_OFFSET_X || 0), py = ptr.y;
+      for (const h of hits) {
+        if (px >= h.x - PAD && px <= h.x + h.w + PAD
+         && py >= h.y - PAD && py <= h.y + h.h + PAD) {
+          this._draggingSurvKey = h.key;
+          setFromPointer(px);
+          break;
+        }
+      }
+    });
+    this.input.on('pointermove', (ptr) => {
+      if (!this._draggingSurvKey) return;
+      if (!isCustom()) { this._draggingSurvKey = null; return; }
+      setFromPointer(ptr.x - (C.HUD_OFFSET_X || 0));
+    });
+    const endSurvDrag = () => { this._draggingSurvKey = null; };
+    this.input.on('pointerup',        endSurvDrag);
+    this.input.on('pointerupoutside', endSurvDrag);
+  }
+
   /** Render one inventory cell — icon (image or emoji) + invisible
    *  tap-to-fire hit-zone + count badge + neon card — at an explicit
    *  (x, y).  Shared by the weapon column and the standalone disguise
@@ -19122,6 +19229,15 @@ export class GameScene extends Phaser.Scene {
       difficulty: dmode,
       customSub:  dmode === 'custom' ? (Difficulty.customSub?.() ?? 'normal') : 'normal',
       score: Math.max(0, Math.round(this.score ?? 0)),
+      // Wall-clock save time embedded in the snapshot so the newest-wins load
+      // (local vs server) can compare them — the Worker's GET response doesn't
+      // return its own timestamp, so the snapshot must carry its own.
+      savedAt: Date.now(),
+      // Actual driving-type pick (default / classic / flappy / tilt) so resume
+      // restores the scheme the player used.  DEFAULT steering saves into the
+      // 'tap' profile bucket, so inferring the scheme from the bucket wrongly
+      // forced TAP on resume — carry the real pick here instead.
+      steering: this.registry?.get?.('titleThumbsPick') ?? this.registry?.get?.('steeringMode') ?? null,
       stars: Math.max(0, Math.min(5, Math.round(this.cops?.starDisplay ?? this.cops?.stars ?? 0))),
       hp:    Math.max(0, Math.round(dur)),
       hpMax: Math.max(1, hpMax),
@@ -19236,8 +19352,14 @@ export class GameScene extends Phaser.Scene {
         this._applyVehicleSwap?.(s.vehicleId);
       }
       if (this.damage) {
-        if (s.hpMax) this.damage.setMax(s.hpMax);
-        if (typeof s.hp === 'number') this.damage.setDurability(Math.max(0, Math.min(s.hpMax ?? 9999, s.hp)));
+        // Max HP = the LARGER of the current persistent-upgrade cap (set by the
+        // vehicle swap above via _runMaxHp) and the snapshot's saved max.  This
+        // honors upgrades bought since the save (upgrades raise _runMaxHp) AND
+        // preserves any above-base bonus HP baked into the snapshot.
+        const _curMax = this.damage._max ?? 0;
+        const _max = Math.max(_curMax, s.hpMax ?? 0, 1);
+        this.damage.setMax(_max);
+        if (typeof s.hp === 'number') this.damage.setDurability(Math.max(0, Math.min(_max, s.hp)));
       }
       if (this.player && typeof s.gas === 'number') {
         const maxMi = VEHICLES[s.vehicleId]?.rangeMi ?? this.player.gasMaxMi ?? s.gas;
@@ -19319,7 +19441,8 @@ export class GameScene extends Phaser.Scene {
     // Bank the wallet at every rest stop — pulling in is the "safe" moment, so
     // quitting mid-run never costs more than the leg since your last stop.
     if (Difficulty.mode?.() !== 'custom') {
-      this.registry.get('save')?.set?.('wallet', Math.round(Math.max(0, this.score)));
+      const _sv = this.registry.get('save');
+      if (_sv?.walletStore) { _sv.walletStore.money = Math.round(Math.max(0, this.score)); _sv.save?.(); }
     }
 
     // Music keeps playing in the rest stop — only the mute button (M key /
@@ -20277,33 +20400,79 @@ export class GameScene extends Phaser.Scene {
    *  the per-device code map, and resume from the matching snapshot.
    *  `defaultCode` pre-fills the prompt — pass the most recent save code
    *  so the player can either accept it (Enter) or erase + type another. */
-  /** Title-screen LOAD SAVE handler — one tap resumes the slot's last
-   *  DELIBERATE save point (phone-menu Save button), with money / location /
-   *  vehicles / vices / weapons / survival bars all restored via the
-   *  live-snapshot path.  NEVER pops the type-a-code modal (owner 2026-07-22):
-   *  fallback order is manual phone save → rolling autosave → last rest-stop
-   *  checkpoint → a "NO SAVE FOUND" toast. */
-  _titleLoadSave() {
+  /** The freshest LOCAL save for the active slot — durable phone-menu Save
+   *  point first, then the rolling autosave.  Returns {snap, ts, mode} or null.
+   *  Synchronous + instant (used to decide the START prompt without blocking). */
+  _getLocalSave() {
     const save = this.registry.get('save');
-    // Read the freshest save from the CURRENTLY-selected slot's storage.
-    // (Slots can be switched on the title without a scene restart, so an
-    // init-time cached snapshot can be stale — go straight to the store.)
-    // Prefer the durable phone-menu save point over the rolling autosave.
-    const latest   = save?.latestLiveRun?.('manualSave') ?? save?.latestLiveRun?.();
-    const liveSnap = (latest?.snap?.position != null) ? latest.snap : null;
-    if (liveSnap) {
-      // Restore the steering mode / profile bucket the run was saved under so
-      // the resumed run — and its future autosaves — hit the same profile.
-      if (latest?.mode) {
-        save?.setMode?.(latest.mode);
-        const uiId = { tap: 'flappy', classic: 'classic', tilt: 'tilt' }[latest.mode] ?? 'default';
-        this.registry?.set?.('titleThumbsPick', uiId);
-        this.registry?.set?.('steeringMode',    uiId);
+    const latest = save?.latestLiveRun?.('manualSave') ?? save?.latestLiveRun?.();
+    if (latest?.snap?.position == null) return null;
+    return { snap: latest.snap, ts: latest.ts ?? (Number(latest.snap.savedAt) || 0), mode: latest.mode ?? null };
+  }
+
+  /** Newest save across LOCAL storage and the SERVER (owner: server-backed
+   *  saves, newest wins).  CloudSave.get returns null on localhost / offline /
+   *  before the API is deployed, so this degrades to the local save cleanly.
+   *  The two are compared by the snapshot's embedded `savedAt` timestamp. */
+  async _resolveNewestSave() {
+    const save  = this.registry.get('save');
+    const local = this._getLocalSave();
+    let server = null;
+    try {
+      const playerId = save?.activePlayerId;
+      if (playerId && CloudSave?.enabled) {
+        const s = await CloudSave.get(playerId);
+        const snap = s?.snapshot;
+        if (snap && typeof snap.position === 'number') {
+          server = { snap, ts: Number(snap.savedAt) || 0, mode: null };
+        }
       }
-      this._resumeFromLiveSnapshot(liveSnap);
+    } catch (_) {}
+    if (!local && !server) return null;
+    if (!server) return local;
+    if (!local)  return server;
+    return (server.ts > (local.ts ?? 0)) ? server : local;
+  }
+
+  /** Restore the storage bucket + driving type a picked save was made under.
+   *  The bucket (setMode) keeps the resumed run's autosaves in the same profile;
+   *  the DRIVING TYPE is taken from the snapshot's recorded `steering` pick, NOT
+   *  inferred from the bucket — DEFAULT steering lives in the 'tap' bucket, so
+   *  inferring it wrongly forced TAP on resume.  Absent (old saves) → leave the
+   *  player's current title selection untouched rather than forcing one. */
+  _applyResumeMode(picked) {
+    const save = this.registry.get('save');
+    if (picked?.mode) save?.setMode?.(picked.mode);
+    const steer = picked?.snap?.steering;
+    if (steer) {
+      this.registry?.set?.('titleThumbsPick', steer);
+      this.registry?.set?.('steeringMode',    steer);
+    }
+  }
+
+  /** One-line save summary for the prompts: wallet $ · location · mile. */
+  _saveSummaryLine(snap) {
+    const money = Math.max(0, Math.round(snap?.score ?? 0));
+    const mi    = Math.max(0, Math.round(snap?.odometer ?? 0));
+    const total = Math.round(TOTAL_ROUTE_MILES || 0);
+    const t     = TOTAL_ROUTE_MILES ? mi / TOTAL_ROUTE_MILES : 0;
+    const cp    = [...CHECKPOINTS].reverse().find(c => c.t <= t);
+    return `$${money.toLocaleString()}   ·   ${cp?.name || 'West Seattle'}   ·   Mile ${mi} of ${total}`;
+  }
+
+  /** Title-screen LOAD SAVE handler — resumes the newest save (local vs server,
+   *  newest wins) with money / location / vehicles / vices / weapons / survival
+   *  bars all restored via the live-snapshot path.  Falls back to the last
+   *  rest-stop checkpoint, then a "NO SAVE FOUND" toast. */
+  async _titleLoadSave() {
+    const picked = await this._resolveNewestSave();
+    if (picked?.snap?.position != null) {
+      this._applyResumeMode(picked);
+      this._resumeFromLiveSnapshot(picked.snap);
       return;
     }
-    // No phone save / autosave — try the last rest-stop checkpoint.
+    // No live/server save — try the last rest-stop checkpoint.
+    const save = this.registry.get('save');
     const savedSnap = (() => { const r = save?.get?.('lastRestStop'); return (r && r.id) ? r : null; })();
     if (savedSnap) { this._resumeFromSavedSnapshot(savedSnap); return; }
     // Nothing saved for this slot — say so on the title (no code popup).
@@ -20314,6 +20483,79 @@ export class GameScene extends Phaser.Scene {
     this._addHudObjs?.(t);
     this.tweens.add({ targets: t, alpha: 0, delay: 1200, duration: 400,
                       onComplete: () => t.destroy() });
+  }
+
+  /** START-time "you have a saved game" prompt — shows the save's wallet +
+   *  location so the player decides with the money in view, then Resume / New
+   *  Run / Cancel.  Three-button variant of _buildConfirmPopup. */
+  _buildSavePrompt(picked, onResume, onNew, onCancel) {
+    this._modalOpen = true;
+    const objs = [];
+    const D = 230;
+    const cx = SCREEN_W / 2, cy = SCREEN_H / 2;
+
+    const scrim = this.add.rectangle(cx, cy, 4000, SCREEN_H + 800, 0x000000, 0)
+      .setDepth(D).setInteractive();
+    scrim.on('pointerdown', (p) => { p.event?.stopPropagation?.(); });
+    objs.push(scrim);
+
+    const cardW = 460, cardH = 190;
+    const card = this.add.graphics().setDepth(D + 1);
+    card.fillStyle(0x050812, 0.97);
+    card.fillRoundedRect(cx - cardW / 2, cy - cardH / 2, cardW, cardH, 7);
+    card.lineStyle(3, 0x39A8FF, 0.92);
+    card.strokeRoundedRect(cx - cardW / 2, cy - cardH / 2, cardW, cardH, 7);
+    card.lineStyle(1, 0xFF39AF, 0.70);
+    card.strokeRoundedRect(cx - cardW / 2 + 5, cy - cardH / 2 + 5, cardW - 10, cardH - 10, 5);
+    objs.push(card);
+
+    const ttl = this.add.text(cx, cy - 58, 'SAVED GAME FOUND', {
+      fontSize: '20px', fontFamily: '"Arial Black", sans-serif', color: '#F4F7FF',
+      stroke: '#FF39AF', strokeThickness: 2, align: 'center',
+    }).setOrigin(0.5).setDepth(D + 2);
+    objs.push(ttl);
+
+    const summary = this.add.text(cx, cy - 22, this._saveSummaryLine(picked.snap), {
+      fontSize: '15px', fontFamily: 'Impact, "Arial Black", sans-serif', color: '#39FF8A',
+      stroke: '#000', strokeThickness: 3, align: 'center',
+    }).setOrigin(0.5).setDepth(D + 2);
+    objs.push(summary);
+
+    const sub = this.add.text(cx, cy + 2, 'Resume this trip, or start a new run?', {
+      fontSize: '12px', fontFamily: '"Helvetica Neue", Arial, sans-serif',
+      color: '#B9C8DE', align: 'center',
+    }).setOrigin(0.5).setDepth(D + 2);
+    objs.push(sub);
+
+    const close = () => { this._modalOpen = false; objs.forEach(o => o?.destroy?.()); };
+
+    const makeBtn = (x, w, label, neonColor, handler) => {
+      const bg = this.add.graphics().setDepth(D + 2);
+      const draw = (hover = false) => {
+        bg.clear();
+        bg.fillStyle(0x050812, hover ? 1 : 0.92);
+        bg.fillRoundedRect(x - w / 2, cy + 34, w, 38, 5);
+        bg.lineStyle(hover ? 3 : 2, neonColor, 1);
+        bg.strokeRoundedRect(x - w / 2, cy + 34, w, 38, 5);
+      };
+      draw(false);
+      bg.setInteractive(new Phaser.Geom.Rectangle(x - w / 2, cy + 34, w, 38), Phaser.Geom.Rectangle.Contains);
+      bg.input.cursor = 'pointer';
+      const css = `#${neonColor.toString(16).padStart(6, '0')}`;
+      const txt = this.add.text(x, cy + 53, label, {
+        fontSize: '15px', fontFamily: '"Arial Black", sans-serif',
+        color: '#F4F7FF', stroke: css, strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(D + 3);
+      bg.on('pointerover', () => draw(true));
+      bg.on('pointerout',  () => draw(false));
+      bg.on('pointerdown', (p) => { p.event?.stopPropagation?.(); close(); handler?.(); });
+      objs.push(bg, txt);
+    };
+    makeBtn(cx - 148, 132, 'RESUME',  0x39FF8A, onResume);
+    makeBtn(cx,        132, 'NEW RUN', 0xFF39AF, onNew);
+    makeBtn(cx + 148, 132, 'CANCEL',  0x39A8FF, onCancel);
+
+    this._addHudObjs(...objs);
   }
 
   _promptForCode(defaultCode = '') {
@@ -20487,6 +20729,9 @@ export class GameScene extends Phaser.Scene {
    *  (same device) or From Checkpoint (cross-device, exact spot). */
   _saveCurrentRun() {
     try {
+      // Custom is a throwaway sandbox — nothing persists, so a manual Save
+      // would be a lie.  Surface it (phone toast: "Custom games don't save").
+      if (Difficulty.mode?.() === 'custom') return { ok: false, custom: true };
       if (!this._introDone || this._awaitingStart || this._awaitingResumeOk) return { ok: false };
       const save = this.registry.get('save');
       const snap = this._collectSaveSnapshot(null);
@@ -20700,6 +20945,10 @@ export class GameScene extends Phaser.Scene {
 
   _startGameplay() {
     this._awaitingStart = false;
+    // The title just committed the run's difficulty (incl. Custom) without a
+    // scene restart — recalibrate the save sandbox now, before any purchase
+    // or upgrade read below runs against the wrong bucket.
+    this.registry.get('save')?.setSandbox?.(Difficulty.mode?.() === 'custom');
     // A run is starting — drop any stale controls-editor arm so it can never
     // hijack gameplay (belt-and-suspenders; enter-on-rotate normally consumes
     // it before the title's START is reachable).
@@ -20913,17 +21162,17 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /** True while the Steroid power-up is active (invincible, bulldozes cars). */
-  _steroidActive() {
-    return (this._steroidUntilMile ?? -1) > (this._odometer ?? 0);
+  /** True while the Rage power-up is active (invincible, bulldozes cars). */
+  _rageActive() {
+    return (this._rageUntilMile ?? -1) > (this._odometer ?? 0);
   }
 
-  /** Start a 1-mile Redneck / Road Rage (invincible battering-ram) with the
+  /** Start a 2-mile Redneck / Road Rage (invincible battering-ram) with the
    *  full spectacle.  Fired by the powerup pickup and by maxing Alertness
    *  (fromAlertness) — the latter drops Alertness to 75% when it wears off. */
   _startRedneckRage({ fromAlertness = false } = {}) {
-    this._steroidUntilMile  = (this._odometer ?? 0) + 1.0;
-    this._steroidWasActive  = true;
+    this._rageUntilMile  = (this._odometer ?? 0) + 2.0;
+    this._rageWasActive  = true;
     this._rageFromAlertness = fromAlertness;
     this._showPopup?.(
       fromAlertness ? '🤬 ROAD RAGE!\nUNSTOPPABLE — 1 MILE' : '🤬 REDNECK RAGE!\nUNSTOPPABLE — 1 MILE',
@@ -20934,21 +21183,21 @@ export class GameScene extends Phaser.Scene {
     try { this.audio?.playHorn?.(); } catch (_) {}    // no-op if cue absent
   }
 
-  /** Per-frame Steroid upkeep: heat suppression, HUD readout, expiry popup,
+  /** Per-frame Rage upkeep: heat suppression, HUD readout, expiry popup,
    *  and the rare standalone spawn timer.  Called from update(). */
-  _updateSteroid(rawDt) {
+  _updateRage(rawDt) {
     // Road-rage trigger: maxing Alertness (tiredness hits 0 → 100% alert)
-    // launches a 1-mile Road Rage; it drops Alertness to 75% when it wears
+    // launches a 2-mile Road Rage; it drops Alertness to 75% when it wears
     // off (see the worn-off block below).  Owner 2026-07-20.
-    if (!this._awaitingStart && !this._steroidActive()
+    if (!this._awaitingStart && !this._rageActive()
         && (this.survival?.tiredness ?? 99) <= 0) {
       this._startRedneckRage({ fromAlertness: true });
     }
-    const active = this._steroidActive();
+    const active = this._rageActive();
     // Untouchable while active — zero out wanted-star attraction so the
     // rampage doesn't bury you in heat the instant it wears off.
     if (active && this.cops) this.cops._starGainMul = 0;
-    if (!active && this._steroidWasActive) {
+    if (!active && this._rageWasActive) {
       this._showPopup?.('🤬 RAGE WORN OFF', '#FFAA33');
       // Road Rage (alertness-triggered) crashes you back down to 75% alert.
       if (this._rageFromAlertness && this.survival) {
@@ -20956,13 +21205,13 @@ export class GameScene extends Phaser.Scene {
       }
       this._rageFromAlertness = false;
     }
-    this._steroidWasActive = active;
-    if (this.hudSteroid) {
+    this._rageWasActive = active;
+    if (this.hudRage) {
       if (active) {
-        const left = Math.max(0, this._steroidUntilMile - (this._odometer ?? 0));
-        this.hudSteroid.setText(`🤬 RAGE — ${left.toFixed(2)} mi`).setVisible(true);
+        const left = Math.max(0, this._rageUntilMile - (this._odometer ?? 0));
+        this.hudRage.setText(`🤬 RAGE — ${left.toFixed(2)} mi`).setVisible(true);
       } else {
-        this.hudSteroid.setVisible(false);
+        this.hudRage.setVisible(false);
       }
     }
     // Pulsing red rage vignette — a full-screen red overlay that throbs while
@@ -20979,15 +21228,15 @@ export class GameScene extends Phaser.Scene {
     }
     // Rare standalone drop — no spawning on the title/pre-start screen.
     if (this._awaitingStart) return;
-    this._steroidSpawnTimer = (this._steroidSpawnTimer ?? 150) - rawDt;
-    if (this._steroidSpawnTimer <= 0) {
-      this._steroidSpawnTimer = 150 + Math.random() * 120;   // ~2.5–4.5 min
-      if (!active) this._injectSteroid();
+    this._rageSpawnTimer = (this._rageSpawnTimer ?? 150) - rawDt;
+    if (this._rageSpawnTimer <= 0) {
+      this._rageSpawnTimer = 150 + Math.random() * 120;   // ~2.5–4.5 min
+      if (!active) this._injectRage();
     }
   }
 
-  /** Drop a single Steroid pickup a short way ahead (rare standalone). */
-  _injectSteroid() {
+  /** Drop a single Rage pickup a short way ahead (rare standalone). */
+  _injectRage() {
     const segs = this.road?.segments;
     if (!segs?.length) return;
     const startSeg = Math.floor(this.player.position / SEG_LENGTH);
@@ -20995,35 +21244,35 @@ export class GameScene extends Phaser.Scene {
     const seg      = segs[(startSeg + ahead) % segs.length];
     if (!seg) return;
     seg.sprites.push({
-      type:            'steroid',
+      type:            'rage',
       texKey:          'powerup_rage',
       offset:          0.05 + Math.random() * 0.40,
       baseW: 720, baseH: 880,
       collected:       false,
       isCollectible:   true,
-      collectibleType: 'steroid',
+      collectibleType: 'rage',
       _bonus:          true,
     });
     this._showPopup?.('🤬 REDNECK RAGE AHEAD!', '#FFD23D');
   }
 
-  /** Narcan upkeep: HUD readout + rare standalone spawn timer. */
-  _updateNarcan(rawDt) {
-    if (this.hudNarcan) {
-      const n = this._narcanCount ?? 0;
-      if (n > 0) this.hudNarcan.setText(`☕ ESPRESSO ×${n}`).setVisible(true);
-      else this.hudNarcan.setVisible(false);
+  /** Espresso upkeep: HUD readout + rare standalone spawn timer. */
+  _updateEspresso(rawDt) {
+    if (this.hudEspresso) {
+      const n = this._espressoCount ?? 0;
+      if (n > 0) this.hudEspresso.setText(`☕ ESPRESSO ×${n}`).setVisible(true);
+      else this.hudEspresso.setVisible(false);
     }
     if (this._awaitingStart) return;
-    this._narcanSpawnTimer = (this._narcanSpawnTimer ?? 150) - rawDt;
-    if (this._narcanSpawnTimer <= 0) {
-      this._narcanSpawnTimer = 150 + Math.random() * 120;   // ~2.5–4.5 min
-      if ((this._narcanCount ?? 0) < 3) this._injectNarcan();
+    this._espressoSpawnTimer = (this._espressoSpawnTimer ?? 150) - rawDt;
+    if (this._espressoSpawnTimer <= 0) {
+      this._espressoSpawnTimer = 150 + Math.random() * 120;   // ~2.5–4.5 min
+      if ((this._espressoCount ?? 0) < 3) this._injectEspresso();
     }
   }
 
-  /** Drop a single Narcan pickup a short way ahead (rare standalone). */
-  _injectNarcan() {
+  /** Drop a single Espresso pickup a short way ahead (rare standalone). */
+  _injectEspresso() {
     const segs = this.road?.segments;
     if (!segs?.length) return;
     const startSeg = Math.floor(this.player.position / SEG_LENGTH);
@@ -21031,26 +21280,26 @@ export class GameScene extends Phaser.Scene {
     const seg      = segs[(startSeg + ahead) % segs.length];
     if (!seg) return;
     seg.sprites.push({
-      type:            'narcan',
+      type:            'espresso',
       texKey:          'powerup_espresso',
       offset:          0.05 + Math.random() * 0.40,
       baseW: 720, baseH: 880,
       collected:       false,
       isCollectible:   true,
-      collectibleType: 'narcan',
+      collectibleType: 'espresso',
       _bonus:          true,
     });
     this._showPopup?.('☕ EMERGENCY ESPRESSO AHEAD!', '#42A5F5');
   }
 
   /** If an OPIOID overdose (fentanyl/heroin/rx) is about to kill the player
-   *  and a Narcan is in inventory, consume it: flash the screen red, flush
+   *  and a Espresso is in inventory, consume it: flash the screen red, flush
    *  all opioid bars, and cancel the OD.  Returns true if the OD was saved. */
-  _tryNarcan(viceId) {
+  _tryEspresso(viceId) {
     const OPIOIDS = [VICES.COMA, VICES.COMBO, VICES.COLDBREW];
-    if (!OPIOIDS.includes(viceId)) return false;   // Narcan only reverses opioids
-    if ((this._narcanCount ?? 0) <= 0) return false;
-    this._narcanCount -= 1;
+    if (!OPIOIDS.includes(viceId)) return false;   // Espresso only reverses opioids
+    if ((this._espressoCount ?? 0) <= 0) return false;
+    this._espressoCount -= 1;
     for (const id of OPIOIDS) this.vices.levels[id] = 0;   // flush the opioids
     this.cameras?.main?.flash?.(450, 220, 20, 20);          // red rescue flash
     this._showPopup?.('☕ ESPRESSO — SNAPPED AWAKE', '#FF5555');
@@ -21081,6 +21330,11 @@ export class GameScene extends Phaser.Scene {
     this._hasFogLights     = !!getInstalledUpgrade?.(save, vehId, 'foglights');
     this._hasNewHeadlights = !!getInstalledUpgrade?.(save, vehId, 'headlights');
     this._hasNewWindshield = !!getInstalledUpgrade?.(save, vehId, 'windshield');
+    // Fog lights → 50% fog transparency (owner spec), applied CENTRALLY in
+    // Weather so every fog visual thins together: the screen haze
+    // (EffectsSystem), the distance fog (Road.js), and all fogParams sprite
+    // fades.  Physics (grip) reads Weather.intensity directly — unaffected.
+    Weather.setFogClarity?.(this._hasFogLights ? 0.5 : 1);
     return merged;
   }
 
@@ -21135,11 +21389,14 @@ export class GameScene extends Phaser.Scene {
     return trueMph;
   }
 
-  _regionIndex(progress) {
-    for (let i = 0; i < REGION_ORDER.length; i++) {
-      if (progress < REGION_ORDER[i].end) return i;
+  /** Index into CHECKPOINTS (the town list) for a route progress 0-1 —
+   *  the last town whose start t is at or behind the player. */
+  _townIndex(progress) {
+    let idx = 0;
+    for (let i = 0; i < CHECKPOINTS.length; i++) {
+      if (CHECKPOINTS[i].t <= progress) idx = i; else break;
     }
-    return REGION_ORDER.length - 1;
+    return idx;
   }
 
   _onArrested() {
@@ -21404,7 +21661,8 @@ export class GameScene extends Phaser.Scene {
         this.score = Math.max(0, this.score - lost);
         extra.losses = (extra.losses ?? 0) + lost;
       }
-      this.registry.get('save')?.set?.('wallet', Math.round(Math.max(0, this.score)));
+      const _sv = this.registry.get('save');
+      if (_sv?.walletStore) { _sv.walletStore.money = Math.round(Math.max(0, this.score)); _sv.save?.(); }
     }
 
     // Career stats: a Pullman finish is a completion; everything else

@@ -31,7 +31,33 @@ const SLOT_COUNT = 3;
 // missionRep / missionStats (Ch. 8 Favors) are lifetime per-player records —
 // rep tiers and accepted/completed/failed counts must survive per-mode
 // resets and never fork per steering mode, so they're GLOBAL too.
-const GLOBAL_KEYS = new Set(['achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector', 'npcMemory', 'missionRep', 'missionStats']);
+// PROGRESSION now belongs to the PLATE (per-slot global), not the steering-type
+// profile (owner 2026-07-23): owned/current car, upgrades, accessories, vice
+// inventory, mission progress, rest-stop + live/manual saves, survival state,
+// buffs, AND the HUD controls layout all follow the plate so switching driving
+// type keeps everything.  Money was already global.  The per-mode `profiles`
+// buckets are now vestigial (kept only to read + lift legacy saves).
+const GLOBAL_KEYS = new Set([
+  'achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector',
+  'npcMemory', 'missionRep', 'missionStats',
+  // ── Progression, moved from per-mode profile to the plate ──
+  'money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
+  'lastRestStop', 'restStopSaves', 'liveRun', 'manualSave', 'accessories',
+  'upgrades', 'tempUpgrades', 'controlsLayout', 'controlsLayoutVer',
+  'survivalState', 'activeBuffs',
+]);
+
+// Custom-mode SANDBOX: these first-segments hold RUN PROGRESS.  While the
+// sandbox is on (a Custom run), reads AND writes of these keys route to a
+// throwaway in-memory bucket — Custom starts fresh, purchases work for the
+// session, and NOTHING persists or leaks into the real save.  (Owner
+// 2026-07-23: upgrades bought in a Custom game were transferring to the
+// Easy profile.)  Settings / achievements / stats stay on the real save.
+const SANDBOX_KEYS = new Set([
+  'money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
+  'lastRestStop', 'restStopSaves', 'liveRun', 'manualSave', 'accessories',
+  'upgrades', 'tempUpgrades', 'survivalState', 'activeBuffs', 'radarDetector',
+]);
 
 // Storage-key names for each profile bucket.  Kept as-is for backward
 // compatibility with on-disk saves.  The GameScene UI uses 'flappy' and
@@ -104,17 +130,31 @@ const DEFAULT_PROFILE = {
   // all money/progress.  Shape: { snap: <full _collectSaveSnapshot>, ts }.
   // Cleared on a clean trip-end / Start Over / Main Menu / death.
   liveRun:         null,
+  // Durable phone-menu Save point.  Same shape as liveRun ({ snap, ts }) but,
+  // unlike liveRun, later autosaves NEVER overwrite it — the title LOAD SAVE
+  // returns to the last spot the player deliberately hit Save.  MUST be listed
+  // here (and copied in _sanitizeProfile) or the load-time whitelist drops it
+  // every reload, wiping the manual save ("NO SAVE FOUND" after a Save+reload).
+  manualSave:      null,
   // Per-vehicle accessory state.  Shape:
   //   accessories: { [vehicleId]: { bumper: bool, traction: bool, nos: 0|1|2|3 } }
   // Bumper / traction are one-shot purchases (boolean).  NOS is a tier
   // counter — 0 (none) → 3 (max).  Each tier adds +5 mph to cruise + boost.
   accessories:     {},
+  // Installed part upgrades (UpgradeSystem).  Shape:
+  //   upgrades: { [vehicleId]: { [slot]: upgradeId } }
+  // These carry the HP / grip / speed / range bonuses (getUpgradeEffects), so
+  // they MUST be listed here + copied in _sanitizeProfile or the load-time
+  // whitelist drops them every reload — which wiped all purchased upgrades and
+  // left max HP at the vehicle base (e.g. Beater stuck at 25 HP).
+  upgrades:        {},
+  tempUpgrades:    {},   // temporary (per-run) patches — same shape
 };
 
 const DEFAULT_GLOBAL = {
   achievements:    {},
   checkpointTiers: {},          // { [stopId]: 'bronze' | 'silver' | 'gold' }
-  settings:        { muted: false, radio: 0, backgroundRadio: true },
+  settings:        { muted: false, radio: -1, backgroundRadio: true },   // radio -1 = no default station chosen
   // Career stats — full canonical shape is owned by StatsTracker, which
   // deep-merges its defaults over whatever is here on boot.  Empty is fine.
   stats:           {},
@@ -138,6 +178,23 @@ const DEFAULT_GLOBAL = {
   // run snapshots instead (see MissionSystem.serialize).
   missionRep:      {},
   missionStats:    {},
+  // ── Progression (moved from DEFAULT_PROFILE → the plate, owner 2026-07-23) ──
+  // Same shapes as they had per-mode; see DEFAULT_PROFILE comments for detail.
+  ownedCars:       ['beater'],
+  currentCar:      'beater',
+  viceInventory:   {},
+  missionProgress: 0,
+  lastRestStop:    null,
+  restStopSaves:   {},
+  liveRun:         null,   // rolling mid-drive autosave
+  manualSave:      null,   // durable phone-menu Save point
+  accessories:     {},
+  upgrades:        {},
+  tempUpgrades:    {},
+  controlsLayout:  null,   // null = never customized → baked default layout
+  controlsLayoutVer: 1,
+  survivalState:   null,
+  activeBuffs:     [],
 };
 
 // A single player profile slot — its license-plate handle plus a complete,
@@ -177,6 +234,108 @@ function liftMoneyToGlobal(slot) {
     if (Number.isFinite(v) && v > m) m = v;
   }
   slot.global.money = finiteInt(m, 0, 0);
+}
+
+// One-time (idempotent) migration: promote per-mode PROGRESSION up to the plate
+// (global).  Legacy saves stored owned cars / upgrades / accessories / vice
+// inventory / mission progress / rest-stop + live/manual saves / survival /
+// buffs / controls layout per steering mode; they now belong to the plate.
+// MERGES rather than overwrites (keeps the best of global vs each mode), so it
+// is safe to re-run every load, then clears the moved keys from the vestigial
+// per-mode profiles.  Run AFTER liftMoneyToGlobal (which still reads .money).
+function liftProgressionToGlobal(slot) {
+  if (!slot || !isObj(slot.global)) return;
+  const g = slot.global;
+  const profs = VALID_MODES.map(m => slot.profiles?.[m]).filter(isObj);
+
+  // Owned cars — union (never lose a purchase); beater always present.
+  const cars = new Set(Array.isArray(g.ownedCars) ? g.ownedCars : []);
+  for (const p of profs) for (const c of (Array.isArray(p.ownedCars) ? p.ownedCars : [])) {
+    if (typeof c === 'string' && c.trim()) cars.add(c.trim());
+  }
+  cars.add('beater');
+  g.ownedCars = [...cars];
+  const owns = (c) => typeof c === 'string' && g.ownedCars.includes(c);
+  // currentCar: keep global's if it's already an owned non-beater; otherwise
+  // adopt the last car from the RICHEST (most money) mode so migration doesn't
+  // silently drop the player back into the beater.  (Per-mode .money is still
+  // present here — the MOVED clear runs at the end.)
+  if (!owns(g.currentCar) || g.currentCar === 'beater') {
+    const ranked = profs.slice().sort((a, b) => finiteNum(b.money, 0, 0) - finiteNum(a.money, 0, 0));
+    const picked = ranked.map(p => p.currentCar).find(owns);
+    if (picked) g.currentCar = picked;
+    else if (!owns(g.currentCar)) g.currentCar = g.ownedCars[0] ?? 'beater';
+  }
+
+  // Highest mission progress.
+  g.missionProgress = Math.max(finiteNum(g.missionProgress, 0, 0), ...profs.map(p => finiteNum(p.missionProgress, 0, 0)), 0);
+
+  // Vice inventory — max per vice across all sources.
+  if (!isObj(g.viceInventory)) g.viceInventory = {};
+  for (const p of profs) for (const [k, v] of Object.entries(isObj(p.viceInventory) ? p.viceInventory : {})) {
+    g.viceInventory[k] = Math.max(g.viceInventory[k] ?? 0, Number(v) || 0);
+  }
+
+  // Per-vehicle maps (accessories / upgrades / tempUpgrades) — union by vehicle,
+  // GLOBAL wins on a per-slot conflict.
+  const mergeVehMap = (dst, list) => {
+    const out = isObj(dst) ? { ...dst } : {};
+    for (const s of list) for (const [veh, val] of Object.entries(isObj(s) ? s : {})) {
+      out[veh] = { ...(isObj(val) ? val : {}), ...(isObj(out[veh]) ? out[veh] : {}) };
+    }
+    return out;
+  };
+  g.accessories  = mergeVehMap(g.accessories,  profs.map(p => p.accessories));
+  g.upgrades     = mergeVehMap(g.upgrades,     profs.map(p => p.upgrades));
+  g.tempUpgrades = mergeVehMap(g.tempUpgrades, profs.map(p => p.tempUpgrades));
+
+  // Rest-stop saves — union by code, newest ts per code.
+  if (!isObj(g.restStopSaves)) g.restStopSaves = {};
+  for (const p of profs) for (const [code, snap] of Object.entries(isObj(p.restStopSaves) ? p.restStopSaves : {})) {
+    const cur = g.restStopSaves[code];
+    if (!cur || (snap?.ts ?? 0) > (cur?.ts ?? 0)) g.restStopSaves[code] = snap;
+  }
+
+  // Newest-by-ts singletons.
+  const newest = (a, b) => {
+    const ta = a ? (a.ts ?? 0) : -Infinity, tb = b ? (b.ts ?? 0) : -Infinity;
+    return tb > ta ? b : a;
+  };
+  for (const key of ['liveRun', 'manualSave', 'lastRestStop']) {
+    let best = g[key] ?? null;
+    for (const p of profs) best = newest(best, p[key] ?? null);
+    g[key] = best;
+  }
+
+  // Survival state — keep global if set, else the first mode that has one.
+  if (g.survivalState == null) g.survivalState = profs.map(p => p.survivalState).find(x => x != null) ?? null;
+  // Active buffs — keep global if non-empty, else the first mode's non-empty list.
+  if (!Array.isArray(g.activeBuffs) || g.activeBuffs.length === 0) {
+    g.activeBuffs = profs.map(p => p.activeBuffs).find(a => Array.isArray(a) && a.length)
+      ?? (Array.isArray(g.activeBuffs) ? g.activeBuffs : []);
+  }
+
+  // Controls layout — keep global if it has offsets; else adopt the mode with
+  // the most.  Never downgrade a null (baked-default) global to an empty {}.
+  const glCount = isObj(g.controlsLayout) ? Object.keys(g.controlsLayout).length : 0;
+  if (glCount === 0) {
+    let best = null, bestN = 0;
+    for (const p of profs) {
+      const n = isObj(p.controlsLayout) ? Object.keys(p.controlsLayout).length : 0;
+      if (n > bestN) { bestN = n; best = p.controlsLayout; }
+    }
+    if (best) g.controlsLayout = best;
+  }
+  g.controlsLayoutVer = Math.max(finiteNum(g.controlsLayoutVer, 1, 1), ...profs.map(p => finiteNum(p.controlsLayoutVer, 1, 1)), 1);
+
+  // Clear the moved keys from the now-vestigial per-mode profiles so the save
+  // isn't carrying stale duplicates.
+  const MOVED = ['money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
+    'lastRestStop', 'restStopSaves', 'liveRun', 'manualSave', 'accessories',
+    'upgrades', 'tempUpgrades', 'controlsLayout', 'controlsLayoutVer', 'survivalState', 'activeBuffs'];
+  for (const m of VALID_MODES) {
+    if (isObj(slot.profiles?.[m])) for (const k of MOVED) delete slot.profiles[m][k];
+  }
 }
 
 export class SaveSystem {
@@ -303,6 +462,13 @@ export class SaveSystem {
    *  so this must return the real object (not a copy).  Backfills `.money` to
    *  an integer in case a slot predates the migration. */
   get walletStore() {
+    if (this._sandbox) {
+      // Custom sandbox — throwaway wallet (Custom seeds its own $100k as
+      // score and never banks; this guards any direct Wallet-class use).
+      const w = (this._sandboxStore.__walletStore ??= { money: 0 });
+      if (!Number.isInteger(w.money) || w.money < 0) w.money = 0;
+      return w;
+    }
     const g = this._slot.global;
     if (!Number.isFinite(g.money) || !Number.isInteger(g.money) || g.money < 0) g.money = 0;
     return g;
@@ -316,17 +482,11 @@ export class SaveSystem {
    *  later autosaves) or 'liveRun' (rolling autosave, default).
    *  Returns { snap, ts, mode } or null when the slot has no such save. */
   latestLiveRun(key = 'liveRun') {
-    const slot = this._slot;
-    let best = null;
-    for (const mode of VALID_MODES) {
-      const lr  = slot.profiles?.[mode]?.[key];
-      const pos = lr?.snap?.position;
-      if (!lr || typeof pos !== 'number') continue;
-      if (!best || (lr.ts ?? 0) > (best.ts ?? 0)) {
-        best = { snap: lr.snap, ts: lr.ts ?? 0, mode };
-      }
-    }
-    return best;
+    // Saves now live on the PLATE (global), one per slot — no per-mode scan.
+    const lr  = this._slot?.global?.[key];
+    const pos = lr?.snap?.position;
+    if (!lr || typeof pos !== 'number') return null;
+    return { snap: lr.snap, ts: lr.ts ?? 0, mode: null };
   }
 
   _load() {
@@ -386,6 +546,7 @@ export class SaveSystem {
       slot.profiles[m] = this._sanitizeProfile(src.profiles?.[m]);
     }
     liftMoneyToGlobal(slot);   // money belongs to the plate (global), not per-mode
+    liftProgressionToGlobal(slot);   // …and so does the rest of progression now
     return slot;
   }
 
@@ -407,6 +568,32 @@ export class SaveSystem {
     const missionStats = cleanJson(src.missionStats, {});
     g.missionStats     = isObj(missionStats) ? missionStats : {};
     if (src.money !== undefined) g.money = finiteInt(src.money, 0, 0);
+    // ── Progression, now plate-global (present on migrated saves; on legacy
+    // saves these stay at defaults and get lifted from the per-mode profiles
+    // by liftProgressionToGlobal in _fillSlot). ──
+    const ownedG = Array.isArray(src.ownedCars)
+      ? [...new Set(src.ownedCars.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim()))]
+      : [];
+    g.ownedCars    = ownedG.length ? ownedG : ['beater'];
+    g.currentCar   = (typeof src.currentCar === 'string' && g.ownedCars.includes(src.currentCar))
+      ? src.currentCar : g.ownedCars[0];
+    g.viceInventory   = this._sanitizeNumberMap(src.viceInventory, 0, 999);
+    g.missionProgress = finiteNum(src.missionProgress, 0, 0);
+    g.lastRestStop    = this._sanitizeRestStopSnapshot(src.lastRestStop);
+    g.restStopSaves   = this._sanitizeRestStopSaves(src.restStopSaves);
+    g.liveRun         = this._sanitizeLiveRun(src.liveRun);
+    g.manualSave      = this._sanitizeLiveRun(src.manualSave);
+    g.accessories     = this._sanitizeAccessories(src.accessories);
+    g.upgrades        = isObj(src.upgrades)     ? cleanJson(src.upgrades, {})     : {};
+    g.tempUpgrades    = isObj(src.tempUpgrades) ? cleanJson(src.tempUpgrades, {}) : {};
+    // controlsLayout: preserve NULL when the source lacks it so a never-customized
+    // plate falls back to the baked DEFAULT_HUD_LAYOUT (an empty {} would instead
+    // pin every element to its bare code-default position).
+    g.controlsLayout    = (src.controlsLayout != null) ? this._sanitizeControlsLayout(src.controlsLayout) : null;
+    g.controlsLayoutVer = finiteNum(src.controlsLayoutVer, 1, 1);
+    g.survivalState     = cleanJson(src.survivalState, null);
+    g.activeBuffs       = Array.isArray(src.activeBuffs)
+      ? src.activeBuffs.filter(v => typeof v === 'string').slice(0, 40) : [];
     return g;
   }
 
@@ -414,7 +601,12 @@ export class SaveSystem {
     const p = structuredClone(DEFAULT_PROFILE);
     if (!isObj(src)) { if (src != null) this._loadRepaired = true; return p; }
 
-    p.money = finiteInt(src.money, 0, 0);
+    // Legacy salvage (2026-07-23): the game used to bank the run's cash under
+    // a per-profile `wallet` key, which this whitelist silently DROPPED on
+    // every load — that wiped the player's money each session ("every Start
+    // begins with $0").  Map it into `money` so liftMoneyToGlobal lifts it
+    // to the plate's global store.
+    p.money = finiteInt(src.money ?? src.wallet, 0, 0);
     const owned = Array.isArray(src.ownedCars)
       ? [...new Set(src.ownedCars.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim()))]
       : [];
@@ -437,6 +629,30 @@ export class SaveSystem {
     p.activeBuffs = Array.isArray(src.activeBuffs)
       ? src.activeBuffs.filter(v => typeof v === 'string').slice(0, 40) : [];
     p.liveRun = this._sanitizeLiveRun(src.liveRun);
+    // Durable phone-menu Save point — same {snap, ts} shape as liveRun, so it
+    // survives the load-time whitelist (was previously dropped every reload).
+    p.manualSave = this._sanitizeLiveRun(src.manualSave);
+    // Installed part upgrades — { [vehicleId]: { [slot]: upgradeId } }.  Must be
+    // copied here or the whitelist drops them on load, wiping every purchase.
+    p.upgrades     = isObj(src.upgrades)     ? cleanJson(src.upgrades, {})     : {};
+    p.tempUpgrades = isObj(src.tempUpgrades) ? cleanJson(src.tempUpgrades, {}) : {};
+    // ── 2026-07-23 whitelist audit — keys the game persists that this
+    // whitelist was silently DROPPING every load (same class as the wallet
+    // bug).  Copied only when present so absent keys keep falling through to
+    // each call site's own get() fallback.
+    if (typeof src.genre === 'string' && src.genre) p.genre = src.genre;   // per-plate culture pick
+    if (src.girlTexts     !== undefined) p.girlTexts     = finiteInt(src.girlTexts, 0, 0);
+    if (src.girlResponded !== undefined) p.girlResponded = src.girlResponded === true;
+    if (src.girlSkips     !== undefined) p.girlSkips     = finiteInt(src.girlSkips, 0, 0);
+    if (src.girlGone      !== undefined) p.girlGone      = src.girlGone === true;
+    if (src.coldBrewCount !== undefined) p.coldBrewCount = finiteInt(src.coldBrewCount, 0, 0);
+    if (Array.isArray(src.encountersSeen)) {
+      p.encountersSeen = src.encountersSeen.filter(v => typeof v === 'string').slice(0, 300);
+    }
+    {
+      const fr = cleanJson(src.factRotation, null);
+      if (isObj(fr)) p.factRotation = fr;
+    }
     return p;
   }
 
@@ -455,7 +671,13 @@ export class SaveSystem {
     const s = { ...DEFAULT_GLOBAL.settings };
     if (!isObj(src)) return s;
     s.muted = src.muted === true;
-    s.radio = finiteInt(src.radio, 0, 0, 9);
+    // Default station: only a value the player DELIBERATELY chose survives
+    // (radioSet flag, written by the Music app's star).  Legacy saves carry a
+    // materialized radio:0 from the old sanitizer default — without the flag
+    // that read as "HIP-HOP chosen" for everyone, so unflagged values reset
+    // to -1 (unset → weighted-random start).  2026-07-23.
+    s.radioSet = src.radioSet === true;
+    s.radio    = s.radioSet ? finiteInt(src.radio, -1, -1, 9) : -1;
     if (src.backgroundRadio !== undefined) s.backgroundRadio = src.backgroundRadio !== false;
     if (src.haptics !== undefined) s.haptics = src.haptics !== false;
     if (src.units === 'kmh' || src.units === 'mph') s.units = src.units;
@@ -639,7 +861,20 @@ export class SaveSystem {
   }
 
   _rootFor(firstSeg) {
+    if (this._sandbox && SANDBOX_KEYS.has(firstSeg)) return this._sandboxStore;
     return GLOBAL_KEYS.has(firstSeg) ? this._slot.global : this.profile;
+  }
+
+  /** Custom-mode sandbox toggle — see SANDBOX_KEYS.  Flipping ON gives a
+   *  fresh empty progress bucket (each Custom run is new); flipping OFF
+   *  discards it (nothing from Custom is ever saved).  GameScene sets this
+   *  at every scene boot AND at _startGameplay, since the title can switch
+   *  mode without a scene restart. */
+  setSandbox(on) {
+    on = !!on;
+    if ((this._sandbox ?? false) === on) return;
+    this._sandbox      = on;
+    this._sandboxStore = on ? {} : null;
   }
 
   get(path, fallback = undefined) {

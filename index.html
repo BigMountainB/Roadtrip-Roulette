@@ -2843,7 +2843,9 @@
         const res = window.__saveRun?.();
         const ok = !!(res && res.ok);
         const t = document.createElement('div');
-        t.textContent = ok ? '✓ Game saved' : 'No active run to save';
+        t.textContent = ok ? '✓ Game saved'
+                      : (res && res.custom) ? "Custom games don't save"
+                      : 'No active run to save';
         t.style.cssText = 'position:fixed;left:50%;bottom:14%;transform:translateX(-50%);z-index:100001;'
           + 'background:#04101e;color:' + (ok ? '#66FF99' : '#FFAA66') + ';border:2px solid '
           + (ok ? '#66FF99' : '#FFAA66') + ';border-radius:10px;padding:12px 22px;'

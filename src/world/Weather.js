@@ -126,8 +126,21 @@ export const Weather = {
    *  exponentially toward the (time-of-day-tinted) fog backdrop, fully
    *  dissolving by `visibilityDistance`.  contrast/saturation/bloom are
    *  consumed by later light passes.  density 0 → everything clear. */
+  /** Fog-lights clarity factor (owner 2026-07-22): the FOG LIGHTS upgrade
+   *  thins every fog VISUAL to this fraction (0.5 = "50% more transparent",
+   *  per the owner's spec).  Applied here in fogParams (all sprite-fade
+   *  consumers) and read directly by the two intensity-driven fog visuals
+   *  (EffectsSystem screen haze + Road.js distance fog).  VISUAL ONLY —
+   *  Weather.intensity itself is untouched, so fog's grip physics and
+   *  rain/snow severity are unaffected. */
+  _fogClarityMul: 1,
+  setFogClarity(m) {
+    this._fogClarityMul = Math.max(0.1, Math.min(1, Number(m) || 1));
+  },
+
   fogParams(mile) {
-    const d = Math.max(0, Math.min(1, this.isFog(mile) ? this.intensity(mile) : 0));
+    const d = Math.max(0, Math.min(1, this.isFog(mile) ? this.intensity(mile) : 0))
+            * (this._fogClarityMul ?? 1);
     const L = (a, b) => a + (b - a) * d;
     return {
       density:            d,

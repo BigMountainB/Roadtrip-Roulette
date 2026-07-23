@@ -114,6 +114,56 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-23 — Wallet persistence root fix, save-whitelist audit, Custom sandbox, fog lights visible, 5★ barricade pacing, town-line stars — LOCAL (unpushed)
+Full-day batch on top of yesterday's push (`90fcdc7`).  Parallel session concurrently moved ALL
+progression keys to the plate-global bucket (per-mode profiles now vestigial) + `upgrades`/`manualSave`
+whitelisting — this entry covers this session's work.
+- **Wallet $0-on-START root fix**: the save sanitizer's whitelist DROPPED the per-profile `wallet` key on
+  every load, wiping banked money each session.  All four bank sites (run-start read, rest-stop bank,
+  game-end bank ×2) now use the plate-global `walletStore.money`; loader salvages any surviving legacy
+  `wallet` value into it.  [SaveSystem.js](src/systems/SaveSystem.js) + [GameScene.js](src/scenes/GameScene.js)
+  + [RestStopScene.js](src/scenes/RestStopScene.js).
+- **Save-whitelist AUDIT (owner-requested full scan)**: found 7 more keys persisted-then-wiped every boot —
+  `genre` (per-plate culture; global rtr.genre mirror masked it as one shared genre), `girlTexts/
+  girlResponded/girlSkips/girlGone` (friend arc reset; "gone" resurrected), `coldBrewCount`,
+  `encountersSeen` (once-only encounters replayed), `factRotation`.  All whitelisted in _sanitizeProfile.
+- **Default-radio unset state**: sanitizer materialized `settings.radio: 0` → after any reload every
+  player "chose" HIP-HOP.  Now `-1` = unset + a `radioSet` flag marks deliberate stars; unflagged legacy
+  values reset to unset (weighted-random start restored).  Deliberate pre-existing HIP-HOP stars must be
+  re-set once.
+- **Custom mode = throwaway SANDBOX** (owner: custom upgrades leaked into Easy): while a Custom run is
+  active, all run-progress keys (`SANDBOX_KEYS` — upgrades/accessories/radar/vices/money/saves/…) route to
+  an in-memory bucket: fresh start, session-only purchases, discarded on exit, real profile untouched.
+  Armed in create() + _startGameplay (title switches mode without a restart).  Phone Save in Custom now
+  toasts **"Custom games don't save"** instead of a false "✓ Game saved".  Owner note: existing leaked
+  upgrades left in place (owner will delete the plate profile if wanted).
+- **Coal-lull phantom PULL OVER fixed (option b)**: a trap tripped during coal's 30 s lull now CLOCKS you
+  quietly (+1★, "📸 Trap clocked you through the smoke") — no comply window, no phantom/teleported
+  trooper.  `_spawnRearFromEncounter` returns its cop (null when gated) so `_spawnTrapPursuit` can never
+  blind-tag `cops[last]` again.
+- **Fog lights actually visible**: the old hook only thinned NPC-sprite fades.  New central
+  `Weather.setFogClarity(0.5)` (installed = 50% per owner spec) thins ALL fog visuals together — the
+  EffectsSystem screen haze/veil/wisps, Road.js distance fog, and every fogParams consumer.  Physics
+  (grip via Weather.intensity) untouched.
+- **5★ barricades drivable**: rows now 0.1 mi apart (owner spec; was ~0.03 mi ≈ impossible slalom) and the
+  maze spawns just BEYOND the 76k draw distance (~78k) so rows come over the horizon instead of
+  materializing mid-screen (~3.5 s + ~1.4 s/row at 100 mph).
+- **Radar detector quiet at 3★+** (owner: "just an annoyance" mid-pursuit); re-arms below 3★.
+- **Town-line star cooldown = TOWN list** (owner): −1★ keys off CHECKPOINTS (the HUD label), not palette
+  regions — West Seattle→Seattle drop now lands at the label change (mile 2), and the lake's 4-boundaries-
+  in-5-miles star melt is gone.  Dead `_regionIndex` + unused Colors imports removed.
+- **Custom status-bar drag**: in Custom, press+drag any survival bar (Drinks/Food/Alertness/Bladder,
+  horizontal) to set it; degradation + bladder pipeline keep running from the set value.  Never steers,
+  yields to vice-bar drags + the controls editor.
+- **Vomit slide-off 2× slower** (1.6 s → 3.2 s; oozes off, same fade curve).
+- **Title cards**: dark `dynamicFill` boxes removed from DIFFICULTY / DRIVING TYPE (values sit on the
+  baked art); value text centered on measured card centers (343 / 502).
+- **Wallet-multiplier explained** (no code change): it's a straight count — Drinks 25-75, Food 25-75,
+  Alertness>75, Bladder<25, each +1, wanted stars stack; NO base 1×.  Zero conditions = 0× earnings.
+  Sweet-spot is strict (exactly 25 doesn't count).  Owner may want a base-1× or HUD breakdown later.
+- **Genre dealership PLANNED (do not delete dealer_cars code)**: dealers to sell genre/culture cars at
+  $25k (soundtrack + ride + sprite art) — memory saved; RestStopScene dealer machinery deliberately kept.
+
 ### 2026-07-22 (pt 2) — NPC-over-player ROOT CAUSE fixed (UI-cam double-draw), Coal smoke-out, title-zone alignment, one-tap LOAD SAVE, 50/50 tap steering, resume-music fix — SHIPPED 2026-07-22
 - **Title bottom-menu zones traced to the baked art** (owner: "buttons should match the image"): all four
   zones (START / DIFFICULTY / DRIVING TYPE / LOAD SAVE) now use art-measured rects via `titleRectShape`

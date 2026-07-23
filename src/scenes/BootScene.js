@@ -264,11 +264,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   /** Procedural placeholder for power-up pickups, distinct from the circular
-   *  vice baggies.  Steroid = gold syringe on a red roundel; Narcan = a
+   *  vice baggies.  Rage = gold syringe on a red roundel; Espresso = a
    *  blue rescue vial with a white medical cross.  Replaced by real art when
    *  the .webp is added. */
   _makePowerupPlaceholder(key) {
-    if (key === 'powerup_espresso') return this._makeNarcanSprite(key);
+    if (key === 'powerup_espresso') return this._makeEspressoSprite(key);
     // Redneck Rage placeholder — a red energy CAN (no vice-styled art), shown
     // until redneck_rage.png is dropped into public/assets/vices/.
     const size = 56;
@@ -283,9 +283,9 @@ export class BootScene extends Phaser.Scene {
     g.destroy();
   }
 
-  /** Narcan rescue kit — a blue roundel + white nasal-spray vial with a red
+  /** Espresso rescue kit — a blue roundel + white nasal-spray vial with a red
    *  medical cross, reading clearly as "emergency medicine", not a vice. */
-  _makeNarcanSprite(key) {
+  _makeEspressoSprite(key) {
     const size = 56;
     const g = this.make.graphics({ x: 0, y: 0, add: false });
     // Blue roundel with soft shadow.

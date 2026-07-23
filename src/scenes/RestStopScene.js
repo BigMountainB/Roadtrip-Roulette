@@ -873,7 +873,8 @@ export class RestStopScene extends Phaser.Scene {
         // Bank immediately — pulling in is the "safe" moment, and the
         // GameScene entry-bank no longer includes uncollected mission pay.
         if (Difficulty.noScore?.() !== true) {
-          this.registry.get('save')?.set?.('wallet', Math.round(Math.max(0, this._score)));
+          { const _sv = this.registry.get('save');
+            if (_sv?.walletStore) { _sv.walletStore.money = Math.round(Math.max(0, this._score)); _sv.save?.(); } }
         }
         this._buttonRefresh.forEach(fn => fn());   // shop affordability updates
         bg.disableInteractive().setFillStyle(0x8A7A3A);

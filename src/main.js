@@ -1048,7 +1048,9 @@ const _boot = () => {
     getDefaultStation: () => game.registry.get('save')?.get?.('settings.radio', -1),   // -1 = no default set (so index 0 isn't falsely starred)
     setDefaultStation: (idx) => {
       const i = parseInt(idx, 10) || 0;
-      game.registry.get('save')?.set?.('settings.radio', i);
+      const sv = game.registry.get('save');
+      sv?.set?.('settings.radio', i);
+      sv?.set?.('settings.radioSet', true);   // marks a DELIBERATE choice (survives the sanitizer)
       game.registry.get('audio')?.setStation?.(i);
     },
     toggleMute: () => {

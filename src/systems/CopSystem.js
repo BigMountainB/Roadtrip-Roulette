@@ -131,8 +131,12 @@ export class CopSystem {
    *  the encounter has consequence. */
   _spawnRearFromEncounter(playerPos) {
     // Rolling-coal lull — route encounters don't manifest pursuers either.
-    if ((this._coalLull ?? 0) > 0) return;
-    this.cops.push({
+    // Returns the spawned cop (or null when the lull gated it) so callers
+    // can tell whether anything actually hit the road — _spawnTrapPursuit
+    // used to assume cops[last] was its fresh spawn, which mis-tagged a
+    // RANDOM existing cop as the trap trooper during the lull (2026-07-23).
+    if ((this._coalLull ?? 0) > 0) return null;
+    const cop = {
       id:          Math.random(),
       position:    playerPos - (3000 + Math.random() * 3000),
       laneOffset:  (Math.random() - 0.5) * 0.6,
@@ -146,7 +150,9 @@ export class CopSystem {
       painted:     false,
       _closeFactor: 0.10 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
-    });
+    };
+    this.cops.push(cop);
+    return cop;
   }
 
   /** Speed-trap civil-stop pursuer (0★ layer, Stage 1).  Same rear-pursuit
@@ -154,8 +160,7 @@ export class CopSystem {
    *  back off cleanly (player pulled over) or promote it into the normal
    *  wanted system (player ignored the stop → +1★). */
   _spawnTrapPursuit(playerPos) {
-    this._spawnRearFromEncounter(playerPos);
-    const cop = this.cops[this.cops.length - 1];
+    const cop = this._spawnRearFromEncounter(playerPos);
     if (cop) {
       cop.trapPursuit = true;
       // Pull the civil-stop cruiser in CLOSE behind (≈40-65 ft) so it's plainly
@@ -220,17 +225,23 @@ export class CopSystem {
    *  flat-tire slow in _onCopCollision).  Difficulty-aware: Easy runs 2
    *  rows with a double-wide gap; Normal/Hard run 3 rows, single-lane gap. */
   _spawnBarricade(playerPos) {
-    // First row ~14k units ahead so the player has time to read the maze.
-    const firstRowZ = playerPos + 14000 + Math.random() * 4000;
+    // First row spawns just BEYOND the render draw distance (76k) so the
+    // maze scrolls in over the horizon like normal traffic — the old +14k
+    // spawn was well inside the visible road, so rows materialized
+    // mid-screen with ~0.6s to react (owner 2026-07-23).  ~78k ≈ 3.5s of
+    // warning at 100 mph.
+    const firstRowZ = playerPos + 78000 + Math.random() * 4000;
     // 5 lane slots across the drivable width; the gap is one (or two,
     // on Easy) of these.
     const laneSlots = [-0.8, -0.4, 0, 0.4, 0.8];
     const easy      = Difficulty.mode?.() === 'easy';
     const rows      = easy ? 2 : 3;
     const gapWidth  = easy ? 2 : 1;               // adjacent open slots per row
-    // Row spacing — ~0.4s of reaction at highway speed (≈100 mph is
-    // 22.5k units/s), tight enough to force a real weave but dodgeable.
-    const rowGapZ   = easy ? 11000 : 9000;
+    // Row spacing — 0.1 mile between rows (owner 2026-07-23: the old
+    // 9-11k gap ≈ 0.03 mi was nearly impossible to weave gap-to-gap).
+    // Derived from route constants so a route change can't desync it;
+    // ≈32k units ≈ 1.4s between rows at 100 mph.
+    const rowGapZ   = 0.1 * (ROUTE_SEGS * SEG_LENGTH / TOTAL_ROUTE_MILES);
     let prevGap = -1;
     for (let r = 0; r < rows; r++) {
       const rowZ = firstRowZ + r * rowGapZ;
@@ -350,7 +361,7 @@ export class CopSystem {
     // events — "Failed to pull over! +1★", "WANTED LEVEL ACTIVATED", the
     // fireworks spectacle star — and must land a full DISPLAY star: halving
     // them made the popup promise +1★ while floor(stars) never moved
-    // (2026-07-14 playtest bug).  _starGainMul (energy >1× / steroid 0×)
+    // (2026-07-14 playtest bug).  _starGainMul (energy >1× / rage 0×)
     // still applies to everything.
     const mul  = (this._starGainMul ?? 1)
                * (amount >= 1 ? 1 : Difficulty.starGainMul());

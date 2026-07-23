@@ -713,7 +713,9 @@ export class EffectsSystem {
         // and down over the near road, with a few big soft wisps sliding
         // across it.  Paired with Road.js's gentle distance-fog lift through
         // the same mile window, the basin reads with real depth.
-        const fi      = weatherInt;
+        // Fog lights thin the whole screen haze (owner 2026-07-22) — the
+        // clarity factor is 1 without the upgrade, 0.5 with it installed.
+        const fi      = weatherInt * (Weather._fogClarityMul ?? 1);
         const horizon = Math.round(CAM.horizonY ?? 200);
         const FOG_RGB = 0xC9D2DA;                 // cool pale grey
         // Cap below 1.0 so no slice clamps to fully-opaque — clamping flattens

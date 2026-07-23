@@ -1202,7 +1202,8 @@ export class Road {
     // alpha to read as horizontal step-lines across the distant scenery.
     // The heavy "socked-in" look is carried by the SMOOTH screen-space haze
     // in EffectsSystem instead; here we only add a soft distant fade.
-    const _fogZone  = Weather.isFog(_mileNow) ? Weather.intensity(_mileNow) : 0;
+    const _fogZone  = (Weather.isFog(_mileNow) ? Weather.intensity(_mileNow) : 0)
+                    * (Weather._fogClarityMul ?? 1);   // fog lights thin the distance fog too
     const _fogExp   = FOG_DENSITY - 1.5 * _fogZone;   // 4 → ~2.5 in full fog (step-safe; thickness via the floor below)
     const _fogFloor = 0.30 * _fogZone;                // stronger near-seg wash (50% thicker)
 
