@@ -30,6 +30,40 @@ const json = (obj, status = 200) =>
 // So "B-ob", "BOB", and "bob" all collide (owner spec: alphanumeric-only).
 const normPlate = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 
+// ── Entitlement skus (must match the game's culture keys / schema.sql) ──
+const GENRE_KEYS = [
+  'hiphop_phonk', 'country', 'reggaeton', 'k_pop', 'metal',
+  'classic_rock', 'edm_rave', 'reggae', 'pop_punk_emo', 'norteno',
+];
+const ATOMIC_SKUS = new Set([
+  'route_full', 'plate_custom', 'plates_states',
+  ...GENRE_KEYS.map(k => `genre_${k}`),
+]);
+
+// Expand a purchase sku to the atomic skus it grants (null = unknown sku).
+// 'starter' needs `genre` (the buyer's 1 chosen starter genre).
+function expandSku(sku, genre) {
+  if (ATOMIC_SKUS.has(sku)) return [sku];
+  if (sku === 'starter') {
+    if (!GENRE_KEYS.includes(genre)) return null;
+    return ['route_full', 'plate_custom', `genre_${genre}`];
+  }
+  if (sku === 'all_access') {
+    return ['route_full', 'plate_custom', 'plates_states', ...GENRE_KEYS.map(k => `genre_${k}`)];
+  }
+  return null;
+}
+
+async function grantSkus(db, playerId, skus, source) {
+  const now = Date.now();
+  const stmt = db.prepare(
+    `INSERT INTO entitlements (player_id, sku, source, granted_at)
+       VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT(player_id, sku) DO NOTHING`
+  );
+  await db.batch(skus.map(s => stmt.bind(playerId, s, source, now)));
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -128,6 +162,33 @@ export default {
              FROM leaderboard ${where} ORDER BY ${orderBy} LIMIT ?1`
         ).bind(limit).all();
         return json({ ok: true, entries: rows.results || [] });
+      }
+
+      // ── Entitlements (beta à-la-carte purchases; see schema.sql) ──────
+      if (path === '/api/entitlements' && method === 'GET') {
+        const pid = url.searchParams.get('playerId');
+        if (!pid) return json({ ok: false, error: 'no-player' }, 400);
+        const rows = await db.prepare(
+          'SELECT sku FROM entitlements WHERE player_id=?1'
+        ).bind(pid).all();
+        return json({ ok: true, skus: (rows.results || []).map(r => r.sku) });
+      }
+
+      // Dev/admin grant — gated by the GRANT_SECRET env secret
+      // (`wrangler secret put GRANT_SECRET`). Accepts atomic skus or the
+      // bundles 'starter' ($1: route_full + plate_custom + 1 genre via
+      // `genre`) and 'all_access' ($10: everything). A payment provider
+      // webhook will call the same _grant() once payments are wired.
+      if (path === '/api/grant' && method === 'POST') {
+        const b = await request.json();
+        if (!env.GRANT_SECRET || !b || b.secret !== env.GRANT_SECRET) {
+          return json({ ok: false, error: 'forbidden' }, 403);
+        }
+        if (!b.playerId || !b.sku) return json({ ok: false, error: 'invalid' }, 400);
+        const skus = expandSku(b.sku, b.genre);
+        if (!skus) return json({ ok: false, error: 'bad-sku' }, 400);
+        await grantSkus(db, b.playerId, skus, b.source || 'dev-grant');
+        return json({ ok: true, granted: skus });
       }
 
       return json({ ok: false, error: 'not-found' }, 404);

@@ -114,6 +114,136 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-07-26b — BETA MONETIZATION design locked + worker entitlements BUILT; CF token EXPIRED blocks deploys
+Owner pivoted the demo into an à-la-carte beta ("web is the product; Steam later as premium bundle"):
+- **Pricing ladder (owner-approved)**: GUEST plate = FREE to North Bend (mi 32) · **$1 custom plate =
+  full route + leaderboard identity + 1 starter genre** · **$3/genre** (alternative to $25k in-game
+  dealer buy) · **$1/plate per save slot, $3 = all three WA/OR/ID slots** (state plates ARE the 3 save
+  slots — GameScene `PLATE_KEYS`, not cosmetics) · **$10 all-in beta deal** (everything).
+- **Worker entitlements BUILT** ([worker/src/index.js](worker/src/index.js), [worker/schema.sql](worker/schema.sql)):
+  `entitlements` table (player_id, sku) · `GET /api/entitlements?playerId=` · `POST /api/grant`
+  (gated by `GRANT_SECRET` wrangler secret; accepts atomic skus + bundles `starter`/`all_access`,
+  expanded server-side so the client only checks atomic skus). Payment webhook will reuse `grantSkus()`.
+- **Payments**: undecided. Fee table shown to owner; recommendation = Stripe w/ checkout upsells +
+  $10 all-in front-and-center (PayPal micropayments 4.99%+9¢ is the only <30%-on-$1 option). Apple/
+  Google Pay = wallet buttons on top of Stripe et al, not standalone processors. iOS Capacitor build
+  must NOT link to web purchases (App Store IAP rule).
+- **✅ WORKER DEPLOYED 2026-07-26**: `https://roadtrip-api.brendanbaughn.workers.dev` (the exact URL
+  CloudSave.js expects) — D1 `rtr` created (id `d3e421f9-ccb1-40ad-ba25-643a8ab17d05`, in
+  wrangler.toml), schema applied (players/leaderboard/entitlements), `GRANT_SECRET` set (local copy in
+  gitignored `worker/.dev.vars`). Smoke-tested live: plate check, leaderboard, entitlements, grant
+  (bad secret → 403; `starter`+country → route_full+plate_custom+genre_country; test rows deleted).
+  **Plate uniqueness + cloud saves + world leaderboard are now LIVE for the game**; the site's
+  leaderboard page reads real (currently empty) data. Redeploy after worker edits:
+  `cd worker && set -a && . ../../DUI/.cloudflare.env && set +a && npx wrangler deploy`.
+- **CF token REPLACED** (old one expired 2026-07-22): new token `rtr-dui-deploys`, NO expiry,
+  scopes Workers Scripts/D1/Pages Edit, lives in gitignored `DUI/.cloudflare.env` (shared by DUI
+  Pages deploys and RTR worker; RTR has no separate env file). Wrangler works fine with it on this
+  setup (d1 create/execute + deploy + secret put all succeeded first try).
+- **Deleted dead `server/`** (stale DUI worker copy carried by the fork; superseded by `worker/`).
+- **Game-side gating: plan APPROVED, build deferred to NEXT SESSION** (owner). Design owed: ONE
+  master kill-switch `BETA_GATES_LIVE` (GENRE_LOCK_LIVE pattern; false = all gates inert), additive
+  only — new `src/systems/Entitlements.js` (boot-fetch `/api/entitlements`, localStorage mirror OUTSIDE
+  the save, `has(sku)`), GUEST plate free→North Bend wall on rest-stop depart at stop N (mi 32),
+  custom-plate claim gated on `plate_custom` (slots 2/3 = own skus, $3 all three), entitled genres
+  merge into `__genre.owned()` beside the $25k dealer path, localhost dev ungated (CloudSave guard).
+
+### 2026-07-26 — Marketing WEBSITE built at `website/` (9 pages, static, no framework) — LOCAL, not deployed
+Owner-approved plan: story = **broke touring musician** (Pullman gig = the big break); demo =
+**Seattle→North Bend, 2 genres (country + hiphop_phonk)**; soundtrack plays **FULL tracks**; leaderboard
+reads the REAL worker (deploy approved, push still gated). Pages: `index / story / genres / walkthrough /
+map / leaderboard / faq / press / demo`.
+- **Data-driven from the game**: [website/js/data.js](website/js/data.js) hand-extracted from
+  AudioSystem STATIONS (names/colors/bpm), genreVehicleTraits (10 vehicles + strengths/weaknesses +
+  top/cruise mph), constants REST_STOPS + pass-throughs (23 route entries), townFacts (trimmed), and the
+  actual mp3 filenames (108 tracks). `musicDir` mapping: `edm_rave→edm`, `k_pop→kpop`.
+- **Assets are DERIVED + GITIGNORED** (`website/assets/`, 342 MB): run
+  [website/sync-assets.sh](website/sync-assets.sh) to copy music, culture starter sprites, genre art,
+  title/loading screens from `public/assets` (source of truth per DUI/RTR asset rule). `website/demo/`
+  also ignored (future demo build output).
+- **Genres page**: tab per genre (station color), starter front/back sprites, trait boxes, full-track
+  audio player (one `Audio` at a time). **Leaderboard page**: fetches
+  `GET {API_BASE}/api/leaderboard?metric=score|miles|time` — worker CORS is already `*`, NO new endpoint
+  needed; graceful "unreachable" fallback until the worker is deployed. **Demo page**: placeholder that
+  auto-swaps to an iframe when `website/demo/index.html` exists.
+- **Still open**: (1) DEMO_MODE game build (route cap at North Bend mi 32, 2-genre lock, buy-wall) —
+  needs owner sign-off on approach before touching game code; (2) worker deploy (`worker/README.md`
+  steps) — owner approved doing it, but actual wrangler push awaits explicit go per push rule;
+  (3) site itself not deployed anywhere yet (likely its own CF Pages project, NOT the `dui` one).
+- **Story page is now CINEMATIC SCROLL (2026-07-26c, revised same night)**: owner's 6 panoramas in
+  `website/assets/story/origin-0N-*.png` (~3:1 = 3 panels each) pan left→right while pinned — pan
+  progress runs over the PINNED window only, so each image STARTS with its left border on the
+  screen's left edge (owner spec). Text = owner's 18 captions VERBATIM (3 per scene, one per image
+  third) crossfading in sync with which third is on screen, at 52.5px (3× old body — owner spec);
+  scene height 240vh (~2.4 screens/scene, replaced the earlier 1.5-screen pacing to give 3 captions
+  room). Desktop = full-bleed art, caption low over scrim; portrait phones = art as top-52% band,
+  captions in the dark area under it, font capped clamp(21px,6vw,49.5px) to physically fit (only
+  deviation from the 3× spec). prefers-reduced-motion = static art + all captions stacked.
+  Implementation: sticky `.scene-frame` + rAF handler in [website/story.html](website/story.html),
+  site.css §Story scenes. Captions later shrunk 40% (31.5px) + set in **Dinofans** (Gradia Light
+  fallback; both embedded in `website/fonts/` from ~/Library/Fonts). ⚠️ **Khurasan commercial font
+  license must be purchased BEFORE commercial sales go live** (owner: "when we commercially sell,
+  I'll grab the license") — add to release checklist. `.gitignore` narrowed to only SYNCED asset subfolders
+  (music/culture/genre_art/ui) so `assets/story/` is COMMITTED.
+- Local preview: `cd website && python3 -m http.server 8090`.
+
+### 2026-07-23 (parallel session) — Progression → PLATE profile, save-whitelist drops (upgrades/manualSave), START resume prompt, server newest-wins load, Rage/Espresso rename, dev cheats behind `?dev=1` — LOCAL (unpushed)
+The "parallel session" referenced by the entry below. Save-architecture + resume/UX batch.
+- **PROGRESSION now belongs to the PLATE, not the steering type** (owner: "change the storing rules to
+  plate profile instead of steering type profile"). `ownedCars / currentCar / upgrades / tempUpgrades /
+  accessories / viceInventory / missionProgress / lastRestStop / restStopSaves / liveRun / manualSave /
+  survivalState / activeBuffs / controlsLayout(+Ver)` all moved into `GLOBAL_KEYS` + `DEFAULT_GLOBAL` and
+  are sanitized in `_sanitizeGlobal`. Money was already global. **Per-mode `profiles` buckets are now
+  vestigial** (kept only to read + lift legacy saves). Switching driving type keeps everything; saves are
+  one-per-plate, so `latestLiveRun` reads global directly instead of scanning three buckets.
+  [SaveSystem.js](src/systems/SaveSystem.js)
+- **Migration `liftProgressionToGlobal` (idempotent, best-effort keep)** — runs every load, **merges**
+  rather than overwrites so re-running is safe: owned cars / upgrades / accessories **unioned**; vice
+  inventory + mission progress **max**; liveRun / manualSave / lastRestStop **newest by ts**; restStopSaves
+  unioned by code; `currentCar` adopts the **richest (most-money) mode's** car so migration can't silently
+  drop you back into the Beater; controls layout adopts the most-customized mode (never downgrades a null
+  → baked-default layout to an empty `{}`). Clears the moved keys from the vestigial profiles afterward.
+  Verified by a **22-case node harness** (union, save→reload idempotency, fresh-slot defaults).
+- **Two more save-whitelist drops fixed** (same class as the audit below): `manualSave` and
+  `upgrades`/`tempUpgrades` were written but never copied in `_sanitizeProfile`, so **every reload wiped
+  them**. Symptoms: "NO SAVE FOUND" after Save→reload; and **all purchased upgrades wiped → max HP stuck at
+  the Beater base 25** (plus every other upgrade effect — grip/speed/range — silently lost).
+  ⚠️ Upgrades bought before this fix were never persisted and can't be recovered — re-buy once.
+- **START now looks for a save and asks** (owner: "ask the player, based on wallet amount"). New
+  `_buildSavePrompt` — a 3-button modal (**RESUME / NEW RUN / CANCEL**) showing the save's **wallet $ +
+  location + mile** so the choice is made with the money in view. Triggers off the LOCAL save only, so
+  START stays instant; no save → starts fresh exactly as before. Fixes the footgun where START silently
+  began a new run and the rolling autosave overwrote an in-progress trip.
+- **LOAD SAVE = newest-wins (local vs server)** — snapshots now carry a `savedAt` stamp (the Worker's GET
+  returns no timestamp of its own), and `_resolveNewestSave` compares the local save against
+  `CloudSave.get(playerId)`, resuming whichever is fresher. Degrades cleanly to local when the API is
+  unreachable. NOTE: CloudSave is disabled on `localhost` by design, so the server half only exercises on
+  the deployed build — deliberately NOT tied to `?dev=1`, since that would write test data to production
+  every dev session.
+- **Resume fidelity fixes** — (a) the snapshot now records the **actual driving type** (`steering`);
+  resume was inferring it from the storage bucket, and DEFAULT steering saves into the `'tap'` bucket, so
+  every resume **forced TAP**. (b) Resume max HP = **larger of** the current persistent-upgrade cap
+  (`_runMaxHp`) **vs** the snapshot's `hpMax`, so upgrades bought since the save are honored instead of
+  being capped by a stale value.
+- **Steroid/Narcan → Rage/Espresso rename** (owner: "change any code that refers to steroids or Narcan").
+  All identifiers renamed across [GameScene.js](src/scenes/GameScene.js) / [BootScene.js](src/scenes/BootScene.js) /
+  [CopSystem.js](src/systems/CopSystem.js) — `_rageUntilMile`, `_updateRage`, `_startRedneckRage`,
+  `_espressoCount`, `_tryEspresso`, `_makeEspressoSprite`, collectible types `'rage'`/`'espresso'`. Sprite
+  keys/art/HUD text were already reskinned; this closes the loop (zero `steroid`/`narcan` left).
+  **Rage invincibility 1 mi → 2 mi.**
+- **Dev cheats gated behind `?dev=1`** (beta-safety): DEV WARP digits 1–9, back/forward warp (B/N), F3
+  debug overlay, F4 camera toggle, K cockpit-calibration, and `__daily.all()`'s "Test any run" Calendar
+  list are all inert on a plain URL — testers can't trigger them by accident, owner keeps them with the
+  flag. `V` (first/third-person view) left ungated as a real player feature.
+- **Wiper works in ALL weather** (owner: "get the windshield wiper to work all the time") — the button was
+  already permanent, but `_wiperMode` was force-parked to 0 every frame outside rain/snow, so a tap did
+  nothing when dry. Force-park removed; blades keep whatever state the player set.
+- **Rock chips reworked** — the two tiny stock chips replaced with big star-break impacts (crystalline pit
+  + faint bullseye stress rings + tapered splinters with a few long light-catching glints, matching the
+  owner's reference photos), ~5× bigger and relocated to clear **centre glass** (≈335,216 / 500,274) so
+  they no longer sit behind the survB Drinks/**Food** bars. The long bottom crack is untouched; positions
+  are a tunable array at the top of the block in `_drawStockGlassChips`.
+
 ### 2026-07-23 — Wallet persistence root fix, save-whitelist audit, Custom sandbox, fog lights visible, 5★ barricade pacing, town-line stars — LOCAL (unpushed)
 Full-day batch on top of yesterday's push (`90fcdc7`).  Parallel session concurrently moved ALL
 progression keys to the plate-global bucket (per-mode profiles now vestigial) + `upgrades`/`manualSave`
@@ -3294,6 +3424,14 @@ A single-doc orientation for anyone (human or AI) joining the project mid-flight
 ---
 
 ## ⚠️ PRE-RELEASE CLEANUP — strip dev/test aids before the final deploy (2026-07-21)
+
+> **UPDATE 2026-07-23 (RTR):** these are now **gated behind `?dev=1`** rather than deleted — on a plain
+> URL every item below is inert, so a beta build is already safe to hand to testers while the owner keeps
+> the tools via the flag. `GameScene._devEnabled` (parsed from the URL) guards DEV WARP, back/forward warp
+> (B/N), F3 debug overlay, F4 camera toggle and K cockpit-calibration; `window.__DEV` guards
+> `__daily.all()` (the Calendar's dev section already hides on an empty list). The `V` first/third-person
+> toggle is a real player feature and is intentionally NOT gated. TEST SPEED TRAP is not present in RTR.
+> For a FINAL release build, deleting them outright is still the belt-and-braces move.
 
 The release deploy is scheduled for **July 21, 2026**. These dev/testing conveniences MUST be removed before cutting that build:
 

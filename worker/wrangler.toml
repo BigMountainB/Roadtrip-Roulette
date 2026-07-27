@@ -9,4 +9,4 @@ compatibility_date = "2026-07-21"
 [[d1_databases]]
 binding = "DB"
 database_name = "rtr"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "d3e421f9-ccb1-40ad-ba25-643a8ab17d05"

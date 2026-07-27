@@ -357,7 +357,7 @@
       display: flex; align-items: center; justify-content: flex-end;
       color: #FFFFFF;
       font-family: -apple-system, "Helvetica Neue", Helvetica, sans-serif;
-      font-size: 3.6vmin;
+      font-size: calc(31 * var(--pxs, 0.116vmin)); /* PNG px — tracks art scale */
       font-weight: 700;
       letter-spacing: 0.5px;
       pointer-events: none;
@@ -370,7 +370,7 @@
       position: absolute;
       display: flex; align-items: center;
       color: #FFFFFF; font-family: -apple-system, "Helvetica Neue", sans-serif;
-      font-size: 4.2vmin; font-weight: 800; letter-spacing: 0.04em;
+      font-size: calc(36 * var(--pxs, 0.116vmin)); font-weight: 800; letter-spacing: 0.04em;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       pointer-events: none; user-select: none; -webkit-user-select: none;
       text-shadow: 0 1px 3px rgba(0,0,0,0.6);
@@ -381,7 +381,7 @@
       position: absolute;
       display: flex; align-items: center; justify-content: flex-start;
       color: #FFFFFF; font-family: -apple-system, "Helvetica Neue", sans-serif;
-      font-size: 11vmin; font-weight: 700;
+      font-size: calc(94 * var(--pxs, 0.116vmin)); font-weight: 700;
       pointer-events: none; user-select: none; -webkit-user-select: none;
       text-shadow: 0 1px 3px rgba(0,0,0,0.55);
     }
@@ -389,7 +389,7 @@
     #phone-wx {
       position: absolute;
       display: flex; align-items: center; justify-content: center;
-      font-size: 19.1vmin; line-height: 1;
+      font-size: calc(163 * var(--pxs, 0.116vmin)); line-height: 1;
       pointer-events: none; user-select: none; -webkit-user-select: none;
     }
 
@@ -648,6 +648,24 @@
     }
     #phone-music .genre-check.checked { background: #1E5BB8; border-color: #FFEE00; }
     #phone-music .genre-check.partial { background: rgba(30,91,184,0.4); border-color: #FFEE00; }
+    /* Locked genre — the plate doesn't own this culture's car yet.  Art dims
+       and a 🔒 dealer-price tag replaces the star/check controls. */
+    #phone-music .genre.locked .genre-art img { filter: grayscale(1) brightness(0.5); }
+    #phone-music .genre.locked .genre-name,
+    #phone-music .genre.locked .genre-count { opacity: 0.55; }
+    #phone-music .genre-lock {
+      position: absolute;
+      bottom: 1.5vmin; left: 50%; transform: translateX(-50%);
+      padding: 0.8vmin 1.4vmin;
+      background: rgba(0,0,0,0.62);
+      border: 2px solid #FFAA66;
+      border-radius: 6px;
+      color: #FFAA66; font-size: 2.4vmin; font-weight: 800; letter-spacing: 0.04em;
+      font-family: "Impact", -apple-system, "Segoe UI Emoji", sans-serif;
+      white-space: nowrap;
+      backdrop-filter: blur(3px);
+      z-index: 3;
+    }
     #phone-music .song-list {
       flex: 1;
       display: flex; flex-direction: column;
@@ -1415,6 +1433,17 @@
       padding: calc(env(safe-area-inset-top, 0px) + 5vmin) 5% 5%;
     }
     #phone-achievements.open { display: flex; }
+    /* Phone sub-menus end at the VISIBLE viewport bottom (owner 2026-07-24):
+       in a portrait Safari tab the browser never cedes its bottom strip, so
+       the 100lvh menu container runs ~50px past what's actually visible —
+       a full-bleed (inset:0) modal left a dead black band under its chrome.
+       --pmh is the same visible height the menu art centers in, published
+       by recomputeCover; standalone/home-screen apps resolve it to the full
+       container so nothing changes there. */
+    #phone-app, #phone-garage, #phone-map, #phone-music, #phone-achievements {
+      bottom: auto;
+      height: var(--pmh, 100%);
+    }
     #phone-achievements .title {
       color: #FFD700;
       font-family: "Impact", "Arial Black", sans-serif;
@@ -1840,6 +1869,17 @@
         // untouched, so the art is the same size it always was.
         const offY = (vh - ch * scale) / 2 - INS.t * scale - 5;
         coverState = { scale, offX, offY };
+        // Publish the artwork scale as a CSS length so text sized in PNG
+        // pixels (calc(N * var(--pxs))) tracks the buttons, not the viewport.
+        menu.style.setProperty('--pxs', scale + 'px');
+        // Publish the VISIBLE height so full-screen sub-menus (Music/Garage/
+        // Map/Trophies/apps) stop at the real bottom instead of running into
+        // the dead strip below the visual viewport (Safari's bottom bar).
+        // WEB-ONLY (owner 2026-07-24): in the packaged app (Capacitor native /
+        // home-screen standalone) the whole glass belongs to the game, so the
+        // sub-menus keep the full container height there.
+        const _isApp = navigator.standalone === true || !!window.Capacitor;
+        menu.style.setProperty('--pmh', _isApp ? '100%' : vh + 'px');
         // Size/position the art itself with the SAME transform the hit zones
         // use, so buttons stay glued to the artwork at any scale.
         bgImg.style.left   = offX + 'px';
@@ -2781,7 +2821,32 @@
               + `<ul class="gt-list">${li(_trait.strengths, '✅')}${li(_trait.weaknesses, '⚠️')}</ul></div>`;
           }
         }
-        garageList.innerHTML = carsHtml + traitHtml + panelHtml;
+        // ── MY RIDES — owned genre cars, tap to swap (owner 2026-07-23).
+        // Appears once a second car is bought at a dealership; the swap is
+        // free here, same as the Music-app star and the dealer lot. ──
+        let ridesHtml = '';
+        {
+          const _owned  = window.__genre?.owned?.() ?? [];
+          const _active = window.__genre?.get?.() ?? null;
+          if (_owned.length > 1) {
+            const _sts = window.__music?.list?.() ?? [];
+            const _nameFor = (g) => _sts.find(s => s.culture === g)?.name ?? g.toUpperCase();
+            ridesHtml = `<div style="margin-top:2vmin;padding:2.5vmin;background:#080c16;border:2px solid #163550;border-radius:2vmin;">`
+              + `<div style="color:#39D9FF;font-weight:bold;font-size:7vmin;margin-bottom:1.4vmin;">MY RIDES</div>`
+              + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:2vmin;">`
+              + _owned.map(g => {
+                  const curR = g === _active;
+                  const t = window.__vehTraits?.forGenre?.(g);
+                  return `<div class="g-ride" data-genre="${g}" style="cursor:pointer;padding:1.8vmin;border-radius:1.6vmin;`
+                    + `background:${curR ? '#123049' : '#0a1626'};border:2px solid ${curR ? '#39A8FF' : '#16283a'};text-align:center;">`
+                    + `<img src="assets/culture/${g}/vehicles/starter_back.png" alt="" style="max-width:70%;max-height:14vmin;object-fit:contain;" onerror="this.style.display='none'"/>`
+                    + `<div style="color:#F4F7FF;font-size:4.6vmin;font-weight:bold;">${t?.vehicleName ?? g}${curR ? ' ★' : ''}</div>`
+                    + `<div style="color:#9fb7d6;font-size:3.6vmin;">${_nameFor(g)}</div></div>`;
+                }).join('')
+              + `</div></div>`;
+          }
+        }
+        garageList.innerHTML = carsHtml + ridesHtml + traitHtml + panelHtml;
 
         garageList.querySelectorAll('.row').forEach(row => {
           row.addEventListener('click', (e) => {
@@ -2793,6 +2858,16 @@
             // via innerHTML, destroying THIS row mid-gesture — on iOS that
             // strands the touch and kills game input after returning to play.
             requestAnimationFrame(renderGarage);   // re-paint with new "current"
+          });
+        });
+        // MY RIDES — tap an owned genre car to make it the active ride.
+        garageList.querySelectorAll('.g-ride').forEach(el => {
+          el.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const g = el.dataset.genre;
+            if (!g || g === window.__genre?.get?.()) return;
+            window.__genre?.set?.(g);
+            requestAnimationFrame(renderGarage);
           });
         });
         // Read-only garage: tap a slot to expand its tiers, tap a tier to
@@ -3173,6 +3248,19 @@
           musicShuffle.style.display = '';
           musicShuffleG.style.display = 'none';
           musicBody.className = '';
+          // Genre-car ownership gate (owner 2026-07-23): you can only PICK /
+          // PLAY / star a genre whose car this plate owns — the rest show a
+          // 🔒 $25K dealer tag.  A plate with no genre yet (tutorial pick
+          // pending) has the whole grid open: the first star is the free car.
+          // GENRE_LOCK_LIVE — OFF during beta (owner 2026-07-24: every genre
+          // stays pick/playable while testing).  Flip to true at RELEASE to
+          // hard-lock unowned genres behind the $25k dealership buy.
+          const GENRE_LOCK_LIVE = false;
+          const _ownedGenres = window.__genre?.owned?.() ?? [];
+          const _activeGenre = window.__genre?.get?.() ?? null;
+          const _firstPick   = !_activeGenre && _ownedGenres.length === 0;
+          const _gLocked = (s) => GENRE_LOCK_LIVE && !_firstPick && !!s.culture
+            && !_ownedGenres.includes(s.culture) && s.culture !== _activeGenre;
           musicBody.innerHTML = playlistBar + `<div class="genre-grid">` + stations.map((s) => {
             const tracks      = s.tracks ?? [];
             const tracksCount = tracks.length;
@@ -3183,20 +3271,34 @@
             const checkGlyph  = allChecked ? '✓' : (someChecked ? '–' : '');
             const checkClass  = allChecked ? 'checked' : (someChecked ? 'partial' : '');
             const isDefault   = (window.__music?.getDefaultStation?.() ?? 0) === s.index;
+            const locked      = _gLocked(s);
             const culture = s.culture ?? '';
             const cultureArt = culture ? `<div class="genre-art" aria-hidden="true">
               <img src="assets/ui/music_genres/${culture}.png?v=vehicle-scenes-1" alt="" />
             </div>` : '';
-            return `<div class="genre ${playing ? 'playing' : ''}" data-idx="${s.index}" style="border-color:${s.color}; box-shadow:inset 0 0 3.5vmin ${s.color}30, 0 0 8px rgba(0,0,0,0.5);">
+            return `<div class="genre ${playing ? 'playing' : ''} ${locked ? 'locked' : ''}" data-idx="${s.index}" data-locked="${locked ? 1 : ''}" style="border-color:${s.color}; box-shadow:inset 0 0 3.5vmin ${s.color}30, 0 0 8px rgba(0,0,0,0.5);">
               ${cultureArt}
-              <button class="genre-check ${checkClass}" data-idx="${s.index}" aria-label="Toggle ${s.name} songs">${checkGlyph}</button>
-              <button class="genre-default ${isDefault ? 'on' : ''}" data-idx="${s.index}" aria-label="Set ${s.name} as default station">${isDefault ? '★' : '☆'}</button>
+              ${locked ? '' : `<button class="genre-check ${checkClass}" data-idx="${s.index}" aria-label="Toggle ${s.name} songs">${checkGlyph}</button>`}
+              ${locked ? `<span class="genre-lock">🔒 $25K AT DEALER</span>`
+                       : `<button class="genre-default ${isDefault ? 'on' : ''}" data-idx="${s.index}" aria-label="Set ${s.name} as default station">${isDefault ? '★' : '☆'}</button>`}
               ${isDefault ? '<span class="genre-default-lbl">DEFAULT</span>' : ''}
               <span class="genre-name ${s.name.length > 11 ? 'long' : ''}" style="color:${s.color};">${s.name}</span><br/><span class="genre-count">${tracksCount} song${tracksCount === 1 ? '' : 's'}</span>
             </div>`;
           }).join('') + `</div>`;
+          // Locked-genre toast (shared by tile / star taps).
+          const lockedToast = () => {
+            const t = document.createElement('div');
+            t.textContent = '🔒 Own the ride first — $25,000 at any dealership';
+            t.style.cssText = 'position:fixed;left:50%;bottom:14%;transform:translateX(-50%);z-index:100001;'
+              + 'background:#04101e;color:#FFAA66;border:2px solid #FFAA66;border-radius:10px;'
+              + 'padding:12px 22px;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;'
+              + 'white-space:nowrap;';
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 1800);
+          };
           musicBody.querySelectorAll('.genre').forEach(el => {
             addTap(el, () => {
+              if (el.dataset.locked) { lockedToast(); return; }
               musicGenreIdx = parseInt(el.dataset.idx, 10);
               renderMusic();
             });
@@ -3212,13 +3314,18 @@
               renderMusic();
             });
             // Default-station star — persists settings.radio (boot default).
+            // Only rendered on OWNED genres (locked tiles carry the 🔒 tag
+            // instead), so a successful star is always a legal car swap.
             const def = el.querySelector('.genre-default');
             if (def) addTap(def, () => {
               const idx = parseInt(def.dataset.idx, 10);
               window.__music?.setDefaultStation?.(idx);
               // Your default station IS your genre — swap the culture art to match.
               const st = (window.__music?.list?.() ?? [])[idx];
-              if (st && st.culture) window.__genre?.set?.(st.culture);
+              if (st && st.culture) {
+                window.__genre?.set?.(st.culture);
+                window.__genre?.own?.(st.culture);   // tutorial first pick = the free starter car
+              }
               renderMusic();
               // If the tutorial is waiting on a genre pick, this completes it.
               try { window.__tut?.genrePicked?.(); } catch (_) {}
@@ -3436,6 +3543,11 @@
       const onMusicOrientationChange = () => {
         const attempt = () => {
           if (window.innerHeight > window.innerWidth) return;   // still portrait
+          // Desktop shows the menu as a centered portrait frame no matter the
+          // window's shape — a landscape-proportioned browser window is normal
+          // there, not a rotate-to-gameplay, so never auto-close (owner
+          // 2026-07-24: music modal kept closing on wide desktop windows).
+          if (document.body.classList.contains('is-desktop')) return;
           closeMusicForGameplay();
         };
         // iOS reports old dimensions for the first orientation event

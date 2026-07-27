@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Story — Road Trip Roulette</title>
+<meta name="description" content="You're a broke touring musician. Pullman is the big break. 293 miles is all that's in the way.">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+
+<section class="section" style="padding-bottom:20px">
+  <div class="wrap" style="max-width:760px">
+    <div class="hwy-sign" style="margin-bottom:28px">PULLMAN&nbsp;&nbsp;293<span class="sub">DOORS AT 9 · NO REFUNDS</span></div>
+    <h1>The last honest musician in Seattle</h1>
+    <p class="dim" style="margin-top:14px">Scroll. The road does the rest.</p>
+  </div>
+</section>
+
+<!-- Six scroll-driven scenes. Each panorama starts with its LEFT border on
+     the screen's left edge and pans left→right while pinned; the three
+     captions (left/center/right third of the art, owner's copy verbatim)
+     crossfade in sync with which third is on screen. -->
+
+<section class="scene" data-img="assets/story/origin-01-gigs.png" data-alt="Years of small gigs">
+  <div class="scene-frame">
+    <div class="scene-captions">
+      <p class="cap">You’ve been doing this music thing for years, playing to crowds that barely looked up from their drinks.</p>
+      <p class="cap">Late nights meant handshakes, crumpled cash, and basement shows that paid in pizza. Your landlord knew your name for all the wrong reasons.</p>
+      <p class="cap">Packing the trunk in the freezing rain became a routine. Everything you owned that matters fit in a beater worth less than your amp.</p>
+    </div>
+  </div>
+</section>
+
+<section class="scene" data-img="assets/story/origin-02-call.png" data-alt="The phone call">
+  <div class="scene-frame">
+    <div class="scene-captions">
+      <p class="cap">Then your phone rings in your cramped bedroom. A promoter in <b>Pullman</b> lost their headliner—a real venue, real money, and a stage ready for you tonight.</p>
+      <p class="cap">293 miles east, past the neon lights of the city. The slot is yours if you can make it—no plan B, no savings, and no band. Just you and the gear.</p>
+      <p class="cap">Guitar in hand, you dash out into the sunset dusk with a quarter tank of gas, chasing a horizon paved with fresh promises.</p>
+    </div>
+  </div>
+</section>
+
+<section class="scene" data-img="assets/story/origin-03-crossing.png" data-alt="Crossing Washington">
+  <div class="scene-frame">
+    <div class="scene-captions">
+      <p class="cap">You take the wheel as the night settles in. Every mile of Washington lies in wait: the Snoqualmie Pass snow blinding your headlights.</p>
+      <p class="cap">The Vantage wind tries to slap you into the Columbia River as you cross the dark, icy bridge into the middle of nowhere.</p>
+      <p class="cap">Out on the long black nothing of WA-26, state patrol tail lamps glow in the distance—and they do not care about your big night.</p>
+    </div>
+  </div>
+</section>
+
+<section class="scene" data-img="assets/story/origin-04-survival.png" data-alt="Surviving the drive">
+  <div class="scene-frame">
+    <div class="scene-captions">
+      <p class="cap">You earn the trip as you drive it—hustling fares and taking odd jobs under neon gas station signs just to keep fuel in the tank.</p>
+      <p class="cap">Tuning your instrument by the pumps while the tank fills, trading music for enough caffeine to stay on the right side of the rumble strip.</p>
+      <p class="cap">Eat. Stay awake. Find a bathroom. Keep the engine alive and your head clear through the long, lonely stretch of rain.</p>
+    </div>
+  </div>
+</section>
+
+<section class="scene" data-img="assets/story/origin-05-classes.png" data-alt="Ten scenes, ten machines">
+  <div class="scene-frame">
+    <div class="scene-captions">
+      <p class="cap">What kind of musician you are changes everything. The country kid hauls a beat-up Mud Truck that shrugs off winter storms.</p>
+      <p class="cap">The phonk producer's VIP Sedan speeds through the rain, dodging city traffic and trying to outrun its own mistakes.</p>
+      <p class="cap">The EDM act's Laser Supercar is the fastest thing on the route, leaving light trails behind—even if it folds like a lawn chair on impact.</p>
+    </div>
+  </div>
+</section>
+
+<section class="scene" data-img="assets/story/origin-06-outcomes.png" data-alt="How the nights end">
+  <div class="scene-frame">
+    <div class="scene-captions">
+      <p class="cap">Some nights you get busted outside Ellensburg, standing under flashing red and blue lights with a ticket you can't afford.</p>
+      <p class="cap">Some nights the engine lets go 40 miles out, leaving you sitting on the hood in the dark listening to your own demo.</p>
+      <p class="cap">And some nights—some nights—you roll into Pullman with the crowd waiting outside, windows down, and the set of your life in your hands.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap" style="max-width:760px">
+    <p style="font-family:var(--mono); color:var(--accent); font-size:15px;">
+    Every run is another Friday. Spin it again.</p>
+    <div style="margin-top:30px; display:flex; gap:12px; flex-wrap:wrap;">
+      <a class="btn btn-primary" href="demo.html">Start Driving — Free Demo</a>
+      <a class="btn btn-ghost" href="genres.html">Choose Your Scene</a>
+    </div>
+  </div>
+</section>
+
+<script type="module">
+// Scroll driver. Pan progress runs over the PINNED window only:
+//   p = 0  while the scene approaches (image left border ON the left edge)
+//   p = 1  when the sticky frame releases (image right border on the right edge)
+// Caption i (0/1/2) peaks at p = (i + 0.5) / 3 and fades to 0 at its
+// third's boundaries, so captions crossfade as their third of the art
+// crosses the screen.
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const scenes = [...document.querySelectorAll('.scene')].map(scene => {
+  const frame = scene.querySelector('.scene-frame');
+  const img = new Image();
+  img.src = scene.dataset.img;
+  img.alt = scene.dataset.alt || '';
+  img.decoding = 'async';
+  frame.prepend(img);
+  if (reduced) scene.classList.add('reduced');
+  return { scene, frame, img, caps: [...scene.querySelectorAll('.cap')], span: 0 };
+});
+
+function measure() {
+  if (reduced) return;
+  for (const s of scenes) {
+    const ih = s.img.clientHeight || s.frame.clientHeight;   // 100% or 52% band
+    const ar = (s.img.naturalWidth && s.img.naturalHeight)
+      ? s.img.naturalWidth / s.img.naturalHeight : 3;
+    s.span = Math.max(0, ih * ar - s.frame.clientWidth);
+  }
+}
+
+let ticking = false;
+function paint() {
+  ticking = false;
+  if (reduced) return;
+  const vh = innerHeight;
+  for (const s of scenes) {
+    const r = s.scene.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > vh) continue;                // off-screen
+    const p = Math.min(1, Math.max(0, -r.top / (r.height - vh)));
+    s.img.style.transform = `translateX(${(-s.span * p).toFixed(1)}px)`;
+    s.caps.forEach((c, i) => {
+      c.style.opacity = Math.min(1, Math.max(0, 1 - Math.abs(p * 3 - (i + 0.5)) * 2)).toFixed(2);
+    });
+  }
+}
+function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(paint); } }
+
+addEventListener('scroll', onScroll, { passive: true });
+addEventListener('resize', () => { measure(); onScroll(); });
+for (const s of scenes) {
+  if (s.img.complete) continue;
+  s.img.addEventListener('load', () => { measure(); onScroll(); }, { once: true });
+}
+measure();
+paint();
+</script>
+<script type="module" src="js/site.js"></script>
+</body>
+</html>

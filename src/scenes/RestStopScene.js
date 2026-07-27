@@ -16,6 +16,7 @@ import { nextTownFact } from '../data/townFacts.js';
 import { MISSION_TIERS, tierFor, contactIdFor, contactGreeting } from '../systems/MissionSystem.js';
 import { getInstalled, buyUpgrade } from '../systems/UpgradeSystem.js';
 import { UPGRADE_SLOTS, SLOT_LABELS, getSlotTiers } from '../data/upgrades.js';
+import { GENRE_VEHICLE_TRAITS } from '../data/genreVehicleTraits.js';
 
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
@@ -149,23 +150,41 @@ function shopViceItems(shopKey, pickupCounts) {
   return out;
 }
 
-// Vehicle catalog items for the DEALER tab — derived from VEHICLES.
-// `fuelFilter` (optional) restricts the list to gas-only or electric-only
-// so SUCK Dealership (east, gas) and Lord Motors (west, electric) sell
-// distinct inventories per the user's spec.
-function dealerVehicleItems(fuelFilter = null) {
+// Genre-car catalog for the DEALER → CARS screen (owner 2026-07-23): every
+// culture's starter car is on the lot at ANY dealership for a flat $25,000.
+// Buying one unlocks that culture for the plate — its soundtrack identity,
+// ride traits, and sprite art — and you drive it off the lot immediately.
+// Already-owned cars swap in free; the active car lists as a YOUR RIDE row.
+// (In Custom mode the save sandbox seeds + isolates ownership, so lot
+// activity there never persists.)
+const GENRE_CAR_PRICE = 25000;
+const GENRE_LABELS = {
+  hiphop_phonk: 'HIP-HOP / PHONK', country: 'COUNTRY', reggaeton: 'REGGAETON',
+  k_pop: 'K-POP', metal: 'METAL', classic_rock: 'CLASSIC ROCK',
+  edm_rave: 'EDM / RAVE', reggae: 'REGGAE', pop_punk_emo: 'POP-PUNK / EMO',
+  norteno: 'NORTEÑO',
+};
+function genreCarItems() {
+  const active = window.__genre?.get?.() ?? null;
+  const owned  = window.__genre?.owned?.() ?? [];
   const out = [];
-  for (const v of Object.values(VEHICLES)) {
-    if (v.priceUsd == null || v.priceUsd <= 0) continue;
-    if (fuelFilter && v.fuel !== fuelFilter) continue;
+  for (const t of Object.values(GENRE_VEHICLE_TRAITS)) {
+    const gLabel   = GENRE_LABELS[t.key] ?? t.key.toUpperCase();
+    const isActive = t.key === active;
+    const isOwned  = isActive || owned.includes(t.key);
     out.push({
-      id: `veh_${v.id}`,
-      label: `🚗  ${v.label}`,
-      cost: v.priceUsd,
-      desc: `${v.hp} HP · ${v.rangeMi} mi · ${v.topMph} mph · ${v.drive} · ${v.fuel}`,
-      payload: { buyVehicle: v.id },
+      id: `gcar_${t.key}`,
+      label: `🚗  ${t.vehicleName.toUpperCase()} — ${gLabel}`,
+      cost: isOwned ? 0 : GENRE_CAR_PRICE,
+      desc: isActive ? 'Your current ride.'
+                     : `${t.topSpeedMph} mph top · ${t.strengths?.[0] ?? ''}`,
+      disabled: isActive,
+      disabledReason: 'Already driving it.',
+      payload: isOwned ? { driveGenre: t.key } : { buyGenre: t.key },
     });
   }
+  // Your ride first, then owned swaps, then the $25k showroom.
+  out.sort((a, b) => (a.disabled ? -1 : b.disabled ? 1 : a.cost - b.cost));
   return out;
 }
 
@@ -635,11 +654,14 @@ export class RestStopScene extends Phaser.Scene {
           label: `🔩  ${_slotLbl} — ${_next.label}`,
           cost: _next.cost,
           desc: (_next.desc ?? '') + (_next.tradeoff ? `  ⚠ ${_next.tradeoff}` : ''),
+          lvl: _next.level,   // read by _applyDealerTierGate (Sam's caps at 2)
           payload: { upgradeInstall: _next.id },
         });
       }
     }
     SECTIONS.dealer_acc.items = accItems;
+    // Genre-car showroom — same catalog at every dealership (owner 2026-07-23).
+    SECTIONS.dealer_cars.items = genreCarItems();
 
     // ── Per-shop vice menus (gated by pickupCounts on registry) ────
     // Each shop keeps its base items + appends the vices it sells (only
@@ -955,13 +977,15 @@ export class RestStopScene extends Phaser.Scene {
       card.on('pointerout',  () => card.setFillStyle(0xFFFFFF));
       card.on('pointerdown', (ptr) => {
         ptr.event?.stopPropagation?.();
-        // DEALER no longer sells CARS (owner 2026-07-19 — one vehicle, the
-        // genre beater), so a dealer tile opens ACCESSORIES/upgrades directly
-        // rather than the old Cars/Accessories chooser.  Both Lord Motors and
-        // Sam's route here; remember which so the header shows that brand.
+        // Dealers sell CARS again (owner 2026-07-23 — the genre-car showroom),
+        // so a dealer tile opens the Cars/Accessories chooser.  Remember which
+        // brand was tapped: headers show it, and Sam's caps parts at level 2
+        // (level 3 is Lord Motors exclusive).
         if (key === 'dealer' || key === 'lord' || key === 'suck') {
           this._activeDealerBrand = stopBrands[key]?.name ?? null;
-          this._showSection('dealer_acc');
+          this._activeDealerKey   = key;
+          this._applyDealerTierGate();
+          this._showDealerChooser();
         } else {
           this._showSection(key);
         }
@@ -1030,6 +1054,8 @@ export class RestStopScene extends Phaser.Scene {
           ptr.event?.stopPropagation?.();
           this._showSection(ch.key, /* parent: */ 'dealer');
         });
+        // CARS tile subtitle re-brands to whichever dealer placard was tapped.
+        if (ch.key === 'dealer_cars') this._dealerCarsSubLbl = sub;
         this._dealerChooserObjs.push(card, strip, lbl, sub);
       });
       for (const o of this._dealerChooserObjs) o.setVisible(false);
@@ -1126,12 +1152,14 @@ export class RestStopScene extends Phaser.Scene {
     const firstVisit = !visited.has(stopId);
     if (firstVisit) { visited.add(stopId); save?.set?.('stopsVisited', [...visited]); }
     // Mission ("Favors") contact — every stop carries side work (Ch. 8;
-    // Pullman is payoff-only, gated inside offersForStop).  Queued so it
-    // shows AFTER the regular encounter conversation closes, or immediately
-    // when no encounter fires.  Custom mode = unranked sandbox, no missions.
+    // Pullman is payoff-only, gated inside offersForStop).  Queued but NOT
+    // shown on arrival: a separate contact pitches it when the player HITS THE
+    // ROAD (owner 2026-07-26), so any job COMPLETED here first frees its type
+    // slot for a re-take.  Custom mode = unranked sandbox, no missions.
     this._pendingMissionCard = Difficulty.noScore?.() !== true;
-    // First visit → guaranteed intro; later visits → 60% chance.
-    if (!firstVisit && Math.random() > 0.60) { this._maybeShowMissionCard(); return; }
+    // First visit → guaranteed welcome intro; later visits → 60% chance.
+    // The job offer is deferred to exit either way, so nothing to chain here.
+    if (!firstVisit && Math.random() > 0.60) return;
     const seen = new Set(save?.get?.('encountersSeen', []) ?? []);
     const enc  = pickEncounterForStop(stopId, {
       firstVisit,
@@ -1140,22 +1168,31 @@ export class RestStopScene extends Phaser.Scene {
       heat:    this._stars ?? 0,
     });
     if (enc) {
-      // Remember the welcome NPC so the mission-offer card that follows is
-      // presented by the SAME character (2026-07-16 owner: no NPC swap
-      // between the greeting and the job pitch).
+      // Remember the welcome NPC so the EXIT job pitch can pick a DIFFERENT
+      // face (owner 2026-07-26: "another NPC" approaches you on the way out).
       this._welcomeNpc = { portrait: enc.portrait, speaker: enc.speaker };
       this._showEncounterCard(enc, save, seen);
-    } else this._maybeShowMissionCard();
+    }
+    // No welcome encounter this visit → nothing to show now; the job offer
+    // still fires on HIT THE ROAD.
   }
 
-  /** Show the queued mission-offer conversation, once per visit. */
-  _maybeShowMissionCard() {
-    if (!this._pendingMissionCard) return;
+  /** HIT THE ROAD hook — a fresh contact pitches this stop's side work on the
+   *  way out (deferred from arrival so a job completed here has freed its type
+   *  slot).  Returns true when a card was shown (caller must wait to leave);
+   *  false when there's nothing to offer (caller proceeds to leave).  Once per
+   *  visit.  When the shown card closes, its terminal branch calls _continue()
+   *  so the player leaves right after resolving it. */
+  _tryExitMissionCard() {
+    if (!this._pendingMissionCard) return false;
     this._pendingMissionCard = false;
     const missions = this.registry.get('missions');
-    if (!missions) return;
+    if (!missions) return false;
     const enc = this._buildMissionEncounter(missions);
-    if (enc) this._showEncounterCard(enc, this.registry.get('save'), new Set());
+    if (!enc) return false;
+    this._showingExitMission = true;
+    this._showEncounterCard(enc, this.registry.get('save'), new Set());
+    return true;
   }
 
   /** Synthesize a Phase-1 dialogue-tree card from this stop's persisted
@@ -1176,13 +1213,17 @@ export class RestStopScene extends Phaser.Scene {
     }) ?? [];
     const open   = offers.filter(o => o.status === 'offered');
     if (!open.length) return null;
-    // Same character as the welcome encounter when one fired this visit
-    // (2026-07-16 owner: no NPC swap between greeting and job pitch);
-    // hash-picked stable contact otherwise.
+    // A SEPARATE contact from the welcome NPC pitches the job on the way out
+    // (owner 2026-07-26: "another NPC" approaches you as you leave).  Hash-pick
+    // a stable face per stop; if it collides with the welcome NPC's face, step
+    // to the next so it visibly reads as a different person.
     const portraits = ['long_haul_mike', 'tow_driver', 'farm_worker', 'street_weirdo'];
     let h = 0; for (let i = 0; i < String(stopId).length; i++) h = (h * 31 + String(stopId).charCodeAt(i)) | 0;
-    const portrait = this._welcomeNpc?.portrait ?? portraits[Math.abs(h) % portraits.length];
-    const npcName  = this._welcomeNpc?.speaker ?? open[0].npcName ?? 'Shady Contact';
+    let portrait = portraits[Math.abs(h) % portraits.length];
+    if (this._welcomeNpc?.portrait && portrait === this._welcomeNpc.portrait) {
+      portrait = portraits[(Math.abs(h) + 1) % portraits.length];
+    }
+    const npcName  = open[0].npcName ?? 'Shady Contact';
 
     // "The catch" line per offer, from its terms.
     const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -1222,10 +1263,10 @@ export class RestStopScene extends Phaser.Scene {
     };
     // Passenger quirk warning — the rider states their own terms.
     const quirkLine = {
-      nervous:       "One hard crash and I'm walking, deal's off.",
-      carsick:       'Keep it smooth — too much banging around and I am DONE.',
-      fugitive:      "If the stars start stacking up, I'm gone out the door. Two's my limit.",
-      thrill_seeker: "Fare's flat, but make it interesting and there's a tip in it.",
+      nervous:       "One hard crash and I'm walking — deal's off; so drive it soft.",
+      carsick:       'Keep it smooth as glass, no jolt, no bump — too much banging and I am DONE, you chump.',
+      fugitive:      "If the stars start stacking, I'm out the door for sure — two's my limit, not one star more.",
+      thrill_seeker: "Fare's flat and set, but thrill me a bit — make it fun and there's a tip in it.",
     };
 
     // Busy is PER TYPE (one active per type, Ch. 8) — an occupied slot still
@@ -1246,8 +1287,8 @@ export class RestStopScene extends Phaser.Scene {
     // with your rep at that type: cautious Rookie ask → Legend trust.
     const tierIntro = (o) => {
       const t = missions.tierOf?.(o.type)?.name ?? 'Rookie';
-      return t === 'Legend' ? "You're the only one I'd trust with this. "
-        : t === 'Known' ? "You've earned the better work. "
+      return t === 'Legend' ? "You're the one I'd trust with this, and none else on my list. "
+        : t === 'Known' ? "You've earned the better work, no doubt — the kind of run I don't hand out. "
         : '';
     };
 
@@ -1268,22 +1309,22 @@ export class RestStopScene extends Phaser.Scene {
     // Varied opener so the contact isn't reciting the SAME line at every stop
     // (owner 2026-07-19). Stable per stop via the stopId hash `h`.
     const GREETS = [
-      "Got a run that needs a driver who doesn't ask questions.",
-      "You've got a trunk and a lead foot. I've got a problem. Let's talk.",
-      "Word is you drive fast and forget faces. That's the whole job.",
-      "No badge, no paperwork, no questions — my kind of driver.",
-      "You didn't hear this from me, and we never met after.",
-      "Quiet type? Good. The loud ones end up in a ditch out here.",
-      "I need something gone, and I need to never think about it again.",
-      "You look like someone who needs cash more than answers.",
-      "Don't nod too hard, someone's always watching. Just listen.",
-      "Half up front's not a thing I do. All of it on delivery, though.",
+      "Got a run that needs a driver, quick and mum — one who won't ask questions or where the cargo's from.",
+      "You've got a trunk and a lead-foot walk; I've got a problem — so let's you and me talk.",
+      "Word is you drive fast and forget every face — that's the whole of the job, and you've got the pace.",
+      "No badge, no paperwork, no fuss, no jiver — no questions asked: now that's my kind of driver.",
+      "You didn't hear this from me, understand — and we never met, once it's out of your hand.",
+      "Quiet type? Good — that suits me fine; the loud ones end in a ditch off the line.",
+      "I need a thing gone and clean off my plate — never to think of it again, or its weight.",
+      "You look like a soul who needs cash in the hand far more than answers or a lay of the land.",
+      "Don't nod too hard — there's always an eye; just listen close and let it slide by.",
+      "Half up front? No, that's not my way — all of it lands on delivery day.",
     ];
     const _greet = GREETS[Math.abs(h) % GREETS.length];
     nodes.greet = {
       line: memLine ?? (anyBusy
-        ? "You're already hauling for somebody — I can see it in how you parked. Hear me out anyway."
-        : (open.length > 1 ? `${_greet} Got ${open.length} of them, actually.` : _greet)),
+        ? "You're hauling for someone — I can tell by your park; still, hear me out before you embark."
+        : (open.length > 1 ? `${_greet} I've got ${open.length}, in fact — pick one and let's transact.` : _greet)),
       choices: greetChoices,
     };
     open.forEach((o, i) => {
@@ -1306,9 +1347,9 @@ export class RestStopScene extends Phaser.Scene {
         const p = o.passenger ?? {};
         const riderName = p.name ? `${p.name}` : 'A rider';
         nodes[`offer${i}`] = {
-          line: (`${tierIntro(o)}Got someone who needs a lift. `
-              + `"${p.ask ?? 'I need a ride.'}" ${quirkLine[p.quirk] ?? ''}`).trim()
-              + (busy ? " …Looks like your passenger seat's spoken for, though." : ''),
+          line: (`${tierIntro(o)}Here's a rider who needs a lift, you see. `
+              + `"${p.ask ?? 'I need a ride — would you carry me?'}" ${quirkLine[p.quirk] ?? ''}`).trim()
+              + (busy ? " …though your shotgun seat's already taken, it seems to me." : ''),
           deal: {
             head: 'JOB · RIDER',
             rows: [
@@ -1324,9 +1365,9 @@ export class RestStopScene extends Phaser.Scene {
         // Heat escape — however you shed the stars counts (paid clears too;
         // their price is penalty enough — 2026-07-13 decision).
         nodes[`offer${i}`] = {
-          line: `${tierIntro(o)}You're glowing, friend — and I don't care how you shake them. `
-              + `Get busted and we never met.`
-              + (busy ? " …Except you're already running from something for someone." : ''),
+          line: `${tierIntro(o)}You're glowing, friend, lit up like a flare — shed 'em how you like, I don't much care; `
+              + `get busted, though, and I was never there.`
+              + (busy ? " …though you're already running hot for someone, I swear." : ''),
           deal: {
             head: 'JOB · SHAKE THE HEAT',
             rows: [
@@ -1340,8 +1381,8 @@ export class RestStopScene extends Phaser.Scene {
         };
       } else {
         nodes[`offer${i}`] = {
-          line: `${tierIntro(o)}Something needs to get up the road and stay off paper. You in?`
-              + (busy ? " …But your trunk's full. Come back when it isn't." : ''),
+          line: `${tierIntro(o)}Something needs up the road and off the books, no trace — you in for the run, and up for the pace?`
+              + (busy ? " …but your trunk's packed tight; come back when there's space." : ''),
           deal: {
             head: o.type === 'timed' ? 'JOB · RUSH DELIVERY' : 'JOB · DELIVERY',
             rows: [
@@ -1564,6 +1605,15 @@ export class RestStopScene extends Phaser.Scene {
         } else if (m) {
           this._setStatus(`📦 Job taken — ${m.cargo} to ${m.targetName}. $${m.payout} on delivery.`, '#88FF88');
         }
+        // The exit pitch auto-leaves on resolve; a job taken here holds its
+        // confirmation on screen ~5s first (owner 2026-07-26) so the player can
+        // read it before the fade.  Re-arm the status clear to match that hold.
+        if (m) {
+          this._exitJobTaken = true;
+          if (this._statusTimer) this._statusTimer.remove();
+          this._statusTimer = this.time.delayedCall(5000, () =>
+            this._statusText.setText('').setFontSize(34).setFontStyle('normal').setStroke('#000000', 4));
+        }
       }
       if (choice.missionDecline) {
         this.registry.get('missions')?.decline?.(choice.missionDecline);
@@ -1574,9 +1624,20 @@ export class RestStopScene extends Phaser.Scene {
         this._showEncounterCard(enc, save, seen, choice.next);   // walk the tree
       } else {
         if (enc.once) { seen.add(enc.id); save?.set?.('encountersSeen', [...seen]); }
-        // Conversation over — surface the queued mission contact (no-op when
-        // this card IS the mission contact or nothing is pending).
-        this._maybeShowMissionCard();
+        // If this was the EXIT job pitch (shown on HIT THE ROAD), resolving it
+        // means the player is leaving — finish the exit now.  The welcome card
+        // no longer chains into a job pitch (that's deferred to HIT THE ROAD).
+        // A job taken here holds ~5s so its confirmation is readable before the
+        // fade; clicking HIT THE ROAD again skips the wait (_continue guards).
+        if (this._showingExitMission) {
+          this._showingExitMission = false;
+          if (this._exitJobTaken) {
+            this._exitJobTaken = false;
+            this.time.delayedCall(5000, () => this._continue());
+          } else {
+            this._continue();
+          }
+        }
       }
     };
 
@@ -1628,11 +1689,12 @@ export class RestStopScene extends Phaser.Scene {
   /** Brand (shop) name for a section key, or null where no brand exists
    *  (e.g. dealer_acc).  dealer_cars titles itself as the dealer brand. */
   _shopNameFor(key) {
-    // ACCESSORIES is shared by both dealerships — title it with whichever
-    // dealer placard was tapped (Lord Motors / Sam's), set on tile click.
-    if (key === 'dealer_acc') return this._activeDealerBrand ?? null;
-    const brandKey = key === 'dealer_cars' ? 'dealer' : key;
-    return this._brands?.[brandKey]?.name ?? null;
+    // ACCESSORIES + CARS are shared by both dealerships — title them with
+    // whichever dealer placard was tapped (Lord Motors / Sam's), set on tap.
+    if (key === 'dealer_acc' || key === 'dealer_cars' || key === 'dealer') {
+      return this._activeDealerBrand ?? this._brands?.dealer?.name ?? null;
+    }
+    return this._brands?.[key]?.name ?? null;
   }
 
   /** Show the landing screen (5 brand placards). */
@@ -1653,6 +1715,7 @@ export class RestStopScene extends Phaser.Scene {
     this._screenStack = ['landing', 'dealer'];
     this._activeSection = null;
     this._hideAllScreens();
+    this._dealerCarsSubLbl?.setText?.(this._activeDealerBrand ?? this._brands?.dealer?.name ?? '');
     for (const obj of (this._dealerChooserObjs ?? [])) obj.setVisible?.(true);
     this._backBtnBg?.setVisible(true);
     this._backBtnLbl?.setVisible(true);
@@ -1661,6 +1724,27 @@ export class RestStopScene extends Phaser.Scene {
       this._sectionHeader.setText(shopName ?? '🏬  DEALER').setVisible(true);
     }
     this._titleText?.setText(shopName ?? this._stop.name.toUpperCase());
+  }
+
+  /** Sam's carries level-1/2 parts only — level 3 is Lord Motors exclusive
+   *  (owner 2026-07-23).  Flips the LIVE `disabled` flag on the prebuilt
+   *  dealer_acc buttons; `_tierGated` marks OUR disables so this never
+   *  re-enables an item disabled for another reason (e.g. ✓ Installed). */
+  _applyDealerTierGate() {
+    const sam = this._activeDealerKey === 'suck';
+    for (const it of (SECTIONS.dealer_acc.items ?? [])) {
+      if (!it?.payload?.upgradeInstall || (it.lvl ?? 0) < 3) continue;
+      if (sam && !it.disabled) {
+        it.disabled = true;
+        it._tierGated = true;
+        it.disabledReason = '⭐ Level-3 parts are Lord Motors exclusive.';
+      } else if (!sam && it._tierGated) {
+        it.disabled = false;
+        it._tierGated = false;
+        it.disabledReason = undefined;
+      }
+    }
+    this._buttonRefresh?.forEach?.(fn => fn());
   }
 
   /** Show a sub-menu for a section key.  parent (optional) = the
@@ -1860,6 +1944,15 @@ export class RestStopScene extends Phaser.Scene {
         desc.setText('Next tier available at the next shop.');
         cost.setText('N/A');
       }
+      // Genre car bought/swapped — this row becomes YOUR RIDE for the visit.
+      // (Other rows re-derive owned/active state on the next stop.)
+      if (item.payload?.buyGenre || item.payload?.driveGenre) {
+        item.disabled = true;
+        item.disabledReason = 'Already driving it.';
+        label.setText('✓  YOUR RIDE');
+        desc.setText(item.payload?.buyGenre ? 'Keys in hand — drove it off the lot.' : 'Swapped in.');
+        cost.setText('N/A');
+      }
       this._setStatus(this._purchaseConfirmation(item), '#88FF88');
       this._flash(bg, 0x44FF44);
       this._buttonRefresh.forEach(fn => fn());
@@ -2056,6 +2149,15 @@ export class RestStopScene extends Phaser.Scene {
       const save = this.registry?.get?.('save');
       if (save) buyUpgrade(save, this._vehicleId, p.upgradeInstall);
       this._purchases.upgradeRecompute = true;
+    }
+    if (p.buyGenre || p.driveGenre) {
+      // Genre car — a buy unlocks the culture for the plate; either way you
+      // drive it off the lot NOW.  __genre.set persists the pick, swaps the
+      // live art on the (sleeping) GameScene, and refreshes the ride traits.
+      const culture = p.buyGenre ?? p.driveGenre;
+      if (p.buyGenre) window.__genre?.own?.(culture);
+      window.__genre?.set?.(culture);
+      this._purchases.upgradeRecompute = true;   // top speed / HP re-derive on resume
     }
     if (p.viceTopUp) {
       // Per-vice top-up: each click ADDS p.amount (+10%) up to a cap of
@@ -2283,6 +2385,11 @@ export class RestStopScene extends Phaser.Scene {
 
   _continue() {
     if (this._continuing) return;
+    // A fresh contact pitches this stop's side work as you head out — deferred
+    // to now (not arrival) so any job you COMPLETED here has freed its type
+    // slot for a re-take.  When the pitch resolves it re-calls _continue() and
+    // this returns false (already shown), so the player leaves.
+    if (this._tryExitMissionCard()) return;
     // Uncollected READY drop-offs — the route is one-way, so leaving now
     // fails them for good.  Confirm first; LEAVE ANYWAY re-enters with the
     // flag set and fails them as 'not_delivered' (no payout, rep unchanged).

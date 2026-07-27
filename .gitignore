@@ -26,3 +26,12 @@ Images/Codex_Concepts/
 .cloudflare.env
 .dev.vars
 hud-layout-dump.json
+
+# Website derived assets (copied from public/assets by website/sync-assets.sh).
+# Only the SYNCED subfolders are ignored — website-original art (e.g.
+# assets/story/) IS committed.
+website/assets/music/
+website/assets/culture/
+website/assets/genre_art/
+website/assets/ui/
+website/demo/

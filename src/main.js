@@ -985,12 +985,31 @@ const _boot = () => {
       if (g) return g;
       try { return localStorage.getItem('rtr.genre') || null; } catch (_) { return null; }
     },
+    // ── Genre-car ownership (dealership $25k buys; the tutorial pick is the
+    // free starter).  Stored per-plate under 'genresOwned'; in a Custom run
+    // the sandbox seeds + isolates it so buys/swaps don't persist. ──
+    owned: () => {
+      const save = game.registry.get('save');
+      let list = save?.get?.('genresOwned', null);
+      if (!Array.isArray(list)) list = [];
+      // Self-heal pre-dealership plates: the active genre is always owned.
+      const g = save?.get?.('genre', null);
+      if (g && !list.includes(g)) { list = [...list, g]; save?.set?.('genresOwned', list); }
+      return list;
+    },
+    owns: (culture) => !!culture && window.__genre.owned().includes(culture),
+    own: (culture) => {
+      if (!culture) return;
+      const list = window.__genre.owned();
+      if (!list.includes(culture)) game.registry.get('save')?.set?.('genresOwned', [...list, culture]);
+    },
     set: (culture) => {
       if (!culture) return;
       try { game.registry.get('save')?.set?.('genre', culture); } catch (_) {}  // per-plate
       try { localStorage.setItem('rtr.genre', culture); } catch (_) {}          // boot mirror
       const s = game.scene?.getScene?.('Game');
       try { s?._applyGenreArt?.(culture); } catch (_) {}
+      try { s?._refreshGenreTrait?.(); } catch (_) {}   // ride traits follow the car
     },
     // Profile/plate switched → mirror that plate's stored genre to rtr.genre and
     // reskin live (null genre reverts to base art).

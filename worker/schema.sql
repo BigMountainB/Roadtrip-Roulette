@@ -30,3 +30,21 @@ CREATE TABLE IF NOT EXISTS leaderboard (
 CREATE INDEX IF NOT EXISTS idx_lb_score ON leaderboard(score DESC);
 CREATE INDEX IF NOT EXISTS idx_lb_miles ON leaderboard(miles DESC);
 CREATE INDEX IF NOT EXISTS idx_lb_time  ON leaderboard(time_sec ASC);
+
+-- Paid entitlements (beta à-la-carte model, 2026-07-26). One row per
+-- (player, sku). Bundles are EXPANDED to atomic skus at grant time so the
+-- game client only ever checks atomic ones:
+--   route_full     — lifts the GUEST North Bend cap ($1 custom-plate purchase)
+--   plate_custom   — may claim a custom plate name ($1, same purchase)
+--   plates_states  — WA/OR/ID plate designs ($3 pack)
+--   genre_<key>    — one soundtrack culture, e.g. genre_metal ($3 each;
+--                    $1 purchase includes the buyer's 1 starter genre)
+-- ($10 all-in = route_full + plate_custom + plates_states + all 10 genres.)
+-- source: 'dev-grant' | payment provider id (e.g. 'stripe:<session_id>').
+CREATE TABLE IF NOT EXISTS entitlements (
+  player_id   TEXT NOT NULL,
+  sku         TEXT NOT NULL,
+  source      TEXT,
+  granted_at  INTEGER,
+  PRIMARY KEY (player_id, sku)
+);

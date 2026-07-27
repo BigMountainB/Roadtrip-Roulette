@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free Demo — Road Trip Roulette</title>
+<meta name="description" content="Play the free browser demo: Seattle to North Bend, two genres, no download.">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+
+<section class="section">
+  <div class="wrap">
+    <h1>Free Demo</h1>
+    <p class="lead">The first leg of the run — <b>Seattle → North Bend</b>, 32 miles,
+    two genres — right in your browser. No download, no account. Just don't hit
+    anything you'd have to explain.</p>
+
+    <div class="demo-frame-wrap" style="margin-top:28px" id="demo-wrap">
+      <div class="demo-placeholder" id="demo-placeholder">
+        <div>
+          <div class="hwy-sign" style="margin-bottom:16px">NORTH BEND&nbsp;&nbsp;32<span class="sub">DEMO ROUTE ENDS</span></div>
+          <p class="dim">The demo build is being tuned up at the shop.<br>Check back soon.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-3" style="margin-top:28px">
+      <div class="card"><h3>⌨️ Controls</h3>
+        <p>Arrow keys / WASD to drive, on-screen pedals on touch. Everything else the
+        tutorial teaches in the first mile.</p></div>
+      <div class="card"><h3>🎸 Two scenes</h3>
+        <p>Country's Mud Truck or Hip-Hop/Phonk's VIP Sedan — two very different ways
+        to take the same 32 miles.</p></div>
+      <div class="card"><h3>🏔️ Where it ends</h3>
+        <p>North Bend — the last stop before the Pass. The remaining 261 miles ship
+        with the full game.</p></div>
+    </div>
+  </div>
+</section>
+
+<script type="module">
+// When the demo build exists at ./demo/, swap the placeholder for the iframe.
+fetch('demo/index.html', { method: 'HEAD' }).then(r => {
+  if (!r.ok) return;
+  const wrap = document.getElementById('demo-wrap');
+  wrap.innerHTML = '<iframe src="demo/index.html" allow="autoplay; fullscreen" title="Road Trip Roulette demo"></iframe>';
+}).catch(() => {});
+</script>
+<script type="module" src="js/site.js"></script>
+</body>
+</html>

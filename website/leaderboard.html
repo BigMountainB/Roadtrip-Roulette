@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Leaderboard — Road Trip Roulette</title>
+<meta name="description" content="Top plates worldwide — by score, miles survived, and fastest Seattle→Pullman run.">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+
+<section class="section">
+  <div class="wrap" style="max-width:820px">
+    <h1>World Leaderboard</h1>
+    <p class="lead">Your license plate is your name on the wall. Best score, most
+    miles survived, fastest full Seattle→Pullman run — one entry per plate,
+    straight from the game.</p>
+
+    <div class="lb-tabs">
+      <button class="lb-tab active" data-metric="score">Score</button>
+      <button class="lb-tab" data-metric="miles">Miles</button>
+      <button class="lb-tab" data-metric="time">Fastest Run</button>
+    </div>
+
+    <table class="lb">
+      <thead id="lb-head"></thead>
+      <tbody id="lb-body"></tbody>
+    </table>
+    <p class="dim small lb-note" id="lb-note"></p>
+  </div>
+</section>
+
+<script type="module">
+import { API_BASE } from './js/data.js';
+
+const head = document.getElementById('lb-head');
+const body = document.getElementById('lb-body');
+const note = document.getElementById('lb-note');
+const tabs = document.querySelectorAll('.lb-tab');
+
+const fmtTime = (s) => {
+  s = Math.round(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(ss).padStart(2, '0');
+};
+const fmtNum = (n) => Number(n).toLocaleString('en-US');
+
+const COLS = {
+  score: ['Score',       (e) => '$' + fmtNum(e.score)],
+  miles: ['Miles',       (e) => fmtNum(Math.floor(e.miles)) + ' mi'],
+  time:  ['Time',        (e) => fmtTime(e.timeSec)],
+};
+
+async function load(metric) {
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.metric === metric));
+  const [colLabel, colFmt] = COLS[metric];
+  head.innerHTML = `<tr><th style="width:60px">#</th><th>Plate</th><th>${colLabel}</th><th>Finished?</th></tr>`;
+  body.innerHTML = `<tr><td colspan="4" class="dim">Loading…</td></tr>`;
+  note.textContent = '';
+  try {
+    const r = await fetch(`${API_BASE}/api/leaderboard?metric=${metric}&limit=50`);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'bad response');
+    if (!j.entries.length) {
+      body.innerHTML = `<tr><td colspan="4" class="dim">No entries yet — the wall is waiting. Go drive.</td></tr>`;
+      return;
+    }
+    body.innerHTML = j.entries.map((e, i) => `
+      <tr>
+        <td><span class="rank">${i + 1}</span></td>
+        <td><span class="plate">${String(e.plate || '———').toUpperCase()}</span></td>
+        <td class="num">${colFmt(e)}</td>
+        <td>${e.completed ? '🏁 Pullman' : '<span class="dim">DNF</span>'}</td>
+      </tr>`).join('');
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="4" class="dim">Leaderboard is unreachable right now — try again in a bit.</td></tr>`;
+    note.textContent = 'Scores are submitted automatically from in-game runs.';
+  }
+}
+
+tabs.forEach(t => t.addEventListener('click', () => load(t.dataset.metric)));
+load('score');
+</script>
+<script type="module" src="js/site.js"></script>
+</body>
+</html>

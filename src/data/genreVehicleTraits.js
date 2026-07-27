@@ -94,9 +94,9 @@ export const GENRE_VEHICLE_TRAITS = {
     strengths: [
       'Reaches top speed 20% faster',
       'Driving-bonus grace period lasts 50% longer',
-      'Wanted stars decay 25% slower',
     ],
     weaknesses: [
+      'Wanted stars decay 25% slower',
       'Snow, wind & rough-road steering penalties 25% stronger',
     ],
     modifiers: {
@@ -204,7 +204,7 @@ export const GENRE_VEHICLE_TRAITS = {
     topSpeedMph: 150,   // pedal-DOWN max (no caffeine)
     cruiseMph:   135,   // no-pedal cruise
     strengths: [
-      'Driving cash above 120 mph +30%',
+      'Driving cash above 120 mph +20%',
       'Shrugs off the first overheat each leg',
     ],
     weaknesses: [
@@ -212,7 +212,7 @@ export const GENRE_VEHICLE_TRAITS = {
       'Snow & crosswind instability +30%',
     ],
     modifiers: {
-      drivingCashHiSpeedMult:    1.30,
+      drivingCashHiSpeedMult:    1.20,   // was 1.30 (owner rebalance 2026-07-26)
       ignoreFirstOverheatPerLeg: true,
       brakingMult:               0.80,
       hazardInstabilityMult:     1.30,

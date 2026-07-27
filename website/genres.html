@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Genres &amp; Garage — Road Trip Roulette</title>
+<meta name="description" content="Ten genres, ten cars, ten original soundtracks. Hear every track and compare every ride.">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+
+<section class="section">
+  <div class="wrap">
+    <h1>Genres &amp; Garage</h1>
+    <p class="lead">Your genre is your identity: it reskins your car, rewires how it
+    drives, and takes over the radio with its own original soundtrack. Pick a tab,
+    meet the machine, press play.</p>
+
+    <div class="genre-tabs" id="tabs"></div>
+    <div id="panel"></div>
+  </div>
+</section>
+
+<script type="module">
+import { GENRES, trackTitle } from './js/data.js';
+
+const tabs  = document.getElementById('tabs');
+const panel = document.getElementById('panel');
+let audio = null, playingEl = null;
+
+// Demo genres play FULL songs; every other genre is capped to a preview.
+const DEMO_GENRES = new Set(['country', 'hiphop_phonk']);
+const PREVIEW_SECONDS = 30;
+
+GENRES.forEach((g, i) => {
+  const b = document.createElement('button');
+  b.className = 'genre-tab';
+  b.textContent = g.name;
+  b.style.setProperty('--g', g.color);
+  b.addEventListener('click', () => select(i));
+  tabs.append(b);
+});
+
+function stop() {
+  if (audio) { audio.pause(); audio = null; }
+  if (playingEl) { playingEl.classList.remove('playing'); playingEl.querySelector('.t-play').textContent = '▶'; playingEl = null; }
+}
+
+function select(i) {
+  stop();
+  const g = GENRES[i];
+  [...tabs.children].forEach((t, j) => t.classList.toggle('active', j === i));
+  panel.style.setProperty('--g', g.color);
+  const isDemoGenre = DEMO_GENRES.has(g.key);   // demo genres play full songs
+  const trackRow = (t, n) => `
+    <div class="track" data-src="assets/music/${g.musicDir}/${t}.mp3">
+      <span class="t-num">${String(n + 1).padStart(2, '0')}</span>
+      <button class="t-play" aria-label="Play">▶</button>
+      <span class="t-title">${trackTitle(t)}</span>
+    </div>`;
+  const half = Math.ceil(g.tracks.length / 2);
+  panel.innerHTML = `
+    <div class="genre-head">
+      <h2 style="color:${g.color}">${g.name}</h2>
+      <p class="dim">${g.blurb}</p>
+    </div>
+    <div class="genre-top">
+      <div class="genre-car">
+        <div class="sprites">
+          <img src="assets/culture/${g.key}/starter_front.png" alt="${g.vehicleName} front">
+          <img src="assets/culture/${g.key}/starter_back.png" alt="${g.vehicleName} back">
+        </div>
+        <div class="vname" style="color:${g.color}">${g.vehicleName}</div>
+        <div class="vstats">TOP ${g.topSpeedMph} MPH · CRUISE ${g.cruiseMph} MPH · ${g.bpm} BPM</div>
+      </div>
+      <div class="genre-art"><img src="assets/genre_art/${g.key}.png" alt="${g.name} art"
+        onerror="this.parentElement.style.display='none'"></div>
+    </div>
+    <div class="traits">
+      <div class="trait-box plus"><h4>Strengths</h4><ul>${g.strengths.map(s => `<li>${s}</li>`).join('')}</ul></div>
+      <div class="trait-box minus"><h4>Weaknesses</h4><ul>${g.weaknesses.map(s => `<li>${s}</li>`).join('')}</ul></div>
+    </div>
+    <h3>Soundtrack — ${g.tracks.length} tracks
+      ${isDemoGenre
+        ? `<span class="dim small" style="font-weight:400"> · full songs — included in the demo</span>`
+        : `<span class="dim small" style="font-weight:400"> · 30-second previews</span>`}
+    </h3>
+    <div class="tracklist-cols">
+      <div class="tracklist">${g.tracks.slice(0, half).map((t, n) => trackRow(t, n)).join('')}</div>
+      ${g.tracks.length > half
+        ? `<div class="tracklist">${g.tracks.slice(half).map((t, n) => trackRow(t, n + half)).join('')}</div>`
+        : ''}
+    </div>`;
+
+  panel.querySelectorAll('.track').forEach(row => {
+    row.querySelector('.t-play').addEventListener('click', () => {
+      if (playingEl === row) { stop(); return; }
+      stop();
+      audio = new Audio(row.dataset.src);
+      audio.play();
+      audio.addEventListener('ended', stop);
+      if (!isDemoGenre) {
+        // Preview cap: non-demo genres stop at 30 seconds.
+        audio.addEventListener('timeupdate', function cap() {
+          if (audio && audio.currentTime >= PREVIEW_SECONDS) stop();
+        });
+      }
+      playingEl = row;
+      row.classList.add('playing');
+      row.querySelector('.t-play').textContent = '❚❚';
+    });
+  });
+}
+
+select(0);
+</script>
+<script type="module" src="js/site.js"></script>
+</body>
+</html>

@@ -370,6 +370,12 @@ export class GameScene extends Phaser.Scene {
     // into a new run with the player's persisted difficulty / steering
     // settings instead of bouncing through the title screen first.
     this._skipTitle     = !!data?.skipTitle;
+    // Fresh-run kickoff: scene.start('Game', { skipTitle: true, freshStart: true })
+    // rebuilds the scene from scratch (so no prior run — e.g. a Custom sandbox's
+    // maxed HP/upgrades — can leak in) AND drops straight into gameplay by
+    // auto-calling _startGameplay() at the end of create().  Used by the title
+    // "SAVED GAME FOUND → NEW RUN" button so it can't reuse stale scene state.
+    this._freshStart    = !!data?.freshStart;
     // Resume-from-rest-stop: scene.start('Game', { resumeFromStop: 'C', score, ... })
     // tells us to skip the title overlay and place the player at the saved
     // mileage with the saved score. Set in RestStopScene "CONTINUE" or in
@@ -480,6 +486,10 @@ export class GameScene extends Phaser.Scene {
     // _takeRestStopExit calls until the page was reloaded.
     this._takingExit          = false;
     this._touchExitArmed      = false;
+    // Music resume-intent (set only by the live-resume branch, consumed by
+    // _kickRadio).  Cleared here so an un-consumed intent from a previous run
+    // can't leak into a later fresh START.
+    this._pendingResumeMusic  = null;
     // Reset rest-stop / checkpoint history so a "Start Over" from the
     // pause menu actually re-prompts every stop.  Previously these sets
     // accumulated across runs — once you'd taken the Seattle exit on one
@@ -716,6 +726,15 @@ export class GameScene extends Phaser.Scene {
     // Analog gas gauge — cached label Texts (E/½/F/⛽) follow the same
     // restart-safety rule; needle state resets so it re-seats on the new tank.
     this._gasGaugeTxts = null; this._gasGaugeBounds = null; this._gasNeedleFrac = null;
+    // Gas warning ICON (ui_gas_full/empty) is lazily created once and cached
+    // with an `=== undefined` guard.  Phaser reuses the scene instance across
+    // scene.start('Game', …) (rest-stop return, checkpoint respawn, NEW RUN),
+    // which DESTROYS the image but leaves this ref pointing at the dead object
+    // (scene=null) — the next _drawGasGauge then calls setTexture() on it and
+    // throws "Cannot read properties of undefined (reading 'sys')".  Reset to
+    // undefined so it rebuilds fresh (undefined, not null: null is the "art not
+    // loaded, don't retry" sentinel set below).
+    this._hudGasIcon = undefined;
     // Mission ("Favors") HUD chip — same restart-safety rule as the survival
     // labels: drop the cached Text refs so the chip rebuilds after a scene
     // restart instead of setText()ing destroyed objects.
@@ -1848,7 +1867,12 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0).setDepth(61).setVisible(false)
       .setInteractive({ useHandCursor: true });
     const setVolFromX = (px) => {
-      const t = Math.max(0, Math.min(1, (px - sliderL) / sliderW));
+      // The pause HUD renders on _uiCam, which is scrolled −HUD_OFFSET_X on a
+      // widened (desktop) canvas — so pointer.x (screen space) is offset from
+      // the slider's HUD-space x.  Translate back into HUD space, else the fill
+      // lands HUD_OFFSET_X px from where you clicked.  No-op on mobile (scroll 0).
+      const wx = px + (this._uiCam?.scrollX ?? 0);
+      const t = Math.max(0, Math.min(1, (wx - sliderL) / sliderW));
       if (this.audio) {
         this.audio.volume = t;
         // Dragging the pause-menu slider counts as a user-initiated
@@ -1895,6 +1919,12 @@ export class GameScene extends Phaser.Scene {
       this._restStopClockMin = (typeof lr.snap.restStopClockMin === 'number')
         ? lr.snap.restStopClockMin : 0;
       this._applyResumeSnapshot(lr.snap);
+      // Music on LOAD: play the NEXT song in order of the player's default
+      // genre (owner 2026-07-23).  Stashed as an intent because audio can't
+      // start until the browser's autoplay gate opens — _kickRadio consumes it.
+      this._pendingResumeMusic = (lr.snap.music && typeof lr.snap.music.culture === 'string')
+        ? { culture: lr.snap.music.culture, trackIdx: Math.max(0, Math.round(Number(lr.snap.music.trackIdx)) || 0) }
+        : null;
       const tNow = this.player.position / segWorld;
       this._passedRestStops   = new Set(REST_STOPS.filter(r => r.t <= tNow).map(r => r.id));
       this._passedCheckpoints = new Set(CHECKPOINTS.filter(c => c.t <= tNow).map(c => c.name));
@@ -2399,6 +2429,13 @@ export class GameScene extends Phaser.Scene {
     // Auto-resume modal — the run is restored; show "sorry, we lost you…"
     // and hold the frozen world until the player taps OK.
     if (this._awaitingResumeOk) this._showLostYouPopup();
+
+    // Fresh-run kickoff (title "NEW RUN"): the scene was rebuilt clean by
+    // scene.start('Game', { skipTitle:true, freshStart:true }), so everything
+    // is at fresh-start defaults (position 0, DamageModel at this vehicle's
+    // real max, wallet re-read).  Start gameplay now so the player drops
+    // straight in instead of landing back on the title.
+    if (this._freshStart) this._startGameplay();
   }
 
   /** Center the decoupled world + fixed-800 HUD in the (possibly widened)
@@ -4934,6 +4971,20 @@ export class GameScene extends Phaser.Scene {
         }
       } else if ((this._accelCharge ?? 100) < 100) {
         this._accelCharge = Math.min(100, (this._accelCharge ?? 0) + ACCEL_REFILL_PER_SEC * rawDt);
+      }
+    }
+
+    // ── Keyboard pedal-glow sync ──────────────────────────────────────
+    // Holding ↑/W or ↓/S drives the throttle/brake through _isBoost/_isBrake
+    // but doesn't touch _touchBoost/_touchBrake, so the pedal art never lit up
+    // on desktop.  Edge-triggered (only on a state change) so the gold throb
+    // tween isn't torn down + rebuilt every frame while a key is held.
+    {
+      const boostOn = this._isBoost(), brakeOn = this._isBrake();
+      if (boostOn !== this._pedalGlowBoost || brakeOn !== this._pedalGlowBrake) {
+        this._pedalGlowBoost = boostOn;
+        this._pedalGlowBrake = brakeOn;
+        this._refreshPedals?.();
       }
     }
 
@@ -15884,7 +15935,8 @@ export class GameScene extends Phaser.Scene {
       }
     };
     const refreshGas = () => {
-      const on = this._touchBoost;
+      // Effective throttle — touch toggle OR a held ↑ / W key (desktop).
+      const on = this._isBoost();
       this._gasArt?.setAlpha(on ? 1 : 0.86);
       this._gasLbl?.setColor?.('#F4F7FF');
       this._gasLbl?.setStroke?.(on ? '#0B3D63' : '#39A8FF', 2);
@@ -15899,7 +15951,8 @@ export class GameScene extends Phaser.Scene {
         drawPedalGlow(this._brakeGlow, this._brakeArt, '_brakeGlowTween', false);
         return;
       }
-      const on = this._touchBrake;
+      // Effective brake — touch toggle OR a held ↓ / S key (desktop).
+      const on = this._isBrake();
       this._brakeArt?.setAlpha(on ? 1 : 0.86);
       this._brakeLbl?.setColor?.('#F4F7FF');
       this._brakeLbl?.setStroke?.(on ? '#7A124E' : '#FF39AF', 2);
@@ -16389,7 +16442,7 @@ export class GameScene extends Phaser.Scene {
         this._buildSavePrompt(
           localSave,
           () => { this._applyResumeMode(localSave); this._resumeFromLiveSnapshot(localSave.snap); },
-          () => this._startGameplay(),
+          () => this._startFreshFromPrompt(),
           () => {},   // Cancel — stay on the title
         );
         return;
@@ -19238,6 +19291,10 @@ export class GameScene extends Phaser.Scene {
       // 'tap' profile bucket, so inferring the scheme from the bucket wrongly
       // forced TAP on resume — carry the real pick here instead.
       steering: this.registry?.get?.('titleThumbsPick') ?? this.registry?.get?.('steeringMode') ?? null,
+      // What was on the radio — { culture, trackIdx, time }.  On LOAD we play
+      // the NEXT song in order of that genre (owner 2026-07-23), so only the
+      // genre + index actually matter here.
+      music: this.audio?.getPlaybackState?.() ?? null,
       stars: Math.max(0, Math.min(5, Math.round(this.cops?.starDisplay ?? this.cops?.stars ?? 0))),
       hp:    Math.max(0, Math.round(dur)),
       hpMax: Math.max(1, hpMax),
@@ -20403,6 +20460,26 @@ export class GameScene extends Phaser.Scene {
   /** The freshest LOCAL save for the active slot — durable phone-menu Save
    *  point first, then the rolling autosave.  Returns {snap, ts, mode} or null.
    *  Synchronous + instant (used to decide the START prompt without blocking). */
+  /** Title "SAVED GAME FOUND → NEW RUN" — abandon the saved run and drop
+   *  straight into a clean one.  Rebuilding the scene (not just calling
+   *  _startGameplay) is what actually resets everything: the old code reused
+   *  the live scene instance, so a previous run's state (notably a Custom
+   *  sandbox's maxed HP / upgrades → the impossible "100/25") leaked into the
+   *  "new" run.  Banked money + purchased upgrades still carry (create()
+   *  re-reads them), matching pause-menu "Start Over". */
+  _startFreshFromPrompt() {
+    const save = this.registry.get('save');
+    // Drop the mid-drive autosave + last checkpoint so the rebuilt scene can't
+    // auto-resume the run we're abandoning.
+    save?.set?.('liveRun', null);
+    save?.set?.('lastRestStop', null);
+    this._resumeLive         = null;
+    this._resumeFromStop     = null;
+    this._resumeFromPosition = null;
+    this._titleResumeSnap    = null;
+    this.scene.start('Game', { skipTitle: true, freshStart: true });
+  }
+
   _getLocalSave() {
     const save = this.registry.get('save');
     const latest = save?.latestLiveRun?.('manualSave') ?? save?.latestLiveRun?.();
@@ -20931,16 +21008,36 @@ export class GameScene extends Phaser.Scene {
   _kickRadio() {
     const a = this.audio;
     if (!a) return;
+    // DEFAULT GENRE = the Music app's starred station (owner 2026-07-22: a
+    // station IS a genre).  settings.radio is a station index; any in-range
+    // integer is a real choice (index 0 = HIP-HOP counts — no `> 0` gate).
+    // If no default is starred, fall back to the genre the save was made in.
+    const _defSt = this.registry?.get?.('save')?.get?.('settings.radio', null);
+    const pend   = this._pendingResumeMusic ?? null;
+    let station  = (Number.isInteger(_defSt) && _defSt >= 0) ? _defSt : -1;
+    if (station < 0 && pend?.culture) station = a.stationIndexForCulture?.(pend.culture) ?? -1;
+
     if (!a.ready) {
-      // First start of the session — honor the Music app's saved DEFAULT
-      // genre (owner 2026-07-22: resumed runs inited the radio here with a
-      // RANDOM station, so "default Reggaeton" booted playing classic rock).
-      // settings.radio is a station index; any in-range integer is a real
-      // choice (index 0 = HIP-HOP counts too — no `> 0` gate).
-      const _defSt = this.registry?.get?.('save')?.get?.('settings.radio', null);
-      if (Number.isInteger(_defSt) && _defSt >= 0) a.setStation?.(_defSt);
+      if (station >= 0) a.setStation?.(station);
       a.init();             // first ever → inits + starts the chosen station
+      // Plain app/browser REOPEN (title up, not loading a save): pick the music
+      // back up exactly where it left off (owner 2026-07-23).
+      if (this._awaitingStart && !pend) a.restorePersistedPlayback?.();
     } else if (a._ctx?.state !== 'running') { a._enablePlayback?.(); a.play?.(); }  // resume after an autoplay block
+
+    // Resuming a SAVE → default genre, one song PAST the saved one.  A genre
+    // switch (saved in a different genre than the current default) just starts
+    // the default genre fresh, since "next in order" wouldn't mean anything.
+    if (pend) {
+      this._pendingResumeMusic = null;
+      const st = (station >= 0) ? station : a.currentStation;
+      a._enablePlayback?.();
+      if ((a.stationIndexForCulture?.(pend.culture) ?? -1) === st) {
+        a.playStationTrack?.(st, (pend.trackIdx ?? 0) + 1);   // wraps past the end
+      } else if (station >= 0) {
+        a.setStation?.(station);
+      }
+    }
   }
 
   _startGameplay() {

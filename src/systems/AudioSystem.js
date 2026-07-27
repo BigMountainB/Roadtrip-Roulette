@@ -678,6 +678,10 @@ export class AudioSystem {
         this._watchStall = 0;
       }
       this._watchLastTime = t;
+      // Piggyback the music-position save here (already a 1 s tick while a real
+      // track is playing) so a plain app reopen resumes within ~1 s of where it
+      // left off.  See _persistPlaybackState / restorePersistedPlayback.
+      this._persistPlaybackState();
     }, 1000);
   }
 
@@ -867,6 +871,22 @@ export class AudioSystem {
         // as the element is created, so by the time play() runs the
         // first samples are already buffered.
         el.preload = 'auto';
+        // Resume-at-position (app/browser reopen): apply a one-shot seek once
+        // the metadata — and therefore duration — is known.  Set by
+        // playStationTrack(…, seekSec); cleared here so it can't leak into the
+        // next song.
+        if (this._pendingSeekSec > 0) {
+          const _seekTo = this._pendingSeekSec;
+          this._pendingSeekSec = 0;
+          const _applySeek = () => {
+            try {
+              const d = el.duration;
+              el.currentTime = (isFinite(d) && d > 0) ? Math.max(0, Math.min(_seekTo, d - 0.5)) : _seekTo;
+            } catch (_) {}
+          };
+          if (isFinite(el.duration) && el.duration > 0) _applySeek();
+          else el.addEventListener('loadedmetadata', _applySeek, { once: true });
+        }
         // Route through the master gain so volume/mute/pause apply.
         const src = this._ctx.createMediaElementSource(el);
         src.connect(this._master);
@@ -942,6 +962,85 @@ export class AudioSystem {
     if (!el || !isFinite(el.duration) || el.duration <= 0) return false;
     try { el.currentTime = Math.max(0, Math.min(1, frac)) * el.duration; return true; }
     catch (_) { return false; }
+  }
+
+  // ── Music position: save / restore (owner 2026-07-23) ──────────────────
+  // A STATION *is* a genre (each carries a `culture` id), so these are the
+  // genre-aware hooks the save + boot paths use.
+
+  /** Station index whose `culture` id matches, or -1 — the genre→station lookup. */
+  stationIndexForCulture(culture) {
+    if (!culture) return -1;
+    return STATIONS.findIndex(s => s.culture === culture);
+  }
+
+  /** Where the music is right now, for saving: which genre, which track, how
+   *  far in.  null when nothing real is playing (procedural station/silence). */
+  getPlaybackState() {
+    const st = STATIONS[this.currentStation];
+    if (!st?.tracks?.length) return null;
+    const el = this._trackEl;
+    return {
+      culture:  st.culture ?? null,
+      trackIdx: Math.max(0, this._trackIdx ?? 0),
+      time:     (el && isFinite(el.currentTime)) ? (el.currentTime || 0) : 0,
+    };
+  }
+
+  /** Play an EXACT track of an exact station, optionally seeking into it.
+   *  Used by the LOAD path (next-song-in-order) and the app-reopen restore
+   *  (exact position).  trackIdx wraps, so idx+1 past the end is safe. */
+  playStationTrack(stationIdx, trackIdx, seekSec = 0) {
+    if (!(stationIdx >= 0 && stationIdx < STATIONS.length)) return false;
+    const st = STATIONS[stationIdx];
+    if (!st?.tracks?.length) return false;
+    const n   = st.tracks.length;
+    const idx = ((Math.round(Number(trackIdx) || 0) % n) + n) % n;
+    this._playlistQueue  = null;    // an explicit station track cancels a custom playlist
+    this._playlistIdx    = 0;
+    this.currentStation  = stationIdx;
+    this._currentStep    = 0;
+    this._songBarsTotal  = 0;
+    this._songPhase      = 'play';
+    this._trackIdx       = idx;
+    this._genrePlayed    = new Set([idx]);
+    this._pendingSeekSec = Math.max(0, Number(seekSec) || 0);
+    this._startTrack(st.tracks[idx]);
+    return true;
+  }
+
+  /** Persist {culture, trackIdx, time} so a plain app/browser reopen resumes
+   *  exactly where the music left off.  Called ~1×/s from the skip watchdog. */
+  _persistPlaybackState() {
+    try {
+      const s = this.getPlaybackState();
+      if (!s || !s.culture) return;
+      window.localStorage?.setItem?.('rtr.music.state', JSON.stringify(s));
+    } catch (_) {}
+  }
+
+  /** Read back the persisted music position, or null. */
+  static readPersistedPlayback() {
+    try {
+      const raw = window.localStorage?.getItem?.('rtr.music.state');
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || typeof s.culture !== 'string') return null;
+      return {
+        culture:  s.culture,
+        trackIdx: Math.max(0, Math.round(Number(s.trackIdx) || 0)),
+        time:     Math.max(0, Number(s.time) || 0),
+      };
+    } catch (_) { return null; }
+  }
+
+  /** Restore the persisted position (app reopen).  True if it was applied. */
+  restorePersistedPlayback() {
+    const s = AudioSystem.readPersistedPlayback();
+    if (!s) return false;
+    const idx = this.stationIndexForCulture(s.culture);
+    if (idx < 0) return false;
+    return this.playStationTrack(idx, s.trackIdx, s.time);
   }
 
   _onTrackEnded() {

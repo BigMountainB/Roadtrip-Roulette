@@ -45,6 +45,9 @@ const GLOBAL_KEYS = new Set([
   'lastRestStop', 'restStopSaves', 'liveRun', 'manualSave', 'accessories',
   'upgrades', 'tempUpgrades', 'controlsLayout', 'controlsLayoutVer',
   'survivalState', 'activeBuffs',
+  // Genre identity is per-PLATE (one culture pick + the genre cars bought at
+  // dealerships), not per steering mode.
+  'genre', 'genresOwned',
 ]);
 
 // Custom-mode SANDBOX: these first-segments hold RUN PROGRESS.  While the
@@ -57,6 +60,10 @@ const SANDBOX_KEYS = new Set([
   'money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
   'lastRestStop', 'restStopSaves', 'liveRun', 'manualSave', 'accessories',
   'upgrades', 'tempUpgrades', 'survivalState', 'activeBuffs', 'radarDetector',
+  // Genre cars: a $25k dealership buy (or a genre swap) inside a Custom run
+  // must not persist.  setSandbox SEEDS these two from the real plate so the
+  // player still drives their own car in Custom.
+  'genre', 'genresOwned',
 ]);
 
 // Storage-key names for each profile bucket.  Kept as-is for backward
@@ -195,6 +202,10 @@ const DEFAULT_GLOBAL = {
   controlsLayoutVer: 1,
   survivalState:   null,
   activeBuffs:     [],
+  // Genre identity — the ACTIVE culture skin/traits + every culture whose
+  // $25k genre car this plate owns (the tutorial pick seeds the first one).
+  genre:           null,
+  genresOwned:     [],
 };
 
 // A single player profile slot — its license-plate handle plus a complete,
@@ -328,11 +339,21 @@ function liftProgressionToGlobal(slot) {
   }
   g.controlsLayoutVer = Math.max(finiteNum(g.controlsLayoutVer, 1, 1), ...profs.map(p => finiteNum(p.controlsLayoutVer, 1, 1)), 1);
 
+  // Genre — the per-plate culture pick used to live per-mode; lift the first
+  // one found.  Owned genre cars: keep any migrated list, and always make sure
+  // the ACTIVE genre is owned (the tutorial pick is the free starter car).
+  if (typeof g.genre !== 'string' || !g.genre) {
+    g.genre = profs.map(p => p.genre).find(v => typeof v === 'string' && v) ?? null;
+  }
+  if (!Array.isArray(g.genresOwned)) g.genresOwned = [];
+  if (g.genre && !g.genresOwned.includes(g.genre)) g.genresOwned.push(g.genre);
+
   // Clear the moved keys from the now-vestigial per-mode profiles so the save
   // isn't carrying stale duplicates.
   const MOVED = ['money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
     'lastRestStop', 'restStopSaves', 'liveRun', 'manualSave', 'accessories',
-    'upgrades', 'tempUpgrades', 'controlsLayout', 'controlsLayoutVer', 'survivalState', 'activeBuffs'];
+    'upgrades', 'tempUpgrades', 'controlsLayout', 'controlsLayoutVer', 'survivalState', 'activeBuffs',
+    'genre'];
   for (const m of VALID_MODES) {
     if (isObj(slot.profiles?.[m])) for (const k of MOVED) delete slot.profiles[m][k];
   }
@@ -594,6 +615,11 @@ export class SaveSystem {
     g.survivalState     = cleanJson(src.survivalState, null);
     g.activeBuffs       = Array.isArray(src.activeBuffs)
       ? src.activeBuffs.filter(v => typeof v === 'string').slice(0, 40) : [];
+    // Genre identity — active culture + owned genre cars (dealership buys).
+    if (typeof src.genre === 'string' && src.genre) g.genre = src.genre;
+    g.genresOwned = Array.isArray(src.genresOwned)
+      ? [...new Set(src.genresOwned.filter(v => typeof v === 'string' && v.trim()))].slice(0, 20)
+      : [];
     return g;
   }
 
@@ -875,6 +901,13 @@ export class SaveSystem {
     if ((this._sandbox ?? false) === on) return;
     this._sandbox      = on;
     this._sandboxStore = on ? {} : null;
+    if (on) {
+      // Seed the genre identity from the real plate — a Custom run starts in
+      // YOUR car with YOUR owned genres; buys/swaps then stay run-local.
+      const g = this._slot.global;
+      this._sandboxStore.genre       = g.genre ?? null;
+      this._sandboxStore.genresOwned = Array.isArray(g.genresOwned) ? [...g.genresOwned] : [];
+    }
   }
 
   get(path, fallback = undefined) {

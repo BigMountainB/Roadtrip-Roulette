@@ -491,11 +491,11 @@ const _REST_STOP_DEF = [
   // real WSDOT exit numbers ("Exit 4", "Exit 7B", etc.) since those
   // ARE numeric and don't echo the I-90 shield.
   { id: 'Y',  name: 'Royal City, WA',      mileage:  158, exit: 'Exit 158',   hwy: 'hwy_wa26',  amenities: ['gas', 'hunting', 'vices'] },
-  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['gas', 'suck', 'vices', 'ambm'] },
+  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['gas', 'lord', 'suck', 'vices', 'ambm'] },
   { id: 'H',  name: 'Hatton, WA',          mileage:  205, exit: 'Exit 205',   hwy: 'hwy_wa26',  amenities: ['gas', 'ambm'] },
   { id: 'W',  name: 'Washtucna, WA',       mileage:  228, exit: 'Exit 228',   hwy: 'hwy_wa26',  amenities: ['gas', 'camp', 'ambm'] },
   { id: 'L',  name: 'La Crosse, WA',       mileage:  253, exit: 'Exit 253',   hwy: 'hwy_us195', amenities: ['gas', 'hunting'] },
-  { id: 'CO', name: 'Colfax, WA',          mileage:  274, exit: 'Exit 274',   hwy: 'hwy_us195', amenities: ['gas', 'suck', 'parkride', 'vices'] },
+  { id: 'CO', name: 'Colfax, WA',          mileage:  274, exit: 'Exit 274',   hwy: 'hwy_us195', amenities: ['gas', 'lord', 'suck', 'parkride', 'vices'] },
   { id: 'P',  name: 'Pullman, WA',         mileage:  289, exit: 'Exit 289',   hwy: 'hwy_wa270', amenities: ['cargo', 'lord', 'parkride', 'vices', 'ambm'] },
 ];
 export const REST_STOPS = _REST_STOP_DEF.map(rs => ({
