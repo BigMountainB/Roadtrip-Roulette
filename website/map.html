@@ -5,12 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Route Map — Road Trip Roulette</title>
 <meta name="description" content="Every stop on the 293-mile Seattle→Pullman route, with the real Washington facts behind them.">
-<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/site.css?v=13">
+
+<!-- Link preview (iMessage / Slack / Twitter / Facebook).  Must be real markup:
+     preview crawlers don't run the JS that injects the nav, so these can't be
+     generated at runtime. Absolute URLs are required by the spec. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Road Trip Roulette">
+<meta property="og:url" content="https://roadtrip-roulette.pages.dev/map">
+<meta property="og:title" content="Route Map — Road Trip Roulette">
+<meta property="og:description" content="Every stop on the 293-mile Seattle→Pullman route, with the real Washington facts behind them.">
+<meta property="og:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Road Trip Roulette — neon logo over a rain-slicked I-90 heading east out of Seattle at night">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Route Map — Road Trip Roulette">
+<meta name="twitter:description" content="Every stop on the 293-mile Seattle→Pullman route, with the real Washington facts behind them.">
+<meta name="twitter:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
 </head>
 <body>
 
 <section class="section">
-  <div class="wrap" style="max-width:820px">
+  <div class="wrap" style="max-width:1010px">
     <h1>The Route</h1>
     <p class="lead">293 real miles: I-90 over the Cascades, WA-26 through the
     scablands, US-195 into the Palouse. 19 rest stops, 4 blink-and-miss-it towns.
@@ -23,22 +40,56 @@
 </section>
 
 <script type="module">
-import { ROUTE } from './js/data.js';
+import { ROUTE, BIZ } from './js/data.js';
 
 const el = document.getElementById('route');
-el.innerHTML = ROUTE.map((s, i) => `
+el.innerHTML = ROUTE.map((s, i) => {
+  const logos = (s.biz || []).map(k => BIZ[k]).filter(Boolean).map(b =>
+    `<img src="assets/businesses/${b.img}" alt="${b.name}" title="${b.name}">`).join('');
+  const body = (s.facts.length || logos)
+    ? `<div class="stop-body">
+        ${logos ? `<div class="stop-biz">${logos}</div>` : ''}
+        <div class="stop-facts">${s.facts.map(f => `<p>${f}</p>`).join('')}</div>
+      </div>`
+    : '';
+  return `
   <div class="stop${s.stop ? '' : ' pass'}" data-i="${i}">
     <div class="stop-head">
       <span class="mi">MI ${String(s.mi).padStart(3, '0')}</span>
       <span class="nm">${s.name}, WA</span>
       <span class="badge">${s.stop ? 'REST STOP' : 'PASS-THROUGH'}</span>
     </div>
-    ${s.facts.length ? `<div class="stop-facts">${s.facts.map(f => `<p>${f}</p>`).join('')}</div>` : ''}
-  </div>`).join('');
+    ${body}
+  </div>`;
+}).join('');
 
+// For stops near the end of the route, a tall logo stack would run past
+// Pullman's last fact line (and over the footer). If it would, pull it up
+// so the stack grows BOTTOM-UP, its base pinned to the route's bottom.
+function placeBiz(stop) {
+  const biz = stop.querySelector('.stop-biz');
+  if (!biz || !matchMedia('(min-width: 700px)').matches) { if (biz) biz.style.top = ''; return; }
+  biz.style.top = '0px';
+  const overflow = (stop.getBoundingClientRect().top + biz.offsetHeight)
+                 - el.getBoundingClientRect().bottom;
+  if (overflow > 0) biz.style.top = `${-overflow}px`;
+}
+
+// Accordion: opening a stop closes whichever was open before.
+// Clicks on the business logos themselves don't toggle the stop.
 el.querySelectorAll('.stop').forEach(d =>
-  d.addEventListener('click', () => d.classList.toggle('open')));
+  d.addEventListener('click', (e) => {
+    if (e.target.closest('.stop-biz')) return;
+    const wasOpen = d.classList.contains('open');
+    el.querySelectorAll('.stop.open').forEach(o => o.classList.remove('open'));
+    if (!wasOpen) { d.classList.add('open'); placeBiz(d); }
+  }));
+
+// Re-pin after logo images finish loading (heights settle) or on resize.
+el.querySelectorAll('.stop-biz img').forEach(img =>
+  img.addEventListener('load', () => { const o = el.querySelector('.stop.open'); if (o) placeBiz(o); }));
+addEventListener('resize', () => { const o = el.querySelector('.stop.open'); if (o) placeBiz(o); });
 </script>
-<script type="module" src="js/site.js"></script>
+<script type="module" src="js/site.js?v=6"></script>
 </body>
 </html>

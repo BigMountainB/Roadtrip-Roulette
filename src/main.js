@@ -3,7 +3,11 @@ import { BootScene }    from './scenes/BootScene.js';
 import { GameScene }    from './scenes/GameScene.js';
 import { RestStopScene } from './scenes/RestStopScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
-import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, REST_STOPS, setWorldWidth } from './constants.js';
+import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, REST_STOPS, setWorldWidth, DEMO_MODE, DEMO_GENRES } from './constants.js';
+// Expose demo flags for index.html's inline music/genre UI (the genre grid
+// locks non-demo genres when __DEMO is set).  Set at module load so the inline
+// scripts — which run after the module — can read them.
+try { window.__DEMO = DEMO_MODE; window.__DEMO_GENRES = DEMO_GENRES; } catch (_) {}
 import { Weather } from './world/Weather.js';
 import { GENRE_VEHICLE_TRAITS } from './data/genreVehicleTraits.js';
 import { AchievementSystem } from './systems/AchievementSystem.js';
@@ -138,12 +142,27 @@ const _boot = () => {
     const k = _gameKb();
     if (k) {
       k.enabled = true;
-      try { if (_savedKeyCaptures && _savedKeyCaptures.length) k.addCaptures?.(_savedKeyCaptures); } catch (_) {}
+      // Phaser 3's API is addCapture (SINGULAR — it accepts an array).  This
+      // used to call addCaptures?.(), which doesn't exist, so the optional
+      // call silently no-oped and every key capture was permanently lost
+      // after the first text-field focus.  Without captures the browser
+      // default fires alongside the game: arrows/space scroll the page and
+      // the pedals feel dead on any window with scrollbars.
+      try { if (_savedKeyCaptures && _savedKeyCaptures.length) k.addCapture?.(_savedKeyCaptures); } catch (_) {}
     }
     _savedKeyCaptures = null;
   };
   document.addEventListener('focusin',  (e) => { if (_isTextField(e.target)) _suspendGameKeys(); });
   document.addEventListener('focusout', (e) => { if (_isTextField(e.target)) _resumeGameKeys(); });
+  // Watchdog — the phone menu re-renders via innerHTML, and when a focused
+  // input's ANCESTOR is wiped that way Chrome fires no focusout, leaving the
+  // game keyboard suspended forever (every key dead, not just pedals).  Any
+  // keypress that arrives while suspended with no text field focused means
+  // the blur was missed: heal on the spot.  Capture phase so it runs even
+  // though Phaser stops propagation later.
+  document.addEventListener('keydown', () => {
+    if (_savedKeyCaptures !== null && !_isTextField(document.activeElement)) _resumeGameKeys();
+  }, true);
 
   // Register the AudioSystem on the registry IMMEDIATELY so the
   // iPhone-menu music app can read stations without waiting for
@@ -356,9 +375,16 @@ const _boot = () => {
     return { ok: true, plate };
   };
   window.__plate = {
-    get:        () => game.registry.get('save')?.activePlate ?? '',
+    // Demo build: every player is "Guest" (a non-unique, un-nameable handle) —
+    // no plate-entry modal, no server uniqueness.  Multiple demo players all
+    // share "Guest" since demo runs never touch the leaderboard.
+    get:        () => {
+      const p = (game.registry.get('save')?.activePlate ?? '').trim();
+      return p || (DEMO_MODE ? 'Guest' : '');
+    },
     playerId:   () => game.registry.get('save')?.activePlayerId ?? '',
-    needsEntry: () => !((game.registry.get('save')?.activePlate ?? '').trim()),
+    needsEntry: () => DEMO_MODE ? false
+                    : !((game.registry.get('save')?.activePlate ?? '').trim()),
     // Validate WITHOUT committing — the modal calls this to show inline errors.
     validate:   (v) => _validatePlate(v),
     set: (v) => {

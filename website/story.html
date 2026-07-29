@@ -5,7 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Story — Road Trip Roulette</title>
 <meta name="description" content="You're a broke touring musician. Pullman is the big break. 293 miles is all that's in the way.">
-<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/site.css?v=13">
+
+<!-- Link preview (iMessage / Slack / Twitter / Facebook).  Must be real markup:
+     preview crawlers don't run the JS that injects the nav, so these can't be
+     generated at runtime. Absolute URLs are required by the spec. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Road Trip Roulette">
+<meta property="og:url" content="https://roadtrip-roulette.pages.dev/story">
+<meta property="og:title" content="The Story — Road Trip Roulette">
+<meta property="og:description" content="You're a broke touring musician. Pullman is the big break. 293 miles is all that's in the way.">
+<meta property="og:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Road Trip Roulette — neon logo over a rain-slicked I-90 heading east out of Seattle at night">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Story — Road Trip Roulette">
+<meta name="twitter:description" content="You're a broke touring musician. Pullman is the big break. 293 miles is all that's in the way.">
+<meta name="twitter:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
 </head>
 <body>
 
@@ -87,8 +104,8 @@
     <p style="font-family:var(--mono); color:var(--accent); font-size:15px;">
     Every run is another Friday. Spin it again.</p>
     <div style="margin-top:30px; display:flex; gap:12px; flex-wrap:wrap;">
-      <a class="btn btn-primary" href="demo.html">Start Driving — Free Demo</a>
-      <a class="btn btn-ghost" href="genres.html">Choose Your Scene</a>
+      <a class="btn btn-invert" href="genres.html">Choose Your Vibe</a>
+      <a class="btn btn-primary" href="demo.html">Play Demo</a>
     </div>
   </div>
 </section>
@@ -97,10 +114,30 @@
 // Scroll driver. Pan progress runs over the PINNED window only:
 //   p = 0  while the scene approaches (image left border ON the left edge)
 //   p = 1  when the sticky frame releases (image right border on the right edge)
-// Caption i (0/1/2) peaks at p = (i + 0.5) / 3 and fades to 0 at its
-// third's boundaries, so captions crossfade as their third of the art
-// crosses the screen.
+// Caption i (0/1/2) owns the third of the pan centred on p = (i + 0.5) / 3
+// and fades to 0 at that third's boundaries, so captions hand over as their
+// third of the art crosses the screen.
+//
+// Within its third the opacity curve is a PLATEAU, not a peak: full opacity
+// across the middle ~70%, with a short fade at each end.  It used to be a
+// triangle (opacity = 1 - 2·distance), which hit 1.0 only at the exact centre
+// and spent the whole third ramping — so text read as appearing late and
+// vanishing early.  The captions are absolutely positioned on top of each
+// other, so the fades must stay inside the third: any overlap would render two
+// captions superimposed.
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Share of a caption's slice spent fading, per side (0.5 = the old triangle).
+// Lower = snappier fades and a longer readable hold.
+const CAP_FADE = 0.15;
+
+// Extra pan-units of reading time granted to the FIRST and LAST captions, which
+// have no neighbour on that side.  In pan units, where 1.0 = the whole pinned
+// scroll of a scene, so 0.15 ≈ 21vh of extra scrolling each: the opening line
+// is already up while the frame is still settling, and the closing line holds
+// until the frame has begun to leave.
+const CAP_LEAD = 0.15;
+const CAP_TAIL = 0.15;
 
 const scenes = [...document.querySelectorAll('.scene')].map(scene => {
   const frame = scene.querySelector('.scene-frame');
@@ -131,10 +168,24 @@ function paint() {
   for (const s of scenes) {
     const r = s.scene.getBoundingClientRect();
     if (r.bottom < 0 || r.top > vh) continue;                // off-screen
-    const p = Math.min(1, Math.max(0, -r.top / (r.height - vh)));
+    // raw runs PAST both ends of the pinned window: negative while the scene is
+    // still sliding up into place, above 1 once the frame has released.  The
+    // pan itself stays clamped — only the captions use the overshoot.
+    const raw = -r.top / (r.height - vh);
+    const p = Math.min(1, Math.max(0, raw));
     s.img.style.transform = `translateX(${(-s.span * p).toFixed(1)}px)`;
+    const n = s.caps.length;
     s.caps.forEach((c, i) => {
-      c.style.opacity = Math.min(1, Math.max(0, 1 - Math.abs(p * 3 - (i + 0.5)) * 2)).toFixed(2);
+      // Each caption owns a slice of the pan.  The FIRST slice reaches back
+      // before the pan begins and the LAST runs on past its end, which buys
+      // reading time at no cost — there's no neighbouring caption out there to
+      // collide with.  Inner edges stay flush against their neighbours, since
+      // the captions are stacked and any overlap would double-expose them.
+      const a = (i === 0)     ? -CAP_LEAD    : i / n;
+      const b = (i === n - 1) ? 1 + CAP_TAIL : (i + 1) / n;
+      const t = (raw - a) / (b - a);            // 0→1 across this caption's slice
+      const d = Math.abs(t - 0.5);              // 0 at its centre, 0.5 at its edges
+      c.style.opacity = Math.min(1, Math.max(0, (0.5 - d) / CAP_FADE)).toFixed(2);
     });
   }
 }
@@ -149,6 +200,6 @@ for (const s of scenes) {
 measure();
 paint();
 </script>
-<script type="module" src="js/site.js"></script>
+<script type="module" src="js/site.js?v=6"></script>
 </body>
 </html>

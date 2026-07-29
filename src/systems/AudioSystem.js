@@ -902,11 +902,17 @@ export class AudioSystem {
         // resume after a short beat so the interruption doesn't kill
         // the song.
         el.addEventListener('pause', () => {
-          if (this.paused || this.muted) return;     // intentional
+          // _musicPaused MUST be in this guard: the Music-app pause button
+          // also pauses this element, and without the check this listener
+          // treated it as an iOS interruption and silently play()'d the
+          // track again 120 ms later — under the zeroed master gain.  Net
+          // effect: "pause" muted the sound while the song kept advancing,
+          // and un-pausing resumed somewhere further along.
+          if (this.paused || this.muted || this._musicPaused) return;   // intentional
           if (el.ended) return;
           if (el !== this._trackEl) return;          // superseded
           setTimeout(() => {
-            if (this.paused || this.muted) return;
+            if (this.paused || this.muted || this._musicPaused) return;
             if (el !== this._trackEl || el.ended) return;
             el.play().catch(() => {});
           }, 120);

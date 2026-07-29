@@ -3,27 +3,55 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Road Trip Roulette — 293 miles. One night. Don't miss the show.</title>
+<title>Road Trip Roulette — 293 Miles. One Goal.</title>
 <meta name="description" content="A roguelite driving game: 293 real Washington miles from Seattle to Pullman, ten genre-bent cars and soundtracks, cops, snow, and one gig that could change everything.">
-<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/site.css?v=13">
+
+<!-- Link preview (iMessage / Slack / Twitter / Facebook).  Must be real markup:
+     preview crawlers don't run the JS that injects the nav, so these can't be
+     generated at runtime. Absolute URLs are required by the spec. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Road Trip Roulette">
+<meta property="og:url" content="https://roadtrip-roulette.pages.dev/">
+<meta property="og:title" content="Road Trip Roulette — 293 Miles. One Goal.">
+<meta property="og:description" content="A roguelite driving game: 293 real Washington miles from Seattle to Pullman, ten genre-bent cars and soundtracks, cops, snow, and one gig that could change everything.">
+<meta property="og:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Road Trip Roulette — neon logo over a rain-slicked I-90 heading east out of Seattle at night">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Road Trip Roulette — 293 Miles. One Goal.">
+<meta name="twitter:description" content="A roguelite driving game: 293 real Washington miles from Seattle to Pullman, ten genre-bent cars and soundtracks, cops, snow, and one gig that could change everything.">
+<meta name="twitter:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
 </head>
 <body>
 
 <header class="hero">
+  <!-- Full-bleed key art.  A real <img> rather than a CSS background so it
+       keeps its alt text and can be prioritised as the LCP element.
+       This is a WEB-ONLY derivative of the game's loading screen with the baked
+       "LOADING…" line and its neon rule painted out — that word is correct in
+       the game and wrong on a marketing page, and relying on the copy panel to
+       cover it was fragile (the panel's top edge had to land in a ~27px gap
+       between the logo's descenders and the text, which broke on tall windows).
+       Lives in assets/hero/, NOT assets/ui/, because sync-assets.sh overwrites
+       assets/ui/ from the game's public/assets and that folder is gitignored. -->
+  <img class="hero-bg" src="assets/hero/key_art.png" fetchpriority="high"
+       alt="Road Trip Roulette — a beater sedan on a rain-slicked I-90 heading east out of Seattle at night">
   <div class="hero-inner">
-    <div>
-      <div class="tag">A roguelite road trip · Seattle → Pullman</div>
-      <h1>293 miles.<br>One night.<br>Don't miss the show.</h1>
-      <p class="lead">You're a broke musician with a beater full of gear and a gig in
-      Pullman that could change everything. Ten genres, ten cars, ten soundtracks —
-      and every real mile of Washington highway trying to stop you.</p>
-      <div class="hero-ctas">
-        <a class="btn btn-primary" href="demo.html">Play the Free Demo</a>
-        <a class="btn btn-ghost" href="genres.html">Hear the Soundtracks</a>
+    <div class="hero-panel">
+      <div class="hero-panel-l">
+        <h1>293 Miles.<br>One Goal.</h1>
       </div>
-    </div>
-    <div class="hero-art">
-      <img src="assets/ui/title_screen.png" alt="Road Trip Roulette title screen">
+      <div class="hero-panel-r">
+        <p class="lead">You're a broke musician with an opportunity to change everything.
+        Pack your gear and hit the road with 10 soundtracks, each to keep you entertained
+        and awake. Stay hydrated and fed while the Washington roads try to eat you.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-invert" href="story.html">Learn the Legend</a>
+          <a class="btn btn-primary" href="demo.html">Play Demo</a>
+        </div>
+      </div>
     </div>
   </div>
 </header>
@@ -32,48 +60,28 @@
   <div class="wrap">
     <h2>The drive is the game</h2>
     <div class="grid grid-3">
-      <div class="card">
-        <h3>🎸 Ten genres, ten machines</h3>
-        <p>Pick your scene and it picks your car: a phonk VIP Sedan, a country Mud
-        Truck, an EDM Laser Supercar. Every genre drives, earns, and breaks
-        differently — and brings its own original soundtrack.</p>
-      </div>
-      <div class="card">
-        <h3>🗺️ A real 293-mile route</h3>
-        <p>Seattle, the Snoqualmie Pass snow, the Vantage crosswinds, the empty
-        WA-26 dark, the Palouse hills — 19 real towns to stop in and refuel,
-        repair, and take jobs.</p>
-      </div>
-      <div class="card">
+      <a class="card" href="walkthrough.html">
         <h3>🎲 Every run is a gamble</h3>
         <p>Manage fuel, hunger, bladder, alertness, engine heat, and the law.
         Take missions for cash and rep. Get busted, crash, or roll into Pullman
         a legend — then spin it again.</p>
-      </div>
+      </a>
+      <a class="card" href="genres.html">
+        <h3>🎸 Ten genres, ten machines</h3>
+        <p>Pick your scene and it picks your car: a phonk VIP Sedan, a country Mud
+        Truck, an EDM Laser Supercar. Every genre drives, earns, and breaks
+        differently — and brings its own original soundtrack.</p>
+      </a>
+      <a class="card" href="map.html">
+        <h3>🗺️ A real 293-mile route</h3>
+        <p>Seattle, the Snoqualmie Pass snow, the Vantage crosswinds, the empty
+        WA-26 dark, the Palouse hills — 19 real towns to stop in and refuel,
+        repair, and take jobs.</p>
+      </a>
     </div>
   </div>
 </section>
 
-<section class="section">
-  <div class="wrap">
-    <h2>Explore</h2>
-    <div class="grid grid-3">
-      <div class="card"><h3><a href="story.html">The Story</a></h3>
-        <p>Who you are, why you're broke, and what's waiting at the end of the road.</p></div>
-      <div class="card"><h3><a href="genres.html">Genres &amp; Garage</a></h3>
-        <p>All ten cars, their strengths and weaknesses, and 100+ original tracks to listen to right here.</p></div>
-      <div class="card"><h3><a href="walkthrough.html">Walkthrough</a></h3>
-        <p>The deep guide — survival bars, money, missions, cops, weather, upgrades.</p></div>
-      <div class="card"><h3><a href="map.html">Route Map</a></h3>
-        <p>Every stop from Seattle to Pullman, with the real Washington facts behind them.</p></div>
-      <div class="card"><h3><a href="leaderboard.html">World Leaderboard</a></h3>
-        <p>Top plates by score, miles survived, and fastest full run.</p></div>
-      <div class="card"><h3><a href="demo.html">Free Demo</a></h3>
-        <p>Drive the first leg — Seattle to North Bend — right in your browser.</p></div>
-    </div>
-  </div>
-</section>
-
-<script type="module" src="js/site.js"></script>
+<script type="module" src="js/site.js?v=6"></script>
 </body>
 </html>

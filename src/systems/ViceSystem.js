@@ -16,7 +16,6 @@
  *   ketamine  → lsd bar ever reached >= 0.5
  */
 import { VICES, VICE_CONFIG, VICE_COMBOS } from '../constants.js';
-import { Difficulty } from './Difficulty.js';
 
 // Pickup amounts — per the user's vice-design spec.  Hits-to-max varies
 // wildly by vice: 14 beers vs 2 fentanyl, etc.  Many vices also trigger
@@ -30,10 +29,27 @@ const PICKUP_AMOUNTS = {
   gummies:  0.20,    // 20% — fastest visual ramp
   hotdog:      0.25,    // 25% — fastest of all
   combo:   0.30,    // 30%
-  coldbrew:       0.18,    // 18% — one pill is a real dose (raised from 8.5% 2026-06-23)
+  coldbrew:       0.10,    // 10% — per-dose timer, see DOSE_SECONDS (was 0.18)
   coma: 0.55,    // 55% — 2 hits OD at ≥1.00
   slushie: 0.15,    // 15% — dissociative, scales with redosing (was 10%)
-  caffeine:     0.25,    // 25% — most potent + longest stimulant high (was 10%)
+  caffeine:     0.10,    // 10% — per-dose timer, see DOSE_SECONDS (was 0.25)
+};
+
+// ── Per-dose stimulant decay (owner 2026-07-27) ──────────────────────────
+// The default model is ONE shared bar draining at a flat `cfg.decayRate`, which
+// means each extra pickup extends the whole bar's lifetime — 4 caffeine pills
+// lasted 204 s TOGETHER instead of ~51 s each, so a stacked stimulant high never
+// wore off (and pinned the speed multiplier at its ceiling for minutes).
+//
+// Vices listed here are DOSE-TRACKED instead: every pickup becomes its own
+// {amt, t, dur} entry whose clock starts the instant it's collected, and the bar
+// level is the SUM of the live doses' remaining fractions. Stacking now raises
+// the bar HIGHER, never LONGER — dose #4 expires on its own schedule regardless
+// of what doses #1-3 are doing. Anything not listed keeps the shared-drain model.
+const DOSE_SECONDS = {
+  caffeine: 60,   // one pill: 10% → 0 over 60 s
+  coldbrew: 45,   // one pull: 10% → 0 over 45 s
+  energy:   30,   // one line: 10% → 0 over 30 s
 };
 
 export class ViceSystem {
@@ -57,11 +73,19 @@ export class ViceSystem {
     // doesn't have to lazy-init on first call (audit caught this).
     this._comboActivatedAt  = {};
     for (const id of Object.values(VICES)) this.pickupCounts[id] = 0;
+    // Per-dose ledgers for the DOSE_SECONDS vices: `_doses[id]` is the list of
+    // live doses, `_doseSum[id]` is the level this system last wrote.  The pair
+    // lets `_updateDoses` tell its own output apart from an EXTERNAL write to
+    // `levels[id]` (GameScene does that in ~13 places) and honour the latter.
+    this._doses   = {};
+    this._doseSum = {};
 
     for (const id of Object.values(VICES)) {
       this.levels[id]     = 0;
       this.unlocked[id]   = VICE_CONFIG[id].unlocked ?? false;
       this.maxReached[id] = 0;
+      this._doses[id]     = [];
+      this._doseSum[id]   = 0;
     }
   }
 
@@ -124,10 +148,13 @@ export class ViceSystem {
   update(dt) {
     let anyActive = false;
     const energyLevel = this.levels[VICES.ENERGY] ?? 0;
-    // Custom mode — vice levels are user-set sandbox values, so they
-    // hold steady (no decay).  Still tally maxReached + anyActive so
-    // bar rendering and combo detection work normally.
-    const noDecay = Difficulty.noScore?.() === true;
+    // Custom mode used to FREEZE every bar here (levels were treated as fixed
+    // user-set sandbox values).  Removed 2026-07-28 (owner): custom now restores
+    // road pickups, and a frozen bar plus working pickups is a one-way ratchet —
+    // levels could only climb, with no way to sober up.  The slider now sets the
+    // STARTING levels and the run simulates normally from there, which is also
+    // what makes mid-run slider edits work (they land as external writes that
+    // `_updateDoses` reconciles).
     // Permastoned hold — once the weed bar hits 100% it should freeze
     // there until the 10-mile timer trips.  We can't gate on
     // `_weedAt100StartPos` because that field is populated by
@@ -141,11 +168,22 @@ export class ViceSystem {
       const cfg   = VICE_CONFIG[id];
       const level = this.levels[id];
 
+      // Dose-tracked stimulants run their own per-pickup clocks and must tick
+      // even at level 0 (a direct external write to `levels[id]` needs
+      // reconciling into the ledger, and a level-0 vice may still have stale
+      // doses to clear).
+      if (DOSE_SECONDS[id] !== undefined) {
+        const lvl = this._updateDoses(id, dt);
+        if (lvl > 0) {
+          anyActive = true;
+          if (lvl > this.maxReached[id]) this.maxReached[id] = lvl;
+        }
+        continue;
+      }
+
       if (level > 0) {
         anyActive = true;
         if (level > this.maxReached[id]) this.maxReached[id] = level;
-        // Custom mode freezes every bar — no decay, no metabolism.
-        if (noDecay) continue;
         // Weed bar holds at 100% during the Permastoned window — no decay
         // until the 10-mi mark trips and the bar is force-reset to 0.
         if (id === VICES.BURRITO && weedPermastonedActive) continue;
@@ -180,6 +218,59 @@ export class ViceSystem {
     this._checkUnlocks(dt);
 
     return anyActive;
+  }
+
+  /** Advance ONE dose-tracked vice (see DOSE_SECONDS) and return its new level.
+   *
+   *  Each dose carries its own elapsed clock, so its contribution to the bar is
+   *  `amt × (1 − t/dur)` and it expires `dur` seconds after IT was picked up —
+   *  never waiting on an earlier dose to drain first.  The bar is the sum.
+   *
+   *  Reconciliation: GameScene writes `vices.levels[id]` directly in ~13 places
+   *  (rest-stop "reduce vices" buys, Narcan opioid flush, save restore, the dev
+   *  slider, and the cross-vice drops inside `pickup`).  Those writes must win,
+   *  so whenever the level no longer matches what this method last produced, the
+   *  live doses are rescaled to the externally-set total — preserving their
+   *  individual clocks — rather than being silently recomputed away. */
+  _updateDoses(id, dt) {
+    const dur   = DOSE_SECONDS[id];
+    const doses = this._doses[id] ?? (this._doses[id] = []);
+    const level = this.levels[id] ?? 0;
+
+    // ── 1. Honour any external write since the last tick ──
+    if (Math.abs(level - (this._doseSum[id] ?? 0)) > 1e-4) {
+      if (level <= 1e-4) {
+        doses.length = 0;
+      } else {
+        let live = 0;
+        for (const d of doses) live += d.amt * (1 - d.t / d.dur);
+        if (live > 1e-6) {
+          const k = level / live;
+          for (const d of doses) d.amt *= k;
+        } else {
+          // Level set from nothing (dev slider, save restore) — start it as a
+          // single fresh dose so it decays on the normal schedule from here.
+          doses.length = 0;
+          doses.push({ amt: level, t: 0, dur });
+        }
+      }
+    }
+
+    // ── 2. Every dose ages on its own clock ──
+    for (const d of doses) d.t += dt;
+
+    // ── 3. Retire the expired, sum the rest ──
+    let sum = 0;
+    for (let i = doses.length - 1; i >= 0; i--) {
+      const d = doses[i];
+      if (d.t >= d.dur) { doses.splice(i, 1); continue; }
+      sum += d.amt * (1 - d.t / d.dur);
+    }
+    sum = Math.max(0, Math.min(1, sum));
+
+    this.levels[id]   = sum;
+    this._doseSum[id] = sum;
+    return sum;
   }
 
   /** Called by GameScene each frame with the player's current world-Z
@@ -351,6 +442,19 @@ export class ViceSystem {
     const prevLevel = this.levels[id];
     const newLevel  = Math.min(1, prevLevel + amount);
     this.levels[id] = newLevel;
+
+    // Dose-tracked stimulants: log THIS pickup as its own dose, clock starting
+    // now.  Bank only the portion that actually fit under the 1.0 cap so the
+    // ledger can't drift above the bar, and sync `_doseSum` so the reconcile in
+    // `_updateDoses` doesn't mistake our own write for an external one.
+    if (DOSE_SECONDS[id] !== undefined) {
+      const fitted = newLevel - prevLevel;
+      if (fitted > 1e-6) {
+        this._doses[id] ??= [];
+        this._doses[id].push({ amt: fitted, t: 0, dur: DOSE_SECONDS[id] });
+      }
+      this._doseSum[id] = newLevel;
+    }
 
     // ── Cross-vice pickup effects ─────────────────────────────────────
     // Beer lowers each OTHER vice by 5 percentage points only while that

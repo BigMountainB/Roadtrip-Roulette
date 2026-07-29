@@ -24,6 +24,32 @@ import { Weather }   from '../world/Weather.js';
 // height), NOT the horizon position.
 const H = () => CAM.horizonY;
 
+// ── Snow blanket (owner spec, 2026-07-27) ───────────────────────────────
+// Ground snow starts at the weather zone edge (mile 40) and reaches TOTAL
+// coverage at mile 55 — road, rumble strip and both shoulders all one
+// unbroken white sheet with every lane marking buried.
+const SNOW_START_MILE  = 40;
+const SNOW_FULL_MILE   = 55;
+const SNOW_BUILD_MILES = SNOW_FULL_MILE - SNOW_START_MILE;
+// The single colour everything converges on.  Slightly off pure white so the
+// windshield snow particles and the headlight cones still read against it.
+export const SNOW_WHITE = 0xF4F6F8;
+
+/**
+ * Ground-snow coverage at a route mile, 0..1.  THE single source of truth —
+ * the forward view (_drawSegment) and the rear-view mirror both read it, so a
+ * whiteout can't end up rendering as summer in the glass.
+ */
+export function snowBlanketAt(mile) {
+  if (!Weather.isSnow(mile)) return 0;
+  const easeIn  = Math.min(1, Math.max(0, (mile - SNOW_START_MILE) / SNOW_BUILD_MILES));
+  const easeOut = mile > 86 ? Math.max(0, (88 - mile) / 2) : 1;
+  return easeIn * easeOut;
+}
+
+/** Miles at/after which lane markings are fully buried. */
+export const SNOW_MARKINGS_GONE = 0.55;
+
 export class Road {
   constructor() {
     this.segments = [];
@@ -75,8 +101,34 @@ export class Road {
   }
 
   /** Main render call — called every frame from GameScene */
-  render(g, ghostG, playerPos, playerX, palette, effects, propsG, frontG) {
+  /**
+   * @param terrainG  Optional separate Graphics for GROUND fills only, sat
+   *   one depth below `g`.  Splitting ground from road opens a slot for a
+   *   textured ground plate (the North Bend underlay) to be drawn between
+   *   them.  Omit it and every ground fill falls back to `g`, restoring the
+   *   original single-layer behaviour exactly.
+   * @param groundP  Optional GroundPlane.  Sits in that same slot and paints a
+   *   repeating ground tile over the flat fill, using each segment's own
+   *   projection so it tracks hills and curves.  Omit it and the ground stays
+   *   flat-coloured — nothing else changes.
+   */
+  render(g, ghostG, playerPos, playerX, palette, effects, propsG, frontG, terrainG, skyG, groundP) {
     g.clear();
+    if (skyG) skyG.clear();
+    if (terrainG) terrainG.clear();
+    // SKY / BACKDROP LAYER.  Everything above the horizon — sky gradient,
+    // stars, skyline silhouettes, lake horizon, far shore — paints here
+    // instead of into the road layer.  That is what lets the biome parallax
+    // bands sit BENEATH the ground: previously the sky lived in roadGfx, so
+    // any band had to outrank roadGfx to be visible at all, which also put
+    // it on top of the terrain and left its base as a hard seam floating
+    // over the grass.  With the sky on its own layer the order becomes
+    // sky -> bands -> terrain -> road, and the ground occludes the band's
+    // base the way real terrain would.
+    const bg = skyG ?? g;
+    this._terrainG = terrainG ?? null;
+    this._groundP  = groundP ?? null;
+    if (groundP) groundP.beginFrame(playerPos);
     if (propsG) propsG.clear();
     if (frontG) frontG.clear();
     this._propsG = propsG ?? null;
@@ -138,15 +190,15 @@ export class Road {
     // Cap the sky region with a solid block of the top-band colour so a
     // rotated camera (ketamine tilt) doesn't reveal black above the
     // gradient.
-    g.fillStyle(skyTopMix, 1);
-    g.fillRect(-MARGIN, SKY_TOP, W, -SKY_TOP);
+    bg.fillStyle(skyTopMix, 1);
+    bg.fillRect(-MARGIN, SKY_TOP, W, -SKY_TOP);
     for (let b = 0; b < skyBands; b++) {
       const t   = b / skyBands;
       const col = lerpColor(skyTopMix, skyFogMix, t * 0.65);
-      g.fillStyle(col, 1);
+      bg.fillStyle(col, 1);
       const bandY = Math.floor(t * skyH);
       const bandH = Math.ceil(skyH / skyBands) + 2;
-      g.fillRect(-MARGIN, bandY, W, bandH);
+      bg.fillRect(-MARGIN, bandY, W, bandH);
     }
 
     // --- Shrooms rainbow (≥ 65%) — drawn AFTER the sky but BEFORE
@@ -158,10 +210,10 @@ export class Road {
       const cx = 400, cy = 300, baseR = 220;
       const arcCols = [0xFF3333, 0xFF8800, 0xFFEE00, 0x33CC33, 0x3388FF, 0x8833FF];
       for (let i = 0; i < arcCols.length; i++) {
-        g.lineStyle(7, arcCols[i], a);
-        g.beginPath();
-        g.arc(cx, cy, baseR + i * 8, Math.PI, Math.PI * 2);
-        g.strokePath();
+        bg.lineStyle(7, arcCols[i], a);
+        bg.beginPath();
+        bg.arc(cx, cy, baseR + i * 8, Math.PI, Math.PI * 2);
+        bg.strokePath();
       }
     }
 
@@ -421,8 +473,8 @@ export class Road {
           const a = mwAlpha * (0.08 + 0.18 * bright);
           // Same warm/cool palette as the granular puffs so they blend.
           const color = bright > 0.55 ? 0xD8C8A0 : 0x7A92B5;
-          g.fillStyle(color, a);
-          g.fillCircle(rx, ry, radius);
+          bg.fillStyle(color, a);
+          bg.fillCircle(rx, ry, radius);
         }
 
         // ── Soft puffy band ────────────────────────────────────────
@@ -461,8 +513,8 @@ export class Road {
           // — old palette restored for the "vibrant" look the user
           // wanted on top of the new tapered shape.
           const color = bright > 0.55 ? 0xD8C8A0 : 0x7A92B5;
-          g.fillStyle(color, baseA * 0.55);
-          g.fillCircle(rx, ry, radius);
+          bg.fillStyle(color, baseA * 0.55);
+          bg.fillCircle(rx, ry, radius);
         }
 
         // ── Galactic-core plume ────────────────────────────────────
@@ -507,8 +559,8 @@ export class Road {
           // at the edges — old vivid palette so the core glows rather
           // than reading grey.
           const color = falloff > 0.45 ? 0xEDD9A8 : 0xB4C2D8;
-          g.fillStyle(color, a);
-          g.fillCircle(rx, ry, radius);
+          bg.fillStyle(color, a);
+          bg.fillCircle(rx, ry, radius);
         }
 
         // ── Dust lanes — scattered dark patches ────────────────────
@@ -535,8 +587,8 @@ export class Road {
           if (ry < -40 || ry > H() + 20)   continue;
           const radius = (3 + starHash(i * 251 + 11) * 13)
                        * (0.55 + girth * 0.90);
-          g.fillStyle(0x040810, 0.48 * mwAlpha);
-          g.fillCircle(rx, ry, radius);
+          bg.fillStyle(0x040810, 0.48 * mwAlpha);
+          bg.fillCircle(rx, ry, radius);
         }
 
         // ── Dust rivers — long branching dark veins through the core
@@ -572,8 +624,8 @@ export class Road {
             const coreW = Math.exp(-Math.pow((tt - CORE_T) / 0.22, 2));
             const radius = (5 + starHash(r * 547 + j * 23) * 10)
                          * (0.50 + coreW * 1.00);
-            g.fillStyle(0x030610, 0.55 * mwAlpha * (0.45 + coreW * 0.85));
-            g.fillCircle(px, py, radius);
+            bg.fillStyle(0x030610, 0.55 * mwAlpha * (0.45 + coreW * 0.85));
+            bg.fillCircle(px, py, radius);
           }
         }
 
@@ -600,10 +652,10 @@ export class Road {
           const bright = mwBright(t);
           const radius = (2 + starHash(i * 421 + 17) * 8) * (0.6 + bright * 0.9);
           // Warm halo + bright core knot — old vivid yellow tones.
-          g.fillStyle(0xF0E6BC, 0.22 * mwAlpha);
-          g.fillCircle(rx, ry, radius * 1.5);
-          g.fillStyle(0xFFF3CE, 0.42 * mwAlpha);
-          g.fillCircle(rx, ry, radius);
+          bg.fillStyle(0xF0E6BC, 0.22 * mwAlpha);
+          bg.fillCircle(rx, ry, radius * 1.5);
+          bg.fillStyle(0xFFF3CE, 0.42 * mwAlpha);
+          bg.fillCircle(rx, ry, radius);
         }
 
         // ── Sprinkled stars along the band (denser than the field) ─
@@ -638,8 +690,8 @@ export class Road {
           // dropped tail stars to near-invisible).
           const a = (0.30 + starHash(i * 67 + 23) * 0.55)
                   * (0.70 + bright * 0.55) * mwAlpha;
-          g.fillStyle(0xE8EEFF, a);
-          g.fillRect(Math.floor(sx), Math.floor(sy), 1, 1);
+          bg.fillStyle(0xE8EEFF, a);
+          bg.fillRect(Math.floor(sx), Math.floor(sy), 1, 1);
         }
       }
 
@@ -678,9 +730,9 @@ export class Road {
         const color = cRoll < 0.15 ? 0xC8D4FF
                     : cRoll < 0.25 ? 0xFFE8C0
                     :                0xFFFFFF;
-        g.fillStyle(color, a);
+        bg.fillStyle(color, a);
         const size = baseBright > 0.82 ? 3 : (baseBright > 0.60 ? 2 : 1);
-        g.fillRect(Math.floor(sx), Math.floor(sy), size, size);
+        bg.fillRect(Math.floor(sx), Math.floor(sy), size, size);
       }
 
       // ── Named bright stars + photo-traced constellations ───────
@@ -724,7 +776,7 @@ export class Road {
         ];
         for (const f of figures) {
           // Faint constellation lines (rotated with the rest of the field).
-          g.lineStyle(1, 0x88AACC, 0.18 * conA);
+          bg.lineStyle(1, 0x88AACC, 0.18 * conA);
           for (const [ai, bi] of f.lines) {
             const [ax, ay] = f.stars[ai];
             const [bx, by] = f.stars[bi];
@@ -734,10 +786,10 @@ export class Road {
             const x2 = rotX(bx2, by2), y2 = rotY(bx2, by2);
             if (Math.abs((x1 + x2) / 2 - moonX) < 28
                 && Math.abs((y1 + y2) / 2 - moonArcY) < 28) continue;
-            g.beginPath();
-            g.moveTo(x1, y1);
-            g.lineTo(x2, y2);
-            g.strokePath();
+            bg.beginPath();
+            bg.moveTo(x1, y1);
+            bg.lineTo(x2, y2);
+            bg.strokePath();
           }
           // Star pips.  Anchor (mainIdx) gets a bigger glow + bigger pip.
           for (let j = 0; j < f.stars.length; j++) {
@@ -749,10 +801,10 @@ export class Road {
             const isMain = j === f.mainIdx;
             const haloR  = isMain ? 7 : 3;
             const pipSz  = isMain ? f.mainSize : 2;
-            g.fillStyle(f.tint, (isMain ? 0.32 : 0.20) * conA);
-            g.fillCircle(x, y, haloR);
-            g.fillStyle(0xFFFFFF, Math.min(1, tw * conA));
-            g.fillRect(Math.floor(x) - Math.floor(pipSz / 2),
+            bg.fillStyle(f.tint, (isMain ? 0.32 : 0.20) * conA);
+            bg.fillCircle(x, y, haloR);
+            bg.fillStyle(0xFFFFFF, Math.min(1, tw * conA));
+            bg.fillRect(Math.floor(x) - Math.floor(pipSz / 2),
                        Math.floor(y) - Math.floor(pipSz / 2),
                        pipSz, pipSz);
           }
@@ -773,134 +825,38 @@ export class Road {
           const px = pl.x * W - MARGIN;
           const py = pl.y * H();
           // Soft halo
-          g.fillStyle(pl.col, 0.30 * planA);
-          g.fillCircle(px, py, pl.r * 2.4);
+          bg.fillStyle(pl.col, 0.30 * planA);
+          bg.fillCircle(px, py, pl.r * 2.4);
           // Solid body
-          g.fillStyle(pl.col, planA);
-          g.fillCircle(px, py, pl.r);
+          bg.fillStyle(pl.col, planA);
+          bg.fillCircle(px, py, pl.r);
         }
       }
 
       // Moon — painted last so it sits above the Milky Way + stars.
       // Skipped once the body crosses behind the windshield (set in W).
       if (moonOnScreen) {
-        g.fillStyle(0xF6F2D8, 0.30 * skyDark);
-        g.fillCircle(moonX, moonArcY, 22);
-        g.fillStyle(0xFFF8E0, Math.min(1, 1.2 * skyDark));
-        g.fillCircle(moonX, moonArcY, 14);
-        g.fillStyle(0xFFFFFF, Math.min(1, skyDark));
-        g.fillCircle(moonX - 3, moonArcY - 3, 9);
+        bg.fillStyle(0xF6F2D8, 0.30 * skyDark);
+        bg.fillCircle(moonX, moonArcY, 22);
+        bg.fillStyle(0xFFF8E0, Math.min(1, 1.2 * skyDark));
+        bg.fillCircle(moonX, moonArcY, 14);
+        bg.fillStyle(0xFFFFFF, Math.min(1, skyDark));
+        bg.fillCircle(moonX - 3, moonArcY - 3, 9);
       }
     }
 
-    // --- MOUNTAIN SILHOUETTES (parallax + Cascade-pass progression) ---
-    // Geographic progression along the route — Seattle (mile 0) is flat
-    // marine air, the foothills rise around mile 30, peaks crescendo at
-    // Snoqualmie Pass (mile 47-50), the road threads BETWEEN them for
-    // ~14 miles, then they fade as we drop into eastern WA.
-    const mileProgress = (playerPos / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
-    const lerpClamp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
-    // Height multiplier — 0.5 at mile 0, 2.0 by mile 47, holds 2.5 through
-    // the pass (47-64), fades to 0 by mile 70.
-    let heightMul;
-    if      (mileProgress < 47) heightMul = lerpClamp(0.5, 2.0, mileProgress / 47);
-    else if (mileProgress < 50) heightMul = lerpClamp(2.0, 2.5, (mileProgress - 47) / 3);
-    else if (mileProgress < 64) heightMul = 2.5;
-    else if (mileProgress < 70) heightMul = lerpClamp(2.5, 0,   (mileProgress - 64) / 6);
-    else                         heightMul = 0;
-    // Pass-gap — 0 before mile 47, opens to 0.55 of the screen by mile 50,
-    // holds through the parted section, closes back to 0 as the range fades.
-    let passGap;
-    if      (mileProgress < 47) passGap = 0;
-    else if (mileProgress < 50) passGap = lerpClamp(0,    0.55, (mileProgress - 47) / 3);
-    else if (mileProgress < 64) passGap = 0.55;
-    else if (mileProgress < 70) passGap = lerpClamp(0.55, 0,   (mileProgress - 64) / 6);
-    else                         passGap = 0;
-    // Detail unlocks — staggered from mile 30 onward.
-    const snowAmt   = lerpClamp(0, 1, (mileProgress - 30) / 5);   // 30 → 35
-    const shadeAmt  = lerpClamp(0, 1, (mileProgress - 35) / 5);   // 35 → 40
-    const outcropAmt= lerpClamp(0, 1, (mileProgress - 40) / 5);   // 40 → 45
-
-    const mBaseY = H() + 2;
-    // Helper: should this peak's screen X land in the road-pass gap?
-    const inGap = (mx) => {
-      if (passGap <= 0) return false;
-      const gapHalf = SCREEN_W * passGap * 0.5;
-      return Math.abs(mx - SCREEN_W * 0.5) < gapHalf;
-    };
-
-    // Per-peak draw — base triangle plus optional snow / shade / outcrop /
-    // vegetation layers.  Skips the peak entirely if it falls inside the
-    // road-pass gap so the mountains visually "part" around the highway.
-    const drawPeak = (mx, mw, mh, baseColor, isNear) => {
-      if (heightMul <= 0) return;
-      if (inGap(mx)) return;
-      const top = mBaseY - mh;
-      g.fillStyle(baseColor, 1);
-      g.fillTriangle(mx - mw, mBaseY, mx + mw, mBaseY, mx, top);
-
-      // Shade — darker right-flank wedge (sun from upper-left).
-      if (shadeAmt > 0.02 && isNear) {
-        const shadeCol = lerpColor(baseColor, 0x000000, 0.30 * shadeAmt);
-        g.fillStyle(shadeCol, 1);
-        g.fillTriangle(mx, top, mx + mw, mBaseY, mx, mBaseY);
-      }
-
-      // Outcrops — secondary jagged sub-peak on the left flank, suggests
-      // ridgeline topography rather than a clean cone.
-      if (outcropAmt > 0.02 && isNear) {
-        const subH = mh * (0.55 + 0.10 * ((mx | 0) % 5) / 5);
-        const subW = mw * 0.55;
-        const subX = mx - mw * 0.40;
-        if (!inGap(subX)) {
-          g.fillStyle(baseColor, 1);
-          g.fillTriangle(subX - subW, mBaseY, subX + subW, mBaseY, subX, mBaseY - subH);
-          if (shadeAmt > 0.02) {
-            g.fillStyle(lerpColor(baseColor, 0x000000, 0.25 * shadeAmt), 1);
-            g.fillTriangle(subX, mBaseY - subH, subX + subW, mBaseY, subX, mBaseY);
-          }
-        }
-      }
-
-      // Snow caps — white triangle on the upper third, intensity scales.
-      if (snowAmt > 0.02 && isNear) {
-        const capH = mh * 0.32;
-        const capW = mw * 0.32;
-        g.fillStyle(0xFFFFFF, 0.85 * snowAmt);
-        g.fillTriangle(mx - capW, top + capH, mx + capW, top + capH, mx, top);
-        // Subtle blue-grey under-snow shadow line so the cap reads as 3D.
-        g.fillStyle(0xC8D4DC, 0.55 * snowAmt);
-        g.fillTriangle(mx, top + capH * 0.4, mx + capW * 0.85, top + capH, mx + capW * 0.15, top + capH);
-      }
-
-      // Vegetation treeline removed per design — the mountain's base color
-      // now extends straight down to the horizon, so there's no green band
-      // sitting at the foot of the peaks.
-    };
-
-    // Far range: lighter, shorter
-    const farColor = lerpColor(palette.fog, palette.horizon, 0.5);
-    const farShift = ((playerX * 7) % SCREEN_W + SCREEN_W * 2) % SCREEN_W;
-    for (let m = 0; m < 8; m++) {
-      const mx = ((m / 8) * SCREEN_W + farShift) % SCREEN_W;
-      const mh = (14 + (m * 29 % 20)) * heightMul;
-      const mw = 70 + (m * 37 % 55);
-      drawPeak(mx,            mw, mh, farColor, false);
-      if (mx + mw > SCREEN_W) drawPeak(mx - SCREEN_W, mw, mh, farColor, false);
-      if (mx - mw < 0)        drawPeak(mx + SCREEN_W, mw, mh, farColor, false);
-    }
-
-    // Near range: darker, taller
-    const nearColor = lerpColor(palette.horizon, 0x001100, 0.18);
-    const nearShift = ((playerX * 18) % SCREEN_W + SCREEN_W * 2) % SCREEN_W;
-    for (let m = 0; m < 5; m++) {
-      const mx = ((m / 5) * SCREEN_W + nearShift) % SCREEN_W;
-      const mh = (28 + (m * 41 % 28)) * heightMul;
-      const mw = 100 + (m * 53 % 80);
-      drawPeak(mx,            mw, mh, nearColor, true);
-      if (mx + mw > SCREEN_W) drawPeak(mx - SCREEN_W, mw, mh, nearColor, true);
-      if (mx - mw < 0)        drawPeak(mx + SCREEN_W, mw, mh, nearColor, true);
-    }
+    // --- DISTANT TERRAIN ---
+    // The single procedural Cascade range that used to live here is gone.
+    // It scaled one triangle silhouette by mile, unlocked snow caps at mile
+    // 30 regardless of where you actually were, and zeroed its height
+    // multiplier past mile 70 — leaving 223 of the route's 293 miles
+    // rendering against bare sky.
+    //
+    // Replaced by the biome parallax bands: seven distinct terrain sets
+    // driven from src/road/Biomes.js and drawn as TileSprites in
+    // GameScene._renderBiomeBackdrop().  They live outside this Graphics
+    // because they are textured, and at depth 0.5 so they sit above the
+    // sky painted here and below everything else.
 
     // Horizon haze band REMOVED.  It was a 14px palette.horizon strip at
     // 0.82 alpha just above the horizon, but the sky gradient above already
@@ -911,30 +867,11 @@ export class Road {
     // leaves the clean sky→ground horizon; the void-fill role it once had is
     // covered by the sky gradient above and the grass / water bands below.
 
-    // ── Lake Sammamish — visible on the LEFT during mile 15-16,
-    // behind the houses, tucked just under the horizon line so it
-    // reads as a distant water surface beyond the Bellevue/Issaquah
-    // foothills.  Fades in/out at the edges of the window.
-    if (_mileNow >= 14.9 && _mileNow <= 16.2) {
-      let lakeAlpha = 1;
-      if (_mileNow < 15.0)     lakeAlpha = (_mileNow - 14.9) / 0.1;
-      else if (_mileNow > 16.0) lakeAlpha = 1 - (_mileNow - 16.0) / 0.2;
-      lakeAlpha = Math.max(0, Math.min(1, lakeAlpha));
-      const lakeY = H() - 5;
-      const lakeH = 8;
-      const lakeLeft  = -MARGIN;
-      const lakeRight = SCREEN_W * 0.40;        // only left third-ish
-      g.fillStyle(0x2D4F6C, 0.85 * lakeAlpha);
-      g.fillRect(lakeLeft, lakeY, lakeRight - lakeLeft, lakeH);
-      // Subtle highlight stripe on the water surface — suggests sunlight
-      // glinting off the lake.
-      g.fillStyle(0xA9C4D6, 0.55 * lakeAlpha);
-      g.fillRect(lakeLeft, lakeY + 2, lakeRight - lakeLeft, 1);
-      // Far shoreline silhouette behind the lake (treeline on the east
-      // side of the lake) — a thin dark band just above the water.
-      g.fillStyle(0x16243A, 0.75 * lakeAlpha);
-      g.fillRect(lakeLeft, lakeY - 3, lakeRight - lakeLeft, 3);
-    }
+    // (The old hardcoded Lake Sammamish horizon decal lived here — an 8 px
+    //  water strip hand-placed at mile 14.9–16.2 in the left 40% of screen.
+    //  Superseded by the seg.waterLeft / seg.waterRight lake system below,
+    //  which paints Sammamish as real water with a real far shore.)
+
     // Fail-safe world fill. On steep descents the projected road can drop
     // below the horizon for a few frames, leaving the cleared Graphics
     // background visible as a black band. Paint a terrain/water backing
@@ -942,7 +879,27 @@ export class Road {
     // tunnel pieces still draw over this per segment.
     const startSegIdx = Math.floor(playerPos / SEG_LENGTH) % this.segments.length;
     const startSeg = this.segments[startSegIdx];
-    if (startSeg?.water || startSeg?.bridge) {
+    // waterLeft joins the gate (owner 2026-07-27): the West Seattle
+    // approach (mile 0-1) is elevated, so the void beyond the draw cap is
+    // tall — and this region's grass2 is city-pavement GREY, which rendered
+    // the whole area as a blank grey wall where Elliott Bay should run to
+    // the horizon.  The backing paints the bay + the downtown skyline
+    // silhouette there instead (geographically right: downtown IS across
+    // the water), and it also puts the skyline the owner liked on the
+    // approach instead of popping in at the bridge.  Water bands are
+    // width-limited on waterLeft so the right (homes) flank keeps land.
+    // Urban cityscape backing (owner 2026-07-28): through Seattle/SoDo (to
+    // the Mt Baker tunnel at 4.9) the void band beyond the draw cap showed
+    // the raw haze-toned fill — the persistent "grey-blue line".  Paint the
+    // bridge-style charcoal cityscape + downtown skyline there instead, so
+    // the skyline persists through the whole urban stretch.
+    const _cityBack = _mileNow < 4.9 && !startSeg?.water && !startSeg?.bridge && !startSeg?.waterLeft;
+    if (startSeg?.water || startSeg?.bridge || startSeg?.waterLeft || _cityBack) {
+      // Full width even for waterLeft: the right-flank terrain and home
+      // sprites paint over the backing wherever there is land, and a
+      // width-limit just left an unpainted black notch between the water's
+      // cut edge and the first sprite.
+      const WATER_W  = W;
       const waterTop = H() - 5;
       // Bridge segments use a near-black charcoal tone instead of the
       // saturated blue used on plain water crossings (floating bridges,
@@ -951,15 +908,16 @@ export class Road {
       // dark charcoal reads as "shaded underbridge / cityscape" so
       // the cranes silhouette against an urban backdrop, with the
       // existing skyline silhouette painting on top at horizon level.
-      const waterA = startSeg.bridge ? 0x1A1E22 : 0x2D5B82;
-      const waterB = startSeg.bridge ? 0x0E1014 : 0x173A58;
+      const _charcoal = startSeg.bridge || _cityBack;   // urban mass, not open water
+      const waterA = _charcoal ? 0x1A1E22 : 0x2D5B82;
+      const waterB = _charcoal ? 0x0E1014 : 0x173A58;
       const bands = 7;
       for (let b = 0; b < bands; b++) {
         const t = b / Math.max(1, bands - 1);
         const y = waterTop + Math.floor(t * (SCREEN_H - waterTop));
         const h = Math.ceil((SCREEN_H - waterTop) / bands) + 2;
-        g.fillStyle(lerpColor(waterA, waterB, t), 1);
-        g.fillRect(-MARGIN, y, W, h);
+        bg.fillStyle(lerpColor(waterA, waterB, t), 1);
+        bg.fillRect(-MARGIN, y, WATER_W, h);
       }
       // Distant opposite shoreline — varied silhouette in two layers so
       // the horizon doesn't read as one flat blue bar.  Far hills behind,
@@ -990,13 +948,13 @@ export class Road {
       // shape readable but not blocky.
       if (cityGap < 1) {
         const farStep = 24;
-        g.fillStyle(farHillCol, 0.95);
+        bg.fillStyle(farHillCol, 0.95);
         for (let x = -MARGIN; x < SCREEN_W + MARGIN; x += farStep) {
           if (inCityGap(x + farStep * 0.5)) continue;
           const n = Math.sin(x * 0.013) + Math.sin(x * 0.041 + 1.7) * 0.6
                   + Math.sin(x * 0.087 + 3.1) * 0.4;
           const h = 6 + Math.max(0, n + 1.6) * 4;          // 6–18 px tall
-          g.fillRect(x, horizonY - h * 0.4, farStep + 1, h + 8);
+          bg.fillRect(x, horizonY - h * 0.4, farStep + 1, h + 8);
         }
         // Layer 2 — building blocks (warehouses + downtown skyline).
         // Deterministic per-block: width and height pseudo-randomised by
@@ -1012,15 +970,15 @@ export class Road {
           const tall = (r3 - Math.floor(r3)) > 0.82;                 // ~18% are skyscrapers
           const realH = tall ? h + 10 + Math.floor((r3 - Math.floor(r3)) * 14) : h;
           if (!inCityGap(bx + w * 0.5)) {
-            g.fillStyle(buildingCol, 1);
-            g.fillRect(bx, horizonY - realH + 6, w, realH + 6);
+            bg.fillStyle(buildingCol, 1);
+            bg.fillRect(bx, horizonY - realH + 6, w, realH + 6);
             // Sparse warm window dots on tall blocks
             if (tall && realH > 14) {
-              g.fillStyle(buildingLit, 0.7);
+              bg.fillStyle(buildingLit, 0.7);
               const winRows = Math.max(1, Math.floor(realH / 6));
               for (let row = 0; row < winRows; row++) {
                 if ((blockI + row) % 3 === 0) {
-                  g.fillRect(bx + 2 + (row % 3) * 4, horizonY - realH + 8 + row * 5, 2, 2);
+                  bg.fillRect(bx + 2 + (row % 3) * 4, horizonY - realH + 8 + row * 5, 2, 2);
                 }
               }
             }
@@ -1034,14 +992,14 @@ export class Road {
       // tone now, and the light ripple stripes were reading as
       // water reflections behind the port cranes.  Plain water
       // crossings (floating bridges) keep the glints.
-      if (!startSeg.bridge) {
-        g.fillStyle(0xC8D8E0, 0.20);
-        g.fillRect(-MARGIN, H() + 16, W, 3);
-        g.fillStyle(0xFFFFFF, 0.18);
+      if (!startSeg.bridge && !_cityBack) {
+        bg.fillStyle(0xC8D8E0, 0.20);
+        bg.fillRect(-MARGIN, H() + 16, W, 3);
+        bg.fillStyle(0xFFFFFF, 0.18);
         for (let gl = 0; gl < 9; gl++) {
           const gx = ((gl * 173 + Math.floor(playerPos / 400)) % (SCREEN_W + MARGIN * 2)) - MARGIN;
           const gy = H() + 34 + (gl % 3) * 12;
-          g.fillRect(gx, gy, 26 + (gl % 4) * 12, 2);
+          bg.fillRect(gx, gy, 26 + (gl % 4) * 12, 2);
         }
       }
       // ── Distant treeline along the far shore ──────────────────────
@@ -1055,23 +1013,8 @@ export class Road {
       // calls per frame max — well under the road's segment loop
       // budget.  Skipped on bridge segments because those have their
       // own foreground cranes filling the horizon area.
-      if (!startSeg.bridge) {
-        const shoreY  = H() - 2;
-        // Soft shore band — slightly lighter than water, fades the
-        // tree silhouette into the horizon.
-        g.fillStyle(0x4A5448, 0.85);
-        g.fillRect(-MARGIN, shoreY, W, 4);
-        // Treeline silhouette (rolling sin-mix bumps, 4-14 px tall,
-        // stepped every 5 px).  Forest green; alpha 0.95 so the
-        // shore band peeks through and softens hard edges.
-        const treeStep = 5;
-        g.fillStyle(0x1E2A18, 0.95);
-        for (let x = -MARGIN; x < SCREEN_W + MARGIN; x += treeStep) {
-          const n = Math.sin(x * 0.041) + Math.sin(x * 0.097 + 1.1) * 0.55
-                  + Math.sin(x * 0.187 + 2.3) * 0.32;
-          const treeH = 4 + Math.max(0, n + 1.4) * 4;       // 4-14 px tall
-          g.fillRect(x, shoreY - treeH + 2, treeStep + 1, treeH);
-        }
+      if (!startSeg.bridge && !_cityBack) {
+        this._paintFarShore(bg, -MARGIN, SCREEN_W + MARGIN, 1);
       }
     } else {
       // Extend grass past the screen bottom by MARGIN so a rotated camera
@@ -1079,8 +1022,85 @@ export class Road {
       // AT the horizon line (not 10 px below it) so far building
       // sprites that anchor near the horizon visibly sit on ground
       // instead of floating in the haze band.
-      g.fillStyle(palette.grass2, 1);
-      g.fillRect(-MARGIN, H(), W, SCREEN_H - H() + 20 + MARGIN);
+      // Terrain layer — see the per-segment grass fill in _drawSegment.
+      // This fail-safe world fill is opaque below the horizon, so it has to
+      // move too or it would hide any ground plate drawn above it.
+      const _tg = this._terrainG ?? g;
+      // Haze-toned, not raw grass2: every pixel of this fill is BEYOND the
+      // last drawn segment, i.e. the farthest thing on screen — so it must
+      // be at least as fogged as the far segments' own distance-fog veil
+      // (palette.fog at 0.85 in _drawSegment).  Raw grass showed as an
+      // unfogged band ABOVE that veil, which made the veil's edge read as a
+      // hard light-blue line hugging the horizon on descents (pixel-matched
+      // to palette.fog exactly).  Blending the fill toward skyFogMix makes
+      // fill → far veil → defogging road one continuous recession, and
+      // inherits dusk/night tinting for free.
+      // GRADIENT, not a flat tone.  A single blend was tried at 0.72 (read as
+      // a grey-blue band) and at 0.35 (read as a green band) — both failed for
+      // the same structural reason: ANY flat colour here meets the horizon at
+      // a hard edge, and an edge across the full screen width is a bar no
+      // matter what colour it is.  That is the "green bar" the owner kept
+      // circling, and it is the lowest-layer fill, which is why stripping
+      // every other layer never removed it.
+      //
+      // Distance goes to INFINITY at the horizon, so atmospheric extinction
+      // must be TOTAL there: ground colour has to equal the fog colour exactly
+      // at H(), then recover toward grass over the near strip.  Matching at
+      // the seam is what removes the band — there is nothing left to see an
+      // edge against.  Stepped because Phaser's Graphics has no vertical
+      // gradient fill; HAZE_STEPS bands over HAZE_H px is smooth at this size.
+      const HAZE_H = 64, HAZE_STEPS = 16;
+      for (let i = 0; i < HAZE_STEPS; i++) {
+        const t0 = i / HAZE_STEPS;
+        // ease-out: most of the recovery happens in the first few px below the
+        // horizon, which is where the compression is worst.
+        const mix = Math.pow(1 - t0, 1.8);
+        _tg.fillStyle(lerpColor(palette.grass2, skyFogMix, mix), 1);
+        _tg.fillRect(-MARGIN, H() + t0 * HAZE_H, W, HAZE_H / HAZE_STEPS + 1);
+      }
+      // Flat ground colour below the haze strip — still fail-safe cover for
+      // anything the segment loop doesn't reach.
+      _tg.fillStyle(lerpColor(palette.grass2, skyFogMix, 0.06), 1);
+      _tg.fillRect(-MARGIN, H() + HAZE_H, W, SCREEN_H - H() - HAZE_H + 20 + MARGIN);
+    }
+
+    // ── Roadside lake horizon (one-sided water) ───────────────────────
+    // Painted OVER the grass fill above, on the lake's side only, so the
+    // land flank keeps its terrain.  Three stacked pieces read as a lake
+    // rather than a blue rectangle: water surface, a sun glint stripe,
+    // and the far shore with its treeline.
+    //
+    // `lakeShore` is how far across the screen half-width the water
+    // reaches before the far shore — the thing that distinguishes a lake
+    // from open ocean.  Sammamish (wide) gets more screen than Keechelus
+    // (narrow), and Kachess/Easton are barely a sliver.
+    // Gated on `lakeShore`, NOT on the water flags alone: the West Seattle
+    // approach (mile 0–1) is also waterLeft, but that is Elliott Bay — open
+    // water to the horizon, which must NOT get a far shore painted across
+    // it.  Only segments tagged by the LAKES table carry lakeShore.
+    //
+    // `lakeDistant` covers lakes the road never reaches (Sammamish, Kachess).
+    // They paint ONLY here, at the horizon — the roadside keeps its grass and
+    // its trees and houses, and because those sprites draw at depth 7-9.5 they
+    // occlude this band naturally.  That is what puts the lake behind them
+    // instead of underneath them.
+    const _lakeSide = startSeg?.lakeDistant
+      ?? (startSeg?.waterLeft ? -1 : (startSeg?.waterRight ? 1 : 0));
+    if (_lakeSide !== 0 && startSeg.lakeShore && !startSeg.water && !startSeg.bridge) {
+      const frac  = startSeg.lakeShore;
+      const halfW = SCREEN_W / 2;
+      // Left lakes span from the screen edge inward toward centre; right
+      // lakes from centre outward.  `frac` of the half-width either way.
+      const x0 = _lakeSide < 0 ? -MARGIN          : halfW;
+      const x1 = _lakeSide < 0 ? halfW * frac     : halfW + halfW * frac;
+      const lakeY = H() - 5;
+      bg.fillStyle(0x2D4F6C, 0.92);
+      bg.fillRect(x0, lakeY, x1 - x0, 9);
+      // Sun glint on the surface.
+      bg.fillStyle(0xA9C4D6, 0.50);
+      bg.fillRect(x0, lakeY + 3, x1 - x0, 1);
+      // Far shore + treeline, clipped to the lake's span.
+      this._paintFarShore(bg, x0, x1, 1);
     }
 
     // --- PROJECT VISIBLE SEGMENTS ---
@@ -1483,6 +1503,24 @@ export class Road {
         if (s.screenY < _runMinY) _runMinY = s.screenY;
       }
     }
+
+    // ── Horizon haze fade (terrain layer) ─────────────────────────────
+    // The strip just under the horizon line belongs to the flat terrain
+    // fill: the farthest projected segments stop a few px short of H(), so
+    // between their top edge and the horizon the raw grass colour shows as
+    // a dead-flat green band spanning the screen ("the flat green hill").
+    // The old procedural mountain range happened to paint over it; the
+    // biome bands and scenery plates end AT the horizon, so it surfaced.
+    // Proven by layer isolation (hide terrainGfx → band vanishes).
+    //
+    // Fade the terrain's top ~22 px toward the sky-fog colour so the strip
+    // reads as atmospheric haze under whatever backdrop art sits above it.
+    // Painted into the TERRAIN layer, so the textured ground plane, the
+    // North Bend plate and the road all still draw over it untouched.
+    // (The 3-step horizon haze strip that lived here is gone: the fail-safe
+    //  world fill above is now itself blended toward skyFogMix, which covers
+    //  the whole void between the horizon and the farthest drawn segment —
+    //  a fixed 22 px strip could not, and left an unfogged band on descents.)
 
     // ── Continuous shoulder ribbons (one polygon per side) ──────────
     // Draw AFTER rebuilding _surfaceSamples, otherwise the side lines use
@@ -2829,23 +2867,41 @@ export class Road {
     // weather envelope so the transition into / out of the snow zone is
     // smooth instead of a hard color flip.
     const segMile = (seg.index / this.segments.length) * TOTAL_ROUTE_MILES;
+    // Ground-texture opacity.  Full outside the snow zone; inside it the tile
+    // survives the accumulation and disappears under total cover (see below).
+    let groundTexFade = 1;
+    // Snow blanket strength, 0..1, hoisted so the paint markings further down
+    // (double-yellow centre line) can be buried by it too.
+    let snowBlanket = 0;
     if (Weather.isSnow(segMile)) {
       // Ground snow accumulates GRADUALLY, decoupled from the falling-snow
       // intensity (which is full from mile 40 with no fade-in, so the sky
       // hands off rain→snow with no clear gap).  Using intensity directly
       // snapped the road to full white right at mile 40 — a hard "line" on
-      // the pavement.  Instead ramp the ground blanket in over ~6 mi
-      // (40→46) and out over the last 2 mi (86→88) so the road whitens
-      // smoothly.  (The sky precip is unchanged — per user.)
-      const easeIn  = Math.min(1, Math.max(0, (segMile - 40) / 6));
-      const easeOut = segMile > 86 ? Math.max(0, (88 - segMile) / 2) : 1;
-      const snowI   = easeIn * easeOut;
+      // the pavement.  Instead the blanket builds over SNOW_BUILD_MILES and
+      // eases out over the last 2 mi (86→88).  (Sky precip unchanged.)
+      //
+      // Full coverage lands at mile 55 per owner spec (2026-07-27): by then
+      // the road and both shoulders are a single unbroken white sheet with
+      // every lane marking buried.
+      const snowI = snowBlanketAt(segMile);
+      snowBlanket = snowI;
       if (snowI > 0.001) {
-        grass    = lerpColor(grass,    0xE6E8EC, snowI * 0.85);
-        road     = lerpColor(road,     0xE0E2E0, snowI * 0.80);
-        rumble   = lerpColor(rumble,   0xC8CACC, snowI * 0.80);
-        laneCol  = lerpColor(laneCol,  road,     snowI);   // lanes vanish into road
-        if (snowI > 0.7) dashOn = false;                   // no lane paint visible
+        // Ground texture lingers through the ACCUMULATION (scrub still shows
+        // through a partial blanket) then reaches zero at full cover, so the
+        // whiteout is genuinely white rather than moss seen through gauze.
+        groundTexFade = Math.pow(1 - snowI, 0.6);
+        // Everything converges on ONE snow white — road, rumble and roadside
+        // alike.  Blending only 80-85% of the way (the old values) left the
+        // pavement a readable grey ribbon, which is exactly the "you can still
+        // see the road" look the whiteout is meant to remove.
+        grass    = lerpColor(grass,   SNOW_WHITE, snowI);
+        road     = lerpColor(road,    SNOW_WHITE, snowI);
+        rumble   = lerpColor(rumble,  SNOW_WHITE, snowI);
+        laneCol  = lerpColor(laneCol, road,       snowI);  // lanes vanish into road
+        // Lane paint stops being drawn well before full cover — a dashed line
+        // fading through grey reads as a rendering artefact, not as snow.
+        if (snowI > 0.55) dashOn = false;
       }
     }
     const segLanes = seg.lanes ?? LANES;
@@ -2875,8 +2931,30 @@ export class Road {
     const isLandSeg = !seg.water && !seg.bridge;
     const grassH = isLandSeg ? Math.max(60, segH) : segH;
     if (!isGhost) {
-      g.fillStyle(grass, 1);
-      g.fillRect(-M, fy, SCREEN_W + M * 2, grassH);
+      // TERRAIN LAYER, not the road layer.  This full-width opaque fill is
+      // the only per-segment ground paint, so routing it to a separate
+      // Graphics one depth below is the whole of the terrain/road split —
+      // it opens a slot for a textured ground plate to sit between the two.
+      //
+      // Safe to move because hill occlusion does NOT depend on it: the
+      // segment loop skips anything hidden behind a crest outright
+      // (`if (curr.screenY < maxScreenY) continue`) rather than relying on
+      // nearer grass painting over farther road.
+      const tg = this._terrainG ?? g;
+      tg.fillStyle(grass, 1);
+      tg.fillRect(-M, fy, SCREEN_W + M * 2, grassH);
+
+      // Textured ground, painted OVER that fill one depth up.  The flat fill
+      // stays as the base — it carries the biome / snow colour and shows
+      // through as the tile fades out toward the horizon.
+      // Uses segH, not grassH: the 60 px apron above is a shoreline read for
+      // the flat fill, and stretching the tile down into it would double-blend
+      // the fade where consecutive segments overlap.
+      // Water / bridge segments are skipped — g overpaints them with river and
+      // port-yard fills anyway, so a ground tile there is invisible work.
+      if (this._groundP && !seg.water && !seg.bridge) {
+        this._groundP.pushRow(fy, ny, x2, x1, w2, w1, curr.relZ, next.relZ, groundTexFade);
+      }
     }
 
     // ── Tunnel: concrete portal structure rendered per-segment ─────────
@@ -3095,11 +3173,41 @@ export class Road {
     // Painted before the bilateral `seg.water` block so a future segment
     // that wants BOTH flags can still get bilateral water from the block
     // below.  Doesn't paint waves/streaks — bay water is just a flat field.
+    // `lakeWaterEdgeX` (RouteData LAKES `setbackFt`) holds the lake back from
+    // the roadway: it is the |p.x| where water begins, and p.x ±1 projects to
+    // ±w2, so the near edge lands at x2 ± lakeWaterEdgeX * w2.  Unset (a
+    // waterline lake, and every non-lake water flag such as the Elliott Bay
+    // approach) leaves the fill exactly where it was — hard against the
+    // pavement + rumble.  Math.max keeps a setback from ever pulling the
+    // waterline back INSIDE the rumble strip.
+    const _setbackPx = seg.lakeWaterEdgeX ? seg.lakeWaterEdgeX * w2 : 0;
+
     if (seg.waterLeft && !seg.water && !seg.bridge && !isGhost) {
       const wave = (Math.sin(seg.index * 0.18) * 0.5 + 0.5);
       const waterCol = lerpColor(0x224A6E, 0x4A7FA8, wave * 0.6);
       g.fillStyle(waterCol, 1);
-      g.fillRect(-M, fy, Math.max(0, x2 - w2 - rw2 + M), segH);
+      const edge = _setbackPx
+        ? Math.min(x2 - w2 - rw2, x2 - _setbackPx)
+        : x2 - w2 - rw2;
+      g.fillRect(-M, fy, Math.max(0, edge + M), segH);
+    }
+
+    // Right-side-only water — the mirror of the block above.  The flag has
+    // had guardrail and dunk handling in GameScene since the DUI fork, but
+    // never had a renderer, so a waterRight segment would drown you in
+    // invisible water.  Needed for Keechelus and Easton, which I-90 passes
+    // on the right heading east.
+    if (seg.waterRight && !seg.water && !seg.bridge && !isGhost) {
+      const wave = (Math.sin(seg.index * 0.18) * 0.5 + 0.5);
+      const waterCol = lerpColor(0x224A6E, 0x4A7FA8, wave * 0.6);
+      g.fillStyle(waterCol, 1);
+      // Lake Easton is held 75 ft back — see `_setbackPx` above.  The terrain
+      // pass has already painted this flank, so simply starting the water fill
+      // further out is what leaves real ground showing between road and lake.
+      const edge = _setbackPx
+        ? Math.max(x2 + w2 + rw2, x2 + _setbackPx)
+        : x2 + w2 + rw2;
+      g.fillRect(edge, fy, Math.max(0, SCREEN_W + M - edge), segH);
     }
 
     if (seg.water) {
@@ -3447,12 +3555,19 @@ export class Road {
     // Double solid yellow center line — only on multi-lane roads.  Worn
     // per-segment toward a duller, sun-faded yellow so it isn't a flat
     // fluorescent stripe.
-    if (segLanes >= 2) {
+    // Snow buries it: this stripe has its OWN colour and so ignored the snow
+    // blend applied to `laneCol`, which left a bright yellow centre line
+    // painted across an otherwise total whiteout.  It now dissolves into the
+    // road on the same schedule the dashes do (gone by snowBlanket 0.55).
+    if (segLanes >= 2 && snowBlanket < 0.55) {
       const clw1 = Math.max(1, Math.round(lw1 * 0.55));
       const clw2 = Math.max(1, Math.round(lw2 * 0.55));
       const gap1 = lw1 * 1.1;
       const gap2 = lw2 * 1.1;
-      const wornYellow = lerpColor(0xFFEE00, 0xB8A63A, (seg._sn3 ?? 0) * 0.45);
+      const wornYellow = lerpColor(
+        lerpColor(0xFFEE00, 0xB8A63A, (seg._sn3 ?? 0) * 0.45),
+        road, snowBlanket / 0.55,
+      );
       fillTrap(surfaceG, wornYellow,
         x2 - gap2 - clw2, fy, x2 - gap2,       fy,
         x1 - gap1,        ny, x1 - gap1 - clw1, ny);
@@ -3496,7 +3611,13 @@ export class Road {
     // area.  Fog tints both the surrounding world and the tunnel
     // walls slightly toward the haze colour at distance.
     if (fog > 0.05) {
-      g.fillStyle(palette.fog ?? palette.sky, fog * 0.85);
+      // 0.35 cap (was 0.85): at 85% the last rows were repainted almost
+      // fully in palette.fog — a hard light-blue stripe hugging the far
+      // cap, absurd for a ~380 m view distance.  The biome bands above the
+      // horizon carry "beyond the cap" scenery now; this veil only needs
+      // to soften the last rows, matching the world fill's 0.35 blend so
+      // fill → veil → clear road is one continuous ramp.
+      g.fillStyle(palette.fog ?? palette.sky, fog * 0.35);
       g.fillRect(-M, fy, SCREEN_W + M * 2, segH);
     }
   }
@@ -4342,6 +4463,48 @@ export class Road {
   /** Back-compat NPC projection — same shape as before (sx/sy/sw, no
    *  visible/scale).  Returns null on clipped segments so callers that
    *  currently `if (!proj) return` cull cleanly. */
+  /** Far shore across a horizontal span: a soft shore band with a rolling
+   *  treeline silhouette on top, sitting just under the horizon.
+   *
+   *  Extracted from the floating-bridge render so ONE-SIDED water can use
+   *  it too.  Without a far shore a lake paints as a flat field running to
+   *  the screen edge, which is correct for open water like Elliott Bay but
+   *  makes Sammamish or Keechelus read as ocean — and makes anything drawn
+   *  behind them look like it is rising out of the sea.
+   *
+   *  Painted once per frame at the horizon, NOT per segment: the far shore
+   *  sits at a fixed world distance, so it belongs to the horizon band
+   *  rather than to any one segment's projection. */
+  _paintFarShore(g, xFrom, xTo, alpha = 1) {
+    if (alpha <= 0.01 || xTo <= xFrom) return;
+    const shoreY = H() - 2;
+    // Soft shore band — slightly lighter than the water, so the treeline
+    // has something to fade into rather than meeting water at a hard edge.
+    g.fillStyle(0x5A6458, 0.55 * alpha);
+    g.fillRect(xFrom, shoreY, xTo - xFrom, 3);
+
+    // Treeline silhouette.  Originally stepped every 5 px at 4-14 px tall,
+    // which was fine on the floating-bridge crossing it was written for —
+    // seen small, far away, across open water.  Reused at lake scale on a
+    // wide display it became ~500 hard-edged rectangles in a row and read
+    // as a pixelated blocky slab across the horizon.
+    //
+    // Now: 3 px steps, a shorter 2-8 px profile, and a fourth
+    // higher-frequency term so the crowns break up into something
+    // tree-shaped instead of rolling mounds.  Colour is a desaturated
+    // blue-green at low alpha rather than near-black, so it reads as
+    // several miles away instead of sitting on top of the water.
+    const treeStep = 3;
+    g.fillStyle(0x3B4A42, 0.72 * alpha);
+    for (let x = xFrom; x < xTo; x += treeStep) {
+      const n = Math.sin(x * 0.041) + Math.sin(x * 0.097 + 1.1) * 0.55
+              + Math.sin(x * 0.187 + 2.3) * 0.32
+              + Math.sin(x * 0.409 + 0.7) * 0.22;
+      const treeH = 2 + Math.max(0, n + 1.4) * 2.2;     // 2-8 px tall
+      g.fillRect(x, shoreY - treeH + 2, Math.min(treeStep + 1, xTo - x), treeH);
+    }
+  }
+
   getVehicleProjection(relativeZ, laneOffset /* playerLatX not needed */) {
     const s = this.sampleSurface(relativeZ, laneOffset);
     if (!s) return null;

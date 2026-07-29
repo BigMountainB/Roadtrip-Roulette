@@ -158,6 +158,11 @@ export const PTS_CRASH    = 500;
 // Hitchhiker NICE FOLKS payout.  PARTY FAVOR is half this (per the
 // existing 0.5× multiplier in the hitchhiker handler).
 export const PTS_HITCH    = 500;
+// How far you have to drive before a hitchhiker shows their hand (owner spec,
+// 2026-07-27).  The outcome is ROLLED at pickup but sealed — nothing is
+// applied until this many miles have passed, so the gamble stays a gamble.
+// Arriving at a rest stop reveals early: the rider gets out there.
+export const HITCH_REVEAL_MILES = 5;
 export const VICE_MULT    = 0.5;
 
 // Per-vice pickup points (doubled when that bar is full)
@@ -388,6 +393,36 @@ export const CHECKPOINTS = _CP_RAW.map(cp => ({
   tEnd: (cp.end ?? cp.mileage) / TOTAL_ROUTE_MILES,
 }));
 
+// ── Demo build (App Store push) ──────────────────────────────────────────
+// The demo is West Seattle → the Snoqualmie rest stop only.  The FULL route
+// data above is left completely intact — DEMO_MODE just ends the run early at
+// DEMO_FINISH_MILE, so one codebase ships both the demo and the full game.
+//   • Ship the demo: set the base value below to `true`.
+//   • Test either way from any build: `?demo=1` forces it on, `?demo=0` off.
+function _computeDemoMode() {
+  let on = false;   // ← flip to true for the App Store DEMO build
+  // Build-time: `VITE_DEMO=1 vite build` bakes a demo-only bundle (the
+  // website/demo/ embed) so there's no full-route access and no reliance on a
+  // ?demo query param.
+  try {
+    const _env = import.meta.env;
+    if (_env && (_env.VITE_DEMO === '1' || _env.VITE_DEMO === 'true')) on = true;
+  } catch (_) { /* import.meta unavailable (non-ESM contexts) — ignore */ }
+  // Runtime URL override — forces demo on/off from ANY build, for testing.
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.has('demo')) on = q.get('demo') !== '0';
+  } catch (_) { /* non-browser (tests) — keep the base value */ }
+  return on;
+}
+export const DEMO_MODE = _computeDemoMode();
+// Snoqualmie rest stop mileage (REST_STOPS 'SQ').  Crossing this ends the demo.
+export const DEMO_FINISH_MILE = 25;
+// Playable genres in the demo — the other 8 still SHOW in the music grid (locked,
+// as full-game teasers) but can't be picked, and their heavy car/culture/music
+// assets aren't shipped in the demo bundle.  Culture keys match STATIONS.culture.
+export const DEMO_GENRES = ['country', 'hiphop_phonk'];
+
 /** HUD location label for a given progress (0–1).  Returns the name of
  *  the location whose [start, end] range contains the player, or the
  *  closest preceding location if the player is in a "between" gap. */
@@ -465,7 +500,7 @@ export function getLastSignTown(currentMile) {
 // at Colfax, and finishes on WA-270 into Pullman (we reuse hwy_wa270 for
 // WA-271 since the same green WA-state badge fits visually).
 const _REST_STOP_DEF = [
-  { id: 'S',  name: 'Seattle, WA',         mileage:    4, exit: 'Exit 4',     hwy: 'hwy_i90',   amenities: ['cargo', 'lord', 'suck', 'parkride', 'vices', 'ambm'] },
+  { id: 'S',  name: 'Seattle, WA',         mileage:    4, exit: 'Exit 4',     hwy: 'hwy_i90',   amenities: ['cargo', 'lord', 'suck', 'parkride', 'vices', 'ambm', 'schwasted', 'fap'] },
   // Mercer Island sits between the Mercer Island Lid Tunnel (8.5–9.0)
   // and the East Channel Bridge (10–11.5).  Mile 9.5 keeps the entire
   // 1-mi ramp window (8.5–9.5) on dry road only after the player exits
@@ -474,16 +509,16 @@ const _REST_STOP_DEF = [
   // Bellevue moved 1 mi past the East Channel Bridge end (mile 11.5) so
   // the ramp window (11.5–12.5) lands on dry Bellevue shoreline rather
   // than half-on the floating bridge.
-  { id: 'B',  name: 'Bellevue, WA',        mileage: 12.5, exit: 'Exit 10',    hwy: 'hwy_i90',   amenities: ['cargo', 'lord', 'suck', 'parkride', 'vices', 'ambm'] },
-  { id: 'I',  name: 'Issaquah, WA',        mileage:   18, exit: 'Exit 18',    hwy: 'hwy_i90',   amenities: ['cargo', 'hunting', 'camp', 'lord', 'parkride', 'vices'] },
+  { id: 'B',  name: 'Bellevue, WA',        mileage: 12.5, exit: 'Exit 10',    hwy: 'hwy_i90',   amenities: ['cargo', 'lord', 'suck', 'parkride', 'vices', 'ambm', 'schwasted', 'fap'] },
+  { id: 'I',  name: 'Issaquah, WA',        mileage:   18, exit: 'Exit 18',    hwy: 'hwy_i90',   amenities: ['cargo', 'hunting', 'camp', 'lord', 'parkride', 'vices', 'schwasted'] },
   { id: 'SQ', name: 'Snoqualmie, WA',      mileage:   25, exit: 'Exit 25',    hwy: 'hwy_i90',   amenities: ['parkride', 'vices', 'ambm'] },
-  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['cargo', 'camp', 'lord', 'parkride', 'vices', 'ambm'] },
+  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['cargo', 'camp', 'lord', 'parkride', 'vices', 'ambm', 'schwasted'] },
   { id: 'SP', name: 'Snoqualmie Pass, WA', mileage:   53, exit: 'Exit 53',    hwy: 'hwy_i90',   amenities: ['cargo', 'camp', 'ambm'] },
   { id: 'EA', name: 'Easton, WA',          mileage:   70, exit: 'Exit 70',    hwy: 'hwy_i90',   amenities: ['camp', 'vices'] },
-  { id: 'C',  name: 'Cle Elum, WA',        mileage:   84, exit: 'Exit 84',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'camp', 'lord', 'vices'] },
+  { id: 'C',  name: 'Cle Elum, WA',        mileage:   84, exit: 'Exit 84',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'camp', 'lord', 'vices', 'schwasted', 'fap'] },
   { id: 'TH', name: 'Thorp, WA',           mileage:  101, exit: 'Exit 101',   hwy: 'hwy_i90',   amenities: ['camp', 'vices'] },
-  { id: 'E',  name: 'Ellensburg, WA',      mileage:  109, exit: 'Exit 109',   hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'suck', 'parkride', 'vices'] },
-  { id: 'V',  name: 'Vantage, WA',         mileage:  137, exit: 'Exit 137',   hwy: 'hwy_i90',   amenities: ['gas', 'camp', 'ambm'] },
+  { id: 'E',  name: 'Ellensburg, WA',      mileage:  109, exit: 'Exit 109',   hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'suck', 'parkride', 'vices', 'schwasted', 'fap'] },
+  { id: 'V',  name: 'Vantage, WA',         mileage:  137, exit: 'Exit 137',   hwy: 'hwy_i90',   amenities: ['gas', 'camp', 'ambm', 'schwasted'] },
   // 2026-05-31: non-I-90 rest stops switched from highway-name labels
   // ("WA-262", "WA-17", "Airport Rd", etc.) to "Exit <mileage>".  The
   // sign already carries the highway as a shield-badge image, so the
@@ -491,9 +526,9 @@ const _REST_STOP_DEF = [
   // real WSDOT exit numbers ("Exit 4", "Exit 7B", etc.) since those
   // ARE numeric and don't echo the I-90 shield.
   { id: 'Y',  name: 'Royal City, WA',      mileage:  158, exit: 'Exit 158',   hwy: 'hwy_wa26',  amenities: ['gas', 'hunting', 'vices'] },
-  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['gas', 'lord', 'suck', 'vices', 'ambm'] },
+  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['gas', 'lord', 'suck', 'vices', 'ambm', 'schwasted', 'fap'] },
   { id: 'H',  name: 'Hatton, WA',          mileage:  205, exit: 'Exit 205',   hwy: 'hwy_wa26',  amenities: ['gas', 'ambm'] },
-  { id: 'W',  name: 'Washtucna, WA',       mileage:  228, exit: 'Exit 228',   hwy: 'hwy_wa26',  amenities: ['gas', 'camp', 'ambm'] },
+  { id: 'W',  name: 'Washtucna, WA',       mileage:  228, exit: 'Exit 228',   hwy: 'hwy_wa26',  amenities: ['gas', 'camp', 'ambm', 'schwasted'] },
   { id: 'L',  name: 'La Crosse, WA',       mileage:  253, exit: 'Exit 253',   hwy: 'hwy_us195', amenities: ['gas', 'hunting'] },
   { id: 'CO', name: 'Colfax, WA',          mileage:  274, exit: 'Exit 274',   hwy: 'hwy_us195', amenities: ['gas', 'lord', 'suck', 'parkride', 'vices'] },
   { id: 'P',  name: 'Pullman, WA',         mileage:  289, exit: 'Exit 289',   hwy: 'hwy_wa270', amenities: ['cargo', 'lord', 'parkride', 'vices', 'ambm'] },

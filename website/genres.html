@@ -5,7 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Genres &amp; Garage — Road Trip Roulette</title>
 <meta name="description" content="Ten genres, ten cars, ten original soundtracks. Hear every track and compare every ride.">
-<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/site.css?v=13">
+
+<!-- Link preview (iMessage / Slack / Twitter / Facebook).  Must be real markup:
+     preview crawlers don't run the JS that injects the nav, so these can't be
+     generated at runtime. Absolute URLs are required by the spec. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Road Trip Roulette">
+<meta property="og:url" content="https://roadtrip-roulette.pages.dev/genres">
+<meta property="og:title" content="Genres &amp; Garage — Road Trip Roulette">
+<meta property="og:description" content="Ten genres, ten cars, ten original soundtracks. Hear every track and compare every ride.">
+<meta property="og:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Road Trip Roulette — neon logo over a rain-slicked I-90 heading east out of Seattle at night">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Genres &amp; Garage — Road Trip Roulette">
+<meta name="twitter:description" content="Ten genres, ten cars, ten original soundtracks. Hear every track and compare every ride.">
+<meta name="twitter:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
 </head>
 <body>
 
@@ -32,6 +49,78 @@ let audio = null, playingEl = null;
 const DEMO_GENRES = new Set(['country', 'hiphop_phonk']);
 const PREVIEW_SECONDS = 30;
 
+// The 14 per-culture vice/item reskins — THREE columns (owner spec):
+// Food | Caffeine | Hydration, ordered so each column runs its own badge
+// color first and ends with its red-ringed "warning label" items.
+const VICE_GROUPS = [
+  ['#FF7A1A', 'Food', [
+    ['burrito', 'Burrito'], ['hotdog', 'Hot Dog'], ['combo_meal', 'Combo Meal'],
+    ['sushi', 'Sushi'], ['gummies', 'Gummies'],
+    ['food_coma', 'Food Coma'],                       // red
+  ]],
+  ['#F2C94C', 'Caffeine', [
+    ['caffeine_pills', 'Caffeine Pills'], ['cold_brew', 'Cold Brew'],
+    ['energy_shot', 'Energy Shot'],
+    ['emergency_espresso', 'Emergency Espresso'],     // red
+    ['redneck_rage', 'Redneck Rage'],                 // red
+  ]],
+  ['#3AA0FF', 'Hydration', [
+    ['water', 'Water'], ['slushie', 'Slushie'],
+    ['dramamine', 'Dramamine'],                       // red
+  ]],
+];
+
+// World art that isn't tied to a single genre — moved here from the retired
+// Press Kit page and shown as a final "Additional Artwork" tab.
+const ART_GROUPS = [
+  ['The Law', 'law', [
+    ['car_front_police', 'Cruiser'], ['car_front_swat', 'SWAT'], ['heli_1', 'Helicopter'],
+  ]],
+  ['Traffic', 'traffic', [
+    ['car_npc_hatchback_front', 'Hatchback'], ['car_npc_minivan_front', 'Minivan'],
+    ['car_npc_wagon_front', 'Wagon'], ['codex_semi_red_front', 'Semi'],
+    ['codex_suv4x4_front', '4×4 SUV'], ['codex_sports_car_front', 'Sports Car'],
+  ]],
+  ['Weapons', 'weapons', [
+    ['rolling_coal', 'Rolling Coal'], ['fireworks', 'Fireworks'],
+    ['paint_bomb', 'Paint Bomb'], ['disguise', 'Disguise'],
+  ]],
+  ['The Locals', 'people', [
+    ['long_haul_mike', 'Long-Haul Mike'], ['diner_waitress', 'Diner Waitress'],
+    ['grandma', 'Grandma'], ['farm_worker', 'Farm Worker'],
+    ['hiker_woman', 'Hiker'], ['park_ranger', 'Park Ranger'],
+    ['ski_bum', 'Ski Bum'], ['chain_guy', 'Chain Guy'],
+    ['street_weirdo', 'Street Weirdo'], ['biz_founder', 'The Founder'],
+  ]],
+  ['Roadside Casualties', 'smashables', [
+    ['construction_cone_transparent', 'Cone'], ['orange_barricade_transparent', 'Barricade'],
+    ['road_barrel_transparent', 'Road Barrel'], ['mailbox_transparent', 'Mailbox'],
+    ['trash_can_transparent', 'Trash Can'], ['recycle_can_transparent', 'Recycle Can'],
+    ['sandwich_board_transparent', 'Sandwich Board'], ['bike_transparent', 'Bike'],
+  ]],
+];
+
+// Per-sprite corrections: a flat 1/6 assumes every sprite was exported at the
+// same scale, and they weren't — the semi (283px source) and helicopter (384px)
+// come out tiny beside a 768px car, while the 768px cruiser reads oversized.
+// Keyed by filename, so everything absent from this map keeps the plain 1/6.
+const SPRITE_SCALE = {
+  car_front_police:     0.875,  // 128 → 112px, slightly smaller
+  car_front_swat:       1.25,   //  83 → 104px, slightly bigger
+  heli_1:               1.85,   //  64 → 118px, much bigger
+  codex_semi_red_front: 2.15,   //  47 → 101px, much bigger
+};
+
+// Render every gallery sprite at 1/6th its natural pixel size.
+function sizeSprites(root) {
+  root.querySelectorAll('.sprite-card img').forEach(img => {
+    const key = (img.getAttribute('src') || '').split('/').pop().replace('.png', '');
+    const k = SPRITE_SCALE[key] ?? 1;
+    const apply = () => { if (img.naturalWidth) img.style.width = (img.naturalWidth / 6 * k) + 'px'; };
+    img.complete ? apply() : img.addEventListener('load', apply, { once: true });
+  });
+}
+
 GENRES.forEach((g, i) => {
   const b = document.createElement('button');
   b.className = 'genre-tab';
@@ -40,6 +129,16 @@ GENRES.forEach((g, i) => {
   b.addEventListener('click', () => select(i));
   tabs.append(b);
 });
+
+// Final tab — not a genre, so it gets its own handler.  It stays LAST, which
+// also means select()'s index-based active toggle naturally clears it.
+const ART_COLOR = '#9aa1b2';
+const artTab = document.createElement('button');
+artTab.className = 'genre-tab';
+artTab.textContent = 'Additional Artwork';
+artTab.style.setProperty('--g', ART_COLOR);
+artTab.addEventListener('click', selectArt);
+tabs.append(artTab);
 
 function stop() {
   if (audio) { audio.pause(); audio = null; }
@@ -90,6 +189,21 @@ function select(i) {
       ${g.tracks.length > half
         ? `<div class="tracklist">${g.tracks.slice(half).map((t, n) => trackRow(t, n + half)).join('')}</div>`
         : ''}
+    </div>
+    <h3 style="margin-top:26px">Sprite Art
+      <span class="dim small" style="font-weight:400"> · every item on the road, reskinned for ${g.name}</span>
+    </h3>
+    <div class="sprite-cols">
+      ${VICE_GROUPS.map(([color, label, sprites]) => `
+        <div class="sprite-col">
+          <div class="sprite-group-label"><span class="swatch" style="background:${color}"></span>${label}</div>
+          ${sprites.map(v => `
+            <figure class="sprite-card">
+              <img src="assets/culture/${g.key}/vices/${v[0]}.png" alt="${v[1]}" loading="lazy"
+                onerror="this.closest('figure').style.display='none'">
+              <figcaption>${v[1]}</figcaption>
+            </figure>`).join('')}
+        </div>`).join('')}
     </div>`;
 
   panel.querySelectorAll('.track').forEach(row => {
@@ -110,10 +224,38 @@ function select(i) {
       row.querySelector('.t-play').textContent = '❚❚';
     });
   });
+
+  sizeSprites(panel);
+}
+
+// "Additional Artwork" — the non-genre world art.  Same .sprite-grid markup the
+// Press Kit page used, so the existing styles apply unchanged.
+function selectArt() {
+  stop();
+  [...tabs.children].forEach(t => t.classList.toggle('active', t === artTab));
+  panel.style.setProperty('--g', ART_COLOR);
+  panel.innerHTML = `
+    <div class="genre-head">
+      <h2 style="color:${ART_COLOR}">Additional Artwork</h2>
+      <p class="dim">World art that isn't tied to one genre — the law, civilian
+      traffic, weapons, the people you meet at rest stops, and everything you can
+      flatten on the shoulder.</p>
+    </div>
+    ${ART_GROUPS.map(([label, dir, items]) => `
+      <h3 style="margin-top:26px">${label}</h3>
+      <div class="sprite-grid">
+        ${items.map(([f, name]) => `
+          <figure class="sprite-card">
+            <img src="assets/gallery/${dir}/${f}.png" alt="${name}" loading="lazy"
+              onerror="this.closest('figure').style.display='none'">
+            <figcaption>${name}</figcaption>
+          </figure>`).join('')}
+      </div>`).join('')}`;
+  sizeSprites(panel);
 }
 
 select(0);
 </script>
-<script type="module" src="js/site.js"></script>
+<script type="module" src="js/site.js?v=6"></script>
 </body>
 </html>

@@ -26,7 +26,11 @@ function _write(save, key, val) {
 export function getInstalled(save, vehicleId) {
   const perm = _read(save, 'upgrades')[vehicleId] ?? {};
   const temp = _read(save, 'tempUpgrades')[vehicleId] ?? {};
-  return { ...temp, ...perm };
+  // Temp SHADOWS perm: a run-scoped install (Custom sandbox purchase, temp
+  // repair) applies over the permanent part for this run, and the permanent
+  // part resurfaces when the temp store is cleared at the next fresh run.
+  // (Was { ...temp, ...perm }, which hid a sandbox L3 behind a permanent L1.)
+  return { ...perm, ...temp };
 }
 
 /** The installed upgrade object in a given slot, or null. */
@@ -42,12 +46,15 @@ export function hasUpgrade(save, vehicleId, upgradeId) {
 
 /** Install an upgrade (payment handled by the caller / garage UI).  Replaces
  *  whatever occupied the slot.  Returns { ok, reason, replaced }. */
-export function buyUpgrade(save, vehicleId, upgradeId) {
+export function buyUpgrade(save, vehicleId, upgradeId, opts = {}) {
   const up = getUpgradeById(upgradeId);
   if (!up) return { ok: false, reason: 'unknown-upgrade' };
   if (!UPGRADE_SLOTS.includes(up.slot)) return { ok: false, reason: 'bad-slot' };
 
-  const permKey = up.effects?.persistent === false ? 'tempUpgrades' : 'upgrades';
+  // `opts.forceTemp` routes the install to the run-scoped tempUpgrades store
+  // regardless of the part's own persistence — Custom-mode (sandbox)
+  // purchases use it so nothing bought in Custom survives into a real run.
+  const permKey = (opts.forceTemp || up.effects?.persistent === false) ? 'tempUpgrades' : 'upgrades';
   const otherKey = permKey === 'upgrades' ? 'tempUpgrades' : 'upgrades';
 
   const all = _read(save, permKey);

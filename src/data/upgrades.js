@@ -35,6 +35,44 @@ export const SLOT_LABELS = {
   police: 'Police Avoidance',
 };
 
+// ── Garage toolbar categories (owner art, 2026-07-28) ────────────────────
+// `assets/ui/garage_upgrade_toolbar.png` is ONE 1672x220 strip of seven tabs
+// with their labels already baked into the art.  ORDER HERE MUST MATCH THE
+// ART, left to right — the renderer slices the strip into seven equal columns
+// by index, so reordering this array silently mislabels every tab.
+//
+// Seven tabs cover ten of the twelve slots.  `body` and `police` have no tab;
+// they surface at Finesse as always-visible services instead (body work is
+// that shop's namesake, not a parts category).  If the toolbar art ever grows
+// to nine tabs, they get entries here and drop out of the services list.
+export const GARAGE_CATEGORIES = [
+  { id: 'tires',      label: 'TIRES',               slots: ['tires'],      icon: 'garage_ico_tires' },
+  { id: 'brakes',     label: 'BRAKES',              slots: ['brakes'],     icon: 'garage_ico_brakes' },
+  { id: 'suspension', label: 'SUSPENSION',          slots: ['suspension'], icon: 'garage_ico_suspension' },
+  { id: 'engine',     label: 'ENGINE',              slots: ['engine'],     icon: 'garage_ico_engine' },
+  { id: 'fuel',       label: 'FUEL',                slots: ['fuel'],       icon: 'garage_ico_fuel' },
+  { id: 'coolant',    label: 'COOLANT',             slots: ['cooling'],    icon: 'garage_ico_coolant' },
+  { id: 'wipers',     label: 'WIPERS / HEADLIGHTS',
+    slots: ['wipers', 'headlights', 'foglights', 'windshield'],            icon: 'garage_ico_wipers' },
+];
+
+/** Which toolbar categories each garage brand stocks.  Les Schwasted is the
+ *  tyre-and-brake specialist (fast, cheap, common); Finesse is full
+ *  service (expensive, rare) and also carries the untabbed body/police
+ *  slots plus repair, paint, bumper and NOS. */
+export const SHOP_CATEGORIES = {
+  les_schwasted: ['tires', 'brakes', 'suspension'],
+  fap:           ['engine', 'fuel', 'coolant', 'wipers'],
+};
+
+/** Slots with no toolbar tab — sold as flat services at Finesse. */
+export const UNTABBED_SLOTS = ['body', 'police'];
+
+/** Category descriptor for a slot, or null if the slot has no tab. */
+export function categoryForSlot(slot) {
+  return GARAGE_CATEGORIES.find(c => c.slots.includes(slot)) ?? null;
+}
+
 export const UPGRADE_CATALOG = {
   tires: [
     { id: 'tires_1', slot: 'tires', level: 1, label: 'Used All-Seasons', cost: 250,

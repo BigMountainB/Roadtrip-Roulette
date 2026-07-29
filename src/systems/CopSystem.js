@@ -34,7 +34,7 @@
 import {
   MAX_STARS, STAR_DECAY, MAX_SPEED, ROUTE_SEGS, SEG_LENGTH, TOTAL_ROUTE_MILES,
   COP_REAR_BUMPS_TO_ARREST,
-  COP_HEADONS_TO_ARREST, COP_PITS_TO_ARREST, COP_TOP_MPH,
+  COP_HEADONS_TO_ARREST, COP_PITS_TO_ARREST, COP_TOP_MPH, PLAYER_VIRTUAL_Z,
 } from '../constants.js';
 import { clamp } from '../utils/Helpers.js';
 import { Difficulty } from './Difficulty.js';
@@ -73,6 +73,53 @@ export const FLEE_EXIT_SPAN     = 7400;   // exit completes at rel ≈ -3000
 // Rolling coal that actually smokes a pursuer buys a real lull: NO new cop
 // spawns for 30 s (stars persist — pursuit just doesn't remanifest).
 const COAL_LULL_SEC = 30;
+// ── Pursuit reference frame ─────────────────────────────────────────────
+// The player's CAR is rendered PLAYER_VIRTUAL_Z units AHEAD of
+// player.position (which is the camera/physics origin).  Collision detection
+// and the rear-view mirror both measure from the car; the pursuit AI used to
+// measure from the camera, so a rear cop "caught" the player 3000 units short
+// of the bumper — six times the ±CAR_LEN_Z collision window — and then
+// throttled to 0.92x.  It could close on the camera forever and never touch
+// the car or fill the mirror.  Rear pursuit now targets the car.
+const UNITS_PER_MILE   = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
+// Escape distance: get this far ahead of a pursuer and you have genuinely
+// lost it (owner 2026-07-27).  This replaces the old ~1000 ft cull, which was
+// short enough to delete cops the same tick they spawned.
+const COP_ESCAPE_MILES = 1.5;
+const COP_ESCAPE_UNITS = UNITS_PER_MILE * COP_ESCAPE_MILES;
+
+// ── Chase discipline (police-chase spec, owner 2026-07-28) ──────────────
+// A pursuer may only get IN FRONT of the player at 4-5 stars.  Below that,
+// blocking / overtaking / PIT are unreachable and two guards enforce it.
+const MIN_STARS_AHEAD = 4;
+
+// Car length in world units.  Derived, not guessed: LANE_DASH_LEN (3) x
+// SEG_LENGTH (200) = 600 units per dash, and a US-standard highway dash is
+// 10 ft, giving ~60.8 units/ft.  The spec's 5 m car length is therefore
+// ~997 units — which also matches CAR_LEN_Z (500) being the HALF-length.
+const CAR_LENGTH_Z = 1000;
+
+// GUARD 1 — speed ceiling as a MULTIPLE of the player's speed, never an
+// absolute cap, so it holds at any speed.  Indexed by star 1-5 (0 unused).
+const SPEED_CAP_BY_STAR = [1.03, 1.03, 1.06, 1.08, 1.15, 1.25];
+
+// GUARD 2 — the hard positional clamp, and the one that actually fixes the
+// reported bug: a speed ceiling alone still lets a cop drift past whenever
+// the player brakes harder than the cop can decelerate (braking for a
+// corner is the exact repro).
+//
+// The spec's star-scaled `minGap` standoff was DROPPED (owner call): a 25 CL
+// gap at 1 star put the cop 410 ft back and made the low-star ram
+// unreachable.  The invariant is simply "never exceed the player's depth".
+//
+// TAILGATE_GAP is NOT that standoff — it is collision hygiene.  Pinning a
+// cop at exactly the player's depth would hold it inside the +/-CAR_LEN_Z
+// hit box permanently, registering a ram every frame and busting the player
+// instantly.  A cop parks just clear of the box instead, and a cop actively
+// making a strike is exempt so bumping still lands.
+const TAILGATE_GAP  = 600;
+const RAM_STRIKE_Z  = 2000;   // within this of the bumper = making contact
+const SETTLE_SPEED_MULT = 0.98;   // pinned cops settle rather than stick
 // Rolling-coal recede (owner 2026-07-17): the smoked cop KEEPS PACE with the
 // player for this many seconds, then slows to 0.45× and falls back, dropping
 // off the bottom edge the same way it drove in (pure positional recede — no
@@ -870,6 +917,8 @@ export class CopSystem {
       const cop = this.cops[i];
       const dist  = cop.position - playerPos;
       const aDist = Math.abs(dist);
+      // Where a pursuer actually aims: the player's CAR, not the camera.
+      const pursuitZ = playerPos + PLAYER_VIRTUAL_Z;
 
       // ── ROLLING-COAL TOUCH: a cop that drives into the hanging cloud (and
       // can be chasing — not a stationary barricade or a parked held-stop
@@ -985,6 +1034,13 @@ export class CopSystem {
             // instead of zooming off into the distance.  The previous
             // "always playerSpeed + closing" formula made cops sail past
             // the player and despawn off-screen, leaving the chase blank.
+            //
+            // Distances here are measured to the CAR (see the pursuit frame
+            // note at the top), NOT to the camera — that is what lets a rear
+            // cop actually reach the bumper, register a ram, and fill the
+            // mirror instead of parking 3000 units short of all three.
+            const dist  = cop.position - pursuitZ;
+            const aDist = Math.abs(dist);
             const closing = Math.max(playerSpeed * 0.10, 600);
             if (dist > 0) {
               // Cop is AHEAD of player — slow down so the player either
@@ -1012,8 +1068,13 @@ export class CopSystem {
               // the cop so the next side contact registers as a successful
               // PIT strike.  Was previously only on pursuit-front; now
               // belongs on rear cops since pursuit-front is gone.
+              // STAR GATE: a PIT puts the cop alongside and then across the
+              // player's nose, which is a lead manoeuvre — unreachable below
+              // MIN_STARS_AHEAD.  At 1-3 stars the lateral lock still tracks
+              // (that is just lane-matching to line up a rear bump), but it
+              // never arms a PIT strike.
               const lateralLock = Math.abs(playerX - cop.laneOffset) < 0.18;
-              if (lateralLock) {
+              if (lateralLock && this.stars >= MIN_STARS_AHEAD) {
                 cop._pitProgress = (cop._pitProgress ?? 0) + dt;
                 if (cop._pitProgress > 0.65) cop._pitArmed = true;
               } else {
@@ -1042,13 +1103,75 @@ export class CopSystem {
             cop.speed = playerSpeed;
         }
       }
+
+      // ── ANTI-PASS GUARDS ──────────────────────────────────────────────
+      // Applied to every unit that has no right to lead.  Oncoming traffic
+      // and barricades are exempt by definition (they are SUPPOSED to be in
+      // front), as are fleeing / parked units, which are no longer pursuing.
+      // Gate on the DISPLAYED tier, not the raw float.  `stars` decays
+      // continuously (1 per 60 s), so a raw `>= 4` test flips to false within
+      // a single frame of reaching 4.0 — and worse, it disagrees with the HUD,
+      // which shows Math.floor(stars).  Reading the same floor keeps "cops may
+      // lead" true exactly while the player can SEE 4+ stars.
+      const _starTier = Math.floor(this.stars);
+      const _mayLead = _starTier >= MIN_STARS_AHEAD || !!cop._overtakeToken;
+      const _guarded = !_mayLead && !cop.fleeing && !cop.parked
+                    && cop.kind !== 'oncoming' && cop.kind !== 'barricade';
+      const _copCarDist = cop.position - pursuitZ;   // >0 = cop is ahead
+
+      if (_guarded) {
+        // DEMOTION.  A unit already in front when the gate closes (5* -> 3*,
+        // or a token revoked) must fall back under its OWN braking.  Snapping
+        // it behind the player would teleport a car across the screen.
+        if (_copCarDist > 0) cop._demoting = true;
+        if (cop._demoting) {
+          cop.speed = Math.max(0, playerSpeed * 0.80);   // drift back
+          if (_copCarDist <= -TAILGATE_GAP) cop._demoting = false;
+        } else {
+          // GUARD 1 — ceiling scaled to the player, so it holds at any speed.
+          const _starIdx = Math.max(1, Math.min(5, _starTier));
+          cop.speed = Math.min(cop.speed, playerSpeed * SPEED_CAP_BY_STAR[_starIdx]);
+        }
+      } else {
+        cop._demoting = false;
+      }
+
       cop.position += cop.speed * dt;
+
+      // GUARD 2 — hard positional clamp, applied AFTER integration because
+      // that is the only place an overrun can be observed.  Skipped while
+      // demoting so the fall-back stays smooth rather than snapping.
+      if (_guarded && !cop._demoting) {
+        // A cop mid-strike may close to contact; it still may not pass.
+        const _striking = _copCarDist < 0 && Math.abs(_copCarDist) < RAM_STRIKE_Z;
+        const _limit = pursuitZ - (_striking ? 0 : TAILGATE_GAP);
+        if (cop.position > _limit) {
+          cop.position = _limit;
+          cop.speed    = playerSpeed * SETTLE_SPEED_MULT;
+        }
+      }
 
       // Despawn rules — different per kind.
       if (cop.kind === 'oncoming') {
         if (dist < -2500) this.cops.splice(i, 1);
       } else if (cop.kind === 'rear') {
-        if (dist < -10000 || dist > 30000) this.cops.splice(i, 1);
+        // A PURSUING cop does not quit because it fell behind.  The old rule
+        // culled at dist < -10000, but _spawnCop seeds a rear cop 6-14k back —
+        // PAST that line — and the cull runs in the same update() tick as the
+        // spawn, so roughly half of all star-driven pursuers were deleted
+        // before they ever rendered (the spawn cooldown was still spent:
+        // "cops dispatched", no cop).  It also ended live chases outright
+        // whenever the player out-ran the cruiser, with the star still lit.
+        //
+        // Pursuit now ends only the ways the player can actually cause it to:
+        // a weapon (cop.fleeing, handled above), an arrest, letting the wanted
+        // level decay out, or genuinely OUT-RUNNING the cruiser — you have to
+        // put COP_ESCAPE_MILES between you and it (owner 2026-07-27).  Far
+        // AHEAD is still culled: that's a stranded cruiser, not a chase.
+        const carDist = cop.position - pursuitZ;
+        if (dist > 30000) this.cops.splice(i, 1);
+        else if (carDist < -COP_ESCAPE_UNITS) this.cops.splice(i, 1);
+        else if (this.stars < 1 && carDist < -10000) this.cops.splice(i, 1);
       } else if (cop.kind === 'barricade') {
         // Once player blows past the barricade, drop it.
         if (dist < -2500) this.cops.splice(i, 1);

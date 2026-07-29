@@ -4,7 +4,10 @@ Single consolidated reference for the **Road Trip Roulette** game (commercial fo
 This file merges every project `.md` into one navigable document. Use the Table of Contents
 to jump straight to the chapter you need to read or change.
 
-- **Live build:** https://roadtrip-roulette.pages.dev (auto-deploys on push to `main`)
+- **Live site:** https://roadtrip-roulette.pages.dev — the marketing site (as of 2026-07-27)
+- **Live game:** https://roadtrip-roulette.pages.dev/fully — the FULL game, free + public
+- **Demo embed:** https://roadtrip-roulette.pages.dev/demo — 25-mile browser demo
+- ⚠️ **CI will clobber all three** — see Chapter 2 “Deploy conflict”
 - **Repo:** `BigMountainB/Roadtrip-Roulette`
 - **Local path:** `/Users/brendanbaughn/Documents/Claude/Road trip roulette/`
 
@@ -113,6 +116,360 @@ genre pick, and a "Rotate Phone to Enter Game Play" prompt follows. Remaining: e
 genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
+
+### 2026-07-28 (pt 2) — Custom mode: real pickups, real prices, unlimited wallet
+Local + test-passing (348) + builds clean. Not deployed.
+
+Owner spec: Custom keeps food/drink/caffeine pickups on the road (cull nothing), items COST
+money, but the custom wallet never depletes.
+
+**1. Vice pickups restored.** Custom suppressed them in TWO places — the renderer (they never
+drew) and the collection scan (they couldn't be picked up), both reasoning "the slider already
+set the bars". Both guards removed; pickups now behave identically to every other mode.
+
+**2. Vice bars no longer frozen.** `ViceSystem.update()` skipped all decay when
+`Difficulty.noScore()` — i.e. in Custom. That had to go with #1: a frozen bar plus working
+pickups is a **one-way ratchet**, levels could only climb with no way to sober up. The slider now
+sets the STARTING levels and the run simulates normally. `Difficulty` is no longer imported by
+ViceSystem at all, and `_updateDoses`' `frozen` parameter went with it.
+
+Bars stay **draggable mid-run** — that already existed (`_draggingViceId` for vices,
+`_draggingSurvKey` for Food/Drinks/Alertness/Bladder, both gated on custom); the freeze is what
+made it pointless, since a dragged bar just sat there. A drag is an external write to
+`levels[id]`, which the per-dose reconciliation in `_updateDoses` (see pt 4 below) absorbs — so
+dragging caffeine to 80% now gives you 80% that then decays on the normal schedule.
+
+**3. Every vice unlocked in Custom.** `ViceSystem.pickup()` bails on a locked vice, and the
+fresh-start block only unlocked vices the slider left ABOVE zero — so a vice you zeroed rendered
+a pickup you could drive through forever. Now unlocked unconditionally, and moved into
+`_applyCustomGrants()` so resumed custom runs get it too, not just fresh starts.
+
+**4. Items cost money.** `freeMode` in `RestStopScene` (which zeroed every price in Custom) is
+gone. Prices are real, displayed, and charged to spend-stats; the genre-trait repair discount
+still applies.
+
+**5. The wallet never depletes.** One rule, one place: **`GameScene._cashLoss(amount)`** returns
+0 in Custom and the rounded amount otherwise. Every drain routes through it — the four
+hitchhiker/stranger robberies (−$500/$250/$600/$1200), the AAA call-out, speeding fines, arrest
+bail, and the `busted_late` penalty (the last three were yesterday's inline guards, now unified
+onto the helper). Shop side mirrors it with `RestStopScene._infiniteMoney()`: the purchase is
+fully real (price charged to stats, business unlocked, item applied) but the subtraction is
+skipped. NPC-encounter `addCash` takes gains and ignores losses. Gas-station robbery skipped.
+
+**Route ALL future `score -=` sites through `_cashLoss()`** rather than adding another mode
+check — that's the whole point of the helper.
+
+Note: money is unearnable in Custom (`_scoreMult()` returns 0) and now unloseable, so the
+balance sits at exactly the $100,000 seed. OD stays enabled in Custom per owner ("we don't
+really OD any more, it's falling asleep or throwing up").
+
+### 2026-07-28 — Custom mode: $0 and no weapons after a crash-load
+Local + test-passing (348) + builds clean. Not deployed.
+
+Owner report: played Custom, crashed, loaded back in with **$0 and no weapons** instead of
+$100,000 and a full rack.
+
+**The weapons symptom identified the bug.** `useF12Token` skips every decrement when the mode
+is custom (`CopSystem.js:499-508`) — weapons are literally unspendable there. An empty rack
+therefore *cannot* be depletion; it proves the seeding never ran.
+
+**Defect 1 — the grants lived in the one method every resume path skips.** `$100,000` and the
+weapon inventory were seeded inline in `_startGameplay()`, which only runs on the START tap or
+when `_freshStart` is set. Crash auto-resume, LOAD SAVE and checkpoint respawn all bypass it —
+the code says so itself ("resume + checkpoint respawn skip `_startGameplay`"). Any of those
+doors = a Custom run with no money and no guns.
+
+Fixed by extracting **`_applyCustomGrants()`** — idempotent, **top-up only** (owner's call):
+`score = max(score, 100_000)`, each weapon slot topped back to a full stack of 3 rather than
+reset, so a resumed run holding more keeps it. Called from three places, all no-ops outside
+custom: `_startGameplay()`, the end of `_applyResumeSnapshot()` (must run *after* the snapshot
+overwrites score/weapons), and the end of `_doCreate()` as the catch-all so no future entry
+point can be missed the way `_startGameplay` alone was.
+
+**Defect 2 — a Custom run's autosave is written to a bucket that never reaches disk.**
+`'liveRun'` is in `SANDBOX_KEYS` (`SaveSystem.js:59-67`) and Custom turns the sandbox on, so
+`_autosaveRun()`'s `save.set('liveRun', …)` lands in `_sandboxStore` — and `save()` only
+serializes `this.data`. The snapshot dies with the reload. Worse, `init()` reads `liveRun`
+*before* `_doCreate` enables the sandbox, so the crash boot read the **real profile's** liveRun
+(a leftover from the last *scored* run) and, with the crash marker set, auto-resumed that —
+dropping the player into another run's wallet while they believed they were still in Custom.
+Note the inconsistency that set the trap: `_saveCurrentRun()` refuses in custom ("Custom games
+don't save"), but `_autosaveRun()` had no such guard and wrote silently into the void.
+
+**Fix (owner's call): Custom never auto-resumes.** `init()` now checks the persisted difficulty
+(read straight off the save — `Difficulty.hydrate()` hasn't run yet at init time, and
+`'difficulty'` is not a sandbox key) and skips the resume entirely for custom. On a genuine
+**crash** it sets `_reopenCustomSetup`, and `_doCreate` reopens the **Custom setup menu** over
+the title so the player re-picks their settings or backs out. A clean boot that merely has
+Custom selected just shows the title. Required extracting the setup modal out of the title
+START closure into **`_openCustomSetupModal()`**, now shared by both entry points.
+
+**Defect 3 — direct `score -=` sites bypassed the no-score gate.** Every normal money path
+collapses to zero in Custom via `_scoreMult()`, but four places subtracted cash directly, so
+tickets and bail were quietly eating the $100k with no crash required. Gated on
+`Difficulty.noScore()`: speeding fines, arrest bail, the `busted_late` cash penalty, and the
+gas-station robbery roll in `RestStopScene`. (The crash/overdose wallet settlement was already
+mode-gated and is unchanged.)
+
+### 2026-07-27 (pt 5) — Lake Easton held 75 ft back from the roadway
+Local + test-passing (348) + builds clean. Not deployed.
+
+A lake used to be one of two things: `'shore'` (water plane starts at the pavement edge, with
+guardrail and dunk) or `'distant'` (horizon-only, unreachable). Easton was `'shore'`, so the
+lake rendered hard against the rumble strip. It should sit 50–100 ft off the road.
+
+**New third option: `setbackFt` on a `'shore'` lake** (`src/road/RouteData.js`, LAKES table).
+Easton is `setbackFt: 75`; every other lake omits it and is byte-for-byte unchanged.
+
+Lateral distances are `p.x` road half-widths — `p.x ±1` is the pavement edge and the road is
+4 lanes ≈ 50 ft edge to edge, so **one half-width ≈ 25 ft** (`FT_PER_HALF_WIDTH`). 75 ft
+therefore puts the waterline at `|p.x| = 4.0`, published once as `seg.lakeWaterEdgeX` so the
+three consumers can never disagree about where the shore is:
+
+1. **Render** (`Road.js`, both flanks) — water fill starts at `x2 ± lakeWaterEdgeX * w2`
+   instead of the pavement+rumble edge. The terrain pass already painted that flank, so simply
+   starting the fill further out is what leaves real ground showing. Clamped so a setback can
+   never pull the waterline back *inside* the rumble strip.
+2. **Dunk** (`GameScene.js`) — `DUNK_THRESH` becomes `seg.lakeWaterEdgeX ?? 1.15`. You can no
+   longer drown standing on dry ground 75 ft from the lake.
+3. **Scenery** — `'shore'` used to delete *every* sprite on the water flank so trees wouldn't
+   render standing in the lake. Now it deletes only sprites at `|offset| >= waterEdgeX`;
+   anything inside the setback is on genuine dry ground and survives, which is what puts a
+   shoreline strip back at Easton. Collectibles still always survive.
+
+**⚠️ THE GUARDRAIL WAS NOT MOVED — this was the owner's explicit call, don't "fix" it later.**
+The rail stays a solid wall at `BRIDGE_RAIL` (0.95) on every `waterRight` segment, exactly as
+before. Consequence, accepted knowingly: the 75 ft strip is **unreachable** and the relocated
+dunk at 4.0 effectively cannot fire at Easton. The setback is a visual/geographic correction,
+not new drivable ground. The barrier is worth more intact than the sink is worth reachable —
+see the `feedback_never_touch_walls` standing rule.
+
+Related: `SINK_EDGE` (1.15) in the rail-rescue exception previously carried a "keep equal to
+DUNK_THRESH below" comment. That invariant is now deliberately broken — comment corrected, no
+behaviour change. Also noted while in here: `src/road/Road 2.js` is a stale unimported
+duplicate of `Road.js` (nothing references it); left in place, but it's dead.
+
+### 2026-07-27 (pt 4) — Stimulants get PER-DOSE timers (the "200 mph Lowrider" fix)
+Local + test-passing (348). Not built, not deployed.
+
+**The report.** The reggaeton Lowrider was doing 150 mph cruising and 200 boosting, against a
+data table that says 115 / 135 (`src/data/genreVehicleTraits.js`).
+
+**Root cause — it was never a speed bug, it was a *duration* bug.** `ViceSystem.update()`
+modelled each vice as ONE shared scalar draining at a flat `cfg.decayRate`, so every additional
+pickup extended the whole bar's lifetime instead of running its own clock. Four caffeine pills
+(25% each) filled the bar to 100% and then took **204 seconds** to drain — not ~51 s apiece.
+A full caffeine bar feeds `EffectsSystem`'s `speedMult` at `1 + caffeine × 0.45` = **×1.45**,
+which multiplies the genre car's base in `GameScene._updatePlayer`. So `115 × 1.45 = 167 mph`
+*without touching the accelerator*, sustained for over three minutes, and the player read that
+as "the car goes 200".
+
+**The fix.** The three stimulants are now DOSE-TRACKED (`DOSE_SECONDS` in `ViceSystem.js`).
+Every pickup becomes its own `{amt, t, dur}` entry whose clock starts the instant it's
+collected; the bar level is the SUM of the live doses' remaining fractions. Stacking now raises
+the bar **higher**, never **longer** — dose #4 expires on its own schedule no matter what doses
+#1–3 are doing.
+
+| Vice | Fill | Per-dose life |
+|---|---|---|
+| 💊 Caffeine | 25% → **10%** | **60 s** |
+| 🧋 Cold Brew | 18% → **10%** | **45 s** |
+| ⚡ Energy | 10% (unchanged) | **30 s** |
+
+Net: peak caffeine `speedMult` from a realistic 4-pill stack drops **×1.45 → ×1.18**, and it
+lasts under a minute instead of 3½. Lowrider peak 196 → 159 mph. The other 8 vices keep the
+shared-drain model — alcohol/weed/opioids need per-dose durations designed from scratch (a
+naive conversion would gut a beer down to ~12 s) and that's a separate pass.
+
+**Reconciliation matters.** GameScene writes `vices.levels[id]` directly in ~13 places
+(rest-stop "reduce vices" buys, Narcan opioid flush, save restore, dev slider, and the
+cross-vice drops inside `pickup()`). `_updateDoses` compares the current level against what it
+last wrote and, on mismatch, rescales the live doses to the externally-set total — preserving
+their individual clocks. **Those 13 call sites were not touched and must not need to be.**
+`tests/vices.test.mjs` covers all three write shapes (zero / halve / set-from-nothing).
+
+**Deliberately NOT done** (considered and passed on):
+- No absolute mph clamp in `_updatePlayer`. Without one, ECU (×1.10) + downhill (×1.15) are
+  structurally ×1.27, so a 135 base still reaches ~171 with a full stack. Acceptable for now;
+  revisit if playtest still reads too fast.
+- Genre base-speed table untouched (all 10 cars keep their current cruise/top).
+- `EffectsSystem` speedMult coefficients untouched (energy 0.55 / caffeine 0.45, clamp 1.8).
+- Caffeine `odThreshold` still 1.0001 — at 10% a dose that now needs **11 live doses inside
+  60 s**, so caffeine OD is effectively unreachable. Drop it to ~0.5 if OD should stay in play.
+
+### 2026-07-27 (pt 3) — SITE LIVE: marketing site at root, full game moved to `/fully`, desktop-bridge + phone-UI fixes, link previews
+Website went public and the Pages project now serves **two things**. Game changes are local +
+test-passing (327); website changes are deployed and verified live.
+
+**⚠️ Read Chapter 2 “Deploy conflict” before the next `git push`.** The GitHub Action still
+deploys `dist` (the game) to the root of this same Pages project, so the next push to `main`
+will wipe the marketing site and `/fully`. Nothing is lost — Pages keeps every deployment and
+rollback is one click — but the workflow needs rewiring before pushing.
+
+**Phone-UI sizing bug (game).** Every modal inside `#phone-menu` sized itself in `vmin`, which
+measures the WINDOW. In a browser there's no phone to rotate, so the desktop bridge reframes the
+menu as a small portrait card (`width: calc(100svh * 853 / 1844)`) — and `vmin` then measured
+something ~7x larger than the frame. The reset-player confirm wrapped one word per line and
+pushed its buttons off the bottom. Fix: `#phone-menu` declares `container-type: inline-size` and
+121 rules (314 values) moved `vmin` → `cqw`. On a real phone the frame IS the viewport, so
+`cqw === vmin` — mobile renders pixel-identically (verified: 47 differing pixels out of 329,160,
+max delta 1/255, all backdrop-blur dither in one corner).
+
+**Desktop bridge (game).** Three dead ends for browser players:
+- **Title screen had no route into the phone menu at all** — `_togglePause()` returns early while
+  `_awaitingStart`, so the pause overlay (where the only "iPHONE MENU" button lived) never opens
+  there. Added a desktop-only `📱 iPHONE MENU` button under the driver plates (art-checked: sits
+  on dark water, 9px clear of the START card). It joins `_titleDifficultyBtns`, which is what
+  hands it to `_setTitleVisible` + the UI-camera ignore lists.
+- **The portrait tutorial's last step was a trap.** It shows the rotate prompt with
+  `pointerEvents:'none'` (taps deliberately ignored) and only advances on an
+  orientationchange/resize landing in landscape. A desktop window is *already* landscape and fires
+  neither, so the tour could never finish and `#tut-capture` kept swallowing clicks — escape was
+  resizing the browser. In the demo it fires EVERY session (`markTutorialSeen()` never persists
+  when `window.__DEMO`). Now clickable on desktop, reading "Click to Enter Game Play".
+- **Copy that described impossible actions.** The green button said "Rotate phone to enter
+  gameplay" though its CSS only ever shows it under `body.is-desktop`; now "▶ Enter Gameplay".
+  The bottom bar of the menu art is baked "ROTATE PHONE TO ENTER GAME PLAY" in
+  `iphone_menu_bg.png` *and all 8 car-skin variants*, so it can't be reworded — a desktop-only
+  opaque panel (`#phone-desk-play`, `data-px="36 1558 782 160"`) covers it and offers the click.
+  Unlike the hit zone removed 2026-06-19, it calls `__phoneMenu.close()` (resumes in place)
+  rather than returning to the title, so no run is lost.
+
+**Website.** Hero rebuilt as full-bleed key art with the copy in a bottom-left panel; new
+headline "293 Miles. One Goal."; Explore section removed; the three "drive is the game" cards are
+now whole-card links (Walkthrough / Genres / Route Map) with Walkthrough first; nav reordered to
+Story · Genres · Businesses · Walkthrough · Route Map · Leaderboard · FAQ.
+
+**Press Kit retired.** Page deleted; its sprite gallery moved to Genres as a final
+**"Additional Artwork"** tab (31 sprites: law, traffic, weapons, locals, smashables). A copy of
+the old page (fact sheet / description / features / history — the non-art content) sits at
+`docs/retired/press-kit-page.html`; it's also in git history at commit `4375424`.
+
+**Sprite scale correction.** The gallery renders every sprite at natural-size ÷ 6, which assumes
+one export scale — but the cruiser is a 768px source while the semi is 283px and the helicopter
+384px, so they read wildly different. `SPRITE_SCALE` (in the genres.html module) now multiplies
+the odd ones: cruiser ×0.875, SWAT ×1.25, heli ×1.85, semi ×2.15 → 112/104/118/101px.
+**That script writes `img.style.width` after layout, so it beats any CSS rule** — size tweaks go
+in the map, never in `site.css`. (Cost an hour finding this; a correct, matching CSS rule and
+even an inline `style="width:…"` both lost to it.)
+
+**Button system.** `.btn-primary` and `.btn-invert` are exact inverses (accent fill + dark text ⇄
+dark fill + accent text/ring) and each takes the other's look on hover, so a pair previews itself.
+Ring is an INSET box-shadow, not a border — these buttons are auto-width, so a border would grow
+the box and make them jump. `.btn-ghost` deleted (no users left). Landing: Learn the Legend /
+Play Demo. Story outro: Choose Your Vibe / Play Demo. Nav CTA matches at nav scale.
+
+**Story caption timing.** Opacity was a triangle (`1 - 2·distance`) that hit 1.0 only at the exact
+centre of each third — readable ~10% of its window. Now a plateau with short fades (`CAP_FADE`),
+and the first/last captions extend past the pinned window (`CAP_LEAD`/`CAP_TAIL` = 0.15 each,
+≈21vh) since they have no neighbour on that side. Readable at ≥90% opacity: 10% → 73%. Inner
+edges must stay flush — the three captions are stacked, so overlap double-exposes them.
+
+**Hero art is a web-only derivative.** `assets/hero/key_art.png` is the loading screen with the
+baked "LOADING…" line inpainted out (correct in-game, wrong on a marketing page). It lives in
+`assets/hero/`, **not** `assets/ui/`, because `sync-assets.sh` overwrites `assets/ui/` from
+`public/assets` and that folder is gitignored.
+
+**Link previews.** `assets/hero/link-preview.jpg` (1200×630, 240KB) + Open Graph/Twitter tags on
+all 9 pages, each with its own title/description. Written as real markup — preview crawlers don't
+run the JS that injects the nav, so these can't be generated at runtime.
+
+### 2026-07-27 (pt 2) — SCENERY OVERHAUL: sky/terrain/road layer split, 7-biome parallax backdrop, distance-projected landmarks, lakes, Cascade tree density — LOCAL, mostly UNVERIFIED in motion
+Large scenery session. Everything below **builds clean and passes all 327 tests**, but only
+parts have been seen running — treat the visual side as unverified.
+
+**Renderer: sky / terrain / road split (structural).** `roadGfx` used to hold sky *and* road at
+one depth, so nothing could be layered between ground and tarmac. Now three layers:
+```
+skyGfx     0     sky, stars, skylines, lake horizon, far shore
+bands      0.5   biome parallax
+landmarks  0.46  hero peaks (see below)
+terrainGfx 1     ground fills
+roadGfx    1.5   road surface, markings, water, tunnels
+ghostGfx   1.55
+```
+`Road.render()` takes `terrainG` and `skyG` as OPTIONAL trailing args — omit them and every fill
+falls back to `g`, restoring the original single-layer behaviour exactly. Only two draw sites are
+terrain: the per-segment grass rect and the fail-safe world fill. Safe because hill occlusion uses
+`if (curr.screenY < maxScreenY) continue` (segments behind a crest are skipped outright) and never
+relied on grass overpainting road.
+
+**Biome backdrop (`src/road/Biomes.js`, `scripts/buildBiomeBands.js`).** Replaced the single
+procedural Cascade range, which scaled by mile and hit zero past mile 70 — leaving 223 of 293 miles
+against bare sky. Now 7 biomes x 3 layers with 4-mile cross-fades: westside_forest 20-26,
+north_bend 26-40, westside_forest 40-45, pass_alpine 45-58, easton_transition 58-78,
+kittitas_foothills 78-122, vantage_basalt 122-142, columbia_irrigated 142-210, palouse_hills
+210-293. **Snow exists in exactly one biome (pass_alpine)** — snow east of Snoqualmie is a bug.
+Placeholder art; real bands drop in at the same 21 filenames (2048x640, bottom-anchored).
+
+**Parallax now keys off accumulated road heading** (`seg.heading`, summed from `seg.curve` in
+RouteData), not `player.x`. Tracking lateral position alone meant the backdrop slid on lane changes
+but froze through bends — the tell that it was a painted wall. Measured 23x more swing through the
+Cascades than the flat basin. Bands also ride a damped `pitchOff` so they rise with grade.
+
+**Landmarks (`src/road/Landmarks.js`) — new system.** Six hero peaks, miles 28-54, each placed by
+mile / lateral-miles / height and projected independently. Cannot use the sprite pipeline: that
+culls at 76,000 units and a mile is ~320,800, i.e. it sees a QUARTER MILE. Lateral motion uses the
+BEARING `atan2(lateral, dz)`, not `lateral/dz` — the ratio explodes near dz=0 and made peaks whip
+off in a mile. Bearing is bounded, continuous through dz=0, and lets a peak recede while shrinking.
+Real art wired for McClellan / Granite-Bandera / Snoqualmie-Guye (one plate covers both, so they are
+ONE landmark). Mount Si cropped from the North Bend plate. Mount Washington still placeholder.
+
+**North Bend (miles 26-40).** Base plate `north_bend_transition_east.png` (ground + side hills +
+valley notch) at depth 1.25, overscanned 1.45x and following the vanishing point at only 0.22 —
+tracking it 1:1 dragged the whole landscape sideways on bends. The three north_bend *bands* are
+emitted transparent (superseded by the plate); `JOBS_ART` in `buildNorthBendBands.js` preserves the
+layered path if ever revisited.
+
+**Lakes.** `LAKES` table in RouteData, keyed off I-90 EXIT numbers. Two modes: `shore` (near water,
+guardrails, dunk, roadside scenery suppressed on the water flank) for Keechelus 54.5-58 and Easton
+70-72; `distant` (horizon only, NO rail/dunk, normal scenery in front) for Sammamish 14-18 and
+Kachess 59.5-62 — neither alignment actually touches the water. Added the missing `waterRight`
+renderer: the flag had guardrail + dunk handling since the DUI fork but nothing drew it, so a
+waterRight segment would have drowned you in invisible water. Block runs LAST in `buildRoute` so
+bridge/tunnel flags exist and every sprite pass has finished.
+
+**Tree density.** `cascades` said "heaviest forest on the route" while setting 30 slots/mile —
+sparser than downtown Seattle. Raised to 520 + `_denseStreetTrees` + 1.45x height boost; `eastside`
+past mile 25 likewise. North Bend now ~1,600/mi with ~1,400 of those within offset 3.0 (vs Seattle's
+120). Separately, `downtown_seattle` reverted 600 -> 120 slots/mile (owner: ~90 trees per skyscraper
+through SoDo and the elevated West Seattle Bridge).
+
+**Bug fixes.** Rest-stop mission card: speaker label overlapped the deal panel (top- vs
+bottom-anchored, never reconciled) and the town fact ghosted under it (equal depth, later creation
+order); the tier-fitting loop also accepted the smallest tier via `|| last` even when it did not fit
+— now drops the town fact as the pressure valve. Messages app: contacts sort by recency (on `mile`,
+not the `time` label, which wraps across the day/night cycle) and threads render newest-first, both
+on COPIES so append/cap logic and the tail-read previews still work. Weapons no longer fire on
+unpause — HUD cells keep live input zones behind the pause overlay, so a tap selected AND queued the
+shot; guarded at `_fireWeaponByType` to cover every entry path.
+
+**Yaw-billboard spike (earlier, same day).** Traffic cars get per-angle sprite frames; press **Y**
+in-game to A/B. Traffic yaw is dominated by PARALLAX (`atan2(carX-camX, carZ-camZ)`), not steering.
+Placeholder frames only; never playtested.
+
+**KNOWN OPEN — see `project_rtr_session_handoff` memory:**
+- Textured scrolling ground NOT built. Tile is registered (`ground_pnw_roadside`, seamless top-down
+  1024px) but nothing draws it; ground is still the flat `palette.grass1` fill.
+- **Cop near-cull origin mismatch**: traffic uses camera-relative `relZ`, cops use player-relative
+  `cop.relativePos`, so a cop *behind* you is culled while the pursuit HUD counts down to 1.
+- **HP starts at 100 on an un-upgraded beater** (base is 25, so `_upgradeFx.hp` is contributing +75).
+- **Unexplained green bar** at the horizon. Guessed the North Bend plate's ground band twice, wrong
+  both times, both reverted. Isolate layers rather than guessing again.
+
+
+### 2026-07-27 — Game DEPLOYED to CF Pages (local wrangler); GitHub-Actions deploy still broken until secret update
+Committed + pushed the whole accumulated batch (4375424: website, worker entitlements, trait
+rebalances, parallel-session save batch). **Root cause of the stale live site**: RTR deploys via
+`.github/workflows/cloudflare-pages.yml` using GitHub secret `CF_PAGES_API_TOKEN` — that secret holds
+the token that EXPIRED 2026-07-22, so every push-deploy since failed (verified: last green run
+2026-07-22, the expiry day). Worked around with a clean local build + `npx wrangler@3 pages deploy
+dist --project-name=roadtrip-roulette` → live at roadtrip-roulette.pages.dev (culture sprites verified
+serving). **⚠️ OWNER TODO: update `CF_PAGES_API_TOKEN` in GitHub repo settings for BOTH
+BigMountainB/Roadtrip-Roulette and BigMountainB/DUI** (classifier blocks Claude from writing repo
+secrets) — until then push-to-deploy stays red and deploys must be run locally. Note: the pages
+project serves the GAME build only; the marketing `website/` is still undeployed (needs its own
+CF Pages project).
 
 ### 2026-07-26b — BETA MONETIZATION design locked + worker entitlements BUILT; CF token EXPIRED blocks deploys
 Owner pivoted the demo into an à-la-carte beta ("web is the product; Steam later as premium bundle"):
@@ -917,6 +1274,38 @@ idling parked on the road (only miles + stop-time advance it) — confirm that's
 
 Road Trip Roulette deploys to **Cloudflare Pages**, not Netlify (the old `Netlify.md` was DUI's
 and is superseded by this chapter).
+
+
+> ## ⚠️ Deploy conflict (2026-07-27) — READ FIRST
+>
+> This Pages project now serves the **marketing site at the root** and the **full game at
+> `/fully`**, deployed manually from `website/`. But `.github/workflows/cloudflare-pages.yml`
+> still runs `wrangler pages deploy dist` — the GAME build — to the same project on every push
+> to `main`. **The next push replaces the site with the game at the root and deletes `/fully`.**
+>
+> Nothing is destroyed: Cloudflare keeps every deployment and rollback is one click in the
+> dashboard (or the `/deployments/{id}/rollback` API). But until the workflow is rewired, either
+> don't push to `main`, or expect to redeploy the site afterwards.
+>
+> **The fix** is to make CI reproduce what was done by hand: build the game into
+> `website/fully`, then deploy `website` instead of `dist`. Two post-build patches must move into
+> a script first — they're applied to generated files and a plain rebuild wipes them:
+> 1. Inject `<base href="/fully/">` into `website/fully/index.html`. Vite builds with
+>    `base: './'`, so at `/fully` **without** a trailing slash every asset resolves against the
+>    site root and 404s. The base tag makes it work either way.
+> 2. Rewrite `website/fully/manifest.webmanifest` — `start_url`, `scope` and the icon `src` are
+>    root-absolute (`/`, `/icons/...`) and point at nothing under `/fully`.
+>
+> Manual deploy actually used (credentials sourced from `../DUI/.cloudflare.env`, which is
+> account-scoped despite older notes claiming it was project-scoped):
+> ```bash
+> cd "/Users/brendanbaughn/Documents/Claude/Road trip roulette"
+> set -a; . ../DUI/.cloudflare.env; set +a
+> npx --yes wrangler@3 pages deploy website --project-name roadtrip-roulette \
+>   --branch main --commit-dirty=true
+> ```
+> Site is ~1.2 GB / 1,422 files — inside the 20,000-file and 25 MiB-per-file caps. Uploads are
+> fast after the first because Pages dedupes by content hash.
 
 ## How to deploy
 

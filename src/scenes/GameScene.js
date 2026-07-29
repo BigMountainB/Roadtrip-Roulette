@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {
   SCREEN_W, SCREEN_H, SEG_LENGTH, ROUTE_SEGS, ROAD_WIDTH, DRAW_DIST,
   MAX_SPEED, ACCEL, BRAKE, DECEL, TURN_SPEED, OFFROAD_SLOW, CENTRIFUGAL,
-  PTS_DIST, PTS_CRASH, PTS_HITCH, VICE_MULT, VICE_PTS, FULL_BAR_THRESHOLD,
+  PTS_DIST, PTS_CRASH, PTS_HITCH, HITCH_REVEAL_MILES, VICE_MULT, VICE_PTS, FULL_BAR_THRESHOLD,
   VICES, VICE_CONFIG, VICE_COMBOS, CHECKPOINTS, TOTAL_ROUTE_MILES, REST_STOPS, PASS_THROUGH_CITIES,
   getLocationName,
   getLastSignTown,
@@ -23,7 +23,14 @@ import {
 // CURRENT value rather than a pre-boot snapshot.
 import * as C from '../constants.js';
 import { clamp, lerp } from '../utils/Helpers.js';
-import { Road }          from '../road/Road.js';
+
+// World units per mile, derived from the route's own definition — used by the
+// pursuit HUD to convert a world-space gap into honest feet.
+const UNITS_PER_MILE_HUD = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
+import { Road, snowBlanketAt, SNOW_WHITE, SNOW_MARKINGS_GONE } from '../road/Road.js';
+import { GroundPlane }   from '../road/GroundPlane.js';
+import { BAND, BIOMES, biomeAt, bandKey, bandHeight, bandRate } from '../road/Biomes.js';
+import { LANDMARKS, projectLandmark, activeLandmarks } from '../road/Landmarks.js';
 import geoData           from '../road/routeGeo.json';
 import { ViceSystem }    from '../systems/ViceSystem.js';
 import { SurvivalSystem } from '../systems/SurvivalSystem.js';
@@ -40,7 +47,7 @@ import { DamageModel }   from '../car/DamageModel.js';
 import { CloudSave }     from '../systems/CloudSave.js';
 import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
 import { getPaletteAtProgress, lerpColor } from '../utils/Colors.js';
-import { getUpgradeEffects, getInstalledUpgrade } from '../systems/UpgradeSystem.js';
+import { getUpgradeEffects, getInstalledUpgrade, clearTempUpgrades } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
 import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs, policeWarningChance } from '../data/genreVehicleTraits.js';
 
@@ -422,6 +429,7 @@ export class GameScene extends Phaser.Scene {
     this._resumeLive = null;
     this._resumeLiveExplicit = false;
     this._titleResumeSnap = null;   // set on a clean-quit boot → title RESUME button
+    this._reopenCustomSetup = false; // set on a crash boot in Custom → reopen the setup menu
     if (data?.resumeLiveSnapshot && typeof data.resumeLiveSnapshot === 'object'
         && typeof data.resumeLiveSnapshot.position === 'number') {
       // Explicit exact-spot resume (manual Save → From Checkpoint): no "lost
@@ -438,7 +446,27 @@ export class GameScene extends Phaser.Scene {
         // does NOT.  One-shot: read + clear here regardless of outcome.
         let crashed = false;
         try { crashed = localStorage.getItem('rtr_crashed') === '1'; localStorage.removeItem('rtr_crashed'); } catch (_) {}
-        if (lr && typeof lr === 'object' && lr.snap
+        // ── Custom mode never auto-resumes (owner 2026-07-27) ──────────────
+        // 'liveRun' is a SANDBOX_KEY, so a Custom run's autosave goes to the
+        // in-memory sandbox bucket and is NEVER written to disk.  Whatever is
+        // sitting in `liveRun` after a Custom-run crash therefore belongs to a
+        // DIFFERENT, scored run — resuming it dropped the player into another
+        // run's wallet and weapons while they still believed they were in their
+        // Custom game.  Send them back to the Custom setup menu instead, where
+        // they can re-pick settings or back out to the title.
+        //
+        // Read the mode straight off the save rather than Difficulty.mode():
+        // init() runs BEFORE Difficulty.hydrate() (called in _doCreate), so on a
+        // fresh page load the module-level mode is still the default here.
+        // 'difficulty' is not a sandbox key, so it does persist.
+        //
+        // Only a genuine CRASH reopens the menu; a clean boot that merely
+        // happens to have Custom selected just shows the title as usual. Either
+        // way the auto-resume is skipped.
+        const _bootMode = _lrSave?.get?.('difficulty') ?? Difficulty.mode?.();
+        if (_bootMode === 'custom') {
+          this._reopenCustomSetup = crashed;
+        } else if (lr && typeof lr === 'object' && lr.snap
             && typeof lr.snap.position === 'number' && lr.snap.position > 50
             && (Date.now() - (lr.ts || 0)) < 12 * 3600 * 1000) {
           if (lr.snap.difficulty) Difficulty.set(lr.snap.difficulty, this.registry);
@@ -816,6 +844,18 @@ export class GameScene extends Phaser.Scene {
     const _veh = VEHICLES[this.player.vehicleId];
     // Active per-run buffs (from encounter choices, restored on resume below).
     this._activeBuffs = [];
+    // Sealed hitchhiker: { source, roll, pickupMile }.  Null = no rider, which
+    // is also what gates picking up a second one.
+    this._passenger = null;
+    // FRESH run (not a rest-stop resume): drop run-scoped installs — temp
+    // repairs and Custom-sandbox purchases — before aggregating effects.
+    // clearTempUpgrades was exported for exactly this and never called, so
+    // the temp store previously lived forever; with Custom purchases now
+    // routed there (see RestStopScene), this clear is what makes "nothing
+    // carries over from a Custom game" true.
+    if (!this._resumeFromStop) {
+      try { clearTempUpgrades(this.registry.get('save'), this.player?.vehicleId ?? 'beater'); } catch (_) {}
+    }
     // Aggregate installed part-upgrade effects for this vehicle so the drive
     // physics (top speed, grip, steering, stability, range) reflect them.
     this._recomputeUpgradeFx();
@@ -929,7 +969,82 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Graphics layers ───────────────────────────────────────────────
-    this.roadGfx      = this.add.graphics();
+    // TERRAIN / ROAD SPLIT.  Ground fills (the per-segment grass rect and
+    // the fail-safe world fill) draw into terrainGfx at depth 0; everything
+    // else the road renderer paints — road surface, markings, water,
+    // tunnels — stays on roadGfx at depth 1.  The gap between them is where
+    // a textured ground plate can sit, which is impossible in a single
+    // Graphics because Phaser has no sub-object depth.
+    // SKY -> BANDS -> TERRAIN -> ROAD.  The sky used to live in roadGfx,
+    // which forced the parallax bands above roadGfx just to be visible —
+    // and that also put them above the ground, leaving each band's base as
+    // a hard seam floating over the grass and road.  With the sky on its
+    // own layer the bands drop into their natural slot and the terrain
+    // occludes their base, so distant trees emerge from behind the ground.
+    this.skyGfx       = this.add.graphics().setDepth(0);
+    this.terrainGfx   = this.add.graphics().setDepth(1);
+    this.roadGfx      = this.add.graphics().setDepth(1.5);
+
+    // Textured ground, in the slot the terrain/road split opened.  Depth 1.3
+    // puts it OVER the flat grass fill (1) AND over the North Bend base plate
+    // (1.25), but still under the road (1.5).
+    //
+    // Above the plate is deliberate.  The plate's painted ground has no
+    // perspective relationship to the road, so the tarmac read as a ribbon
+    // floating over unconnected scenery — which is the whole reason this
+    // layer exists.  Running the perspective-correct tile over the plate's
+    // ground ties the road to the terrain; the plate's HILLS sit above the
+    // horizon and are untouched, so the mountains still read behind it.
+    this.groundPlane = this.add.existing(new GroundPlane(this)).setDepth(1.3);
+
+    // ── Biome parallax backdrop ───────────────────────────────────────
+    // Six TileSprites: three depth layers, doubled so adjacent biomes can
+    // cross-fade at their boundary.  Depth 0.5 puts them above the sky
+    // (painted into roadGfx at depth 0) and below everything else.
+    //
+    // Each band is CROPPED at the horizon rather than seated below it —
+    // the band's height is reduced by BAND.yCrop and its origin is
+    // bottom-left, so a near layer shows only the crowns that clear the
+    // horizon and can never paint over the road, which shares roadGfx's
+    // depth and would otherwise be overdrawn.
+    this._biomeLayers = { a: {}, b: {} };
+    for (const set of ['a', 'b']) {
+      for (const layer of BAND.layers) {
+        const ts = this.add.tileSprite(0, 0, SCREEN_W, BAND.h - BAND.yCrop[layer],
+                                       bandKey(BIOMES[0].key, layer))
+          .setOrigin(0, 1)
+          // Between the sky (0) and the terrain (1): above the sky so it
+          // is visible, below the ground so the terrain hides its base.
+          .setDepth(0.5)
+          .setScrollFactor(0)
+          .setVisible(false);
+        this._biomeLayers[set][layer] = ts;
+      }
+    }
+
+    // North Bend ground plate.  Depth 0.5 puts it in the slot the
+    // terrain/road split opened: above terrainGfx (0), below roadGfx (1).
+    // A perspective triangle with its tip at the road's vanishing point and
+    // its base past both bottom corners, so a curve can expose terrain on
+    // either side without revealing a hole.
+    // Base plate — ground, side hills, valley notch.  Sits ABOVE terrainGfx
+    // (depth 1) so its detailed ground replaces the flat grass fill, and
+    // BELOW roadGfx (1.5) so the road still paints over it.
+    this._nbBasePlate = this.add.image(0, 0, 'nb_base_plate')
+      .setDepth(1.25)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    // Landmarks sit just UNDER the base plate, so the plate's own hills
+    // occlude a distant peak — which is the free half of "landmarks can be
+    // hidden by closer objects".  Roadside sprites (depth 7-9.5) cover the
+    // other half by simply outranking them.
+    this._landmarkImgs = LANDMARKS.map(lm =>
+      this.add.image(0, 0, lm.key)
+        .setOrigin(0.5, 1)
+        .setDepth(1.2)
+        .setScrollFactor(0)
+        .setVisible(false));
     // Smoke layer sits ABOVE the player car so low-HP puffs read
     // clearly instead of being half-hidden behind the chassis.
     // (Player car is at depth 9.95; this lands just above.)
@@ -945,7 +1060,9 @@ export class GameScene extends Phaser.Scene {
     // saw no visual feedback because the fire was painted behind the
     // building they just hit.
     this._explosionGfx = this.add.graphics().setDepth(9.96);
-    this.ghostGfx     = this.add.graphics();
+    // Depth tracks roadGfx (see the terrain/road split above) — at the old
+    // implicit depth 0 the double-vision ghost would render beneath terrain.
+    this.ghostGfx     = this.add.graphics().setDepth(1.55);
     // Procedural-sprite layer (houses, buildings, etc.) — sits in the
     // tree/car depth band so they don't always render *behind* image-
     // based trees on roadGfx (depth 0).  9.45 lands above most trees
@@ -1358,6 +1475,20 @@ export class GameScene extends Phaser.Scene {
     this.keyQ     = this.input.keyboard?.addKey('Q');
     this.keySpace = this.input.keyboard?.addKey('SPACE');
     this.keyEnter = this.input.keyboard?.addKey('ENTER');
+
+    // ── YAW-BILLBOARD SPIKE toggle ──────────────────────────────────────
+    // Y swaps same-direction traffic between the shipped dead-rear sprite
+    // and the six-frame placeholder yaw set, so the two can be A/B'd on the
+    // same road.  Shift+Y additionally prints the computed yaw per car.
+    // DEV ONLY — strip this, the frames, and _spikeYawFrame before release
+    // if the technique isn't adopted.
+    this._spikeYawOn    = false;
+    this._spikeYawDebug = false;
+    this.input.keyboard?.on('keydown-Y', (ev) => {
+      if (ev.shiftKey) { this._spikeYawDebug = !this._spikeYawDebug; return; }
+      this._spikeYawOn = !this._spikeYawOn;
+      console.log(`[yaw-spike] ${this._spikeYawOn ? 'ON — 6-frame placeholder' : 'OFF — shipped dead-rear art'}`);
+    });
 
     // Shift+L toggles left/right-handed HUD layout — temporary until
     // the phone-menu has an interactive widget for it.  Forces a scene
@@ -2134,6 +2265,16 @@ export class GameScene extends Phaser.Scene {
               this.vices.levels[id] = Math.max(0, Math.min(1, lvl));
             }
           }
+          // Hitchhiker picked up AT the stop — carried out sealed.  The roll
+          // was made in RestStopScene but deliberately not resolved there;
+          // it lands HITCH_REVEAL_MILES down the road like a roadside pickup.
+          if (buys.hitchhiker) {
+            this._passenger = {
+              source:     'reststop',
+              roll:       buys.hitchhiker.roll,
+              pickupMile: this._mileNow(),
+            };
+          }
           if (buys.restock && this.vices?.refillAll) this.vices.refillAll();
           // Coffee / Snooze — multiplier applied to ALL vice bars FIRST so
           // any subsequent top-ups (beers, weed, etc.) win on top of the
@@ -2363,7 +2504,11 @@ export class GameScene extends Phaser.Scene {
     this._worldObjects.push(
       ...[
         this._titleBlackout,
-        this.roadGfx, this.ghostGfx, this.propsGfx, this._ruralFenceGfx, this._utilityLineGfx, this.bridgeFrontGfx, this.tunnelFacadeGfx, this.tunnelGfx, this._tunnelMaskGfx, this.tunnelDimGfx, ...this._signGfxPool, this._explosionGfx, this._smokeGfx, this._damageGlassGfx, this.overlayGfx, this.vignetteGfx,
+        this.skyGfx, this.terrainGfx, this.groundPlane, this.roadGfx, this.ghostGfx, this.propsGfx, this._ruralFenceGfx, this._utilityLineGfx, this.bridgeFrontGfx, this.tunnelFacadeGfx, this.tunnelGfx, this._tunnelMaskGfx, this.tunnelDimGfx, ...this._signGfxPool, this._explosionGfx, this._smokeGfx, this._damageGlassGfx, this.overlayGfx, this.vignetteGfx,
+        // Biome parallax bands — world objects, so the UI camera must
+        // ignore them or it re-paints the horizon on top of the HUD.
+        ...Object.values(this._biomeLayers.a), ...Object.values(this._biomeLayers.b),
+        this._nbBasePlate, ...this._landmarkImgs,
         this._fogGlowGfx,
         this.weatherFxGfx, this.wipersGfx, ...this.chaseWipers,
         this.hudFlashGfx, this.playerSprite, this._rearPlateImg, this._rearPlate,
@@ -2428,6 +2573,12 @@ export class GameScene extends Phaser.Scene {
 
     // Auto-resume modal — the run is restored; show "sorry, we lost you…"
     // and hold the frozen world until the player taps OK.
+    // Catch-all for the sandbox grants: every way into a custom run passes
+    // through here (fresh start, crash auto-resume, LOAD SAVE, checkpoint
+    // respawn), and the call is idempotent, so no entry point can be missed
+    // the way `_startGameplay` alone was.  No-op outside custom.
+    this._applyCustomGrants();
+
     if (this._awaitingResumeOk) this._showLostYouPopup();
 
     // Fresh-run kickoff (title "NEW RUN"): the scene was rebuilt clean by
@@ -2436,6 +2587,16 @@ export class GameScene extends Phaser.Scene {
     // real max, wallet re-read).  Start gameplay now so the player drops
     // straight in instead of landing back on the title.
     if (this._freshStart) this._startGameplay();
+
+    // Crash boot while Custom was the active mode — there was nothing
+    // resumable (see init()), so bring the player back to the Custom setup
+    // menu to re-pick their settings.  Backing out of the modal just leaves
+    // them on the title.  Deferred one tick so the title finishes building
+    // underneath it.
+    if (this._reopenCustomSetup) {
+      this._reopenCustomSetup = false;
+      this.time?.delayedCall?.(0, () => this._openCustomSetupModal());
+    }
   }
 
   /** Center the decoupled world + fixed-800 HUD in the (possibly widened)
@@ -3836,7 +3997,11 @@ export class GameScene extends Phaser.Scene {
     if (this._gameFinished) {
       if (this._finishCinematic && !this._finishCineEnded) {
         this._finishCineT = Math.min(1, (this._finishCineT ?? 0) + rawDt / FINISH_PARK_SEC);
-        this._updatePlayer(rawDt);
+        // _updatePlayer needs a `phys` object (reads phys.speedMult etc.) — the
+        // main loop computes it below, but the cinematic returns before that, so
+        // compute it here.  Without this the call threw every frame, the T>=1
+        // completion check never ran, and the finish (Pullman AND demo) hung.
+        this._updatePlayer(rawDt, this.effects.getPhysics(this.vices));
         if (this._finishCineT >= 1) {
           this._finishCineEnded = true;
           this._finishCinematic = false;
@@ -4209,6 +4374,8 @@ export class GameScene extends Phaser.Scene {
       this.cops.update(rawDt, this.player.position, this.player.speed, this.player.x);
       this._updateScannerAlert();
     }
+    // Sealed hitchhiker — fires HITCH_REVEAL_MILES after pickup.
+    this._tickPassenger();
     // Sex-worker dirt buff: enforce the star cap and expire it once
     // the player passes the buff's end position.
     this.cops.tickStarCap?.(this.player.position);
@@ -4717,6 +4884,16 @@ export class GameScene extends Phaser.Scene {
     // bar advance — only _lastCheckpoint is gated.
     const _isHard = (Difficulty.mode?.() === 'hard');
     const progress = this.player.position / (ROUTE_SEGS * SEG_LENGTH);
+    // ── Demo build finish (App Store) ────────────────────────────────────
+    // The demo runs West Seattle → the Snoqualmie rest stop only.  Crossing
+    // DEMO_FINISH_MILE ends the run here instead of at Pullman; the full route
+    // data is untouched (see constants.js DEMO_MODE).  Checked before the
+    // checkpoint loop so it can't be pre-empted by a later checkpoint.
+    if (C.DEMO_MODE && !this._gameFinished
+        && (progress * TOTAL_ROUTE_MILES) >= C.DEMO_FINISH_MILE) {
+      this._triggerDemoFinish();
+      return;
+    }
     // ── Daily objective: per-frame telemetry ─────────────────────────
     // Sampled continuously so peak-vice / max-stars / combo-continuity
     // objectives have the data they need at the end city.  Guarded to
@@ -5815,7 +5992,11 @@ export class GameScene extends Phaser.Scene {
       // NOT yank it back ("replaced on the bridge"); it falls through to the
       // dunk below and SINKS.  The rail is never opened — it just doesn't
       // rescue a car that is already in the water.
-      const SINK_EDGE = 1.15;   // keep equal to DUNK_THRESH below
+      // The "already in the water" line for the rail-rescue exception below.
+      // This is the DEFAULT dunk threshold, not necessarily the one in force:
+      // a held-back lake (LAKES `setbackFt`) moves its sink line further out
+      // while the rail — and therefore this rescue test — stays put by design.
+      const SINK_EDGE = 1.15;
       // Skip the rail entirely while mid-sink so it can't yank the sinking car.
       if (!this._sinkState) {
         if (railsRightSide && p.x > BRIDGE_RAIL && _preMoveX <= SINK_EDGE) {
@@ -6008,7 +6189,14 @@ export class GameScene extends Phaser.Scene {
     // was 1.5, which was reachable only via a violent impulse — so
     // the typical "drove off into the lake" scenario silently rail-
     // scraped instead of sinking.
-    const DUNK_THRESH = 1.15;
+    // Held-back lakes (RouteData LAKES `setbackFt`, currently just Easton at
+    // 75 ft) move the SINK LINE out to their real waterline — you cannot drown
+    // on dry ground 75 ft from the lake.  The guardrail is deliberately NOT
+    // moved (owner 2026-07-27): it stays a solid wall at BRIDGE_RAIL exactly
+    // as before, which does mean the setback strip is unreachable and this
+    // dunk effectively cannot fire at Easton.  That is the accepted trade —
+    // the barrier is worth more intact than the sink is worth reachable.
+    const DUNK_THRESH = seg?.lakeWaterEdgeX ?? 1.15;
     let _waterDunkTriggered = false;
     // `bridgeWaterChannel` marks the sub-spans of the West Seattle bridge
     // that actually cross the Duwamish (the rest of that bridge is over
@@ -7009,7 +7197,6 @@ export class GameScene extends Phaser.Scene {
     // live player sprite rect — that way the pickup vanishes the frame
     // its image meets the bumper, not the moment its world Z passes the
     // camera.
-    const customMode = Difficulty.mode() === 'custom';
     const carY    = this.playerSprite?.y ?? (SCREEN_H - 130);
     const carH    = this.playerSprite?.displayHeight ?? 56;
     const carTop  = carY - carH * 0.55;
@@ -7030,7 +7217,6 @@ export class GameScene extends Phaser.Scene {
       if (!seg?.sprites) continue;
       for (const sp of seg.sprites) {
         if (sp.collected || !sp.isCollectible) continue;
-        if (customMode && sp.collectibleType === 'vice') continue;
         // Lateral overlap (~half a lane) — required for visual touch.
         // Genre-vehicle pickup-radius modifier (k-pop +30%) widens the window.
         const _pr = this._traitMod('pickupRadiusMult');
@@ -9833,6 +10019,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (type === 'hitchhiker') {
+      // One rider at a time (owner spec).  Leave the sprite UNcollected so the
+      // hitchhiker stays standing on the shoulder rather than silently
+      // vanishing — same pattern the full-weapon-inventory branch below uses.
+      // The refusal popup is throttled: `collected = false` means this branch
+      // re-fires every frame for as long as the car overlaps the sprite.
+      if (this._passenger) {
+        sprite.collected = false;
+        const now = this.time?.now ?? 0;
+        if (now - (this._passengerRefusedAt ?? -1e9) > 2500) {
+          this._passengerRefusedAt = now;
+          this._showPopup('🧍 NO ROOM\n— already got a rider', '#FFCC44');
+        }
+        return;
+      }
       this._hitchhikerPickup();
       return;
     }
@@ -9922,12 +10122,48 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** On-road hitchhiker pickup — risk/reward.  70 % positive (vices
-   *  recovery / score bonus / free weapon), 30 % negative (robbed of
-   *  score, vices, or a weapon).  Be careful who you pick up. */
+  /** Current route mile. */
+  _mileNow() {
+    return ((this.player?.position ?? 0) / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+  }
+
+  /**
+   * On-road hitchhiker pickup.  SEALS the outcome — the roll happens now, but
+   * nothing is applied and nothing is revealed until HITCH_REVEAL_MILES down
+   * the road (owner spec, 2026-07-27).  Applying it silently at pickup would
+   * give the game away: the player would see the cash or the weapon change.
+   * Only one rider at a time; the caller gates on `this._passenger`.
+   */
   _hitchhikerPickup() {
     this.effects.triggerShake(80, 0.002);
-    const r = Math.random();
+    this._passenger = {
+      source:     'road',
+      roll:       Math.random(),
+      pickupMile: this._mileNow(),
+    };
+    this._showPopup('🧍 PICKED UP A RIDER\nGuess we\'ll find out…', '#DDDDDD');
+  }
+
+  /** Fires HITCH_REVEAL_MILES after pickup, or on rest-stop arrival. */
+  _revealPassenger() {
+    const p = this._passenger;
+    if (!p) return;
+    this._passenger = null;          // cleared FIRST — the outcome can popup
+    if (p.source === 'reststop') this._applyRestStopHitchOutcome(p.roll);
+    else                         this._applyRoadHitchOutcome(p.roll);
+  }
+
+  /** Mile-driven reveal.  Called once per frame from the main update. */
+  _tickPassenger() {
+    const p = this._passenger;
+    if (!p) return;
+    if (this._mileNow() - p.pickupMile >= HITCH_REVEAL_MILES) this._revealPassenger();
+  }
+
+  /** On-road hitchhiker outcome — risk/reward.  70 % positive (vices
+   *  recovery / score bonus / free weapon), 30 % negative (robbed of
+   *  score, vices, or a weapon).  Be careful who you pick up. */
+  _applyRoadHitchOutcome(r) {
     // Stats: on-road hitchhiker is good below 0.70, bad at/above (no neutral).
     this.stats?.recordHitchhiker(r < 0.70 ? 'good' : 'bad');
 
@@ -9988,7 +10224,7 @@ export class GameScene extends Phaser.Scene {
     }
     // ── 15% — sketchy stranger robs score ─────────────────────────────
     if (r < 0.85) {
-      const loss = Math.min(this.score, 500);
+      const loss = this._cashLoss(Math.min(this.score, 500));
       this.score -= loss;
       this.stats?.recordRobbery(loss);
       this._showPopup(`💀 ROBBED!\n−$${loss}`, '#FF4444');
@@ -10005,7 +10241,7 @@ export class GameScene extends Phaser.Scene {
         stolen = tokens[idx];
         tokens.splice(idx, 1);
       }
-      const loss = Math.min(this.score, 250);
+      const loss = this._cashLoss(Math.min(this.score, 250));
       this.score -= loss;
       this.stats?.recordRobbery(loss);
       this._showPopup(
@@ -10027,6 +10263,64 @@ export class GameScene extends Phaser.Scene {
     } else {
       this._showPopup('💀 SKETCHY HITCH\n— close call', '#FFCC44');
     }
+  }
+
+  /**
+   * Rest-stop hitchhiker outcome, applied LIVE on the road.
+   *
+   * These used to resolve inside RestStopScene, which accumulated them into
+   * `_purchases` for GameScene to apply on resume.  That reveals the result
+   * the instant you buy, so the roll is now sealed at the stop and lands here
+   * HITCH_REVEAL_MILES later.  Probabilities and payouts mirror the original
+   * RestStopScene._rollHitchhiker table exactly — only the timing moved.
+   */
+  _applyRestStopHitchOutcome(r) {
+    this.stats?.recordHitchhiker(r < 0.55 ? 'good' : (r < 0.90 ? 'bad' : 'neutral'));
+
+    if (r < 0.18) {
+      this.cops.addF12Token('fireworks');
+      this._showPopup('🤝 FRIENDLY BIKER\ngave you 🎆 FIREWORKS!', '#88FFCC');
+      return;
+    }
+    if (r < 0.40) {
+      const bonus = 800;
+      this.score += bonus;
+      this.stats?.recordEarn(bonus, 'hitchhiker', bonus);
+      this._showPopup(`🤝 OFF-DUTY TRUCKER\ntipped you $${bonus}!`, '#88FFCC');
+      return;
+    }
+    if (r < 0.55) {
+      this.vices?.refillAll?.();
+      this._showPopup('🤝 OLD HIPPIE\nRESTOCKED your vices!', '#88FFCC');
+      return;
+    }
+    if (r < 0.75) {
+      const loss = this._cashLoss(Math.min(this.score, 600));
+      this.score -= loss;
+      this.stats?.recordRobbery(loss);
+      this._showPopup(`💀 ROBBED!\n−$${loss}`, '#FF4444');
+      return;
+    }
+    if (r < 0.90) {
+      // Armed robbery — cash AND the weapon inventory.  Custom mode has
+      // infinite weapons, so only the cash penalty applies there (same carve-
+      // out the on-road armed robbery uses).
+      const loss = this._cashLoss(Math.min(this.score, 1200));
+      this.score -= loss;
+      this.stats?.recordRobbery(loss);
+      let tookWeapons = false;
+      if (Difficulty.mode?.() !== 'custom' && this.cops.f12Tokens.length) {
+        this.cops.f12Tokens.length = 0;
+        tookWeapons = true;
+      }
+      this._showPopup(
+        tookWeapons ? `💀 ARMED ROBBERY!\n−$${loss} + your weapons!`
+                    : `💀 ARMED ROBBERY!\n−$${loss}`,
+        '#FF4444',
+      );
+      return;
+    }
+    this._showPopup('😐 RIDER BAILED\nat the next exit.', '#FFCC44');
   }
 
   /** Order in which the weapon-cycle button steps through types. */
@@ -10812,6 +11106,12 @@ export class GameScene extends Phaser.Scene {
    *  player owns at least one of `baseType`, sets the selected slot to it
    *  and fires. */
   _fireWeaponByType(baseType) {
+    // Weapons are inert while paused.  The HUD weapon cells keep their input
+    // zones active behind the pause overlay, so a tap there used to select the
+    // slot AND queue the shot — which then fired the instant you unpaused.
+    // Guarding here rather than on the tap zones covers every entry point
+    // (cell taps, keyboard, gamepad) with one check.
+    if (this._paused) return;
     if (!this.cops.f12Tokens.includes(baseType)) return;
     this._selectedWeapon = this._defaultSlotFor(baseType);
     this._useTopF12();
@@ -11676,8 +11976,13 @@ export class GameScene extends Phaser.Scene {
       },
       this.propsGfx,
       this.bridgeFrontGfx,
+      this.terrainGfx,
+      this.skyGfx,
+      this.groundPlane,
     );
 
+    this._renderBiomeBackdrop();    // biome parallax bands at the horizon
+    this._renderNorthBend();        // base plate + distance-projected landmarks
     this._renderHorizonStrips();    // opaque Bellevue approach strip
     this._renderRuralFences();      // low-cost roadside pasture boundaries
     this._renderUtilityLines();     // sparse dry-side poles + projected wires
@@ -13046,6 +13351,274 @@ export class GameScene extends Phaser.Scene {
     return 'npc_car_white';
   }
 
+  // ──────────────────────────────────────────────────────────────────────
+  //  YAW-BILLBOARD SPIKE
+  //  ---------------------------------------------------------------------
+  //  Traffic currently draws one of two frames: dead-rear or dead-front.
+  //  That is the single biggest tell that these are billboards, and it is
+  //  NOT an art-quality problem — the existing sedan art is photoreal.
+  //
+  //  The angle you actually see a car at is dominated by PARALLAX, not by
+  //  that car's steering.  A car one lane over is viewed from further and
+  //  further off-axis as you close on it:
+  //
+  //      yaw = atan2(carX - camX, carZ - camZ)
+  //
+  //  One lane over (0.5 laneOffset ≈ 1800 units) reads ~24° at 4000 units
+  //  ahead and ~1.4° at the draw limit.  Drawing all of those dead-on is
+  //  what makes traffic read as cardboard.
+  //
+  //  Only ONE side is ever rendered: positive yaw exposes the car's left
+  //  flank, negative yaw reuses the same frame flipped horizontally.  Six
+  //  frames therefore cover eleven angles.
+  //
+  //  NOT YET MODELLED (deliberate — see the writeup):
+  //    - road curvature.  On a bend the car ahead is additionally rotated
+  //      by the heading delta accumulated between camera and car, so you
+  //      should see the inside flank of everything ahead of you.
+  //    - the car's own lane-change heading.
+  //  Both are additive terms on `yaw` below and neither changes the
+  //  frame-selection or asset pipeline.
+  // ──────────────────────────────────────────────────────────────────────
+
+  /** Frame table — must stay in sync with scripts/buildCarYawFrames.js.
+   *  `frames.json` beside the PNGs records the same numbers. */
+  static SPIKE_YAW = {
+    angles:       [0, 8, 16, 24, 34, 45],   // degrees, ascending
+    keyPrefix:    'spike_sedan_back_y',
+    canvasWorldW: 5.6,      // metres the frame spans...
+    carWorldW:    1.8,      // ...vs the car itself, so the game can rescale
+    groundFrac:   0.85265,  // where the footprint sits in the frame
+  };
+
+  /** Pick the frame for a signed yaw (radians).  Returns the texture key,
+   *  whether to mirror it, and the framing constants the caller needs to
+   *  size and seat the sprite. */
+  _spikeYawFrame(yawRad) {
+    const S = GameScene.SPIKE_YAW;
+    const deg = Math.abs(yawRad) * 180 / Math.PI;
+    // Nearest-angle bucket.  Linear scan — six entries, not worth a search.
+    let best = 0, bestErr = Infinity;
+    for (let i = 0; i < S.angles.length; i++) {
+      const err = Math.abs(S.angles[i] - deg);
+      if (err < bestErr) { bestErr = err; best = i; }
+    }
+    const tag = String(S.angles[best]).padStart(2, '0');
+    return {
+      key:        `${S.keyPrefix}${tag}`,
+      flipX:      yawRad < 0,
+      widthScale: S.canvasWorldW / S.carWorldW,   // frame is wider than the car
+      groundFrac: S.groundFrac,
+      deg:        S.angles[best],
+    };
+  }
+
+  /** Signed yaw (radians) at which the camera sees a vehicle sitting at
+   *  `laneOffset`, `relZ` units ahead.  Positive ⇒ the car is to the RIGHT
+   *  of the camera, so its LEFT flank is toward us.
+   *
+   *  laneOffset is normalised to the road half-width, so the lateral world
+   *  delta is `dLane * ROAD_WIDTH` — the same units relZ is already in
+   *  (see Road.sampleSurface's fallback projection, which multiplies
+   *  laneOffset * ROAD_WIDTH against a scale derived from relativeZ). */
+  _vehicleYaw(relZ, laneOffset) {
+    const dx = (laneOffset - (this.player?.x ?? 0)) * ROAD_WIDTH;
+    return Math.atan2(dx, Math.max(1, relZ));
+  }
+
+  /**
+   * Biome parallax backdrop — three textured bands per biome, cross-fading
+   * into the next biome across its boundary.
+   *
+   * Replaces the single procedural Cascade range that scaled by mile and
+   * then vanished entirely past mile 70, leaving 223 of 293 miles against
+   * bare sky.  Snow now exists in exactly one biome instead of anywhere
+   * the old height multiplier happened to be non-zero.
+   *
+   * Parallax keys off ACCUMULATED ROAD HEADING (seg.heading), not the
+   * player's lateral position.  Tracking player.x alone made the backdrop
+   * slide when changing lanes but sit frozen through a bend — the tell
+   * that it was a flat painted wall.  A small player.x term is still
+   * folded in because leaning across the lane genuinely does shift a near
+   * treeline slightly.
+   */
+  _renderBiomeBackdrop() {
+    const layers = this._biomeLayers;
+    if (!layers) return;
+
+    const mile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+    const sel  = biomeAt(mile);
+    if (!sel) {                       // urban miles — skyline owns the horizon
+      for (const set of ['a', 'b']) {
+        for (const l of BAND.layers) layers[set][l].setVisible(false);
+      }
+      return;
+    }
+
+    const segIdx  = Math.floor(this.player.position / SEG_LENGTH) % this.road.segments.length;
+    const heading = this.road.segments[segIdx]?.heading ?? 0;
+    const horizon = CAM.horizonY;
+
+    // Fog eats the distant layers first — a far ridge should disappear into
+    // haze well before the near treeline does.
+    const fogD = Weather.fogParams(mile)?.density ?? 0;
+
+    // How far the far road currently sits off the nominal horizon — the
+    // pitch signal the bands ride.  allowClipped so a crest returns a value
+    // instead of null and snapping the backdrop back to flat.
+    const _far = this.road?.sampleSurface?.(52000, 0, { allowClipped: true });
+    const pitchOff = Number.isFinite(_far?.sy)
+      ? Math.max(-70, Math.min(70, _far.sy - horizon))
+      : 0;
+
+    const paint = (set, biome, weight) => {
+      for (const layer of BAND.layers) {
+        const ts = layers[set][layer];
+        if (!biome || weight <= 0.002) { ts.setVisible(false); continue; }
+        // Bands are AUTHORED at BAND.w (2048) but the screen is 800 wide.
+        // A TileSprite does not scale its texture — it shows a native-size
+        // window and tiles — so without tileScale each band rendered only
+        // its leftmost 39%, which is why Mount Si came out cropped, at the
+        // wrong scale, and short of the screen edge.  Scale UNIFORMLY so the
+        // whole authored design spans the screen with its aspect intact.
+        // Cover the FULL viewport, not just SCREEN_W.  The display is wider
+        // than the 800x450 internal frame, which is why the road renderer
+        // draws from -MARGIN to SCREEN_W + MARGIN.  Sizing bands to SCREEN_W
+        // left the treeline stopping short of the screen edge.
+        const _M  = 150 + Math.ceil(C.HUD_OFFSET_X ?? 0);
+        const _bw = SCREEN_W + _M * 2;
+        const s = SCREEN_W / BAND.w;
+        if (ts.tileScaleX !== s) { ts.tileScaleX = s; ts.tileScaleY = s; }
+        const bh = Math.round((bandHeight(biome) - BAND.yCrop[layer]) * s);
+        if (ts.height !== bh || ts.width !== _bw) ts.setSize(_bw, bh);
+        if (ts.x !== -_M) ts.x = -_M;
+
+        const key = bandKey(biome, layer);
+        if (this.textures.exists(key) && ts.texture.key !== key) ts.setTexture(key);
+
+        // Distance-weighted fog: far layers (low rate) fade first.
+        const depthT  = 1 - (bandRate(biome, layer) / BAND.rate.near);   // 0 near .. ~0.8 far
+        const fogFade = 1 - Math.min(0.92, fogD * (0.45 + depthT * 0.75));
+
+        // tilePositionX is in TEXTURE pixels, which tileScale does not undo —
+        // divide by the scale or the backdrop scrolls ~2.6x too fast.
+        ts.tilePositionX = ((heading * bandRate(biome, layer) * 900
+                            + this.player.x * bandRate(biome, layer) * 90) / s) % BAND.w;
+        // Vertical tracking: CAM.horizonY is a constant, so pinning bands to
+        // it left them dead still while the road pitched over hills.  Riding
+        // a fraction of the far road's offset from the horizon makes the
+        // backdrop rise and settle with the terrain instead of floating.
+        // Deliberately a FRACTION — distant terrain should lag the road, not
+        // move with it — and clamped so a crest can't fling it off screen.
+        ts.y = horizon + pitchOff * (0.55 - depthT * 0.35);
+        ts.setAlpha(weight * sel.alpha * fogFade);
+        ts.setVisible(true);
+      }
+    };
+
+    paint('a', sel.a, 1);
+    paint('b', sel.b, sel.t);
+  }
+
+  /**
+   * North Bend base plate + landmarks.
+   *
+   * The plate carries the ground and the side hills as one image, anchored so
+   * ITS horizon lands on the camera's horizon.  Landmarks are projected
+   * individually by distance (see Landmarks.js) and drawn just beneath it, so
+   * the plate's near hills hide a far peak automatically.
+   */
+  _renderNorthBend() {
+    const plate = this._nbBasePlate;
+    const mile  = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+    const sel   = biomeAt(mile);
+
+    // Weight follows the same cross-fade the bands use, so the plate arrives
+    // and leaves with the rest of the biome rather than popping on its own.
+    let w = 0;
+    if (sel) {
+      if (sel.a === 'north_bend')      w = sel.b ? 1 - sel.t : 1;
+      else if (sel.b === 'north_bend') w = sel.t;
+      w *= sel.alpha;
+    }
+
+    const horizonY = CAM.horizonY;
+    const far = this.road?.sampleSurface?.(60000, 0, { allowClipped: true });
+    const horizonX = Number.isFinite(far?.sx) ? far.sx : SCREEN_W / 2;
+
+    // PITCH.  CAM.horizonY is a constant, but the road's real horizon rises
+    // and falls with grade.  Pinning the plate and the peaks to the constant
+    // made the road look like an elevated bridge on every climb — the tarmac
+    // went up and the entire world stayed behind.  Ride the far road's offset
+    // from the nominal horizon, damped, so the landscape moves with the
+    // terrain without matching it one-for-one.
+    const pitchOff = Number.isFinite(far?.sy)
+      ? Math.max(-70, Math.min(70, far.sy - horizonY))
+      : 0;
+
+    if (plate) {
+      if (w <= 0.01 || !this.textures.exists('nb_base_plate')) {
+        plate.setVisible(false);
+      } else {
+        const tex = this.textures.get('nb_base_plate').source[0];
+        // OVERSCAN.  At exactly SCREEN_W the plate covers the viewport only
+        // while perfectly centred, so any lateral shift exposed a hard
+        // vertical edge with flat terrain beside it.  1.45x means it can
+        // drift with the curve and still cover corner to corner.
+        const s = (SCREEN_W * 1.45) / tex.width;
+        // The plate's own horizon (where its hills meet transparent sky) sits
+        // ~55% down the art; pin THAT to the camera horizon rather than the
+        // image centre, or the ground sits at the wrong height.
+        // Follow the curve only PARTLY.  Pinning the plate to the road's
+        // vanishing point dragged the whole landscape sideways on every bend
+        // — ground and hills swinging with the road reads as the world
+        // sliding, not the car turning.  Distant terrain should lag heavily.
+        const plateX = SCREEN_W / 2 + (horizonX - SCREEN_W / 2) * 0.22;
+        plate.setOrigin(0.5, 0.55)
+          .setPosition(plateX, horizonY + pitchOff * 0.55)
+          .setScale(s)
+          .setAlpha(w)
+          .setVisible(true);
+      }
+    }
+
+    // ── Landmarks ──────────────────────────────────────────────────────
+    // Independent of the biome cross-fade: the six hero peaks run miles
+    // 28-54, which crosses out of north_bend (26-40) and through
+    // pass_alpine.  Gating them on the plate's weight would blink them off
+    // at mile 40 mid-approach.
+    const active = new Set();
+    for (const lm of activeLandmarks(mile)) active.add(lm.key);
+    LANDMARKS.forEach((lm, i) => {
+      const img = this._landmarkImgs?.[i];
+      if (!img) return;
+      if (!active.has(lm.key) || !this.textures.exists(lm.key)) {
+        img.setVisible(false);
+        return;
+      }
+      const p = projectLandmark(lm, mile, horizonX, horizonY);
+      if (!p || p.h < 2) { img.setVisible(false); return; }
+      // Fully off-screen either side — skip rather than draw a huge offscreen
+      // quad, which is wasted fill and can upset the WebGL batch.
+      const tex = this.textures.get(lm.key).source[0];
+      const drawW = p.h * (tex.width / tex.height);
+      if (p.x + drawW / 2 < -40 || p.x - drawW / 2 > SCREEN_W + 40) {
+        img.setVisible(false);
+        return;
+      }
+      // Seat the base BELOW the nominal horizon so it tucks into the
+      // treeline instead of hanging in mid-air with a hard flat bottom edge.
+      // Peaks draw over the base plate (owner: never occlude a hero peak),
+      // so overlapping the trees is what reads as "rising from behind them".
+      const seatY = p.y + pitchOff * 0.38 + (lm.seatPx ?? 26);
+      img.setPosition(p.x, seatY)
+        .setDisplaySize(drawW, p.h)
+        .setAlpha(p.alpha)
+        .setDepth(p.depth)
+        .setVisible(true);
+    });
+  }
+
   _renderVehicles() {
     const p = this.player;
     // Shared render-camera position — cockpit shifts the eye 3000 units
@@ -13125,7 +13698,7 @@ export class GameScene extends Phaser.Scene {
     // fade thin together instead of only this vehicle pass.)
     const _fogP = Weather.fogParams((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
     const nearCull = cockpit ? 100 : 300;
-    const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1, exitT = 0) => {
+    const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1, exitT = 0, spikeFrame = null) => {
       if (relZ < nearCull || relZ > 76000 || alphaMul <= 0.01) return;
       // alphaMul folds a per-vehicle fade (e.g. a smoked cop's fleeFade)
       // into the same factor as the fog dissolve, so sprite + shadow +
@@ -13143,11 +13716,16 @@ export class GameScene extends Phaser.Scene {
       // collision now both use the real laneOffset.
       let proj = this.road.getVehicleProjection(relZ, laneOffset);
       if (!proj || proj.sw < 2) return;
-      const useTex = texKey || 'npc_car_white';
+      // Yaw-spike frames override the texture entirely.  They use a padded
+      // framing convention (car centred on its footprint inside a fixed
+      // world-width canvas) rather than the fit-to-frame convention of the
+      // shipped art, so both the width and the ground seat need adjusting.
+      const useTex = spikeFrame ? spikeFrame.key : (texKey || 'npc_car_white');
       const tex = this.textures.get(useTex)?.source?.[0];
       const baseW = tex?.width  || 64;
       const baseH = tex?.height || 40;
       let targetW = proj.sw * (scaleHint ?? 1) * (inTunnel ? 0.88 : 1);
+      if (spikeFrame) targetW *= spikeFrame.widthScale;
       // Optional hard cap (cops): perspective alone made an on-bumper cruiser
       // fill the screen — clamp so it never renders past ~player-car size.
       if (maxW && targetW > maxW) targetW = maxW;
@@ -13303,7 +13881,14 @@ export class GameScene extends Phaser.Scene {
       // player's bumper ⇒ behind ⇒ paint over") misfired on close tailgated
       // cars and downhill-compressed projections, stamping in-front cars on
       // top of the player.  Cars actually behind exist only in the mirror.
-      s.setPosition(proj.sx, proj.sy)
+      // Spike frames carry empty canvas below the car's footprint (needed so
+      // a 45° frame has room for the near wheels), so the bottom-anchored
+      // sprite has to sink by that padding or the car floats above the road.
+      const seatY = spikeFrame
+        ? proj.sy + (1 - spikeFrame.groundFrac) * targetH
+        : proj.sy;
+      s.setFlipX(!!spikeFrame?.flipX);
+      s.setPosition(proj.sx, seatY)
         .setDisplaySize(targetW, targetH)
         .setTint(color)
         .setRotation(rotation ?? 0)
@@ -13348,7 +13933,8 @@ export class GameScene extends Phaser.Scene {
       if (ol) {
         const rim = Math.max(0.8, Math.min(3, targetW * CAR_OUTLINE_PX));
         if (ol.texture.key !== useTex) ol.setTexture(useTex);
-        ol.setPosition(proj.sx, proj.sy - targetH / 2)
+        ol.setFlipX(!!spikeFrame?.flipX);
+        ol.setPosition(proj.sx, seatY - targetH / 2)
           .setDisplaySize(targetW + rim * 2, targetH + rim * 2)
           .setTint(CAR_OUTLINE_COLOR)
           .setRotation(rotation ?? 0)
@@ -13365,7 +13951,8 @@ export class GameScene extends Phaser.Scene {
         const ghostOffset = ghostOffsetBase * Math.min(1, (proj.sw ?? 0) / 200);
         const gs = ghostPool[ghostUsed++];
         if (gs.texture.key !== useTex) gs.setTexture(useTex);
-        gs.setPosition(proj.sx + ghostOffset, proj.sy)
+        gs.setFlipX(!!spikeFrame?.flipX);
+        gs.setPosition(proj.sx + ghostOffset, seatY)
           .setDisplaySize(targetW, targetH)
           .setTint(color)
           .setRotation(rotation ?? 0)
@@ -13412,8 +13999,25 @@ export class GameScene extends Phaser.Scene {
         if (t._lightsOff === undefined) t._lightsOff = Math.random() < 1 / 5.5;   // clear weather/night: ~1 in 4-7 cars run dark
         if (inFogLights && t._fogLightsOff === undefined) t._fogLightsOff = Math.random() >= 0.85;   // fog: 85% lit
         const lightsOff = inFogLights ? t._fogLightsOff : t._lightsOff;
-        place(relZ, t.laneOffset, tint, vs, 0, texKey, undefined, undefined,
-              lightsOff ? null : ((t.speed ?? 0) < 0 ? 'head' : 'tail'), t.vClass ?? t.colorSet);
+        // YAW SPIKE: same-direction cars only (the placeholder frame set is
+        // rear-view only).  Tint is forced white so the flat-shaded
+        // placeholder keeps its own face shading instead of being washed
+        // into a single colour.
+        let spikeFrame = null;
+        if (this._spikeYawOn && facing === 'back' && vs === 1) {
+          const yaw = this._vehicleYaw(relZ, t.laneOffset);
+          spikeFrame = this._spikeYawFrame(yaw);
+          if (this._spikeYawDebug && relZ < 12000) {
+            console.log('[yaw-spike]',
+              'relZ', relZ.toFixed(0).padStart(6),
+              'dLane', (t.laneOffset - this.player.x).toFixed(2).padStart(6),
+              'yaw', (yaw * 180 / Math.PI).toFixed(1).padStart(6) + '°',
+              '->', spikeFrame.key, spikeFrame.flipX ? '(flipX)' : '');
+          }
+        }
+        place(relZ, t.laneOffset, spikeFrame ? 0xFFFFFF : tint, vs, 0, texKey, undefined, undefined,
+              lightsOff ? null : ((t.speed ?? 0) < 0 ? 'head' : 'tail'), t.vClass ?? t.colorSet,
+              1, 0, spikeFrame);
         // ── Same-direction headlight beams (per-slot masked) ──
         // Oncoming traffic shows a grille-mounted dot pair handled
         // in _renderHeadlights; same-direction NPCs project forward
@@ -15017,17 +15621,16 @@ export class GameScene extends Phaser.Scene {
 
     // Walk visible segments far→near. Render BOTH vice pickups and F12
     // weapon tokens through this pool — same depth, same sizing rules.
-    const customMode = Difficulty.mode() === 'custom';
+    // Custom mode used to suppress every vice pickup here AND in the collection
+    // scan, on the theory that the slider had already set the bars.  Removed
+    // 2026-07-28 (owner): food / drink / caffeine now spawn and render in custom
+    // exactly like every other mode — nothing about pickups is culled.
     for (let n = 380; n >= 0 && used < pool.length; n--) {
       const seg = segs[(startSeg + n) % segs.length];
       if (!seg?.sprites) continue;
       for (const sp of seg.sprites) {
         if (!sp.isCollectible || sp.collected) continue;
         if (sp.type === 'vice-pending') continue;
-        // Custom mode — no vice pickups on the road (player chose
-        // starting bar levels via slider, can adjust mid-run).  Weapons
-        // still render so the player has tools.
-        if (customMode && sp.collectibleType === 'vice') continue;
         // 4★+ vice pickup suppression — ~40% of vices simply don't render
         // (they're "gone" — narcs swept the area).  Stable per-sprite roll.
         if (sp.collectibleType === 'vice'
@@ -15066,7 +15669,9 @@ export class GameScene extends Phaser.Scene {
         const tex = this.textures.get(texKey).source[0];
         const baseW = tex?.width  || 64;
         const baseH = tex?.height || 64;
-        const targetMax = proj.sw * 0.6;
+        // 0.84 = the long-standing 0.6 × 1.4 (owner 2026-07-28: pickups
+        // 40% bigger — vices, weapon tokens, powerups all size from here).
+        const targetMax = proj.sw * 0.84;
         let dispW, dispH;
         if (baseW >= baseH) { dispW = targetMax; dispH = targetMax * (baseH / baseW); }
         else                { dispH = targetMax; dispW = targetMax * (baseW / baseH); }
@@ -16121,6 +16726,16 @@ export class GameScene extends Phaser.Scene {
       align: 'center',
     }).setOrigin(0.5, 0).setDepth(d).setVisible(false);
 
+    // ── PASSENGER indicator — a rider is aboard and hasn't shown their hand
+    // yet.  Without this the one-at-a-time rule is invisible: a second
+    // hitchhiker refusing to be picked up just reads as a broken pickup.
+    // Sits directly under the rear-cop line so the two never overlap.
+    this.hudPassenger = this.add.text(SCREEN_W / 2, 90, '', {
+      fontSize: '13px', fontFamily: IMPACT,
+      color: '#DDDDDD', stroke: '#000000', strokeThickness: 4,
+      align: 'center',
+    }).setOrigin(0.5, 0).setDepth(d).setVisible(false);
+
     // ── 5★ helicopter overlay — ASCII chopper that hovers high above the
     // road centre and pulses red+blue rotor flash.  Decorative only —
     // signals "you're at maximum heat" without adding extra collision logic.
@@ -16169,6 +16784,20 @@ export class GameScene extends Phaser.Scene {
     this._titleMain = null;
     this._titleSub = null;
     this._titleRoute = null;
+
+    // DEMO badge — only on the App Store demo build (DEMO_MODE).  A neon pill in
+    // the top-left so it's unmistakably the demo; hidden on the full game and
+    // toggled with the rest of the title by _setTitleVisible.
+    this._titleDemoBadge = null;
+    if (C.DEMO_MODE) {
+      this._titleDemoBadge = this.add.text(60, 28, 'DEMO', {
+        fontSize: '20px', fontFamily: IMPACT, color: '#FFFFFF',
+        backgroundColor: '#FF39AF', padding: { x: 12, y: 5 },
+        stroke: '#39A8FF', strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(d + 20).setVisible(!!this._awaitingStart);
+      this._hudObjects?.push(this._titleDemoBadge);
+      this.cameras?.main?.ignore?.([this._titleDemoBadge]);   // UI camera only
+    }
 
     const save = this.registry.get('save');
     const last = save?.get?.('lastRestStop');
@@ -16365,6 +16994,46 @@ export class GameScene extends Phaser.Scene {
     // ── Player-profile plates (left side) — pick / create the driver ──
     this._buildPlateSlots(d);
 
+    // ── Desktop-only: the way INTO the iPhone menu from the title screen ────
+    // A phone reaches the menu by rotating to portrait.  Desktop can't, and the
+    // pause overlay's "iPHONE MENU" button is no help here because _togglePause
+    // refuses to open while _awaitingStart is true — so the title screen had NO
+    // route to the phone at all.  Sits directly under the driver plates (the
+    // phone belongs to whoever's driving) in the gap between the plate stack
+    // and the START card, matched to the plate column's x/width so it reads as
+    // part of that group.  window.__phoneMenu.open() is the same bridge the
+    // pause overlay uses; the menu's own "Enter Gameplay" button closes it.
+    // Same media query as the pause-overlay button rather than
+    // window.__isDesktop, which isn't guaranteed to be set before create().
+    if (window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches) {
+      const PX = 16, PW = 137;          // plate column — see _buildPlateSlots
+      const PY = 310, PH = 26;          // plates end at 302, START card starts at 345
+      const phoneBg = this.add.graphics().setDepth(d + 10);
+      const phoneTx = this.add.text(PX + PW / 2, PY + PH / 2, '📱 iPHONE MENU', {
+        fontSize: '13px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif',
+        color: '#39FF8A', stroke: '#04150C', strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(d + 12);
+      const drawPhoneBtn = (hover = false) => {
+        phoneBg.clear();
+        phoneBg.fillStyle(0x07160F, hover ? 0.96 : 0.82);
+        phoneBg.fillRoundedRect(PX, PY, PW, PH, 6);
+        phoneBg.lineStyle(2, 0x39FF8A, hover ? 1 : 0.6);
+        phoneBg.strokeRoundedRect(PX, PY, PW, PH, 6);
+      };
+      drawPhoneBtn();
+      phoneBg.setInteractive(new Phaser.Geom.Rectangle(PX, PY, PW, PH), Phaser.Geom.Rectangle.Contains);
+      phoneBg.input.cursor = 'pointer';
+      phoneBg.on('pointerover', () => drawPhoneBtn(true));
+      phoneBg.on('pointerout',  () => drawPhoneBtn(false));
+      phoneBg.on('pointerdown', (ptr) => {
+        ptr.event?.stopPropagation?.();
+        try { window.__phoneMenu?.open?.(); } catch (_) {}
+      });
+      // Joining _titleDifficultyBtns is what hands these to _setTitleVisible
+      // and the UI-camera / ignore lists — no separate bookkeeping needed.
+      this._titleDifficultyBtns.push(phoneBg, phoneTx);
+    }
+
     // Shared START dispatcher — used by the painted START panel and
     // keyboard handlers; current selector values determine the launch.
     this._fireTitleCursor = () => {
@@ -16387,46 +17056,7 @@ export class GameScene extends Phaser.Scene {
       }
       const cur = this._wheelCursor ?? Difficulty.mode();
       if (cur === 'custom') {
-        this._buildViceSliderModal({
-          mode: 'custom',
-          onConfirm: ({ viceLevels, checkpointPos, noNpcDamage, noPolice, startStars, customSub, drivingType, vehicleId, accessories, radar }) => {
-            Difficulty.set('custom', this.registry);
-            if (customSub) Difficulty.setCustomSub(customSub, this.registry);
-            if (drivingType) {
-              this.registry?.set?.('titleThumbsPick', drivingType);
-              this._setSteeringMode?.(drivingType);
-            }
-            // Custom is a sandbox — let the player drive ANY vehicle
-            // and toggle ANY accessory for this run.  Stored as
-            // scene-instance overrides so the persisted save state
-            // (ownedVehicles, accessories[vid]) isn't clobbered.
-            if (vehicleId && VEHICLES[vehicleId]) {
-              this._customStartVehicleId = vehicleId;
-              this._applyVehicleSwap?.(vehicleId);
-            }
-            this._customStartAccessories = accessories ?? null;
-            // Custom sandbox: the RADAR toggle is authoritative for this run
-            // (overrides global ownership) and does NOT persist to the save.
-            this._hasRadar = !!radar;
-            this._customStartLevels = viceLevels;
-            this._customFlags = { noNpcDamage: !!noNpcDamage, noPolice: !!noPolice };
-            // Persist the sandbox loadout so a rest-stop exit / crash respawn
-            // (which re-runs init() with NO modal to re-apply choices) can
-            // restore it — otherwise No-damage / No-police / accessories /
-            // radar silently revert on the way back from a stop.
-            this.registry?.set?.('customLoadout', {
-              noNpcDamage: !!noNpcDamage, noPolice: !!noPolice,
-              accessories: accessories ?? null, radar: !!radar,
-            });
-            this._customStartStars = Math.max(0, Math.min(5, startStars ?? 0));
-            this._customStartPosition = Math.max(0, checkpointPos ?? 0);
-            // Reset the party clock to Custom's setting (40 min by spec)
-            // so the run begins with a fresh countdown.
-            this._partyClockSec    = Difficulty.partyClockSec();
-            this._partyClockSecMax = this._partyClockSec;
-            this._startGameplay();
-          },
-        });
+        this._openCustomSetupModal();
         return;
       }
       if (cur === 'saved') {
@@ -16481,7 +17111,7 @@ export class GameScene extends Phaser.Scene {
         ...[
           this.hudScore, this.hudMult, this.hudDist, this.hudRegion, this.hudStars, this.hudRage, this.hudEspresso, this.hudHP, this.hudHPDamage, this.hudAccelBar,
           this.hudSpeed, this.hudRadio, this.hudPopup, this._trapSign,
-          this.hudRearCop, this.hudRestStop, this.hudHelicopter, this.hudHelicopterImg,
+          this.hudRearCop, this.hudPassenger, this.hudRestStop, this.hudHelicopter, this.hudHelicopterImg,
           this._titleScrim, this._titleBackdrop, this._titleMain, this._titleSub, this._titleRoute, this._titleTap,
           this._titleResume,    this._titleResumeTxt,
           this._titleEnterCode, this._titleEnterCodeTxt,
@@ -16497,6 +17127,17 @@ export class GameScene extends Phaser.Scene {
     // Expose the guided title tutorial so the DOM rotate-wait bridge can start
     // it the moment the player rotates in from the portrait tour (owner 2026-07-18).
     try { window.__titleTut = { start: () => this._startTitleTutorial() }; } catch (_) {}
+    // Demo build on DESKTOP: the mobile portrait tour never fires (no phone menu
+    // in the desktop layout), so auto-start the title-screen tutorial once so
+    // demo players are always onboarded.  Mobile keeps its own tour flow.  The
+    // plate step auto-advances since the demo's Guest plate makes needsEntry
+    // false.  Once per scene instance so a replay doesn't re-nag.
+    try {
+      if (C.DEMO_MODE && this._awaitingStart && window.__isDesktop && !this._demoTutStarted) {
+        this._demoTutStarted = true;
+        this.time.delayedCall(650, () => { try { this._startTitleTutorial(); } catch (_) {} });
+      }
+    } catch (_) {}
   }
 
   // ── Guided title-screen tutorial (Stage 1b) ───────────────────────────
@@ -16779,7 +17420,7 @@ export class GameScene extends Phaser.Scene {
    *  (loses non-Beater vehicle, free tow back in the Beater). */
   _runTow() {
     const cash    = this.score ?? 0;
-    const aaaCost = Math.floor(cash * 0.50);
+    const aaaCost = this._cashLoss(Math.floor(cash * 0.50));
     const curMile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
     // Previous rest stop = the last one whose mileage <= curMile.
     let prevStop = null;
@@ -17219,6 +17860,12 @@ export class GameScene extends Phaser.Scene {
       // (forward-LEFT) stays on mirror-LEFT.
       const groundY = mb.horizonY;
       const groundH = mb.glassY + mb.glassH - mb.horizonY;
+      // Snow blanket, read from the SAME helper the forward view uses.  The
+      // mirror painted raw palette colours, so during a whiteout the glass
+      // still showed green verges and a yellow centre line behind a car
+      // driving through a snowfield.
+      const _snowM  = snowBlanketAt(this._mileNow());
+      const _snowy  = (c) => (_snowM > 0.001 ? lerpColor(c, SNOW_WHITE, _snowM) : c);
       if (inTunnel) {
         mg.fillStyle(0x55524A, 1);
         mg.fillRect(mb.glassX, groundY, mb.glassW, groundH);
@@ -17231,7 +17878,7 @@ export class GameScene extends Phaser.Scene {
         mg.fillStyle(0x4A4742, 1);
         mg.fillRect(mb.glassX, groundY, mb.glassW, groundH);
       } else if (onWaterLeft) {
-        const grass = palette.grass1 ?? 0x3F6E40;
+        const grass = _snowy(palette.grass1 ?? 0x3F6E40);
         const water = 0x1E3850;
         // Mirror preserves the driver's left/right frame — forward-LEFT
         // water stays on mirror-LEFT.  The water/grass boundary FOLLOWS the
@@ -17249,13 +17896,13 @@ export class GameScene extends Phaser.Scene {
         wp.push({ x: mb.glassX, y: groundY + groundH });
         mg.fillPoints(wp, true);
       } else {
-        mg.fillStyle(palette.grass1 ?? 0x3F6E40, 1);
+        mg.fillStyle(_snowy(palette.grass1 ?? 0x3F6E40), 1);
         mg.fillRect(mb.glassX, groundY, mb.glassW, groundH);
       }
       // Road surface — a single filled strip that follows the curved
       // centerline (left edge near→far, then right edge far→near).  The
       // geometry mask clips any overspill to the glass.
-      mg.fillStyle(palette.road2 ?? palette.road1 ?? 0x2A2A2A, 1);
+      mg.fillStyle(_snowy(palette.road2 ?? palette.road1 ?? 0x2A2A2A), 1);
       {
         const left = [], right = [];
         for (let n = 0; n <= ROAD_SAMPLES; n++) {       // uniform screen samples → smooth
@@ -17300,12 +17947,17 @@ export class GameScene extends Phaser.Scene {
         }
       };
       // White edge lines, white dashed lane dividers, yellow double centre.
-      stripeCurve(-1.00, whiteCol, 0.65);
-      stripeCurve( 1.00, whiteCol, 0.65);
-      dashedStripeCurve(-0.50, whiteCol, 0.60);
-      dashedStripeCurve( 0.50, whiteCol, 0.60);
-      stripeCurve(-0.05, yellowCol, 0.85);
-      stripeCurve( 0.05, yellowCol, 0.85);
+      // Buried once the blanket passes SNOW_MARKINGS_GONE, matching the
+      // forward view — a yellow line in the mirror during a whiteout was the
+      // giveaway that the two views disagreed.
+      if (_snowM < SNOW_MARKINGS_GONE) {
+        stripeCurve(-1.00, whiteCol, 0.65);
+        stripeCurve( 1.00, whiteCol, 0.65);
+        dashedStripeCurve(-0.50, whiteCol, 0.60);
+        dashedStripeCurve( 0.50, whiteCol, 0.60);
+        stripeCurve(-0.05, yellowCol, 0.85);
+        stripeCurve( 0.05, yellowCol, 0.85);
+      }
       mb._playerLane = playerLane;
 
       // Project (relZ, laneOffset) onto the mirror's CURVED rear road using
@@ -17451,6 +18103,21 @@ export class GameScene extends Phaser.Scene {
       // close zone so traffic only popped in ~15 segs back, already small.)
       // Shared by the cop loop below.
       const MIRROR_NEAR_CULL = 250;
+      // Rear cops — computed BEFORE the traffic loop so slots can be
+      // RESERVED for them.  Both loops share the 14-slot _mirrorCarPool and
+      // traffic used to draw first: with the traffic cap at 18-22 and cars
+      // kept alive 35,000 units behind specifically for the mirror, a busy
+      // stretch filled all 14 slots with receding traffic and the cop loop
+      // hit `usedCars >= carPool.length` before placing anything.  Result:
+      // the PURSUIT countdown ran to 1 ft with no cruiser in the glass —
+      // the pool starved out exactly the sprite the player most needs to
+      // see, and only on busy roads ("often", not always).
+      const copsBehind = (this.cops?.cops ?? [])
+        .map(c => ({ c, vz: visualPlayerZ - c.position }))
+        .filter(o => o.vz > MIRROR_NEAR_CULL && o.vz <= MIRROR_FAR_Z)
+        .sort((a, b) => b.vz - a.vz);
+      const _copReserve = Math.min(copsBehind.length, 3);
+      const _carSlotMax = carPool.length - _copReserve;
       const carsBehind = (this.traffic ?? [])
         .map(c => ({ c, vz: visualPlayerZ - c.position }))
         .filter(o => o.c.alive && o.vz > MIRROR_NEAR_CULL && o.vz <= MIRROR_FAR_Z)
@@ -17465,7 +18132,7 @@ export class GameScene extends Phaser.Scene {
       const haloAM     = _darknessMirror * NPC_PEAK_M * 0.6;
       const ml = this.hudMirrorLights ?? mg;
       for (const { c: car, vz } of carsBehind) {
-        if (usedCars >= carPool.length) break;
+        if (usedCars >= _carSlotMax) break;   // leave reserved slots for cops
         const proj = projectRear(vz, car.laneOffset, MIRROR_FAR_Z);
         // In the mirror, same-direction NPCs (behind player, going the
         // same way) are facing the player → show FRONT.  Oncoming NPCs
@@ -17579,10 +18246,7 @@ export class GameScene extends Phaser.Scene {
       // Rear cops — front-view police art plus an overlay light bar.  The
       // texture has emergency art baked in, but the mirror view is tiny; live
       // dots keep a close pursuit readable at night and in fog.
-      const copsBehind = (this.cops?.cops ?? [])
-        .map(c => ({ c, vz: visualPlayerZ - c.position }))
-        .filter(o => o.vz > MIRROR_NEAR_CULL && o.vz <= MIRROR_FAR_Z)
-        .sort((a, b) => b.vz - a.vz);
+      // (copsBehind computed above the traffic loop — slots are reserved.)
       for (const { c: cop, vz } of copsBehind) {
         if (usedCars >= carPool.length) break;
         // Smoked/scattered cops fade OUT in the mirror too (same
@@ -17696,16 +18360,44 @@ export class GameScene extends Phaser.Scene {
 
     // Rear cop pursuit indicator — pseudo-3D can't render behind the player,
     // so we show a HUD chevron when a cop is closing from the rear.
-    const rear = this._ctrlEditMode ? null : this.cops.getRearCopInfo?.(p.position);
+    // Measured to the player's CAR (position + PLAYER_VIRTUAL_Z), which is what
+    // the mirror draws and what collisions test — reading from the camera made
+    // the countdown 3000 units optimistic, so it hit "20 ft" while the cruiser
+    // was still a car-length-times-six back and tiny in the glass.
+    const rear = this._ctrlEditMode
+      ? null
+      : this.cops.getRearCopInfo?.(p.position + PLAYER_VIRTUAL_Z);
     if (this._ctrlEditMode) {
       // Editor: keep the placeholder visible so it can be positioned.
     } else if (rear?.count) {
-      const distFt = Math.max(1, Math.round(-rear.nearestRelZ / 10));
+      // World units per foot, derived rather than guessed: the route is
+      // ROUTE_SEGS x SEG_LENGTH units over TOTAL_ROUTE_MILES.  The old /10
+      // divisor overstated every distance by ~6x.
+      // −10 ft calibration (owner 2026-07-27): rear distance is measured to
+      // the player's POSITION, but the cars READ as touching about a car
+      // length sooner — with the fix that made pursuit target the visible
+      // car, a cruiser showing "12 ft behind" was already drawing alongside
+      // the bumper.  Subtracting a flat 10 ft makes "0 ft" coincide with
+      // visual contact.  Floor at 0, not 1 — at contact it should read 0.
+      const distFt = Math.max(0, Math.round(-rear.nearestRelZ / (UNITS_PER_MILE_HUD / 5280)) - 10);
       this.hudRearCop
         .setText(`${this._colorblind ? '[!] ' : ''}◀ PURSUIT ${rear.count > 1 ? '×' + rear.count + ' ' : ''}— ${distFt} ft behind`)
         .setVisible(true);
     } else {
       this.hudRearCop.setVisible(false);
+    }
+
+    // Passenger aboard — icon + miles until they show their hand.
+    if (this.hudPassenger) {
+      const pax = this._passenger;
+      if (pax && !this._ctrlEditMode) {
+        const left = Math.max(0, HITCH_REVEAL_MILES - (this._mileNow() - pax.pickupMile));
+        this.hudPassenger
+          .setText(`🧍 RIDER ABOARD — ${left < 0.1 ? '<0.1' : left.toFixed(1)} mi`)
+          .setVisible(true);
+      } else {
+        this.hudPassenger.setVisible(false);
+      }
     }
 
     this._drawViceBars();
@@ -18743,6 +19435,13 @@ export class GameScene extends Phaser.Scene {
   _ensureSurvBarDragHandler() {
     if (this._survBarDragWired) return;
     this._survBarDragWired = true;
+    // Phaser REUSES the scene instance across restarts and clears all input
+    // listeners on shutdown — but this flag survived, so after any restart
+    // (rest stop, START OVER, resume) the early-out above skipped rewiring
+    // and the custom-mode bar drag went permanently dead.  It only ever
+    // worked on the first run after a full page load.  Clear the flag on
+    // shutdown so the next create() wires fresh listeners.
+    this.events.once('shutdown', () => { this._survBarDragWired = false; });
     this._draggingSurvKey = null;
 
     const setFromPointer = (px) => {
@@ -19184,9 +19883,14 @@ export class GameScene extends Phaser.Scene {
     if (!segs?.length) return;
     const startSeg = Math.floor(this.player.position / SEG_LENGTH);
     const ahead    = 250 + ((Math.random() * 200) | 0);
-    // Centre the line in a SAME-direction lane (offset 0.0 to +0.45) so the
-    // player doesn't have to swerve hard across traffic to grab it.
-    const offset = 0.05 + Math.random() * 0.40;
+    // Lane spread (owner 2026-07-27): each food line sits in ONE of the 4 lane
+    // centres, round-robined across successive lines so all 4 lanes get used
+    // evenly over the run (was pinned to the inner same-direction lane).  The
+    // whole line shares one lane so you don't have to weave across oncoming
+    // traffic mid-grab — evenness is across lines, not within a line.
+    const LANE_CENTERS = [-0.75, -0.25, 0.25, 0.75];   // oncoming | oncoming | same-dir | same-dir
+    this._foodLaneIdx = ((this._foodLaneIdx ?? -1) + 1) % LANE_CENTERS.length;
+    const offset = LANE_CENTERS[this._foodLaneIdx];
     const types  = o$.types  ?? ['sushi', 'sushi', 'sushi'];
     const spread = o$.spread ?? 14;        // segments between cans
     let placed = 0;
@@ -19228,10 +19932,14 @@ export class GameScene extends Phaser.Scene {
     if (r < 0.30)      { f12Type = 'f12_coal';      texKey = 'weapon_coal'; }
     else if (r < 0.80) { f12Type = 'f12_fireworks'; texKey = 'weapon_fireworks'; }
     else               { f12Type = 'f12_paint';     texKey = 'weapon_paint_bomb'; }
+    // Lane spread (owner 2026-07-27): round-robin the 4 lane centres so bonus
+    // weapons land evenly across all lanes over time (was clustered inner).
+    const LANE_CENTERS = [-0.75, -0.25, 0.25, 0.75];
+    this._weaponLaneIdx = ((this._weaponLaneIdx ?? -1) + 1) % LANE_CENTERS.length;
     seg.sprites.push({
       type:            f12Type,
       texKey,
-      offset:          (Math.random() * 0.9) - 0.45,
+      offset:          LANE_CENTERS[this._weaponLaneIdx],
       baseW: 720, baseH: 880,
       collected:       false,
       isCollectible:   true,
@@ -19457,6 +20165,10 @@ export class GameScene extends Phaser.Scene {
       this._applyRunState(s.runState);
       this._applyMessageState(s.messageState);
       if (s.missions) this.missions?.restore?.(s.missions);
+      // A resumed CUSTOM run gets its sandbox grants back — the snapshot may
+      // have overwritten score/weapons just above, and `_startGameplay` (the
+      // only other place they are applied) never runs on a resume path.
+      this._applyCustomGrants();
     } catch (e) { console.error('[applyResumeSnapshot]', e); }
   }
 
@@ -19506,6 +20218,11 @@ export class GameScene extends Phaser.Scene {
     // in-game mute icon) silences the radio.  Previously paused on entry,
     // unpaused on _continue; removed per user direction so the player has
     // a soundtrack while shopping.
+
+    // A rider still aboard gets out HERE, short of the 5-mile mark (owner
+    // spec).  Resolved BEFORE the score/weapon snapshot below so whatever
+    // they hand over — or take — carries into the rest stop.
+    this._revealPassenger();
 
     // Fade-to-white-then-launch effect — short cinematic so the transition
     // feels like an actual off-ramp pull-over, not an instant scene swap.
@@ -19620,6 +20337,7 @@ export class GameScene extends Phaser.Scene {
       this._titleScrim, this._titleBackdrop, this._titleMain, this._titleSub, this._titleRoute, this._titleTap,
       this._titleResume,    this._titleResumeTxt,
       this._titleEnterCode, this._titleEnterCodeTxt,
+      this._titleDemoBadge,
       ...(this._titleDifficultyBtns ?? []),
     ].forEach(o => o?.setVisible(v));
     if (Array.isArray(this._titleLetters)) {
@@ -20372,7 +21090,12 @@ export class GameScene extends Phaser.Scene {
     const active = save.activeSlot;
     for (const wdg of this._plateWidgets) {
       const slot     = info[wdg.index] || { used: false, plate: '' };
-      const isActive = wdg.index === active && slot.used;
+      // Gold glow follows the SELECTED slot, named or not.  The old
+      // `&& slot.used` gate meant only slots with a plate name could show it
+      // — with one named slot (Idaho), the other two never highlighted even
+      // though tapping them genuinely moves activeSlot (selectSlot runs for
+      // blank slots too; the name is only asked at START).
+      const isActive = wdg.index === active;
       const { g, t, img, x, y, w, h } = wdg;
       g.clear();
       // Every slot ALWAYS shows its fixed state plate (slot 0/1/2 → WA/OR/ID),
@@ -20828,6 +21551,113 @@ export class GameScene extends Phaser.Scene {
     } catch (_) { return { ok: false }; }
   }
 
+  /** Open the Custom-game setup menu (vice sliders, checkpoint, sub-difficulty,
+   *  vehicle, accessories, flags) and start the run when the player confirms.
+   *
+   *  Extracted from the title START dispatcher so the crash-boot recovery can
+   *  reuse it verbatim: a custom run's autosave never reaches disk, so after a
+   *  reload there is nothing to resume and the player is sent back here to
+   *  re-pick their settings (or back out to the title) rather than being
+   *  silently dropped into a stale scored run.  Closing the modal without
+   *  confirming just leaves the title up. */
+  _openCustomSetupModal() {
+    this._buildViceSliderModal({
+      mode: 'custom',
+      onConfirm: ({ viceLevels, checkpointPos, noNpcDamage, noPolice, startStars, customSub, drivingType, vehicleId, accessories, radar }) => {
+        Difficulty.set('custom', this.registry);
+        if (customSub) Difficulty.setCustomSub(customSub, this.registry);
+        if (drivingType) {
+          this.registry?.set?.('titleThumbsPick', drivingType);
+          this._setSteeringMode?.(drivingType);
+        }
+        // Custom is a sandbox — let the player drive ANY vehicle
+        // and toggle ANY accessory for this run.  Stored as
+        // scene-instance overrides so the persisted save state
+        // (ownedVehicles, accessories[vid]) isn't clobbered.
+        if (vehicleId && VEHICLES[vehicleId]) {
+          this._customStartVehicleId = vehicleId;
+          this._applyVehicleSwap?.(vehicleId);
+        }
+        this._customStartAccessories = accessories ?? null;
+        // Custom sandbox: the RADAR toggle is authoritative for this run
+        // (overrides global ownership) and does NOT persist to the save.
+        this._hasRadar = !!radar;
+        this._customStartLevels = viceLevels;
+        this._customFlags = { noNpcDamage: !!noNpcDamage, noPolice: !!noPolice };
+        // Persist the sandbox loadout so a rest-stop exit / crash respawn
+        // (which re-runs init() with NO modal to re-apply choices) can
+        // restore it — otherwise No-damage / No-police / accessories /
+        // radar silently revert on the way back from a stop.
+        this.registry?.set?.('customLoadout', {
+          noNpcDamage: !!noNpcDamage, noPolice: !!noPolice,
+          accessories: accessories ?? null, radar: !!radar,
+        });
+        this._customStartStars = Math.max(0, Math.min(5, startStars ?? 0));
+        this._customStartPosition = Math.max(0, checkpointPos ?? 0);
+        // Reset the party clock to Custom's setting (40 min by spec)
+        // so the run begins with a fresh countdown.
+        this._partyClockSec    = Difficulty.partyClockSec();
+        this._partyClockSecMax = this._partyClockSec;
+        this._startGameplay();
+      },
+    });
+  }
+
+  /** How much cash the player can ACTUALLY lose from a would-be `amount`.
+   *
+   *  Single rule for every drain (owner 2026-07-28): in Custom the wallet never
+   *  depletes, so every loss resolves to 0.  Note this is NOT "everything is
+   *  free" — shop items in Custom cost their real price and display it (the old
+   *  `freeMode` zeroing was removed); the money just doesn't run out.  Route ALL
+   *  new `score -=` sites through here rather than adding another mode check. */
+  _cashLoss(amount) {
+    if (Difficulty.noScore?.()) return 0;
+    return Math.max(0, Math.round(amount ?? 0));
+  }
+
+  /** Custom-mode sandbox grants: $100,000 and a full weapon rack.
+   *
+   *  IDEMPOTENT AND TOP-UP ONLY, deliberately (owner 2026-07-27).  This used to
+   *  live inline in `_startGameplay`, which is the ONE entry point that every
+   *  resume path skips — crash auto-resume, LOAD SAVE and checkpoint respawn all
+   *  bypass it (see the note at the top of `_startGameplay`).  Coming back
+   *  through any of those doors therefore landed the player in a custom run with
+   *  $0 and no weapons, which is what got reported.  Call this from every entry
+   *  into a custom run instead; a no-op in every other mode.
+   *
+   *  Top-up rather than reset so a resumed custom run that legitimately holds
+   *  MORE than the seed keeps it.  Weapons can never be spent in custom
+   *  (`useF12Token` skips all decrements there), so topping each slot back to
+   *  full is always the correct target. */
+  _applyCustomGrants() {
+    if (Difficulty.mode?.() !== 'custom') return;
+    const SEED_MONEY = 100000;
+    const FULL_STACK = 3;
+    this.score = Math.max(this.score ?? 0, SEED_MONEY);
+    // Every vice unlocked (owner 2026-07-28) — custom shows all bars, and a
+    // LOCKED vice makes its road pickups inert (`ViceSystem.pickup` bails on
+    // !unlocked).  Applied here, not just in the fresh-start slider block, so a
+    // resumed custom run can still collect everything.
+    if (this.vices?.unlocked) {
+      for (const id of Object.values(VICES)) this.vices.unlocked[id] = true;
+      if (this.vices.snapshotUnlocks) {
+        this.registry?.set?.('viceUnlocks', this.vices.snapshotUnlocks());
+      }
+    }
+    if (!this.cops) return;
+    // Rolling coal to max clouds; the 'coal' token is present iff coalAmmo > 0.
+    this.cops.coalAmmo  = Math.max(this.cops.coalAmmo ?? 0, FULL_STACK);
+    this.cops.f12Tokens = Array.isArray(this.cops.f12Tokens) ? this.cops.f12Tokens : [];
+    const toks = this.cops.f12Tokens;
+    if (this.cops.coalAmmo > 0 && !toks.includes('coal')) toks.push('coal');
+    // Top each deployable up to a full stack so every slot shows and is usable,
+    // without duplicating what a restored snapshot already put there.
+    for (const w of ['fireworks', 'paint_bomb', 'disguise']) {
+      const have = toks.reduce((n, t) => n + (t === w ? 1 : 0), 0);
+      for (let i = have; i < FULL_STACK; i++) toks.push(w);
+    }
+  }
+
   /** Resume an EXACT-spot snapshot (manual Save) — clean continue, no death
    *  penalties, no "lost you" modal.  Routed through the _resumeLive branch. */
   _resumeFromLiveSnapshot(snap) {
@@ -21079,6 +21909,12 @@ export class GameScene extends Phaser.Scene {
         || !!localStorage.getItem('rtr_tutStage1')
         || !!localStorage.getItem('rtr_tutStage2');
     } catch (_) {}
+    // Demo build: every player is "Guest".  Persist it to the save (so the rear
+    // plate + any display reads it) and skip the required plate-name modal.
+    if (C.DEMO_MODE) {
+      const _sv = this.registry.get('save');
+      if (_sv && !(_sv.activePlate ?? '').trim()) _sv.setActivePlate?.('Guest');
+    }
     if (!_tutBusy && window.__plate?.needsEntry?.()) window.showPlateModal?.({ required: true });
     // Grace window — the START button's own pointerdown is currently
     // mid-dispatch, so any once-listener attached now would fire for
@@ -21103,11 +21939,16 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.once('keydown-ENTER', fireFirstTap);
     });
     // Custom mode — apply the slider levels chosen on the title screen.
-    // Also unlock every vice at level > 0 so the bar renders properly.
+    // EVERY vice is unlocked, not just the ones the slider left above 0 (owner
+    // 2026-07-28): custom already shows all bars (`showAllVices`), and road
+    // pickups no-op on a LOCKED vice (`ViceSystem.pickup` bails on !unlocked).
+    // Gating the unlock on `lvl > 0` meant a vice you left at zero rendered a
+    // pickup you could drive through forever — exactly the culling the owner
+    // asked to remove.
     if (this._customStartLevels && this.vices?.levels) {
       for (const [id, lvl] of Object.entries(this._customStartLevels)) {
         this.vices.levels[id] = lvl;
-        if (lvl > 0 && this.vices.unlocked) this.vices.unlocked[id] = true;
+        if (this.vices.unlocked) this.vices.unlocked[id] = true;
       }
       // Refresh the registry-stored unlock map so the HUD redraws bars.
       if (this.vices.snapshotUnlocks) {
@@ -21122,25 +21963,7 @@ export class GameScene extends Phaser.Scene {
       this.cops.starTimer = 4;            // matches addStar's reset
       this._customStartStars = null;
     }
-    // Custom mode — seed the wallet with $100,000 so the sandbox run
-    // starts with money to spend on gas / weapons / pickups instead of
-    // a $0 wallet.  Custom runs don't score, so this isn't "earned" —
-    // it's just spending money for sandbox testing.
-    if (Difficulty.mode?.() === 'custom') {
-      this.score = 100000;
-      // All weapons available from the start (sandbox).  Custom fire is
-      // infinite (useF12Token never decrements), so we just seed the
-      // inventory to full: rolling coal to max clouds + a full stack of
-      // every deployable and the disguise so all slots show and are usable.
-      if (this.cops) {
-        this.cops.f12Tokens = [];
-        this.cops.coalAmmo  = 3;
-        this.cops.f12Tokens.push('coal');
-        for (const w of ['fireworks', 'paint_bomb', 'disguise']) {
-          for (let i = 0; i < 3; i++) this.cops.f12Tokens.push(w);
-        }
-      }
-    }
+    this._applyCustomGrants();
     // Initialize/play radio on first user interaction (browser audio
     // gate).  PHONK (index 0) is the default station — the default vibe
     // when no other music is already playing.  But if the player
@@ -21508,6 +22331,7 @@ export class GameScene extends Phaser.Scene {
     let   lost        = Math.floor(earnedSince / 2);
     // Tow-insurance buff (from the Washtucna tow driver) cushions the loss too.
     if (hasSpecialBuff(this._activeBuffs ?? [], 'cheaper_wreck')) lost = Math.floor(lost * 0.5);
+    lost = this._cashLoss(lost);   // Custom: wallet never depletes
     this.score       -= lost;
 
     // Busted = every active mission fails (Ch. 8: Delivery "wreck/busted =
@@ -21567,6 +22391,7 @@ export class GameScene extends Phaser.Scene {
       Math.round(Math.max(0, this.score) * COP_TICKET_SPEEDING_FRAC));
     // Genre-vehicle ticket surcharge (reggae +$200).
     fine += this._traitMod('ticketSurcharge');
+    fine = this._cashLoss(fine);   // Custom: wallet never depletes
 
     this.score = Math.max(0, this.score - fine);
     this.stats?.recordTrafficStop({ dui: false, amountPaid: fine, busted: false });
@@ -21687,6 +22512,27 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Demo build finish (App Store) — reached the Snoqualmie rest stop.  Mirrors
+   *  the Pullman on-time finish (the demo clock is generous, so it's always an
+   *  arrival), minus the Pullman-only achievements / Crush payoff.  Plays the
+   *  park cinematic, then _endGame('demo_complete') shows the demo-complete
+   *  screen with the "get the full game" CTA. */
+  _triggerDemoFinish() {
+    this._gameFinished = true;
+    if (Difficulty.mode?.() !== 'custom') {
+      const mul   = Difficulty.onTimeBonusMul?.() ?? 1;
+      const bonus = Math.round(this.score * (mul - 1));
+      if (bonus > 0) { this.score += bonus; this.stats?.recordEarn?.(bonus, 'completionBonus'); }
+      this._showPopup?.(`🎉 DEMO COMPLETE — you made it to Snoqualmie!\n+$${bonus.toLocaleString()} bonus`, '#44FF88', 4);
+    } else {
+      this._showPopup?.('🎉 DEMO COMPLETE — you made it to Snoqualmie!', '#44FF88', 4);
+    }
+    this._finishCinematic = true;
+    this._finishCineT     = 0;
+    this._finishCineEnded = false;
+    this._finishCause     = 'demo_complete';
+  }
+
   _endGame(cause, extra = {}) {
     // Run-ending events terminally fail every active mission — no payout,
     // rep untouched (Ch. 8).  Recorded in the outcome ledger so a
@@ -21710,7 +22556,7 @@ export class GameScene extends Phaser.Scene {
       this._restartModalOpen = true;
       const cp = this._lastCheckpoint ?? { position: 0, scoreAtCP: 0 };
       const earnedSince = Math.max(0, this.score - (cp.scoreAtCP ?? 0));
-      let   lost        = Math.floor(earnedSince / 2);
+      let   lost        = this._cashLoss(Math.floor(earnedSince / 2));
       this.score        = Math.max(0, this.score - lost);
       this._showPopup(`💀 Cash penalty: −$${lost.toLocaleString()}`, '#FF4444');
       // Open slider modal in restart mode after a brief beat.
@@ -21772,7 +22618,7 @@ export class GameScene extends Phaser.Scene {
       const _s = Math.round(this.score);
       const _mi = this._odometer ?? 0;
       const _t = Math.floor(this.gameTime ?? 0);
-      const _completed = (cause === 'finish_on_time' || cause === 'finish_late');
+      const _completed = (cause === 'finish_on_time' || cause === 'finish_late' || cause === 'demo_complete');
       if (_completed) {
         this.stats?.tripComplete({ score: _s, miles: _mi, timeSec: _t });
       } else {
@@ -21781,7 +22627,9 @@ export class GameScene extends Phaser.Scene {
       // World leaderboard submit (best-effort).  Ranked runs only — Custom is a
       // sandbox and doesn't score, mirroring StatsTracker.recordRun's gate.
       try {
-        if (Difficulty.mode?.() !== 'custom') {
+        // Demo runs never touch the world leaderboard (short truncated route —
+        // would pollute the real board).  Custom is a sandbox, also excluded.
+        if (Difficulty.mode?.() !== 'custom' && !C.DEMO_MODE) {
           const _save = this.registry.get('save');
           CloudSave.submitScore({
             playerId:  _save?.activePlayerId,

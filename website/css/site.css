@@ -74,7 +74,15 @@ a:hover { text-decoration: underline; }
   background: var(--accent); color: #14100a; font-weight: 800; font-size: 14px;
   padding: 7px 14px; border-radius: 8px; margin-left: 6px; white-space: nowrap;
 }
-.nav a.nav-cta:hover { text-decoration: none; filter: brightness(1.1); }
+/* Same treatment as the hero's demo button: solid accent that flips to the
+   inverse on hover.  Kept at nav scale (14px / 7px-14px padding) on purpose —
+   matching the hero's 15px/12px-22px would grow the 58px bar.  Ring is an
+   inset shadow so the button doesn't change size on hover. */
+.nav a.nav-cta:hover {
+  text-decoration: none; filter: none;
+  background: #14100a; color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
 .nav-burger { display: none; }
 
 @media (max-width: 880px) {
@@ -115,13 +123,27 @@ p.lead { font-size: 18px; color: var(--text-dim); max-width: 640px; }
   display: inline-block; font-weight: 800; border-radius: 10px;
   padding: 12px 22px; font-size: 15px; border: 0; cursor: pointer;
 }
+/* .btn-primary and .btn-invert are exact inverses of one another — the same two
+   colours, swapped — and each takes on the other's look when hovered.  They're
+   always used as a PAIR (landing hero, story outro), so hovering either one
+   previews the other.  The ring is an INSET box-shadow rather than a border:
+   these buttons are auto-width, so a real border would grow the box and make
+   them jump on hover.  Sizes measured identical in both states. */
 .btn-primary { background: var(--accent); color: #14100a; }
-.btn-primary:hover { filter: brightness(1.1); text-decoration: none; }
-.btn-ghost {
-  background: transparent; color: var(--text);
-  border: 1px solid var(--line);
+.btn-primary:hover {
+  text-decoration: none;
+  background: #14100a; color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
-.btn-ghost:hover { background: var(--bg-3); text-decoration: none; }
+.btn-invert {
+  background: #14100a; color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.btn-invert:hover {
+  text-decoration: none;
+  background: var(--accent); color: #14100a;
+  box-shadow: none;
+}
 
 /* ── Cards / grids ───────────────────────────────────────────────── */
 .grid { display: grid; gap: 18px; }
@@ -134,6 +156,23 @@ p.lead { font-size: 18px; color: var(--text-dim); max-width: 640px; }
 }
 .card h3 { margin-bottom: 6px; }
 .card p { color: var(--text-dim); font-size: 14.5px; }
+/* Whole-card links.  Scoped to a.card so every plain <div class="card">
+   elsewhere on the site is untouched.  The global `a` rule would otherwise
+   paint the entire card accent-orange and underline it on hover, so colour is
+   reset to inherit and the hover moves to the card's own chrome instead. */
+a.card {
+  display: block; color: inherit;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+a.card:hover {
+  text-decoration: none;
+  border-color: var(--accent);
+  background: var(--bg-3);
+  transform: translateY(-2px);
+}
+a.card:hover h3 { color: var(--accent); }
+a.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { a.card { transition: none; } a.card:hover { transform: none; } }
 
 /* ── Highway sign motif ──────────────────────────────────────────── */
 .hwy-sign {
@@ -144,25 +183,79 @@ p.lead { font-size: 18px; color: var(--text-dim); max-width: 640px; }
 .hwy-sign .sub { display: block; font-weight: 600; font-size: .72em; opacity: .9; }
 
 /* ── Hero ────────────────────────────────────────────────────────── */
+/* Full-bleed key art with the copy in a panel on top of it.
+   The panel sits along the BOTTOM rather than down one side, because the art
+   carries the game's own logo across the middle ~43% of its width: a side
+   panel wide enough for this copy always cuts the logo in half, and `cover`
+   only affords ~160px of horizontal shift at desktop size — nowhere near
+   enough to slide the logo clear.  A wide, short bar clears the logo instead,
+   and lands over the art's baked "LOADING…" line, hiding it for free. */
 .hero {
   position: relative; overflow: hidden;
   border-bottom: 1px solid var(--line);
-  background:
-    radial-gradient(1200px 500px at 70% -10%, rgba(168,85,247,.18), transparent 60%),
-    radial-gradient(900px 420px at 20% 110%, rgba(255,122,26,.14), transparent 60%),
-    var(--bg);
+  background: var(--bg);
 }
+.hero-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  /* Rides high so the logo clears the copy panel below.  Free to be chosen on
+     looks alone now that the art itself has no "LOADING…" line to hide. */
+  object-fit: cover; object-position: 50% 25%;
+}
+/* Scrim: darkens top and bottom, leaves the logo band nearly clear.  Painted
+   after .hero-bg (both absolute, so DOM order decides) and under .hero-inner. */
+.hero::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(8,10,15,.62) 0%, rgba(8,10,15,.18) 18%,
+    rgba(8,10,15,.10) 46%, rgba(8,10,15,.55) 78%, rgba(8,10,15,.86) 100%);
+}
+/* Not capped to --max like the rest of the site: the panel is meant to sit
+   near the LEFT EDGE of the screen, and a centred 1060px column would inset it
+   ~200px on a wide monitor. */
 .hero-inner {
-  max-width: var(--max); margin: 0 auto; padding: 72px 20px 60px;
-  display: grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: center;
+  position: relative; z-index: 1;
+  max-width: none; margin: 0; padding: 40px clamp(20px, 3.4vw, 56px) 52px;
+  min-height: clamp(560px, 86vh, 880px);
+  display: flex; align-items: flex-end;          /* copy sits along the bottom */
 }
-@media (max-width: 880px) { .hero-inner { grid-template-columns: 1fr; padding-top: 48px; } }
+.hero-panel {
+  /* Left edge is fixed by .hero-inner's padding; the panel only grows to the
+     RIGHT.  The headline column is max-content so it takes exactly the width of
+     its longest line — a fixed fraction left a wide dead gap once the headline
+     dropped to two short lines.  Wide enough overall that the two CTAs stay on
+     one row; much narrower and the panel grows tall enough to cut into the
+     "ROULETTE" line of the logo above it. */
+  width: min(100%, 880px);                       /* left-anchored, not full-bleed */
+  display: grid; gap: 28px 34px; align-items: center;
+  grid-template-columns: max-content minmax(0, 1fr);
+  padding: 26px 30px 28px;
+  background: rgba(10, 12, 18, .76);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 24px 70px rgba(0,0,0,.6);
+}
+.hero-panel h1 { margin-bottom: 0; }
+.hero-panel .lead { margin-top: 0; }
+@media (max-width: 880px) {
+  /* Portrait: the art can't hold a two-column bar, so it stacks and the scrim
+     goes flat-dark for legibility.  object-position keeps the car in frame. */
+  /* Narrow viewports crop hard horizontally and not at all vertically, so the
+     band above the panel is always the art's TOP strip — panning right puts
+     the moon and the Space Needle there instead of half-cut logo letters. */
+  .hero-bg { object-position: 96% 50%; }
+  .hero::after {
+    background: linear-gradient(180deg, rgba(8,10,15,.55) 0%, rgba(8,10,15,.72) 45%, rgba(8,10,15,.92) 100%);
+  }
+  /* Taller than the panel needs, so a band of art still reads above it —
+     otherwise the stacked panel fills the hero and the key art disappears. */
+  .hero-inner { padding: 32px 20px 32px; min-height: clamp(620px, 92vh, 860px); }
+  .hero-panel { grid-template-columns: 1fr; gap: 16px; padding: 22px 20px 24px; }
+}
 .hero .tag {
   font-family: var(--mono); color: var(--accent); font-size: 13px;
   letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px;
 }
 .hero p.lead { margin: 18px 0 26px; }
-.hero-art img { border-radius: var(--radius); border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0,0,0,.55); }
 .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; }
 
 /* ── Footer ──────────────────────────────────────────────────────── */
@@ -256,6 +349,22 @@ p.lead { font-size: 18px; color: var(--text-dim); max-width: 640px; }
 @media (max-width: 880px) { .guide-layout { grid-template-columns: 1fr; } .toc { position: static; } }
 .guide h2 { margin-top: 40px; scroll-margin-top: 80px; }
 .guide h2:first-child { margin-top: 0; }
+
+/* Section banner: full-width art with the title overlaid on a scrim. */
+.wt-fig {
+  position: relative; margin: 44px 0 14px; border-radius: var(--radius);
+  overflow: hidden; border: 1px solid var(--line);
+  scroll-margin-top: 80px;
+}
+.wt-fig:first-child { margin-top: 0; }
+.wt-fig img { width: 100%; display: block; }
+.wt-fig h2 {
+  position: absolute; left: 0; right: 0; bottom: 0; margin: 0;
+  padding: 46px 20px 14px; color: #fff;
+  background: linear-gradient(180deg, rgba(11,13,18,0) 0%, rgba(11,13,18,.85) 78%);
+  text-shadow: 0 2px 8px rgba(0,0,0,.9);
+}
+.wt-cap { margin: -6px 0 14px; font-style: italic; }
 .guide p, .guide li { color: var(--text-dim); }
 .guide ul { padding-left: 20px; margin: 10px 0; }
 .guide .tip {
@@ -286,12 +395,28 @@ p.lead { font-size: 18px; color: var(--text-dim); max-width: 640px; }
   padding: 2px 8px; background: var(--hwy); color: #fff;
 }
 .stop.pass .stop-head .badge { background: var(--bg-3); color: var(--text-dim); }
-.stop-facts { display: none; margin-top: 8px; }
-.stop.open .stop-facts { display: block; }
+.stop-body { display: none; margin-top: 10px; gap: 16px; }
+.stop.open .stop-body { display: flex; align-items: flex-start; }
+.stop-biz { display: flex; flex-direction: column; gap: 10px; flex: none; }
+.stop-biz img {
+  width: 86px; height: auto; border-radius: 8px;
+  background: var(--bg-2); border: 1px solid var(--line); padding: 6px;
+}
+.stop-facts { flex: 1; min-width: 0; }
 .stop-facts p {
   color: var(--text-dim); font-size: 14px; padding: 6px 0 6px 14px;
   border-left: 2px solid var(--line); margin: 6px 0;
 }
+/* Wide screens: the open stop's businesses sit in a gutter LEFT of the
+   route line, twice the size, absolutely positioned so the stack may run
+   lower than the stop's own row (the gutter below is empty anyway). */
+@media (min-width: 700px) {
+  .route { margin-left: 216px; }
+  .stop { position: relative; }
+  .stop-biz { position: absolute; left: -250px; top: 0; width: 172px; }
+  .stop-biz img { width: 172px; }
+}
+@media (max-width: 520px) { .stop-biz img { width: 64px; } }
 
 /* ── Story scenes (scroll-driven pan + staged captions) ──────────────
    Each .scene is a tall block; a full-viewport sticky .scene-frame pins
@@ -331,14 +456,20 @@ p.lead { font-size: 18px; color: var(--text-dim); max-width: 640px; }
 .scene-captions .cap b { color: var(--accent); }
 
 @media (orientation: portrait) and (max-width: 700px) {
+  /* Pin BELOW the sticky nav (measured into --nav-h by site.js) so the
+     art's top edge is never hidden behind the menu bar. */
+  .scene-frame {
+    top: var(--nav-h, 58px);
+    height: calc(100vh - var(--nav-h, 58px));
+  }
   .scene-frame img { height: 52%; }          /* art band on top */
   .scene-frame::after {
     background: linear-gradient(180deg, rgba(11,13,18,0) 40%, rgba(11,13,18,.55) 52%,
                 var(--bg) 53%, var(--bg) 100%);
   }
   .scene-captions .cap {
-    bottom: auto; top: 56%; width: 92vw;
-    font-size: clamp(18px, 5vw, 31.5px);   /* shrunk 40% with the desktop size */
+    bottom: auto; top: 60%; width: 92vw;     /* lower text (owner request) */
+    font-size: clamp(18px, 5vw, 31.5px);     /* shrunk 40% with the desktop size */
     line-height: 1.4; text-shadow: none; color: var(--text);
   }
 }
@@ -348,6 +479,82 @@ p.lead { font-size: 18px; color: var(--text-dim); max-width: 640px; }
 .scene.reduced .scene-captions .cap { position: static; transform: none; opacity: 1; margin: 14px auto; }
 .scene.reduced { height: auto; }
 .scene.reduced .scene-frame { position: static; height: 60vh; }
+
+/* ── Sprite galleries (Genres strip + Press gallery) ─────────────── */
+/* Images render at 1/6th their natural pixel size (set by sizeSprites JS). */
+.sprite-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 10px; margin: 10px 0 18px;
+}
+@media (max-width: 700px) { .sprite-grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* Genres strip: one COLUMN per category (Food / Caffeine / Hydration / Meds),
+   items stacked vertically inside their column. */
+.sprite-cols {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 12px; margin-top: 14px; align-items: start;
+}
+.sprite-col { display: flex; flex-direction: column; gap: 10px; }
+.sprite-col .sprite-group-label { margin: 0 0 2px; }
+/* Phones: category columns would be a 1-wide jumble — instead each category
+   becomes its own SECTION, label on top, items in a 3-across row. */
+@media (max-width: 700px) {
+  .sprite-cols { grid-template-columns: 1fr; }
+  .sprite-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .sprite-col .sprite-group-label { grid-column: 1 / -1; margin-top: 8px; }
+}
+.sprite-group-label {
+  display: flex; align-items: center; gap: 10px; margin-top: 16px;
+  font-size: 24px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text);
+}
+.sprite-group-label .swatch {
+  width: 18px; height: 18px; border-radius: 50%; display: inline-block;
+}
+.sprite-card {
+  background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 8px 8px; text-align: center; margin: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+}
+.sprite-card img { max-width: 100%; object-fit: contain; }
+/* NOTE: gallery sprite widths are NOT settable from here.  A script at the
+   bottom of press.html writes img.style.width on every .sprite-card img
+   (natural size ÷ 6, so the art shares one world scale), which beats any rule
+   in this file.  Per-sprite size tweaks go in that script's SPRITE_SCALE map. */
+.sprite-card figcaption {
+  font-size: 11.5px; color: var(--text-dim); margin-top: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+
+/* ── Businesses page ─────────────────────────────────────────────── */
+.biz {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-2); margin-bottom: 14px; overflow: hidden;
+}
+.biz-head {
+  display: flex; align-items: center; gap: 18px; padding: 14px 18px;
+  cursor: pointer;
+}
+.biz-head:hover { background: var(--bg-3); }
+.biz-head img {
+  width: 96px; height: auto; border-radius: 8px; flex: none;
+  background: var(--bg); border: 1px solid var(--line); padding: 6px;
+}
+.biz-head h3 { margin: 0; }
+.biz-caret { margin-left: auto; color: var(--text-dim); transition: transform .15s; }
+.biz.open .biz-caret { transform: rotate(180deg); }
+.biz-menu { display: none; border-top: 1px solid var(--line); padding: 6px 18px 14px; }
+.biz.open .biz-menu { display: block; }
+.biz-item {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: baseline;
+  column-gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line);
+}
+.biz-item:last-child { border-bottom: 0; }
+.bi-name { font-weight: 700; font-size: 14.5px; }
+.bi-dots { border-bottom: 1px dotted var(--line); transform: translateY(-4px); }
+.bi-price { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 14px; }
+.bi-price.free { color: #4ade80; }
+.bi-desc { grid-column: 1 / -1; margin-top: 2px; }
 
 /* ── Leaderboard ─────────────────────────────────────────────────── */
 .lb-tabs { display: flex; gap: 8px; margin: 22px 0; }

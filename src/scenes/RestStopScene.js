@@ -14,8 +14,15 @@ import {
 import { getPortrait } from '../data/npcPortraits.js';
 import { nextTownFact } from '../data/townFacts.js';
 import { MISSION_TIERS, tierFor, contactIdFor, contactGreeting } from '../systems/MissionSystem.js';
-import { getInstalled, buyUpgrade } from '../systems/UpgradeSystem.js';
-import { UPGRADE_SLOTS, SLOT_LABELS, getSlotTiers } from '../data/upgrades.js';
+import { getInstalled, buyUpgrade, getUpgradeEffects } from '../systems/UpgradeSystem.js';
+import { UPGRADE_SLOTS, SLOT_LABELS, getSlotTiers,
+         GARAGE_CATEGORIES, SHOP_CATEGORIES, categoryForSlot } from '../data/upgrades.js';
+
+// Les Schwasted's free popcorn heals 1% of MAX health per serving, capped at
+// this fraction of max per visit (owner 2026-07-28).  The cap is what keeps a
+// free item from replacing the $1500 repair.
+const POPCORN_MAX_PCT   = 0.05;
+const POPCORN_PER_SERVE = 0.01;
 import { GENRE_VEHICLE_TRAITS } from '../data/genreVehicleTraits.js';
 
 const CX = SCREEN_W / 2;
@@ -271,6 +278,22 @@ const SECTIONS = {
     label: '🅿️  PARK & RIDE',
     items: [],
   },
+  // ── The two garages (owner 2026-07-28) ───────────────────────────────
+  // Part-upgrades used to live entirely in dealer_acc, which meant the car
+  // DEALERSHIPS sold tyres and paint.  They're split out here so the
+  // dealerships go back to selling cars:
+  //   Les Schwasted — tyre/brake/suspension specialist.  Cheap, quick,
+  //     common.  Free popcorn + water (the Les Schwab gag).
+  //   Finesse     — body & performance.  Expensive, rare, and the home of
+  //     the PAINT JOB, which is what actually drops your wanted stars.
+  schwasted: {
+    label: '🛞  TIRES & BRAKES',
+    items: [],   // populated per-vehicle in create()
+  },
+  fap: {
+    label: '🎨  BODY & PERFORMANCE',
+    items: [],   // populated per-vehicle in create()
+  },
 };
 
 // SECTIONS is mutated per visit (dynamic pricing, restrooms, shop vices…) —
@@ -285,8 +308,29 @@ const SECTIONS_PRISTINE = Object.fromEntries(
 
 // Landing tab order (brand placards).  dealer_acc / dealer_cars are
 // reached via the Dealer chooser, not the landing.
-const TAB_ORDER = ['gas', 'cargo', 'hunting', 'camp', 'lord', 'suck', 'parkride', 'vices', 'ambm'];
-const ALL_SECTIONS = ['gas', 'cargo', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'parkride', 'vices', 'ambm'];
+// Storefront backdrop per shop section.  Keys that aren't here keep the blue
+// highway-sign look (dealer chooser, sub-screens with no brand of their own).
+const SHOP_BG = {
+  gas:       'shop_bg_huffs',
+  cargo:     'shop_bg_cargo',
+  hunting:   'shop_bg_cowbellas',
+  camp:      'shop_bg_aok',
+  lord:      'shop_bg_lord',
+  suck:      'shop_bg_suck',
+  vices:     'shop_bg_gasnsip',
+  ambm:      'shop_bg_am_bm',
+  parkride:  'shop_bg_parkride',
+  schwasted: 'shop_bg_les_schwasted',
+  fap:       'shop_bg_fap',
+};
+/** Shops with toolbar categories (the two garages). */
+const GARAGE_KEYS = new Set(['schwasted', 'fap']);
+
+/** Shops whose menu is a single column over the storefront's empty left third. */
+const FULL_BLEED = new Set(Object.keys(SHOP_BG));
+
+const TAB_ORDER = ['gas', 'cargo', 'hunting', 'camp', 'lord', 'suck', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
+const ALL_SECTIONS = ['gas', 'cargo', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
 
 // Per-stop brand catalog — west-side gets the cleaner brands (CarGo +
 // Lord Motors EV), east-side the dustier set (Huff's + Sam's gas).
@@ -316,6 +360,11 @@ function brandsForStop(stop) {
     vices:   { name: 'Gas-N-Sip', logo: 'biz_gasnsip' },
     ambm:    { name: 'AM/BM',     logo: 'biz_am_bm' },
     parkride:{ name: 'Metro Park & Ride', logo: 'biz_parkride' },
+    // Logo keys are only registered in AssetManifest once the art exists —
+    // the landing placard already falls back to an accent strip + name when
+    // textures.exists() is false, so these render fine until then.
+    schwasted:{ name: 'Les Schwasted', logo: 'biz_les_schwasted' },
+    fap:{ name: 'Finesse Autobody & Performance', logo: 'biz_fap' },
   };
 }
 
@@ -418,6 +467,9 @@ export class RestStopScene extends Phaser.Scene {
     this._purchases = {
       repair: false, restock: false, clearStars: false,
       scoreBonus: 0, upgrade: [], f12: [],
+      // Sealed hitchhiker roll ({ roll }) — resolved by GameScene 5 mi out,
+      // never here.  null when no rider was picked up at this stop.
+      hitchhiker: null,
       // Default preserves the entry vice levels verbatim.
       viceLevelsOnResume: { ...this._viceLevelsAtEntry },
       // Default preserves carried weapons verbatim; purchases/hitchhiker
@@ -602,16 +654,34 @@ export class RestStopScene extends Phaser.Scene {
     const _vNosTier     = Math.max(0, Math.min(3, _vAcc.nos ?? 0));
     const NOS_PRICES = [5000, 10000, 15000];
 
-    const accItems = [
+    // ── The two garages (owner 2026-07-28) ───────────────────────────────
+    // Everything below used to pile into one dealer_acc list, which meant the
+    // car DEALERSHIPS sold tyres and paint.  Items now route to whichever shop
+    // would really carry them; the dealerships go back to selling cars.
+    const schwastedItems = [];   // Les Schwasted — tyres / brakes / suspension
+    const fapItems = [];   // Finesse (FAP) — body / performance / paint
+
+    // Les Schwab's free popcorn and water, which is the whole joke.  Popcorn
+    // is a genuine (if pitiful) repair: 1% of MAX health per serving, capped
+    // at POPCORN_MAX_PCT per visit, so it's a top-up between stops and never
+    // a substitute for a real repair.  Cost 0 — the cap is the limiter.
+    fapItems.push(
       { id: 'repair',  label: '🔧  REPAIR CAR', cost: 1500,
         desc: 'Restore full health', payload: { repair: true } },
       { id: 'paint',   label: '🎨  PAINT JOB',  cost: 3500,
         desc: 'Drops ALL stars — only way out from under a 5★ chopper.',
         payload: { clearStars: true } },
-    ];
+    );
+    schwastedItems.push(
+      { id: 'popcorn', label: '🍿  FREE POPCORN', cost: 0,
+        desc: `Complimentary. +1% health a serving, up to +${Math.round(POPCORN_MAX_PCT * 100)}% a visit.`,
+        payload: { popcorn: true, survivalDelta: { fullness: 4 } } },
+      { ...waterItem(0), label: '💧  FREE WATER',
+        desc: 'Complimentary. A small Drinks top-up.' },
+    );
     if (_vNosTier < 3) {
       const nextTier = _vNosTier + 1;
-      accItems.push({
+      fapItems.push({
         id: 'nos', label: `⚡  NOS UPGRADE — LV ${nextTier}`,
         cost: NOS_PRICES[_vNosTier],
         desc: `+5 mph cruise & boost (total +${nextTier * 5}).`,
@@ -619,14 +689,14 @@ export class RestStopScene extends Phaser.Scene {
       });
     }
     if (!_vHasBumper) {
-      accItems.push({
+      fapItems.push({
         id: 'armor', label: '🛡  REINFORCED BUMPER', cost: 4000,
         desc: 'Take 20% less crash damage on this vehicle.',
         payload: { vehicleAccessory: 'bumper' },
       });
     }
     if (!_vHasTraction) {
-      accItems.push({
+      schwastedItems.push({
         id: 'traction', label: '❄️  TRACTION TIRES', cost: 1500,
         desc: '−40% slide penalty on any car (−100% with 4x4).',
         payload: { vehicleAccessory: 'traction' },
@@ -649,17 +719,32 @@ export class RestStopScene extends Phaser.Scene {
         const _next   = _tiers.find(t => t.level === _curLvl + 1);
         if (!_next) continue;   // maxed on this vehicle — nothing to sell
         const _slotLbl = (SLOT_LABELS[_slot] ?? _slot).toUpperCase();
-        accItems.push({
+        // Which shop stocks this part is decided by its TOOLBAR CATEGORY, so
+        // the tabs and the inventory can never disagree.  Untabbed slots
+        // (body, police) fall through to Finesse as flat services.
+        const _cat  = categoryForSlot(_slot);
+        const _dest = _cat && SHOP_CATEGORIES.les_schwasted.includes(_cat.id)
+          ? schwastedItems : fapItems;
+        _dest.push({
           id: `up_${_slot}`,
           label: `🔩  ${_slotLbl} — ${_next.label}`,
           cost: _next.cost,
           desc: (_next.desc ?? '') + (_next.tradeoff ? `  ⚠ ${_next.tradeoff}` : ''),
-          lvl: _next.level,   // read by _applyDealerTierGate (Sam's caps at 2)
+          lvl: _next.level,   // read by _applyDealerTierGate (level-3 gate)
+          slot: _slot,
+          category: _cat?.id ?? null,   // drives the toolbar tab
+          // Row thumbnail — the same 1254px hero shot the toolbar tab uses,
+          // scaled down by _makeButton's existing icon path.  Untabbed slots
+          // (body, police) have no category and fall back to their emoji.
+          icon: _cat?.icon ?? undefined,
           payload: { upgradeInstall: _next.id },
         });
       }
     }
-    SECTIONS.dealer_acc.items = accItems;
+    SECTIONS.schwasted.items = schwastedItems;
+    SECTIONS.fap.items = fapItems;
+    // Dealerships sell CARS now — accessories moved to the two garages above.
+    SECTIONS.dealer_acc.items = [];
     // Genre-car showroom — same catalog at every dealership (owner 2026-07-23).
     SECTIONS.dealer_cars.items = genreCarItems();
 
@@ -676,7 +761,7 @@ export class RestStopScene extends Phaser.Scene {
     // DOWN-tier their HP.  Mark it disabled so it shows "N/A" and the
     // tap returns a friendly status message instead of charging $.
     {
-      const _vehMax65    = VEHICLES[this._vehicleId]?.hp ?? 100;
+      const _vehMax65    = this._vehMaxHp();
       const _target65    = Math.round(_vehMax65 * 0.65);
       const _hpAtEntry65 = this._durabilityAtEntry ?? _vehMax65;
       SECTIONS.camp.items = SECTIONS.camp.items.map(it => {
@@ -694,7 +779,9 @@ export class RestStopScene extends Phaser.Scene {
     SECTIONS.camp.items    = [...SECTIONS.camp.items,    waterItem(7),    ...shopViceItems('camp',    _pickupCounts)];
     // Campgrounds always have a free restroom.
     SECTIONS.camp.items    = [...SECTIONS.camp.items,    restroomItem(false)];
-    SECTIONS.dealer_acc.items = [...SECTIONS.dealer_acc.items, ...shopViceItems('dealer', _pickupCounts)];
+    // Shop vices used to ride along in dealer_acc; that section is empty now,
+    // so they hang off Finesse (the full-service garage you actually wait in).
+    SECTIONS.fap.items = [...SECTIONS.fap.items, ...shopViceItems('dealer', _pickupCounts)];
 
     // ── Background — blue highway services sign ─────────────────────
     // Mimics the real-world blue services placard (the user's reference
@@ -703,11 +790,26 @@ export class RestStopScene extends Phaser.Scene {
     // service categories.  Brand-logo placards are rendered per-button
     // by _makeButton.
     this.add.rectangle(0, 0, SCREEN_W, SCREEN_H, 0x07111F).setOrigin(0);
-    // Main sign body — services blue.
-    this.add.rectangle(20, 18, SCREEN_W - 40, SCREEN_H - 36, 0x1E5BB8).setOrigin(0)
+
+    // ── Full-bleed storefront backdrop (owner 2026-07-28) ────────────────
+    // One image, retextured per shop in _showSection.  Sits edge to edge with
+    // no frame; the shop's menu is drawn over its LEFT THIRD, which is the
+    // dead space the storefront art deliberately leaves empty.  Hidden on the
+    // landing screen, where the blue highway sign still rules.
+    this._shopBg = this.add.image(0, 0, '__DEFAULT').setOrigin(0)
+      .setDisplaySize(SCREEN_W, SCREEN_H).setVisible(false);
+    // Scrim over the menu column.  Storefronts vary hugely in brightness
+    // (Les Schwasted is a night shot, others are daylight), so menu text
+    // needs a guaranteed-dark bed rather than luck.
+    this._shopScrim = this.add.rectangle(0, 0, Math.round(SCREEN_W / 3), SCREEN_H, 0x050A12, 0.62)
+      .setOrigin(0).setVisible(false);
+
+    // Main sign body — services blue.  Stashed so a storefront screen can
+    // hide the sign entirely instead of showing a panel on top of a photo.
+    this._signBody = this.add.rectangle(20, 18, SCREEN_W - 40, SCREEN_H - 36, 0x1E5BB8).setOrigin(0)
       .setStrokeStyle(4, 0xFFFFFF);
     // Subtle highlight band at the top edge of the sign for depth.
-    this.add.rectangle(24, 22, SCREEN_W - 48, 4, 0x4789D8).setOrigin(0);
+    this._signTopBand = this.add.rectangle(24, 22, SCREEN_W - 48, 4, 0x4789D8).setOrigin(0);
     // EXIT-NUMBER tab — small white-bordered panel sitting OUTSIDE the
     // top-right corner of the main sign, like the reference image.
     {
@@ -745,7 +847,7 @@ export class RestStopScene extends Phaser.Scene {
     //    player can see how beat-up the car is before deciding to repair.
     //    Colored green / amber / red by fraction. ──
     {
-      const _maxHp   = VEHICLES[this._vehicleId]?.hp ?? 100;
+      const _maxHp   = this._vehMaxHp();
       const _curHp   = Math.round(this._durabilityAtEntry ?? _maxHp);
       const _frac    = _maxHp > 0 ? _curHp / _maxHp : 0;
       const _hpColor = _frac > 0.5 ? '#66FF99' : (_frac > 0.25 ? '#FFCC44' : '#FF5544');
@@ -902,6 +1004,15 @@ export class RestStopScene extends Phaser.Scene {
         bg.disableInteractive().setFillStyle(0x8A7A3A);
         lbl.setText('✓ COLLECTED').setColor('#33301E');
         this._showPayoffBanner(paid);
+        // Owner 2026-07-28: the spent bar shouldn't squat over the shop —
+        // hold the ✓ COLLECTED receipt for 3 s, then fade it away.
+        this.time.delayedCall(3000, () => {
+          if (!bg.scene) return;   // scene already torn down (HIT THE ROAD)
+          this.tweens.add({
+            targets: [bg, lbl], alpha: 0, duration: 450,
+            onComplete: () => { bg.destroy(); lbl.destroy(); },
+          });
+        });
       });
     });
 
@@ -954,7 +1065,7 @@ export class RestStopScene extends Phaser.Scene {
         img.setDisplaySize(baseW * k, baseH * k);
         this._landingObjs.push(img);
       } else {
-        const accentFor = { gas: 0xFFCC22, cargo: 0x0E9488, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, lord: 0xCC1122, suck: 0x8A5A2B, vices: 0x9A36CC, parkride: 0x1E5BB8 };
+        const accentFor = { gas: 0xFFCC22, cargo: 0x0E9488, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, lord: 0xCC1122, suck: 0x8A5A2B, vices: 0x9A36CC, parkride: 0x1E5BB8, schwasted: 0xC8102E, fap: 0x7A3FA0 };
         const accent = accentFor[key] ?? 0x888888;
         const strip = this.add.rectangle(logoArea.x, logoArea.y, logoArea.w, logoArea.h, accent, 1)
           .setOrigin(0, 0);
@@ -1009,18 +1120,45 @@ export class RestStopScene extends Phaser.Scene {
         if (obj && obj.setVisible) obj.setVisible(true);
         container.add(obj);
       }
+      // Mask must match the SAME rect the content was laid out in, or a
+      // storefront shop's left-third column gets clipped by the sign's geometry.
+      const _mr = this._contentRectFor(key);
       const maskGfx = this.make.graphics({ x: 0, y: 0, add: false });
       maskGfx.fillStyle(0xFFFFFF);
-      maskGfx.fillRect(this._contentX - 4, this._contentY - 4,
-                       this._contentW + 8, this._contentH + 8);
+      maskGfx.fillRect(_mr.x - 4, _mr.y - 4, _mr.w + 8, _mr.h + 8);
       container.setMask(maskGfx.createGeometryMask());
       this._sectionContainers[key] = container;
       this._sectionScroll[key]     = 0;
       const itemCount = SECTIONS[key].items.length;
-      const colsK = (key === 'vices' || itemCount > 6) ? 2 : 1;
+      const colsK = FULL_BLEED.has(key) ? 1 : ((key === 'vices' || itemCount > 6) ? 2 : 1);
       const rowsK = Math.ceil(itemCount / colsK);
-      const itemH = Math.min(56, Math.max(30, (this._contentH - (rowsK - 1) * 6) / rowsK));
+      const itemH = FULL_BLEED.has(key)
+        ? 52
+        : Math.min(56, Math.max(30, (this._contentH - (rowsK - 1) * 6) / rowsK));
       this._sectionContentH[key] = rowsK * (itemH + 6) - 6;
+    }
+
+    // ── Garage category toolbar ──────────────────────────────────────
+    // ONE 1672x220 strip holding seven tabs with their labels baked in, so it
+    // gets sliced into seven equal frames rather than needing seven files.
+    // Frame order is GARAGE_CATEGORIES order — see the warning on that array.
+    this._garageTabs = [];
+    if (this.textures.exists('ui_garage_toolbar')) {
+      const _tex  = this.textures.get('ui_garage_toolbar');
+      const _srcW = _tex.source[0].width, _srcH = _tex.source[0].height;
+      const _tabW = _srcW / GARAGE_CATEGORIES.length;
+      GARAGE_CATEGORIES.forEach((cat, i) => {
+        const _fk = `tab_${cat.id}`;
+        if (!_tex.has(_fk)) _tex.add(_fk, 0, Math.round(i * _tabW), 0, Math.round(_tabW), _srcH);
+        const img = this.add.image(0, 0, 'ui_garage_toolbar', _fk)
+          .setOrigin(0, 0).setVisible(false)
+          .setInteractive({ useHandCursor: true });
+        img.on('pointerdown', (ptr) => {
+          ptr.event?.stopPropagation?.();
+          this._selectGarageCategory(this._activeSection, cat.id);
+        });
+        this._garageTabs.push({ cat, img });
+      });
     }
 
     // ── DEALER chooser — two big tiles: Cars / Accessories ──────────
@@ -1515,6 +1653,7 @@ export class RestStopScene extends Phaser.Scene {
       : null;
 
     let dlgText = null, factText = null, dealText = null, botH = 0;
+    let fits = false;
     for (const t of TYPE_TIERS) {
       const d = this.add.text(tx, py + 34, `"${node.line}"`, {
         fontSize: `${t.dlg}px`, fontFamily: 'Georgia, serif', color: '#F4F7FF',
@@ -1531,13 +1670,27 @@ export class RestStopScene extends Phaser.Scene {
       const dH = dl ? dl.height + 26 : 0;
       const bot = (t.spk + 8) + (f ? f.height + 6 : 0) + choices.length * (t.bh + 6) + 8;
       const last = t === TYPE_TIERS[TYPE_TIERS.length - 1];
-      if (py + 34 + d.height + dH + 10 <= py + ph - bot || last) {
+      const fitsHere = py + 34 + d.height + dH + 10 <= py + ph - bot;
+      if (fitsHere || last) {
         T = t; dlgText = d; factText = f; dealText = dl; botH = bot;
+        fits = fitsHere;
         break;
       }
       d.destroy(); f?.destroy(); dl?.destroy();
     }
+
+    // Even the smallest tier can overflow — a long quirk line on a mission
+    // offer pushes the deal panel down into the speaker label and the town
+    // fact, which used to render as text stacked on text.  The fact is the
+    // one droppable element here (pure flavour; the deal rows and the
+    // speaker are load-bearing), so it is the pressure valve.
+    if (!fits && factText) {
+      factText.destroy();
+      factText = null;
+      botH = (T.spk + 8) + choices.length * (T.bh + 6) + 8;
+    }
     add(dlgText);
+    let _dealBottom = 0;
     // Boxed panel behind the deal rows.
     if (dealText) {
       const dyTop = py + 34 + dlgText.height + 12;
@@ -1546,21 +1699,36 @@ export class RestStopScene extends Phaser.Scene {
         tx - dpad, dyTop - dpad,
         Math.min(tw, dealText.width + dpad * 2), dealText.height + dpad * 2,
         0x0C1A32, 0.94,
-      ).setOrigin(0, 0).setStrokeStyle(1.5, 0x39A8FF, 0.7).setDepth(D + 4);
+      // D + 3.6, NOT D + 4: at an equal depth this panel tied with the town
+      // fact and the speaker label and, being created later, painted over
+      // them at 0.94 alpha — the ghosted strikethrough on the fact line.
+      ).setOrigin(0, 0).setStrokeStyle(1.5, 0x39A8FF, 0.7).setDepth(D + 3.6);
       add(dbg, dealText.setPosition(tx, dyTop).setVisible(true));
+      _dealBottom = dyTop + dealText.height + dpad;
     }
-    add(this.add.text(tx, py + ph - botH, (node.speaker ?? enc.speaker ?? port.name).toUpperCase(), {
+    // The bottom block is bottom-anchored while the deal panel is
+    // top-anchored, so on a tall card the two used to collide — this is what
+    // put the yellow speaker label on top of the deal's last line.  Push the
+    // block down past the panel whenever the panel reaches further.
+    const _botY = Math.max(py + ph - botH, _dealBottom + 10);
+    add(this.add.text(tx, _botY, (node.speaker ?? enc.speaker ?? port.name).toUpperCase(), {
       fontSize: `${T.spk}px`, fontFamily: IMPACT, color: '#FFD23D',
     }).setDepth(D + 4));
-    if (factText) add(factText.setPosition(tx, py + ph - botH + T.spk + 6).setVisible(true));
+    if (factText) add(factText.setPosition(tx, _botY + T.spk + 6).setVisible(true));
 
     // Effect-application context — writes to _purchases (resumed by GameScene)
     // and to live _score/_stars for on-card display.
-    const vehMax = VEHICLES[this._vehicleId]?.hp ?? 100;
     const applyCtx = {
-      addCash:   (n) => { this._score = Math.max(0, (this._score ?? 0) + n); this._refreshScore?.(); },
+      // Custom: gains land normally, LOSSES are ignored — the sandbox wallet
+      // never depletes (owner 2026-07-28).  Same rule as GameScene._cashLoss.
+      addCash:   (n) => {
+        const d = (this._infiniteMoney() && n < 0) ? 0 : n;
+        this._score = Math.max(0, (this._score ?? 0) + d);
+        this._refreshScore?.();
+      },
       addFuelMi: (n) => { this._purchases.addGasMi = (this._purchases.addGasMi ?? 0) + n; },
       addHp:     (n) => {
+        const vehMax = this._vehMaxHp();
         const cur = this._purchases.durabilityOnResume ?? this._durabilityAtEntry ?? vehMax;
         this._purchases.durabilityOnResume = Math.max(0, Math.min(vehMax, cur + n));
       },
@@ -1698,9 +1866,25 @@ export class RestStopScene extends Phaser.Scene {
   }
 
   /** Show the landing screen (5 brand placards). */
+  /** This vehicle's CURRENT max HP: base + installed part-upgrade HP,
+   *  computed LIVE so a purchase made at this very stop raises the cap
+   *  immediately.  Every HP clamp here used to read the raw VEHICLES base
+   *  (beater 25), which silently discarded upgrade HP — repairs, restores
+   *  and the header all capped at 25 until the next fresh run.  Raising the
+   *  cap does NOT heal: current damage is tracked separately, which is what
+   *  the owner wants ("that is what repairs are for"). */
+  _vehMaxHp() {
+    const base = VEHICLES[this._vehicleId]?.hp ?? 100;
+    let upHp = 0;
+    try { upHp = Math.max(0, getUpgradeEffects(this.registry.get('save'), this._vehicleId)?.hp ?? 0); }
+    catch (_) {}
+    return base + upHp;
+  }
+
   _showLanding() {
     this._screenStack = ['landing'];
     this._activeSection = null;
+    this._applyShopChrome(null);   // back to the blue highway sign
     this._hideAllScreens();
     for (const obj of (this._landingObjs ?? [])) obj.setVisible?.(true);
     this._backBtnBg?.setVisible(false);
@@ -1712,6 +1896,7 @@ export class RestStopScene extends Phaser.Scene {
 
   /** Show the dealer chooser (Cars / Accessories). */
   _showDealerChooser() {
+    this._applyShopChrome(null);
     this._screenStack = ['landing', 'dealer'];
     this._activeSection = null;
     this._hideAllScreens();
@@ -1731,8 +1916,13 @@ export class RestStopScene extends Phaser.Scene {
    *  dealer_acc buttons; `_tierGated` marks OUR disables so this never
    *  re-enables an item disabled for another reason (e.g. ✓ Installed). */
   _applyDealerTierGate() {
-    const sam = this._activeDealerKey === 'suck';
-    for (const it of (SECTIONS.dealer_acc.items ?? [])) {
+    // Level-3 parts stay premium.  They used to be gated on which DEALER you
+    // walked in through, but parts moved to the two garages, so the gate now
+    // keys off whether this stop carries Lord Motors at all — same rule
+    // ("level 3 is Lord Motors exclusive"), re-homed rather than reinvented.
+    const sam = !(this._stop?.amenities ?? []).includes('lord');
+    const gated = [...(SECTIONS.schwasted.items ?? []), ...(SECTIONS.fap.items ?? [])];
+    for (const it of gated) {
       if (!it?.payload?.upgradeInstall || (it.lvl ?? 0) < 3) continue;
       if (sam && !it.disabled) {
         it.disabled = true;
@@ -1754,6 +1944,10 @@ export class RestStopScene extends Phaser.Scene {
       ? ['landing', 'dealer', key]
       : ['landing', key];
     this._activeSection = key;
+    // Parts moved out of the dealership, so the level-3 gate has to re-evaluate
+    // when a GARAGE opens rather than when a dealer placard is tapped.
+    if (key === 'schwasted' || key === 'fap') this._applyDealerTierGate();
+    this._applyShopChrome(key);
     this._hideAllScreens();
     if (this._sectionContainers?.[key]) {
       this._sectionContainers[key].setVisible(true);
@@ -1764,10 +1958,89 @@ export class RestStopScene extends Phaser.Scene {
     // big title and section header both show the store's name (falling
     // back to the section label where no brand exists, e.g. ACCESSORIES).
     const shopName = this._shopNameFor(key);
+    // On a full-bleed storefront the BUILDING already carries the brand on a
+    // lit sign — printing the name twice more over the art just fights it.
+    const _bleed = FULL_BLEED.has(key) && this._shopBg?.visible;
     if (this._sectionHeader) {
-      this._sectionHeader.setText(shopName ?? SECTIONS[key]?.label ?? key.toUpperCase()).setVisible(true);
+      this._sectionHeader
+        .setText(shopName ?? SECTIONS[key]?.label ?? key.toUpperCase())
+        .setVisible(!_bleed);
     }
-    this._titleText?.setText(shopName ?? this._stop.name.toUpperCase());
+    this._titleText?.setText(_bleed ? '' : (shopName ?? this._stop.name.toUpperCase()));
+    this._subtitleText?.setVisible?.(!_bleed);
+    this._setSectionScroll(key, 0);
+  }
+
+  /**
+   * Swap the screen between the blue highway sign and a full-bleed storefront.
+   * `null` restores the sign (landing / dealer chooser).
+   */
+  _applyShopChrome(key) {
+    const bgKey = key ? SHOP_BG[key] : null;
+    const on    = !!bgKey && this.textures.exists(bgKey);
+    if (on) this._shopBg.setTexture(bgKey).setDisplaySize(SCREEN_W, SCREEN_H);
+    this._shopBg?.setVisible(on);
+    this._shopScrim?.setVisible(on);
+    // The sign and the storefront are mutually exclusive — a blue panel on top
+    // of a photograph is the worst of both.
+    this._signBody?.setVisible(!on);
+    this._signTopBand?.setVisible(!on);
+    this._layoutGarageTabs(key);
+  }
+
+  /** Place the stocked category tabs along the bottom of the right two-thirds. */
+  _layoutGarageTabs(key) {
+    const tabs = this._garageTabs ?? [];
+    const stocked = GARAGE_KEYS.has(key) ? (SHOP_CATEGORIES[key === 'schwasted' ? 'les_schwasted' : key] ?? []) : [];
+    if (!stocked.length) { tabs.forEach(t => t.img.setVisible(false)); return; }
+
+    const menuW = Math.round(SCREEN_W / 3);
+    const availW = SCREEN_W - menuW - 12;
+    const shown  = tabs.filter(t => stocked.includes(t.cat.id));
+    // 88, not 112: a tab is nearly square, so a wider one ate ~23% of the
+    // screen height.  Capped so the strip stays a strip.
+    const tw = Math.min(88, Math.floor(availW / shown.length) - 4);
+    const th = Math.round(tw * (220 / (1672 / GARAGE_CATEGORIES.length)));
+    const totalW = shown.length * (tw + 4) - 4;
+    const x0 = menuW + Math.round((availW - totalW) / 2);
+    // Sit ABOVE the HIT THE ROAD button (centred at SCREEN_H-30, 36 tall) —
+    // the tabs were overlapping the one control that leaves the stop.
+    const y0 = (SCREEN_H - 30 - 18) - th - 8;
+
+    tabs.forEach(t => t.img.setVisible(false));
+    shown.forEach((t, i) => {
+      t.img.setVisible(true).setDisplaySize(tw, th).setPosition(x0 + i * (tw + 4), y0);
+      t.img.setDepth(6);
+    });
+    // Default to the first stocked category on entry.
+    if (this._garageCat?.[key] == null) (this._garageCat ??= {})[key] = stocked[0];
+    this._selectGarageCategory(key, this._garageCat[key]);
+  }
+
+  /**
+   * Filter the shop column to one toolbar category.  Items with no category
+   * (repair, paint, popcorn, the untabbed body/police slots) are SERVICES and
+   * stay pinned above the parts, so a tab never hides the reason you stopped.
+   */
+  _selectGarageCategory(key, catId) {
+    const rec = this._garageRows?.[key];
+    if (!rec || !GARAGE_KEYS.has(key)) return;
+    (this._garageCat ??= {})[key] = catId;
+    this._garageTabs?.forEach(t => {
+      if (!t.img.visible) return;
+      t.img.setAlpha(t.cat.id === catId ? 1 : 0.45);
+    });
+    let row = 0;
+    for (const r of rec.rows) {
+      const cat = r.item.category ?? null;
+      const show = cat === null || cat === catId;
+      r.objs.forEach((o, k) => {
+        o.setVisible?.(show);
+        if (show) o.y = rec.y + row * (rec.cellH + 6) + r.dy[k];
+      });
+      if (show) row++;
+    }
+    this._sectionContentH[key] = Math.max(0, row * (rec.cellH + 6) - 6);
     this._setSectionScroll(key, 0);
   }
 
@@ -1785,7 +2058,10 @@ export class RestStopScene extends Phaser.Scene {
   }
 
   _setSectionScroll(key, y) {
-    const max = Math.max(0, (this._sectionContentH[key] ?? 0) - this._contentH);
+    // Viewport height differs per layout — the storefront column is taller
+    // than the sign panel, so scroll clamping has to use its own rect.
+    const _vh = this._contentRectFor(key).h;
+    const max = Math.max(0, (this._sectionContentH[key] ?? 0) - _vh);
     const clamped = Math.max(0, Math.min(max, y));
     this._sectionScroll[key] = clamped;
     const c = this._sectionContainers[key];
@@ -1795,8 +2071,26 @@ export class RestStopScene extends Phaser.Scene {
     this._setSectionScroll(key, (this._sectionScroll[key] ?? 0) + dy);
   }
 
+  /**
+   * Where a section's menu lives.  Storefront shops draw a single narrow column
+   * over the art's empty LEFT THIRD; everything else keeps the full-width area
+   * inside the blue sign.  Returned separately from _buildTabContent so the
+   * scroll mask in create() can use the identical rect.
+   */
+  _contentRectFor(key) {
+    if (!FULL_BLEED.has(key)) {
+      return { x: this._contentX, y: this._contentY, w: this._contentW, h: this._contentH };
+    }
+    const colW = Math.round(SCREEN_W / 3) - 20;
+    return { x: 10, y: 74, w: colW, h: SCREEN_H - 74 - 84 };   // 84 = toolbar band
+  }
+
   _buildTabContent(key, x, y, w, h) {
     const items = SECTIONS[key].items;
+    if (FULL_BLEED.has(key)) {
+      const r = this._contentRectFor(key);
+      x = r.x; y = r.y; w = r.w; h = r.h;
+    }
     // TWO columns whenever one column would squeeze rows unreadably thin
     // (2026-07-16: AM/BM + camp menus were cutting descriptions off) —
     // fewer, TALLER buttons beat many crushed ones.
@@ -1804,11 +2098,14 @@ export class RestStopScene extends Phaser.Scene {
     // stretching buttons full-width — gas (CarGo/Huff's), hunting (CowBella),
     // AM/BM, Park & Ride. Anything with >6 items also splits regardless.
     const TWO_COL = new Set(['vices', 'gas', 'hunting', 'ambm', 'parkride']);
-    const cols  = (TWO_COL.has(key) || items.length > 6) ? 2 : 1;
+    const cols  = FULL_BLEED.has(key) ? 1 : ((TWO_COL.has(key) || items.length > 6) ? 2 : 1);
     const rows  = Math.ceil(items.length / cols);
     const cellW = (w - (cols - 1) * 6) / cols;
-    const cellH = Math.min(56, Math.max(30, (h - (rows - 1) * 6) / rows));
+    const cellH = FULL_BLEED.has(key)
+      ? 52                                     // fixed row height; the column scrolls
+      : Math.min(56, Math.max(30, (h - (rows - 1) * 6) / rows));
     const objs  = [];
+    const rowRecs = [];
     items.forEach((item, i) => {
       const r  = Math.floor(i / cols);
       const c  = i % cols;
@@ -1816,7 +2113,13 @@ export class RestStopScene extends Phaser.Scene {
       const cy = y + r * (cellH + 6);
       const created = this._makeButton(cx, cy, cellW, cellH, item, key);
       created.forEach(o => objs.push(o));
+      // Offsets from the row's top let a category filter restack the column
+      // without rebuilding every button.
+      rowRecs.push({ item, objs: created, dy: created.map(o => (o.y ?? 0) - cy) });
     });
+    if (GARAGE_KEYS.has(key)) {
+      (this._garageRows ??= {})[key] = { rows: rowRecs, x, y, cellH };
+    }
     return objs;
   }
 
@@ -1859,22 +2162,25 @@ export class RestStopScene extends Phaser.Scene {
     const desc = this.add.text(textX, y + (compact ? h / 2 + 7 : 28), item.desc, {
       fontSize: compact ? '9px' : '10px', fontFamily: 'Arial', color: '#CCBB88',
     }).setOrigin(0, 0);
-    // Custom mode runs noScore=true and gives every shop item for FREE
-    // (the player chose their starting vice levels via the slider, so
-    // there's no $ to spend and the shop shouldn't gate them out).
-    const freeMode = Difficulty.noScore?.() === true;
+    // Custom used to zero every shop price (`freeMode`).  Removed 2026-07-28
+    // (owner): items COST MONEY in Custom, at their real price, and that price is
+    // what's displayed.  The wallet just never depletes — see `_infiniteMoney` at
+    // the charge site below — so everything stays affordable without the shop
+    // pretending to be free.
     // Genre-vehicle repair discount (pop-punk −25%): applied to the effective
     // cost so display, affordability, and charge all stay consistent. Only
     // REPAIR items here; garage part-upgrades are discounted in UpgradeSystem.
     const _repairMult = (item.payload?.repair || item.payload?.campRepair || item.payload?.upgradeInstall)
       ? ((this.registry.get('genreTraitMods') ?? {}).repairUpgradeCostMult ?? 1)
       : 1;
-    const effectiveCost = freeMode ? 0 : Math.max(0, Math.round((item.cost ?? 0) * _repairMult));
+    const effectiveCost = Math.max(0, Math.round((item.cost ?? 0) * _repairMult));
     const disabled = !!item.disabled;            // set per-item when the
                                                   // purchase would be a
                                                   // no-op or downgrade.
 
-    const cost = this.add.text(x + w - 8, y + h / 2,
+    // -5: the price sat on the baseline of the description text and collided
+    // with long descriptions (and with the wider "FREE" string).
+    const cost = this.add.text(x + w - 8, y + h / 2 - 5,
       disabled              ? 'N/A' :
       effectiveCost > 0     ? `$${effectiveCost}` : 'FREE', {
         fontSize: compact ? '11px' : '13px', fontFamily: IMPACT,
@@ -1885,6 +2191,12 @@ export class RestStopScene extends Phaser.Scene {
     // item.disabled is read LIVE (not the build-time `disabled` const) so a
     // purchase can flip it — e.g. REFUEL greys itself out after one buy.
     const refresh = () => {
+      // Row may have been DESTROYED (the installed-upgrade fade removes the
+      // whole row 3 s after purchase) while this callback stays registered
+      // in _buttonRefresh — touching a destroyed Text crashes Phaser in
+      // updateUVs (seen scrolling the FAP shop).  Destroyed objects have no
+      // scene; bail for the whole row.
+      if (!bg.scene || !label.scene || !cost.scene) return;
       const ok = !item.disabled && this._score >= effectiveCost;
       bg.setFillStyle(ok ? 0x2A1808 : 0x1A0E04);
       bg.setStrokeStyle(2, ok ? 0xFFCC66 : 0x664422);
@@ -1919,7 +2231,11 @@ export class RestStopScene extends Phaser.Scene {
         return;
       }
       if (effectiveCost > 0) {
-        this._score -= effectiveCost;
+        // Custom: the purchase is REAL (price charged to stats, business
+        // unlocked, item applied) but the wallet doesn't drain — money in the
+        // sandbox is unlimited, not free.  Everything else about the buy is
+        // untouched, so prices, affordability and spend tracking stay honest.
+        if (!this._infiniteMoney()) this._score -= effectiveCost;
         if (bizKey) this._boughtAt.add(bizKey);   // unlocks THIS business's restroom only
         const _si = this._statsSpendInfo(item);
         this._stats?.recordSpend(effectiveCost, _si.category, _si.subId);
@@ -1940,9 +2256,20 @@ export class RestStopScene extends Phaser.Scene {
       if (item.payload?.upgradeInstall) {
         item.disabled = true;
         item.disabledReason = '✓ Installed on this car.';
+        // Owner 2026-07-28: no "INSTALLED / next tier" placeholder — a part
+        // this shop no longer sells shows NOTHING.  Brief ✓ receipt, then
+        // the whole row (icon, label, desc, cost, backing) fades away.
         label.setText('✓  INSTALLED');
-        desc.setText('Next tier available at the next shop.');
-        cost.setText('N/A');
+        desc.setText('');
+        cost.setText('');
+        this.time.delayedCall(3000, () => {
+          const row = created.filter(o => o?.scene);
+          if (!row.length) return;
+          this.tweens.add({
+            targets: row, alpha: 0, duration: 450,
+            onComplete: () => row.forEach(o => o.destroy()),
+          });
+        });
       }
       // Genre car bought/swapped — this row becomes YOUR RIDE for the visit.
       // (Other rows re-derive owned/active state on the next stop.)
@@ -1962,6 +2289,7 @@ export class RestStopScene extends Phaser.Scene {
   }
 
   _purchaseConfirmation(item) {
+    if (item.payload?.popcorn) return this._popcornMsg ?? '🍿 Free popcorn.';
     if (item.payload?.hitchhike) {
       const outcome = this._rollHitchhiker();
       return outcome.message;
@@ -1970,41 +2298,19 @@ export class RestStopScene extends Phaser.Scene {
     return `✓ ${item.label.replace(/[^\w ]/g, '').trim()}`;
   }
 
-  /** Random hitchhiker outcome — accumulates effects into _purchases so
-   *  GameScene applies them on resume.  Mix of generous and shady riders. */
+  /**
+   * Hitchhiker pickup — SEALS the outcome instead of resolving it here.
+   *
+   * The roll is made now but handed to GameScene unopened; it lands
+   * HITCH_REVEAL_MILES down the road (owner spec, 2026-07-27), so the player
+   * drives off not knowing whether they just helped themselves or got taken.
+   * The outcome TABLE now lives in GameScene._applyRestStopHitchOutcome —
+   * resolving it here would apply effects (and record stats) at purchase time,
+   * which is exactly the reveal we're deferring.
+   */
   _rollHitchhiker() {
-    const r = Math.random();
-    // Stats: good < 0.55, bad (robbery) < 0.90, else neutral ("bailed").
-    this._stats?.recordHitchhiker(r < 0.55 ? 'good' : (r < 0.90 ? 'bad' : 'neutral'));
-    if (r < 0.18) {
-      this._purchases.f12.push('fireworks');
-      return { message: '🤝 Friendly biker — gave you FIREWORKS!' };
-    }
-    if (r < 0.40) {
-      const bonus = 800;
-      this._purchases.scoreBonus += bonus;
-      return { message: `🤝 Off-duty trucker — tipped you $${bonus}!` };
-    }
-    if (r < 0.55) {
-      this._purchases.restock = true;
-      return { message: '🤝 Old hippie — RESTOCKED your vices!' };
-    }
-    if (r < 0.75) {
-      const loss = Math.min(this._score, 600);
-      this._score -= loss;
-      this._stats?.recordRobbery(loss);
-      this._refreshScore();
-      return { message: `💀 Sketchy stranger ROBBED you of $${loss}!` };
-    }
-    if (r < 0.90) {
-      const loss = Math.min(this._score, 1200);
-      this._score -= loss;
-      this._stats?.recordRobbery(loss);
-      this._refreshScore();
-      this._purchases.f12 = [];           // wipe any tokens we'd been giving
-      return { message: `💀 Armed robbery — lost $${loss} + pending weapons!` };
-    }
-    return { message: '😐 Hitchhiker bailed at the next exit. Nothing happened.' };
+    this._purchases.hitchhiker = { roll: Math.random() };
+    return { message: '🧍 They hop in. Whatever this is, you\'ll find out down the road…' };
   }
 
   /** Map a shop item to its stats spend bucket.  Vice top-ups and weapon
@@ -2039,19 +2345,40 @@ export class RestStopScene extends Phaser.Scene {
       }
       this._drawSurvivalMini();   // bladder bar drains on the landing HUD
     }
+    if (p.popcorn) {
+      // Free popcorn heals 1% of MAX health a serving, capped at
+      // POPCORN_MAX_PCT of max per visit.  Routed through the SAME
+      // durabilityOnResume channel the paid repair uses, so it can never
+      // stack past the vehicle's ceiling and GameScene needs no new case.
+      const _max     = this._vehMaxHp();
+      const _already = this._purchases.popcornHealed ?? 0;
+      const _room    = Math.max(0, _max * POPCORN_MAX_PCT - _already);
+      const _gain    = Math.min(_max * POPCORN_PER_SERVE, _room);
+      if (_gain > 0) {
+        this._purchases.popcornHealed = _already + _gain;
+        const _cur = this._purchases.durabilityOnResume ?? this._durabilityAtEntry ?? _max;
+        this._purchases.durabilityOnResume = Math.min(_max, _cur + _gain);
+        this._popcornMsg = `🍿 +${_gain.toFixed(1)} HP. Free refills, tiny miracles.`;
+      } else {
+        this._popcornMsg = "🍿 You've had enough popcorn. Buy a real repair.";
+      }
+      this._refreshScore?.();
+    }
     if (p.repair) {
       this._purchases.repair             = true;
       // Restore to the actual vehicle's max HP, not the legacy 100.
       // playdoutS3X has 125 HP, so a flat 100 silently capped a "full
       // repair" at 80 % of capacity for that vehicle.
-      this._purchases.durabilityOnResume = VEHICLES[this._vehicleId]?.hp ?? 100;
+      this._purchases.durabilityOnResume = this._vehMaxHp();
     }
     // ── Phase 2-4 payloads ────────────────────────────────────────
     if (p.refuel) {
       this._purchases.refuelToFull = true;
       // 10% robbery roll — drains a fraction of the player's cash.
       // Done here so the popup ("ROBBED!") fires alongside the refuel.
-      if (Math.random() < GAS_ROBBERY_CHANCE) {
+      // Skipped in Custom: it's a no-score sandbox where everything is free,
+      // so a robbery would only chew into the $100k seed (owner 2026-07-27).
+      if (Difficulty.noScore?.() !== true && Math.random() < GAS_ROBBERY_CHANCE) {
         const loss = Math.floor(this._score * GAS_ROBBERY_FRAC);
         this._score = Math.max(0, this._score - loss);
         this._stats?.recordRobbery(loss);
@@ -2072,7 +2399,7 @@ export class RestStopScene extends Phaser.Scene {
       // points — otherwise low-HP cars (Beater = 50 max) get clamped to
       // full when setDurability(65) caps against _max.  Never DECREASE
       // current durability.
-      const vehMax = VEHICLES[this._vehicleId]?.hp ?? 100;
+      const vehMax = this._vehMaxHp();
       const target = Math.round(vehMax * 0.65);
       this._purchases.durabilityOnResume = Math.max(this._purchases.durabilityOnResume ?? 0, target);
     }
@@ -2147,7 +2474,10 @@ export class RestStopScene extends Phaser.Scene {
       // GameScene re-reads the save via _recomputeUpgradeFx on resume; the
       // flag forces that recompute so the upgrade affects the drive at once.
       const save = this.registry?.get?.('save');
-      if (save) buyUpgrade(save, this._vehicleId, p.upgradeInstall);
+      // Custom mode is a sandbox: route the install to tempUpgrades so it
+      // works for the rest of THIS run but never persists into Easy/Normal.
+      if (save) buyUpgrade(save, this._vehicleId, p.upgradeInstall,
+                           { forceTemp: Difficulty.mode?.() === 'custom' });
       this._purchases.upgradeRecompute = true;
     }
     if (p.buyGenre || p.driveGenre) {
@@ -2184,6 +2514,13 @@ export class RestStopScene extends Phaser.Scene {
       this._purchases.reduceVices = cur * p.reduceVices;
     }
     // hitchhike outcome handled in _purchaseConfirmation → _rollHitchhiker
+  }
+
+  /** Custom mode: the wallet never depletes (owner 2026-07-28).  Prices are
+   *  real and charged for display / stats / affordability — this only suppresses
+   *  the actual subtraction.  Mirrors GameScene._cashLoss for the shop side. */
+  _infiniteMoney() {
+    return Difficulty.noScore?.() === true;
   }
 
   _refreshScore() {

@@ -1684,15 +1684,24 @@ export function buildRoute(count = ROUTE_SEGS) {
         break;
       case 'downtown_seattle':
         // SoDo → downtown Seattle.  Tree-lined surface streets,
-        // approach to the Mercer Island floating bridge.  User asked
-        // for ~5× the trees and bigger/taller, so bumped from 120 →
-        // 600 slots/mile and added a 1.5× heightBoost on each spawn.
-        // Heavily deciduous SEATTLE_STREET_TREES pool.  Trees co-
-        // exist with the regional building spawn — separate sprite
-        // type written by SPAWN_TREE, not part of the building if/
-        // else chain.
+        // approach to the Mercer Island floating bridge.  Heavily
+        // deciduous SEATTLE_STREET_TREES pool.  Trees co-exist with the
+        // regional building spawn — separate sprite type written by
+        // SPAWN_TREE, not part of the building if/else chain.
+        //
+        // Was bumped to 600 slots/mile (a 5× increase) with a 1.5×
+        // heightBoost; reverted to 120 on 2026-07-27.  At 600 this region
+        // produced ~1200 trees/mile against 11-16 buildings — roughly 90
+        // trees per skyscraper — and because the region spans mile 0.6-5.7
+        // it applied that canopy to the elevated West Seattle Bridge and
+        // industrial SoDo as well as the downtown core.  The heightBoost
+        // is kept: the complaint was quantity, not size.
+        //
+        // NOTE: the region's `sceneryDensity: 0.005` does NOT control tree
+        // count here — this value does.  Reading the traits block alone
+        // gives a wildly wrong impression of the density.
         _treePool = SEATTLE_STREET_TREES;
-        _treeSlotsPerMile = 600;
+        _treeSlotsPerMile = 120;
         _treeHeightBoost  = 1.5;
         _denseStreetTrees = true;
         break;
@@ -1733,7 +1742,20 @@ export function buildRoute(count = ROUTE_SEGS) {
         // also gets the 4-row DENSE FOREST overlay; Issaquah relies on this
         // denser single row instead, kept clear of the home/road zone by the
         // home-side gating in SPAWN_TREE.)
-        _treeSlotsPerMile = (mileNow >= 14 && mileNow <= 25) ? 200 : 22;
+        // Past the Issaquah corridor this was 22 slots/mile — effectively
+        // bare — right across the North Bend approach (mile 26-38), which is
+        // dense wet Cascade foothill forest.  Owner wants this reading like
+        // the old Seattle density.
+        _treeSlotsPerMile = (mileNow >= 14 && mileNow <= 25) ? 200 : 480;
+        // Past the Issaquah corridor this is the North Bend approach — same
+        // unbroken near row + scale as the cascades case below.
+        if (mileNow > 25) {
+          _denseStreetTrees   = true;
+          _treeHeightBoost    = 1.45;
+          _treeBigBoostChance = 0.28;
+          _treeBigBoostMin    = 1.9;
+          _treeBigBoostMax    = 2.8;
+        }
         if (mileNow >= 14 && mileNow <= 25) {
           _denseStreetTrees    = true;
           _treeBigBoostChance  = 0.28;
@@ -1741,11 +1763,46 @@ export function buildRoute(count = ROUTE_SEGS) {
           _treeBigBoostMax     = 2.6;
         }
         break;
-      case 'cascades':
-        // Snoqualmie Pass + Cle Elum — heaviest forest on the route.
-        _treePool = WESTERN_WA_CONIFERS;
-        _treeSlotsPerMile = 30;
+      case 'cascades': {
+        // Snoqualmie Pass + Cle Elum — heaviest forest on the route (520
+        // slots/mile through the pass; was 30, sparser than downtown
+        // Seattle, contradicting its own comment).
+        //
+        // EAST-SLOPE TAPER (owner 2026-07-28): the wall holds to mile 60,
+        // then thins across Easton → Cle Elum so it ARRIVES at the dry
+        // side's ~45/mile by the region edge (88) instead of the old 22×
+        // cliff where one mile was a fir wall and the next was bare.
+        // Matches the biome backdrop's own arc (easton_transition 58-78 is
+        // literally "thinning ponderosa").
+        const _dryT = Math.max(0, Math.min(1, (mileNow - 60) / 28));   // 0 @60 → 1 @88
+        _treeSlotsPerMile = Math.round(520 - (520 - 12) * _dryT);
+        // SPECIES BLEND — eastern pines (ponderosa / white pine) mix in
+        // after Easton (62) and dominate by the region edge.  The pool is
+        // rebuilt per whole-mile (cached) so composition shifts gradually;
+        // spawn code indexes the pool cyclically, so entry ratio = mix.
+        const _eastT = Math.max(0, Math.min(1, (mileNow - 62) / 24));   // 0 @62 → 1 @86
+        const _mileKey = Math.floor(mileNow);
+        if (globalThis.__cascadePoolCache?.key !== _mileKey) {
+          const eastN = Math.round(_eastT * 6);            // 0..6 of 8 slots
+          const mixed = [];
+          for (let k = 0; k < 8; k++) {
+            mixed.push(k < eastN
+              ? EAST_CASCADES_PINES[k % EAST_CASCADES_PINES.length]
+              : WESTERN_WA_CONIFERS[k % WESTERN_WA_CONIFERS.length]);
+          }
+          globalThis.__cascadePoolCache = { key: _mileKey, pool: mixed };
+        }
+        _treePool = globalThis.__cascadePoolCache?.pool ?? WESTERN_WA_CONIFERS;
+        // Unbroken curb row + giant sprinkle only while the wall holds; as
+        // it thins, natural gaps return and heights settle toward the
+        // shorter eastern pines.
+        _denseStreetTrees = mileNow < 60;
+        _treeHeightBoost  = 1.45 - 0.45 * _dryT;
+        _treeBigBoostChance = 0.28 * (1 - _dryT);
+        _treeBigBoostMin    = 1.9;
+        _treeBigBoostMax    = 2.8;
         break;
+      }
       case 'east_cascades':
         // Cle Elum → Ellensburg → Vantage — sparser, drier; pines
         // start replacing the wet-side conifers.
@@ -2009,7 +2066,9 @@ export function buildRoute(count = ROUTE_SEGS) {
       sprites.push({
         type:            'vice-pending',
         defaultType:     pickCollectible(rng, t),
-        offset:          rng.range(-0.55, 0.55),
+        // Lane spread (owner 2026-07-27): snap to one of the 4 lane centres,
+        // uniformly across lanes (was a narrow inner-lane band).
+        offset:          [-0.75, -0.25, 0.25, 0.75][(rng.next() * 4) | 0],
         baseW: 720, baseH: 880,   // 2× per request — much easier to spot
         collected:       false,
         isCollectible:   true,
@@ -2034,7 +2093,9 @@ export function buildRoute(count = ROUTE_SEGS) {
       sprites.push({
         type:            f12Type,
         texKey:          f12TexMap[f12Type],
-        offset:          rng.range(-0.45, 0.45),
+        // Lane spread (owner 2026-07-27): snap to one of the 4 lane centres,
+        // uniformly across lanes (was a narrow inner-lane band).
+        offset:          [-0.75, -0.25, 0.25, 0.75][(rng.next() * 4) | 0],
         baseW: 720, baseH: 880,   // same as vice pickups so they appear similar size
         collected:       false,
         isCollectible:   true,
@@ -2079,6 +2140,25 @@ export function buildRoute(count = ROUTE_SEGS) {
       sprites,
       cars: [],
     });
+  }
+
+  // ── Accumulated road heading ────────────────────────────────────────
+  // Running sum of per-segment curve, i.e. how far the road has turned
+  // from its starting bearing by this segment.  The parallax backdrop
+  // keys off THIS rather than off the player's lateral position: a
+  // backdrop that only tracks player.x slides when you change lanes but
+  // stays frozen through a bend, which is what made the old mountain
+  // range read as a flat painted wall.  Heading makes the horizon swing
+  // as the road turns, which is the actual parallax cue.
+  //
+  // The value grows without bound over 293 miles; that is fine, every
+  // consumer takes it modulo a band width.
+  {
+    let heading = 0;
+    for (const seg of segments) {
+      heading += seg.curve;
+      seg.heading = heading;
+    }
   }
 
   // ── Mt Baker Tunnel (mile 4.9–5.6) ─────────────────────────────────
@@ -3068,6 +3148,118 @@ export function buildRoute(count = ROUTE_SEGS) {
     survivors.sort((a, b) => a - b);
     segments.trapMiles = survivors;
   }
+
+  // NOTE: this block runs LAST on purpose.  It needs the bridge/tunnel/water
+  // flags already set so its skip-guard actually fires, and it needs every
+  // sprite-adding pass to have finished so the water-flank scenery filter
+  // below catches sprites added by the rest-stop and ramp passes too.
+  // ── Roadside lakes ──────────────────────────────────────────────────
+  // Real lakes the route runs alongside, keyed off I-90 EXIT numbers
+  // (WSDOT numbers interstate exits by milepost, and the elevation profile
+  // above is already exit-aligned through the pass — Issaquah at 17 is
+  // exit 17, the summit at 52 is exit 52, and Keechelus is already called
+  // out at 54.5–58).
+  //
+  // `side` is as seen driving EASTBOUND, which is the only direction the
+  // route runs.  `shoreFrac` is how far across the screen half-width the
+  // water reaches before hitting the far shore — this is what stops a lake
+  // reading as open ocean.  It is a rough stand-in for the lake's real
+  // width: Sammamish is ~1.5 mi across, Keechelus ~0.5 mi, and Kachess and
+  // Easton are glimpsed rather than driven alongside.
+  //
+  // NOT INCLUDED, and not an oversight: there are no lakes on the eastern
+  // leg.  The route leaves I-90 at Vantage (mile 132) for WA-26 through
+  // Royal City / Othello / Washtucna — dry scabland and irrigation
+  // country.  Moses Lake (I-90 exit 179) and Sprague Lake (exit 245+) are
+  // both far east of where this route turns off.
+  // `mode` decides whether the road actually runs at the waterline:
+  //
+  //   'shore'    Water is a near-field ground plane replacing the roadside
+  //              grass, with guardrails and a dunk if you get past them.
+  //              Roadside scenery on the water flank is SUPPRESSED, because
+  //              otherwise trees and houses render standing in the lake.
+  //
+  //   'distant'  The lake sits beyond the roadside strip — visible at the
+  //              horizon, behind the trees and homes, with normal grass and
+  //              scenery in the near field.  No rail, no dunk: you cannot
+  //              reach it, so pretending you can drown in it would be a lie.
+  //
+  // Sammamish and Kachess are 'distant' because neither freeway alignment
+  // actually touches the water — I-90 crosses Sammamish's SOUTH END behind
+  // a strip of park, trees and houses, and Kachess sits about two miles
+  // north of the road.  Keechelus and Easton genuinely do run at the
+  // waterline, so they stay 'shore'.
+  // `setbackFt` (owner 2026-07-27) is the third possibility between 'shore'
+  // (water starts at the pavement edge) and 'distant' (water at the horizon):
+  // a 'shore' lake that sits a MEASURED distance back from the roadway, with
+  // real ground in between.  Lake Easton is the case that needed it — I-90
+  // passes it close, but not at the waterline.  0 / omitted = waterline, i.e.
+  // the original behaviour, so Keechelus is untouched.
+  //
+  // Lateral distances are expressed in `p.x` road half-widths (p.x ±1 is the
+  // pavement edge) and the road is 4 lanes ≈ 50 ft edge to edge, so one half-
+  // width ≈ 25 ft.  Everything that consumes a setback reads the SAME derived
+  // `seg.lakeWaterEdgeX` — the |p.x| at which water begins — so the renderer,
+  // the dunk check and the scenery filter can never disagree about where the
+  // shoreline is.
+  const FT_PER_HALF_WIDTH = 25;
+  const LAKES = [
+    // name              start  end   side     shoreFrac  mode        setbackFt
+    { name: 'Sammamish', s: 14.0, e: 18.0, side: 'left',  shore: 0.55, mode: 'distant' },
+    { name: 'Keechelus', s: 54.5, e: 58.0, side: 'right', shore: 0.30, mode: 'shore'   },
+    { name: 'Kachess',   s: 59.5, e: 62.0, side: 'left',  shore: 0.22, mode: 'distant' },
+    { name: 'Easton',    s: 70.0, e: 72.0, side: 'right', shore: 0.18, mode: 'shore', setbackFt: 75 },
+  ];
+  {
+    const segsPerMile = count / TOTAL_ROUTE_MILES;
+    for (const lake of LAKES) {
+      const s = Math.floor(lake.s * segsPerMile);
+      const e = Math.floor(lake.e * segsPerMile);
+      const sideSign = lake.side === 'left' ? -1 : 1;
+      for (let i = s; i < e && i < count; i++) {
+        const seg = segments[i];
+        if (!seg) continue;
+        // Never overwrite a bridge or tunnel — those own their own flanks
+        // and their guardrail/wall clamps must not be disturbed.
+        if (seg.bridge || seg.tunnel || seg.water) continue;
+        seg.lakeShore = lake.shore;
+        seg.lakeName  = lake.name;
+
+        if (lake.mode === 'distant') {
+          // Horizon-only. Deliberately does NOT set waterLeft/waterRight:
+          // those flags are what add the guardrail and arm the dunk in
+          // GameScene, and neither belongs on water you can't reach.
+          seg.lakeDistant = sideSign;
+        } else {
+          if (sideSign < 0) seg.waterLeft = true;
+          else              seg.waterRight = true;
+          // Where the waterline actually is, in |p.x|.  Left UNSET for a
+          // waterline lake so the renderer and the dunk keep their original
+          // pavement-edge behaviour; written only when the lake is held back
+          // from the road.  Single source of truth — see the LAKES comment.
+          const waterEdgeX = lake.setbackFt
+            ? 1 + lake.setbackFt / FT_PER_HALF_WIDTH
+            : 0;
+          if (waterEdgeX) seg.lakeWaterEdgeX = waterEdgeX;
+          // Drop roadside scenery that would render standing IN the lake.
+          // Sprites draw at depth 7-9.5, far above the water in roadGfx at
+          // depth 0, so anything past the waterline reads as floating.
+          // Without a setback the waterline IS the pavement edge and the whole
+          // flank goes (unchanged).  With one, sprites inside the setback sit
+          // on genuine dry ground and are KEPT — that is what puts a shoreline
+          // strip back at Easton.  Collectibles always survive so a pickup can
+          // never be silently deleted.
+          if (seg.sprites?.length) {
+            seg.sprites = seg.sprites.filter(sp =>
+              sp.isCollectible
+              || Math.sign(sp.offset ?? 0) !== sideSign
+              || Math.abs(sp.offset ?? 0) < waterEdgeX);
+          }
+        }
+      }
+    }
+  }
+
 
   return segments;
 }

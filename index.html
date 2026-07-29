@@ -137,6 +137,19 @@
       z-index: 9999;
       touch-action: none;
       overflow: hidden;
+      /* The phone's own size — NOT the window's — is what every modal
+         inside it should scale against.  On a real phone the two are the
+         same, but the desktop bridge below reframes this element as a
+         small portrait card in the middle of a wide window; sizing the
+         modals in vmin there measured the WINDOW and blew the text up far
+         past the frame (the reset-player confirm wrapped one word per line
+         and pushed its buttons off the bottom).  Declaring a container
+         here lets those rules use cqw, which always means "percent of the
+         phone's width".  Portrait in every state — full-bleed, desktop
+         card, and the landscape counter-rotate — so cqw is exactly the old
+         vmin on mobile and renders identically there. */
+      container-type: inline-size;
+      container-name: phone;
     }
     #phone-menu img.bg {
       position: absolute;
@@ -207,10 +220,10 @@
     #vehtrait-pop .vt-list li { font-size: clamp(14px, 3.4vmin, 19px); line-height: 1.5; }
     #vehtrait-pop .vt-hint { text-align: center; color: #FFE08A; font-size: clamp(11px, 2.6vmin, 15px); margin-top: 1.6vmin; opacity: 0.8; }
     /* Genre-vehicle trait panel inside the Garage app. */
-    #garage-trait { margin-top: 2vmin; padding: 2.5vmin; background: #0b0716; border: 2px solid #4a2f6e; border-radius: 2vmin; color: #F4F7FF; }
-    #garage-trait .gt-name { color: #FFD24D; font-weight: bold; font-size: 6.4vmin; text-align: center; margin-bottom: 1.4vmin; }
+    #garage-trait { margin-top: 2cqw; padding: 2.5cqw; background: #0b0716; border: 2px solid #4a2f6e; border-radius: 2cqw; color: #F4F7FF; }
+    #garage-trait .gt-name { color: #FFD24D; font-weight: bold; font-size: 6.4cqw; text-align: center; margin-bottom: 1.4cqw; }
     #garage-trait .gt-list { list-style: none; margin: 0; padding: 0; }
-    #garage-trait .gt-list li { font-size: 5.2vmin; line-height: 1.55; }
+    #garage-trait .gt-list li { font-size: 5.2cqw; line-height: 1.55; }
     #tut-skip {
       position: fixed; top: calc(env(safe-area-inset-top, 0px) + 1.6vmin); right: 1.8vmin; z-index: 999996;
       width: 39vmin; max-width: 192px; height: 13.5vmin; max-height: 69px; display: none;
@@ -249,6 +262,11 @@
     /* Tutorial variant — golden throbbing border; taps do nothing (rotate to advance). */
     @keyframes rppPulseGold { 0%, 100% { opacity: 0.7; box-shadow: 0 0 2vmin 0.5vmin rgba(255, 210, 77, 0.6); } 50% { opacity: 1; box-shadow: 0 0 6.5vmin 2vmin rgba(255, 210, 77, 0.98); } }
     #rotate-play-prompt.tut { border-color: #FFD24D; cursor: default; animation: rppPulseGold 1.05s ease-in-out infinite; }
+    /* Desktop: the prompt IS the button, so it has to look clickable and must
+       not spin a rotate-the-device icon.  Declared after .tut so it wins the
+       cursor (equal specificity — order decides). */
+    #rotate-play-prompt.desk { cursor: pointer; }
+    #rotate-play-prompt.desk .rpp-icon { animation: none; }
     /* During the Music/genre step the capture + quote overlays let taps fall
        through to the real genre buttons underneath. */
     #tut-capture.pass, #tut-quote.pass { pointer-events: none; }
@@ -409,17 +427,17 @@
     #phone-garage .title {
       color: #FFEE00;
       font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 6vmin;
+      font-size: 6cqw;
       text-align: center;
-      margin-bottom: 2vmin;
+      margin-bottom: 2cqw;
     }
-    #phone-garage .list { flex: 1; display: flex; flex-direction: column; gap: 2vmin; }
+    #phone-garage .list { flex: 1; display: flex; flex-direction: column; gap: 2cqw; }
     #phone-garage .row {
       display: flex; align-items: center;
       background: #1E2C42;
       border: 2px solid #4A6E8C;
       border-radius: 8px;
-      padding: 2vmin;
+      padding: 2cqw;
       cursor: pointer;
     }
     #phone-garage .row.current {
@@ -429,23 +447,23 @@
     #phone-garage .row .car-img {
       width: 22%;
       height: auto;
-      max-height: 12vmin;
+      max-height: 12cqw;
       object-fit: contain;
-      margin-right: 3vmin;
+      margin-right: 3cqw;
     }
     #phone-garage .row .info { flex: 1; color: #FFF; font-family: "Helvetica Neue", sans-serif; }
-    #phone-garage .row .name { font-size: 4vmin; font-weight: 700; }
-    #phone-garage .row .stats { font-size: 2.6vmin; color: #AAD0FF; }
-    #phone-garage .row .acc { font-size: 3.4vmin; margin-bottom: 0.5vmin; min-height: 4vmin; }
-    #phone-garage .row .acc .badge { margin-right: 1vmin; }
+    #phone-garage .row .name { font-size: 4cqw; font-weight: 700; }
+    #phone-garage .row .stats { font-size: 2.6cqw; color: #AAD0FF; }
+    #phone-garage .row .acc { font-size: 3.4cqw; margin-bottom: 0.5cqw; min-height: 4cqw; }
+    #phone-garage .row .acc .badge { margin-right: 1cqw; }
     /* Upgrade-panel cost badges — ONE uniform pill shape for every slot
        (buy buttons and the MAX marker alike), sized to the enlarged
        upgrade text.  Same palette as the rest of the garage. */
     #phone-garage .up-buy, #phone-garage .up-max {
-      display: inline-block; min-width: 24vmin; padding: 1.4vmin 4vmin;
-      border-radius: 999px; border: 0.5vmin solid #335;
+      display: inline-block; min-width: 24cqw; padding: 1.4cqw 4cqw;
+      border-radius: 999px; border: 0.5cqw solid #335;
       background: #16203a; color: #8aa;
-      font-family: inherit; font-weight: 800; font-size: 5.6vmin;
+      font-family: inherit; font-weight: 800; font-size: 5.6cqw;
       text-align: center; white-space: nowrap; cursor: pointer;
       box-sizing: border-box;
     }
@@ -453,15 +471,15 @@
     #phone-garage .up-max { color: #66FF99; border-color: #2a5a3a; background: #0d1a12; cursor: default; }
     #phone-garage .close-btn {
       align-self: center;
-      padding: 2vmin 6vmin;
+      padding: 2cqw 6cqw;
       background: #FFFFFF;
       color: #1E5BB8;
       border: 2px solid #000;
       border-radius: 6px;
       font-family: "Impact", sans-serif;
-      font-size: 4vmin;
+      font-size: 4cqw;
       cursor: pointer;
-      margin-top: 2vmin;
+      margin-top: 2cqw;
     }
 
     /* Music app modal — Spotify-style genre → songs picker. */
@@ -475,7 +493,7 @@
       /* Pad the top by the iOS safe-area inset so the MUSIC title
          clears the Dynamic Island / notch, and the BOTTOM inset so the
          close button clears the home-indicator "black bar". */
-      padding: calc(env(safe-area-inset-top, 0px) + 5vmin) 4% calc(env(safe-area-inset-bottom, 0px) + 4%);
+      padding: calc(env(safe-area-inset-top, 0px) + 5cqw) 4% calc(env(safe-area-inset-bottom, 0px) + 4%);
       /* No overflow on the container — the inner body owns scrolling
          so the header + close button stay pinned. */
       overflow: hidden;
@@ -491,27 +509,27 @@
          CLOSE / BACK button AND the iOS home-indicator safe-area
          (the bottom "black bar") — otherwise the final rows are hidden
          under it and can't be scrolled into view. */
-      padding-bottom: calc(14vmin + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(14cqw + env(safe-area-inset-bottom, 0px));
     }
     #phone-music.open { display: flex; }
     #phone-music .title {
       color: #39A8FF;
       font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 6vmin;
+      font-size: 6cqw;
       letter-spacing: 0.04em;
       text-align: center;
-      margin-bottom: 1vmin;
+      margin-bottom: 1cqw;
       text-shadow: 0 0 8px rgba(57,168,255,0.7), 0 2px 3px rgba(0,0,0,0.6);
     }
-    #phone-music .controls { display: flex; gap: 2vmin; margin: 1vmin 0 2vmin; justify-content: center; }
+    #phone-music .controls { display: flex; gap: 2cqw; margin: 1cqw 0 2cqw; justify-content: center; }
     #phone-music .controls button {
       background: linear-gradient(180deg, #243A5C 0%, #0A1427 55%, #07101F 100%);
       color: #F4FAFF;
       border: 2px solid #59B6FF;
-      border-radius: 2vmin;
-      padding: 1.5vmin 3vmin;
+      border-radius: 2cqw;
+      padding: 1.5cqw 3cqw;
       font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 3.2vmin;
+      font-size: 3.2cqw;
       letter-spacing: 0.035em;
       text-shadow: 0 2px 2px #000, 0 0 7px rgba(89,182,255,0.8);
       cursor: pointer;
@@ -523,35 +541,35 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 12px rgba(57,168,255,0.75);
     }
     /* Now-playing scrubber (drag to seek). */
-    #phone-music-now { padding: 1vmin 1.5vmin 0; }
-    #phone-music-now .pmn-name { color:#CFE4FF; font-size:2.6vmin; text-align:center; margin-bottom:1.2vmin; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:Helvetica; }
-    #phone-music-now .pmn-bar { position:relative; height:1.6vmin; background:rgba(255,255,255,0.18); border-radius:1vmin; cursor:pointer; touch-action:none; }
-    #phone-music-now .pmn-fill { position:absolute; left:0; top:0; bottom:0; width:0%; background:#39A8FF; border-radius:1vmin; pointer-events:none; }
-    #phone-music-now .pmn-knob { position:absolute; top:50%; left:0%; width:3.4vmin; height:3.4vmin; margin-left:-1.7vmin; transform:translateY(-50%); background:#FFF; border:0.4vmin solid #39A8FF; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.6); pointer-events:none; }
-    #phone-music-now .pmn-times { display:flex; justify-content:space-between; font-size:2.2vmin; color:#88A; font-family:Helvetica; margin-top:0.7vmin; }
+    #phone-music-now { padding: 1cqw 1.5cqw 0; }
+    #phone-music-now .pmn-name { color:#CFE4FF; font-size:2.6cqw; text-align:center; margin-bottom:1.2cqw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:Helvetica; }
+    #phone-music-now .pmn-bar { position:relative; height:1.6cqw; background:rgba(255,255,255,0.18); border-radius:1cqw; cursor:pointer; touch-action:none; }
+    #phone-music-now .pmn-fill { position:absolute; left:0; top:0; bottom:0; width:0%; background:#39A8FF; border-radius:1cqw; pointer-events:none; }
+    #phone-music-now .pmn-knob { position:absolute; top:50%; left:0%; width:3.4cqw; height:3.4cqw; margin-left:-1.7cqw; transform:translateY(-50%); background:#FFF; border:0.4cqw solid #39A8FF; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.6); pointer-events:none; }
+    #phone-music-now .pmn-times { display:flex; justify-content:space-between; font-size:2.2cqw; color:#88A; font-family:Helvetica; margin-top:0.7cqw; }
     /* Neon close button to match the rest of the new menu chrome. */
     #phone-music .close-btn {
-      align-self: center; margin-top: 2vmin;
-      padding: 1.8vmin 7vmin;
+      align-self: center; margin-top: 2cqw;
+      padding: 1.8cqw 7cqw;
       background: #11203a; color: #CFE6FF;
-      border: 2px solid #39A8FF; border-radius: 2.4vmin;
-      font-family: "Impact", sans-serif; font-size: 4vmin; cursor: pointer;
+      border: 2px solid #39A8FF; border-radius: 2.4cqw;
+      font-family: "Impact", sans-serif; font-size: 4cqw; cursor: pointer;
       box-shadow: 0 0 8px rgba(57,168,255,0.4);
     }
     #phone-music .genre-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       grid-auto-rows: 1fr;          /* every tile the same height */
-      gap: 2.4vmin;
+      gap: 2.4cqw;
     }
     /* Full-scene culture card.  Artwork is clipped inside the unchanged card
        bounds; controls and hit areas retain their original placement. */
     #phone-music .genre {
       position: relative;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      min-height: 24vmin;
-      padding: 4vmin 2vmin;
-      border-radius: 2.2vmin;
+      min-height: 24cqw;
+      padding: 4cqw 2cqw;
+      border-radius: 2.2cqw;
       background: #070D18;
       overflow: hidden;
       isolation: isolate;
@@ -584,30 +602,30 @@
     #phone-music .genre-name {
       position: relative; z-index: 2;
       max-width: 72%;
-      font-size: 4.2vmin; line-height: 1.02; letter-spacing: 0.02em;
+      font-size: 4.2cqw; line-height: 1.02; letter-spacing: 0.02em;
       text-shadow: 0 0 9px currentColor, 0 2px 3px #000, 0 0 4px #000;
     }
     #phone-music .genre-name.long {
       max-width: 78%;
-      font-size: 3.15vmin;
+      font-size: 3.15cqw;
       line-height: 1.05;
     }
     #phone-music .genre-count {
       position: relative; z-index: 2;
-      font-size: 2.6vmin; color: #E6F2FF; margin-top: 0.8vmin;
+      font-size: 2.6cqw; color: #E6F2FF; margin-top: 0.8cqw;
       text-shadow: 0 2px 3px #000, 0 0 4px #000;
     }
     #phone-music .genre.playing { box-shadow: 0 0 14px rgba(255,255,255,0.55), 0 0 8px rgba(0,0,0,0.5); }
     /* Default-station star — top-LEFT of each tile (opposite the songs check). */
     #phone-music .genre-default {
       position: absolute;
-      top: 1.5vmin; left: 1.5vmin;
-      width: 6.5vmin; height: 6.5vmin;
+      top: 1.5cqw; left: 1.5cqw;
+      width: 6.5cqw; height: 6.5cqw;
       display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0.35);
       border: 2px solid rgba(255,255,255,0.5);
       border-radius: 6px;
-      color: #FFE066; font-size: 4vmin; line-height: 1;
+      color: #FFE066; font-size: 4cqw; line-height: 1;
       cursor: pointer; padding: 0;
       z-index: 3;
       font-family: -apple-system, "Segoe UI Emoji", sans-serif;
@@ -621,8 +639,8 @@
        it never changes the tile's height. */
     #phone-music .genre-default-lbl {
       position: absolute;
-      top: 9vmin; left: 1.5vmin;
-      font-size: 2.2vmin; font-weight: 800; letter-spacing: 0.08em;
+      top: 9cqw; left: 1.5cqw;
+      font-size: 2.2cqw; font-weight: 800; letter-spacing: 0.08em;
       color: #FFE066; font-family: "Impact", sans-serif;
       text-shadow: 0 0 6px rgba(255,224,102,0.9), 0 1px 2px rgba(0,0,0,0.7);
       z-index: 3;
@@ -631,15 +649,15 @@
        whole station's tracks in/out of the playlist in one tap. */
     #phone-music .genre-check {
       position: absolute;
-      top: 1.5vmin;
-      right: 1.5vmin;
-      width: 6.5vmin; height: 6.5vmin;
+      top: 1.5cqw;
+      right: 1.5cqw;
+      width: 6.5cqw; height: 6.5cqw;
       display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0.35);
       border: 2px solid rgba(255,255,255,0.6);
       border-radius: 6px;
       color: #FFEE00;
-      font-size: 4vmin;
+      font-size: 4cqw;
       cursor: pointer;
       padding: 0;
       font-family: -apple-system, "Segoe UI Emoji", sans-serif;
@@ -655,12 +673,12 @@
     #phone-music .genre.locked .genre-count { opacity: 0.55; }
     #phone-music .genre-lock {
       position: absolute;
-      bottom: 1.5vmin; left: 50%; transform: translateX(-50%);
-      padding: 0.8vmin 1.4vmin;
+      bottom: 1.5cqw; left: 50%; transform: translateX(-50%);
+      padding: 0.8cqw 1.4cqw;
       background: rgba(0,0,0,0.62);
       border: 2px solid #FFAA66;
       border-radius: 6px;
-      color: #FFAA66; font-size: 2.4vmin; font-weight: 800; letter-spacing: 0.04em;
+      color: #FFAA66; font-size: 2.4cqw; font-weight: 800; letter-spacing: 0.04em;
       font-family: "Impact", -apple-system, "Segoe UI Emoji", sans-serif;
       white-space: nowrap;
       backdrop-filter: blur(3px);
@@ -669,16 +687,16 @@
     #phone-music .song-list {
       flex: 1;
       display: flex; flex-direction: column;
-      gap: 1.2vmin;
+      gap: 1.2cqw;
     }
     #phone-music .song {
-      padding: 2vmin;
+      padding: 2cqw;
       border-radius: 6px;
       color: #FFF;
       background: #2A3C5C;
       cursor: pointer;
       font-family: "Helvetica Neue", sans-serif;
-      font-size: 3.3vmin;
+      font-size: 3.3cqw;
       display: flex; align-items: center;
     }
     #phone-music .song:hover { background: #3A4C6C; }
@@ -691,15 +709,15 @@
        the radio's pause state without leaving the modal. */
     #phone-music .pause-btn {
       position: absolute;
-      top: calc(env(safe-area-inset-top, 0px) + 2vmin);
-      left: 4vmin;
-      width: 11vmin; height: 11vmin;
+      top: calc(env(safe-area-inset-top, 0px) + 2cqw);
+      left: 4cqw;
+      width: 11cqw; height: 11cqw;
       display: flex; align-items: center; justify-content: center;
       background: linear-gradient(180deg, #283A54 0%, #09111F 70%);
       border: 2px solid #FFE73B;
-      border-radius: 1.6vmin;
+      border-radius: 1.6cqw;
       color: #FFFFFF;
-      font-size: 6vmin;
+      font-size: 6cqw;
       cursor: pointer;
       padding: 0;
       z-index: 4;
@@ -714,14 +732,14 @@
        Trophies, Music, Leaderboard/Stats/Settings/Help all use this look). */
     .menu-x {
       position: absolute;
-      top: calc(env(safe-area-inset-top, 0px) + 3.5vmin);
-      right: 5vmin;
+      top: calc(env(safe-area-inset-top, 0px) + 3.5cqw);
+      right: 5cqw;
       z-index: 6;
       display: flex; align-items: center; justify-content: center;
-      width: 10vmin; height: 10vmin; padding: 0;
+      width: 10cqw; height: 10cqw; padding: 0;
       background: rgba(6, 11, 22, 0.55);
-      border: 0.6vmin solid #39A8FF; color: #39A8FF;
-      border-radius: 50%; font-size: 4.5vmin; line-height: 1;
+      border: 0.6cqw solid #39A8FF; color: #39A8FF;
+      border-radius: 50%; font-size: 4.5cqw; line-height: 1;
       cursor: pointer;
     }
     #phone-music .menu-x {
@@ -732,20 +750,20 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 0 10px rgba(57,168,255,0.45);
     }
     #phone-music .song .num {
-      width: 6vmin; opacity: 0.6; font-variant-numeric: tabular-nums;
+      width: 6cqw; opacity: 0.6; font-variant-numeric: tabular-nums;
     }
     #phone-music .song .name { flex: 1; }
     #phone-music .song-check {
-      width: 8vmin; height: 8vmin;
+      width: 8cqw; height: 8cqw;
       display: flex; align-items: center; justify-content: center;
       background: transparent;
       border: 2px solid #88AACC;
       border-radius: 6px;
       color: #FFEE00;
-      font-size: 4.5vmin;
+      font-size: 4.5cqw;
       font-family: -apple-system, "Segoe UI Emoji", sans-serif;
       cursor: pointer;
-      margin-right: 2vmin;
+      margin-right: 2cqw;
       flex-shrink: 0;
       padding: 0;
     }
@@ -763,17 +781,17 @@
        Stacked vertically on the left edge of each song row. */
     #phone-music .reorder {
       display: flex; flex-direction: column;
-      gap: 0.6vmin;
-      margin-right: 2vmin;
+      gap: 0.6cqw;
+      margin-right: 2cqw;
     }
     #phone-music .reorder-btn {
-      width: 7vmin; height: 4vmin;
+      width: 7cqw; height: 4cqw;
       display: flex; align-items: center; justify-content: center;
       background: #2A3C5C;
       border: 1px solid #4A6E8C;
       border-radius: 4px;
       color: #FFEE00;
-      font-size: 2.6vmin;
+      font-size: 2.6cqw;
       cursor: pointer;
       padding: 0;
       font-family: -apple-system, "Segoe UI Emoji", sans-serif;
@@ -782,30 +800,30 @@
     /* Playlist bar — appears at the top of the music modal whenever
        the player has tracks selected in the playlist set. */
     #phone-music .playlist-bar {
-      display: flex; gap: 2vmin; align-items: center;
+      display: flex; gap: 2cqw; align-items: center;
       background: linear-gradient(180deg, rgba(42,63,99,0.98), rgba(12,22,41,0.98));
       border: 2px solid #FFE73B;
-      border-radius: 2vmin;
-      padding: 2vmin;
-      margin-bottom: 2vmin;
+      border-radius: 2cqw;
+      padding: 2cqw;
+      margin-bottom: 2cqw;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -6px 12px rgba(0,0,0,0.38), 0 0 8px rgba(255,231,59,0.24);
     }
     #phone-music .playlist-bar .count {
       flex: 1;
       color: #FFEE00;
       font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 3.5vmin;
+      font-size: 3.5cqw;
       letter-spacing: 0.02em;
       text-shadow: 0 2px 2px #000, 0 0 7px rgba(255,231,59,0.48);
     }
     #phone-music .playlist-bar button {
-      padding: 1.5vmin 3vmin;
+      padding: 1.5cqw 3cqw;
       border: 2px solid #FFE73B;
-      border-radius: 1.4vmin;
+      border-radius: 1.4cqw;
       background: linear-gradient(180deg, #3F72D8 0%, #183A83 100%);
       color: #FFFFFF;
       font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 3.2vmin;
+      font-size: 3.2cqw;
       letter-spacing: 0.025em;
       text-shadow: 0 2px 2px #000;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -4px 7px rgba(0,0,0,0.35);
@@ -818,46 +836,46 @@
     }
     #phone-music .back-btn {
       align-self: flex-start;
-      padding: 1.5vmin 4vmin;
+      padding: 1.5cqw 4cqw;
       background: #FFFFFF;
       color: #1E5BB8;
       border: 2px solid #000;
       border-radius: 6px;
       font-family: "Impact", sans-serif;
-      font-size: 3.4vmin;
+      font-size: 3.4cqw;
       cursor: pointer;
-      margin-bottom: 2vmin;
+      margin-bottom: 2cqw;
     }
     #phone-music .close-btn {
       align-self: center;
-      padding: 2vmin 6vmin;
+      padding: 2cqw 6cqw;
       background: #FFFFFF;
       color: #1E5BB8;
       border: 2px solid #000;
       border-radius: 6px;
       font-family: "Impact", sans-serif;
-      font-size: 4vmin;
+      font-size: 4cqw;
       cursor: pointer;
-      margin-top: 2vmin;
+      margin-top: 2cqw;
     }
     #phone-music .vol-row {
       display: flex;
       align-items: center;
-      gap: 2vmin;
-      padding: 1.5vmin 2vmin;
-      margin-top: 1vmin;
+      gap: 2cqw;
+      padding: 1.5cqw 2cqw;
+      margin-top: 1cqw;
       background: rgba(255,255,255,0.05);
       border-radius: 8px;
     }
     #phone-music .vol-row .lbl {
       color: #88CCFF;
       font-family: "Impact", sans-serif;
-      font-size: 3.2vmin;
-      min-width: 12vmin;
+      font-size: 3.2cqw;
+      min-width: 12cqw;
     }
     #phone-music .vol-row input[type="range"] {
       flex: 1;
-      height: 4vmin;
+      height: 4cqw;
       accent-color: #44CC88;
     }
 
@@ -872,11 +890,11 @@
       z-index: 5;
       align-items: center;
       justify-content: center;
-      padding: 8vmin;
+      padding: 8cqw;
     }
     #phone-confirm.open { display: flex; }
     #phone-confirm .box {
-      width: 78vmin;
+      width: 78cqw;
       max-width: 90%;
       background: rgba(245, 245, 245, 0.96);
       backdrop-filter: blur(14px);
@@ -889,9 +907,9 @@
     #phone-confirm .msg {
       color: #000;
       text-align: center;
-      font-size: 4.2vmin;
+      font-size: 4.2cqw;
       line-height: 1.35;
-      padding: 6vmin 5vmin 5vmin;
+      padding: 6cqw 5cqw 5cqw;
       font-weight: 500;
     }
     #phone-confirm .row {
@@ -900,12 +918,12 @@
     }
     #phone-confirm .row button {
       flex: 1;
-      padding: 3.5vmin 0;
+      padding: 3.5cqw 0;
       border: 0;
       background: transparent;
       color: #007AFF;
       font-family: inherit;
-      font-size: 4.5vmin;
+      font-size: 4.5cqw;
       cursor: pointer;
     }
     #phone-confirm .row button + button {
@@ -927,15 +945,15 @@
     #phone-map .title {
       color: #FFEE00;
       font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 6vmin;
+      font-size: 6cqw;
       text-align: center;
-      margin-bottom: 1vmin;
+      margin-bottom: 1cqw;
     }
     #phone-map .sub {
       color: #88CCFF;
-      font-size: 3vmin;
+      font-size: 3cqw;
       text-align: center;
-      margin-bottom: 3vmin;
+      margin-bottom: 3cqw;
     }
     #phone-map svg { flex: 1; width: 100%; height: 100%; }
     /* "NEXT REST STOP" — vertical stack of business logos, right side of map. */
@@ -946,7 +964,7 @@
       display: none;
       flex-direction: column;
       align-items: center;
-      gap: 1.6vmin;
+      gap: 1.6cqw;
       z-index: 3;
       pointer-events: none;
       max-width: 28%;
@@ -954,29 +972,29 @@
     #phone-map-stops .np-title {
       color: #FFFFFF;
       font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 2.8vmin;
+      font-size: 2.8cqw;
       text-decoration: underline;
       text-align: center;
-      margin-bottom: 0.6vmin;
+      margin-bottom: 0.6cqw;
       text-shadow: 0 1px 3px #000;
     }
     #phone-map-stops img {
       width: 100%;
-      max-width: 24vmin;
+      max-width: 24cqw;
       height: auto;
       filter: drop-shadow(0 1px 3px rgba(0,0,0,0.85));
     }
     #phone-map .close-btn {
       align-self: center;
-      padding: 2vmin 6vmin;
+      padding: 2cqw 6cqw;
       background: #FFFFFF;
       color: #1E5BB8;
       border: 2px solid #000;
       border-radius: 6px;
       font-family: "Impact", sans-serif;
-      font-size: 4vmin;
+      font-size: 4cqw;
       cursor: pointer;
-      margin-top: 2vmin;
+      margin-top: 2cqw;
     }
 
     @media (orientation: portrait) {
@@ -1037,6 +1055,38 @@
        phone back to landscape (window.__phoneMenu.close → resume).  Lives at
        body level (a sibling of #phone-menu) so position:fixed is viewport-
        relative, not trapped by the menu's transform. */
+    /* Desktop stand-in for the baked "ROTATE PHONE TO ENTER GAME PLAY" bar.
+       Opaque black because the art behind it is (sampled #010105), so the red
+       neon underneath is fully hidden rather than showing through.  Sized in
+       cqw like the rest of the phone's chrome, so it scales with the frame
+       rather than the window.  placePngBox writes left/top/width/height. */
+    #phone-desk-play { display: none; }
+    body.is-desktop #phone-desk-play {
+      display: flex;
+      position: absolute;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4cqw;
+      box-sizing: border-box;
+      background: #000;
+      border: 0.55cqw solid #39FF8A;
+      border-radius: 2.4cqw;
+      color: #EAF3FF;
+      font-family: "Impact", "Arial Black", sans-serif;
+      letter-spacing: 0.04em;
+      line-height: 1.05;
+      cursor: pointer;
+      z-index: 2;
+      box-shadow: 0 0 2.4cqw rgba(57, 255, 138, 0.4), inset 0 0 2cqw rgba(57, 255, 138, 0.1);
+    }
+    body.is-desktop #phone-desk-play span { font-size: 3.4cqw; color: #EAF3FF; }
+    body.is-desktop #phone-desk-play b    { font-size: 5.4cqw; color: #39FF8A; }
+    body.is-desktop #phone-desk-play:hover {
+      background: #04160B;
+      box-shadow: 0 0 3.6cqw rgba(57, 255, 138, 0.75), inset 0 0 2cqw rgba(57, 255, 138, 0.18);
+    }
+
     #phone-enter-gameplay { display: none; }
     body.is-desktop.menu-locked #phone-enter-gameplay {
       display: block;
@@ -1076,21 +1126,21 @@
       background: rgba(6, 11, 22, 0.975);
       z-index: 3;
       flex-direction: column;
-      padding: calc(env(safe-area-inset-top, 0px) + 4vmin) 6% 6%;
+      padding: calc(env(safe-area-inset-top, 0px) + 4cqw) 6% 6%;
       box-sizing: border-box;
     }
     #phone-app.open { display: flex; }
     #phone-app .pa-head {
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 3vmin; flex-shrink: 0;
+      margin-bottom: 3cqw; flex-shrink: 0;
     }
     #phone-app-title {
       color: #39A8FF; font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 6vmin; letter-spacing: 0.04em;
+      font-size: 6cqw; letter-spacing: 0.04em;
     }
     #phone-app .pa-close {
-      background: none; border: 0.6vmin solid #39A8FF; color: #39A8FF;
-      border-radius: 50%; width: 10vmin; height: 10vmin; font-size: 4.5vmin;
+      background: none; border: 0.6cqw solid #39A8FF; color: #39A8FF;
+      border-radius: 50%; width: 10cqw; height: 10cqw; font-size: 4.5cqw;
       line-height: 1; cursor: pointer;
     }
     #phone-app .pa-body {
@@ -1098,59 +1148,59 @@
       color: #DCE8FF; font-family: "Helvetica Neue", Arial, sans-serif;
       /* Slim scrollbar pinned to the far edge, with the row content padded
          clear of it so right-aligned values never sit under the bar. */
-      padding-right: 3.5vmin;
+      padding-right: 3.5cqw;
       scrollbar-width: thin;
       scrollbar-color: rgba(57,168,255,0.55) transparent;
     }
-    #phone-app .pa-body::-webkit-scrollbar { width: 1.1vmin; }
+    #phone-app .pa-body::-webkit-scrollbar { width: 1.1cqw; }
     #phone-app .pa-body::-webkit-scrollbar-track { background: transparent; }
     #phone-app .pa-body::-webkit-scrollbar-thumb {
-      background: rgba(57,168,255,0.55); border-radius: 1vmin;
+      background: rgba(57,168,255,0.55); border-radius: 1cqw;
     }
     #phone-app .pa-row {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 3vmin; padding: 2.8vmin 0.5vmin;
-      border-bottom: 1px solid rgba(57, 168, 255, 0.18); font-size: 3.7vmin;
+      gap: 3cqw; padding: 2.8cqw 0.5cqw;
+      border-bottom: 1px solid rgba(57, 168, 255, 0.18); font-size: 3.7cqw;
     }
     #phone-app .pa-row .k { color: #9FC2E8; }
     #phone-app .pa-row .v { color: #FFFFFF; font-weight: 700; text-align: right; }
     #phone-app .pa-link { color: #5FC8FF; text-decoration: none; font-weight: 700; }
-    #phone-app .pa-lead { color: #BFD6F2; font-size: 3.5vmin; line-height: 1.45; margin: 1vmin 0 2vmin; }
-    #phone-app .pa-note { color: #6E86A8; font-size: 2.8vmin; line-height: 1.4; margin-top: 4vmin; }
+    #phone-app .pa-lead { color: #BFD6F2; font-size: 3.5cqw; line-height: 1.45; margin: 1cqw 0 2cqw; }
+    #phone-app .pa-note { color: #6E86A8; font-size: 2.8cqw; line-height: 1.4; margin-top: 4cqw; }
     #phone-app .pa-section {
-      color: #39A8FF; font-weight: 800; font-size: 3.2vmin; letter-spacing: 0.08em;
-      text-transform: uppercase; margin: 4.5vmin 0 0.5vmin;
-      border-bottom: 2px solid rgba(57,168,255,0.4); padding-bottom: 1vmin;
+      color: #39A8FF; font-weight: 800; font-size: 3.2cqw; letter-spacing: 0.08em;
+      text-transform: uppercase; margin: 4.5cqw 0 0.5cqw;
+      border-bottom: 2px solid rgba(57,168,255,0.4); padding-bottom: 1cqw;
     }
     #phone-app .pa-section:first-child { margin-top: 0; }
     #phone-app .pa-dim { color: #6E86A8; }
     /* Per-thread unread dot in the Contacts list — sits to the RIGHT of the
        name, cleared when that thread is opened (renderContact → __notif.ackMsg). */
     #phone-app .msg-unread {
-      display: inline-block; width: 2.6vmin; height: 2.6vmin;
+      display: inline-block; width: 2.6cqw; height: 2.6cqw;
       border-radius: 50%; background: #FF3B30;
-      margin-left: 1.6vmin; vertical-align: middle;
-      box-shadow: 0 0 1vmin rgba(255, 59, 48, 0.6);
+      margin-left: 1.6cqw; vertical-align: middle;
+      box-shadow: 0 0 1cqw rgba(255, 59, 48, 0.6);
     }
     /* Contact-row chevron — 3× the row font, reads as a tap affordance. */
-    #phone-app .contact-row .v { font-size: 11vmin; line-height: 1; color: #6E86A8; }
+    #phone-app .contact-row .v { font-size: 11cqw; line-height: 1; color: #6E86A8; }
     /* House-leaderboard metric tabs (Score / Time / Miles). */
-    #phone-app .lb-tabs { display: flex; gap: 2vmin; margin: 2vmin 0 1vmin; }
+    #phone-app .lb-tabs { display: flex; gap: 2cqw; margin: 2cqw 0 1cqw; }
     #phone-app .lb-tab {
-      flex: 1; padding: 2vmin 0; border: 0.5vmin solid rgba(57,168,255,0.5);
-      background: none; color: #9FC2E8; border-radius: 2vmin; cursor: pointer;
-      font-family: inherit; font-weight: 800; font-size: 3vmin;
+      flex: 1; padding: 2cqw 0; border: 0.5cqw solid rgba(57,168,255,0.5);
+      background: none; color: #9FC2E8; border-radius: 2cqw; cursor: pointer;
+      font-family: inherit; font-weight: 800; font-size: 3cqw;
       letter-spacing: 0.04em; text-transform: uppercase;
     }
     #phone-app .lb-tab.on { background: #39A8FF; color: #06121F; border-color: #39A8FF; }
     /* Highlight the active player's own row in the house board. */
-    #phone-app .pa-row.lb-me { background: rgba(57,168,255,0.12); border-radius: 1.5vmin; }
+    #phone-app .pa-row.lb-me { background: rgba(57,168,255,0.12); border-radius: 1.5cqw; }
     #phone-app .pa-row.lb-me .k { color: #5FC8FF; font-weight: 800; }
     #phone-app input[type=range] { width: 46%; accent-color: #39A8FF; }
     #phone-app .pa-toggle {
-      min-width: 18vmin; padding: 1.6vmin 0; border-radius: 2vmin;
-      border: 0.5vmin solid #335; background: #16203a; color: #8aa;
-      font-weight: 800; font-size: 3.4vmin; cursor: pointer;
+      min-width: 18cqw; padding: 1.6cqw 0; border-radius: 2cqw;
+      border: 0.5cqw solid #335; background: #16203a; color: #8aa;
+      font-weight: 800; font-size: 3.4cqw; cursor: pointer;
     }
     #phone-app .pa-toggle.on { border-color: #39A8FF; background: #1E5BB8; color: #FFF; }
 
@@ -1170,14 +1220,14 @@
     #phone-app,
     #phone-garage,
     #phone-map {
-      padding-top: calc(env(safe-area-inset-top, 0px) + 7vmin);
+      padding-top: calc(env(safe-area-inset-top, 0px) + 7cqw);
     }
     #phone-app .pa-head {
-      min-height: 11vmin;
-      margin-bottom: 2.5vmin;
-      padding: 0 0 1.8vmin;
-      border-bottom: 0.45vmin solid rgba(57, 168, 255, 0.46);
-      box-shadow: 0 1.4vmin 2.5vmin -2.2vmin rgba(57, 168, 255, 0.75);
+      min-height: 11cqw;
+      margin-bottom: 2.5cqw;
+      padding: 0 0 1.8cqw;
+      border-bottom: 0.45cqw solid rgba(57, 168, 255, 0.46);
+      box-shadow: 0 1.4cqw 2.5cqw -2.2cqw rgba(57, 168, 255, 0.75);
     }
     #phone-app-title,
     #phone-garage .title,
@@ -1185,11 +1235,11 @@
     #phone-achievements .title {
       line-height: 1.08;
       letter-spacing: 0.065em;
-      text-shadow: 0 0 1.5vmin rgba(57, 168, 255, 0.72), 0 0.4vmin 0 #07101f;
+      text-shadow: 0 0 1.5cqw rgba(57, 168, 255, 0.72), 0 0.4cqw 0 #07101f;
     }
     #phone-app-title { color: #72C9FF; }
     #phone-garage .title,
-    #phone-map .title { color: #FFE84A; text-shadow: 0 0 1.5vmin rgba(255,232,74,0.5), 0 0.4vmin 0 #07101f; }
+    #phone-map .title { color: #FFE84A; text-shadow: 0 0 1.5cqw rgba(255,232,74,0.5), 0 0.4cqw 0 #07101f; }
     #phone-app .pa-close,
     #phone-app .menu-x,
     #phone-garage .menu-x,
@@ -1198,50 +1248,50 @@
       background: radial-gradient(circle at 38% 30%, #253d5d 0%, #07101f 72%);
       border-color: #67C2FF;
       color: #8CD5FF;
-      text-shadow: 0 0 1.2vmin rgba(103,194,255,0.95);
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.25), 0 0 1.7vmin rgba(57,168,255,0.45);
+      text-shadow: 0 0 1.2cqw rgba(103,194,255,0.95);
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.25), 0 0 1.7cqw rgba(57,168,255,0.45);
     }
     #phone-app .pa-body {
       color: #E9F3FF;
-      padding: 0 3.5vmin 4vmin 0;
+      padding: 0 3.5cqw 4cqw 0;
     }
     #phone-app .pa-section {
       color: #7ED0FF;
       font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 3.55vmin;
+      font-size: 3.55cqw;
       letter-spacing: 0.095em;
-      padding: 1.2vmin 1.4vmin 1.3vmin;
-      margin-top: 5vmin;
+      padding: 1.2cqw 1.4cqw 1.3cqw;
+      margin-top: 5cqw;
       background: linear-gradient(90deg, rgba(36,116,205,0.26), rgba(36,116,205,0.03));
-      border-left: 0.7vmin solid #39A8FF;
+      border-left: 0.7cqw solid #39A8FF;
       border-bottom: 1px solid rgba(93,190,255,0.45);
-      border-radius: 0.8vmin;
-      text-shadow: 0 0 1vmin rgba(57,168,255,0.55);
+      border-radius: 0.8cqw;
+      text-shadow: 0 0 1cqw rgba(57,168,255,0.55);
     }
     #phone-app .pa-row {
-      min-height: 8vmin;
-      padding: 2.65vmin 1.3vmin;
+      min-height: 8cqw;
+      padding: 2.65cqw 1.3cqw;
       border-bottom-color: rgba(111, 175, 230, 0.22);
       background: linear-gradient(90deg, rgba(255,255,255,0.025), transparent 70%);
     }
     #phone-app .pa-row .k { color: #C0D9F4; }
-    #phone-app .pa-row .v { color: #FFFFFF; text-shadow: 0 0 0.8vmin rgba(103,194,255,0.22); }
-    #phone-app .pa-link { color: #67C9FF; text-shadow: 0 0 0.8vmin rgba(57,168,255,0.45); }
+    #phone-app .pa-row .v { color: #FFFFFF; text-shadow: 0 0 0.8cqw rgba(103,194,255,0.22); }
+    #phone-app .pa-link { color: #67C9FF; text-shadow: 0 0 0.8cqw rgba(57,168,255,0.45); }
     #phone-app .pa-lead {
-      padding: 2.4vmin 2.8vmin;
+      padding: 2.4cqw 2.8cqw;
       color: #D8E9FA;
       background: linear-gradient(135deg, rgba(31,72,123,0.34), rgba(8,22,43,0.35));
       border: 1px solid rgba(103,194,255,0.28);
-      border-radius: 2vmin;
+      border-radius: 2cqw;
     }
     #phone-app .pa-note { color: #8FAAC8; }
     #phone-app .contact-row {
-      margin: 1.5vmin 0;
-      padding-left: 2.4vmin;
+      margin: 1.5cqw 0;
+      padding-left: 2.4cqw;
       background: linear-gradient(135deg, rgba(27,60,103,0.72), rgba(10,24,46,0.72));
       border: 1px solid rgba(88,177,244,0.3);
-      border-radius: 2vmin;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.06);
+      border-radius: 2cqw;
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.06);
     }
     #phone-app .lb-tab,
     #phone-app .pa-toggle {
@@ -1250,55 +1300,55 @@
       background: linear-gradient(180deg, #223754, #0B1528 72%);
       border-color: #466A91;
       color: #C7DDF2;
-      text-shadow: 0 0.3vmin 0 #000;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.15), inset 0 -0.7vmin 1.1vmin rgba(0,0,0,0.34);
+      text-shadow: 0 0.3cqw 0 #000;
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.15), inset 0 -0.7cqw 1.1cqw rgba(0,0,0,0.34);
     }
     #phone-app .lb-tab.on,
     #phone-app .pa-toggle.on {
       background: linear-gradient(180deg, #40B9FF, #1256B2 72%);
       border-color: #9CDEFF;
       color: #FFFFFF;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.35), 0 0 1.4vmin rgba(57,168,255,0.48);
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.35), 0 0 1.4cqw rgba(57,168,255,0.48);
     }
     #phone-app .pa-toggle:disabled { opacity: 0.52; filter: saturate(0.55); cursor: default; }
     #phone-app input[type=range] {
-      height: 1.6vmin;
+      height: 1.6cqw;
       accent-color: #39A8FF;
-      filter: drop-shadow(0 0 0.7vmin rgba(57,168,255,0.6));
+      filter: drop-shadow(0 0 0.7cqw rgba(57,168,255,0.6));
     }
 
     /* Garage: chunky arcade cards and readable upgrade hardware. */
-    #phone-garage .list { gap: 2.3vmin; padding: 1vmin 0 4vmin; }
+    #phone-garage .list { gap: 2.3cqw; padding: 1cqw 0 4cqw; }
     #phone-garage .row {
       background: linear-gradient(135deg, #182A43, #0B1527);
       border-color: #416D94;
-      border-radius: 2vmin;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.09), 0 1vmin 2vmin rgba(0,0,0,0.26);
+      border-radius: 2cqw;
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.09), 0 1cqw 2cqw rgba(0,0,0,0.26);
     }
     #phone-garage .row.current {
       color: #FFFFFF;
       background: linear-gradient(135deg, #197DC8, #173E86);
       border-color: #FFE84A;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.22), 0 0 1.6vmin rgba(255,232,74,0.28);
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.22), 0 0 1.6cqw rgba(255,232,74,0.28);
     }
     #phone-garage .row .name {
       font-family: "Impact", "Arial Black", sans-serif;
       letter-spacing: 0.045em;
       color: #FFFFFF;
-      text-shadow: 0 0.35vmin 0 #07101f;
+      text-shadow: 0 0.35cqw 0 #07101f;
     }
     #phone-garage .row .stats { color: #C2E3FF; line-height: 1.35; }
     #phone-garage .row.current .acc span[style] { color: #D9E8F7 !important; }
     #phone-garage #garage-upgrades {
       font-family: "Helvetica Neue", Arial, sans-serif !important;
       background: linear-gradient(160deg, rgba(13,28,51,0.98), rgba(4,10,20,0.99)) !important;
-      border: 0.5vmin solid #2F78AD !important;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.08), 0 0 2vmin rgba(57,168,255,0.18);
+      border: 0.5cqw solid #2F78AD !important;
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.08), 0 0 2cqw rgba(57,168,255,0.18);
     }
     #phone-garage #garage-upgrades > div:first-child span:first-child {
       font-family: "Impact", "Arial Black", sans-serif;
       letter-spacing: 0.08em;
-      text-shadow: 0 0 1vmin rgba(57,217,255,0.6);
+      text-shadow: 0 0 1cqw rgba(57,217,255,0.6);
     }
     #phone-garage #garage-upgrades span[style*="#5b6b82"] { color: #95ABC3 !important; }
     #phone-garage .up-buy,
@@ -1308,13 +1358,13 @@
       border-color: #3D5873;
       background: linear-gradient(180deg, #263A54, #0C1525);
       color: #8297AC;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.12), inset 0 -0.8vmin 1.1vmin rgba(0,0,0,0.35);
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.12), inset 0 -0.8cqw 1.1cqw rgba(0,0,0,0.35);
     }
     #phone-garage .up-buy.on {
       border-color: #80D0FF;
       background: linear-gradient(180deg, #3DB9FF, #1558B2);
       color: #FFFFFF;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.34), 0 0 1.3vmin rgba(57,168,255,0.44);
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.34), 0 0 1.3cqw rgba(57,168,255,0.44);
     }
     #phone-garage .up-buy:disabled { opacity: 0.5; }
     #phone-garage .up-max {
@@ -1331,17 +1381,17 @@
       letter-spacing: 0.04em;
     }
     #phone-map-stops {
-      padding: 2vmin;
+      padding: 2cqw;
       background: rgba(4,12,24,0.76);
       border: 1px solid rgba(103,194,255,0.35);
-      border-radius: 2vmin;
-      box-shadow: 0 0 1.5vmin rgba(0,0,0,0.55);
+      border-radius: 2cqw;
+      box-shadow: 0 0 1.5cqw rgba(0,0,0,0.55);
     }
     #phone-map-stops .np-title { color: #FFE84A; text-decoration: none; letter-spacing: 0.06em; }
     #phone-achievements .row {
       background: linear-gradient(135deg, rgba(27,49,78,0.9), rgba(8,18,34,0.92));
-      border-radius: 2vmin;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.07), 0 0.8vmin 1.6vmin rgba(0,0,0,0.22);
+      border-radius: 2cqw;
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.07), 0 0.8cqw 1.6cqw rgba(0,0,0,0.22);
     }
     #phone-achievements .row.locked { opacity: 0.72; filter: saturate(0.58); }
 
@@ -1350,30 +1400,30 @@
     #phone-confirm { background: rgba(1,5,12,0.78); backdrop-filter: blur(5px); }
     #phone-confirm .box {
       background: linear-gradient(160deg, rgba(22,45,76,0.98), rgba(5,12,25,0.99));
-      border: 0.6vmin solid #58B9FF;
-      border-radius: 3vmin;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.16), 0 0 3vmin rgba(57,168,255,0.38), 0 3vmin 7vmin rgba(0,0,0,0.65);
+      border: 0.6cqw solid #58B9FF;
+      border-radius: 3cqw;
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.16), 0 0 3cqw rgba(57,168,255,0.38), 0 3cqw 7cqw rgba(0,0,0,0.65);
       font-family: "Helvetica Neue", Arial, sans-serif;
     }
-    #phone-confirm .msg { color: #EEF7FF; font-weight: 700; text-shadow: 0 0.3vmin 0 #000; }
-    #phone-confirm .row { gap: 1.8vmin; padding: 2vmin; border-top-color: rgba(103,194,255,0.25); }
+    #phone-confirm .msg { color: #EEF7FF; font-weight: 700; text-shadow: 0 0.3cqw 0 #000; }
+    #phone-confirm .row { gap: 1.8cqw; padding: 2cqw; border-top-color: rgba(103,194,255,0.25); }
     #phone-confirm .row button {
-      padding: 2.7vmin 0;
-      border: 0.45vmin solid #55718E;
-      border-radius: 1.8vmin;
+      padding: 2.7cqw 0;
+      border: 0.45cqw solid #55718E;
+      border-radius: 1.8cqw;
       background: linear-gradient(180deg, #293E59, #0B1628);
       color: #D5E7F8;
       font-family: "Impact", "Arial Black", sans-serif;
       letter-spacing: 0.055em;
-      text-shadow: 0 0.3vmin 0 #000;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.14);
+      text-shadow: 0 0.3cqw 0 #000;
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.14);
     }
-    #phone-confirm .row button + button { border-left: 0.45vmin solid #8DD6FF; }
+    #phone-confirm .row button + button { border-left: 0.45cqw solid #8DD6FF; }
     #phone-confirm .row .ok {
       border-color: #8DD6FF;
       background: linear-gradient(180deg, #42B8FF, #1558B5);
       color: #FFFFFF;
-      box-shadow: inset 0 0.3vmin 0 rgba(255,255,255,0.3), 0 0 1.2vmin rgba(57,168,255,0.38);
+      box-shadow: inset 0 0.3cqw 0 rgba(255,255,255,0.3), 0 0 1.2cqw rgba(57,168,255,0.38);
     }
 
     /* Tutorial — FULL-BLEED swipeable slide carousel.  In tut-mode the app
@@ -1401,23 +1451,23 @@
     }
     #phone-app .tut-dots {
       position: absolute; left: 0; right: 0; pointer-events: none;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5vmin);
-      display: flex; justify-content: center; gap: 2.4vmin;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5cqw);
+      display: flex; justify-content: center; gap: 2.4cqw;
     }
     #phone-app .tut-dot {
-      width: 2.4vmin; height: 2.4vmin; border-radius: 50%; cursor: pointer;
+      width: 2.4cqw; height: 2.4cqw; border-radius: 50%; cursor: pointer;
       pointer-events: auto; background: rgba(255, 255, 255, 0.45);
-      box-shadow: 0 0 1vmin rgba(0, 0, 0, 0.6);
+      box-shadow: 0 0 1cqw rgba(0, 0, 0, 0.6);
       transition: background 0.2s, transform 0.2s;
     }
     #phone-app .tut-dot.on { background: #39A8FF; transform: scale(1.3); }
     #phone-app .tut-close {
-      position: absolute; right: 3vmin;
-      top: calc(env(safe-area-inset-top, 0px) + 2.5vmin);
-      width: 9vmin; height: 9vmin; border-radius: 50%;
+      position: absolute; right: 3cqw;
+      top: calc(env(safe-area-inset-top, 0px) + 2.5cqw);
+      width: 9cqw; height: 9cqw; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(6, 11, 22, 0.55); border: 0.5vmin solid #39A8FF;
-      color: #FFF; font-size: 4.5vmin; line-height: 1; cursor: pointer;
+      background: rgba(6, 11, 22, 0.55); border: 0.5cqw solid #39A8FF;
+      color: #FFF; font-size: 4.5cqw; line-height: 1; cursor: pointer;
       -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
     }
 
@@ -1430,7 +1480,7 @@
       flex-direction: column;
       /* Pad the top by the iOS safe-area inset so the TROPHIES title
          clears the Dynamic Island / notch on modern iPhones. */
-      padding: calc(env(safe-area-inset-top, 0px) + 5vmin) 5% 5%;
+      padding: calc(env(safe-area-inset-top, 0px) + 5cqw) 5% 5%;
     }
     #phone-achievements.open { display: flex; }
     /* Phone sub-menus end at the VISIBLE viewport bottom (owner 2026-07-24):
@@ -1447,22 +1497,22 @@
     #phone-achievements .title {
       color: #FFD700;
       font-family: "Impact", "Arial Black", sans-serif;
-      font-size: 6vmin;
+      font-size: 6cqw;
       text-align: center;
-      margin-bottom: 1vmin;
+      margin-bottom: 1cqw;
       flex-shrink: 0;
     }
     #phone-achievements .sub {
       color: #88CCFF;
-      font-size: 3vmin;
+      font-size: 3cqw;
       text-align: center;
-      margin-bottom: 3vmin;
+      margin-bottom: 3cqw;
       flex-shrink: 0;
     }
     #phone-achievements .list {
       flex: 1;
       display: flex; flex-direction: column;
-      gap: 1.5vmin;
+      gap: 1.5cqw;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       /* The parent #phone-menu sets touch-action:none so the page
@@ -1471,33 +1521,33 @@
       touch-action: pan-y;
       /* Leave room at the bottom so the last row isn't covered by
          the floating BACK button. */
-      padding-bottom: 14vmin;
+      padding-bottom: 14cqw;
     }
     #phone-achievements .row {
-      display: flex; align-items: center; gap: 2vmin;
+      display: flex; align-items: center; gap: 2cqw;
       background: #1A2238;
       border: 2px solid #2E3F60;
       border-radius: 8px;
-      padding: 2vmin;
+      padding: 2cqw;
       flex-shrink: 0;
     }
     #phone-achievements .row.earned { border-color: var(--tier-color, #FFD700); }
     #phone-achievements .row.locked { opacity: 0.5; }
     #phone-achievements .row .icon {
-      font-size: 6vmin;
-      width: 9vmin; height: 9vmin;
+      font-size: 6cqw;
+      width: 9cqw; height: 9cqw;
       display: flex; align-items: center; justify-content: center;
       background: #0E1828;
       border-radius: 50%;
       flex-shrink: 0;
     }
     #phone-achievements .row .info { flex: 1; color: #FFF; font-family: "Helvetica Neue", sans-serif; }
-    #phone-achievements .row .name { font-size: 3.6vmin; font-weight: 700; }
-    #phone-achievements .row .desc { font-size: 2.6vmin; color: #AAD0FF; margin-top: 0.5vmin; }
+    #phone-achievements .row .name { font-size: 3.6cqw; font-weight: 700; }
+    #phone-achievements .row .desc { font-size: 2.6cqw; color: #AAD0FF; margin-top: 0.5cqw; }
     #phone-achievements .row .badge {
-      font-size: 2.6vmin;
+      font-size: 2.6cqw;
       font-weight: 700;
-      padding: 0.5vmin 1.5vmin;
+      padding: 0.5cqw 1.5cqw;
       border-radius: 999px;
       color: #000;
       background: var(--tier-color, #555);
@@ -1505,15 +1555,15 @@
     }
     #phone-achievements .close-btn {
       position: absolute;
-      bottom: 4vmin;
-      right: 4vmin;
-      padding: 2vmin 5vmin;
+      bottom: 4cqw;
+      right: 4cqw;
+      padding: 2cqw 5cqw;
       background: #FFFFFF;
       color: #1E5BB8;
       border: 2px solid #000;
       border-radius: 6px;
       font-family: "Impact", sans-serif;
-      font-size: 4vmin;
+      font-size: 4cqw;
       cursor: pointer;
       z-index: 3;
       box-shadow: 0 2px 8px rgba(0,0,0,0.4);
@@ -1608,6 +1658,17 @@
          PHONE TO ENTER GAME PLAY", but the hit zone returned to the title and
          lost the run — confusing/dangerous.  Players rotate to landscape to
          resume; desktop uses its own "enter gameplay" button. -->
+    <!-- …except on DESKTOP, where "rotate phone" describes an impossible
+         action.  That instruction is painted into iphone_menu_bg.png AND all
+         eight car-skin variants, so it can't be reworded per-platform — this
+         opaque panel covers the baked bar (art bbox x42-811 y1564-1711, padded)
+         and offers the click that stands in for the rotation.  Unlike the 2026
+         hit zone above it does NOT return to the title: __phoneMenu.close()
+         resumes the run in place, so nothing is lost.  data-px keeps it glued
+         to the artwork at any scale; hidden entirely unless body.is-desktop. -->
+    <button id="phone-desk-play" type="button" data-px="36 1558 782 160">
+      <span>CLICK TO</span><b>ENTER GAME PLAY</b>
+    </button>
 
     <!-- Map modal — opens when Maps icon is tapped.  SVG content
          populated by JS below. -->
@@ -1656,9 +1717,12 @@
 
   <!-- Desktop-only "enter gameplay" button.  Sibling of #phone-menu (not a
        child) so its fixed positioning isn't trapped by the menu's transform.
-       Hidden unless body.is-desktop.menu-locked.  Click → resume the run. -->
+       Hidden unless body.is-desktop.menu-locked.  Click → resume the run.
+       Copy is DESKTOP copy on purpose: the CSS above only ever displays this
+       under body.is-desktop, where there is no phone to rotate — telling a
+       browser player to "rotate phone" described an action they can't take. -->
   <button id="phone-enter-gameplay" type="button" aria-label="Enter gameplay">
-    <span class="peg-icon">🔄</span>Rotate phone to enter gameplay
+    <span class="peg-icon">▶</span>Enter Gameplay
   </button>
 
   <!-- License-plate name entry — shows once, on the first run (your handle). -->
@@ -2113,9 +2177,13 @@
       // portrait menu after the tutorial genre pick. Dismisses on rotate-to-
       // landscape (gameplay entry) or a tap.
       (function () {
-        let el = null, onRot = null, onRotateCb = null;
+        let el = null, onRot = null, onRotateCb = null, deskMode = false;
+        // Desktop has no rotation to wait for.  Matches the same media query
+        // main.js uses for IS_DESKTOP, read lazily so it tracks a window moved
+        // between a touch screen and a mouse.
+        const isDesktop = () => !!window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches;
         function hide() {
-          if (el) { el.classList.remove('on', 'tut'); el.style.pointerEvents = ''; }
+          if (el) { el.classList.remove('on', 'tut', 'desk'); el.style.pointerEvents = ''; }
           onRotateCb = null;
           if (onRot) {
             window.removeEventListener('orientationchange', onRot);
@@ -2123,12 +2191,26 @@
             onRot = null;
           }
         }
+        // Dismiss AND advance — what rotating to landscape does on a phone.
+        function advance() {
+          const cb = onRotateCb;
+          hide();
+          // Desktop: the click stands in for the rotation, so it must also do
+          // what the rotation did — leave the menu and un-pause.  Idempotent
+          // (close() only resumes if the scene is actually paused), which
+          // matters because the tour's last step already dropped menu-locked.
+          if (deskMode) { try { window.__phoneMenu?.close?.(); } catch (_) {} }
+          if (cb) cb();
+        }
         function build() {
           el = document.createElement('div');
           el.id = 'rotate-play-prompt';
-          el.innerHTML = '<span class="rpp-icon">🔄</span><span>Rotate Phone to<br>Enter Game Play</span>';
           document.body.appendChild(el);
-          el.addEventListener('click', hide);   // non-tutorial: tap dismisses
+          // Tutorial mode blocks taps on a phone so the player MUST rotate.  On
+          // desktop that rule strands them: the window is already landscape, so
+          // neither orientationchange nor resize ever fires and the tour can
+          // never finish.  There, the click IS the advance.
+          el.addEventListener('click', () => { if (deskMode) advance(); else hide(); });
         }
         // show(opts): { tutorial } → golden border, taps ignored (rotate only);
         // { onRotate } → fired once when the player actually rotates to landscape.
@@ -2136,16 +2218,20 @@
           show(opts) {
             opts = opts || {};
             if (!el) build();
+            deskMode = isDesktop();
+            el.innerHTML = deskMode
+              ? '<span class="rpp-icon">▶</span><span>Click to<br>Enter Game Play</span>'
+              : '<span class="rpp-icon">🔄</span><span>Rotate Phone to<br>Enter Game Play</span>';
             el.classList.toggle('tut', !!opts.tutorial);
-            el.style.pointerEvents = opts.tutorial ? 'none' : '';
+            el.classList.toggle('desk', deskMode);
+            // Taps are ignored during the tutorial ON A PHONE ONLY — see build().
+            el.style.pointerEvents = (opts.tutorial && !deskMode) ? 'none' : '';
             el.classList.add('on');
             onRotateCb = typeof opts.onRotate === 'function' ? opts.onRotate : null;
             if (!onRot) {
               onRot = () => {
                 try {
-                  if (window.matchMedia('(orientation: landscape)').matches) {
-                    const cb = onRotateCb; hide(); if (cb) cb();
-                  }
+                  if (window.matchMedia('(orientation: landscape)').matches) advance();
                 } catch (_) {}
               };
               window.addEventListener('orientationchange', onRot);
@@ -2753,10 +2839,15 @@
           const ORDER = ['grip','steering','stability','braking','durability','cooling','visibility','range'];
           const bar = (n) => `<span style="letter-spacing:1px;color:#39D9FF">${'▮'.repeat(n)}</span>`
                             + `<span style="letter-spacing:1px;color:#26384a">${'▮'.repeat(5-n)}</span>`;
-          // Legibility pass (2026-07-13): upgrade text ~3× its old size
-          // (2.5/2.0/1.9vmin → 7/5.6/5.2vmin), stat meters 2× (2.3 → 4.6vmin)
-          // so the two-column grid still fits; the modal already scrolls.
-          const statsHtml = ORDER.map(k => `<div style="display:flex;justify-content:space-between;gap:6px;font-size:4.6vmin;">`
+          // Legibility pass (2026-07-13): upgrade text ~3× its old size,
+          // stat meters 2× so the two-column grid still fits; the modal
+          // already scrolls.  Units are cqw (container width), NOT vmin:
+          // the phone panel is a CSS container (container-type: inline-size)
+          // and the rest of its UI is cqw-sized.  This block was the one
+          // holdout on vmin, so on a desktop window — huge viewport, small
+          // panel — its text rendered enormous and didn't shrink with the
+          // panel.  Same numbers, correct unit (matches #garage-trait).
+          const statsHtml = ORDER.map(k => `<div style="display:flex;justify-content:space-between;gap:6px;font-size:4.6cqw;">`
             + `<span style="color:#9fb7d6;text-transform:capitalize;">${k}</span><span>${bar(stats[k]?.bars ?? 0)}</span></div>`).join('');
           // Read-only tier browser (owner 2026-07-21): tap a slot to expand its
           // tiers, tap a tier to study its benefit.  Buying lives in the car
@@ -2774,39 +2865,39 @@
                             : t.installed ? `<span style="color:#4a8a5f">passed</span>`
                             : `<span style="color:#FFD23D">$${t.cost.toLocaleString()}</span>`;
                 return `<div class="g-tier" data-slot="${s.slot}" data-tier="${t.id}" `
-                  + `style="display:flex;justify-content:space-between;gap:2vmin;padding:1.6vmin 2vmin;`
-                  + `border-radius:1.4vmin;margin:0.6vmin 0;cursor:pointer;`
+                  + `style="display:flex;justify-content:space-between;gap:2cqw;padding:1.6cqw 2cqw;`
+                  + `border-radius:1.4cqw;margin:0.6cqw 0;cursor:pointer;`
                   + `background:${sel?'#123049':'#0a1626'};border:1px solid ${sel?'#39A8FF':'#16283a'};">`
-                  + `<span style="color:#F4F7FF;font-size:5.4vmin;">L${t.level} · ${t.label}</span>${state}</div>`;
+                  + `<span style="color:#F4F7FF;font-size:5.4cqw;">L${t.level} · ${t.label}</span>${state}</div>`;
               }).join('');
               const selTier = s.tiers.find(t => t.id === _garageSelTier);
               if (selTier) {
-                tiersHtml += `<div style="margin:0.8vmin 0 1.4vmin;padding:2vmin;background:#081019;`
-                  + `border-left:3px solid #39A8FF;border-radius:1vmin;font-size:5vmin;">`
+                tiersHtml += `<div style="margin:0.8cqw 0 1.4cqw;padding:2cqw;background:#081019;`
+                  + `border-left:3px solid #39A8FF;border-radius:1cqw;font-size:5cqw;">`
                   + `<div style="color:#CFE0F5;">${selTier.benefit || 'No stat change.'}</div>`
-                  + (selTier.desc ? `<div style="color:#8fa6c0;font-style:italic;margin-top:0.6vmin;">${selTier.desc}</div>` : '')
-                  + (selTier.tradeoff ? `<div style="color:#d9a15a;margin-top:0.6vmin;">⚠ ${selTier.tradeoff}</div>` : '')
-                  + `<div style="color:#FFD23D;margin-top:0.6vmin;font-weight:bold;">`
+                  + (selTier.desc ? `<div style="color:#8fa6c0;font-style:italic;margin-top:0.6cqw;">${selTier.desc}</div>` : '')
+                  + (selTier.tradeoff ? `<div style="color:#d9a15a;margin-top:0.6cqw;">⚠ ${selTier.tradeoff}</div>` : '')
+                  + `<div style="color:#FFD23D;margin-top:0.6cqw;font-weight:bold;">`
                   + (selTier.installed ? '✓ Already on this car' : `Save for → $${selTier.cost.toLocaleString()}`)
                   + `</div></div>`;
               }
             }
-            return `<div style="border-top:1px solid #16283a;padding:1.4vmin 0;">`
+            return `<div style="border-top:1px solid #16283a;padding:1.4cqw 0;">`
               + `<div class="g-slot" data-slot="${s.slot}" style="display:flex;justify-content:space-between;`
-              + `align-items:center;gap:2vmin;cursor:pointer;">`
-              + `<span style="color:#F4F7FF;font-size:6.4vmin;">${s.slotLabel}</span>`
-              + `<span style="display:flex;gap:1.6vmin;align-items:center;">`
-              + `<span style="color:#66FF99;font-size:5vmin;">${cur}</span>`
-              + `<span style="color:#5b6b82;font-size:5vmin;">${open?'▾':'▸'}</span></span></div>`
+              + `align-items:center;gap:2cqw;cursor:pointer;">`
+              + `<span style="color:#F4F7FF;font-size:6.4cqw;">${s.slotLabel}</span>`
+              + `<span style="display:flex;gap:1.6cqw;align-items:center;">`
+              + `<span style="color:#66FF99;font-size:5cqw;">${cur}</span>`
+              + `<span style="color:#5b6b82;font-size:5cqw;">${open?'▾':'▸'}</span></span></div>`
               + tiersHtml + `</div>`;
           }).join('');
-          panelHtml = `<div id="garage-upgrades" style="margin-top:2vmin;padding:2.5vmin;background:#080c16;`
-            + `border:2px solid #163550;border-radius:2vmin;">`
-            + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5vmin;">`
-            + `<span style="color:#39D9FF;font-weight:bold;font-size:7vmin;">UPGRADES</span>`
-            + `<span style="color:#FFD23D;font-size:6.4vmin;">$${cash.toLocaleString()}</span></div>`
-            + `<div style="color:#8fa6c0;font-size:4.4vmin;margin-bottom:2vmin;">🔧 Study only — buy these at any Car Shop</div>`
-            + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4vmin;margin-bottom:2vmin;">${statsHtml}</div>`
+          panelHtml = `<div id="garage-upgrades" style="margin-top:2cqw;padding:2.5cqw;background:#080c16;`
+            + `border:2px solid #163550;border-radius:2cqw;">`
+            + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5cqw;">`
+            + `<span style="color:#39D9FF;font-weight:bold;font-size:7cqw;">UPGRADES</span>`
+            + `<span style="color:#FFD23D;font-size:6.4cqw;">$${cash.toLocaleString()}</span></div>`
+            + `<div style="color:#8fa6c0;font-size:4.4cqw;margin-bottom:2cqw;">🔧 Study only — buy these at any Car Shop</div>`
+            + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4cqw;margin-bottom:2cqw;">${statsHtml}</div>`
             + slotsHtml + `</div>`;
         }
         // Genre-vehicle trait panel (owner 2026-07-19): the starter/beater
@@ -2942,6 +3033,17 @@
       const enterGameplayBtn = document.getElementById('phone-enter-gameplay');
       if (enterGameplayBtn) {
         enterGameplayBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.__phoneMenu?.close?.();
+        });
+      }
+      // The in-menu twin of the button above — the panel covering the baked
+      // "ROTATE PHONE" bar.  Same call, so the two are interchangeable.  During
+      // the guided tour #tut-capture (z-index 999990) sits above the whole menu
+      // and swallows this, so it can't short-circuit the tutorial.
+      const deskPlayBtn = document.getElementById('phone-desk-play');
+      if (deskPlayBtn) {
+        deskPlayBtn.addEventListener('click', (e) => {
           e.preventDefault();
           window.__phoneMenu?.close?.();
         });
@@ -3256,11 +3358,18 @@
           // stays pick/playable while testing).  Flip to true at RELEASE to
           // hard-lock unowned genres behind the $25k dealership buy.
           const GENRE_LOCK_LIVE = false;
+          // Demo build: only the demo genres are playable; the rest show locked
+          // (full-game teasers).  Overrides the beta GENRE_LOCK_LIVE=false.
+          const _demoOn     = !!window.__DEMO;
+          const _demoGenres = window.__DEMO_GENRES ?? [];
           const _ownedGenres = window.__genre?.owned?.() ?? [];
           const _activeGenre = window.__genre?.get?.() ?? null;
           const _firstPick   = !_activeGenre && _ownedGenres.length === 0;
-          const _gLocked = (s) => GENRE_LOCK_LIVE && !_firstPick && !!s.culture
-            && !_ownedGenres.includes(s.culture) && s.culture !== _activeGenre;
+          const _gLocked = (s) => {
+            if (_demoOn) return !!s.culture && !_demoGenres.includes(s.culture);
+            return GENRE_LOCK_LIVE && !_firstPick && !!s.culture
+              && !_ownedGenres.includes(s.culture) && s.culture !== _activeGenre;
+          };
           musicBody.innerHTML = playlistBar + `<div class="genre-grid">` + stations.map((s) => {
             const tracks      = s.tracks ?? [];
             const tracksCount = tracks.length;
@@ -3279,7 +3388,7 @@
             return `<div class="genre ${playing ? 'playing' : ''} ${locked ? 'locked' : ''}" data-idx="${s.index}" data-locked="${locked ? 1 : ''}" style="border-color:${s.color}; box-shadow:inset 0 0 3.5vmin ${s.color}30, 0 0 8px rgba(0,0,0,0.5);">
               ${cultureArt}
               ${locked ? '' : `<button class="genre-check ${checkClass}" data-idx="${s.index}" aria-label="Toggle ${s.name} songs">${checkGlyph}</button>`}
-              ${locked ? `<span class="genre-lock">🔒 $25K AT DEALER</span>`
+              ${locked ? `<span class="genre-lock">🔒 ${_demoOn ? 'FULL GAME' : '$25K AT DEALER'}</span>`
                        : `<button class="genre-default ${isDefault ? 'on' : ''}" data-idx="${s.index}" aria-label="Set ${s.name} as default station">${isDefault ? '★' : '☆'}</button>`}
               ${isDefault ? '<span class="genre-default-lbl">DEFAULT</span>' : ''}
               <span class="genre-name ${s.name.length > 11 ? 'long' : ''}" style="color:${s.color};">${s.name}</span><br/><span class="genre-count">${tracksCount} song${tracksCount === 1 ? '' : 's'}</span>
@@ -3991,6 +4100,18 @@
             { id: 'unknown', name: '❓ The Unknown', sub: lastOf('unknown') },
             { id: 'spam',    name: '🚫 The Spam',    sub: lastOf('spam') },
           ];
+          // Order by most recent message, newest first.  Sorted on `mile`
+          // rather than the `time` label: `time` is a formatted clock string
+          // that wraps across the day/night cycle, whereas the odometer only
+          // ever increases over a run, so it is the reliable recency key.
+          // Contacts with nothing yet sort to the bottom.
+          const lastMileOf = (id) => {
+            const t = id === 'girl'
+              ? (window.__girl?.status?.()?.thread ?? [])
+              : (tx[id] ?? []);
+            return t.length ? (t[t.length - 1].mile ?? -Infinity) : -Infinity;
+          };
+          rows.sort((a, b) => lastMileOf(b.id) - lastMileOf(a.id));
           openApp('CONTACTS',
             `<p class="pa-note">Tap a contact to view their info.</p>` +
             rows.map(c =>
@@ -4026,7 +4147,10 @@
           }
           // Their incoming texts this run (annoyed → angry → silent "…" → gone,
           // plus a miss-you reply when you text 3 towns in a row).
-          const thread = (g.thread ?? []);
+          // Newest first (owner's call).  Reverse a COPY — the stored array
+          // stays chronological because the append/cap logic and the contacts
+          // list's "last message" preview both read from its tail.
+          const thread = (g.thread ?? []).slice().reverse();
           const convo = thread.length
             ? thread.map(m => `<div class="pa-row"><span class="k">${m.text}<br><span class="pa-dim" style="font-size:0.78em">${m.time ? m.time : `~mile ${m.mile}`}</span></span></div>`).join('')
             : '';
@@ -4054,7 +4178,7 @@
         const BUDDY_NAMES = { friend: '🚨 The Friend', ex: '🖤 The Ex', mom: '👜 The Mom', boss: '💼 The Boss', unknown: '❓ The Unknown', spam: '🚫 The Spam' };
         const renderBuddy = (cid) => {
           const tx   = window.__buddytexts?.threads?.() ?? {};
-          const msgs = tx[cid] ?? [];
+          const msgs = (tx[cid] ?? []).slice().reverse();   // newest first; copy, don't mutate
           const body = msgs.length
             ? msgs.map(m => {
                 const sender = (cid === 'spam' && m.from) ? `<b>${m.from}:</b> ` : '';
@@ -4077,11 +4201,15 @@
       // it the first time, then never again (persisted in localStorage).
       const TUT_SEEN_KEY = 'rtr_tutorialSeen';
       const markTutorialSeen = () => {
+        // Demo build: never persist "seen" so every demo player is onboarded —
+        // the tutorial starts on each fresh demo session.
+        if (window.__DEMO) { qhit('tutorial')?.classList.remove('tut-flash'); return; }
         try { localStorage.setItem(TUT_SEEN_KEY, '1'); } catch (_) {}
         qhit('tutorial')?.classList.remove('tut-flash');
         window.__notif?.refresh?.();   // tutorial dot reads the same flag
       };
       const tutSeenAlready = () => {
+        if (window.__DEMO) return false;   // demo → always run the tutorial
         try { return !!(localStorage.getItem(TUT_SEEN_KEY) || localStorage.getItem('dui_tutorialSeen')); } catch (_) { return true; }
       };
       // First-open nudge: keep the Tutorial tile flashing until it's run once.

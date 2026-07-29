@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Businesses — Road Trip Roulette</title>
+<meta name="description" content="Every business on the route — and everything they'll sell you.">
+<link rel="stylesheet" href="css/site.css?v=13">
+
+<!-- Link preview (iMessage / Slack / Twitter / Facebook).  Must be real markup:
+     preview crawlers don't run the JS that injects the nav, so these can't be
+     generated at runtime. Absolute URLs are required by the spec. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Road Trip Roulette">
+<meta property="og:url" content="https://roadtrip-roulette.pages.dev/businesses">
+<meta property="og:title" content="Businesses — Road Trip Roulette">
+<meta property="og:description" content="Every business on the route — and everything they'll sell you.">
+<meta property="og:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Road Trip Roulette — neon logo over a rain-slicked I-90 heading east out of Seattle at night">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Businesses — Road Trip Roulette">
+<meta name="twitter:description" content="Every business on the route — and everything they'll sell you.">
+<meta name="twitter:image" content="https://roadtrip-roulette.pages.dev/assets/hero/link-preview.jpg">
+</head>
+<body>
+
+<section class="section">
+  <div class="wrap" style="max-width:860px">
+    <h1>The Businesses</h1>
+    <p class="lead">Nine institutions of the Washington roadside. Tap one to see
+    everything it will happily charge you for.</p>
+
+    <div id="bizlist" style="margin-top:32px"></div>
+  </div>
+</section>
+
+<script type="module">
+import { BIZ, BIZ_MENUS } from './js/data.js';
+
+const wrap = document.getElementById('bizlist');
+const price = (p) => p == null ? 'FREE' : (typeof p === 'number' ? '$' + p.toLocaleString('en-US') : '$' + p);
+
+wrap.innerHTML = Object.keys(BIZ_MENUS).map(k => {
+  const b = BIZ[k], m = BIZ_MENUS[k];
+  return `
+  <div class="biz" data-k="${k}">
+    <div class="biz-head">
+      <img src="assets/businesses/${b.img}" alt="${b.name}">
+      <div>
+        <h3>${b.name}</h3>
+        <p class="dim small">${m.tagline}</p>
+      </div>
+      <span class="biz-caret">▾</span>
+    </div>
+    <div class="biz-menu">
+      ${m.items.map(i => `
+        <div class="biz-item">
+          <span class="bi-name">${i.n}</span>
+          <span class="bi-dots"></span>
+          <span class="bi-price${i.p == null ? ' free' : ''}">${price(i.p)}</span>
+          <span class="bi-desc dim small">${i.d}</span>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}).join('');
+
+// Accordion — one business open at a time.
+wrap.querySelectorAll('.biz .biz-head').forEach(h =>
+  h.addEventListener('click', () => {
+    const biz = h.parentElement;
+    const wasOpen = biz.classList.contains('open');
+    wrap.querySelectorAll('.biz.open').forEach(o => o.classList.remove('open'));
+    if (!wasOpen) biz.classList.add('open');
+  }));
+</script>
+<script type="module" src="js/site.js?v=6"></script>
+</body>
+</html>

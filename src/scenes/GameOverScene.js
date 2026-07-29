@@ -48,7 +48,32 @@ const CAUSE = {
     subtitle: 'Pullman, WA — what a road.',
     image:    null,
   },
+  // Pullman finish causes handed over by GameScene._endGame (were falling
+  // through to the BUSTED meta because only the 'finish' key existed).
+  finish_on_time: {
+    headline: 'YOU MADE IT',
+    color:    '#44FF88',
+    subtitle: 'Pullman, WA — right on time. What a road.',
+    image:    null,
+  },
+  finish_late: {
+    headline: 'YOU MADE IT',
+    color:    '#FFCC44',
+    subtitle: 'Pullman, WA — late to the party, but you made it.',
+    image:    null,
+  },
+  // Demo build (App Store push): finished West Seattle → Snoqualmie.
+  demo_complete: {
+    headline: 'DEMO COMPLETE',
+    color:    '#44FF88',
+    subtitle: 'You made it to Snoqualmie — the full drive to Pullman awaits.',
+    image:    null,
+  },
 };
+
+// Full-game App Store listing.  Empty until the listing is live; when set, the
+// demo-complete screen shows a "GET THE FULL GAME" button that opens it.
+const APP_STORE_URL = '';
 
 export class GameOverScene extends Phaser.Scene {
   constructor() { super({ key: 'GameOver' }); }
@@ -89,6 +114,10 @@ export class GameOverScene extends Phaser.Scene {
     }
     if (this.cause === 'busted' || this.cause === 'crash') {
       this._createBakedButtonEnding(meta);
+      return;
+    }
+    if (this.cause === 'demo_complete') {
+      this._createDemoComplete(meta);
       return;
     }
 
@@ -181,6 +210,58 @@ export class GameOverScene extends Phaser.Scene {
     this.input.keyboard?.once('keydown-SPACE', () => this._retrySameSettings());
     this.input.keyboard?.once('keydown-ENTER', () => this._startOver());
     this.input.keyboard?.on('keydown-L', () => this._openViceLog());
+  }
+
+  /** Demo build (App Store push) end screen — celebratory "made it to
+   *  Snoqualmie" + a call to get the full game.  Reuses _makeButton / _startOver
+   *  (a fresh run re-enters the demo since DEMO_MODE is still on). */
+  _createDemoComplete(meta) {
+    this.add.rectangle(0, 0, SCREEN_W, SCREEN_H, 0x03050F).setOrigin(0);
+    // Subtle neon frame to feel like a "win" card, not a fail screen.
+    const frame = this.add.graphics();
+    frame.lineStyle(3, 0x44FF88, 0.9);
+    frame.strokeRoundedRect(18, 18, SCREEN_W - 36, SCREEN_H - 36, 8);
+    frame.lineStyle(1, 0x39A8FF, 0.5);
+    frame.strokeRoundedRect(24, 24, SCREEN_W - 48, SCREEN_H - 48, 6);
+
+    this.add.text(CX, 42, meta.headline, {
+      fontSize: '46px', fontFamily: IMPACT, color: meta.color, stroke: '#000', strokeThickness: 6,
+    }).setOrigin(0.5, 0);
+    this.add.text(CX, 102, meta.subtitle, {
+      fontSize: '15px', fontFamily: 'Arial', color: '#DDEEFF', stroke: '#000', strokeThickness: 2,
+      align: 'center', wordWrap: { width: SCREEN_W * 0.84 },
+    }).setOrigin(0.5, 0);
+
+    this.add.text(CX, SCREEN_H * 0.40, `CASH  $${this.finalScore.toLocaleString()}`, {
+      fontSize: '24px', fontFamily: IMPACT, color: '#FFCC44', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5, 0);
+    this.add.text(CX, SCREEN_H * 0.40 + 32, `DISTANCE  ${this.finalMiles.toFixed(2)} mi`, {
+      fontSize: '14px', fontFamily: 'Arial', color: '#AACCFF',
+    }).setOrigin(0.5, 0);
+
+    this.add.text(CX, SCREEN_H * 0.56,
+      'The full 293-mile drive to Pullman —\nmore towns, vices, weapons, missions & mayhem.', {
+      fontSize: '14px', fontFamily: 'Arial', color: '#9FE8B5', align: 'center',
+      stroke: '#000', strokeThickness: 2, lineSpacing: 4, wordWrap: { width: SCREEN_W * 0.84 },
+    }).setOrigin(0.5, 0);
+
+    const btnY = SCREEN_H - 76;
+    if (APP_STORE_URL) {
+      this._makeButton(CX - 110, btnY, 200, 50, 'GET THE FULL GAME', 0x44FF88, 0x000000,
+        () => { try { window.open(APP_STORE_URL, '_blank'); } catch (_) {} });
+      this._makeButton(CX + 110, btnY, 200, 50, 'Play Demo Again', 0x2A4A6A, 0xFFFFFF,
+        () => this._startOver());
+    } else {
+      // No live App Store listing yet — single replay button + a note.
+      this.add.text(CX, btnY - 34, 'Full game coming soon to the App Store', {
+        fontSize: '13px', fontFamily: 'Arial', color: '#7FE0A0', stroke: '#000', strokeThickness: 2,
+      }).setOrigin(0.5);
+      this._makeButton(CX, btnY, 240, 50, 'Play Demo Again', 0x44FF88, 0x000000,
+        () => this._startOver());
+    }
+
+    this.input.keyboard?.once('keydown-SPACE', () => this._startOver());
+    this.input.keyboard?.once('keydown-ENTER', () => this._startOver());
   }
 
   _createBakedButtonEnding(meta) {
