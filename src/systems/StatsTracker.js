@@ -57,7 +57,14 @@ function defaultStats() {
       weaponsTotal:0,
       vehicles:    0,
       accessories: 0,
-      services:    0,    // repair, coffee, snooze, sex worker, etc.
+      // gas/repairs/upgrades split out of the old services catch-all
+      // (owner 2026-07-29, trip-summary directive) — these three are what
+      // "% spent on gas / repairs / upgrades" needs. Old saves simply start
+      // these at 0 via _bump's `?? 0`; no migration needed.
+      gas:         0,    // refuel + oil (pump purchases)
+      repairs:     0,    // dealer repair, camp repair, hot-springs bonus HP
+      upgrades:    0,    // part-upgrade installs
+      services:    0,    // everything else: restroom, coffee, snooze, sex worker, etc.
     },
 
     vices:   { collected: {} },   // { <viceId>: count }
@@ -382,6 +389,9 @@ export class StatsTracker {
         break;
       case 'vehicles':    this._bump(sp, 'vehicles', amount);    break;
       case 'accessories': this._bump(sp, 'accessories', amount); break;
+      case 'gas':         this._bump(sp, 'gas', amount);         break;
+      case 'repairs':     this._bump(sp, 'repairs', amount);     break;
+      case 'upgrades':    this._bump(sp, 'upgrades', amount);    break;
       default:            this._bump(sp, 'services', amount);    break;
     }
   }

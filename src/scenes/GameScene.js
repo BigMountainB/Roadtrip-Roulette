@@ -4480,6 +4480,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // First-drive nudge toward the garage (owner 2026-07-29) — a quarter mile
+    // in, freeze and point the player at the windshield upgrade.  Once ever.
+    this._maybeWindshieldTip();
+
     // ── Flavor contacts texting you on the road ───────────────────────
     // The Ex / Mom / The Boss / The Unknown drop characterful texts on a
     // cadence — pure tone, no gameplay effect (readable in the Messages app).
@@ -5001,12 +5005,39 @@ export class GameScene extends Phaser.Scene {
         }
         if (cp.isFinish && !this._gameFinished) {
           this._gameFinished = true;
+          const stars = this.cops.starDisplay ?? this.cops.stars ?? 0;
+
+          // ── Auto-complete Pullman-destined missions (owner 2026-07-29) ──
+          // Every other stop pays a mission through an explicit tap on the
+          // rest-stop drop-off button (RestStopScene -> MissionSystem.collect).
+          // Pullman shares its mileage with the finish checkpoint, so a
+          // player who never takes that exit and just crosses the finish
+          // line would otherwise leave any 'P'-targeted mission stuck in
+          // 'active' forever — never paid, never failed. gradeArrivals only
+          // touches STRICTLY 'active' missions (not already 'ready'), so
+          // this is a no-op for anything already collected or already
+          // failed-on-drive-off at a normal Pullman stop visit — safe to
+          // run unconditionally here regardless of on-time/late/busted.
+          {
+            const _pReady = this.missions?.gradeArrivals?.('P', this._odometer, stars) ?? [];
+            for (const _m of _pReady) {
+              const paid = this.missions?.collect?.(_m.id);
+              if (!paid) continue;
+              const _mult = paid.type === 'passenger' ? this._traitMod('passengerPayMult')
+                          : paid.type === 'timed'     ? this._traitMod('timedPayMult')
+                          : paid.type === 'heat'      ? 1
+                          :                              this._traitMod('cargoPayMult');
+              const pay = Math.round((paid.payout + (paid.tip ?? 0)) * _mult);
+              this.score += pay;
+              this.stats?.recordEarn(pay, 'mission');
+            }
+          }
+
           // ── Party-clock evaluation ────────────────────────────────
           // ON TIME (clock > 0): apply Difficulty.onTimeBonusMul × cash.
           // TOO LATE (clock == 0): no bonus.  TOO LATE + 5★: technical
           // loss — game ends with cash penalty + Restart-Checkpoint UI.
           const onTime = (this._partyClockSec ?? 0) > 0;
-          const stars  = this.cops.starDisplay ?? this.cops.stars ?? 0;
           // Collect the finish messages into ONE popup so the Crush reward
           // below can't clobber the made-it / too-late line in the same frame.
           const finishLines = [];
@@ -17238,6 +17269,108 @@ export class GameScene extends Phaser.Scene {
     } catch (_) {}
   }
 
+  // ── Shared tutorial-tour chrome ───────────────────────────────────────
+  /** Feathered, pulsing gold highlight — the Phaser answer to the phone
+   *  menu's CSS `@keyframes tutFlash` box-shadow glow.  Both tours used a
+   *  single 3px stroked rectangle, which read as a flat yellow bar next to
+   *  the phone's soft bloom (owner 2026-07-29).  Concentric rounded strokes
+   *  with alpha falling off by distance reproduce the shadow's feathering;
+   *  the caller tweens the Graphics' own alpha for the flash. */
+  _drawTourGlow(g, b) {
+    const GOLD = 0xFFD24D;
+    const x = b.x - 4, y = b.y - 4, w = b.w + 8, h = b.h + 8;
+    g.clear();
+    // Wide + soft on the outside → tight + bright at the edge.
+    const RINGS = [
+      { grow: 19, lw: 16, a: 0.05 },
+      { grow: 14, lw: 12, a: 0.09 },
+      { grow: 10, lw: 9,  a: 0.15 },
+      { grow: 6,  lw: 6,  a: 0.26 },
+      { grow: 3,  lw: 4,  a: 0.48 },
+      { grow: 0,  lw: 2.5, a: 1 },
+    ];
+    for (const r of RINGS) {
+      g.lineStyle(r.lw, GOLD, r.a);
+      g.strokeRoundedRect(x - r.grow, y - r.grow, w + r.grow * 2, h + r.grow * 2,
+                          Math.min(16, 6 + r.grow));
+    }
+    // Interior wash — the phone tile's rgba(255,205,60,0.12) fill.
+    g.fillStyle(GOLD, 0.10);
+    g.fillRoundedRect(x, y, w, h, 6);
+  }
+
+  /** Draw a tour text panel that NEVER overlaps the element it describes.
+   *  Tries below → above → right → left of the target, shrinking the font
+   *  through a ladder until the copy fits that band; if nothing fits even at
+   *  the floor size it takes the roomiest band, so the box is cramped rather
+   *  than sitting on top of the thing it's pointing at (owner 2026-07-29 —
+   *  the 2.5x font made several steps cover their own highlight).
+   *  Pass target=null to centre the panel (no highlight to avoid). */
+  _placeTourBox(boxG, boxT, target, text, opts = {}) {
+    const M       = 10;                       // screen margin
+    const GAP     = 14;                       // clearance from the highlight
+    const PADX    = 16, PADY = 14;            // panel padding
+    const maxW    = Math.min(opts.maxW ?? 772, SCREEN_W - M * 2);
+    const base    = opts.fontSize ?? 43;
+    const floor   = opts.minFontSize ?? 15;
+    boxT.setOrigin(0.5, 0);
+
+    // Candidate bands, in preference order.  Each is a free rectangle the
+    // panel must fit inside.
+    const bands = [];
+    if (target) {
+      const t = { x: target.x - 10, y: target.y - 10, w: target.w + 20, h: target.h + 20 };
+      bands.push({ x: M, y: t.y + t.h + GAP, w: SCREEN_W - M * 2, h: SCREEN_H - M - (t.y + t.h + GAP), anchor: 'top',    cx: t.x + t.w / 2 });
+      bands.push({ x: M, y: M,               w: SCREEN_W - M * 2, h: (t.y - GAP) - M,                  anchor: 'bottom', cx: t.x + t.w / 2 });
+      const rx = t.x + t.w + GAP;
+      bands.push({ x: rx, y: M, w: SCREEN_W - M - rx, h: SCREEN_H - M * 2, anchor: 'mid', cx: null });
+      bands.push({ x: M,  y: M, w: (t.x - GAP) - M,   h: SCREEN_H - M * 2, anchor: 'mid', cx: null });
+    } else {
+      bands.push({ x: M, y: M, w: SCREEN_W - M * 2, h: SCREEN_H - M * 2, anchor: 'mid', cx: null });
+    }
+
+    // Measure the panel this band+font would need.
+    const measure = (band, px) => {
+      const bw = Math.max(120, Math.min(maxW, band.w));
+      boxT.setFontSize(px);
+      boxT.setWordWrapWidth(bw - PADX * 2);
+      boxT.setText(text);
+      return { bw, bh: boxT.height + PADY * 2 };
+    };
+
+    let best = null;
+    outer:
+    for (const band of bands) {
+      if (band.w < 140 || band.h < 60) continue;         // too thin to be worth it
+      for (let px = base; px >= floor; px = Math.max(floor, Math.round(px * 0.88))) {
+        const m = measure(band, px);
+        if (m.bh <= band.h && m.bw <= band.w) { best = { band, px, ...m }; break outer; }
+        if (px === floor) break;
+      }
+    }
+    if (!best) {
+      // Nothing fit — take the band with the most area at the floor size.
+      const band = bands.filter(b => b.w >= 120 && b.h >= 40)
+                        .sort((a, b) => (b.w * b.h) - (a.w * a.h))[0] ?? bands[0];
+      const m = measure(band, floor);
+      best = { band, px: floor, bw: m.bw, bh: Math.min(m.bh, band.h) };
+    }
+
+    const { band, bw, bh } = best;
+    let bx = band.cx != null ? band.cx : band.x + band.w / 2;
+    bx = Math.max(band.x + bw / 2, Math.min(band.x + band.w - bw / 2, bx));
+    const by = band.anchor === 'bottom' ? (band.y + band.h - bh)
+             : band.anchor === 'top'    ? band.y
+             : band.y + (band.h - bh) / 2;
+    boxG.clear();
+    boxG.fillStyle(0x06101E, 0.86);
+    boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 10);
+    boxG.lineStyle(2, 0xFFD24D, 0.9);
+    boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 10);
+    boxT.setPosition(bx, by + PADY);
+    return { x: bx - bw / 2, y: by, w: bw, h: bh };
+  }
+
   // ── Guided title-screen tutorial (Stage 1b) ───────────────────────────
   // Fires when the player rotates in from the portrait tour. A golden highlight
   // + a text box (always placed clear of the highlight) walks Plates → Difficulty
@@ -17248,24 +17381,28 @@ export class GameScene extends Phaser.Scene {
     if (this._titleTut || !this._awaitingStart) return;
     try { localStorage.removeItem('rtr_tutStage1'); } catch (_) {}
     const D = 95;
+    // Box POSITIONS are no longer authored per step — _placeTourBox derives a
+    // band that clears the highlight and shrinks the font to fit it.  The old
+    // hand-placed coords overlapped their own target once the font went 2.5x.
     const STEPS = [
-      { key: 'plates', b: { x: 16,  y: 104, w: 137, h: 198 }, box: { x: 590, y: 150, w: 360 },
+      { key: 'plates', b: { x: 16,  y: 104, w: 137, h: 198 },
         text: "Here is where your saved games will be. Pick a state's plate and customize it now." },
-      { key: 'diff',   b: { x: 265, y: 346, w: 157, h: 75 },  box: { x: 400, y: 66,  w: 470 },
+      { key: 'diff',   b: { x: 265, y: 346, w: 157, h: 75 },
         text: "Easy, medium, and hard are your options for now until you complete the drive. The Custom mode will allow you more fun at your own leisure." },
-      { key: 'drive',  b: { x: 429, y: 346, w: 146, h: 75 },  box: { x: 380, y: 66,  w: 500 },
+      { key: 'drive',  b: { x: 429, y: 346, w: 146, h: 75 },
         text: "Default is the preferred play here, but if you'd rather switch it up, be my guest. If you accidentally declined the orientation permission, you can cycle through this until you get to default again." },
-      { key: 'load',   b: { x: 585, y: 345, w: 193, h: 74 },  box: { x: 380, y: 78,  w: 440 },
+      { key: 'load',   b: { x: 585, y: 345, w: 193, h: 74 },
         text: "If the game crashes on you, this is where I would start." },
-      { key: 'start',  b: { x: 18,  y: 345, w: 237, h: 74 },  box: { x: 430, y: 86,  w: 400 },
+      { key: 'start',  b: { x: 18,  y: 345, w: 237, h: 74 },
         text: "That's your setup. Tap START to hit the road!" },
     ];
     const scrim = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 3, SCREEN_H * 3, 0x02060E, 0.5)
       .setDepth(D).setScrollFactor(0).setInteractive();
-    const hi   = this.add.rectangle(0, 0, 10, 10, 0xFFD24D, 0).setStrokeStyle(3, 0xFFD24D, 1).setDepth(D + 2);
+    const hi   = this.add.graphics().setDepth(D + 2);
     const boxG = this.add.graphics().setDepth(D + 3);
     const boxT = this.add.text(0, 0, '', {
-      // 33px = owner 2026-07-28: tutorial text 2.5× (was 13px).
+      // 33px = owner 2026-07-28: tutorial text 2.5× (was 13px).  _placeTourBox
+      // steps DOWN from here when a step's copy won't clear its highlight.
       fontSize: '33px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
       align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5, 0).setDepth(D + 4);
@@ -17285,21 +17422,10 @@ export class GameScene extends Phaser.Scene {
     if (!step) { this._endTitleTutorial(); return; }
     T.idx = i;
     const b = step.b;
-    T.hi.setPosition(b.x + b.w / 2, b.y + b.h / 2).setSize(b.w + 8, b.h + 8).setStrokeStyle(3, 0xFFD24D, 1).setVisible(true);
+    this._drawTourGlow(T.hi, b);
+    T.hi.setVisible(true);
     try { T.tw.restart(); } catch (_) {}
-    // Boxes widened ~2× (capped to screen) so the 2.5× font wraps into
-    // readable lines instead of ten-character towers; height stays derived
-    // from the text and the position clamps keep it on screen.
-    const bw = Math.min(SCREEN_W - 16, Math.round(step.box.w * 2));
-    T.boxT.setWordWrapWidth(bw - 24);
-    T.boxT.setText(step.text);
-    const bh = T.boxT.height + 24;
-    let bx = Math.max(bw / 2 + 6, Math.min(SCREEN_W - bw / 2 - 6, step.box.x));
-    let by = Math.max(6, Math.min(SCREEN_H - bh - 6, step.box.y));
-    T.boxG.clear();
-    T.boxG.fillStyle(0x06101E, 0.8); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 8);
-    T.boxG.lineStyle(2, 0xFFD24D, 0.9); T.boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 8);
-    T.boxT.setPosition(bx, by + 12);
+    this._placeTourBox(T.boxG, T.boxT, b, step.text, { fontSize: 33, maxW: 720 });
     T.plateWait = (step.key === 'plates');
   }
 
@@ -17336,6 +17462,73 @@ export class GameScene extends Phaser.Scene {
     try { T.tw?.stop?.(); } catch (_) {}
     try { T.poll?.remove?.(); } catch (_) {}
     for (const o of T.objs) { try { o.destroy(); } catch (_) {} }
+  }
+
+  // ── First-drive windshield nudge (0.25 mi) ────────────────────────────
+  /** A quarter mile into the player's FIRST drive, freeze and recommend the
+   *  windshield upgrade.  Once ever — flagged in localStorage alongside the
+   *  other onboarding stages, so it never interrupts a real run again. */
+  _maybeWindshieldTip() {
+    if (this._windshieldTipDone) return;
+    if (this._windshieldTipDone === undefined) {
+      // Lazily seeded so a scene restart (rest stop / START OVER) re-reads the
+      // flag instead of firing a second time.
+      let seen = false;
+      try { seen = !!localStorage.getItem('rtr_tutWindshield'); } catch (_) {}
+      this._windshieldTipDone = seen;
+      if (seen) return;
+    }
+    // Never interrupt the guided tours, the title screen, or an existing pause.
+    if (this._hudTour || this._hudTourStarting || this._titleTut
+        || this._awaitingStart || this._paused || this._tourTip) return;
+    if (this._mileNow() < 0.25) return;
+    this._windshieldTipDone = true;
+    try { localStorage.setItem('rtr_tutWindshield', '1'); } catch (_) {}
+    this._showTourTip(
+      "The first upgrade I recommend is replacing this busted ass windshield. "
+      + "Keep an eye out for the next rest stop.",
+    );
+  }
+
+  /** One-shot paused tip in the tutorial's own chrome — scrim, feathered gold
+   *  panel, tap anywhere to resume.  No highlight: the panel centres itself. */
+  _showTourTip(text) {
+    if (this._tourTip) return;
+    const D = 96;
+    const scrim = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 3, SCREEN_H * 3, 0x02060E, 0.5)
+      .setDepth(D).setScrollFactor(0).setInteractive();
+    const boxG = this.add.graphics().setDepth(D + 3);
+    const boxT = this.add.text(0, 0, '', {
+      fontSize: '43px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
+      align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5, 0).setDepth(D + 4);
+    const hintT = this.add.text(SCREEN_W / 2, SCREEN_H - 18, 'tap to continue', {
+      fontSize: '20px', fontFamily: '"Helvetica Neue", Arial, sans-serif',
+      color: '#FFE08A', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5, 1).setDepth(D + 4);
+    const objs = [scrim, boxG, boxT, hintT];
+    try { this._hudObjects?.push(...objs); } catch (_) {}
+    try { this.cameras?.main?.ignore?.(objs); } catch (_) {}
+    this._placeTourBox(boxG, boxT, null, text, { fontSize: 43, maxW: 772 });
+    // Pulse the panel the same way the tour highlight breathes.
+    const tw = this.tweens.add({ targets: [boxG, boxT], alpha: { from: 1, to: 0.72 },
+                                 duration: 700, yoyo: true, repeat: -1 });
+    this._paused = true;
+    this._tourTip = { objs, tw };
+    scrim.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); this._endTourTip(); });
+  }
+
+  _endTourTip() {
+    const T = this._tourTip; if (!T) return;
+    this._tourTip = null;
+    try { T.tw?.stop?.(); } catch (_) {}
+    for (const o of T.objs) { try { o.destroy(); } catch (_) {} }
+    // The scene-level pointerdown runs AFTER this object handler — resuming
+    // inline would let the dismissing tap fall through and latch a steer.
+    // Suppress this gesture and resume on the next tick.
+    this._noSteerThisGesture = true;
+    this._touchLeft = this._touchRight = false;
+    this.time.delayedCall(1, () => { this._paused = false; });
   }
 
   // ── Stage 2: in-game paused HUD tour ──────────────────────────────────
@@ -17406,11 +17599,15 @@ export class GameScene extends Phaser.Scene {
       { id: 'dist',       text: "Miles toward Pullman. The whole run's 293 — this is how far you've driven." },
       { id: 'region',     text: "The town you're rolling through — each has its own scenery, rest stops, and flavor." },
       { id: 'stars',      text: "Your wanted level. Drive reckless near cops and it climbs; the higher it is, the harder they chase. Cross a town line to shed one, or pick up a costume or passport to yeet the heat." },
-      { id: 'radio',      text: "You chose your jams, but there are plenty more to earn. Each genre has its own vehicle and item artwork." },
+      // radio = the station NAME readout (display only); btn_genre = the
+      // music-note button, whose handler is audio.nextStation() (it CHANGES
+      // the station).  The two descriptions were on the wrong elements —
+      // swapped 2026-07-29.
+      { id: 'radio',      text: "Shows you what you're jamming to." },
       { id: 'weapons',    text: "Your stash — rolling coal, fireworks, donuts. Grab them off the road (3 max each) and deploy to shake the law." },
       { id: 'btn_map',    text: "Your route map — rest stops ahead, and fast-travel in Custom." },
       { id: 'btn_garage', text: "Buy upgrades with the cash you earn." },
-      { id: 'btn_genre',  text: "Shows you what you're jamming to." },
+      { id: 'btn_genre',  text: "You chose your jams, but there are plenty more to earn. Each genre has its own vehicle and item artwork." },
       { id: 'btn_mute',   text: "Mute or unmute the game." },
       { id: 'btn_ff',     text: "Skip to the next song on your playlist." },
       { id: 'wiper',      text: "Windshield wipers — clear rain and snow so you can see in bad weather." },
@@ -17422,13 +17619,14 @@ export class GameScene extends Phaser.Scene {
     const D = 96;
     const scrim = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 3, SCREEN_H * 3, 0x02060E, 0.5)
       .setDepth(D).setScrollFactor(0).setInteractive();
-    const hi   = this.add.rectangle(0, 0, 10, 10, 0xFFD24D, 0).setStrokeStyle(3, 0xFFD24D, 1).setDepth(D + 2);
+    const hi   = this.add.graphics().setDepth(D + 2);
     const boxG = this.add.graphics().setDepth(D + 3);
     const boxT = this.add.text(0, 0, '', {
-      // 43px = owner 2026-07-28: tutorial text 2.5× (was 17px).
+      // 43px = owner 2026-07-28: tutorial text 2.5× (was 17px).  _placeTourBox
+      // steps DOWN from here when the copy won't clear its highlight.
       fontSize: '43px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
       align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
-    }).setOrigin(0.5, 0.5).setDepth(D + 4);
+    }).setOrigin(0.5, 0).setDepth(D + 4);
     const tw = this.tweens.add({ targets: hi, alpha: { from: 1, to: 0.35 }, duration: 620, yoyo: true, repeat: -1 });
     const objs = [scrim, hi, boxG, boxT];
     try { this._hudObjects?.push(...objs); } catch (_) {}
@@ -17479,20 +17677,13 @@ export class GameScene extends Phaser.Scene {
       return this._hudTourShow(n);
     }
     T.idx = i;
-    T.hi.setPosition(b.x + b.w / 2, b.y + b.h / 2).setSize(b.w + 8, b.h + 8).setStrokeStyle(3, 0xFFD24D, 1).setVisible(true);
+    this._drawTourGlow(T.hi, b);
+    T.hi.setVisible(true);
     try { T.tw.restart(); } catch (_) {}
-    // Big, readable box (~1/3 of the screen) on the opposite half from the target.
-    const bw = Math.min(772, SCREEN_W - 28);   // widened for the 2.5× font
-    T.boxT.setWordWrapWidth(bw - 30);
-    T.boxT.setText(step.text);
-    const bh = Math.max(148, T.boxT.height + 30);
-    const ecy = b.y + b.h / 2;
-    const bx = Math.max(bw / 2 + 8, Math.min(SCREEN_W - bw / 2 - 8, b.x + b.w / 2));
-    const by = (ecy > SCREEN_H * 0.5) ? 16 : (SCREEN_H - bh - 16);   // opposite half → never covers the highlight
-    T.boxG.clear();
-    T.boxG.fillStyle(0x06101E, 0.8); T.boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 10);
-    T.boxG.lineStyle(2, 0xFFD24D, 0.9); T.boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 10);
-    T.boxT.setPosition(bx, by + bh / 2);   // vertically centered (origin 0.5,0.5)
+    // Placed in a band that clears the highlight; the font steps down when the
+    // copy is too long for that band (the old "opposite half" rule still let a
+    // tall box reach back over its own target).
+    this._placeTourBox(T.boxG, T.boxT, b, step.text, { fontSize: 43, maxW: 772 });
   }
 
   _hudTourTap() {

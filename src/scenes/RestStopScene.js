@@ -2372,6 +2372,17 @@ export class RestStopScene extends Phaser.Scene {
     if (p.f12)              return { category: 'weapons',     subId: p.f12 };
     if (p.buyVehicle)       return { category: 'vehicles',    subId: p.buyVehicle };
     if (p.vehicleAccessory) return { category: 'accessories', subId: p.vehicleAccessory };
+    // Split out of the old services catch-all (owner 2026-07-29, trip-summary
+    // directive) — the three buckets a "% spent on gas/repairs/upgrades"
+    // stat actually needs.  Everything else genuinely IS a grab-bag
+    // (restroom, coffee, snooze, passport, radar, hitchhiker...) and stays
+    // 'services'.
+    if (p.refuel)         return { category: 'gas',      subId: 'refuel' };
+    if (p.coolEngineFrac) return { category: 'gas',      subId: 'oil' };          // pint of oil, sold at the pump
+    if (p.repair)         return { category: 'repairs',  subId: 'dealer' };
+    if (p.campRepair)     return { category: 'repairs',  subId: 'camp' };
+    if (p.restHp)         return { category: 'repairs',  subId: 'hotsprings' };   // bonus HP, same "kept the car alive" bucket
+    if (p.upgradeInstall) return { category: 'upgrades', subId: p.upgradeInstall };
     return { category: 'services', subId: null };
   }
 
