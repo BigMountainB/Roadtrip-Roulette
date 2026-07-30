@@ -1002,6 +1002,7 @@ export class RestStopScene extends Phaser.Scene {
         const pay = Math.round((paid.payout + (paid.tip ?? 0)) * _payMultFor(paid.type));
         this._score += pay;
         this._stats?.recordEarn?.(pay, 'mission');
+        this._stats?.recordMissionComplete?.(paid.type, pay);
         this._refreshScore();
         // Bank immediately — pulling in is the "safe" moment, and the
         // GameScene entry-bank no longer includes uncollected mission pay.

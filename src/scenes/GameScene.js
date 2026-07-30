@@ -5030,6 +5030,7 @@ export class GameScene extends Phaser.Scene {
               const pay = Math.round((paid.payout + (paid.tip ?? 0)) * _mult);
               this.score += pay;
               this.stats?.recordEarn(pay, 'mission');
+              this.stats?.recordMissionComplete?.(paid.type, pay);
             }
           }
 

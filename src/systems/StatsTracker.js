@@ -70,6 +70,13 @@ function defaultStats() {
     vices:   { collected: {} },   // { <viceId>: count }
     weapons: { collected: {} },   // { <weaponType>: count }
 
+    // Mission completions by type (owner 2026-07-29, trip-summary directive).
+    // ADDITIVE to earned.bySource.mission (the flat total) — that keeps
+    // working unchanged; this is the per-type breakdown nothing tracked
+    // before. byType key = mission.type ('delivery' | 'passenger' | 'timed'
+    // | 'heat' | 'weather').
+    missions: { byType: {}, completedTotal: 0 },   // { <type>: { count, payout } }
+
     perVehicle: {},   // { <vehicleId>: { miles, driveTimeSec, npcHits, wrecks } }
     restStops:  {},   // { <stopId>:   { visits, totalTimeSec } }
     totalPitstopSec: 0,
@@ -394,6 +401,21 @@ export class StatsTracker {
       case 'upgrades':    this._bump(sp, 'upgrades', amount);    break;
       default:            this._bump(sp, 'services', amount);    break;
     }
+  }
+
+  /** Per-type mission completion — count + payout $ (owner 2026-07-29,
+   *  trip-summary directive).  Called alongside the existing
+   *  recordEarn(pay, 'mission') at BOTH collection sites (RestStopScene's
+   *  manual drop-off button and GameScene's Pullman auto-collect on
+   *  arrival) so neither path can drift out of sync with the other. */
+  recordMissionComplete(type, payout = 0) {
+    if (!this.ranked) return;
+    const t = type || 'unknown';
+    const m = this.stats.missions;
+    const row = (m.byType[t] ??= { count: 0, payout: 0 });
+    row.count  += 1;
+    row.payout += Math.max(0, payout);
+    m.completedTotal += 1;
   }
 
   // ── Distance / time / speed (hot path — in-memory only) ───────────────────
