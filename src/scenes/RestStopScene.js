@@ -701,6 +701,13 @@ export class RestStopScene extends Phaser.Scene {
       schwastedItems.push({
         id: 'traction', label: '❄️  TRACTION TIRES', cost: 1500,
         desc: '−40% slide penalty on any car (−100% with 4x4).',
+        // category: 'tires' (owner 2026-07-29) — this is a legacy accessory
+        // item, never given a toolbar category, so it fell into the
+        // uncategorized-=-always-visible bucket meant for genuine
+        // cross-category services (popcorn/water/repair). Being a TIRE
+        // product that persisted under every tab — including BRAKES — is
+        // exactly what read as "the tabs don't filter anything."
+        category: 'tires',
         payload: { vehicleAccessory: 'traction' },
       });
     }
@@ -822,7 +829,12 @@ export class RestStopScene extends Phaser.Scene {
     // EXIT-NUMBER tab — small white-bordered panel sitting OUTSIDE the
     // top-right corner of the main sign, like the reference image.
     {
-      const _exitMile = this._stop?.mileage ?? '';
+      // Whole number, nearest mile (owner 2026-07-29) — several stops sit at
+      // a half-mile mark (Bellevue 12.5, Mercer Island 9.5) for on-road
+      // ramp-placement reasons, but that precision has no business showing
+      // up on a highway-sign-style EXIT tab. Rounds only the display; the
+      // underlying stop.mileage (used for positioning/progress) is untouched.
+      const _exitMile = Math.round(this._stop?.mileage ?? 0);
       const tabW = 130, tabH = 38;
       const tabX = SCREEN_W - 30 - tabW;
       const tabY = 0;
@@ -2043,7 +2055,14 @@ export class RestStopScene extends Phaser.Scene {
 
     const availW = SCREEN_W - 16;
     const shown  = tabs.filter(t => stocked.includes(t.cat.id));
-    const tw = Math.floor((availW - (shown.length - 1) * 4) / shown.length);
+    // Tab size is fixed at "all 7 categories share the width" REGARDLESS of
+    // how many this particular shop stocks (owner 2026-07-29: Les Schwasted's
+    // 3 tabs were stretching to fill the same total width Finesse's 7 do,
+    // making them ~2.3x oversized — both wider AND taller, since height is
+    // locked to width by the source art's aspect ratio). A shop with fewer
+    // tabs now gets smaller, centered buttons instead of inflated ones —
+    // the x0 centering math below already handles the leftover space.
+    const tw = Math.floor((availW - (GARAGE_CATEGORIES.length - 1) * 4) / GARAGE_CATEGORIES.length);
     const th = Math.round(tw * (220 / (1672 / GARAGE_CATEGORIES.length)));
     const totalW = shown.length * (tw + 4) - 4;
     const x0 = 8 + Math.round((availW - totalW) / 2);
@@ -2070,7 +2089,10 @@ export class RestStopScene extends Phaser.Scene {
     (this._garageCat ??= {})[key] = catId;
     this._garageTabs?.forEach(t => {
       if (!t.img.visible) return;
-      t.img.setAlpha(t.cat.id === catId ? 1 : 0.45);
+      // Unselected tabs 70% less transparent (owner 2026-07-29): was 0.45
+      // alpha (55% transparent) -> transparency * 0.30 = 16.5% transparent
+      // -> 0.84 alpha.
+      t.img.setAlpha(t.cat.id === catId ? 1 : 0.84);
     });
     let row = 0;
     for (const r of rec.rows) {
@@ -2254,8 +2276,19 @@ export class RestStopScene extends Phaser.Scene {
 
     bg.on('pointerover', () => { if (!item.disabled && this._score >= effectiveCost) bg.setFillStyle(0x44280C); });
     bg.on('pointerout',  () => refresh());
-    bg.on('pointerdown', (ptr) => {
+    // Buy fires on pointerUP, not pointerdown (owner 2026-07-29: scrolling the
+    // item list was instantly purchasing whatever sat under the finger at the
+    // START of the swipe). The scene-global drag/scroll listener (create(),
+    // ~line 1249) is a SEPARATE, scene-wide 'pointerdown' handler that fires
+    // regardless of which object the touch lands on — it already tracks the
+    // drag independently of this button, so this button needs no pointerdown
+    // handler of its own at all. Gating on TAP_MAX_DRIFT distinguishes "tap
+    // this button" from "started a scroll here": a real tap barely moves
+    // between down and up; a scroll swipe moves well past this in every case.
+    const TAP_MAX_DRIFT = 12;
+    bg.on('pointerup', (ptr) => {
       ptr.event?.stopPropagation?.();
+      if (ptr.getDistance() > TAP_MAX_DRIFT) return;   // was a scroll, not a tap
       if (item.disabled) {
         this._flash(bg, 0xFF4444);
         this._setStatus(item.disabledReason ?? 'Not available right now.', '#FF6666');
