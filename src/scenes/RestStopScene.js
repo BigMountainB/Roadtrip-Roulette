@@ -72,8 +72,9 @@ const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
     { id: 'coffee',     label: 'COFFEE',           emoji: '☕',
       cost: 10, desc: 'A moderate Alertness bump. Brewed at some point this week.',
       payload: { coffee: true, survivalDelta: { tiredness: -15 } } },
-    { id: 'snooze',     label: 'TAKE A SNOOZE',    emoji: '😴',
-      cost: 150, desc: 'Sleep it all off — every buzz back to zero (instant, no ad)', payload: { reduceVices: 0 } },
+    // TAKE A SNOOZE moved out of both trash gas stations to AOK Camp
+    // (owner 2026-07-29) — you sleep it off at the campground, not in the
+    // aisle of a convenience store.  See the `camp` section below.
   ];
   // Vice unlocks are stored in the registry by ViceSystem.snapshotUnlocks
   // as a PLAIN OBJECT { sushi: true, burrito: true, gummies: true, ... },
@@ -232,7 +233,11 @@ const SECTIONS = {
     label: '🏕  CAMP',
     items: [
       { id: 'hitch',    label: '🧍  PICK UP HITCHHIKER',  cost:   0, desc: 'Free — but it\'s a gamble',                              payload: { hitchhike: true } },
-      { id: 'sleep',    label: '😴  NAP IT OFF',          cost:   0, desc: 'Watch ad (5s); fully restores Alertness',                 payload: { sleep: true,  survivalDelta: { tiredness: -100 } } },
+      // TAKE A SNOOZE replaces the old free ad-gated NAP IT OFF (owner
+      // 2026-07-29): one paid sleep at the campground instead of two sleep
+      // items.  Keeps the nap's full Alertness restore — you don't sleep off
+      // every drug in your system and wake up drowsy.
+      { id: 'snooze',   label: '😴  TAKE A SNOOZE',       cost: 150, desc: 'Sleep it all off — every buzz back to zero, and you wake up sharp.', payload: { reduceVices: 0, survivalDelta: { tiredness: -100 } } },
       { id: 'coffee',   label: '☕  COFFEE',                cost:   7, desc: 'A moderate Alertness bump',                              payload: { coffee: true, survivalDelta: { tiredness: -15 } } },
       { id: 'campfix',  label: '🔧  CAMP REPAIR',          cost: 400, desc: 'Repair up to 65% HP (cheaper than dealership)',          payload: { campRepair: true } },
       // Hot Springs soak — a stacking +10 HP "bonus" (extra over max) that
@@ -260,7 +265,17 @@ const SECTIONS = {
   },
   dealer_acc: {
     label: '🔧  ACCESSORIES',
-    items: [],   // populated dynamically per-vehicle in create()
+    items: [],   // stays empty — Lord Motors is pure car sales
+  },
+  // Sam's-only Level 1 parts counter (owner 2026-07-30). A SEPARATE section
+  // from dealer_acc, not a shared one — RestStopScene builds every section's
+  // row objects ONCE at scene creation (see the "Sub-menus — built once"
+  // loop), so a section's content can't legitimately differ by which dealer
+  // tile got tapped; the two dealers needed genuinely different SECTIONS
+  // entries. Items populated per-vehicle in create(), same as the garages.
+  sam_acc: {
+    label: '🔧  PARTS COUNTER',
+    items: [],
   },
   dealer_cars: {
     label: '🚗  CARS',
@@ -320,7 +335,7 @@ const SHOP_BG = {
 const GARAGE_KEYS = new Set(['schwasted', 'fap']);
 
 /** Shops whose menu is a single column over the storefront's empty left third. */
-const FULL_BLEED = new Set([...Object.keys(SHOP_BG), 'dealer_acc', 'dealer_cars']);
+const FULL_BLEED = new Set([...Object.keys(SHOP_BG), 'dealer_acc', 'dealer_cars', 'sam_acc']);
 
 // Direct paths let a shop recover its own backdrop on demand. Large storefront
 // textures can be dropped during a memory-constrained mobile boot even though
@@ -340,7 +355,7 @@ const SHOP_BG_PATH = {
 };
 
 const TAB_ORDER = ['gas', 'hunting', 'camp', 'lord', 'suck', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
-const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
+const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'sam_acc', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
 
 // Per-stop brand catalog — west-side gets the cleaner brands (Lord Motors
 // EV), east-side the dustier set (Huff's + Sam's gas).
@@ -654,6 +669,13 @@ export class RestStopScene extends Phaser.Scene {
     // would really carry them; the dealerships go back to selling cars.
     const schwastedItems = [];   // Les Schwasted — tyres / brakes / suspension
     const fapItems = [];   // Finesse (FAP) — body / performance / paint
+    // Sam's Used Car Kingdom accessories (owner 2026-07-30): windshield,
+    // headlights, wipers, bumper at their entry (Level 1) tier — a small,
+    // budget parts counter for the used-car dealer, distinct from the two
+    // full garages. Delivered through the shared dealer_acc screen, keyed
+    // per-visit to whichever dealer tile was actually tapped (see the
+    // 'suck' tile handler below) so Lord Motors stays pure car sales.
+    const samItems = [];
 
     // Les Schwab's free popcorn and water, which is the whole joke.  Popcorn
     // is a genuine (if pitiful) repair: 1% of MAX health per serving, capped
@@ -691,11 +713,17 @@ export class RestStopScene extends Phaser.Scene {
       });
     }
     if (!_vHasBumper) {
-      fapItems.push({
+      const _bumperItem = {
         id: 'armor', label: '🛡  REINFORCED BUMPER', cost: 4000,
         desc: 'Take 20% less crash damage on this vehicle.',
         payload: { vehicleAccessory: 'bumper' },
-      });
+      };
+      fapItems.push(_bumperItem);
+      // Sam's carries it too (owner 2026-07-30) — same part, same price;
+      // it's not a tiered slot so there's no separate "Level 1" price point
+      // to invent. Separate object: a purchase mutates the row's
+      // disabled/receipt state, and the two rows must not share one.
+      samItems.push({ ..._bumperItem, payload: { ..._bumperItem.payload } });
     }
     if (!_vHasTraction) {
       schwastedItems.push({
@@ -755,11 +783,21 @@ export class RestStopScene extends Phaser.Scene {
         if (!_cat || (_cat && SHOP_CATEGORIES.fap.includes(_cat.id))) {
           fapItems.push({ ..._item, payload: { ..._item.payload } });
         }
+        // Sam's Used Car Kingdom (owner 2026-07-30): windshield, headlights,
+        // wipers — Level 1 only. These three are single-tier slots (no
+        // ladder past level 1 at all — see the à-la-carte comment on
+        // UPGRADE_SLOTS), so `_next.level === 1` is really "not yet owned,"
+        // but the explicit check keeps the promise literal ("Level 1
+        // upgrades") rather than relying on that being incidentally true.
+        if (['windshield', 'headlights', 'wipers'].includes(_slot) && _next.level === 1) {
+          samItems.push({ ..._item, payload: { ..._item.payload } });
+        }
       }
     }
     SECTIONS.schwasted.items = schwastedItems;
     SECTIONS.fap.items = fapItems;
-    // Dealerships sell CARS now — accessories moved to the two garages above.
+    SECTIONS.sam_acc.items = samItems;
+    // Lord Motors stays pure car sales.
     SECTIONS.dealer_acc.items = [];
     // Genre-car showroom — same catalog at every dealership (owner 2026-07-23).
     SECTIONS.dealer_cars.items = genreCarItems();
@@ -1191,7 +1229,13 @@ export class RestStopScene extends Phaser.Scene {
       const tileY = this._contentY + (this._contentH - tileH) / 2;
       const choices = [
         { key: 'dealer_cars', title: 'CARS',        sub: stopBrands.dealer.name, color: 0x1E5BB8 },
-        { key: 'dealer_acc',  title: 'ACCESSORIES', sub: 'Repair · Paint · Tires', color: 0x4A6E3F },
+        // 'Repair · Paint · Tires' was stale — that content moved to the two
+        // garages back on 2026-07-21 and dealer_acc sold nothing at all
+        // until today.  This tile is built ONCE (not per-dealer), so it
+        // can't safely claim contents that differ between Lord Motors
+        // (still empty) and Sam's (Level 1 parts) — kept generic rather
+        // than overclaiming either way.
+        { key: 'dealer_acc',  title: 'ACCESSORIES', sub: 'Parts & Extras', color: 0x4A6E3F },
       ];
       choices.forEach((ch, i) => {
         const tx = this._contentX + i * (tileW + 14);
@@ -1212,7 +1256,14 @@ export class RestStopScene extends Phaser.Scene {
         card.on('pointerout',  () => card.setFillStyle(0xFFFFFF));
         card.on('pointerdown', (ptr) => {
           ptr.event?.stopPropagation?.();
-          this._showSection(ch.key, /* parent: */ 'dealer');
+          // ACCESSORIES routes to Sam's own dedicated section when Sam's is
+          // the active dealer — dealer_acc and sam_acc are genuinely
+          // separate SECTIONS entries (see the sam_acc definition), not one
+          // shared screen, because content is built once per section at
+          // scene creation and can't differ by which dealer tile was tapped.
+          const _dest = (ch.key === 'dealer_acc' && this._activeDealerKey === 'suck')
+            ? 'sam_acc' : ch.key;
+          this._showSection(_dest, /* parent: */ 'dealer');
         });
         // CARS tile subtitle re-brands to whichever dealer placard was tapped.
         if (ch.key === 'dealer_cars') this._dealerCarsSubLbl = sub;
@@ -1784,26 +1835,22 @@ export class RestStopScene extends Phaser.Scene {
       if (choice.missionAccept) {
         const m = this.registry.get('missions')?.accept?.(
           choice.missionAccept, this._odometer ?? 0, this._partyClockSec ?? null);
+        // Job terms are a contract the player has to actually READ — they go
+        // on a tap-to-dismiss card, not a fading toast (owner 2026-07-29).
         if (m?.type === 'passenger') {
-          this._setStatus(`🧍 ${m.passenger?.name} climbs in. ${m.passenger?.pickup ?? ''} $${m.payout} at ${m.targetName}.`, '#88FF88');
+          this._showMenuPopup(`🧍 ${m.passenger?.name} climbs in.\n\n${m.passenger?.pickup ?? ''}\n\n$${m.payout} at ${m.targetName}.`, '#88FF88');
         } else if (m?.type === 'timed') {
-          this._setStatus(`⚡ Rush job taken — ${m.cargo} to ${m.targetName}. Clock's already running.`, '#88FF88');
+          this._showMenuPopup(`⚡ Rush job taken — ${m.cargo} to ${m.targetName}.\n\nClock's already running.`, '#88FF88');
         } else if (m?.type === 'heat') {
-          this._setStatus(`🔥 Deal — land at ${m.targetName} with ZERO stars. $${m.payout} clean, half if you pay your way out.`, '#88FF88');
+          this._showMenuPopup(`🔥 Deal — land at ${m.targetName} with ZERO stars.\n\n$${m.payout} clean, half if you pay your way out.`, '#88FF88');
         } else if (m?.type === 'weather') {
-          this._setStatus(`${m.terms?.weather_run?.tag === 'wind' ? '🌬' : '🌨'} Contract taken — ${m.cargo} to ${m.targetName}, intact. $${m.payout}.`, '#88FF88');
+          this._showMenuPopup(`${m.terms?.weather_run?.tag === 'wind' ? '🌬' : '🌨'} Contract taken — ${m.cargo} to ${m.targetName}, intact.\n\n$${m.payout}.`, '#88FF88');
         } else if (m) {
-          this._setStatus(`📦 Job taken — ${m.cargo} to ${m.targetName}. $${m.payout} on delivery.`, '#88FF88');
+          this._showMenuPopup(`📦 Job taken — ${m.cargo} to ${m.targetName}.\n\n$${m.payout} on delivery.`, '#88FF88');
         }
-        // The exit pitch auto-leaves on resolve; a job taken here holds its
-        // confirmation on screen ~5s first (owner 2026-07-26) so the player can
-        // read it before the fade.  Re-arm the status clear to match that hold.
-        if (m) {
-          this._exitJobTaken = true;
-          if (this._statusTimer) this._statusTimer.remove();
-          this._statusTimer = this.time.delayedCall(5000, () =>
-            this._statusText.setText('').setFontSize(34).setFontStyle('normal').setStroke('#000000', 4));
-        }
+        // The exit pitch auto-leaves on resolve — the card now holds the terms
+        // until the player dismisses it, so the old 5s status hold is gone.
+        if (m) this._exitJobTaken = true;
       }
       if (choice.missionDecline) {
         this.registry.get('missions')?.decline?.(choice.missionDecline);
@@ -1881,7 +1928,7 @@ export class RestStopScene extends Phaser.Scene {
   _shopNameFor(key) {
     // ACCESSORIES + CARS are shared by both dealerships — title them with
     // whichever dealer placard was tapped (Lord Motors / Sam's), set on tap.
-    if (key === 'dealer_acc' || key === 'dealer_cars' || key === 'dealer') {
+    if (key === 'dealer_acc' || key === 'dealer_cars' || key === 'dealer' || key === 'sam_acc') {
       return this._activeDealerBrand ?? this._brands?.dealer?.name ?? null;
     }
     return this._brands?.[key]?.name ?? null;
@@ -2007,7 +2054,7 @@ export class RestStopScene extends Phaser.Scene {
     // Shared dealer sub-screens still belong to the outer dealer placard.
     // Resolve them back to Lord Motors / Sam's instead of dropping to the
     // blue services-sign fallback.
-    const chromeKey = (key === 'dealer' || key === 'dealer_acc' || key === 'dealer_cars')
+    const chromeKey = (key === 'dealer' || key === 'dealer_acc' || key === 'dealer_cars' || key === 'sam_acc')
       ? this._activeDealerKey
       : key;
     this._activeChromeKey = chromeKey ?? null;
@@ -2317,6 +2364,7 @@ export class RestStopScene extends Phaser.Scene {
         this._stats?.recordSpend(effectiveCost, _si.category, _si.subId);
       }
       this._refreshScore();
+      this._buyOutcomeMsg = null;   // _applyPurchase may stash one (see below)
       this._applyPurchase(item);
       // REFUEL fills the tank fully and is SINGLE-USE (owner 2026-07-17):
       // grey it out + relabel so it can't be bought again this visit.
@@ -2363,7 +2411,7 @@ export class RestStopScene extends Phaser.Scene {
         desc.setText(item.payload?.buyGenre ? 'Keys in hand — drove it off the lot.' : 'Swapped in.');
         cost.setText('N/A');
       }
-      this._setStatus(this._purchaseConfirmation(item), '#88FF88');
+      this._showMenuPopup(this._purchaseConfirmation(item), '#88FF88');
       this._flash(bg, 0x44FF44);
       this._buttonRefresh.forEach(fn => fn());
     });
@@ -2372,6 +2420,10 @@ export class RestStopScene extends Phaser.Scene {
   }
 
   _purchaseConfirmation(item) {
+    // An outcome stashed by _applyPurchase (robbed at the pump, bonus HP, a
+    // detector installed) beats the generic "✓ BOUGHT X" line — one card per
+    // purchase, and it's the one carrying the news.
+    if (this._buyOutcomeMsg) return this._buyOutcomeMsg;
     if (item.payload?.popcorn) return this._popcornMsg ?? '🍿 Free popcorn.';
     if (item.payload?.hitchhike) {
       const outcome = this._rollHitchhiker();
@@ -2477,15 +2529,13 @@ export class RestStopScene extends Phaser.Scene {
         this._score = Math.max(0, this._score - loss);
         this._stats?.recordRobbery(loss);
         this._refreshScore();
-        this._setStatus?.('💀 You were robbed when counting your cash', '#FF4444', true);
+        this._buyOutcomeMsg =
+          `⛽ Tank filled.\n\n💀 You were robbed when counting your cash.\n−$${loss.toLocaleString()}`;
       }
     }
-    if (p.sleep) {
-      // NAP IT OFF: alertness-only now (owner 2026-07-16). No vice cut, no
-      // party-clock penalty — just the 5s ad, then Alertness is restored via
-      // the survivalDelta on the payload.
-      this._purchases.sleepAdMs       = 5000;
-    }
+    // (The ad-gated NAP IT OFF and its `sleep` payload are gone — TAKE A
+    // SNOOZE is a paid item, so nothing sets sleepAdMs any more.  GameScene's
+    // resume still honours the field if a future item wants an ad gate.)
     // COFFEE: alertness-only — its survivalDelta handles the boost; no
     // party-clock penalty and no vice reduction anymore.
     if (p.campRepair) {
@@ -2539,7 +2589,7 @@ export class RestStopScene extends Phaser.Scene {
       // `radarDetector` on init to arm the speed-trap warning.
       this.registry?.get?.('save')?.set?.('radarDetector', true);
       this._purchases.radarBought = true;
-      this._setStatus?.('📡 RADAR DETECTOR installed — it\'ll warn you before speed traps.', '#88FFCC');
+      this._buyOutcomeMsg = '📡 RADAR DETECTOR installed — it\'ll warn you before speed traps.';
     }
     if (p.buyVehicle) {
       this._purchases.boughtVehicles = this._purchases.boughtVehicles ?? [];
@@ -2550,7 +2600,7 @@ export class RestStopScene extends Phaser.Scene {
       // damage before regular HP (see DamageModel takeDamage).  Stacks across
       // multiple soaks.
       this._purchases.bonusHp = (this._purchases.bonusHp ?? 0) + (p.bonusHp ?? 10);
-      this._setStatus?.(`+${p.bonusHp ?? 10} bonus HP. Relaxed and refreshed.`, '#88FFCC');
+      this._buyOutcomeMsg = `♨️ +${p.bonusHp ?? 10} bonus HP. Relaxed and refreshed.`;
     }
     if (p.restock)    this._purchases.restock = true;
     if (p.clearStars) this._purchases.clearStars = true;
@@ -2786,6 +2836,59 @@ export class RestStopScene extends Phaser.Scene {
       bg.on('pointerdown', (p) => { p.event?.stopPropagation?.(); b.act(); });
       objs.push(bg, lb);
     });
+  }
+
+  /** Tap-to-dismiss message card — used for anything the player needs TIME to
+   *  read: what they bought, a bonus they gained, a loss they took (owner
+   *  2026-07-29).  The auto-fading `_setStatus` toast stays for rejections
+   *  ("Need $40 more", "CUSTOMERS ONLY") so shopping doesn't cost a tap per
+   *  mis-click.  This is menu-only — on the road, outcomes stay as GameScene's
+   *  transient text, since there's nothing to pause for.
+   *
+   *  Queued: a purchase that reports both an outcome and a confirmation shows
+   *  them in order rather than one card clobbering the other. */
+  _showMenuPopup(msg, color = '#FFF6E0') {
+    if (!msg) return;
+    (this._menuPopupQueue ??= []).push({ msg, color });
+    if (!this._menuPopupOpen) this._drainMenuPopup();
+  }
+
+  _drainMenuPopup() {
+    const next = this._menuPopupQueue?.shift();
+    if (!next) { this._menuPopupOpen = false; return; }
+    this._menuPopupOpen = true;
+
+    const D = 600;                     // above the encounter card (D = 500)
+    const objs = [];
+    const add = (o) => { objs.push(o); return o; };
+    const dismiss = () => {
+      for (const o of objs) { try { o.destroy(); } catch (_) {} }
+      this._drainMenuPopup();          // show the next one, or close out
+    };
+
+    add(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.78)
+      .setDepth(D).setInteractive())
+      .on('pointerdown', (p) => { p.event?.stopPropagation?.(); dismiss(); });
+
+    const pw = Math.min(660, SCREEN_W - 60);
+    const txt = this.add.text(CX, 0, next.msg, {
+      fontSize: '30px', fontFamily: '"Helvetica Neue", Arial, sans-serif',
+      color: next.color, align: 'center', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 4,
+      wordWrap: { width: pw - 56 },
+    }).setOrigin(0.5, 0).setDepth(D + 3);
+    const hint = this.add.text(CX, 0, 'TAP TO CONTINUE', {
+      fontSize: '18px', fontFamily: IMPACT, color: '#8FB7E6',
+    }).setOrigin(0.5, 0).setDepth(D + 3);
+
+    const ph = txt.height + hint.height + 62;
+    const py = Math.max(20, SCREEN_H / 2 - ph / 2);
+    const panel = add(this.add.graphics().setDepth(D + 1));
+    panel.fillStyle(0x060A14, 0.96); panel.fillRoundedRect(CX - pw / 2, py, pw, ph, 14);
+    panel.lineStyle(3, 0x39A8FF, 1);  panel.strokeRoundedRect(CX - pw / 2, py, pw, ph, 14);
+    txt.setPosition(CX, py + 26);
+    hint.setPosition(CX, py + ph - 30);
+    add(txt); add(hint);
   }
 
   _setStatus(msg, color, big = false) {
