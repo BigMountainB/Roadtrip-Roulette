@@ -488,9 +488,12 @@ export function getLastSignTown(currentMile) {
 // is now the displayed sign label (real-world WA highway exit numbers).
 //
 // `amenities` is an array of brand keys present at this stop:
-//   gas(Huff's) | cargo(CarGo) | hunting(CowBella) | camp(AOK) |
+//   gas(Huff's) | hunting(CowBella) | camp(AOK) |
 //   lord(Lord Motors EV) | suck(Sam's Used Car Kingdom) |
-//   parkride(Metro Park & Ride) | vices(Gas-N-Sip) | ambm(AM/BM)
+//   parkride(Metro Park & Ride) | vices(Gas-N-Sip) | ambm(AM/BM) |
+//   schwasted(Les Schwasted) | fap(Finesse Autobody)
+// CarGo was DROPPED (owner 2026-07-29) — hitchhiker pickup already lived on
+// `camp` (AOK) unconditionally; nothing needed to move.
 // The rest-stop scene's landing screen filters tiles to this list, so
 // a camp-only stop only shows the Camp tile.
 //
@@ -500,38 +503,38 @@ export function getLastSignTown(currentMile) {
 // at Colfax, and finishes on WA-270 into Pullman (we reuse hwy_wa270 for
 // WA-271 since the same green WA-state badge fits visually).
 const _REST_STOP_DEF = [
-  { id: 'S',  name: 'Seattle, WA',         mileage:    4, exit: 'Exit 4',     hwy: 'hwy_i90',   amenities: ['cargo', 'lord', 'suck', 'parkride', 'vices', 'ambm', 'schwasted', 'fap'] },
+  { id: 'S',  name: 'Seattle, WA',         mileage:    4, exit: 'Exit 4',     hwy: 'hwy_i90',   amenities: ['ambm', 'suck', 'fap', 'parkride'] },
   // Mercer Island sits between the Mercer Island Lid Tunnel (8.5–9.0)
   // and the East Channel Bridge (10–11.5).  Mile 9.5 keeps the entire
   // 1-mi ramp window (8.5–9.5) on dry road only after the player exits
   // the lid tunnel — no on-bridge / in-water ramp paint.
-  { id: 'M',  name: 'Mercer Island, WA',   mileage:  9.5, exit: 'Exit 7B',    hwy: 'hwy_i90',   amenities: ['cargo', 'parkride', 'vices'] },
+  { id: 'M',  name: 'Mercer Island, WA',   mileage:  9.5, exit: 'Exit 7B',    hwy: 'hwy_i90',   amenities: ['vices', 'lord', 'parkride'] },
   // Bellevue moved 1 mi past the East Channel Bridge end (mile 11.5) so
   // the ramp window (11.5–12.5) lands on dry Bellevue shoreline rather
   // than half-on the floating bridge.
-  { id: 'B',  name: 'Bellevue, WA',        mileage: 12.5, exit: 'Exit 10',    hwy: 'hwy_i90',   amenities: ['cargo', 'lord', 'suck', 'parkride', 'vices', 'ambm', 'schwasted', 'fap'] },
-  { id: 'I',  name: 'Issaquah, WA',        mileage:   18, exit: 'Exit 18',    hwy: 'hwy_i90',   amenities: ['cargo', 'hunting', 'camp', 'lord', 'parkride', 'vices', 'schwasted'] },
-  { id: 'SQ', name: 'Snoqualmie, WA',      mileage:   25, exit: 'Exit 25',    hwy: 'hwy_i90',   amenities: ['parkride', 'vices', 'ambm'] },
-  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['cargo', 'camp', 'lord', 'parkride', 'vices', 'ambm', 'schwasted'] },
-  { id: 'SP', name: 'Snoqualmie Pass, WA', mileage:   53, exit: 'Exit 53',    hwy: 'hwy_i90',   amenities: ['cargo', 'camp', 'ambm'] },
-  { id: 'EA', name: 'Easton, WA',          mileage:   70, exit: 'Exit 70',    hwy: 'hwy_i90',   amenities: ['camp', 'vices'] },
-  { id: 'C',  name: 'Cle Elum, WA',        mileage:   84, exit: 'Exit 84',    hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'camp', 'lord', 'vices', 'schwasted', 'fap'] },
-  { id: 'TH', name: 'Thorp, WA',           mileage:  101, exit: 'Exit 101',   hwy: 'hwy_i90',   amenities: ['camp', 'vices'] },
-  { id: 'E',  name: 'Ellensburg, WA',      mileage:  109, exit: 'Exit 109',   hwy: 'hwy_i90',   amenities: ['gas', 'hunting', 'suck', 'parkride', 'vices', 'schwasted', 'fap'] },
-  { id: 'V',  name: 'Vantage, WA',         mileage:  137, exit: 'Exit 137',   hwy: 'hwy_i90',   amenities: ['gas', 'camp', 'ambm', 'schwasted'] },
+  { id: 'B',  name: 'Bellevue, WA',        mileage: 12.5, exit: 'Exit 10',    hwy: 'hwy_i90',   amenities: ['ambm', 'lord', 'suck', 'schwasted', 'fap'] },
+  { id: 'I',  name: 'Issaquah, WA',        mileage:   18, exit: 'Exit 18',    hwy: 'hwy_i90',   amenities: ['vices', 'hunting', 'schwasted', 'camp', 'parkride'] },
+  { id: 'SQ', name: 'Snoqualmie, WA',      mileage:   25, exit: 'Exit 25',    hwy: 'hwy_i90',   amenities: ['ambm', 'fap', 'parkride'] },
+  { id: 'N',  name: 'North Bend, WA',      mileage:   32, exit: 'Exit 32',    hwy: 'hwy_i90',   amenities: ['ambm', 'lord', 'schwasted', 'camp', 'parkride'] },
+  { id: 'SP', name: 'Snoqualmie Pass, WA', mileage:   53, exit: 'Exit 53',    hwy: 'hwy_i90',   amenities: ['vices', 'ambm', 'fap', 'camp'] },
+  { id: 'EA', name: 'Easton, WA',          mileage:   70, exit: 'Exit 70',    hwy: 'hwy_i90',   amenities: ['vices', 'schwasted', 'camp'] },
+  { id: 'C',  name: 'Cle Elum, WA',        mileage:   84, exit: 'Exit 84',    hwy: 'hwy_i90',   amenities: ['gas', 'vices', 'hunting', 'schwasted', 'fap', 'camp'] },
+  { id: 'TH', name: 'Thorp, WA',           mileage:  101, exit: 'Exit 101',   hwy: 'hwy_i90',   amenities: ['vices', 'fap', 'camp'] },
+  { id: 'E',  name: 'Ellensburg, WA',      mileage:  109, exit: 'Exit 109',   hwy: 'hwy_i90',   amenities: ['gas', 'vices', 'hunting', 'lord', 'schwasted', 'fap'] },
+  { id: 'V',  name: 'Vantage, WA',         mileage:  137, exit: 'Exit 137',   hwy: 'hwy_i90',   amenities: ['gas', 'ambm', 'schwasted', 'camp'] },
   // 2026-05-31: non-I-90 rest stops switched from highway-name labels
   // ("WA-262", "WA-17", "Airport Rd", etc.) to "Exit <mileage>".  The
   // sign already carries the highway as a shield-badge image, so the
   // text was duplicating what the badge says.  I-90 stops keep their
   // real WSDOT exit numbers ("Exit 4", "Exit 7B", etc.) since those
   // ARE numeric and don't echo the I-90 shield.
-  { id: 'Y',  name: 'Royal City, WA',      mileage:  158, exit: 'Exit 158',   hwy: 'hwy_wa26',  amenities: ['gas', 'hunting', 'vices'] },
-  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['gas', 'lord', 'suck', 'vices', 'ambm', 'schwasted', 'fap'] },
-  { id: 'H',  name: 'Hatton, WA',          mileage:  205, exit: 'Exit 205',   hwy: 'hwy_wa26',  amenities: ['gas', 'ambm'] },
-  { id: 'W',  name: 'Washtucna, WA',       mileage:  228, exit: 'Exit 228',   hwy: 'hwy_wa26',  amenities: ['gas', 'camp', 'ambm', 'schwasted'] },
+  { id: 'Y',  name: 'Royal City, WA',      mileage:  158, exit: 'Exit 158',   hwy: 'hwy_wa26',  amenities: ['gas', 'vices', 'hunting', 'suck', 'schwasted'] },
+  { id: 'O',  name: 'Othello, WA',         mileage:  184, exit: 'Exit 184',   hwy: 'hwy_wa26',  amenities: ['gas', 'vices', 'ambm', 'schwasted', 'fap'] },
+  { id: 'H',  name: 'Hatton, WA',          mileage:  205, exit: 'Exit 205',   hwy: 'hwy_wa26',  amenities: ['gas', 'ambm', 'suck'] },
+  { id: 'W',  name: 'Washtucna, WA',       mileage:  228, exit: 'Exit 228',   hwy: 'hwy_wa26',  amenities: ['gas', 'ambm', 'schwasted', 'camp'] },
   { id: 'L',  name: 'La Crosse, WA',       mileage:  253, exit: 'Exit 253',   hwy: 'hwy_us195', amenities: ['gas', 'hunting'] },
-  { id: 'CO', name: 'Colfax, WA',          mileage:  274, exit: 'Exit 274',   hwy: 'hwy_us195', amenities: ['gas', 'lord', 'suck', 'parkride', 'vices'] },
-  { id: 'P',  name: 'Pullman, WA',         mileage:  289, exit: 'Exit 289',   hwy: 'hwy_wa270', amenities: ['cargo', 'lord', 'parkride', 'vices', 'ambm'] },
+  { id: 'CO', name: 'Colfax, WA',          mileage:  274, exit: 'Exit 274',   hwy: 'hwy_us195', amenities: ['gas', 'vices', 'suck', 'parkride'] },
+  { id: 'P',  name: 'Pullman, WA',         mileage:  289, exit: 'Exit 289',   hwy: 'hwy_wa270', amenities: ['vices', 'ambm', 'lord', 'fap', 'parkride'] },
 ];
 export const REST_STOPS = _REST_STOP_DEF.map(rs => ({
   ...rs, t: rs.mileage / TOTAL_ROUTE_MILES,

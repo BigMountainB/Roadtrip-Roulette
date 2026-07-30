@@ -316,8 +316,8 @@ export const ASSET_MANIFEST = {
   ],
   businesses: [
     // Brand-logo placards used by the rest-stop services-sign UI.
-    { key: 'biz_cargo',      path: 'assets/businesses/cargo.png' },        // Gas — west (gas + EV)
-    { key: 'biz_huffs',      path: 'assets/businesses/huffs.png' },        // Gas — east (gas only)
+    // (biz_cargo / shop_bg_cargo removed 2026-07-29 — CarGo business dropped.)
+    { key: 'biz_huffs',      path: 'assets/businesses/huffs.png' },        // Gas
     { key: 'biz_cowbellas',  path: 'assets/businesses/cowbellas.png' },    // Hunting
     { key: 'biz_aok',        path: 'assets/businesses/aok.png' },          // Camp
     { key: 'biz_lord',       path: 'assets/businesses/lord.png' },         // Dealer — Lord Motors (EV)
@@ -338,7 +338,6 @@ export const ASSET_MANIFEST = {
     // or drew them.  The shop screen composites its brand's storefront
     // full-bleed with the menu column over the left third.
     { key: 'shop_bg_huffs',         path: 'assets/businesses/storefront_huffs.png' },
-    { key: 'shop_bg_cargo',         path: 'assets/businesses/storefront_cargo.png' },
     { key: 'shop_bg_cowbellas',     path: 'assets/businesses/storefront_cowbellas.png' },
     { key: 'shop_bg_aok',           path: 'assets/businesses/storefront_aok.png' },
     { key: 'shop_bg_lord',          path: 'assets/businesses/storefront_lord.png' },
@@ -346,7 +345,8 @@ export const ASSET_MANIFEST = {
     { key: 'shop_bg_gasnsip',       path: 'assets/businesses/storefront_gasnsip.png' },
     { key: 'shop_bg_am_bm',         path: 'assets/businesses/storefront_am_bm.png' },
     { key: 'shop_bg_parkride',      path: 'assets/businesses/storefront_park-and-ride.png' },
-    { key: 'shop_bg_les_schwasted', path: 'assets/businesses/storefront_les_schwasted.png' },
+    // v2 art (owner-supplied, was sitting unwired in businesses/raw/).
+    { key: 'shop_bg_les_schwasted', path: 'assets/businesses/raw/les_schwasted_v2.png' },
     { key: 'shop_bg_fap',           path: 'assets/businesses/storefront_fap.png' },
     // Highway shield badges — composited onto green exit signs.
     { key: 'hwy_i90',   path: 'assets/businesses/hwy_i90.svg' },

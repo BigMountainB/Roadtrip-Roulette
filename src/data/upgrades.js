@@ -62,7 +62,9 @@ export const GARAGE_CATEGORIES = [
  *  slots plus repair, paint, bumper and NOS. */
 export const SHOP_CATEGORIES = {
   les_schwasted: ['tires', 'brakes', 'suspension'],
-  fap:           ['engine', 'fuel', 'coolant', 'wipers'],
+  // Finesse is the full-service garage, so every toolbar category is
+  // available there. Les Schwasted remains the three-category specialist.
+  fap:           GARAGE_CATEGORIES.map(c => c.id),
 };
 
 /** Slots with no toolbar tab — sold as flat services at Finesse. */

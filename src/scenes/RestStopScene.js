@@ -217,12 +217,6 @@ const SECTIONS = {
     // a function of the player's current gas tank.
     items: [],
   },
-  // CarGo — the gig hub: past Issaquah it carries hitchhikers + ready
-  // drop-offs (plus a bottled water). Items populated dynamically in create().
-  cargo: {
-    label: '📦  CARGO',
-    items: [],
-  },
   hunting: {
     label: '🦌  HUNTING',
     items: [
@@ -312,7 +306,6 @@ const SECTIONS_PRISTINE = Object.fromEntries(
 // highway-sign look (dealer chooser, sub-screens with no brand of their own).
 const SHOP_BG = {
   gas:       'shop_bg_huffs',
-  cargo:     'shop_bg_cargo',
   hunting:   'shop_bg_cowbellas',
   camp:      'shop_bg_aok',
   lord:      'shop_bg_lord',
@@ -327,24 +320,37 @@ const SHOP_BG = {
 const GARAGE_KEYS = new Set(['schwasted', 'fap']);
 
 /** Shops whose menu is a single column over the storefront's empty left third. */
-const FULL_BLEED = new Set(Object.keys(SHOP_BG));
+const FULL_BLEED = new Set([...Object.keys(SHOP_BG), 'dealer_acc', 'dealer_cars']);
 
-const TAB_ORDER = ['gas', 'cargo', 'hunting', 'camp', 'lord', 'suck', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
-const ALL_SECTIONS = ['gas', 'cargo', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
+// Direct paths let a shop recover its own backdrop on demand. Large storefront
+// textures can be dropped during a memory-constrained mobile boot even though
+// the smaller logo/menu assets survive; without this retry every shop silently
+// fell back to the blue services-sign panel for the rest of the session.
+const SHOP_BG_PATH = {
+  shop_bg_huffs:         'assets/businesses/storefront_huffs.png',
+  shop_bg_cowbellas:     'assets/businesses/storefront_cowbellas.png',
+  shop_bg_aok:           'assets/businesses/storefront_aok.png',
+  shop_bg_lord:          'assets/businesses/storefront_lord.png',
+  shop_bg_suck:          'assets/businesses/storefront_suck.png',
+  shop_bg_gasnsip:       'assets/businesses/storefront_gasnsip.png',
+  shop_bg_am_bm:         'assets/businesses/storefront_am_bm.png',
+  shop_bg_parkride:      'assets/businesses/storefront_park-and-ride.png',
+  shop_bg_les_schwasted: 'assets/businesses/raw/les_schwasted_v2.png',
+  shop_bg_fap:           'assets/businesses/storefront_fap.png',
+};
 
-// Per-stop brand catalog — west-side gets the cleaner brands (CarGo +
-// Lord Motors EV), east-side the dustier set (Huff's + Sam's gas).
+const TAB_ORDER = ['gas', 'hunting', 'camp', 'lord', 'suck', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
+const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
+
+// Per-stop brand catalog — west-side gets the cleaner brands (Lord Motors
+// EV), east-side the dustier set (Huff's + Sam's gas).
 // CowBella, AOK Camp, and PharmaBros are universal.  Returned object
 // has every brand key; the landing screen filters by stop.amenities to
 // decide which placards actually render.
 function brandsForStop(stop) {
   const isWest = (stop?.mileage ?? 0) < 100;
   return {
-    // Huff's pumps gas at EVERY gas stop now (owner 2026-07-19): "there can be
-    // Huff's without CarGo, but no CarGo without Huff's." CarGo is its own
-    // co-located vendor (below) — the EV charger + the gig hub, no gas.
     gas:   { name: "Huff's Gas", logo: 'biz_huffs' },
-    cargo: { name: 'CarGo',      logo: 'biz_cargo' },
     hunting: { name: 'CowBella',   logo: 'biz_cowbellas' },
     camp:    { name: 'AOK Camp',   logo: 'biz_aok' },
       // Two distinct dealerships now (owner 2026-07-22): a stop can carry
@@ -599,22 +605,10 @@ export class RestStopScene extends Phaser.Scene {
     SECTIONS.vices.items = [refuelItem, waterItem(10), ...(SECTIONS.vices.items ?? [])];
     SECTIONS.ambm.items  = [refuelItem, waterItem(10), ...(SECTIONS.ambm.items  ?? [])];
 
-    // ── CarGo tab (owner 2026-07-22): EV charging removed — CarGo is now the
-    // gig hub (hitchhikers, past Issaquah mi 18) plus a bottled water so the
-    // tab is never empty at the early west stops. Ready drop-offs still
-    // collect via their own Ch.8 panel. ──
-    if (SECTIONS.cargo) {
-      const cargoItems = [waterItem(10)];
-      // Gig hub opens past Issaquah.
-      if ((this._stop?.mileage ?? 0) > 18) {
-        cargoItems.push({
-          id: 'hitch', label: '🧍  PICK UP HITCHHIKER',
-          cost: 0, desc: "Free — but it's a gamble.",
-          payload: { hitchhike: true },
-        });
-      }
-      SECTIONS.cargo.items = cargoItems;
-    }
+    // (CarGo removed 2026-07-29 — its hitchhiker offer was a mile-gated
+    // DUPLICATE of the one AOK Camp already carries unconditionally, see
+    // SECTIONS.camp's 'hitch' item above. Nothing to relocate: any stop
+    // with a Camp tile still offers a rider, same as before CarGo existed.)
 
     // ── PARK & RIDE: a free public restroom stop. ──
     SECTIONS.parkride.items = [restroomItem(false, 'Nasty, but free.')];
@@ -665,9 +659,17 @@ export class RestStopScene extends Phaser.Scene {
     // is a genuine (if pitiful) repair: 1% of MAX health per serving, capped
     // at POPCORN_MAX_PCT per visit, so it's a top-up between stops and never
     // a substitute for a real repair.  Cost 0 — the cap is the limiter.
+    const _repairMissingHp = Math.max(0,
+      Math.ceil(this._vehMaxHp() - (this._durabilityAtEntry ?? this._vehMaxHp())));
     fapItems.push(
-      { id: 'repair',  label: '🔧  REPAIR CAR', cost: 1500,
-        desc: 'Restore full health', payload: { repair: true } },
+      { id: 'repair',  label: _repairMissingHp > 0 ? '🔧  REPAIR CAR' : '✓  NO REPAIRS NEEDED',
+        cost: _repairMissingHp * 80,
+        desc: _repairMissingHp > 0
+          ? `Restore ${_repairMissingHp} HP to full health ($80 per HP).`
+          : 'Car is already at full health.',
+        disabled: _repairMissingHp === 0,
+        disabledReason: 'Car is already at full health.',
+        payload: { repair: true } },
       { id: 'paint',   label: '🎨  PAINT JOB',  cost: 3500,
         desc: 'Drops ALL stars — only way out from under a 5★ chopper.',
         payload: { clearStars: true } },
@@ -723,9 +725,7 @@ export class RestStopScene extends Phaser.Scene {
         // the tabs and the inventory can never disagree.  Untabbed slots
         // (body, police) fall through to Finesse as flat services.
         const _cat  = categoryForSlot(_slot);
-        const _dest = _cat && SHOP_CATEGORIES.les_schwasted.includes(_cat.id)
-          ? schwastedItems : fapItems;
-        _dest.push({
+        const _item = {
           id: `up_${_slot}`,
           label: `🔩  ${_slotLbl} — ${_next.label}`,
           cost: _next.cost,
@@ -738,7 +738,16 @@ export class RestStopScene extends Phaser.Scene {
           // (body, police) have no category and fall back to their emoji.
           icon: _cat?.icon ?? undefined,
           payload: { upgradeInstall: _next.id },
-        });
+        };
+        // Finesse is full-service; Les Schwasted additionally carries its
+        // three specialist categories. Use separate row objects because a
+        // purchase mutates the row's disabled/receipt state.
+        if (_cat && SHOP_CATEGORIES.les_schwasted.includes(_cat.id)) {
+          schwastedItems.push({ ..._item, payload: { ..._item.payload } });
+        }
+        if (!_cat || (_cat && SHOP_CATEGORIES.fap.includes(_cat.id))) {
+          fapItems.push({ ..._item, payload: { ..._item.payload } });
+        }
       }
     }
     SECTIONS.schwasted.items = schwastedItems;
@@ -1065,7 +1074,7 @@ export class RestStopScene extends Phaser.Scene {
         img.setDisplaySize(baseW * k, baseH * k);
         this._landingObjs.push(img);
       } else {
-        const accentFor = { gas: 0xFFCC22, cargo: 0x0E9488, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, lord: 0xCC1122, suck: 0x8A5A2B, vices: 0x9A36CC, parkride: 0x1E5BB8, schwasted: 0xC8102E, fap: 0x7A3FA0 };
+        const accentFor = { gas: 0xFFCC22, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, lord: 0xCC1122, suck: 0x8A5A2B, vices: 0x9A36CC, parkride: 0x1E5BB8, schwasted: 0xC8102E, fap: 0x7A3FA0 };
         const accent = accentFor[key] ?? 0x888888;
         const strip = this.add.rectangle(logoArea.x, logoArea.y, logoArea.w, logoArea.h, accent, 1)
           .setOrigin(0, 0);
@@ -1248,20 +1257,22 @@ export class RestStopScene extends Phaser.Scene {
     this._showLanding();
 
     // ── HIT THE ROAD button ─────────────────────────────────────────────
+    // This is a landing-screen action. Shop sub-screens hide it so their
+    // category toolbar can use the full bottom edge; BACK returns here.
     const contY = SCREEN_H - 30;
-    const cont  = this.add.rectangle(CX, contY, 240, 36, 0x44AA44)
+    this._continueBtnBg = this.add.rectangle(CX, contY, 240, 36, 0x44AA44)
       .setStrokeStyle(3, 0xFFFFFF)
       .setInteractive({ useHandCursor: true });
-    this.add.text(CX, contY, '▶  HIT THE ROAD', {
+    this._continueBtnLbl = this.add.text(CX, contY, '▶  HIT THE ROAD', {
       fontSize: '17px', fontFamily: IMPACT,
       color: '#FFFFFF', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5);
-    cont.on('pointerover', () => cont.setFillStyle(0x66CC66));
-    cont.on('pointerout',  () => cont.setFillStyle(0x44AA44));
-    cont.on('pointerdown', () => this._continue());
+    this._continueBtnBg.on('pointerover', () => this._continueBtnBg.setFillStyle(0x66CC66));
+    this._continueBtnBg.on('pointerout',  () => this._continueBtnBg.setFillStyle(0x44AA44));
+    this._continueBtnBg.on('pointerdown', () => this._continue());
 
     // ── Status line ─────────────────────────────────────────────────────
-    this._statusText = this.add.text(CX, SCREEN_H - 56, '', {
+    this._statusText = this.add.text(CX, SCREEN_H - 118, '', {
       fontSize: '34px', fontFamily: 'Arial', color: '#88FF88',
       align: 'center', wordWrap: { width: SCREEN_W - 60 },
     }).setOrigin(0.5);
@@ -1392,13 +1403,11 @@ export class RestStopScene extends Phaser.Scene {
       if (o.terms?.no_chains)  t.push('DARE · no chains allowed');
       return t.length ? t.join('  ·  ') : 'No strings — easy money';
     };
-    // Drop-off vendor callout (owner 2026-07-19): if the destination has a
-    // CarGo lot, name it — that's where deliveries + riders are handed off.
-    const dropAt = (o) => {
-      const t = REST_STOPS.find(r => r.id === o.targetStopId);
-      const hasCargo = Array.isArray(t?.amenities) && t.amenities.includes('cargo');
-      return hasCargo ? `the CarGo in ${o.targetName}` : o.targetName;
-    };
+    // Drop-off callout — plain stop name.  Used to name "the CarGo in X"
+    // when the destination carried that business; CarGo is gone (2026-07-29).
+    // Per-business delivery targets are future work (see the business-
+    // missions directive) — for now every delivery just names the stop.
+    const dropAt = (o) => o.targetName;
     // Passenger quirk warning — the rider states their own terms.
     const quirkLine = {
       nervous:       "One hard crash and I'm walking — deal's off; so drive it soft.",
@@ -1890,13 +1899,15 @@ export class RestStopScene extends Phaser.Scene {
     this._backBtnBg?.setVisible(false);
     this._backBtnLbl?.setVisible(false);
     this._sectionHeader?.setVisible(false);
+    this._continueBtnBg?.setVisible(true);
+    this._continueBtnLbl?.setVisible(true);
     // Landing shows the LOCATION; sub-screens swap in the shop name.
     this._titleText?.setText(this._stop.name.toUpperCase());
   }
 
   /** Show the dealer chooser (Cars / Accessories). */
   _showDealerChooser() {
-    this._applyShopChrome(null);
+    this._applyShopChrome(this._activeDealerKey);
     this._screenStack = ['landing', 'dealer'];
     this._activeSection = null;
     this._hideAllScreens();
@@ -1904,6 +1915,8 @@ export class RestStopScene extends Phaser.Scene {
     for (const obj of (this._dealerChooserObjs ?? [])) obj.setVisible?.(true);
     this._backBtnBg?.setVisible(true);
     this._backBtnLbl?.setVisible(true);
+    this._continueBtnBg?.setVisible(false);
+    this._continueBtnLbl?.setVisible(false);
     const shopName = this._shopNameFor('dealer');
     if (this._sectionHeader) {
       this._sectionHeader.setText(shopName ?? '🏬  DEALER').setVisible(true);
@@ -1954,6 +1967,8 @@ export class RestStopScene extends Phaser.Scene {
     }
     this._backBtnBg?.setVisible(true);
     this._backBtnLbl?.setVisible(true);
+    this._continueBtnBg?.setVisible(false);
+    this._continueBtnLbl?.setVisible(false);
     // Sub-screens brand themselves as the shop the player is IN — the
     // big title and section header both show the store's name (falling
     // back to the section label where no brand exists, e.g. ACCESSORIES).
@@ -1976,8 +1991,16 @@ export class RestStopScene extends Phaser.Scene {
    * `null` restores the sign (landing / dealer chooser).
    */
   _applyShopChrome(key) {
-    const bgKey = key ? SHOP_BG[key] : null;
+    // Shared dealer sub-screens still belong to the outer dealer placard.
+    // Resolve them back to Lord Motors / Sam's instead of dropping to the
+    // blue services-sign fallback.
+    const chromeKey = (key === 'dealer' || key === 'dealer_acc' || key === 'dealer_cars')
+      ? this._activeDealerKey
+      : key;
+    this._activeChromeKey = chromeKey ?? null;
+    const bgKey = chromeKey ? SHOP_BG[chromeKey] : null;
     const on    = !!bgKey && this.textures.exists(bgKey);
+    if (bgKey && !on) this._loadMissingShopBg(chromeKey, bgKey);
     if (on) this._shopBg.setTexture(bgKey).setDisplaySize(SCREEN_W, SCREEN_H);
     this._shopBg?.setVisible(on);
     this._shopScrim?.setVisible(on);
@@ -1988,24 +2011,42 @@ export class RestStopScene extends Phaser.Scene {
     this._layoutGarageTabs(key);
   }
 
-  /** Place the stocked category tabs along the bottom of the right two-thirds. */
+  /** Retry one missing storefront instead of leaving the blue fallback up. */
+  _loadMissingShopBg(sectionKey, bgKey) {
+    const path = SHOP_BG_PATH[bgKey];
+    if (!path) return;
+    this._shopBgLoading ??= new Set();
+    if (this._shopBgLoading.has(bgKey)) return;
+    this._shopBgLoading.add(bgKey);
+
+    const doneEvent = `filecomplete-image-${bgKey}`;
+    const finish = () => {
+      this._shopBgLoading.delete(bgKey);
+      if (this._activeChromeKey === sectionKey && this.textures.exists(bgKey)) {
+        this._applyShopChrome(sectionKey);
+      }
+    };
+    this.load.once(doneEvent, finish);
+    this.load.once('loaderror', file => {
+      if (file?.key === bgKey) this._shopBgLoading.delete(bgKey);
+    });
+    this.load.image(bgKey, path);
+    if (!this.load.isLoading()) this.load.start();
+  }
+
+  /** Place the stocked category tabs across the full bottom edge. */
   _layoutGarageTabs(key) {
     const tabs = this._garageTabs ?? [];
     const stocked = GARAGE_KEYS.has(key) ? (SHOP_CATEGORIES[key === 'schwasted' ? 'les_schwasted' : key] ?? []) : [];
     if (!stocked.length) { tabs.forEach(t => t.img.setVisible(false)); return; }
 
-    const menuW = Math.round(SCREEN_W / 3);
-    const availW = SCREEN_W - menuW - 12;
+    const availW = SCREEN_W - 16;
     const shown  = tabs.filter(t => stocked.includes(t.cat.id));
-    // 88, not 112: a tab is nearly square, so a wider one ate ~23% of the
-    // screen height.  Capped so the strip stays a strip.
-    const tw = Math.min(88, Math.floor(availW / shown.length) - 4);
+    const tw = Math.floor((availW - (shown.length - 1) * 4) / shown.length);
     const th = Math.round(tw * (220 / (1672 / GARAGE_CATEGORIES.length)));
     const totalW = shown.length * (tw + 4) - 4;
-    const x0 = menuW + Math.round((availW - totalW) / 2);
-    // Sit ABOVE the HIT THE ROAD button (centred at SCREEN_H-30, 36 tall) —
-    // the tabs were overlapping the one control that leaves the stop.
-    const y0 = (SCREEN_H - 30 - 18) - th - 8;
+    const x0 = 8 + Math.round((availW - totalW) / 2);
+    const y0 = SCREEN_H - th - 4;
 
     tabs.forEach(t => t.img.setVisible(false));
     shown.forEach((t, i) => {
@@ -2082,7 +2123,8 @@ export class RestStopScene extends Phaser.Scene {
       return { x: this._contentX, y: this._contentY, w: this._contentW, h: this._contentH };
     }
     const colW = Math.round(SCREEN_W / 3) - 20;
-    return { x: 10, y: 74, w: colW, h: SCREEN_H - 74 - 84 };   // 84 = toolbar band
+    const bottomBand = GARAGE_KEYS.has(key) ? 108 : 84;
+    return { x: 10, y: 74, w: colW, h: SCREEN_H - 74 - bottomBand };
   }
 
   _buildTabContent(key, x, y, w, h) {
@@ -2095,7 +2137,7 @@ export class RestStopScene extends Phaser.Scene {
     // (2026-07-16: AM/BM + camp menus were cutting descriptions off) —
     // fewer, TALLER buttons beat many crushed ones.
     // Two-column shops (owner 2026-07-17): vices + the ones that were still
-    // stretching buttons full-width — gas (CarGo/Huff's), hunting (CowBella),
+    // stretching buttons full-width — gas (Huff's), hunting (CowBella),
     // AM/BM, Park & Ride. Anything with >6 items also splits regardless.
     const TWO_COL = new Set(['vices', 'gas', 'hunting', 'ambm', 'parkride']);
     const cols  = FULL_BLEED.has(key) ? 1 : ((TWO_COL.has(key) || items.length > 6) ? 2 : 1);
@@ -2249,6 +2291,13 @@ export class RestStopScene extends Phaser.Scene {
         item.disabledReason = '⛽ Tank\'s already full.';
         label.setText('⛽  TANK FULL');
         desc.setText('Topped off.');
+        cost.setText('N/A');
+      }
+      if (item.payload?.repair) {
+        item.disabled = true;
+        item.disabledReason = 'Car is already at full health.';
+        label.setText('✓  CAR REPAIRED');
+        desc.setText('Restored to full health.');
         cost.setText('N/A');
       }
       // Slot upgrade installed — grey it out for this visit; the next tier

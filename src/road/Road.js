@@ -112,9 +112,10 @@ export class Road {
    *   projection so it tracks hills and curves.  Omit it and the ground stays
    *   flat-coloured — nothing else changes.
    */
-  render(g, ghostG, playerPos, playerX, palette, effects, propsG, frontG, terrainG, skyG, groundP) {
+  render(g, ghostG, playerPos, playerX, palette, effects, propsG, frontG, terrainG, skyG, groundP, cityG) {
     g.clear();
     if (skyG) skyG.clear();
+    if (cityG) cityG.clear();
     if (terrainG) terrainG.clear();
     // SKY / BACKDROP LAYER.  Everything above the horizon — sky gradient,
     // stars, skyline silhouettes, lake horizon, far shore — paints here
@@ -127,6 +128,7 @@ export class Road {
     // base the way real terrain would.
     const bg = skyG ?? g;
     this._terrainG = terrainG ?? null;
+    this._cityG    = cityG ?? null;
     this._groundP  = groundP ?? null;
     if (groundP) groundP.beginFrame(playerPos);
     if (propsG) propsG.clear();
@@ -893,14 +895,21 @@ export class Road {
     // the raw haze-toned fill — the persistent "grey-blue line".  Paint the
     // bridge-style charcoal cityscape + downtown skyline there instead, so
     // the skyline persists through the whole urban stretch.
-    const _cityBack = _mileNow < 4.9 && !startSeg?.water && !startSeg?.bridge && !startSeg?.waterLeft;
+    // Keep Seattle's skyline present until the HUD/location handoff into
+    // Bellevue. Previously the land-only fallback stopped at the Mt Baker
+    // tunnel while water/bridge branches came and went, making the silhouette
+    // pop out during the same urban drive.
+    const _cityBack = _mileNow < 12.5 && !startSeg?.water && !startSeg?.bridge && !startSeg?.waterLeft;
     if (startSeg?.water || startSeg?.bridge || startSeg?.waterLeft || _cityBack) {
       // Full width even for waterLeft: the right-flank terrain and home
       // sprites paint over the backing wherever there is land, and a
       // width-limit just left an unpainted black notch between the water's
       // cut edge and the first sprite.
       const WATER_W  = W;
-      const waterTop = H() - 5;
+      // Start exactly at the horizon.  Starting five pixels above it exposed
+      // the first dark backing stripe against the sky as a black/blue ruler
+      // line, especially on the opening West Seattle descent.
+      const waterTop = H();
       // Bridge segments use a near-black charcoal tone instead of the
       // saturated blue used on plain water crossings (floating bridges,
       // lake spans).  The blue read as "lake under the bridge" and
@@ -909,15 +918,58 @@ export class Road {
       // the cranes silhouette against an urban backdrop, with the
       // existing skyline silhouette painting on top at horizon level.
       const _charcoal = startSeg.bridge || _cityBack;   // urban mass, not open water
-      const waterA = _charcoal ? 0x1A1E22 : 0x2D5B82;
-      const waterB = _charcoal ? 0x0E1014 : 0x173A58;
-      const bands = 7;
-      for (let b = 0; b < bands; b++) {
-        const t = b / Math.max(1, bands - 1);
-        const y = waterTop + Math.floor(t * (SCREEN_H - waterTop));
-        const h = Math.ceil((SCREEN_H - waterTop) / bands) + 2;
-        bg.fillStyle(lerpColor(waterA, waterB, t), 1);
-        bg.fillRect(-MARGIN, y, WATER_W, h);
+      // The West Seattle Bridge crosses port yards, not a black void.  Its
+      // old near-black bridge backing produced the large horizontal shelf
+      // visible behind the cranes around mile 1.25.  Use fogged urban-ground
+      // tones through Seattle; later bridge/water segments keep their water
+      // or charcoal treatment.
+      const _seattleBridge = _mileNow < 2 && startSeg.bridge;
+      const _seattlePort = _mileNow < 7 && _cityBack;
+      const waterA = _seattleBridge
+        ? lerpColor(palette.grass2, skyFogMix, 0.25)
+        : _seattlePort
+          ? lerpColor(palette.grass2, skyFogMix, 0.58)
+        : (_charcoal ? 0x1A1E22 : 0x2D5B82);
+      const waterB = _seattleBridge
+        ? lerpColor(palette.grass2, 0x252B2D, 0.15)
+        : _seattlePort
+          ? lerpColor(palette.grass2, 0x252B2D, 0.28)
+        : (_charcoal ? 0x0E1014 : 0x173A58);
+      if (_cityBack) {
+        // Land through Seattle uses the terrain layer, not a full-width sky
+        // backing. Do not add the generic distance-haze ramp here: even a
+        // short ramp remains visible beneath the skyline as a horizontal grey
+        // shelf. The skyline itself hides the sky/ground seam; the real ground
+        // colour should meet its base immediately.
+        const tg = this._terrainG ?? g;
+        // Downtown's palette uses pavement-grey grass slots. At the far cap
+        // that becomes the exact grey bar the player sees, while the textured
+        // verge immediately in front is olive/brown. Use the far-verge tone
+        // here so the untextured projection cap visually joins that ground.
+        const cityFarGround = lerpColor(palette.grass2, 0x465038, 0.78);
+        tg.fillStyle(cityFarGround, 1);
+        tg.fillRect(-MARGIN, H(), W, SCREEN_H - H() + 20 + MARGIN);
+      } else {
+        // Match the horizon row to atmospheric fog and transition to the real
+        // water/bridge surface colour in fine steps.
+        const transitionH = _seattleBridge ? 10 : 48;
+        const transitionSteps = _seattleBridge ? 5 : 24;
+        for (let b = 0; b < transitionSteps; b++) {
+          const t = b / Math.max(1, transitionSteps - 1);
+          const y = waterTop + Math.floor(t * transitionH);
+          const h = Math.ceil(transitionH / transitionSteps) + 1;
+          bg.fillStyle(lerpColor(waterA, skyFogMix, Math.pow(1 - t, 2)), 1);
+          bg.fillRect(-MARGIN, y, WATER_W, h);
+        }
+        const bodyTop = waterTop + transitionH;
+        const bodyBands = 7;
+        for (let b = 0; b < bodyBands; b++) {
+          const t = b / Math.max(1, bodyBands - 1);
+          const y = bodyTop + Math.floor(t * (SCREEN_H - bodyTop));
+          const h = Math.ceil((SCREEN_H - bodyTop) / bodyBands) + 2;
+          bg.fillStyle(lerpColor(waterA, waterB, t), 1);
+          bg.fillRect(-MARGIN, y, WATER_W, h);
+        }
       }
       // Distant opposite shoreline — varied silhouette in two layers so
       // the horizon doesn't read as one flat blue bar.  Far hills behind,
@@ -931,30 +983,40 @@ export class Road {
       // (looking back at the receding skyline), gone by the East Channel
       // bridge.  Implemented as `cityGap` — fraction of screen-width
       // around centre where peaks/blocks are skipped.
-      const horizonY     = H() - 4;
-      const farHillCol   = lerpColor(palette.horizon, 0x0E273D, 0.25);
-      const buildingCol  = lerpColor(palette.horizon, 0x081A2E, 0.55);
+      const horizonY     = H();
+      // The first 0.6 mi uses the lighter residential-West-Seattle palette.
+      // Bias the procedural skyline farther toward navy so it is already a
+      // readable silhouette at mile zero, before downtown sprite spawning.
+      const farHillCol   = lerpColor(palette.horizon, 0x0B2034, 0.45);
+      const buildingCol  = lerpColor(palette.horizon, 0x061426, 0.72);
       const buildingLit  = lerpColor(buildingCol, 0xFFE9A8, 0.18);   // warm window glow tint
       const cityMile = (playerPos / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
       let cityGap;
-      if      (cityMile < 7)  cityGap = 0;
-      else if (cityMile < 11) cityGap = (cityMile - 7) / 4;        // 0 → 1 across mile 7-11
-      else                     cityGap = 1;
+      if      (cityMile < 10)   cityGap = 0;
+      else if (cityMile < 12.5) cityGap = (cityMile - 10) / 2.5;  // fade after leaving Seattle
+      else                       cityGap = 1;
       const gapHalfPx = SCREEN_W * 0.5 * cityGap;
       const inCityGap = (cx) => gapHalfPx > 0 && Math.abs(cx - SCREEN_W * 0.5) < gapHalfPx;
+      // City silhouettes belong above the terrain fill but below the road.
+      // Painting them into skyG let the green distance fill cut across their
+      // bases as a horizontal haze line.
+      const city = this._cityG ?? bg;
 
       // Layer 1 — far hills.  Stepped silhouette of varying heights
       // forming a low, rolling ridgeline.  Step width 24 px keeps the
       // shape readable but not blocky.
       if (cityGap < 1) {
         const farStep = 24;
-        bg.fillStyle(farHillCol, 0.95);
+        city.fillStyle(farHillCol, 0.95);
         for (let x = -MARGIN; x < SCREEN_W + MARGIN; x += farStep) {
           if (inCityGap(x + farStep * 0.5)) continue;
           const n = Math.sin(x * 0.013) + Math.sin(x * 0.041 + 1.7) * 0.6
                   + Math.sin(x * 0.087 + 3.1) * 0.4;
-          const h = 6 + Math.max(0, n + 1.6) * 4;          // 6–18 px tall
-          bg.fillRect(x, horizonY - h * 0.4, farStep + 1, h + 8);
+          const h = 8 + Math.max(0, n + 1.6) * 5;          // 8–23 px tall
+          const hillTop = horizonY - h * 0.55;
+          // Stop at (not one pixel below) the horizon. Adjacent rectangles
+          // otherwise shared an opaque bottom row that read as a black line.
+          city.fillRect(x, hillTop, farStep + 1, horizonY - hillTop);
         }
         // Layer 2 — building blocks (warehouses + downtown skyline).
         // Deterministic per-block: width and height pseudo-randomised by
@@ -966,19 +1028,20 @@ export class Road {
           const r2 = Math.sin(blockI * 78.233 + 1.7) * 43758.5453;
           const r3 = Math.sin(blockI * 39.346 + 4.2) * 43758.5453;
           const w = 14 + Math.floor((r1 - Math.floor(r1)) * 36);     // 14–50 px wide
-          const h = 4 + Math.floor((r2 - Math.floor(r2)) * 22);      // 4–26 px tall
+          const h = 7 + Math.floor((r2 - Math.floor(r2)) * 24);      // 7–31 px tall
           const tall = (r3 - Math.floor(r3)) > 0.82;                 // ~18% are skyscrapers
           const realH = tall ? h + 10 + Math.floor((r3 - Math.floor(r3)) * 14) : h;
           if (!inCityGap(bx + w * 0.5)) {
-            bg.fillStyle(buildingCol, 1);
-            bg.fillRect(bx, horizonY - realH + 6, w, realH + 6);
+            city.fillStyle(buildingCol, 1);
+            const buildingTop = horizonY - realH + 6;
+            city.fillRect(bx, buildingTop, w, horizonY - buildingTop);
             // Sparse warm window dots on tall blocks
             if (tall && realH > 14) {
-              bg.fillStyle(buildingLit, 0.7);
+              city.fillStyle(buildingLit, 0.7);
               const winRows = Math.max(1, Math.floor(realH / 6));
               for (let row = 0; row < winRows; row++) {
                 if ((blockI + row) % 3 === 0) {
-                  bg.fillRect(bx + 2 + (row % 3) * 4, horizonY - realH + 8 + row * 5, 2, 2);
+                  city.fillRect(bx + 2 + (row % 3) * 4, horizonY - realH + 8 + row * 5, 2, 2);
                 }
               }
             }

@@ -1,3 +1,16 @@
+// ⚠️  SUPERSEDED — NOT WIRED INTO THE GAME (verified 2026-07-29).
+//
+// Nothing imports this file.  The police AI that actually runs is the
+// per-cop logic inside src/systems/CopSystem.js (`update()`), and the
+// chase rules from the police-chase spec — star gating, the two anti-pass
+// guards, overtake tokens, onramp reinforcements and the forward counter —
+// all live there and in src/systems/Deployables.js.
+//
+// Kept only as a reference sketch of a role/state design.  Do NOT edit this
+// expecting the game to change; in particular CopAI's BLOCK_OVERSHOOT no
+// longer describes how blocking works (blocking is token-gated to 4-5 stars).
+// If this is ever revived, delete this banner and wire it up deliberately.
+
 // INTEGRATION CONTRACT:
 //   Input:  playerSegIdx (int), playerLateralPos (float -1..1), playerSpeed (float), dt (seconds)
 //   Output: getRenderInfo() → {x, y, scale, spotlightWidth, spotlightAlpha, screenSpace:bool}

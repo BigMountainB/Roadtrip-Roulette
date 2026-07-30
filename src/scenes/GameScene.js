@@ -27,6 +27,15 @@ import { clamp, lerp } from '../utils/Helpers.js';
 // World units per mile, derived from the route's own definition — used by the
 // pursuit HUD to convert a world-space gap into honest feet.
 const UNITS_PER_MILE_HUD = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
+
+// Cops draw 1:1 with civilian traffic (owner 2026-07-29).  The old 1.4x
+// "imposing" inflation (1.5x parked) plus a 1.3x-player-width hard cap made a
+// cruiser alongside a pickup read as oversized.  At 1.0 the only size
+// difference is honest perspective: a pursuer sits nearer the camera than the
+// player sprite (which is PLAYER_VIRTUAL_Z ahead of it), so it draws slightly
+// larger closing from behind and converges to the player's size as it comes
+// level.  No cap — traffic has never needed one.
+const COP_VISUAL_SCALE = 1;
 import { Road, snowBlanketAt, SNOW_WHITE, SNOW_MARKINGS_GONE } from '../road/Road.js';
 import { GroundPlane }   from '../road/GroundPlane.js';
 import { BAND, BIOMES, biomeAt, bandKey, bandHeight, bandRate } from '../road/Biomes.js';
@@ -859,10 +868,18 @@ export class GameScene extends Phaser.Scene {
     // Aggregate installed part-upgrade effects for this vehicle so the drive
     // physics (top speed, grip, steering, stability, range) reflect them.
     this._recomputeUpgradeFx();
-    // Gas tank: full on each new run (+ fuel-system upgrade range).
+    // Gas tank (owner 2026-07-28): fresh runs start on HALF a tank — you
+    // leave Seattle under-fueled and the first gas stop matters.  The Idol
+    // EV (k_pop) is exempt: it's the no-fuel car, so it starts full (and
+    // keeps a full gauge until the noFuel flag retires the gauge entirely).
+    // Resume-from-stop keeps the full-fill init; the carried run state
+    // overrides it, so resuming never re-halves a tank mid-trip.
     const _rangeUp = this._upgradeFx?.rangeMi ?? 0;
-    this.player.gasMi    = _veh.rangeMi + _rangeUp;
+    const _isEV    = this._activeGenreTrait?.()?.key === 'k_pop';
     this.player.gasMaxMi = _veh.rangeMi + _rangeUp;
+    this.player.gasMi    = (!this._resumeFromStop && !_isEV)
+      ? Math.round(this.player.gasMaxMi * 0.5)
+      : this.player.gasMaxMi;
 
     // ── New overhaul systems ──────────────────────────────────────────
     // HP cap = vehicle base HP + summed part-upgrade HP (bumper / suspension /
@@ -983,6 +1000,14 @@ export class GameScene extends Phaser.Scene {
     // occludes their base, so distant trees emerge from behind the ground.
     this.skyGfx       = this.add.graphics().setDepth(0);
     this.terrainGfx   = this.add.graphics().setDepth(1);
+    // Seattle silhouettes are clipped to the horizon in Road.render, so they
+    // can safely sit just above roadGfx.  Keeping them below roadGfx allowed
+    // its full-width distant fog/terrain polygons to erase the skyline on
+    // flatter Seattle segments (most visibly just after mile 2).
+    // Above every road/fog/background pass, but below the complete scenery
+    // sprite range (trees/buildings/vehicles bottom out at depth 7.0).
+    // 9.44 incorrectly put the skyline over distant image-based scenery.
+    this.cityBackdropGfx = this.add.graphics().setDepth(6.9);
     this.roadGfx      = this.add.graphics().setDepth(1.5);
 
     // Textured ground, in the slot the terrain/road split opened.  Depth 1.3
@@ -2504,7 +2529,7 @@ export class GameScene extends Phaser.Scene {
     this._worldObjects.push(
       ...[
         this._titleBlackout,
-        this.skyGfx, this.terrainGfx, this.groundPlane, this.roadGfx, this.ghostGfx, this.propsGfx, this._ruralFenceGfx, this._utilityLineGfx, this.bridgeFrontGfx, this.tunnelFacadeGfx, this.tunnelGfx, this._tunnelMaskGfx, this.tunnelDimGfx, ...this._signGfxPool, this._explosionGfx, this._smokeGfx, this._damageGlassGfx, this.overlayGfx, this.vignetteGfx,
+        this.skyGfx, this.terrainGfx, this.cityBackdropGfx, this.groundPlane, this.roadGfx, this.ghostGfx, this.propsGfx, this._ruralFenceGfx, this._utilityLineGfx, this.bridgeFrontGfx, this.tunnelFacadeGfx, this.tunnelGfx, this._tunnelMaskGfx, this.tunnelDimGfx, ...this._signGfxPool, this._explosionGfx, this._smokeGfx, this._damageGlassGfx, this.overlayGfx, this.vignetteGfx,
         // Biome parallax bands — world objects, so the UI camera must
         // ignore them or it re-paints the horizon on top of the HUD.
         ...Object.values(this._biomeLayers.a), ...Object.values(this._biomeLayers.b),
@@ -2654,6 +2679,15 @@ export class GameScene extends Phaser.Scene {
       return hits.some(h => px >= h.x - 12 && px <= h.x + h.w + 12
                          && p.y >= h.y - 12 && p.y <= h.y + h.h + 12);
     };
+    // Wanted-star row — same deal in custom mode (drag-to-set the star level).
+    const overStarRow = (p) => {
+      if (Difficulty.mode?.() !== 'custom') return false;
+      const h = this._starRowHit;
+      if (!h) return false;
+      const px = p.x - C.HUD_OFFSET_X;
+      return px >= h.x - 12 && px <= h.x + h.w + 12
+          && p.y >= h.y - 12 && p.y <= h.y + h.h + 12;
+    };
 
     // Tap-to-resume — Phaser fires `gameobjectdown` BEFORE the
     // scene-level `pointerdown` for any interactive object that was
@@ -2701,6 +2735,8 @@ export class GameScene extends Phaser.Scene {
       if (overViceBar(p)) return;
       // Same for the survival STATUS bars (custom-mode drag-to-set).
       if (overSurvBar(p)) return;
+      // …and the wanted-star row (custom-mode drag-to-set).
+      if (overStarRow(p)) return;
       // Top-row UI band + weapon stack — initial tap must NOT
       // start on these zones (so buttons work), but once a valid
       // steer-tap has started, the player can drag across them.
@@ -2821,8 +2857,8 @@ export class GameScene extends Phaser.Scene {
         this._touchLeft = this._touchRight = false;
         return;
       }
-      // While dragging a vice OR status bar, never steer.
-      if (this._draggingViceId || this._draggingSurvKey) {
+      // While dragging a vice, status bar OR the star row, never steer.
+      if (this._draggingViceId || this._draggingSurvKey || this._draggingStars) {
         this._touchLeft = this._touchRight = false;
         return;
       }
@@ -4373,6 +4409,20 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.cops.update(rawDt, this.player.position, this.player.speed, this.player.x);
       this._updateScannerAlert();
+
+      // ── FORWARD COUNTER (police-chase spec §6) ────────────────────────
+      // The answer to a 4-5 star roadblock: lean on a blocker's rear bumper
+      // with the throttle held and you shove it out of the way. GameScene is
+      // the only place that knows the accelerator is actually down, so the
+      // input check lives here and the rules live in CopSystem.
+      const _push = this.cops.tickPushThrough(
+        rawDt, this.player.position, this.player.speed, this._isBoost(),
+      );
+      if (_push.spun) {
+        this._applyDamage(_push.hp, 'push_through');
+        this.effects.triggerShake(220, 0.009);
+        this._showPopup('🚧 SHOVED THROUGH!', '#FFCC44');
+      }
     }
     // Sealed hitchhiker — fires HITCH_REVEAL_MILES after pickup.
     this._tickPassenger();
@@ -9706,6 +9756,28 @@ export class GameScene extends Phaser.Scene {
     car.speed      *= clamp(0.82 - impact.severity * 0.25, 0.52, 0.76);
   }
 
+  /** Forward-view alpha for a cop, by depth.  Rear pursuers are MIRROR-ONLY
+   *  (owner 2026-07-29): the render camera sits PLAYER_VIRTUAL_Z behind the
+   *  player's car sprite, so a cruiser that is genuinely BEHIND you still
+   *  projects in front of the camera — lower on screen and larger than you,
+   *  which reads as "driving alongside me", the one thing it isn't.  No
+   *  standoff fixes that; pushing it further back only drives it lower and
+   *  bigger until it crosses the camera plane.  So a rear unit fades out as it
+   *  drops behind the player's car and lives in the rear-view mirror instead,
+   *  exactly like the car tailing you on a real highway.
+   *
+   *  Applies ONLY to pursuing rear units.  Parked/roadside cruisers you drive
+   *  PAST, oncoming units, barricades and fleeing cops (which have their own
+   *  bottom-edge exit) keep their existing behaviour.
+   *  @param {{kind?:string, parked?:boolean, fleeing?:boolean, relativePos:number}} cop
+   *  @returns {number} 0-1 alpha multiplier */
+  _rearCopForwardFade(cop) {
+    if (cop.kind !== 'rear' || cop.parked || cop.fleeing) return 1;
+    const gone = PLAYER_VIRTUAL_Z + 200;    // ~3 ft ahead of the car — fully hidden
+    const full = PLAYER_VIRTUAL_Z + 700;    // ~11 ft ahead — fully drawn
+    return Math.max(0, Math.min(1, (cop.relativePos - gone) / (full - gone)));
+  }
+
   _onCopCollision(cop, idx, hit) {
     // i-frame phase-through — same as NPC traffic.  No bust counters
     // accrue, no popup, no damage.
@@ -9786,6 +9858,9 @@ export class GameScene extends Phaser.Scene {
       this.cops.addStar(0.2, 3);                  // player rear-ends a cop
       this.effects.triggerShake(180 + impact.severity * 220, 0.007 + impact.severity * 0.009);
       this._applyDamage((1 + impact.severity * 1.8) * damageMul, 'cop_ram_rear');
+      // The strike landed — break off so the cruiser falls back to its
+      // standoff instead of sitting on the bumper re-ramming every frame.
+      this.cops.endLunge?.(cop);
       const rearBumps = this.cops.registerRearBump();
       const left = 5 - rearBumps;
       this._showPopup(
@@ -11979,6 +12054,7 @@ export class GameScene extends Phaser.Scene {
       this.terrainGfx,
       this.skyGfx,
       this.groundPlane,
+      this.cityBackdropGfx,
     );
 
     this._renderBiomeBackdrop();    // biome parallax bands at the horizon
@@ -13839,7 +13915,11 @@ export class GameScene extends Phaser.Scene {
         if (lightsKind === 'cop') {
           // Cop = single bar bloom (one light bar, not a pair).
           const col = this.cops?.lightFlash ? 0x2A66FF : 0xFF2233;
-          const ly = headY;
+          // Match the baked roof bar in the current police art.  Front art's
+          // bar is ~10% down from the top; rear art's is ~15% down.  Using
+          // the old generic headY (mid-body) put the fog bloom on the glass.
+          const copBarTopFrac = /front_police/i.test(useTex) ? 0.10 : 0.15;
+          const ly = proj.sy - targetH * (1 - copBarTopFrac);
           if (hazeA > 0.01) { g.fillStyle(col, hazeA * 0.62); g.fillEllipse(proj.sx, ly, hazeR * 3.0, hazeR * 1.35); }
           g.fillStyle(col, Math.min(0.70, coreA + 0.08));
           g.fillEllipse(proj.sx, ly, baseR * 0.78, baseR * 0.36);
@@ -14048,14 +14128,9 @@ export class GameScene extends Phaser.Scene {
         (cop.speed ?? 0) < 0     ? 'front' :
                                    'back';
       const texKey = this._carTexKey(cop.colorSet ?? 'police', facing);
-      // Cops render ~40% larger than a stock car so they read as imposing.
-      // But a pursuit cop that closes right onto your bumper used to balloon
-      // (proj.sw × scale, uncapped) and fill the screen — so we HARD-CAP every
-      // cop to ~1.3× the player car's on-screen width.  Cops also skip the
-      // drunk double-vision ghost so they always read as solid (you must be
-      // able to clearly see who's on you).
-      const copScale = cop.parked ? 1.5 : 1.4;
-      const maxCopW  = (this.playerSprite?.displayWidth || 78) * 1.3;
+      // Cops draw at civilian scale (COP_VISUAL_SCALE) with no size cap — see
+      // the constant.  They still skip the drunk double-vision ghost so they
+      // always read as solid (you must be able to clearly see who's on you).
       // Smoked/scattered (fleeing) cops take the SYNTHETIC BOTTOM-EDGE EXIT:
       // once their rel falls toward the projection floor the draw depth is
       // clamped at FLEE_EXIT_HOLD_REL (the last reliably-projectable depth)
@@ -14086,10 +14161,10 @@ export class GameScene extends Phaser.Scene {
         exitT   = cop.fleeing ? (cop.fleeExit ?? 0) : 0;
         drawRel = exitT > 0 ? Math.max(cop.relativePos, FLEE_EXIT_HOLD_REL) : cop.relativePos;
       }
-      const copFa   = exitT > 0
+      const copFa   = (exitT > 0
         ? Math.max(0, Math.min(1, (1 - exitT) / 0.3))   // fade only over the exit's last stretch
-        : (cop.fleeFade ?? 1);
-      place(drawRel, cop.laneOffset, 0xFFFFFF, copScale, 0, texKey, true, maxCopW, 'cop', cop.colorSet ?? 'police', copFa, exitT);
+        : (cop.fleeFade ?? 1)) * this._rearCopForwardFade(cop);
+      place(drawRel, cop.laneOffset, 0xFFFFFF, COP_VISUAL_SCALE, 0, texKey, true, undefined, 'cop', cop.colorSet ?? 'police', copFa, exitT);
     }
 
     // Player tire shadow — anchored to sprite.y (the actual on-screen
@@ -14225,33 +14300,56 @@ export class GameScene extends Phaser.Scene {
         const sink = Math.pow(Math.min(1, _lbExit), 1.15);
         proj = { ...proj, sy: proj.sy + sink * (SCREEN_H + proj.sw * 1.2 - proj.sy) };
       }
-      // Clamp to the same on-screen size cap as the cruiser BODY (see the
-      // cop render loop) so the light bar scales with the capped car instead
-      // of ballooning off a close cop's raw projection (giant-lightbar bug).
-      const copScale = cop.parked ? 1.5 : 1.4;
-      const maxCopW  = (this.playerSprite?.displayWidth || 78) * 1.3;
+      // Derived from the same scale as the cruiser BODY (see the cop render
+      // loop) so the bar always tracks the car it sits on.
       // Light bar fades with the fleeing cruiser body — no lingering bar
       // after a smoked cop's sprite has alpha'd out.
-      const _lbFa = _lbExit > 0
+      const _lbFa = (_lbExit > 0
         ? Math.max(0, Math.min(1, (1 - _lbExit) / 0.3))
-        : (cop.fleeFade ?? 1);
+        : (cop.fleeFade ?? 1)) * this._rearCopForwardFade(cop);
       if (_lbFa <= 0.01) continue;
-      const w = Math.min(proj.sw, maxCopW / copScale), x = proj.sx, y = proj.sy - w * 0.55;
-      g.fillStyle(0x111111, _lbFa); g.fillRect(x - w * 0.32, y, w * 0.64, w * 0.10);
+      // Derive the overlay from the body's ACTUAL capped render size and the
+      // roof-bar pixel coordinates in the new sedan sprites.  The previous
+      // pickup-era formula used raw projection width and landed on the rear
+      // glass/trunk once the body was capped or viewed head-on.
+      const facing =
+        cop.kind === 'oncoming'  ? 'front' :
+        cop.kind === 'barricade' ? 'front' :
+        (cop.speed ?? 0) < 0     ? 'front' : 'back';
+      const texKey = this._carTexKey(cop.colorSet ?? 'police', facing);
+      const tex = this.textures.get(texKey)?.source?.[0];
+      const bodyW = proj.sw * COP_VISUAL_SCALE;
+      const bodyH = bodyW * ((tex?.height || 676) / (tex?.width || 768));
+      const frontView = facing === 'front';
+      const x = proj.sx;
+      const y = proj.sy - bodyH * (frontView ? 0.90 : 0.852);
+      // Light centers measured from the new 768px canvases: rear ±~0.142W,
+      // front ±~0.158W.  Each colored lens occupies ~0.21W.
+      const halfDx = bodyW * (frontView ? 0.158 : 0.142);
+      const lensW  = bodyW * (frontView ? 0.205 : 0.216);
+      const lensH  = Math.max(1.2, bodyH * (frontView ? 0.036 : 0.028));
+      const glowH  = Math.max(lensH * 2.1, bodyW * 0.025);
+      const glowW  = lensW * 1.12;
       if (this._colorblind) {
         // CB: red half → amber (red↔dark reads as near-black on/off for
         // protan/deutan), blue half unchanged, + a white center that blinks
         // with the bar so "active chase" reads by shape + blink, not hue.
-        g.fillStyle(cop.flash ? 0xFFB000 : 0x3A2600, _lbFa);
-        g.fillRect(x - w * 0.30, y + 1, w * 0.28, w * 0.07);
-        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa);
-        g.fillRect(x + w * 0.02, y + 1, w * 0.28, w * 0.07);
-        if (cop.flash) { g.fillStyle(0xFFFFFF, _lbFa); g.fillRect(x - w * 0.035, y, w * 0.07, w * 0.10); }
+        g.fillStyle(cop.flash ? 0xFFB000 : 0x3A2600, _lbFa * 0.86);
+        g.fillEllipse(x + halfDx, y, glowW, glowH);
+        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
+        g.fillEllipse(x - halfDx, y, glowW, glowH);
+        if (cop.flash) {
+          g.fillStyle(0xFFFFFF, _lbFa * 0.88);
+          g.fillRect(x - bodyW * 0.032, y - lensH, bodyW * 0.064, lensH * 2);
+        }
       } else {
-        g.fillStyle(cop.flash ? 0xFF3333 : 0x440000, _lbFa);
-        g.fillRect(x - w * 0.30, y + 1, w * 0.28, w * 0.07);
-        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa);
-        g.fillRect(x + w * 0.02, y + 1, w * 0.28, w * 0.07);
+        // Artwork is blue on screen-left and red on screen-right in both
+        // straight views; pulse each lens in place instead of repainting a
+        // generic black bar over the car.
+        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
+        g.fillEllipse(x - halfDx, y, glowW, glowH);
+        g.fillStyle(cop.flash ? 0xFF3333 : 0x440000, _lbFa * 0.86);
+        g.fillEllipse(x + halfDx, y, glowW, glowH);
       }
     }
   }
@@ -17167,8 +17265,9 @@ export class GameScene extends Phaser.Scene {
     const hi   = this.add.rectangle(0, 0, 10, 10, 0xFFD24D, 0).setStrokeStyle(3, 0xFFD24D, 1).setDepth(D + 2);
     const boxG = this.add.graphics().setDepth(D + 3);
     const boxT = this.add.text(0, 0, '', {
-      fontSize: '13px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
-      align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
+      // 33px = owner 2026-07-28: tutorial text 2.5× (was 13px).
+      fontSize: '33px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
+      align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5, 0).setDepth(D + 4);
     const tw = this.tweens.add({ targets: hi, alpha: { from: 1, to: 0.35 }, duration: 620, yoyo: true, repeat: -1 });
     const poll = this.time.addEvent({ delay: 250, loop: true, callback: () => this._updateTitleTut() });
@@ -17188,9 +17287,13 @@ export class GameScene extends Phaser.Scene {
     const b = step.b;
     T.hi.setPosition(b.x + b.w / 2, b.y + b.h / 2).setSize(b.w + 8, b.h + 8).setStrokeStyle(3, 0xFFD24D, 1).setVisible(true);
     try { T.tw.restart(); } catch (_) {}
-    T.boxT.setWordWrapWidth(step.box.w - 24);
+    // Boxes widened ~2× (capped to screen) so the 2.5× font wraps into
+    // readable lines instead of ten-character towers; height stays derived
+    // from the text and the position clamps keep it on screen.
+    const bw = Math.min(SCREEN_W - 16, Math.round(step.box.w * 2));
+    T.boxT.setWordWrapWidth(bw - 24);
     T.boxT.setText(step.text);
-    const bw = step.box.w, bh = T.boxT.height + 24;
+    const bh = T.boxT.height + 24;
     let bx = Math.max(bw / 2 + 6, Math.min(SCREEN_W - bw / 2 - 6, step.box.x));
     let by = Math.max(6, Math.min(SCREEN_H - bh - 6, step.box.y));
     T.boxG.clear();
@@ -17322,7 +17425,8 @@ export class GameScene extends Phaser.Scene {
     const hi   = this.add.rectangle(0, 0, 10, 10, 0xFFD24D, 0).setStrokeStyle(3, 0xFFD24D, 1).setDepth(D + 2);
     const boxG = this.add.graphics().setDepth(D + 3);
     const boxT = this.add.text(0, 0, '', {
-      fontSize: '17px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
+      // 43px = owner 2026-07-28: tutorial text 2.5× (was 17px).
+      fontSize: '43px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
       align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5, 0.5).setDepth(D + 4);
     const tw = this.tweens.add({ targets: hi, alpha: { from: 1, to: 0.35 }, duration: 620, yoyo: true, repeat: -1 });
@@ -17378,7 +17482,7 @@ export class GameScene extends Phaser.Scene {
     T.hi.setPosition(b.x + b.w / 2, b.y + b.h / 2).setSize(b.w + 8, b.h + 8).setStrokeStyle(3, 0xFFD24D, 1).setVisible(true);
     try { T.tw.restart(); } catch (_) {}
     // Big, readable box (~1/3 of the screen) on the opposite half from the target.
-    const bw = Math.min(480, SCREEN_W - 28);
+    const bw = Math.min(772, SCREEN_W - 28);   // widened for the 2.5× font
     T.boxT.setWordWrapWidth(bw - 30);
     T.boxT.setText(step.text);
     const bh = Math.max(148, T.boxT.height + 30);
@@ -17691,18 +17795,27 @@ export class GameScene extends Phaser.Scene {
         this._setTopRowButtonTexture(this.hudMuteLbl, 'mute', muted, 56);
       }
     }
+    // Wanted stars.  The RAM / HEAD-ON / PIT tallies that used to share this
+    // line were dropped (owner 2026-07-29) — they pushed the star glyphs left
+    // into the weapon cells, where they were unreadable.  Stars alone stay
+    // centred on the line's own anchor, clear of both the weapons and the
+    // mile/town readout.
+    const _starsCustom = Difficulty.mode?.() === 'custom';
     const stars = this.cops.starDisplay;
-    let starsText = stars > 0 ? '★'.repeat(stars) + '☆'.repeat(5 - stars) : '';
-    // Surface whichever per-type counter is closest to busting the player
-    // — the user's about-to-die meter, not a generic total.
-    const cs = this.cops;
-    const tallies = [];
-    const _arr = Difficulty.arrest();
-    if (cs.rearBumpCount > 0) tallies.push(`RAM ${cs.rearBumpCount}/${_arr.rear}`);
-    if (cs.headOnCount   > 0) tallies.push(`HEAD-ON ${cs.headOnCount}/${_arr.headOn}`);
-    if (cs.pitCount      > 0) tallies.push(`PIT ${cs.pitCount}/${_arr.pit}`);
-    if (tallies.length) starsText += `  •  ${tallies.join('  ')}`;
+    // Custom mode keeps the empty row on screen: it doubles as the drag
+    // target for setting the wanted level mid-run (_ensureStarDragHandler).
+    const starsText = (stars > 0 || _starsCustom)
+      ? '★'.repeat(stars) + '☆'.repeat(5 - stars)
+      : '';
     if (this.hudStars.text !== starsText) this.hudStars.setText(starsText);
+    // Publish the drag target (custom only) from the live text box.
+    if (_starsCustom && starsText) {
+      const _sw = this.hudStars.displayWidth, _sh = this.hudStars.displayHeight;
+      this._starRowHit = { x: this.hudStars.x - _sw / 2, y: this.hudStars.y, w: _sw, h: _sh };
+      this._ensureStarDragHandler();
+    } else {
+      this._starRowHit = null;
+    }
 
     {
       const rName = this.audio.currentName;
@@ -17777,9 +17890,21 @@ export class GameScene extends Phaser.Scene {
         }
       }
       // ── Lateral parallax — road shifts opposite the player's drift ──
+      // DEPTH-SCALED, not constant.  A laterally-offset camera shifts the
+      // NEAR road but never the vanishing point, so the shift must decay to
+      // zero at the horizon.  The old flat `-playerLane * glassW * 0.55`
+      // moved the whole rear world — vanishing point included — by up to
+      // 55% of the glass width, and since every sprite ALSO gets the player's
+      // lateral offset applied depth-scaled in projectRear, far sprites rode
+      // almost entirely on the constant term and were pushed off the edge of
+      // the glass, where the geometry mask clipped them.  That is what made a
+      // pursuing cop invisible in the mirror while the PURSUIT chevron
+      // counted down (owner 2026-07-29; found via the cop trace: cruiser
+      // drawn at x258 against a glass spanning 274-526).
       const playerLane   = p.x ?? 0;
-      const lateralShift = -playerLane * (mb.glassW * 0.55);
-      const drawnRoadCx  = mb.roadCx + lateralShift;
+      // Shift at a given depth, matching projectRear's per-sprite term
+      // exactly so sprites sit ON the drawn road at every depth.
+      const lateralShiftAt = (depthT) => -playerLane * (mb.roadHalfW * depthT + 4);
 
       // ── Curved rear road — accumulate per-segment curve into a screen-
       // space bend so the mirror road actually CURVES along its length
@@ -17847,7 +17972,7 @@ export class GameScene extends Phaser.Scene {
         roadCenter[k] = {
           depthT,
           y:     (mb.horizonY + 1) + depthT * ((mb.roadBotY - 1) - (mb.horizonY + 1)),
-          cx:    drawnRoadCx + bendOffAtSeg(nf),
+          cx:    mb.roadCx + bendOffAtSeg(nf) + lateralShiftAt(depthT),
           halfW: mb.roadHalfW * depthT,
         };
       }
@@ -17958,27 +18083,33 @@ export class GameScene extends Phaser.Scene {
         stripeCurve(-0.05, yellowCol, 0.85);
         stripeCurve( 0.05, yellowCol, 0.85);
       }
-      mb._playerLane = playerLane;
 
       // Project (relZ, laneOffset) onto the mirror's CURVED rear road using
       // the SAME perspective depth as the road slices, so cars/scenery sit
       // on the bent centerline and space/size like the forward view.
-      const playerLn  = mb._playerLane ?? 0;
       const projectRear = (relZ, laneOffset/* , maxZ */) => {
         const depthT = mirrorDepthT(relZ);  // perspective: 0 = horizon, 1 = near plane
         const yMin   = mb.horizonY + 1;
         const yMax   = mb.roadBotY - 1;
         const y      = yMin + depthT * (yMax - yMin);
         const halfW  = mb.roadHalfW * depthT;
-        const centerX = drawnRoadCx + bendOffAtSeg(relZ / SEG_LENGTH);
-        const x      = centerX + ((laneOffset ?? 0) - playerLn) * (halfW + 4);
+        // Same centerline the road slices are drawn on — lateralShiftAt()
+        // already carries the player's lateral offset (depth-scaled), so the
+        // lane term must NOT subtract it a second time.
+        const centerX = mb.roadCx + bendOffAtSeg(relZ / SEG_LENGTH) + lateralShiftAt(depthT);
+        const x      = centerX + (laneOffset ?? 0) * (halfW + 4);
         return { x, y, depthT };
       };
 
       // Helper — set a pool sprite to a texture and place it.  Caps
       // height by depth so a close-by car stays inside the glass.
       const mirrorZoom = this._mirrorZoom ?? 1;
-      const placeSprite = (s, tex, x, y, depthT, maxH = 26, alpha = 1) => {
+      // `minH` is the floor a sprite may shrink to.  Traffic keeps the old
+      // sub-pixel 2.5 (a distant car SHOULD dissolve toward the vanishing
+      // point); cops pass a higher floor so a pursuer stays readable in a
+      // glass this small — at 800x450 the road band is only ~26 px tall, and
+      // a cruiser 76 ft back was drawing 4 px (owner 2026-07-29).
+      const placeSprite = (s, tex, x, y, depthT, maxH = 26, alpha = 1, minH = 2.5) => {
         if (s.texture.key !== tex && this.textures.exists(tex)) s.setTexture(tex);
         const t  = this.textures.get(s.texture.key).source[0];
         const tw = t?.width  || 64;
@@ -17987,7 +18118,7 @@ export class GameScene extends Phaser.Scene {
         // touch-and-hold.  Without this the background scaled (it's drawn
         // from _mirrorBounds) but sprite px-heights stayed fixed, so they
         // looked tiny / shrunk in the enlarged mirror.
-        const targetH = Math.max(2.5, 2 + depthT * (maxH - 2)) * mirrorZoom;
+        const targetH = Math.max(minH, 2 + depthT * (maxH - 2)) * mirrorZoom;
         const targetW = targetH * (tw / th);
         s.setDisplaySize(targetW, targetH);
         s.setPosition(x, y);
@@ -18257,24 +18388,31 @@ export class GameScene extends Phaser.Scene {
         const proj = projectRear(vz, cop.laneOffset, MIRROR_FAR_Z);
         const tex = this.textures.exists('car_front_police') ? 'car_front_police' : 'car_front_white';
         const slot = carPool[usedCars++];
-        placeSprite(slot, tex, proj.x, proj.y, proj.depthT, 20, copFa);
+        // Cop floor scales with the glass (≈13% of its height) so the pursuer
+        // stays legible at any mirror size / zoom, never below 6 px.
+        placeSprite(slot, tex, proj.x, proj.y, proj.depthT, 20, copFa,
+                    Math.max(6, mb.glassH * 0.13));
         if (_hlOnMirror) {
           const targetW = slot.displayWidth;
           const targetH = slot.displayHeight;
-          const y = proj.y - targetH * 0.62;
-          const barW = Math.max(2.5, targetW * 0.45);
-          const barH = Math.max(1.0, targetW * 0.08);
-          const flashLeft = !!this.cops?.lightFlash;
+          // car_front_police roof-bar anchors (derived from the 768×615
+          // sprite): centers at ±~15.8% W and ~90% H above the tire line.
+          const y = proj.y - targetH * 0.90;
+          const halfDx = targetW * 0.158;
+          const lensW = Math.max(2.5, targetW * 0.205);
+          const lensH = Math.max(1.0, targetH * 0.036);
+          const flashOn = !!this.cops?.lightFlash;
           ml.blendMode = Phaser.BlendModes.ADD;
-          ml.fillStyle(flashLeft ? 0xFF2233 : 0x2A66FF, Math.min(1, 0.30 + _darknessMirror * 0.55) * copFa);
-          ml.fillEllipse(proj.x - barW * 0.22, y, barW * 0.55, barH);
-          ml.fillStyle(flashLeft ? 0x2A66FF : 0xFF2233, Math.min(1, 0.30 + _darknessMirror * 0.55) * copFa);
-          ml.fillEllipse(proj.x + barW * 0.22, y, barW * 0.55, barH);
+          const barA = Math.min(1, (flashOn ? 0.42 : 0.16) + _darknessMirror * 0.55) * copFa;
+          ml.fillStyle(0x2A66FF, barA);
+          ml.fillEllipse(proj.x - halfDx, y, lensW, lensH * 2.1);
+          ml.fillStyle(0xFF2233, barA);
+          ml.fillEllipse(proj.x + halfDx, y, lensW, lensH * 2.1);
           // Pursuit headlights are visible in the mirror because rear cops
           // are closing in the player's lane.
-          const lampY = proj.y - targetH * 0.50;
+          const lampY = proj.y - targetH * 0.57;
           const r = Math.max(0.8, targetW * 0.055);
-          const dx = targetW * 0.24;
+          const dx = targetW * 0.37;
           ml.fillStyle(0xFFE680, Math.min(1, lightAM * 1.8) * copFa);
           ml.fillCircle(proj.x - dx, lampY, r);
           ml.fillCircle(proj.x + dx, lampY, r);
@@ -19486,6 +19624,59 @@ export class GameScene extends Phaser.Scene {
     const endSurvDrag = () => { this._draggingSurvKey = null; };
     this.input.on('pointerup',        endSurvDrag);
     this.input.on('pointerupoutside', endSurvDrag);
+  }
+
+  /** Custom-mode WANTED-LEVEL drag (owner 2026-07-29) — sandbox control of the
+   *  star rating, mirroring the vice / status bars: press the star row and the
+   *  star under your finger becomes the level; drag across to scrub 0-5 (drag
+   *  off the left edge for 0).  Only the LEVEL is set — CopSystem keeps
+   *  spawning, decaying and busting from there, so the chase stays live.
+   *  Live cops are deliberately NOT cleared on a drop to 0: they break off the
+   *  way they normally do, instead of vanishing every time a scrub passes 0. */
+  _ensureStarDragHandler() {
+    if (this._starDragWired) return;
+    this._starDragWired = true;
+    // Same restart caveat as the status bars: Phaser reuses the scene and
+    // clears listeners on shutdown, so the flag must clear too or the drag
+    // goes dead after the first run.
+    this.events.once('shutdown', () => { this._starDragWired = false; });
+    this._draggingStars = false;
+
+    const isCustom = () => Difficulty.mode?.() === 'custom';
+    const PAD = 12;
+
+    const setStarsFromPointer = (px) => {
+      const hit = this._starRowHit;
+      if (!hit || !this.cops) return;
+      // Which glyph is under the finger: left edge → 0, first star → 1, …
+      const n = Math.max(0, Math.min(5, Math.ceil((px - hit.x) / (hit.w / 5))));
+      if (this.cops.stars === n) return;
+      this.cops.stars = n;
+      // Refresh the decay window so a level you just set doesn't tick away in
+      // the same second (matches every other place that assigns stars).
+      this.cops.starTimer = n > 0 ? 4 : 0;
+    };
+
+    this.input.on('pointerdown', (ptr) => {
+      if (!isCustom() || this._ctrlEditMode) return;
+      if (this._draggingViceId || this._draggingSurvKey) return;
+      const hit = this._starRowHit;
+      if (!hit) return;
+      const px = ptr.x - (C.HUD_OFFSET_X || 0), py = ptr.y;
+      if (px >= hit.x - PAD && px <= hit.x + hit.w + PAD
+       && py >= hit.y - PAD && py <= hit.y + hit.h + PAD) {
+        this._draggingStars = true;
+        setStarsFromPointer(px);
+      }
+    });
+    this.input.on('pointermove', (ptr) => {
+      if (!this._draggingStars) return;
+      if (!isCustom()) { this._draggingStars = false; return; }
+      setStarsFromPointer(ptr.x - (C.HUD_OFFSET_X || 0));
+    });
+    const endStarDrag = () => { this._draggingStars = false; };
+    this.input.on('pointerup',        endStarDrag);
+    this.input.on('pointerupoutside', endStarDrag);
   }
 
   /** Render one inventory cell — icon (image or emoji) + invisible

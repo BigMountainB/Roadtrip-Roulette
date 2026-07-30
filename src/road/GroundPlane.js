@@ -64,22 +64,13 @@ const TILE_Z  = TILE_FT * UNITS_PER_FT_Z;
 
 // Distance fade, in world Z units — full texture to FADE_Z0, gone by FADE_Z1.
 //
-// These now sit BEYOND the render distance (DRAW_DIST x SEG_LENGTH = 76,000),
-// i.e. the ground stays fully opaque all the way to the horizon.  That is
-// deliberate and load-bearing:
-//
-// The original 6k/22k fade revealed the flat terrain fill underneath, which
-// was fine while this layer sat BELOW the North Bend plate.  Now that it sits
-// ABOVE the plate (to kill the floating road), anything it fades out reveals
-// the PLATE — so the mountains showed through the ground in the ~14 px band
-// just under the horizon, where relZ exceeds 22,000.
-//
-// Shimmer was the reason for the fade, and mipmapping is the proper fix for
-// it: a sub-pixel-compressed tile resolves to a high mip level, which is
-// essentially its average colour and is stable frame to frame.  That is what
-// the trilinear + anisotropic setup in enableRepeatWrap() buys.
-const FADE_Z0 = 90000;
-const FADE_Z1 = 140000;
+// Fade before the 76,000-unit draw cap. At grazing-angle compression the last
+// one or two custom-pipeline rows can sample outside the useful mip footprint
+// and appear as a pure-black horizon strip. The flat terrain fill underneath
+// already carries the correct distance-haze colour, so handing off to it over
+// the final 18k units is both safer and visually continuous.
+const FADE_Z0 = 52000;
+const FADE_Z1 = 70000;
 
 /** Max height in px of one textured sub-row.  Smaller = more perspective-
  *  correct UVs in the near field, at ~1 extra quad per 12 px of screen. */
@@ -175,6 +166,11 @@ export class GroundPlane extends Phaser.GameObjects.Image {
 
   /** Called once per frame by Road.render before any segment is drawn. */
   beginFrame(playerPos) {
+    // The Image can be constructed before Phaser has uploaded its source to
+    // WebGL.  The old one-shot check then left `_ok` false forever, producing
+    // flat-colour shoulders for the entire run (especially common on mobile).
+    // Retry until the texture exists on the GPU; after success this is free.
+    if (!this._ok) this._ok = GroundPlane.enableRepeatWrap(this.scene, this.texture.key);
     this._rowCount = 0;
     this._playerZ  = playerPos;
     this._margin   = 150 + Math.ceil(C.HUD_OFFSET_X);

@@ -40,6 +40,7 @@ import { clamp } from '../utils/Helpers.js';
 import { Difficulty } from './Difficulty.js';
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
+import { DeployableField, DONUT_DIVERT_BY_STAR, DONUT_IMMUNE_SEC, PUFF_LIFE, CL } from './Deployables.js';
 
 // Cop top speed in internal world units.  MAX_SPEED is the player's 120 mph
 // reference, so COP_TOP_MPH / 120 × MAX_SPEED is the cop's cap.
@@ -117,9 +118,57 @@ const SPEED_CAP_BY_STAR = [1.03, 1.03, 1.06, 1.08, 1.15, 1.25];
 // hit box permanently, registering a ram every frame and busting the player
 // instantly.  A cop parks just clear of the box instead, and a cop actively
 // making a strike is exempt so bumping still lands.
-const TAILGATE_GAP  = 600;
-const RAM_STRIKE_Z  = 2000;   // within this of the bumper = making contact
+// ── Overtake tokens (spec §3) ───────────────────────────────────────────
+// A unit may only pass the player while HOLDING a token, and tokens only
+// exist at 4-5 stars.  This is what makes "getting in front" a scarce,
+// deliberate event rather than whoever happens to be fastest.
+const TOKEN_POOL_BY_STAR   = [0, 0, 0, 0, 1, 2];   // index by star tier
+const TOKEN_MAX_GAP        = 12 * CL;   // must be this close to even ask
+const TOKEN_LANE_CLEAR     = 20 * CL;   // pass lane clear for this far ahead
+const TOKEN_GRANT_COOLDOWN = 8;         // no two grants inside this window
+const TOKEN_HOLD_MAX       = 15;        // forced return after this long
+const TOKEN_RETURN_COOLDOWN = 6;        // unit can't re-request for this long
+
+// ── Onramp reinforcements (spec §3) ─────────────────────────────────────
+// At 4-5 stars fresh units merge from an onramp AHEAD of the player rather
+// than sprinting past from behind — far more believable than a rear cruiser
+// overtaking at 120 mph, and it's how a real interdiction is set up.
+const ONRAMP_MIN_STARS   = 4;
+const ONRAMP_INTERVAL    = [0, 0, 0, 0, 14, 9];   // seconds between merges, by tier
+// 18-30 CL ahead, NOT 40-70: the rear-cop far cull fires at dist > 30000, so
+// a reinforcement seeded past that was culled on the very frame it merged —
+// the same spawn-outside-the-despawn-window bug that used to delete half of
+// all star-driven spawns.  Onramp units are also exempted from that cull
+// below while they still hold their token.
+const ONRAMP_AHEAD_MIN   = 18 * CL;
+const ONRAMP_AHEAD_SPAN  = 12 * CL;
+
+// ── Forward counter (spec §6) ───────────────────────────────────────────
+// At 4-5 stars, leaning on a blocker's rear bumper for PUSH_THROUGH_SEC
+// shoves it aside and spins it out, at a cost in HP scaled to closing speed.
+const PUSH_THROUGH_SEC   = 1.2;
+const PUSH_CONTACT_Z     = 1.4 * CL;   // how close counts as "on its bumper"
+const PUSH_HP_PER_SPEED  = 6.0;        // HP at full speed; scales linearly
+
+// Where a pursuer SITS: ~30 ft (1800 / 60.8 units-per-ft) back, a bit under
+// two car lengths — what a cruiser running you down actually holds, and far
+// enough that the rear-view mirror reads it as behind you rather than beside
+// you (owner 2026-07-29).  Was 600 (~10 ft), i.e. glued to the bumper.
+const TAILGATE_GAP  = 1800;
 const SETTLE_SPEED_MULT = 0.98;   // pinned cops settle rather than stick
+
+// ── Ram lunges ──────────────────────────────────────────────────────────
+// A pursuer holds TAILGATE_GAP and periodically COMMITS to a strike, then
+// falls back.  This replaces a permanent exemption (any cop within a flat
+// RAM_STRIKE_Z of the bumper was allowed to ignore the standoff), which let a
+// cruiser park at the player's exact depth indefinitely — the "cops drive
+// alongside me instead of behind me" report — and let it re-register a rear
+// ram every single frame while it sat there.
+const LUNGE_GAP_MIN  = 3.5;    // seconds between attempts…
+const LUNGE_GAP_SPAN = 3.5;    // …plus up to this much, randomised per attempt
+const LUNGE_SEC      = 2.5;    // how long the standoff stays lifted
+const LUNGE_CLOSE_MIN = 900;   // floor on the closing rate during a lunge
+const LUNGE_RANGE    = 6000;   // only commit from inside this gap
 // Rolling-coal recede (owner 2026-07-17): the smoked cop KEEPS PACE with the
 // player for this many seconds, then slows to 0.45× and falls back, dropping
 // off the bottom edge the same way it drove in (pure positional recede — no
@@ -155,6 +204,21 @@ export class CopSystem {
     // when the pool hits 0.
     this.coalAmmo      = 0;
     this.lastStateLine = -1;
+
+    // World-space donut boxes + coal puffs.  Replaces the old longitudinal
+    // band filters, which could not reach a cop in front of the player.
+    this.deployables = new DeployableField();
+
+    // Overtake-token bookkeeping.  `_tokenHadTurn` is the fairness set: a unit
+    // cannot take a SECOND token until every other live unit has had one, so
+    // the same cruiser can't monopolise every pass.
+    this._tokensOut      = 0;
+    this._lastGrantAt    = -Infinity;
+    this._tokenClock     = 0;
+    this._tokenHadTurn   = new Set();
+    this._starLevel      = 0;    // latched display level; see _syncStarLevel()
+    this._onrampTimer    = 0;
+    this._pushThrough    = 0;    // seconds of sustained bumper contact
 
     this._spawnCooldown = 0;
     this._flashTimer    = 0;
@@ -199,6 +263,188 @@ export class CopSystem {
       _laneDrift:   0.4  + Math.random() * 0.4,
     };
     this.cops.push(cop);
+    return cop;
+  }
+
+  /**
+   * Grant / hold / revoke overtake tokens.  Called once per frame BEFORE the
+   * per-cop AI so a unit's `_overtakeToken` is current when the anti-pass
+   * guards read it.
+   *
+   * A token is the ONLY way a unit may exceed the player's depth.  Pool size
+   * is 0 below 4 stars, so the guards are absolute there by construction.
+   */
+  _tickOvertakeTokens(dt, pursuitZ, playerX) {
+    this._tokenClock += dt;
+    const tier = Math.max(0, Math.min(5, this._syncStarLevel()));
+    const pool = TOKEN_POOL_BY_STAR[tier];
+
+    // ── Revoke: demotion, death, flight, or the 15 s hold expiring ────────
+    let out = 0;
+    for (const cop of this.cops) {
+      if (!cop._overtakeToken) continue;
+      const expired = (this._tokenClock - cop._overtakeToken.at) > TOKEN_HOLD_MAX;
+      if (pool === 0 || expired || cop.fleeing || cop.parked || !cop.alive) {
+        cop._overtakeToken   = null;
+        cop._tokenCooldownAt = this._tokenClock;   // 6 s before it may re-ask
+        // NOT teleported: the demotion branch in update() lets it decelerate
+        // until the player passes it.
+      } else {
+        out++;
+      }
+    }
+    this._tokensOut = out;
+    if (pool === 0) return;
+
+    // ── Grant: at most one per TOKEN_GRANT_COOLDOWN ──────────────────────
+    if (out >= pool) return;
+    if (this._tokenClock - this._lastGrantAt < TOKEN_GRANT_COOLDOWN) return;
+
+    // Fairness: once every live unit has had a turn, the set resets and
+    // everyone is eligible again.
+    const live = this.cops.filter(c => c.alive && !c.fleeing && !c.parked && c.kind === 'rear');
+    if (live.length && live.every(c => this._tokenHadTurn.has(c.id))) this._tokenHadTurn.clear();
+
+    let best = null, bestGap = Infinity;
+    for (const cop of live) {
+      if (cop._overtakeToken) continue;
+      if (this._tokenHadTurn.has(cop.id)) continue;                  // wait your turn
+      if (this._tokenClock - (cop._tokenCooldownAt ?? -Infinity) < TOKEN_RETURN_COOLDOWN) continue;
+      const gap = pursuitZ - cop.position;                            // >0 = behind
+      if (gap < 0 || gap > TOKEN_MAX_GAP) continue;                   // must be close
+      if (!this._passLaneClear(cop, playerX)) continue;
+      if (gap < bestGap) { best = cop; bestGap = gap; }
+    }
+    if (!best) return;
+
+    best._overtakeToken = { at: this._tokenClock };
+    this._tokenHadTurn.add(best.id);
+    this._lastGrantAt = this._tokenClock;
+  }
+
+  /**
+   * Is the lane this unit would pass through clear for TOKEN_LANE_CLEAR ahead?
+   *
+   * Checks other POLICE units only — CopSystem has no handle on civilian
+   * traffic, so a pass can still be attempted into occupied traffic.  Wiring
+   * traffic in would mean threading it through update(); noted rather than
+   * faked, since a fake check that always passes is worse than none.
+   */
+  _passLaneClear(cop, playerX) {
+    const passLane = cop.laneOffset <= playerX ? playerX - 0.5 : playerX + 0.5;
+    for (const other of this.cops) {
+      if (other === cop || !other.alive) continue;
+      const ahead = other.position - cop.position;
+      if (ahead <= 0 || ahead > TOKEN_LANE_CLEAR) continue;
+      if (Math.abs(other.laneOffset - passLane) < 0.35) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Merge a reinforcement from an onramp AHEAD of the player (4-5 stars).
+   * It arrives already holding a token — it is legitimately in front, so the
+   * anti-pass guards must not drag it back.
+   */
+  _tickOnrampReinforcements(dt, playerPos, cap) {
+    const tier = Math.max(0, Math.min(5, this._syncStarLevel()));
+    if (tier < ONRAMP_MIN_STARS) { this._onrampTimer = 0; return; }
+    if ((this._coalLull ?? 0) > 0) return;          // smokescreen holds them off
+    if (this.cops.length >= cap) return;
+
+    this._onrampTimer -= dt;
+    if (this._onrampTimer > 0) return;
+    this._onrampTimer = ONRAMP_INTERVAL[tier];
+
+    const cop = {
+      id:          Math.random(),
+      position:    playerPos + ONRAMP_AHEAD_MIN + Math.random() * ONRAMP_AHEAD_SPAN,
+      laneOffset:  (Math.random() - 0.5) * 0.8,
+      speed:       COP_TOP_UNITS * 0.55,   // merging up to speed
+      baseSpeed:   COP_TOP_UNITS,
+      side:        'rear',
+      kind:        'rear',
+      colorSet:    'police',
+      damageMul:   1,
+      color:       0xFFFFFF,
+      alive:       true,
+      painted:     false,
+      _closeFactor: 0.06 + Math.random() * 0.06,
+      _laneDrift:   0.4  + Math.random() * 0.4,
+      // Arrives in front legitimately — hand it a token so the guards leave
+      // it alone, and mark its turn so fairness accounting stays honest.
+      _overtakeToken: { at: this._tokenClock },
+      _fromOnramp:    true,
+    };
+    this.cops.push(cop);
+    this._tokenHadTurn.add(cop.id);
+    return cop;
+  }
+
+  /**
+   * FORWARD COUNTER — the player's answer to a 4-5 star roadblock.
+   *
+   * Holding the throttle against a blocker's rear bumper for PUSH_THROUGH_SEC
+   * shoves it aside and spins it out.  Called from GameScene, which is the
+   * only place that knows whether the accelerator is actually held.
+   *
+   * @returns {{spun:object|null, hp:number}} unit spun out this frame (if any)
+   *          and the HP the shove cost the player.
+   */
+  tickPushThrough(dt, playerPos, playerSpeed, throttleHeld) {
+    const tier = Math.max(0, Math.min(5, this._syncStarLevel()));
+    if (tier < MIN_STARS_AHEAD || !throttleHeld) { this._pushThrough = 0; return { spun: null, hp: 0 }; }
+
+    const carZ = playerPos + PLAYER_VIRTUAL_Z;
+    // Nearest unit sitting just in FRONT of the player — the blocker.
+    let target = null, bestGap = PUSH_CONTACT_Z;
+    for (const cop of this.cops) {
+      if (!cop.alive || cop.fleeing || cop.kind === 'oncoming') continue;
+      const gap = cop.position - carZ;
+      if (gap <= 0 || gap > bestGap) continue;
+      target = cop; bestGap = gap;
+    }
+    if (!target) { this._pushThrough = 0; return { spun: null, hp: 0 }; }
+
+    this._pushThrough += dt;
+    if (this._pushThrough < PUSH_THROUGH_SEC) return { spun: null, hp: 0 };
+
+    // Shove: the blocker is spun out of the chase and the player pays for it.
+    this._pushThrough = 0;
+    target._overtakeToken = null;
+    target.fleeing        = true;
+    target._fleeNoSwerve  = false;
+    target._donutLure     = null;
+    target._fleeTimer     = FLEE_MAX_SEC;
+    target.laneOffset    += (Math.random() < 0.5 ? -1 : 1) * 0.9;   // spun aside
+    target._pitArmed      = false;
+    const hp = PUSH_HP_PER_SPEED * Math.max(0, Math.min(1, playerSpeed / MAX_SPEED));
+    return { spun: target, hp };
+  }
+
+  /**
+   * Pull one unit off the chase toward a donut box.  Factored out of the old
+   * inline paint_bomb loop so the world-space lure in update() can reuse the
+   * exact same visual contract the renderer already reads (`fleeing`,
+   * `_donutLure`, `_donutHoldRel`, `_donutFleeDelay`).
+   *
+   * `box` may sit AHEAD of the unit — that is the point.  `_donutHoldRel` is
+   * still measured from the player so the render keeps pinning the cruiser's
+   * on-screen size the way it did before.
+   */
+  _donutDivert(cop, box) {
+    const rel = cop.position - (this._playerPosForDonut ?? cop.position);
+    cop.fleeing         = true;
+    cop._fleeNoSwerve   = false;
+    cop._donutLure      = 0;
+    cop._donutHoldRel   = Math.max(rel, 1500);
+    cop._donutFleeDelay = 1;
+    cop._fleeTimer      = FLEE_MAX_SEC;
+    cop.trapPursuit     = false;
+    cop.parked          = false;
+    cop._pitProgress    = 0;
+    cop._pitArmed       = false;
+    cop._overtakeToken  = null;   // a diverted unit gives its token back
     return cop;
   }
 
@@ -613,6 +859,15 @@ export class CopSystem {
           frontZ: playerPos + COAL_CLOUD_FRONT,
           life:   COAL_CLOUD_LIFE * _durMult,
         };
+        // Puff trail (spec §5): a collider laid every 100 ms with its own
+        // 3.5 s life, so the smoke FOLLOWS the road instead of being a rigid
+        // box.  The band above is kept as the instantaneous catch region; the
+        // trail is what keeps catching late arrivals as the player drives on.
+        // Emit for (life - PUFF_LIFE) so the LAST puff dies exactly when the
+        // legacy cloud does.  Emitting for the full life would stretch coal's
+        // effective window by PUFF_LIFE and let it smoke a late arrival after
+        // the cloud expired — behaviour coal.test.mjs explicitly forbids.
+        this.deployables.startCoal(Math.max(0, COAL_CLOUD_LIFE * _durMult - PUFF_LIFE));
         // Smoke-out any cop ALREADY inside the cloud band this instant — a
         // cop chasing from behind is in the band the moment you belch.  The
         // per-frame touch check (update loop) keeps catching new arrivals,
@@ -694,23 +949,29 @@ export class CopSystem {
         // DISTRACTION: no kills, no star change. `_donutLure` steers the flee
         // toward the donuts; the fireworks-style positional recede slides them
         // off. A SHORT no-spawn window keeps them from re-manifesting instantly.
+        // Drop a world-anchored box.  The per-frame lure check in update()
+        // radius-tests EVERY unit against it — including one that has got in
+        // front of the player, which the old `rel < 3000` band could never
+        // reach.  That is the whole reason donuts felt dead against a blocker.
+        this.deployables.dropDonuts(playerPos, 0, this._traitWeaponDurationMult ?? 1);
+        // Immediate catch: run the SAME radius lure the per-frame check uses,
+        // so a unit already standing in the box's radius reacts on the frame
+        // it lands.  One code path only — the old `rel < 3000` band is gone,
+        // and with it the reason donuts were dead against a blocker.
         let lured = 0;
-        for (const cop of this.cops) {
-          const rel = cop.position - playerPos;
-          if (cop.kind !== 'barricade' && rel < 3000 && rel > -15000) {
-            cop.fleeing        = true;
-            cop._fleeNoSwerve  = false;     // uses the positional recede, not coal's fade
-            cop._donutLure     = 0;         // marks a donut flee (no shoulder swerve); NOT steered anymore
-            // Freeze the cruiser's on-screen SIZE at the moment the box lands
-            // (clamped to the projection floor). The render pins draw depth here
-            // so the cop slides straight DOWN without shrinking (owner 2026-07-21).
-            cop._donutHoldRel  = Math.max(rel, 1500);
-            cop._donutFleeDelay = 1;        // hold on-screen 1s before dropping back (owner 2026-07-19)
-            cop._fleeTimer     = FLEE_MAX_SEC;
-            cop.trapPursuit   = false;
-            cop.parked        = false;
-            cop._pitProgress  = 0;
-            cop._pitArmed     = false;
+        this._syncStarLevel();
+    this._playerPosForDonut = playerPos;
+        {
+          const box  = this.deployables.donuts[this.deployables.donuts.length - 1];
+          const tier = Math.max(1, Math.min(5, this._syncStarLevel()));
+          for (const cop of this.cops) {
+            if (!cop || cop.kind === 'barricade' || cop.parked || cop.fleeing) continue;
+            if ((cop._donutImmune ?? 0) > 0) continue;
+            if (Math.abs(cop.position - box.z) > 16 * CL) continue;
+            cop._donutRolled = box;
+            if (Math.random() >= DONUT_DIVERT_BY_STAR[tier]) continue;
+            cop._donutImmune = DONUT_IMMUNE_SEC;
+            this._donutDivert(cop, box);
             lured++;
           }
         }
@@ -820,6 +1081,11 @@ export class CopSystem {
 
     // Rolling-coal cloud — the hanging smokescreen ages out; while it lives, a
     // cop inside its world-anchored road region gets the 60 mph / 30 s slow.
+    this._playerPosForDonut = playerPos;
+    this._tickOvertakeTokens(dt, playerPos + PLAYER_VIRTUAL_Z, playerX);
+    // World-space deployables: age boxes/puffs and lay new coal at the car.
+    this.deployables.update(dt, playerPos);
+
     if (this._coalCloud) {
       this._coalCloud.life -= dt;
       if (this._coalCloud.life <= 0) this._coalCloud = null;
@@ -894,6 +1160,8 @@ export class CopSystem {
     // ── 5★ extras: barricades + helicopter ─────────────────────────
     // At max wanted level the highway gets cluttered with rolling
     // road-block formations and a permanent chopper overhead.
+    this._tickOnrampReinforcements(dt, playerPos, cap);
+
     this._barricadeCooldown = (this._barricadeCooldown ?? 0) - dt;
     if (this.stars >= 5 && this._barricadeCooldown <= 0 && (this._coalLull ?? 0) <= 0) {
       this._spawnBarricade(playerPos);
@@ -924,9 +1192,38 @@ export class CopSystem {
       // can be chasing — not a stationary barricade or a parked held-stop
       // trooper) breaks pursuit and smoke-outs.  Gated on !fleeing so a cop
       // lingering in the band doesn't get its pace/flee timers re-armed.
-      if (this._coalCloud && cop.kind !== 'barricade' && !cop.parked && !cop.fleeing
-          && cop.position >= this._coalCloud.backZ && cop.position <= this._coalCloud.frontZ) {
+      const _deployable = cop.kind !== 'barricade' && !cop.parked && !cop.fleeing;
+
+      // ── COAL: puff colliders, radius-tested ─────────────────────────────
+      // The legacy band is kept as the instantaneous catch region at fire
+      // time; the puff trail is what keeps catching units afterwards.
+      // NOTE the EFFECT is still the full smoke-out, not the spec's "steering
+      // noise + speed penalty".  That is deliberate: ending the chase was an
+      // explicit owner call (2026-07-22, "Option 1"), because a slow-cap read
+      // as "the first cop withstood the coal", and 25 tests encode it.
+      if (_deployable
+          && ((this._coalCloud
+               && cop.position >= this._coalCloud.backZ
+               && cop.position <= this._coalCloud.frontZ)
+              || this.deployables.inPuff(cop.position))) {
         this._coalSmokeOut(cop);
+      }
+
+      // ── DONUTS: world-space lure, reaches units IN FRONT ────────────────
+      // Radius check against every unit regardless of side.  One roll per
+      // unit per box; on a divert the unit is immune for DONUT_IMMUNE_SEC so
+      // a stack of boxes can't chain-disable the same car.
+      if (cop._donutImmune > 0) cop._donutImmune -= dt;
+      if (_deployable && (cop._donutImmune ?? 0) <= 0) {
+        const box = this.deployables.donutNear(cop.position);
+        if (box && cop._donutRolled !== box) {
+          cop._donutRolled = box;             // one roll per box, per unit
+          const tier = Math.max(1, Math.min(5, this._syncStarLevel()));
+          if (Math.random() < DONUT_DIVERT_BY_STAR[tier]) {
+            cop._donutImmune = DONUT_IMMUNE_SEC;
+            this._donutDivert(cop, box);
+          }
+        }
       }
 
       // Fireworks scatter / coal smoke-out — the cop breaks pursuit and
@@ -1113,11 +1410,32 @@ export class CopSystem {
       // a single frame of reaching 4.0 — and worse, it disagrees with the HUD,
       // which shows Math.floor(stars).  Reading the same floor keeps "cops may
       // lead" true exactly while the player can SEE 4+ stars.
-      const _starTier = Math.floor(this.stars);
+      const _starTier = this._starLevel;
       const _mayLead = _starTier >= MIN_STARS_AHEAD || !!cop._overtakeToken;
       const _guarded = !_mayLead && !cop.fleeing && !cop.parked
                     && cop.kind !== 'oncoming' && cop.kind !== 'barricade';
       const _copCarDist = cop.position - pursuitZ;   // >0 = cop is ahead
+
+      // ── RAM LUNGE ─────────────────────────────────────────────────────
+      // Ticked BEFORE the guards: a committed lunge is exempt from GUARD 1's
+      // speed ceiling (GUARD 2 still stops it passing the player), otherwise a
+      // 1-star cap of 1.03x the player's speed makes the strike take ~6 s to
+      // cross the standoff and it never lands.
+      if (cop._lungeT > 0) {
+        cop._lungeT -= dt;
+      } else if (_guarded && !cop._demoting && cop.kind === 'rear'
+                 && _copCarDist < 0 && _copCarDist > -LUNGE_RANGE) {
+        cop._lungeCd = (cop._lungeCd ?? (LUNGE_GAP_MIN + Math.random() * LUNGE_GAP_SPAN)) - dt;
+        if (cop._lungeCd <= 0) {
+          cop._lungeT  = LUNGE_SEC;
+          cop._lungeCd = LUNGE_GAP_MIN + Math.random() * LUNGE_GAP_SPAN;
+        }
+      }
+      const _lunging = cop._lungeT > 0;
+      if (_lunging) {
+        cop.speed = Math.min(COP_TOP_UNITS,
+                             playerSpeed + Math.max(playerSpeed * 0.12, LUNGE_CLOSE_MIN));
+      }
 
       if (_guarded) {
         // DEMOTION.  A unit already in front when the gate closes (5* -> 3*,
@@ -1127,7 +1445,7 @@ export class CopSystem {
         if (cop._demoting) {
           cop.speed = Math.max(0, playerSpeed * 0.80);   // drift back
           if (_copCarDist <= -TAILGATE_GAP) cop._demoting = false;
-        } else {
+        } else if (!_lunging) {
           // GUARD 1 — ceiling scaled to the player, so it holds at any speed.
           const _starIdx = Math.max(1, Math.min(5, _starTier));
           cop.speed = Math.min(cop.speed, playerSpeed * SPEED_CAP_BY_STAR[_starIdx]);
@@ -1142,9 +1460,8 @@ export class CopSystem {
       // that is the only place an overrun can be observed.  Skipped while
       // demoting so the fall-back stays smooth rather than snapping.
       if (_guarded && !cop._demoting) {
-        // A cop mid-strike may close to contact; it still may not pass.
-        const _striking = _copCarDist < 0 && Math.abs(_copCarDist) < RAM_STRIKE_Z;
-        const _limit = pursuitZ - (_striking ? 0 : TAILGATE_GAP);
+        // A cop mid-LUNGE may close to contact; it still may not pass.
+        const _limit = pursuitZ - (_lunging ? 0 : TAILGATE_GAP);
         if (cop.position > _limit) {
           cop.position = _limit;
           cop.speed    = playerSpeed * SETTLE_SPEED_MULT;
@@ -1169,7 +1486,10 @@ export class CopSystem {
         // put COP_ESCAPE_MILES between you and it (owner 2026-07-27).  Far
         // AHEAD is still culled: that's a stranded cruiser, not a chase.
         const carDist = cop.position - pursuitZ;
-        if (dist > 30000) this.cops.splice(i, 1);
+        // An onramp reinforcement is SUPPOSED to be ahead — don't cull it as a
+        // stranded cruiser while it still holds its overtake token.
+        const _legitAhead = cop._fromOnramp && cop._overtakeToken;
+        if (dist > 30000 && !_legitAhead) this.cops.splice(i, 1);
         else if (carDist < -COP_ESCAPE_UNITS) this.cops.splice(i, 1);
         else if (this.stars < 1 && carDist < -10000) this.cops.splice(i, 1);
       } else if (cop.kind === 'barricade') {
@@ -1237,6 +1557,15 @@ export class CopSystem {
                 || (c.fleeing && c.fleeExit < 1 && c.relativePos > FLEE_DESPAWN_REL && c.relativePos < 50000));
   }
 
+  /** A strike landed — end the lunge and put the unit back on its standoff
+   *  until the next attempt.  Without this a lunging cop pinned at the
+   *  player's depth re-registers a rear ram every frame it sits there. */
+  endLunge(cop) {
+    if (!cop) return;
+    cop._lungeT  = 0;
+    cop._lungeCd = LUNGE_GAP_MIN + Math.random() * LUNGE_GAP_SPAN;
+  }
+
   // Rear cops aren't visible in pseudo-3D; expose count + nearest distance.
   getRearCopInfo(playerPos) {
     let count = 0, nearest = -Infinity;
@@ -1253,5 +1582,32 @@ export class CopSystem {
   // Display the floor — a star only appears once it's been fully earned.
   // Was Math.ceil, which made the HUD jump to "2" the instant raw stars
   // crossed 1.0 + a fractional heat tick.
-  get starDisplay() { return Math.floor(this.stars); }
+  get starDisplay() { this._syncStarLevel(); return this._starLevel; }
+
+  /**
+   * Latch the DISPLAYED wanted level.
+   *
+   * `stars` is a float that decays continuously (1 per 60 s).  Reading it with
+   * Math.floor meant any decay at all dropped the shown level instantly: start
+   * a custom run at exactly 2 stars and one frame later stars is 1.9997, so
+   * the HUD fell to 1 in 1/60th of a second (owner report 2026-07-29 — "two
+   * stars, half a mile, down to one").  Math.ceil is not the answer either;
+   * that was the ORIGINAL bug, where a fractional heat tick above 1.0 showed
+   * a 2nd star that had not been earned.
+   *
+   * So latch it, with the two rules pulling in opposite directions:
+   *   • GAIN only on a fully earned star  (stars >= level + 1)
+   *   • LOSE only once a whole star has decayed away  (stars <= level - 1)
+   *
+   * Starting at 2.0 you now hold 2 stars for the full 60 s it takes to decay
+   * one, and partial heat still never shows a star you have not earned.
+   */
+  _syncStarLevel() {
+    const s = this.stars ?? 0;
+    if (this._starLevel == null) this._starLevel = Math.floor(s);
+    while (this._starLevel < MAX_STARS && s >= this._starLevel + 1) this._starLevel++;
+    while (this._starLevel > 0        && s <= this._starLevel - 1) this._starLevel--;
+    if (s <= 0) this._starLevel = 0;
+    return this._starLevel;
+  }
 }

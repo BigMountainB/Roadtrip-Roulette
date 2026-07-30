@@ -2576,17 +2576,15 @@
       const mapMile    = document.getElementById('phone-map-mile');
       const mapStops   = document.getElementById('phone-map-stops');
       const mapClose   = document.getElementById('phone-map-close');
-      // Amenity → business logo PNG (west/east brand split, matching the
-      // rest-stop screens: CarGo/Huff's gas, Lord/SUCK dealer, etc.).
+      // Amenity → business logo PNG, matching the rest-stop screens.
       // Filenames + display names mirror RestStopScene's brandsForStop()
       // and AssetManifest (biz_* keys → public/assets/businesses/*.png).
       // Explicit per-amenity logo map (matches the game's brandsForStop).
-      // Each business is its own amenity key now — gas is always Huff's,
-      // cargo is CarGo, and the two dealerships (lord / suck) are listed
-      // per-stop rather than auto-picked by region.  isWest unused.
+      // Each business is its own amenity key — gas is always Huff's, and
+      // the two dealerships (lord / suck) are listed per-stop rather than
+      // auto-picked by region.  isWest unused.  (CarGo removed 2026-07-29.)
       const BIZ_LOGO = (a, isWest) => ({
         gas:     { file: 'huffs.png',          name: "Huff's Gas" },
-        cargo:   { file: 'cargo.png',          name: 'CarGo' },
         hunting: { file: 'cowbellas.png',      name: 'CowBella' },
         camp:    { file: 'aok.png',            name: 'AOK Camp' },
         lord:    { file: 'lord.png',           name: 'Lord Motors' },
