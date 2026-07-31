@@ -1693,6 +1693,30 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.input.keyboard?.off('keydown', this._paintedEdgeToggleHandler));
     this.events.once('destroy',  () => this.input.keyboard?.off('keydown', this._paintedEdgeToggleHandler));
 
+    // F5 — speed debugger.  Live breakdown of every factor feeding the
+    // target-speed computation in _updatePlayer (owner request: an
+    // unexplained top-speed jump — 150→177 mph, nothing picked up — needed
+    // a way to see WHICH bonus was actually firing instead of guessing from
+    // the source). _updatePlayer stashes the raw numbers into this._speedDbg
+    // every frame regardless of this toggle (negligible cost); this only
+    // gates whether they get formatted + drawn.
+    this._speedDebugOn = false;
+    this._speedDebugText = this.add.text(8, SCREEN_H - 210, '', {
+      fontFamily: 'monospace, Courier', fontSize: '11px',
+      color: '#00FF88', backgroundColor: 'rgba(0,0,0,0.65)',
+      padding: { x: 5, y: 4 },
+    }).setDepth(19).setScrollFactor?.(0).setVisible(false);
+    this._speedDebugToggleHandler = (ev) => {
+      if (!this._devEnabled) return;
+      if (ev.code !== 'F5' && ev.key !== 'F5') return;
+      ev.preventDefault?.();
+      this._speedDebugOn = !this._speedDebugOn;
+      this._speedDebugText?.setVisible(this._speedDebugOn);
+    };
+    this.input.keyboard?.on('keydown', this._speedDebugToggleHandler);
+    this.events.once('shutdown', () => this.input.keyboard?.off('keydown', this._speedDebugToggleHandler));
+    this.events.once('destroy',  () => this.input.keyboard?.off('keydown', this._speedDebugToggleHandler));
+
     this._setupTouch();
     this._setupTilt();
     // Detach the window-level deviceorientation listener if the scene
@@ -5557,6 +5581,23 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this._curGrade = curGrade;
+
+    // Speed-debugger snapshot (F5, dev mode only) — the exact values THIS
+    // frame's target speed was built from, not a recomputed approximation.
+    // Always stashed (cheap object literal); _renderSpeedDebugOverlay only
+    // formats + draws it when the overlay is toggled on.
+    this._speedDbg = {
+      curMph:        p.speed    * 120 / MAX_SPEED,
+      targetMph:     targetSpeed * 120 / MAX_SPEED,
+      cruiseMph, boostMph,
+      boostBase: _boostBase, cruiseBase: _cruiseBase, topPct: _topPct,
+      energyBonus, caffeineBonus, nosBonus, upMph,
+      speedMult:  phys.speedMult ?? 1,
+      gradeMult, curGrade,
+      engineLimp: this._engineLimp, engineTemp: this._engineTemp,
+      genreVehicle: _gvt?.vehicleName ?? null,
+      genre: window.__genre?.get?.() ?? null,
+    };
 
     // ── Speed-trap auto-stop assist (0★ civil stop) ───────────────────────
     // Cruise braking floors at 60 mph, so the player can't reach a stop on
@@ -12209,6 +12250,7 @@ export class GameScene extends Phaser.Scene {
     }
     this._renderDamageGlass();
     this._renderDebugOverlay();
+    this._renderSpeedDebugOverlay();
 
   }
 
@@ -13418,6 +13460,31 @@ export class GameScene extends Phaser.Scene {
       `tunnel: firstN=${firstTunnelN}  bridge=${onBridge}  inTunnel=${inTunnel}`,
       `camera: ${this.road?._cameraTracksPlayer === false ? 'CENTERED (F4)' : 'TRACKS PLAYER (F4)'}`,
       `iframe=${Math.max(0, this._invincibleUntil - (this.time?.now ?? 0)).toFixed(0)}ms`,
+    ].join('\n'));
+  }
+
+  /** F5 speed debugger — live breakdown of every factor _updatePlayer folds
+   *  into the target speed, so an unexplained jump (e.g. "top speed went
+   *  150→177, nothing was picked up") can be read off directly instead of
+   *  guessed at from source.  Formats this._speedDbg (stashed every frame
+   *  in _updatePlayer regardless of this toggle) — never recomputes, so it
+   *  can't drift from what actually drove the car. */
+  _renderSpeedDebugOverlay() {
+    if (!this._speedDebugOn || !this._speedDebugText) return;
+    const s = this._speedDbg;
+    if (!s) return;
+    const mph = (n) => `${Math.round(n)}`;
+    const pct = (n) => `${n >= 1 ? '+' : ''}${Math.round((n - 1) * 100)}%`;
+    this._speedDebugText.setText([
+      `SPEED DEBUG (F5)  cur=${mph(s.curMph)}  target=${mph(s.targetMph)}`,
+      `cruise=${mph(s.cruiseMph)}  boost=${mph(s.boostMph)}` +
+        (s.genreVehicle ? `  [${s.genreVehicle}${s.genre ? '/' + s.genre : ''}]` : '  [beater]'),
+      `base: cruise=${mph(s.cruiseBase)} boost=${mph(s.boostBase)}  topPct=${pct(s.topPct)}`,
+      `bonuses(mph): energy=${mph(s.energyBonus)} caffeine=${mph(s.caffeineBonus)}` +
+        ` nos=${mph(s.nosBonus)} upgrade=${mph(s.upMph)}`,
+      `mults: speedMult=${s.speedMult.toFixed(2)}  grade=${s.gradeMult.toFixed(2)}` +
+        ` (${(s.curGrade * 100).toFixed(1)}%)`,
+      `engine: temp=${Math.round(s.engineTemp ?? 0)}°  limp=${s.engineLimp ? 'YES' : 'no'}`,
     ].join('\n'));
   }
 
