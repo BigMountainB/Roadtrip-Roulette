@@ -5928,13 +5928,17 @@ export class GameScene extends Phaser.Scene {
     // overall — high stability = "doesn't wander").  Sports cars sit < 1
     // here → nervous.  The driving WEIGHT now lives in the steer-INPUT ramp
     // (see _steerRamp where steerIn is built), not in this settle.
-    // TAP/flappy mode wants a TIGHT one-tap swing — the default settle (8 →
-    // ~0.3s to fully swing) felt like a ~half-second delay in Vantage, where
-    // the crosswind already pulls left so a rightward tap has a big gap to
-    // cross.  Tap gets a higher base settle so it responds almost immediately;
-    // classic/tilt keep the weightier 8.  Vice lag (lagScale) + per-vehicle
-    // stability still apply on top.
-    const _baseSettle = (_mode === 'flappy') ? 14 : 8;
+    // TAP/flappy mode wants a tighter one-tap swing than classic's weighty 8,
+    // so it gets its own higher base settle. Was 14 — tuned that high to fix
+    // a "sluggish fighting the crosswind" complaint, but the Vantage wind
+    // pull (below) is a no-op in flappy mode: steerIn there is ALREADY
+    // pinned to full ±1 with no ramp, so the wind code's left-nudge never
+    // has anything to nudge. 14 was chasing the wrong cause — it just made
+    // every tap-mode swing, everywhere on the route, snap at ~1.75x classic's
+    // rate, which reads as twitchy precisely where you correct most often
+    // (the wind zone, holding right almost continuously). Backed off to 10
+    // (owner 2026-07-31): still snappier than classic/tilt, less whiplash.
+    const _baseSettle = (_mode === 'flappy') ? 10 : 8;
     const settleRate = _baseSettle * lagScale * releaseScale * vehicleStability;
 
     // Tire grip pulls lateral velocity toward desired.
