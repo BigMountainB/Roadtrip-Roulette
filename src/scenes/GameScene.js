@@ -2330,15 +2330,15 @@ export class GameScene extends Phaser.Scene {
           }
           if (buys.restock && this.vices?.refillAll) this.vices.refillAll();
           // Coffee / Snooze — multiplier applied to ALL vice bars FIRST so
-          // any subsequent top-ups (beers, weed, etc.) win on top of the
-          // sobered baseline.  Coffee = ×0.5, Snooze = ×0, stackable.
+          // any subsequent top-ups (Sushi, Burrito, etc.) win on top of the
+          // reset baseline.  Coffee = ×0.5, Snooze = ×0, stackable.
           if (typeof buys.reduceVices === 'number' && this.vices?.levels) {
             for (const id of Object.keys(this.vices.levels)) {
               this.vices.levels[id] = (this.vices.levels[id] ?? 0) * buys.reduceVices;
             }
           }
           // Per-vice top-ups — set each named vice's bar to >= the stored
-          // amount.  Lets players buy weed alone without restocking everything.
+          // amount.  Lets players buy just Burrito without restocking everything.
           if (buys.viceTopUps && this.vices?.levels) {
             for (const [viceId, amount] of Object.entries(buys.viceTopUps)) {
               const cur = this.vices.levels[viceId] ?? 0;
@@ -4300,9 +4300,9 @@ export class GameScene extends Phaser.Scene {
     // old queue here would respawn retired items like Energy. Drain to clear.)
     this.vices.drainFirstLineQueue?.();
     this.vices.routeProgress = this.player.position / (ROUTE_SEGS * SEG_LENGTH);
-    // Weed Permastoned tracker — bar at 100% for 10 in-game miles fires
-    // the Permastoned achievement, force-resets the weed bar to 0, and
-    // suppresses any future weed pickups for the rest of the run.
+    // Burrito Permastoned tracker — bar at 100% for 10 in-game miles fires
+    // the Permastoned achievement, force-resets the Burrito bar to 0, and
+    // suppresses any future Burrito pickups for the rest of the run.
     {
       const posPerMile = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
       const r = this.vices.notePermastonedTick?.(this.player.position, posPerMile);
@@ -4543,8 +4543,8 @@ export class GameScene extends Phaser.Scene {
     // FIRST STAR is gated.  Two separate paths can trigger it; whichever
     // fires first awards the star.  Both paths reach exactly 1.0 stars.
     //
-    //   Path A:  (alcohol ≥ ⅓  OR  weed ≥ ½)
-    //            AND   3 NPC crashes since first drink
+    //   Path A:  (sushi ≥ ⅓  OR  burrito ≥ ½)
+    //            AND   3 NPC crashes since first hit
     //
     //   Path B:  20 NPC-car bumps while at least one vice bar ≥ 30%
     //            (one-shot gate — `_viceBumpFired` flag prevents re-trigger)
@@ -4955,12 +4955,12 @@ export class GameScene extends Phaser.Scene {
       // Fentanyl: while in your system the car is hard-capped at 30%
       // speed.  Penalising the player for that drop is double-jeopardy,
       // so suppress the slowness penalty entirely until it clears.
-      const fentActive = (this.vices?.get?.(VICES.COMA) ?? 0) > 0.05;
-      // Weed ≥ 60% — "hot-boxed" mode: no slow-driving penalty at all,
-      // and off-road penalty cut in half (per user spec).
-      const weedHigh  = (this.vices?.get?.(VICES.BURRITO) ?? 0) >= 0.60;
-      // Any vice dragging max speed below baseline (heroin, fent, weed-
-      // alone, ketamine, rx) suppresses the slowness penalty — getting
+      const comaActive = (this.vices?.get?.(VICES.COMA) ?? 0) > 0.05;
+      // Burrito ≥ 60% — heavy mode: no slow-driving penalty at all,
+      // and off-road penalty cut in half (per owner spec).
+      const burritoHigh  = (this.vices?.get?.(VICES.BURRITO) ?? 0) >= 0.60;
+      // Any vice dragging max speed below baseline (Combo, Coma, Burrito-
+      // alone, Slushie, Cold Brew) suppresses the slowness penalty — getting
       // docked $ for a slowdown the vice is forcing on you is double-
       // jeopardy.  speedMult < 1 means SOMETHING is slowing the car;
       // the player can't help it, so don't drain their wallet for it.
@@ -4977,7 +4977,7 @@ export class GameScene extends Phaser.Scene {
       // is taxed for its own natural cruising speed.
       const _slowThresh = this._baselineCruiseMph() * 0.85;
       // Reggae (noSlowDrivePenalty) earns its normal rate even below the band.
-      if (dispMph < _slowThresh && !fentActive && !weedHigh && !viceSlowing && !trafficStop
+      if (dispMph < _slowThresh && !comaActive && !burritoHigh && !viceSlowing && !trafficStop
           && !this._traitMod('noSlowDrivePenalty')) {
         // -$5/sec floor at 20 mph, linear up to 0 at the threshold.
         const slowness = Math.min(1, (_slowThresh - dispMph) / Math.max(1, _slowThresh - 20));
@@ -4988,7 +4988,7 @@ export class GameScene extends Phaser.Scene {
         // Weed ≥ 60 % halves the penalty (the player is in chill mode).
         const depth = Math.min(1, (Math.abs(this.player.x) - 1) / 1.0);
         let offroad = 10 * (0.5 + 0.5 * depth) * mult;
-        if (weedHigh) offroad *= 0.5;
+        if (burritoHigh) offroad *= 0.5;
         penalty += offroad;
       }
       // Haptic feedback — light buzz on the rumble strip, heavy buzz off-road.
@@ -19562,9 +19562,10 @@ export class GameScene extends Phaser.Scene {
       slushie: 'vice_slushie',
       caffeine:     'vice_caffeine',
     };
-    // Colorblind: recolor the confusable bar-fill pairs (weed↔caffeine both greenish,
-    // lsd reddish — fentanyl keeps its lethal red) and stamp an authoritative
-    // one-letter badge on each card so the vice is read by LETTER, not hue.
+    // Colorblind: recolor the confusable bar-fill pairs (Burrito↔caffeine both
+    // greenish, Hot Dog reddish — Coma keeps its lethal red) and stamp an
+    // authoritative one-letter badge on each card so the vice is read by
+    // LETTER, not hue.
     const CB_FILL   = { burrito: 0x3A9BFF, caffeine: 0xFF9A3D, hotdog: 0xFFD23D, coma: 0xFF2222 };
     const CB_LETTER = { sushi: 'S', burrito: 'B', energy: 'E', gummies: 'G', hotdog: 'H', combo: 'C', coldbrew: 'K', coma: 'X', slushie: 'Z', caffeine: 'F' };
     if (!this._viceBadges) this._viceBadges = {};
@@ -20395,8 +20396,8 @@ export class GameScene extends Phaser.Scene {
    *    • each vice ≥ 5%   ≤ 50%                → +0.5
    *    • each vice > 50%                        → +0.5 more (i.e. +1.0 total)
    *    • each cop star                          → +1.0
-   *  Example (beer 50% + weed 25% + Cross-Faded label active):
-   *    1 + 0.5 (beer) + 0.5 (weed) = 2.0×  ✓
+   *  Example (sushi 50% + burrito 25% + Cross-Faded label active):
+   *    1 + 0.5 (sushi) + 0.5 (burrito) = 2.0×  ✓
    */
   _scoreMult() {
     // Custom mode awards zero score — multiplier collapses to 0 so every
