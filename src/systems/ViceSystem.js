@@ -73,6 +73,13 @@ export class ViceSystem {
     // Active-combo timestamp tracker — initialised here so getActiveCombos
     // doesn't have to lazy-init on first call (audit caught this).
     this._comboActivatedAt  = {};
+    // Coffee speed-bonus doses (owner 2026-07-31: "coffee adds 1mph, up to
+    // 10mph"). Coffee isn't a VICES entry — it's a rest-stop purchase with
+    // no bar/OD/unlock semantics — so it gets its own tiny dose ledger
+    // instead of living in the VICES/_doses machinery above. Same shape as
+    // a real dose ({t, dur}) but no `amt`/fitting: every cup is worth a
+    // flat 1 mph at full strength, decaying linearly over its own 30s.
+    this._coffeeDoses = [];
     for (const id of Object.values(VICES)) this.pickupCounts[id] = 0;
     // Per-dose ledgers for the DOSE_SECONDS vices: `_doses[id]` is the list of
     // live doses, `_doseSum[id]` is the level this system last wrote.  The pair
@@ -219,6 +226,14 @@ export class ViceSystem {
 
     // Unlock checks
     this._checkUnlocks(dt);
+
+    // Coffee doses age on their own clock, same as the DOSE_SECONDS vices,
+    // and get pruned once spent — see noteCoffeePurchase / getCoffeeSpeedBonusMPH.
+    for (let i = this._coffeeDoses.length - 1; i >= 0; i--) {
+      const d = this._coffeeDoses[i];
+      d.t += dt;
+      if (d.t >= d.dur) this._coffeeDoses.splice(i, 1);
+    }
 
     return anyActive;
   }
@@ -510,23 +525,38 @@ export class ViceSystem {
     return this.energyPickupCount * 4 * (this.levels[VICES.ENERGY] ?? 0);
   }
 
-  /** Caffeine speed boost in MPH — owner rule: each pickup is worth ~4 mph,
-   *  fading out over that PILL's own 60 s clock (DOSE_SECONDS.caffeine), not
-   *  diluted by the total bar level. Was `lifetimePickupCount * 4 *
-   *  currentBarFraction` — that formula pre-dates the 2026-07-27 dose-
-   *  tracking rework, when one pill filled the (shared-drain) bar to 25%;
-   *  after the rework a pill only fills it 10%, so one pickup delivered
-   *  `1 * 4 * 0.10 = 0.4 mph` — no perceptible change, exactly the "I ate a
-   *  pill and saw nothing" report. Summing live doses directly (each up to
-   *  4 mph, scaled by its own fitted amt if a near-full bar clipped it)
-   *  fixes that and matches the stated rule exactly. */
+  /** Caffeine Pill speed boost in MPH — owner rule (2026-07-31, revised):
+   *  each pill is worth ~2 mph, fading out over that PILL's own 60 s clock
+   *  (DOSE_SECONDS.caffeine), not diluted by the total bar level, capped at
+   *  a combined +20 mph no matter how many are stacked. Summing live doses
+   *  directly (each up to 2 mph, scaled by its own fitted amt if a
+   *  near-full bar clipped it) means the bonus is always visible per-pill
+   *  instead of hiding behind a bar-fraction multiplier. */
   getCaffeineSpeedBonusMPH() {
     const doses = this._doses[VICES.CAFFEINE];
     if (!doses?.length) return 0;
     const fullAmt = DOSE_SECONDS[VICES.CAFFEINE] ? 0.10 : 0;   // one full-strength pill's fill
     let mph = 0;
-    for (const d of doses) mph += 4 * (fullAmt ? d.amt / fullAmt : 1) * (1 - d.t / d.dur);
-    return mph;
+    for (const d of doses) mph += 2 * (fullAmt ? d.amt / fullAmt : 1) * (1 - d.t / d.dur);
+    return Math.min(20, mph);
+  }
+
+  /** Log a rest-stop Coffee purchase — called once per cup on GameScene
+   *  resume (see the `coffeeCount` purchase field). Each cup gets its own
+   *  fresh 30s clock, independent of any others still fading. */
+  noteCoffeePurchase() {
+    this._coffeeDoses.push({ t: 0, dur: 30 });
+  }
+
+  /** Coffee speed boost in MPH — owner rule (2026-07-31): each cup is
+   *  worth ~1 mph, fading out over its own 30s clock, capped at a combined
+   *  +10 mph no matter how many cups are stacked. Same shape as
+   *  getCaffeineSpeedBonusMPH but Coffee has no bar/fitting to scale by —
+   *  every cup is always full-strength at the moment it's poured. */
+  getCoffeeSpeedBonusMPH() {
+    let mph = 0;
+    for (const d of this._coffeeDoses) mph += 1 * (1 - d.t / d.dur);
+    return Math.min(10, mph);
   }
 
   /** Cold-Brew-driven NPC traffic-speed offset in MPH (±7 mph per pickup),

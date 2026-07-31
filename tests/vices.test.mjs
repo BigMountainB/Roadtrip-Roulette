@@ -101,17 +101,17 @@ const run = (v, secs, step = 1 / 60) => {
 }
 
 // ── 7. Speed impact — what this was all for ──
-// Owner rule (2026-07-31): caffeine's speed effect is a flat ~4 mph per
-// pickup, fading over that pill's own 60 s clock — NOT a percentage
-// speedMult on an invisible bar (the old `1 + c*0.45` mechanism, which
-// double-counted against this same flat bonus and was removed from
-// EffectsSystem entirely). getCaffeineSpeedBonusMPH is now the only
-// place caffeine touches speed.
+// Owner rule (2026-07-31, revised): caffeine pills are +2 mph per pickup,
+// capped at +20 mph total, fading per-dose over that pill's own 60 s
+// clock — NOT a percentage speedMult on an invisible bar (the old
+// `1 + c*0.45` mechanism, which double-counted against this same flat
+// bonus and was removed from EffectsSystem entirely). getCaffeineSpeedBonusMPH
+// is the only place caffeine touches speed.
 {
   const v = mk();
   for (let i = 0; i < 4; i++) v.pickup('caffeine');
   const peakMph = v.getCaffeineSpeedBonusMPH();
-  ok('4 pickups ≈ 16 mph peak (4 mph each, no dilution)', near(peakMph, 16, 0.5), `got ${peakMph.toFixed(2)} mph`);
+  ok('4 pickups ≈ 8 mph peak (2 mph each, no dilution)', near(peakMph, 8, 0.3), `got ${peakMph.toFixed(2)} mph`);
   run(v, 60.5);
   ok('caffeine mph bonus back to 0 in 60 s', v.getCaffeineSpeedBonusMPH() === 0, `got ${v.getCaffeineSpeedBonusMPH()}`);
   console.log(`\n  caffeine speed bonus: peak +${peakMph.toFixed(1)} mph for <60 s (flat, was a x1.45 speedMult for 204 s)`);
@@ -123,7 +123,32 @@ const run = (v, secs, step = 1 / 60) => {
   const v = mk();
   v.pickup('caffeine');
   const oneMph = v.getCaffeineSpeedBonusMPH();
-  ok('one pickup ≈ 4 mph, not ~0.4', near(oneMph, 4, 0.2), `got ${oneMph.toFixed(2)} mph`);
+  ok('one pickup ≈ 2 mph, not ~0.4', near(oneMph, 2, 0.15), `got ${oneMph.toFixed(2)} mph`);
+}
+
+// ── 9. Caffeine's 20 mph cap holds even when doses would stack past it ──
+{
+  const v = mk();
+  for (let i = 0; i < 12; i++) v.pickup('caffeine');
+  const cappedMph = v.getCaffeineSpeedBonusMPH();
+  ok('12 pickups still cap at 20 mph', cappedMph <= 20 && near(cappedMph, 20, 0.3), `got ${cappedMph.toFixed(2)} mph`);
+}
+
+// ── 10. Coffee speed bonus — separate item, own 30 s dose clock, no
+//       vice bar / no VICES entry at all (noteCoffeePurchase / getCoffeeSpeedBonusMPH). ──
+{
+  const v = mk();
+  v.noteCoffeePurchase();
+  const oneCupMph = v.getCoffeeSpeedBonusMPH();
+  ok('one cup ≈ 1 mph', near(oneCupMph, 1, 0.1), `got ${oneCupMph.toFixed(2)} mph`);
+
+  for (let i = 0; i < 20; i++) v.noteCoffeePurchase();
+  const cappedMph = v.getCoffeeSpeedBonusMPH();
+  ok('many cups cap at 10 mph', cappedMph <= 10 && near(cappedMph, 10, 0.3), `got ${cappedMph.toFixed(2)} mph`);
+
+  run(v, 30.5);
+  ok('coffee mph bonus back to 0 in 30 s', v.getCoffeeSpeedBonusMPH() === 0, `got ${v.getCoffeeSpeedBonusMPH()}`);
+  console.log(`\n  coffee speed bonus: peak +${cappedMph.toFixed(1)} mph for <30 s (1 mph/cup, cap 10)`);
 }
 
 console.log(`\ndose.test: ${pass} passed, ${fail} failed`);

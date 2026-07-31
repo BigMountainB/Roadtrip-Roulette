@@ -2345,6 +2345,12 @@ export class GameScene extends Phaser.Scene {
               this.vices.levels[viceId] = Math.max(cur, Math.min(1, amount));
             }
           }
+          // Coffee speed bonus — each cup bought this visit starts its own
+          // fresh 30s fade the moment the player is actually back on the
+          // road, not while they were still browsing the shop menu.
+          if (buys.coffeeCount > 0 && this.vices?.noteCoffeePurchase) {
+            for (let _i = 0; _i < buys.coffeeCount; _i++) this.vices.noteCoffeePurchase();
+          }
           // "Top all to N" — every UNLOCKED bar lifts to >= N.  Use
           // this.vices.unlocked (already hydrated from registry above)
           // Sex-worker dirt-on-a-politician buff — caps cops at 2★ for
@@ -5458,6 +5464,7 @@ export class GameScene extends Phaser.Scene {
     const _vehSpec  = VEHICLES[this.player.vehicleId] ?? VEHICLES.beater;
     const energyBonus = this.vices.getEnergySpeedBonusMPH?.() ?? 0;
     const caffeineBonus = this.vices.getCaffeineSpeedBonusMPH?.() ?? 0;
+    const coffeeBonus = this.vices.getCoffeeSpeedBonusMPH?.() ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
     const nosBonus  = nosTier * 5;
     const upMph     = this._upgradeFx?.topMph ?? 0;   // engine/tire upgrades + buffs
@@ -5476,8 +5483,8 @@ export class GameScene extends Phaser.Scene {
     // 2026-07-21): Tune-Up/Cold Air/ECU = +3/+5/+10%.  Flat upMph (buffs) still
     // stacks on top.
     const _topPct   = 1 + Math.max(0, this._upgradeFx?.topMphPct ?? 0);
-    const cruiseMph = _cruiseBase * _topPct + energyBonus + caffeineBonus + nosBonus + upMph;
-    const boostMph  = _boostBase  * _topPct + energyBonus + caffeineBonus + nosBonus + upMph;
+    const cruiseMph = _cruiseBase * _topPct + energyBonus + caffeineBonus + coffeeBonus + nosBonus + upMph;
+    const boostMph  = _boostBase  * _topPct + energyBonus + caffeineBonus + coffeeBonus + nosBonus + upMph;
     const slowMph   = 60;
     const mphToUnits = (mph) => MAX_SPEED * (mph / 120);
 
@@ -5591,7 +5598,7 @@ export class GameScene extends Phaser.Scene {
       targetMph:     targetSpeed * 120 / MAX_SPEED,
       cruiseMph, boostMph,
       boostBase: _boostBase, cruiseBase: _cruiseBase, topPct: _topPct,
-      energyBonus, caffeineBonus, nosBonus, upMph,
+      energyBonus, caffeineBonus, coffeeBonus, nosBonus, upMph,
       speedMult:  phys.speedMult ?? 1,
       speedMultParts: phys.speedMultParts ?? null,
       gradeMult, curGrade,
@@ -13486,7 +13493,7 @@ export class GameScene extends Phaser.Scene {
         (s.genreVehicle ? `  [${s.genreVehicle}${s.genre ? '/' + s.genre : ''}]` : '  [beater]'),
       `base: cruise=${mph(s.cruiseBase)} boost=${mph(s.boostBase)}  topPct=${pct(s.topPct)}`,
       `bonuses(mph): energy=${mph1(s.energyBonus)} caffeine=${mph1(s.caffeineBonus)}` +
-        ` nos=${mph1(s.nosBonus)} upgrade=${mph1(s.upMph)}`,
+        ` coffee=${mph1(s.coffeeBonus)} nos=${mph1(s.nosBonus)} upgrade=${mph1(s.upMph)}`,
       `mults: speedMult=${s.speedMult.toFixed(2)}  grade=${s.gradeMult.toFixed(2)}` +
         ` (${(s.curGrade * 100).toFixed(1)}%)`,
       `  vices: ${this._fmtSpeedMultParts(s.speedMultParts)}`,
@@ -22850,29 +22857,32 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Top speed in internal units, accounting for energy + caffeine pickup boosts + NOS.
+  // Top speed in internal units, accounting for energy + caffeine + coffee boosts + NOS.
   _maxSpeedWithBoost() {
     const energyBonus = this.vices.getEnergySpeedBonusMPH?.() ?? 0;
     const caffeineBonus = this.vices.getCaffeineSpeedBonusMPH?.()    ?? 0;
+    const coffeeBonus = this.vices.getCoffeeSpeedBonusMPH?.() ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
-    const topMph    = 120 + energyBonus + caffeineBonus + nosTier * 5;
+    const topMph    = 120 + energyBonus + caffeineBonus + coffeeBonus + nosTier * 5;
     return MAX_SPEED * (topMph / 120);
   }
 
   // Displayed MPH = (current speed / current top-speed) × top-MPH.
   _displayMPH() {
-    // +4 mph per energy bag, +4 mph per caffeine pickup, +5 mph per NOS tier.
+    // +4 mph per energy bag, +2 mph per caffeine pill (cap 20), +1 mph per
+    // coffee (cap 10), +5 mph per NOS tier.
     const energyBonus = this.vices?.getEnergySpeedBonusMPH?.() ?? 0;
     const caffeineBonus = this.vices?.getCaffeineSpeedBonusMPH?.()    ?? 0;
+    const coffeeBonus = this.vices?.getCoffeeSpeedBonusMPH?.() ?? 0;
     const nosTier   = this._vehicleAccessories?.().nos ?? 0;
-    const topMph   = 120 + energyBonus + caffeineBonus + nosTier * 5;
+    const topMph   = 120 + energyBonus + caffeineBonus + coffeeBonus + nosTier * 5;
     const topUnits = MAX_SPEED * (topMph / 120);
     const trueMph  = (this.player.speed / topUnits) * topMph;
-    // LSD ≥ 60% — time distortion: world keeps scrolling at the player's
+    // Hot Dog ≥ 60% — time distortion: world keeps scrolling at the player's
     // real speed, but the speedometer pegs at 60 mph for the trippy
     // "I'm crawling but everything's flying past" feel.
-    const lsd = this.vices?.get?.(VICES.HOTDOG) ?? 0;
-    if (lsd >= 0.60) return Math.min(60, trueMph);
+    const hotdog = this.vices?.get?.(VICES.HOTDOG) ?? 0;
+    if (hotdog >= 0.60) return Math.min(60, trueMph);
     return trueMph;
   }
 

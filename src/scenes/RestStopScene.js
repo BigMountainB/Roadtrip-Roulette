@@ -2652,6 +2652,15 @@ export class RestStopScene extends Phaser.Scene {
       // repair" at 80 % of capacity for that vehicle.
       this._purchases.durabilityOnResume = this._vehMaxHp();
     }
+    if (p.coffee) {
+      // `coffee: true` on the payload used to do nothing at all — only
+      // survivalDelta (the Alertness bump) actually fired. Owner 2026-07-31:
+      // each cup should also add a real (if small, capped, fading) speed
+      // bonus. Counted here so GameScene can start each cup's own 30s dose
+      // clock fresh on resume (ViceSystem.noteCoffeePurchase), same as
+      // every other "applies on resume" purchase in this function.
+      this._purchases.coffeeCount = (this._purchases.coffeeCount ?? 0) + 1;
+    }
     // ── Phase 2-4 payloads ────────────────────────────────────────
     if (p.refuel) {
       this._purchases.refuelToFull = true;
