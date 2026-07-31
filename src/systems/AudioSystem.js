@@ -1427,12 +1427,12 @@ export class AudioSystem {
   /** Update master filter chain + tempo multiplier from current vice levels.
    *  Called every frame from GameScene so the mix reacts in real time as
    *  bars rise / decay.  Effects:
-   *    Depressants (alc / weed / her / fent / ket / rx) — drop the lowpass
-   *      cutoff and slow the tempo.  At full ketamine the audio is a
-   *      muffled rumble at half-tempo.
-   *    Uppers (energy / caffeine) — raise the highpass to thin out the lows
+   *    Heavy/sedating vices (Burrito / Combo / Coma / Slushie / Cold Brew) —
+   *      drop the lowpass cutoff and slow the tempo.  At full Slushie the
+   *      audio is a muffled rumble at half-tempo.
+   *    Uppers (Energy / Caffeine) — raise the highpass to thin out the lows
    *      and nudge tempo faster.  Tinny + jittery feel.
-   *    Psychedelics (lsd / shrooms) — push the reverb wet send so the
+   *    Trippy vices (Hot Dog / Gummies) — push the reverb wet send so the
    *      whole mix washes into a long tail. */
   setViceInfluence(levels) {
     if (!this.ready || !this._lowpass || !this._highpass) return;
@@ -1447,42 +1447,42 @@ export class AudioSystem {
       if (lvl < TH) return 0;
       return (lvl - TH) / (1 - TH);
     };
-    const alc = get('sushi'), weed = get('burrito'), energy = get('energy');
-    const lsd = get('hotdog'),     shr  = get('gummies');
-    const her = get('combo'),  fnt  = get('coma');
-    const ket = get('slushie'), mth = get('caffeine'), rx = get('coldbrew');
+    const sushi = get('sushi'), burrito = get('burrito'), energy = get('energy');
+    const hotdog = get('hotdog'),  gummies = get('gummies');
+    const combo  = get('combo'),   coma    = get('coma');
+    const slushie = get('slushie'), caffeine = get('caffeine'), coldbrew = get('coldbrew');
 
-    // Lowpass — depressants progressively close the top end.
-    // Alcohol intentionally excluded: the music shouldn't dull just from
-    // being drunk (per design — drunk affects steering, not the radio).
+    // Lowpass — sedating vices progressively close the top end.
+    // Sushi intentionally excluded: the music shouldn't dull just from
+    // food poisoning (per design — that affects steering, not the radio).
     let lp = 22000;
-    if (weed > 0) lp = Math.min(lp, 22000 - weed * 16000);   // → 6000 Hz
-    if (her  > 0) lp = Math.min(lp, 22000 - her  * 20000);   // → 2000 Hz
-    if (fnt  > 0) lp = Math.min(lp, 22000 - fnt  * 21000);   // → 1000 Hz
-    if (ket  > 0) lp = Math.min(lp, 22000 - ket  * 21500);   // → 500  Hz
-    if (rx   > 0) lp = Math.min(lp, 22000 - rx   * 8000);    // → 14000 Hz
+    if (burrito > 0) lp = Math.min(lp, 22000 - burrito * 16000);   // → 6000 Hz
+    if (combo   > 0) lp = Math.min(lp, 22000 - combo   * 20000);   // → 2000 Hz
+    if (coma    > 0) lp = Math.min(lp, 22000 - coma    * 21000);   // → 1000 Hz
+    if (slushie > 0) lp = Math.min(lp, 22000 - slushie * 21500);   // → 500  Hz
+    if (coldbrew > 0) lp = Math.min(lp, 22000 - coldbrew * 8000);  // → 14000 Hz
     lp = Math.max(300, lp);
 
     // Highpass — uppers thin out the bass for a wired, tinny feel.
     let hp = 20;
-    if (energy > 0) hp = Math.max(hp, 20 + energy * 280);        // → 300 Hz
-    if (mth  > 0) hp = Math.max(hp, 20 + mth  * 480);        // → 500 Hz
+    if (energy   > 0) hp = Math.max(hp, 20 + energy   * 280);   // → 300 Hz
+    if (caffeine > 0) hp = Math.max(hp, 20 + caffeine * 480);   // → 500 Hz
 
     // Tempo nudge applied alongside the per-bar humanizing factor.
-    // Alcohol left out here too — see lowpass note.
+    // Sushi left out here too — see lowpass note.
     let tempoMul = 1.0;
-    tempoMul -= weed * 0.07;
-    tempoMul -= her  * 0.20;
-    tempoMul -= fnt  * 0.30;
-    tempoMul -= ket  * 0.35;
-    tempoMul += energy * 0.10;
-    tempoMul += mth  * 0.18;
+    tempoMul -= burrito * 0.07;
+    tempoMul -= combo   * 0.20;
+    tempoMul -= coma    * 0.30;
+    tempoMul -= slushie * 0.35;
+    tempoMul += energy   * 0.10;
+    tempoMul += caffeine * 0.18;
     tempoMul = Math.max(0.5, Math.min(1.45, tempoMul));
 
-    // Reverb send — psychedelics wash everything into a long tail.
+    // Reverb send — trippy vices wash everything into a long tail.
     let wet = 0.35;
-    wet += lsd * 0.55;
-    wet += shr * 0.45;
+    wet += hotdog  * 0.55;
+    wet += gummies * 0.45;
     wet  = Math.min(1.0, wet);
 
     // Smoothly approach targets so a fresh pickup doesn't click the

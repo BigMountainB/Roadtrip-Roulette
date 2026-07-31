@@ -169,7 +169,7 @@ export const VICE_MULT    = 0.5;
 // Per-vice pickup payouts: { base } when the bar is below the
 // FULL_BAR_THRESHOLD, { full } when the bar is at/above it.  The
 // full-bar bonus is per-vice (used to be a flat 2× across the board)
-// so risky vices (fent, heroin) pay disproportionately more for
+// so risky vices (Coma, Combo) pay disproportionately more for
 // keeping their bar topped off.
 export const VICE_PTS = {
   sushi:    { base:  5, full:  20 },
@@ -188,28 +188,29 @@ export const VICE_PTS = {
 // reachable (less precision-driven, more strategic).
 export const FULL_BAR_THRESHOLD = 0.80;
 
-// Vice IDs — road-trip junk-food / fatigue items (reskinned from the original
-// vice set for App-Store safety; same mechanics, legal-flavored inputs).
+// Vice IDs — road-trip junk-food / fatigue items (all legal-flavored inputs).
 export const VICES = {
-  SUSHI:    'sushi',     // was alcohol — gas-station sushi (food-poisoning woozy)
-  BURRITO:  'burrito',   // was weed — greasy burrito (food coma)
-  ENERGY:   'energy',    // was energy — energy shot (jittery rush)
-  GUMMIES:  'gummies',   // was shrooms — sugar gummies (color trip)
-  HOTDOG:   'hotdog',    // was lsd — roller-grill hot dog (fever dream)
-  COMBO:    'combo',     // was heroin — combo meal (heavy food coma)
-  COLDBREW: 'coldbrew',  // was rx — cold brew (steady caffeine)
-  COMA:     'coma',      // was fentanyl — 3AM buffet coma (lethal 2-hit)
-  SLUSHIE:  'slushie',   // was ketamine — brain-freeze slushie (dizzy)
-  CAFFEINE: 'caffeine',  // was caffeine — caffeine pills (wired for hours)
+  SUSHI:    'sushi',     // gas-station sushi (food-poisoning woozy)
+  BURRITO:  'burrito',   // greasy burrito (food coma)
+  ENERGY:   'energy',    // energy shot (jittery rush)
+  GUMMIES:  'gummies',   // sugar gummies (color trip)
+  HOTDOG:   'hotdog',    // roller-grill hot dog (fever dream)
+  COMBO:    'combo',     // combo meal (heavy food coma)
+  COLDBREW: 'coldbrew',  // cold brew (steady caffeine)
+  COMA:     'coma',      // 3AM buffet coma (lethal 2-hit)
+  SLUSHIE:  'slushie',   // brain-freeze slushie (dizzy)
+  CAFFEINE: 'caffeine',  // caffeine pills (wired for hours)
 };
 
-// Vice config — decayRate (per second, linear) tuned 2026-06-20 to match the
+// Vice config — decayRate (per second, linear) tuned 2026-06-20 to match a
 // REAL relative duration-of-effects ordering, compressed to a ~30s–4min game
-// range (energy shortest → LSD longest).  odThreshold 1.0001 on every OD-capable
-// vice means OD fires only when a pickup OVERFILLS a maxed bar (the pickup OD
-// check compares the uncapped prev+dose).  Non-OD vices keep canOD:false.
-//   full-life ≈ 1/decayRate sec:  energy 30s, ket 36s, fent 42s, weed/beer 65s,
-//   heroin 112s, shrooms 123s, rx 135s, caffeine 205s, lsd 240s.
+// range (energy shortest → Hot Dog longest).  odThreshold 1.0001 on every
+// OD-capable vice means OD fires only when a pickup OVERFILLS a maxed bar
+// (the pickup OD check compares the uncapped prev+dose).  Non-OD vices keep
+// canOD:false.
+//   full-life ≈ 1/decayRate sec:  energy 30s, slushie 36s, coma 42s,
+//   burrito/sushi 65s, combo 112s, gummies 123s, coldbrew 135s,
+//   caffeine 205s, hotdog 240s.
 export const VICE_CONFIG = {
   sushi:    { label: '🍣 Sushi',     color: 0x9ACD32, hexCss: '#9ACD32', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
   burrito:  { label: '🌯 Burrito',   color: 0xC8862B, hexCss: '#C8862B', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },

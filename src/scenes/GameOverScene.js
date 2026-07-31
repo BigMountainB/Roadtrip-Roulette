@@ -561,7 +561,7 @@ export class GameOverScene extends Phaser.Scene {
       layer.add([label, stat]);
 
       // How it was unlocked — revealed now that it IS unlocked.  Starter
-      // vices (alcohol / weed) have no unlock method, so the line is omitted.
+      // vices (Sushi / Burrito) have no unlock method, so the line is omitted.
       if (UNLOCK_HINTS[id]) {
         const how = this.add.text(x, y + 34, `🔓 ${UNLOCK_HINTS[id]}`, {
           fontSize: '10px', fontFamily: 'Arial',

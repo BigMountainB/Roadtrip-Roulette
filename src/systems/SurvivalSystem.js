@@ -51,9 +51,9 @@ export const ITEM_FX = {
 };
 
 const BAD_FISH_CHANCE   = 1 / 12;   // Sushi → bladder emergency
-const ODD_GUMMY_CHANCE  = 1 / 20;   // Gummies → shroom trip
+const ODD_GUMMY_CHANCE  = 1 / 20;   // Gummies → color trip
 const CAFFEINE_DEP_GAIN  = 8;       // per Caffeine Pill
-const CAFFEINE_DEP_ONSET = 15;      // withdrawal begins here (earlier than old alcohol)
+const CAFFEINE_DEP_ONSET = 15;      // withdrawal begins here (earlier than the old Sushi tuning)
 const CAFFEINE_ACTIVE_MI = 12;      // a caffeine dose keeps withdrawal at bay this many miles
 
 export class SurvivalSystem {

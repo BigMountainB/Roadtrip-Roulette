@@ -29,9 +29,8 @@ import { GENRE_VEHICLE_TRAITS } from '../data/genreVehicleTraits.js';
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 
-// Vice texture key — alcohol's pickup asset is named vice_sushi; everything
-// else maps directly.
-const VICE_TEX = (id) => (id === 'sushi' ? 'vice_sushi' : `vice_${id}`);
+// Vice texture key — every vice's pickup asset is named vice_<id>.
+const VICE_TEX = (id) => `vice_${id}`;
 
 // Per-vice rest-stop pricing — each click adds +10 % to that bar, capped
 // at 80 %.  Prices scaled so 8 clicks (0 → 80 %) costs roughly the same
@@ -127,17 +126,17 @@ const viceItems = (unlocks /* { id: bool } | Set<id> | null */) => {
 // only appears if the player has ALREADY sampled the vice at least
 // once (pickupCounts[vice] > 0).  Camp / charging / gas / hunting /
 // dealer each have their own personality (sketchy back-country deals,
-// EV-station hippie shrooms, dive-bar beer at gas pumps, etc.).
+// EV-station novelty gummies, gas-pump snacks, etc.).
 //
-// PharmaBros at the rest-stop vice tab keeps the full menu (the
-// pharmacy is the dedicated vice shop and isn't gated by exposure).
+// Gas-N-Sip's vices tab keeps the full menu (it's the dedicated vice
+// shop and isn't gated by exposure).
 const SHOP_VICES = {
-  gas:     ['sushi', 'burrito'],                       // Beer + weed at the pump
+  gas:     ['sushi', 'burrito'],                       // Sushi + Burrito at the pump
   hunting: [],                                       // Cowbellas = hunting gear only, no food
   camp:    ['coma', 'slushie', 'caffeine'],          // Sketchy back-country
-  dealer:  ['energy'],                               // Dealership = blow
+  dealer:  ['energy'],                               // Dealership = energy shots
 };
-// Camp + charging + dealer charge a 2.5× markup over PharmaBros.
+// Camp + charging + dealer charge a 2.5× markup over Gas-N-Sip.
 const SHOP_VICE_MARKUP = 2.5;
 
 function shopViceItems(shopKey, pickupCounts) {
@@ -237,7 +236,7 @@ const SECTIONS = {
       // TAKE A SNOOZE replaces the old free ad-gated NAP IT OFF (owner
       // 2026-07-29): one paid sleep at the campground instead of two sleep
       // items.  Keeps the nap's full Alertness restore — you don't sleep off
-      // every drug in your system and wake up drowsy.
+      // every vice in your system and wake up drowsy.
       { id: 'snooze',   label: '😴  TAKE A SNOOZE',       cost: 150, desc: 'Sleep it all off — every buzz back to zero, and you wake up sharp.', payload: { reduceVices: 0, survivalDelta: { tiredness: -100 } } },
       { id: 'coffee',   label: '☕  COFFEE',                cost:   7, desc: 'A moderate Alertness bump',                              payload: { coffee: true, survivalDelta: { tiredness: -15 } } },
       { id: 'campfix',  label: '🔧  CAMP REPAIR',          cost: 400, desc: 'Repair up to 65% HP (cheaper than dealership)',          payload: { campRepair: true } },
@@ -360,7 +359,7 @@ const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_
 
 // Per-stop brand catalog — west-side gets the cleaner brands (Lord Motors
 // EV), east-side the dustier set (Huff's + Sam's gas).
-// CowBella, AOK Camp, and PharmaBros are universal.  Returned object
+// CowBella, AOK Camp, and Gas-N-Sip are universal.  Returned object
 // has every brand key; the landing screen filters by stop.amenities to
 // decide which placards actually render.
 function brandsForStop(stop) {
