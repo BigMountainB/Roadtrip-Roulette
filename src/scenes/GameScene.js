@@ -5593,6 +5593,7 @@ export class GameScene extends Phaser.Scene {
       boostBase: _boostBase, cruiseBase: _cruiseBase, topPct: _topPct,
       energyBonus, caffeineBonus, nosBonus, upMph,
       speedMult:  phys.speedMult ?? 1,
+      speedMultParts: phys.speedMultParts ?? null,
       gradeMult, curGrade,
       engineLimp: this._engineLimp, engineTemp: this._engineTemp,
       genreVehicle: _gvt?.vehicleName ?? null,
@@ -13484,8 +13485,24 @@ export class GameScene extends Phaser.Scene {
         ` nos=${mph(s.nosBonus)} upgrade=${mph(s.upMph)}`,
       `mults: speedMult=${s.speedMult.toFixed(2)}  grade=${s.gradeMult.toFixed(2)}` +
         ` (${(s.curGrade * 100).toFixed(1)}%)`,
+      `  vices: ${this._fmtSpeedMultParts(s.speedMultParts)}`,
       `engine: temp=${Math.round(s.engineTemp ?? 0)}°  limp=${s.engineLimp ? 'YES' : 'no'}`,
     ].join('\n'));
+  }
+
+  /** speedMult only shows the FINAL number — this breaks it into which
+   *  vice is actually driving it (owner: "speedMult so high, no idea
+   *  why"). Only lists non-zero terms so a clean sober drive stays a
+   *  one-liner. `parts` is EffectsSystem.getPhysics's speedMultParts —
+   *  real deltas from the real computation, not re-derived here. */
+  _fmtSpeedMultParts(parts) {
+    if (!parts) return '(n/a)';
+    const sign = (n) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}`;
+    const terms = Object.entries(parts)
+      .filter(([k, v]) => k !== 'clamped' && Math.abs(v) > 0.005)
+      .map(([k, v]) => `${k}${sign(v)}`);
+    if (!terms.length) return 'none (sober)';
+    return terms.join(' ') + (parts.clamped ? '  [CLAMPED 0.1-1.8]' : '');
   }
 
   /** Show the player's real car art as soon as it's loaded.  The sprite is

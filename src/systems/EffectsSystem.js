@@ -1169,6 +1169,19 @@ export class EffectsSystem {
 
     return {
       speedMult,
+      // Raw contributions behind speedMult, for the F5 speed debugger — so
+      // "why is speedMult 1.55" is answerable on-screen instead of grepping
+      // this file.  Mirrors the terms above exactly (deltas, not vice
+      // levels) so it can't drift from the real computation.
+      speedMultParts: {
+        energy: energy * 0.55, caffeine: caffeine * 0.45,
+        heroin: -hero * 0.5, fent: -fent * (10 / 12),
+        weed: -weedSpeedPenalty, ket: -ket * 0.35, rx: -rx * 0.15,
+        comboTranq: this._comboTranq ? -baseSpeedMult * 0.15 : 0,
+        comboSpeedball: this._comboSpeedball
+          ? 0.25 * energy * (1 - (this._heroNodAmount ?? 0)) : 0,
+        clamped: baseSpeedMult <= 0.1 || baseSpeedMult >= 1.8,
+      },
 
       // Energy bumped from +0.2 → +0.45 (sharper, brittle precision).
       steerSensitivity: clamp(
