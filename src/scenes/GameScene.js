@@ -4408,6 +4408,11 @@ export class GameScene extends Phaser.Scene {
       this._trapTicket        = null;
     } else {
       this.cops.update(rawDt, this.player.position, this.player.speed, this.player.x);
+      const _cd = this.cops.drainDiverted?.();
+      if (_cd) {
+        if (_cd.weapon)   this.stats?.recordCopOutcome?.('weapon', _cd.weapon);
+        if (_cd.distance) this.stats?.recordCopOutcome?.('distance', _cd.distance);
+      }
       this._updateScannerAlert();
 
       // ── FORWARD COUNTER (police-chase spec §6) ────────────────────────

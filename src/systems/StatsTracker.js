@@ -92,6 +92,12 @@ function defaultStats() {
     // dollars paid in fines, and times a stop ended in a bust (suspended
     // license or couldn't afford the fine).
     police:      { tickets: 0, duis: 0, finesPaid: 0, busts: 0 },
+    // Open-road pursuits ended in the player's favor (trip-summary "cops
+    // diverted" stat, owner 2026-07-29): 'weapon' = coal/donut/fireworks
+    // broke pursuit, 'distance' = genuinely out-ran the cruiser
+    // (CopSystem's COP_ESCAPE_MILES splice). Distinct from `police` above,
+    // which is speed-trap stops specifically.
+    copsDiverted: { weapon: 0, distance: 0 },
 
     // Total time spent in gameplay across ALL modes (incl. custom/sandbox).
     // lifetime.driveTimeSec counts only ranked runs, so the difference here
@@ -416,6 +422,15 @@ export class StatsTracker {
     row.count  += 1;
     row.payout += Math.max(0, payout);
     m.completedTotal += 1;
+  }
+
+  /** Cop pursuit ended in the player's favor (owner 2026-07-29, trip-summary
+   *  "cops diverted" stat). kind: 'weapon' (coal/donut/fireworks broke the
+   *  chase) or 'distance' (genuinely out-ran the cruiser). Called from
+   *  GameScene's per-frame drain of CopSystem.drainDiverted(). */
+  recordCopOutcome(kind, n = 1) {
+    if (!this.ranked || !(n > 0)) return;
+    this._bump(this.stats.copsDiverted, kind, n);
   }
 
   // ── Distance / time / speed (hot path — in-memory only) ───────────────────

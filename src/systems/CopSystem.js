@@ -205,6 +205,14 @@ export class CopSystem {
     this.coalAmmo      = 0;
     this.lastStateLine = -1;
 
+    // Cop-diverted counters (trip-summary stat) — accumulated here since
+    // CopSystem alone knows the instant a pursuit genuinely ends via a
+    // weapon (coal/donut/fireworks) vs the player just out-running the
+    // cruiser.  GameScene drains this once per frame and forwards to
+    // StatsTracker; kept as plain counters so instrumentation can't affect
+    // any existing chase behaviour.
+    this._diverted = { weapon: 0, distance: 0 };
+
     // World-space donut boxes + coal puffs.  Replaces the old longitudinal
     // band filters, which could not reach a cop in front of the player.
     this.deployables = new DeployableField();
@@ -445,6 +453,7 @@ export class CopSystem {
     cop._pitProgress    = 0;
     cop._pitArmed       = false;
     cop._overtakeToken  = null;   // a diverted unit gives its token back
+    this._diverted.weapon++;
     return cop;
   }
 
@@ -507,6 +516,17 @@ export class CopSystem {
     cop.parked        = false;
     cop._pitProgress  = 0;
     cop._pitArmed     = false;
+    this._diverted.weapon++;
+  }
+
+  /** Pull + reset the cop-diverted counters (trip-summary stat).  GameScene
+   *  drains this once per frame and forwards non-zero counts to
+   *  StatsTracker — kept as a plain getter/reset pair so CopSystem never
+   *  needs a reference to StatsTracker itself. */
+  drainDiverted() {
+    const d = this._diverted;
+    this._diverted = { weapon: 0, distance: 0 };
+    return d;
   }
 
   /** 5★ roadblock maze — strings of parked cruisers spanning the drivable
@@ -938,6 +958,7 @@ export class CopSystem {
         this.pitCount       = 0;
         this.arrestPending  = false;
         this._spawnCooldown = Math.max(this._spawnCooldown ?? 0, 2.5);
+        this._diverted.weapon += deferred.filter(v => v.isCop).length;
         return { ok: true, victims: [], deferredVictims: deferred, weapon: type };
       }
 
@@ -1490,7 +1511,7 @@ export class CopSystem {
         // stranded cruiser while it still holds its overtake token.
         const _legitAhead = cop._fromOnramp && cop._overtakeToken;
         if (dist > 30000 && !_legitAhead) this.cops.splice(i, 1);
-        else if (carDist < -COP_ESCAPE_UNITS) this.cops.splice(i, 1);
+        else if (carDist < -COP_ESCAPE_UNITS) { this._diverted.distance++; this.cops.splice(i, 1); }
         else if (this.stars < 1 && carDist < -10000) this.cops.splice(i, 1);
       } else if (cop.kind === 'barricade') {
         // Once player blows past the barricade, drop it.
