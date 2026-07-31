@@ -64,7 +64,7 @@ const CAUSE = {
     subtitle: 'Pullman, WA — late to the party, but you made it.',
     image:    null,
   },
-  // Demo build (App Store push): finished West Seattle → Snoqualmie.
+  // Demo build (web): finished West Seattle → Snoqualmie.
   demo_complete: {
     headline: 'DEMO COMPLETE',
     color:    '#44FF88',
@@ -73,9 +73,10 @@ const CAUSE = {
   },
 };
 
-// Full-game App Store listing.  Empty until the listing is live; when set, the
-// demo-complete screen shows a "GET THE FULL GAME" button that opens it.
-const APP_STORE_URL = '';
+// Full game, deployed alongside the demo on the same Pages project (see
+// website/fully/ + Overview.md Chapter 2). Relative so it resolves correctly
+// on both the production domain and any preview-deployment alias.
+const FULL_GAME_URL = '/fully/';
 
 export class GameOverScene extends Phaser.Scene {
   constructor() { super({ key: 'GameOver' }); }
@@ -231,9 +232,9 @@ export class GameOverScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-T', () => { if (this.tripSummary) this._openTripSummary(); });
   }
 
-  /** Demo build (App Store push) end screen — celebratory "made it to
-   *  Snoqualmie" + a call to get the full game.  Reuses _makeButton / _startOver
-   *  (a fresh run re-enters the demo since DEMO_MODE is still on). */
+  /** Demo build end screen — celebratory "made it to Snoqualmie" + a button
+   *  to the full game at /fully. Reuses _makeButton / _startOver (a fresh run
+   *  re-enters the demo since DEMO_MODE is still on). */
   _createDemoComplete(meta) {
     this.add.rectangle(0, 0, SCREEN_W, SCREEN_H, 0x03050F).setOrigin(0);
     // Subtle neon frame to feel like a "win" card, not a fail screen.
@@ -265,19 +266,10 @@ export class GameOverScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
 
     const btnY = SCREEN_H - 76;
-    if (APP_STORE_URL) {
-      this._makeButton(CX - 110, btnY, 200, 50, 'GET THE FULL GAME', 0x44FF88, 0x000000,
-        () => { try { window.open(APP_STORE_URL, '_blank'); } catch (_) {} });
-      this._makeButton(CX + 110, btnY, 200, 50, 'Play Demo Again', 0x2A4A6A, 0xFFFFFF,
-        () => this._startOver());
-    } else {
-      // No live App Store listing yet — single replay button + a note.
-      this.add.text(CX, btnY - 34, 'Full game coming soon to the App Store', {
-        fontSize: '13px', fontFamily: 'Arial', color: '#7FE0A0', stroke: '#000', strokeThickness: 2,
-      }).setOrigin(0.5);
-      this._makeButton(CX, btnY, 240, 50, 'Play Demo Again', 0x44FF88, 0x000000,
-        () => this._startOver());
-    }
+    this._makeButton(CX - 110, btnY, 200, 50, 'GET THE FULL GAME', 0x44FF88, 0x000000,
+      () => { try { window.open(FULL_GAME_URL, '_blank'); } catch (_) {} });
+    this._makeButton(CX + 110, btnY, 200, 50, 'Play Demo Again', 0x2A4A6A, 0xFFFFFF,
+      () => this._startOver());
 
     this.input.keyboard?.once('keydown-SPACE', () => this._startOver());
     this.input.keyboard?.once('keydown-ENTER', () => this._startOver());
