@@ -4,24 +4,25 @@
  * Each vice has a level 0–1.
  * Level fills on pickup, decays over time.
  * At threshold: OD triggers (game over for most vices).
- * Weed is the exception — cannot OD, just makes you very slow.
+ * Burrito is the exception — cannot OD, just makes you very slow.
  *
  * Unlock tree (checked each update):
- *   energy   → alcohol > 0.3 for > 30s total
- *   shrooms   → alcohol > 0.4 AND weed > 0.4 simultaneously
- *   lsd       → shrooms bar ever reached >= 0.75
- *   heroin    → distance > 50% of route
- *   rx        → energy > 0.5 (simulates "calming down")
- *   fentanyl  → heroin bar ever reached >= 0.6
- *   ketamine  → lsd bar ever reached >= 0.5
+ *   energy   → sushi > 0.3 for > 30s total
+ *   gummies  → sushi > 0.4 AND burrito > 0.4 simultaneously
+ *   hotdog   → gummies bar ever reached >= 0.75
+ *   combo    → distance > 50% of route
+ *   coldbrew → energy > 0.5 (simulates "calming down")
+ *   coma     → combo bar ever reached >= 0.6
+ *   slushie  → hotdog bar ever reached >= 0.5
  */
 import { VICES, VICE_CONFIG, VICE_COMBOS } from '../constants.js';
 
-// Pickup amounts — per the user's vice-design spec.  Hits-to-max varies
-// wildly by vice: 14 beers vs 2 fentanyl, etc.  Many vices also trigger
-// cross-vice or per-pickup effects (see ViceSystem.pickup + GameScene).
+// Pickup amounts — per the owner's vice-design spec.  Hits-to-max varies
+// wildly by vice: 14 sushi rolls vs 2 buffet-coma hits, etc.  Many vices
+// also trigger cross-vice or per-pickup effects (see ViceSystem.pickup +
+// GameScene).
 const PICKUP_AMOUNTS = {
-  sushi:  0.18,    // 18% — bigger sips so a beer line spikes a real buzz that
+  sushi:  0.18,    // 18% — a bigger bite so one hit spikes a real effect that
                      // survives the realistic ~65s decay (raised from 7% 2026-06-22)
   burrito:     0.125,   // 12.5% base; tolerance kicks in past 60%
   energy:  0.10,    // 10% per line → 10 lines fills the bar, 11th ODs (per
@@ -49,7 +50,7 @@ const PICKUP_AMOUNTS = {
 const DOSE_SECONDS = {
   caffeine: 60,   // one pill: 10% → 0 over 60 s
   coldbrew: 45,   // one pull: 10% → 0 over 45 s
-  energy:   30,   // one line: 10% → 0 over 30 s
+  energy:   30,   // one shot: 10% → 0 over 30 s
 };
 
 export class ViceSystem {
@@ -59,14 +60,14 @@ export class ViceSystem {
     this.maxReached = {}; // highest level each vice has ever reached
 
     // Unlock tracking
-    this.totalDrunkTime   = 0;
+    this.totalSushiTime   = 0;
     this.routeProgress    = 0; // 0–1, updated by GameScene
-    // Lifetime NPC-crash counter — feeds the rx unlock gate.
+    // Lifetime NPC-crash counter — feeds the Cold Brew unlock gate.
     this.npcCrashesTotal   = 0;
     this.energyPickupCount = 0; // each pickup permanently raises top speed +4 mph
     this.pickupCounts       = {};
     // Vices that crossed their unlock gate THIS frame — GameScene drains this
-    // to force a guaranteed "first line" of the new vice so the player can
+    // to force a guaranteed first pickup of the new vice so the player can
     // actually try what they just earned (esp. on short runs).
     this._firstLineQueue    = [];
     // Active-combo timestamp tracker — initialised here so getActiveCombos
@@ -111,8 +112,10 @@ export class ViceSystem {
    *  30-second clean window. */
   hydrateProgress(saved) {
     if (!saved || typeof saved !== 'object') return;
-    // `?? old-key` = one-time migration from the pre-rename save fields
-    // (methPhase1 / cocainePeak) so existing progress isn't lost.
+    // `?? old-key` = one-time migration from the save fields these two were
+    // renamed from (pre-dating the vice rename to the current food/fatigue
+    // set) so existing progress isn't lost. Old key names kept as-is here —
+    // this is a save-compat shim, not a place to touch.
     if (saved.caffeinePhase1 ?? saved.methPhase1) this._caffeinePhase1 = true;
     const _peak = saved.energyPeak ?? saved.cocainePeak;
     if (typeof _peak === 'number') {
@@ -130,10 +133,10 @@ export class ViceSystem {
   }
 
   /** Top up every unlocked vice bar to a safe 60% — keeps the player from
-   *  walking out of a rest stop into an instant fent OD.  Bars already
+   *  walking out of a rest stop into an instant Coma OD.  Bars already
    *  above 60% are left alone.  IMPORTANT: do NOT bump `maxReached` —
-   *  the LSD / fentanyl unlock gates read maxReached for shrooms /
-   *  heroin, so writing CAP there would chain-unlock the downstream
+   *  the Hot Dog / Coma unlock gates read maxReached for Gummies /
+   *  Combo, so writing CAP there would chain-unlock the downstream
    *  vices without the player ever peaking the prerequisite bar. */
   refillAll() {
     const CAP = 0.60;
@@ -155,14 +158,14 @@ export class ViceSystem {
     // STARTING levels and the run simulates normally from there, which is also
     // what makes mid-run slider edits work (they land as external writes that
     // `_updateDoses` reconciles).
-    // Permastoned hold — once the weed bar hits 100% it should freeze
+    // Permastoned hold — once the Burrito bar hits 100% it should freeze
     // there until the 10-mile timer trips.  We can't gate on
-    // `_weedAt100StartPos` because that field is populated by
+    // `_burritoAt100StartPos` because that field is populated by
     // `notePermastonedTick`, which runs AFTER `update()` — so on the
     // first frame at 100% the decay would shave the bar back below 1.0
     // before the timer could even start.  Gate purely on the bar level.
-    const weedPermastonedActive = (this.levels[VICES.BURRITO] ?? 0) >= 1.0
-      && !this._weedPermastonedLocked;
+    const burritoPermastonedActive = (this.levels[VICES.BURRITO] ?? 0) >= 1.0
+      && !this._burritoPermastonedLocked;
 
     for (const id of Object.values(VICES)) {
       const cfg   = VICE_CONFIG[id];
@@ -184,15 +187,15 @@ export class ViceSystem {
       if (level > 0) {
         anyActive = true;
         if (level > this.maxReached[id]) this.maxReached[id] = level;
-        // Weed bar holds at 100% during the Permastoned window — no decay
+        // Burrito bar holds at 100% during the Permastoned window — no decay
         // until the 10-mi mark trips and the bar is force-reset to 0.
-        if (id === VICES.BURRITO && weedPermastonedActive) continue;
+        if (id === VICES.BURRITO && burritoPermastonedActive) continue;
         let decay = cfg.decayRate;
-        // Alcohol asymmetric decay — first 50 % of the bar sticks around
-        // (decay ×0.6) so it's easy to stay tipsy; above 50 % the body
-        // burns it off faster (decay ramps up to ×2.5 at full bar) so
-        // extreme drunkenness wears off quickly.  Net: easier to reach
-        // and maintain a buzz, harder to stay maxed.
+        // Sushi asymmetric decay — first 50 % of the bar sticks around
+        // (decay ×0.6) so the queasiness is easy to maintain; above 50 %
+        // it burns off faster (decay ramps up to ×2.5 at full bar) so an
+        // extreme case wears off quickly.  Net: easier to reach and
+        // maintain a mild effect, harder to stay maxed.
         if (id === VICES.SUSHI) {
           if (level <= 0.5) {
             decay *= 0.6;
@@ -201,7 +204,7 @@ export class ViceSystem {
             decay *= 0.6 + (2.5 - 0.6) * t;       // 0.6 → 2.5
           }
         }
-        // Energy speeds up alcohol metabolism (~2× faster at full energy bar)
+        // Energy speeds up Sushi's metabolism (~2× faster at full energy bar)
         if (id === VICES.SUSHI && energyLevel > 0.1) {
           decay *= 1 + energyLevel * 1.2;
         }
@@ -209,9 +212,9 @@ export class ViceSystem {
       }
     }
 
-    // Drunk-time tracking (for energy unlock)
+    // Sushi-time tracking (for energy unlock)
     if (this.levels[VICES.SUSHI] > 0.3) {
-      this.totalDrunkTime += dt;
+      this.totalSushiTime += dt;
     }
 
     // Unlock checks
@@ -227,8 +230,8 @@ export class ViceSystem {
    *  never waiting on an earlier dose to drain first.  The bar is the sum.
    *
    *  Reconciliation: GameScene writes `vices.levels[id]` directly in ~13 places
-   *  (rest-stop "reduce vices" buys, Narcan opioid flush, save restore, the dev
-   *  slider, and the cross-vice drops inside `pickup`).  Those writes must win,
+   *  (rest-stop "reduce vices" buys, the Espresso OD-save flush, save restore,
+   *  the dev slider, and the cross-vice drops inside `pickup`).  Those writes must win,
    *  so whenever the level no longer matches what this method last produced, the
    *  live doses are rescaled to the externally-set total — preserving their
    *  individual clocks — rather than being silently recomputed away. */
@@ -274,43 +277,43 @@ export class ViceSystem {
   }
 
   /** Called by GameScene each frame with the player's current world-Z
-   *  position.  Tracks the Permastoned window: weed bar at 100% for
-   *  10 in-game miles → fire achievement, force-reset weed to 0,
-   *  permanently lock weed pickups for the remainder of the run.
+   *  position.  Tracks the Permastoned window: Burrito bar at 100% for
+   *  10 in-game miles → fire achievement, force-reset Burrito to 0,
+   *  permanently lock Burrito pickups for the remainder of the run.
    *
    *  `posUnitsPerMile` lets the system convert relative position units
    *  to miles without importing constants. */
   notePermastonedTick(playerPos, posUnitsPerMile) {
-    if (this._weedPermastonedLocked) return null;
-    const weed = this.levels[VICES.BURRITO] ?? 0;
-    if (weed < 1.0) {
-      this._weedAt100StartPos = null;
+    if (this._burritoPermastonedLocked) return null;
+    const burrito = this.levels[VICES.BURRITO] ?? 0;
+    if (burrito < 1.0) {
+      this._burritoAt100StartPos = null;
       return null;
     }
-    if (this._weedAt100StartPos == null) {
-      this._weedAt100StartPos = playerPos;
+    if (this._burritoAt100StartPos == null) {
+      this._burritoAt100StartPos = playerPos;
       return null;
     }
-    const milesAt100 = (playerPos - this._weedAt100StartPos) / posUnitsPerMile;
+    const milesAt100 = (playerPos - this._burritoAt100StartPos) / posUnitsPerMile;
     if (milesAt100 >= 10) {
-      this._weedPermastonedLocked = true;
+      this._burritoPermastonedLocked = true;
       this.levels[VICES.BURRITO]     = 0;
-      this._weedAt100StartPos     = null;
+      this._burritoAt100StartPos     = null;
       return { permastoned: true };
     }
     return null;
   }
 
-  isPermastoned() { return !!this._weedPermastonedLocked; }
+  isPermastoned() { return !!this._burritoPermastonedLocked; }
 
-  /** Per-frame unlock check.  Updated thresholds per player spec:
-   *    energy   → 30s drunk
-   *    shrooms   → both alcohol AND weed have ever been ingested (any pickup)
-   *    lsd       → shrooms bar ever hit 0.30
-   *    heroin    → 20% route progress
-   *    rx        → energy bar ever hit 0.30
-   *    fentanyl  → heroin bar ever hit 0.50
-   *    ketamine  → lsd bar ever hit 0.40
+  /** Per-frame unlock check.  Updated thresholds per owner spec:
+   *    energy   → 30s of Sushi
+   *    gummies  → both Sushi AND Burrito have ever been ingested (any pickup)
+   *    hotdog   → gummies bar ever hit 0.30
+   *    combo    → 20% route progress
+   *    coldbrew → energy bar ever hit 0.30
+   *    coma     → combo bar ever hit 0.50
+   *    slushie  → hotdog bar ever hit 0.40
    *    caffeine      → energy bar hit 0.40 then dropped back to 0 for 30s
    *
    *  Once unlocked, vices stay unlocked for the rest of the run — even
@@ -337,13 +340,13 @@ export class ViceSystem {
   _checkUnlocks(dt = 0) {
     const u = this.unlocked;
 
-    if (!u[VICES.ENERGY] && this.totalDrunkTime > 30) {
+    if (!u[VICES.ENERGY] && this.totalSushiTime > 30) {
       this._unlock(VICES.ENERGY);
     }
 
-    // Shrooms unlock once both beer AND weed bars are ≥ 30% AT THE SAME
-    // TIME (not just historically ingested) — the player has to be drunk
-    // and stoned simultaneously, not stage them separately.
+    // Gummies unlock once both Sushi AND Burrito bars are ≥ 30% AT THE SAME
+    // TIME (not just historically ingested) — the player has to be riding
+    // both at once, not stage them separately.
     if (!u[VICES.GUMMIES]
       && (this.levels[VICES.SUSHI] ?? 0) >= 0.30
       && (this.levels[VICES.BURRITO]    ?? 0) >= 0.30) {
@@ -358,8 +361,8 @@ export class ViceSystem {
       this._unlock(VICES.COMBO);
     }
 
-    // Rx unlocks once the player has bumped 50+ NPC cars (the player is
-    // generating their own legal mess that begs prescription painkillers).
+    // Cold Brew unlocks once the player has bumped 50+ NPC cars (the player
+    // is generating their own legal mess and needs the caffeine to cope).
     // GameScene tracks `npcCrashesTotal` on the registry-shared vices
     // instance via `recordNpcCrash`.
     if (!u[VICES.COLDBREW] && (this.npcCrashesTotal ?? 0) >= 50) {
@@ -423,16 +426,16 @@ export class ViceSystem {
     const id = this._mapPickupType(viceType);
     if (!id || !this.unlocked[id]) return false;
 
-    // Permastoned lockout — once weed has been Permastoned-locked, the
-    // road suppresses weed pickups so this should rarely fire, but the
+    // Permastoned lockout — once Burrito has been Permastoned-locked, the
+    // road suppresses Burrito pickups so this should rarely fire, but the
     // double-check keeps any stray pickup honest.
-    if (id === VICES.BURRITO && this._weedPermastonedLocked) return false;
+    if (id === VICES.BURRITO && this._burritoPermastonedLocked) return false;
 
     const cfg    = VICE_CONFIG[id];
     let amount   = PICKUP_AMOUNTS[id] ?? 0.12;
 
-    // Weed tolerance — 12.5% per hit until the bar hits 60%, then a flat
-    // 5% per hit (per user spec).  Below 60% lets the player ramp up
+    // Burrito tolerance — 12.5% per hit until the bar hits 60%, then a flat
+    // 5% per hit (per owner spec).  Below 60% lets the player ramp up
     // quickly; above 60% it takes ~8 more hits to reach the Permastoned
     // 100% lock-in point.
     if (id === VICES.BURRITO) {
@@ -457,9 +460,9 @@ export class ViceSystem {
     }
 
     // ── Cross-vice pickup effects ─────────────────────────────────────
-    // Beer lowers each OTHER vice by 5 percentage points only while that
+    // Sushi lowers each OTHER vice by 5 percentage points only while that
     // bar is above 45%, so it can curb dangerous highs without wiping
-    // early-stage effects. Energy burns 7 points off alcohol. Rx
+    // early-stage effects. Energy burns 7 points off Sushi. Cold Brew
     // multiplies every OTHER vice bar by 0.9 (10% off its current amount).
     const dropBy = (other, delta) => {
       this.levels[other] = Math.max(0, (this.levels[other] ?? 0) - delta);
@@ -482,7 +485,7 @@ export class ViceSystem {
 
     // Per-pickup permanent stat counters — read by GameScene for cumulative
     // top-speed bonuses (+4 mph / energy bag, +4 mph / caffeine pickup) and
-    // for Rx-driven NPC traffic-speed shifts (+/-7 mph / Rx pickup).
+    // for Cold-Brew-driven NPC traffic-speed shifts (+/-7 mph / pickup).
     if (id === VICES.ENERGY) this.energyPickupCount += 1;
     this.pickupCounts[id] = (this.pickupCounts[id] ?? 0) + 1;
 
@@ -490,7 +493,7 @@ export class ViceSystem {
     // odThreshold 1.0001, so OD fires only when a pickup would OVERFILL an
     // already-maxed bar.  The stored level is capped at 1.0, so we test the
     // UNCAPPED dose (prevLevel + amount): you OD by taking one hit too many on
-    // a full bar, uniform across all dangerous vices.  Alcohol/weed are
+    // a full bar, uniform across all dangerous vices.  Sushi/Burrito are
     // canOD:false, so they still fill safely.
     const odThr = cfg.odThreshold ?? 1.0;
     if (cfg.canOD && (prevLevel + amount) >= odThr) {
@@ -526,9 +529,9 @@ export class ViceSystem {
     return mph;
   }
 
-  /** Rx-driven NPC traffic-speed offset in MPH (±7 mph per pickup), scaled by
-   *  the current Rx bar so traffic returns to normal as the Rx wears off.
-   *  Read by GameScene._updateTraffic. */
+  /** Cold-Brew-driven NPC traffic-speed offset in MPH (±7 mph per pickup),
+   *  scaled by the current Cold Brew bar so traffic returns to normal as it
+   *  wears off.  Read by GameScene._updateTraffic. */
   getRxNpcSpeedShiftMPH() {
     return (this.pickupCounts[VICES.COLDBREW] ?? 0) * 7 * (this.levels[VICES.COLDBREW] ?? 0);
   }
@@ -559,23 +562,23 @@ export class ViceSystem {
     let totalW = 0;
     for (const id of Object.values(VICES)) {
       if (!this.unlocked[id]) continue;
-      // Permastoned lock — no weed pickups for the rest of the run.
-      if (id === VICES.BURRITO && this._weedPermastonedLocked) continue;
+      // Permastoned lock — no Burrito pickups for the rest of the run.
+      if (id === VICES.BURRITO && this._burritoPermastonedLocked) continue;
       const count = this.pickupCounts[id] ?? 0;
       // Base weight 1 + addiction kicker.  Switched from linear (count×0.4)
       // to sqrt-scaled (sqrt(count)×1.6) so addiction still strongly biases
-      // the pick after a few hits but a long lifetime history (30+ beers)
-      // doesn't permanently lock other vices out at 13:1 odds.  Old: 30
-      // beers → weight 13.  New: 30 beers → weight ~9.8, 100 beers →
-      // ~17 (vs old 41).  Still meaningful, no longer pathological.
+      // the pick after a few hits but a long lifetime history (30+ Sushi
+      // rolls) doesn't permanently lock other vices out at 13:1 odds.
+      // Old: 30 rolls → weight 13.  New: 30 rolls → weight ~9.8, 100 rolls
+      // → ~17 (vs old 41).  Still meaningful, no longer pathological.
       let w = 1 + Math.sqrt(count) * 1.6;
       if (upDominant && DOWNERS.has(id)) w *= 0.45;
       if (dnDominant && UPPERS.has(id))  w *= 0.45;
-      // Fentanyl is RARE — single hit = 50%, two = OD.  Knock its weight
+      // Coma is RARE — single hit = 50%, two = OD.  Knock its weight
       // way down so it shows up only occasionally even when the player
-      // has piled up an opioid pickup history.
+      // has piled up a heavy-vice pickup history.
       if (id === VICES.COMA) w *= 0.08;
-      // Shrooms population reduced 20% per player request — they were
+      // Gummies population reduced 20% per owner request — they were
       // showing up too often on the road.
       if (id === VICES.GUMMIES)  w *= 0.8;
       candidates.push({ id, w });
@@ -611,7 +614,7 @@ export class ViceSystem {
     // actually triggered at pickup time by the overfill check (prev+dose ≥
     // 1.0001), since stored bars cap at 1.0 and never reach 1.0001 here.  Kept
     // as a guard in case a bar is ever pushed past its threshold by other
-    // means.  Alcohol/weed are canOD:false, so they fill safely.
+    // means.  Sushi/Burrito are canOD:false, so they fill safely.
     for (const id of Object.values(VICES)) {
       const cfg = VICE_CONFIG[id];
       const odThr = cfg.odThreshold ?? 1.0;
@@ -646,16 +649,16 @@ export class ViceSystem {
   isOn(id)   { return this.levels[id]   > 0.05; }
   isUnlocked(id) { return this.unlocked[id] ?? false; }
 
-  /** Score multiplier — additive per vice, weighted by how lit you are.
+  /** Score multiplier — additive per vice, weighted by how deep in you are.
    *  Each vice's contribution:
-   *     bar  ≤ 50%  →  +0.5  (light buzz / mild high)
+   *     bar  ≤ 50%  →  +0.5  (light effect)
    *     bar  > 50%  →  +1.0  (deep, full effect)
    *     bar  < 5%   →   0    (trace residue, ignored)
-   *  Examples (matching the user spec):
-   *     beer 30% + weed 30%        →  1 + 0.5 + 0.5 = 2.0×
-   *     beer full + weed full      →  1 + 1.0 + 1.0 = 3.0×
-   *     beer 80% + weed 20%        →  1 + 1.0 + 0.5 = 2.5×
-   *     one vice at 50%            →  1 + 0.5       = 1.5×
+   *  Examples (matching the owner spec):
+   *     sushi 30% + burrito 30%     →  1 + 0.5 + 0.5 = 2.0×
+   *     sushi full + burrito full   →  1 + 1.0 + 1.0 = 3.0×
+   *     sushi 80% + burrito 20%     →  1 + 1.0 + 0.5 = 2.5×
+   *     one vice at 50%             →  1 + 0.5       = 1.5×
    */
   get scoreMultiplier() {
     let bonus = 0;
