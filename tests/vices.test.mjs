@@ -101,16 +101,29 @@ const run = (v, secs, step = 1 / 60) => {
 }
 
 // ── 7. Speed impact — what this was all for ──
+// Owner rule (2026-07-31): caffeine's speed effect is a flat ~4 mph per
+// pickup, fading over that pill's own 60 s clock — NOT a percentage
+// speedMult on an invisible bar (the old `1 + c*0.45` mechanism, which
+// double-counted against this same flat bonus and was removed from
+// EffectsSystem entirely). getCaffeineSpeedBonusMPH is now the only
+// place caffeine touches speed.
 {
   const v = mk();
   for (let i = 0; i < 4; i++) v.pickup('caffeine');
-  const mult = (c) => 1 + c * 0.45;
-  const peak = mult(v.get('caffeine'));
+  const peakMph = v.getCaffeineSpeedBonusMPH();
+  ok('4 pickups ≈ 16 mph peak (4 mph each, no dilution)', near(peakMph, 16, 0.5), `got ${peakMph.toFixed(2)} mph`);
   run(v, 60.5);
-  ok('caffeine speedMult peak now <= 1.20', peak <= 1.20, `got x${peak.toFixed(3)}`);
-  ok('caffeine speedMult back to 1.0 in 60 s', mult(v.get('caffeine')) === 1, '');
-  console.log(`\n  caffeine speedMult: peak x${peak.toFixed(3)} for <60 s  (was x1.45 for 204 s)`);
-  console.log(`  Lowrider boost 135 mph: ${(135 * peak).toFixed(0)} mph peak  (was ${(135 * 1.45).toFixed(0)})`);
+  ok('caffeine mph bonus back to 0 in 60 s', v.getCaffeineSpeedBonusMPH() === 0, `got ${v.getCaffeineSpeedBonusMPH()}`);
+  console.log(`\n  caffeine speed bonus: peak +${peakMph.toFixed(1)} mph for <60 s (flat, was a x1.45 speedMult for 204 s)`);
+}
+
+// ── 8. One pickup alone is a real, visible bonus (the regression this
+//      whole rework was chasing: "I ate a pill and saw no change") ──
+{
+  const v = mk();
+  v.pickup('caffeine');
+  const oneMph = v.getCaffeineSpeedBonusMPH();
+  ok('one pickup ≈ 4 mph, not ~0.4', near(oneMph, 4, 0.2), `got ${oneMph.toFixed(2)} mph`);
 }
 
 console.log(`\ndose.test: ${pass} passed, ${fail} failed`);

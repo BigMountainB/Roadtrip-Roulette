@@ -1145,9 +1145,13 @@ export class EffectsSystem {
     // 120 mph at multiplier 1.0, so each 10 % fent should drop the
     // multiplier by ~0.083 (10/120).  Applied as a smooth proportional
     // subtraction — no hard cap.
+    // Caffeine's speed effect lives ENTIRELY in ViceSystem.getCaffeineSpeedBonusMPH
+    // now (owner rule: ~4 mph per pickup, fading over that pill's own clock) — it
+    // used to ALSO add a percentage term here, which double-counted the same pill
+    // through two different, disagreeing mechanisms (one visible, one an invisible
+    // bar-level multiplier the player had no way to see or reason about).
     const baseSpeedMult = clamp(
       1 + energy * 0.55
-        + caffeine * 0.45                   // caffeine: speed boost (jittery wired)
         - hero * 0.5
         - fent * (10 / 12)              // -10 mph per 10 % fent (from 120 mph cap)
         - weedSpeedPenalty
@@ -1177,7 +1181,7 @@ export class EffectsSystem {
       // fent/ket/weed/rx) are leftover pre-rename internal names, never
       // player-facing; do not let them leak into anything user-visible.
       speedMultParts: {
-        energy: energy * 0.55, caffeine: caffeine * 0.45,
+        energy: energy * 0.55,
         combo: -hero * 0.5, coma: -fent * (10 / 12),
         burrito: -weedSpeedPenalty, slushie: -ket * 0.35, coldbrew: -rx * 0.15,
         comboTranq: this._comboTranq ? -baseSpeedMult * 0.15 : 0,

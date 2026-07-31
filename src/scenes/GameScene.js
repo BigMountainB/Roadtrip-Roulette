@@ -13474,15 +13474,19 @@ export class GameScene extends Phaser.Scene {
     if (!this._speedDebugOn || !this._speedDebugText) return;
     const s = this._speedDbg;
     if (!s) return;
-    const mph = (n) => `${Math.round(n)}`;
+    const mph  = (n) => `${Math.round(n)}`;
+    // Bonus terms can legitimately be sub-1 mph (a single fading dose) —
+    // Math.round hid exactly that ("I ate a pill and saw no change").
+    // One decimal here only; the big totals above stay whole numbers.
+    const mph1 = (n) => `${n.toFixed(1)}`;
     const pct = (n) => `${n >= 1 ? '+' : ''}${Math.round((n - 1) * 100)}%`;
     this._speedDebugText.setText([
       `SPEED DEBUG (F5)  cur=${mph(s.curMph)}  target=${mph(s.targetMph)}`,
       `cruise=${mph(s.cruiseMph)}  boost=${mph(s.boostMph)}` +
         (s.genreVehicle ? `  [${s.genreVehicle}${s.genre ? '/' + s.genre : ''}]` : '  [beater]'),
       `base: cruise=${mph(s.cruiseBase)} boost=${mph(s.boostBase)}  topPct=${pct(s.topPct)}`,
-      `bonuses(mph): energy=${mph(s.energyBonus)} caffeine=${mph(s.caffeineBonus)}` +
-        ` nos=${mph(s.nosBonus)} upgrade=${mph(s.upMph)}`,
+      `bonuses(mph): energy=${mph1(s.energyBonus)} caffeine=${mph1(s.caffeineBonus)}` +
+        ` nos=${mph1(s.nosBonus)} upgrade=${mph1(s.upMph)}`,
       `mults: speedMult=${s.speedMult.toFixed(2)}  grade=${s.gradeMult.toFixed(2)}` +
         ` (${(s.curGrade * 100).toFixed(1)}%)`,
       `  vices: ${this._fmtSpeedMultParts(s.speedMultParts)}`,

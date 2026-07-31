@@ -507,10 +507,23 @@ export class ViceSystem {
     return this.energyPickupCount * 4 * (this.levels[VICES.ENERGY] ?? 0);
   }
 
-  /** Caffeine speed boost in MPH (+4 mph per pickup), scaled by the current caffeine
-   *  bar so it dissipates as the bar empties. */
+  /** Caffeine speed boost in MPH — owner rule: each pickup is worth ~4 mph,
+   *  fading out over that PILL's own 60 s clock (DOSE_SECONDS.caffeine), not
+   *  diluted by the total bar level. Was `lifetimePickupCount * 4 *
+   *  currentBarFraction` — that formula pre-dates the 2026-07-27 dose-
+   *  tracking rework, when one pill filled the (shared-drain) bar to 25%;
+   *  after the rework a pill only fills it 10%, so one pickup delivered
+   *  `1 * 4 * 0.10 = 0.4 mph` — no perceptible change, exactly the "I ate a
+   *  pill and saw nothing" report. Summing live doses directly (each up to
+   *  4 mph, scaled by its own fitted amt if a near-full bar clipped it)
+   *  fixes that and matches the stated rule exactly. */
   getCaffeineSpeedBonusMPH() {
-    return (this.pickupCounts[VICES.CAFFEINE] ?? 0) * 4 * (this.levels[VICES.CAFFEINE] ?? 0);
+    const doses = this._doses[VICES.CAFFEINE];
+    if (!doses?.length) return 0;
+    const fullAmt = DOSE_SECONDS[VICES.CAFFEINE] ? 0.10 : 0;   // one full-strength pill's fill
+    let mph = 0;
+    for (const d of doses) mph += 4 * (fullAmt ? d.amt / fullAmt : 1) * (1 - d.t / d.dur);
+    return mph;
   }
 
   /** Rx-driven NPC traffic-speed offset in MPH (±7 mph per pickup), scaled by
