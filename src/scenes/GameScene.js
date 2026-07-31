@@ -23007,11 +23007,14 @@ export class GameScene extends Phaser.Scene {
       const _mi = this._odometer ?? 0;
       const _t = Math.floor(this.gameTime ?? 0);
       const _completed = (cause === 'finish_on_time' || cause === 'finish_late' || cause === 'demo_complete');
-      if (_completed) {
-        this.stats?.tripComplete({ score: _s, miles: _mi, timeSec: _t });
-      } else {
-        this.stats?.tripEnd({ score: _s, miles: _mi, timeSec: _t });
-      }
+      // Snapshot the per-trip breakdown (owner 2026-07-29 trip-summary
+      // directive) BEFORE tripComplete/tripEnd's flush — GameOverScene reads
+      // this rather than reaching into StatsTracker's live session, so a
+      // scene transition or a future run's tripStart() can't shift the
+      // numbers out from under it.
+      this._tripSummary = _completed
+        ? this.stats?.tripComplete({ score: _s, miles: _mi, timeSec: _t })
+        : this.stats?.tripEnd({ score: _s, miles: _mi, timeSec: _t });
       // World leaderboard submit (best-effort).  Ranked runs only — Custom is a
       // sandbox and doesn't score, mirroring StatsTracker.recordRun's gate.
       try {
@@ -23043,6 +23046,7 @@ export class GameScene extends Phaser.Scene {
       charge:          extra.charge ?? null,
       losses:          Math.round(extra.losses ?? 0),
       viceSummary,
+      tripSummary:     this._tripSummary ?? null,
       lastCheckpoint:  this._lastCheckpoint
         ? {
             name:     this._lastCheckpoint.name,

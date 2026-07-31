@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { SCREEN_W, SCREEN_H, VICE_CONFIG, VICES, HUD_OFFSET_X } from '../constants.js';
+import { getInstalled } from '../systems/UpgradeSystem.js';
+import { UPGRADE_SLOTS, getSlotTiers } from '../data/upgrades.js';
 
 // Per-vice unlock hints shown for any vice the player hasn't unlocked yet.
 // Order here drives the row order on the run-summary panel.
@@ -89,6 +91,10 @@ export class GameOverScene extends Phaser.Scene {
     this.runTimeSec     = data?.runTimeSec ?? 0;
     this.lastCheckpoint = data?.lastCheckpoint ?? null;
     this.viceSummary    = data?.viceSummary ?? null;
+    // Per-trip stat breakdown (owner 2026-07-29 directive) — a StatsTracker
+    // .summarize() snapshot taken at trip-end, before any future run's
+    // tripStart() could reset the session counters out from under this scene.
+    this.tripSummary    = data?.tripSummary ?? null;
   }
 
   create() {
@@ -205,11 +211,24 @@ export class GameOverScene extends Phaser.Scene {
         () => this._openViceLog(),
       );
     }
+    // Trip-summary tabbed recap (owner 2026-07-29) — only on a genuine
+    // Pullman arrival, where there's a full trip's worth of missions/
+    // money/road data to show, not a mid-run bust/crash/OD.
+    if (this.tripSummary
+        && (this.cause === 'finish' || this.cause === 'finish_on_time' || this.cause === 'finish_late')) {
+      this._makeButton(
+        SCREEN_W - 70, 58, 120, 28,
+        '📊 SUMMARY',
+        0x224422, 0xFFFFFF,
+        () => this._openTripSummary(),
+      );
+    }
 
     // Keyboard shortcuts.
     this.input.keyboard?.once('keydown-SPACE', () => this._retrySameSettings());
     this.input.keyboard?.once('keydown-ENTER', () => this._startOver());
     this.input.keyboard?.on('keydown-L', () => this._openViceLog());
+    this.input.keyboard?.on('keydown-T', () => { if (this.tripSummary) this._openTripSummary(); });
   }
 
   /** Demo build (App Store push) end screen — celebratory "made it to
@@ -592,6 +611,205 @@ export class GameOverScene extends Phaser.Scene {
     this._viceLogOpen = false;
     layer?.destroy();
     this._viceLogLayer = null;
+  }
+
+  // ── Trip summary (owner 2026-07-29 directive) ─────────────────────────
+  // Tabbed recap shown only on a Pullman arrival: score/money/missions/road/
+  // rest-stop breakdowns pulled from the StatsTracker session snapshot
+  // GameScene captured right before ending the trip (this.tripSummary).
+
+  _fmtMoney(n) { return `$${Math.round(n ?? 0).toLocaleString()}`; }
+
+  _fmtDuration(sec) {
+    const total = Math.max(0, Math.round(sec ?? 0));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+
+  _openTripSummary() {
+    if (this._summaryOpen) return;
+    this._summaryOpen = true;
+
+    const layer = this.add.container(0, 0).setDepth(110);
+    const scrim = this.add.rectangle(0, 0, SCREEN_W, SCREEN_H, 0x000000, 0.90)
+      .setOrigin(0).setInteractive();
+    layer.add(scrim);
+
+    layer.add(this.add.text(CX, 14, 'TRIP SUMMARY — PULLMAN, WA', {
+      fontSize: '18px', fontFamily: IMPACT, color: '#88FF88', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5, 0));
+
+    const TABS = [
+      { key: 'overview',  label: 'OVERVIEW' },
+      { key: 'money',     label: 'MONEY' },
+      { key: 'missions',  label: 'MISSIONS' },
+      { key: 'road',      label: 'ROAD' },
+      { key: 'reststops', label: 'REST STOPS' },
+    ];
+    const TAB_Y = 42, TAB_H = 24;
+    const tabW = Math.min(150, (SCREEN_W - 24) / TABS.length);
+    const tabBtns = {};
+    this._summaryTab = this._summaryTab ?? 'overview';
+
+    const redrawTabs = () => {
+      TABS.forEach((t, i) => {
+        const bg = tabBtns[t.key].bg;
+        bg.setFillStyle(t.key === this._summaryTab ? 0x2A6A3A : 0x14202A, 1);
+      });
+    };
+
+    TABS.forEach((t, i) => {
+      const tx = 12 + tabW * i + tabW / 2;
+      const bg = this.add.rectangle(tx, TAB_Y, tabW - 4, TAB_H, 0x14202A, 1)
+        .setStrokeStyle(1, 0x448866).setInteractive({ useHandCursor: true }).setDepth(111);
+      const txt = this.add.text(tx, TAB_Y, t.label, {
+        fontSize: '10px', fontFamily: IMPACT, color: '#EAF8EE',
+      }).setOrigin(0.5).setDepth(112);
+      bg.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); this._summaryTab = t.key; redrawTabs(); drawContent(); });
+      layer.add([bg, txt]);
+      tabBtns[t.key] = { bg, txt };
+    });
+    redrawTabs();
+
+    const contentLayer = this.add.container(0, 0).setDepth(111);
+    layer.add(contentLayer);
+
+    const CONTENT_X = 24;
+    const CONTENT_Y = 76;
+    const CONTENT_W = SCREEN_W - 48;
+
+    const row = (y, label, value, color = '#FFFFFF') => {
+      const l = this.add.text(CONTENT_X, y, label, { fontSize: '12px', fontFamily: 'Arial', color: '#9FC9FF' });
+      const v = this.add.text(CONTENT_X + CONTENT_W, y, value, { fontSize: '12px', fontFamily: IMPACT, color }).setOrigin(1, 0);
+      contentLayer.add([l, v]);
+      return y + 18;
+    };
+    const heading = (y, text) => {
+      const h = this.add.text(CONTENT_X, y, text, {
+        fontSize: '13px', fontFamily: IMPACT, color: '#88FF88', stroke: '#000', strokeThickness: 2,
+      });
+      contentLayer.add(h);
+      return y + 20;
+    };
+
+    const EARN_LABELS = {
+      distance: 'Distance driven', collision: 'Collision cash', hitchhiker: 'Hitchhikers',
+      completionBonus: 'Completion bonus', restStopBonus: 'Rest-stop bonus', girlParty: 'Companionship',
+      pickup: 'Roadside pickups', mission: 'Mission payouts', other: 'Other',
+    };
+    const SPEND_LABELS = {
+      vices: 'Vices', weapons: 'Weapons', vehicles: 'Vehicles', accessories: 'Accessories',
+      gas: 'Gas', repairs: 'Repairs', upgrades: 'Upgrades', services: 'Services',
+    };
+    const MISSION_LABELS = {
+      delivery: 'Delivery', passenger: 'Passenger', timed: 'Rush', heat: 'Lost the tail', weather: 'Dare run', unknown: 'Other',
+    };
+
+    const drawContent = () => {
+      contentLayer.removeAll(true);
+      const s = this.tripSummary ?? {};
+      let y = CONTENT_Y;
+
+      if (this._summaryTab === 'overview') {
+        y = row(y, 'FINAL SCORE', this._fmtMoney(this.finalScore));
+        y = row(y, 'DISTANCE', `${this.finalMiles.toFixed(1)} mi`);
+        y = row(y, 'TRIP TIME', this._fmtDuration(this.runTimeSec));
+        y = row(y, 'TOP SPEED', `${Math.round(s.topSpeed ?? 0)} mph`);
+        y = row(y, 'MISSIONS COMPLETED', `${s.missions?.completedTotal ?? 0}`);
+        y = row(y, 'COPS DIVERTED', `${(s.copsDiverted?.weapon ?? 0) + (s.copsDiverted?.distance ?? 0)}`);
+      }
+
+      if (this._summaryTab === 'money') {
+        y = heading(y, 'EARNED');
+        const bySource = s.earnedBySource ?? {};
+        const srcKeys = Object.keys(bySource).filter(k => bySource[k] > 0);
+        if (!srcKeys.length) y = row(y, 'Nothing earned this trip', '');
+        for (const k of srcKeys) y = row(y, EARN_LABELS[k] ?? k, this._fmtMoney(bySource[k]), '#88FF88');
+        y = row(y, 'TOTAL EARNED', this._fmtMoney(s.earned ?? 0), '#88FF88');
+        y += 8;
+        y = heading(y, 'SPENT');
+        const byCat = s.spentByCategory ?? {};
+        const catKeys = Object.keys(byCat).filter(k => byCat[k] > 0);
+        if (!catKeys.length) y = row(y, 'Nothing spent this trip', '');
+        for (const k of catKeys) y = row(y, SPEND_LABELS[k] ?? k, this._fmtMoney(byCat[k]), '#FF8888');
+        y = row(y, 'TOTAL SPENT', this._fmtMoney(s.spent ?? 0), '#FF8888');
+      }
+
+      if (this._summaryTab === 'missions') {
+        const byType = s.missions?.byType ?? {};
+        const typeKeys = Object.keys(byType);
+        y = row(y, 'TOTAL COMPLETED', `${s.missions?.completedTotal ?? 0}`);
+        y += 6;
+        if (!typeKeys.length) {
+          y = row(y, 'No missions completed this trip', '');
+        } else {
+          for (const k of typeKeys) {
+            const t = byType[k];
+            y = row(y, `${MISSION_LABELS[k] ?? k}  (×${t.count})`, this._fmtMoney(t.payout), '#88FF88');
+          }
+        }
+      }
+
+      if (this._summaryTab === 'road') {
+        y = row(y, 'CARS HIT', `${s.npcHits ?? 0}`);
+        y = row(y, 'DAMAGE TAKEN', `${Math.round(s.damageTaken ?? 0)} HP`);
+        y = row(y, 'TOP SPEED', `${Math.round(s.topSpeed ?? 0)} mph`);
+        y += 8;
+        y = heading(y, 'COPS');
+        y = row(y, 'Diverted — weapon', `${s.copsDiverted?.weapon ?? 0}`);
+        y = row(y, 'Diverted — outran', `${s.copsDiverted?.distance ?? 0}`);
+        y += 8;
+        y = heading(y, 'ENCOUNTERS');
+        y = row(y, 'Hitchhikers picked up', `${s.hitchhikers ?? 0}  (${s.hitchhikersGood ?? 0} good / ${s.hitchhikersBad ?? 0} bad)`);
+        if ((s.robberies ?? 0) > 0) y = row(y, 'Times robbed', `${s.robberies} — ${this._fmtMoney(s.robbedAmount)} lost`, '#FF8888');
+      }
+
+      if (this._summaryTab === 'reststops') {
+        y = row(y, 'TIME AT REST STOPS', this._fmtDuration(s.pitstopSec ?? 0));
+        y += 8;
+        // % of the upgrade catalog installed — one shared vehicle record
+        // across every genre skin (owner 2026-07-29: "each vehicle's
+        // upgrades are identical"), so this is a single global number.
+        try {
+          const save = this.registry?.get?.('save');
+          const vehicleId = s.vehicleId ?? 'beater';
+          const installed = save ? getInstalled(save, vehicleId) : {};
+          let owned = 0, total = 0;
+          for (const slot of UPGRADE_SLOTS) {
+            const tiers = getSlotTiers(slot);
+            if (!tiers.length) continue;
+            total += tiers.length;
+            const curId = installed[slot];
+            const curLvl = curId ? (tiers.find(t => t.id === curId)?.level ?? 0) : 0;
+            owned += Math.min(curLvl, tiers.length);
+          }
+          const pct = total > 0 ? Math.round((owned / total) * 100) : 0;
+          y = heading(y, 'GARAGE');
+          y = row(y, 'Upgrade levels owned', `${owned}/${total}  (${pct}%)`);
+        } catch (_) { /* best-effort — save/upgrade data may be unavailable */ }
+      }
+    };
+    drawContent();
+
+    const closeBtn = this._makeButton(
+      CX, SCREEN_H - 26, 160, 34,
+      'CLOSE  (Esc)',
+      0x884444, 0xFFFFFF,
+      () => this._closeTripSummary(layer),
+    );
+    layer.add([closeBtn.bg, closeBtn.txt]);
+    scrim.on('pointerdown', () => this._closeTripSummary(layer));
+    this.input.keyboard?.once('keydown-ESC', () => this._closeTripSummary(layer));
+
+    this._summaryLayer = layer;
+  }
+
+  _closeTripSummary(layer) {
+    if (!this._summaryOpen) return;
+    this._summaryOpen = false;
+    layer?.destroy();
+    this._summaryLayer = null;
   }
 
   _makeNeonButton(cx, cy, w, h, label, neonColor, onClick) {

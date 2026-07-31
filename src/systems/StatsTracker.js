@@ -138,6 +138,14 @@ function emptySession() {
     sexWorkerBribes:     0,
     robberies:           0,
     robbedAmount:        0,
+    // Per-trip breakdowns for the trip-summary screen (owner 2026-07-29
+    // directive) — mirrors the equivalent `stats.*` lifetime fields so a
+    // single recorder call can bump both without the summary screen ever
+    // showing all-time totals instead of THIS run's numbers.
+    spentByCategory:     { vices: 0, weapons: 0, vehicles: 0, accessories: 0, gas: 0, repairs: 0, upgrades: 0, services: 0 },
+    earnedBySource:      {},   // { <source>: amount } — mirrors stats.earned.bySource, per-trip
+    missions:             { byType: {}, completedTotal: 0 },
+    copsDiverted:         { weapon: 0, distance: 0 },
   };
 }
 
@@ -284,6 +292,10 @@ export class StatsTracker {
       sexWorkerBribes:  this.session.sexWorkerBribes,
       robberies:        this.session.robberies,
       robbedAmount:     this.session.robbedAmount,
+      spentByCategory:  this.session.spentByCategory,
+      earnedBySource:   this.session.earnedBySource,
+      missions:         this.session.missions,
+      copsDiverted:     this.session.copsDiverted,
       ...extra,
     };
   }
@@ -379,6 +391,7 @@ export class StatsTracker {
     this._bump(this.stats.lifetime, 'earnedGross', amount);
     this._bump(this.stats.earned.bySource, source, amount);
     this._bump(this.session, 'earnedThisTrip', amount);
+    this._bump(this.session.earnedBySource, source, amount);
     if (base != null && amount > base) {
       this._bump(this.stats.earned, 'fromMultiplier', amount - base);
     }
@@ -391,21 +404,24 @@ export class StatsTracker {
     this._bump(this.stats.lifetime, 'spentTotal', amount);
     this._bump(this.session, 'spentThisTrip', amount);
     const sp = this.stats.spent;
+    const spTrip = this.session.spentByCategory;
     switch (category) {
       case 'vices':
         if (subId) this._bump(sp.vices, subId, amount);
         this._bump(sp, 'vicesTotal', amount);
+        this._bump(spTrip, 'vices', amount);
         break;
       case 'weapons':
         if (subId) this._bump(sp.weapons, subId, amount);
         this._bump(sp, 'weaponsTotal', amount);
+        this._bump(spTrip, 'weapons', amount);
         break;
-      case 'vehicles':    this._bump(sp, 'vehicles', amount);    break;
-      case 'accessories': this._bump(sp, 'accessories', amount); break;
-      case 'gas':         this._bump(sp, 'gas', amount);         break;
-      case 'repairs':     this._bump(sp, 'repairs', amount);     break;
-      case 'upgrades':    this._bump(sp, 'upgrades', amount);    break;
-      default:            this._bump(sp, 'services', amount);    break;
+      case 'vehicles':    this._bump(sp, 'vehicles', amount);    this._bump(spTrip, 'vehicles', amount);    break;
+      case 'accessories': this._bump(sp, 'accessories', amount); this._bump(spTrip, 'accessories', amount); break;
+      case 'gas':         this._bump(sp, 'gas', amount);         this._bump(spTrip, 'gas', amount);         break;
+      case 'repairs':     this._bump(sp, 'repairs', amount);     this._bump(spTrip, 'repairs', amount);     break;
+      case 'upgrades':    this._bump(sp, 'upgrades', amount);    this._bump(spTrip, 'upgrades', amount);    break;
+      default:            this._bump(sp, 'services', amount);    this._bump(spTrip, 'services', amount);    break;
     }
   }
 
@@ -417,11 +433,13 @@ export class StatsTracker {
   recordMissionComplete(type, payout = 0) {
     if (!this.ranked) return;
     const t = type || 'unknown';
-    const m = this.stats.missions;
-    const row = (m.byType[t] ??= { count: 0, payout: 0 });
-    row.count  += 1;
-    row.payout += Math.max(0, payout);
-    m.completedTotal += 1;
+    const p = Math.max(0, payout);
+    for (const m of [this.stats.missions, this.session.missions]) {
+      const row = (m.byType[t] ??= { count: 0, payout: 0 });
+      row.count  += 1;
+      row.payout += p;
+      m.completedTotal += 1;
+    }
   }
 
   /** Cop pursuit ended in the player's favor (owner 2026-07-29, trip-summary
@@ -431,6 +449,7 @@ export class StatsTracker {
   recordCopOutcome(kind, n = 1) {
     if (!this.ranked || !(n > 0)) return;
     this._bump(this.stats.copsDiverted, kind, n);
+    this._bump(this.session.copsDiverted, kind, n);
   }
 
   // ── Distance / time / speed (hot path — in-memory only) ───────────────────
