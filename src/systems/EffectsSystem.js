@@ -2,15 +2,15 @@
  * EffectsSystem — translates vice levels into visual + physics distortions.
  *
  * Visual effects (no shader required):
- *   - Screen sway / scrollX drift  (alcohol)
- *   - Double vision ghost pass     (alcohol > 0.8)
- *   - Green tint overlay           (weed)
+ *   - Screen sway / scrollX drift  (Sushi)
+ *   - Double vision ghost pass     (Sushi > 0.8)
+ *   - Green tint overlay           (burrito)
  *   - White flash pulse            (energy)
- *   - Hue-cycling color overlay    (shrooms / lsd)
- *   - Liquefying world projection  (shrooms > 0.7)
- *   - Dark vignette + drooping lids (heroin / fentanyl)
- *   - Tunnel vision                (fentanyl)
- *   - K-hole quad split            (ketamine > 0.8)
+ *   - Hue-cycling color overlay    (gummies / hotdog)
+ *   - Liquefying world projection  (gummies > 0.7)
+ *   - Dark vignette + drooping lids (Combo / Coma)
+ *   - Tunnel vision                (Coma)
+ *   - Dissociation quad split      (Slushie > 0.8)
  *   - Screen shake                 (crash events)
  *
  * Physics effects (returned as an object read by Player):
@@ -18,7 +18,7 @@
  *   - steerSensitivity – multiplier on player input
  *   - speedMult      – max speed multiplier
  *   - extraCurve     – adds phantom curve to road
- *   - inputDelay     – ms delay on steering (ketamine)
+ *   - inputDelay     – ms delay on steering (Slushie)
  */
 import { VICES, CAM } from '../constants.js';
 import { clamp, lerp } from '../utils/Helpers.js';
@@ -38,31 +38,31 @@ export class EffectsSystem {
 
     // State exposed to Road renderer
     this.doubleVision = 0;
-    this.shroomMelt = 0;
+    this.gummiesMelt = 0;
 
-    // Delayed input buffer for ketamine
+    // Delayed input buffer for Slushie
     this._inputBuffer = [];
     this._inputDelay  = 0;
 
-    // LSD transient grayscale-flip scheduling
-    this._lsdGrayTimer = 0;
-    this._lsdNextGray  = 2 + Math.random() * 3;
+    // Hot Dog transient grayscale-flip scheduling
+    this._hotdogGrayTimer = 0;
+    this._hotdogNextGray  = 2 + Math.random() * 3;
 
-    // LSD pastel blob pool — pre-allocated, mutated in place to avoid
+    // Hot Dog pastel blob pool — pre-allocated, mutated in place to avoid
     // per-frame GC churn.  Same pattern as the Milky Way puff blobs.
-    this._lsdBlobs = [];
+    this._hotdogBlobs = [];
     for (let i = 0; i < 16; i++) {
-      this._lsdBlobs.push({
+      this._hotdogBlobs.push({
         active: false, x: 0, y: 0, color: 0,
         age: 0, lifetime: 0, radius: 0,
       });
     }
-    this._lsdBlobSpawnTimer = 0;
+    this._hotdogBlobSpawnTimer = 0;
 
-    // Rx roulette
-    this._rxRoll       = -1;
-    this._lastRxBar    = 0;
-    this._rxRollExpire = 0;
+    // Cold Brew roulette
+    this._coldbrewRoll       = -1;
+    this._lastColdbrewBar    = 0;
+    this._coldbrewRollExpire = 0;
 
     // Combo flags (re-derived per update)
     this._comboSnowCone     = false;
@@ -84,68 +84,68 @@ export class EffectsSystem {
     const d = vices;
     const mile = ctx.mile ?? 0;
 
-    const alc  = d.get(VICES.SUSHI);
-    const weed = d.get(VICES.BURRITO);
+    const sushi  = d.get(VICES.SUSHI);
+    const burrito = d.get(VICES.BURRITO);
     const energy = d.get(VICES.ENERGY);
-    const shrooms = d.get(VICES.GUMMIES);
-    const lsd  = d.get(VICES.HOTDOG);
-    const hero = d.get(VICES.COMBO);
-    const rx   = d.get(VICES.COLDBREW);
-    const fent = d.get(VICES.COMA);
-    const ket  = d.get(VICES.SLUSHIE);
+    const gummies = d.get(VICES.GUMMIES);
+    const hotdog  = d.get(VICES.HOTDOG);
+    const combo = d.get(VICES.COMBO);
+    const coldbrew   = d.get(VICES.COLDBREW);
+    const coma = d.get(VICES.COMA);
+    const slushie  = d.get(VICES.SLUSHIE);
     const caffeine = d.get(VICES.CAFFEINE);
 
-    // High-dose mushrooms: smoothly feed a visual-only liquid-world warp
+    // High-dose Gummies: smoothly feed a visual-only liquid-world warp
     // into Road.render(). Keeping this in the projection pass bends pavement,
     // scenery, and traffic together without a shader or extra textures.
-    const meltRaw = clamp((shrooms - 0.70) / 0.30, 0, 1);
+    const meltRaw = clamp((gummies - 0.70) / 0.30, 0, 1);
     const meltTarget = meltRaw * meltRaw * (3 - 2 * meltRaw);
-    this.shroomMelt = lerp(this.shroomMelt, meltTarget, clamp(dt * 3, 0, 1));
+    this.gummiesMelt = lerp(this.gummiesMelt, meltTarget, clamp(dt * 3, 0, 1));
 
-    // ── Rx roulette ─────────────────────────────────────────────────
-    // Detect a fresh pickup (rx jumped > 0.05 vs last frame); roll a
+    // ── Cold Brew roulette ─────────────────────────────────────────────────
+    // Detect a fresh pickup (coldbrew jumped > 0.05 vs last frame); roll a
     // new effect 0..4 and start a 12s window.  When the window expires
-    // _rxRoll = -1 and all rx-roulette physics fields go to 0.
-    if (rx > (this._lastRxBar ?? 0) + 0.05) {
-      this._rxRoll       = Math.floor(Math.random() * 5);
-      this._rxRollExpire = 12;
+    // _coldbrewRoll = -1 and all coldbrew-roulette physics fields go to 0.
+    if (coldbrew > (this._lastColdbrewBar ?? 0) + 0.05) {
+      this._coldbrewRoll       = Math.floor(Math.random() * 5);
+      this._coldbrewRollExpire = 12;
     }
-    this._lastRxBar = rx;
-    if (this._rxRollExpire > 0) {
-      this._rxRollExpire -= dt;
-      if (this._rxRollExpire <= 0) {
-        this._rxRoll       = -1;
-        this._rxRollExpire = 0;
+    this._lastColdbrewBar = coldbrew;
+    if (this._coldbrewRollExpire > 0) {
+      this._coldbrewRollExpire -= dt;
+      if (this._coldbrewRollExpire <= 0) {
+        this._coldbrewRoll       = -1;
+        this._coldbrewRollExpire = 0;
       }
     }
 
     // ── Combo detection ─────────────────────────────────────────────
-    this._comboSnowCone    = (alc > 0.3 && energy > 0.3);
-    this._comboTranq       = (hero > 0.3 && ket > 0.3);
-    this._comboPsychedelic = (shrooms > 0.3 && lsd > 0.3);
-    this._comboSpeedball   = (energy > 0.3 && hero > 0.3);
+    this._comboSnowCone    = (sushi > 0.3 && energy > 0.3);
+    this._comboTranq       = (combo > 0.3 && slushie > 0.3);
+    this._comboPsychedelic = (gummies > 0.3 && hotdog > 0.3);
+    this._comboSpeedball   = (energy > 0.3 && combo > 0.3);
     let _activeCount = 0;
-    if (alc     > 0.3) _activeCount++;
-    if (weed    > 0.3) _activeCount++;
+    if (sushi     > 0.3) _activeCount++;
+    if (burrito    > 0.3) _activeCount++;
     if (energy    > 0.3) _activeCount++;
-    if (shrooms > 0.3) _activeCount++;
-    if (lsd     > 0.3) _activeCount++;
-    if (hero    > 0.3) _activeCount++;
-    if (rx      > 0.3) _activeCount++;
-    if (fent    > 0.3) _activeCount++;
-    if (ket     > 0.3) _activeCount++;
+    if (gummies > 0.3) _activeCount++;
+    if (hotdog     > 0.3) _activeCount++;
+    if (combo    > 0.3) _activeCount++;
+    if (coldbrew      > 0.3) _activeCount++;
+    if (coma    > 0.3) _activeCount++;
+    if (slushie     > 0.3) _activeCount++;
     if (caffeine    > 0.3) _activeCount++;
     this._comboApocalypse = (_activeCount >= 4);
 
     // ── Double Vision (energy partially cuts through it) ──────────────
     // Threshold lowered from 0.60 → 0.45 and the ramp tightened so the
-    // effect peaks well before the bar is full — at 80%+ alcohol the
+    // effect peaks well before the bar is full — at 80%+ Sushi the
     // doubling should be unmistakable, not subtle.
-    const alcNet = Math.max(0, alc - energy * 0.5);  // energy sobers you up some
-    this.doubleVision = alcNet > 0.45 ? clamp((alcNet - 0.45) / 0.30, 0, 1) : 0;
+    const sushiNet = Math.max(0, sushi - energy * 0.5);  // energy sobers you up some
+    this.doubleVision = sushiNet > 0.45 ? clamp((sushiNet - 0.45) / 0.30, 0, 1) : 0;
 
-    // ── Camera Sway (alcohol, reduced by energy) ─────────────────────
-    const swayAlc = Math.max(0, alc - energy * 0.6);
+    // ── Camera Sway (Sushi, reduced by energy) ─────────────────────
+    const swayAlc = Math.max(0, sushi - energy * 0.6);
     if (swayAlc > 0.08) {
       const swayAmp  = swayAlc * 55;
       const swayFreq = 0.8 + swayAlc * 0.8;
@@ -163,27 +163,27 @@ export class EffectsSystem {
     if (this.overlay) {
       this.overlay.clear();
 
-      // Weed: green tint that intensifies into a hot-boxed haze ≥ 60%.
-      // At weed ≥ 0.5 the wash "breathes" at ~0.4 Hz — slow inhale/exhale
+      // Burrito: green tint that intensifies into a heavy haze ≥ 60%.
+      // At burrito ≥ 0.5 the wash "breathes" at ~0.4 Hz — slow inhale/exhale
       // that reads as the hazy/floaty feel without any new visual layers.
-      const weedBreath = weed >= 0.5
+      const burritoBreath = burrito >= 0.5
         ? 1 + Math.sin(t * Math.PI * 2 * 0.4) * 0.25
         : 1;
-      if (weed > 0.05) {
-        this.overlay.fillStyle(0x224422, weed * 0.22 * weedBreath);
+      if (burrito > 0.05) {
+        this.overlay.fillStyle(0x224422, burrito * 0.22 * burritoBreath);
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
-      if (weed >= 0.60) {
-        const haze = (weed - 0.60) / 0.40;
-        this.overlay.fillStyle(0x556b4a, (0.18 + haze * 0.18) * weedBreath);
+      if (burrito >= 0.60) {
+        const haze = (burrito - 0.60) / 0.40;
+        this.overlay.fillStyle(0x556b4a, (0.18 + haze * 0.18) * burritoBreath);
         this.overlay.fillRect(-150, -150, 1100, 750);
-        this.overlay.fillStyle(0xCCDFC2, (0.06 + haze * 0.10) * weedBreath);
+        this.overlay.fillStyle(0xCCDFC2, (0.06 + haze * 0.10) * burritoBreath);
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
-      // Alcohol: red tint at high levels
-      if (alc > 0.5) {
-        this.overlay.fillStyle(0x440000, (alc - 0.5) * 0.3);
+      // Sushi: red tint at high levels
+      if (sushi > 0.5) {
+        this.overlay.fillStyle(0x440000, (sushi - 0.5) * 0.3);
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
@@ -201,14 +201,14 @@ export class EffectsSystem {
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
-      // Shrooms: saturation-pump per dose (8% per pickup, capped at 100%).
+      // Gummies: saturation-pump per dose (8% per pickup, capped at 100%).
       // Implemented as a slow cycling hue overlay whose alpha grows with
       // pickup count — visually "the world's getting more saturated".
       // Alpha bumped 0.32 → 0.55 + a baseline term keyed off the bar
       // itself so saturation reads even on the first pickup.
-      if (shrooms > 0.05) {
-        const shroomPickups = d.pickupCounts?.[VICES.GUMMIES] ?? 0;
-        const satBoost = Math.min(1, shroomPickups * 0.08);
+      if (gummies > 0.05) {
+        const gummiesPickups = d.pickupCounts?.[VICES.GUMMIES] ?? 0;
+        const satBoost = Math.min(1, gummiesPickups * 0.08);
         const hue1 = Math.sin(t * 0.4)         * 0.5 + 0.5;
         const hue2 = Math.sin(t * 0.4 + 2.094) * 0.5 + 0.5;
         const hue3 = Math.sin(t * 0.4 + 4.188) * 0.5 + 0.5;
@@ -217,15 +217,15 @@ export class EffectsSystem {
         const b = Math.round(hue3 * 255);
         const col = (r << 16) | (g << 8) | b;
         // satBoost grows with pickups (slow build), bar-baseline kicks
-        // in immediately so a single mushroom at 90% bar still tints.
-        const a = satBoost * 0.55 + shrooms * 0.18;
+        // in immediately so a single gummy at 90% bar still tints.
+        const a = satBoost * 0.55 + gummies * 0.18;
         this.overlay.fillStyle(col, a);
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
-      // Shrooms perceptual: sky rainbow gradient (5 hue bands across upper
+      // Gummies perceptual: sky rainbow gradient (5 hue bands across upper
       // half, low alpha, hue offset cycles over time).
-      if (shrooms > 0.4) {
+      if (gummies > 0.4) {
         const SKY_TOP = -150;
         const SKY_H   = 225 + 150;          // upper half + top margin
         const BANDS   = 5;
@@ -236,15 +236,15 @@ export class EffectsSystem {
           const rr = Math.round((Math.sin(phase)         * 0.5 + 0.5) * 255);
           const gg = Math.round((Math.sin(phase + 2.094) * 0.5 + 0.5) * 255);
           const bb = Math.round((Math.sin(phase + 4.188) * 0.5 + 0.5) * 255);
-          this.overlay.fillStyle((rr << 16) | (gg << 8) | bb, 0.06 * shrooms);
+          this.overlay.fillStyle((rr << 16) | (gg << 8) | bb, 0.06 * gummies);
           this.overlay.fillRect(-150 + i * BAND_W, SKY_TOP, BAND_W, SKY_H);
         }
       }
 
-      // Shrooms color-saturation pulse — warm-hue cycling wash, alpha
+      // Gummies color-saturation pulse — warm-hue cycling wash, alpha
       // pulses with sin(time).  Pure overlay alpha pulse (no per-pixel sat).
-      if (shrooms > 0.3) {
-        const pulseAlpha = Math.sin(t * 0.6) * 0.04 * shrooms;
+      if (gummies > 0.3) {
+        const pulseAlpha = Math.sin(t * 0.6) * 0.04 * gummies;
         if (pulseAlpha > 0) {
           const warmPhase = t * 0.25;
           const rr = Math.round((Math.sin(warmPhase)       * 0.3 + 0.7) * 255);
@@ -254,58 +254,58 @@ export class EffectsSystem {
           this.overlay.fillRect(-150, -150, 1100, 750);
         }
       }
-      // Shrooms ≥ 65% rainbow is now drawn by Road.js immediately after
+      // Gummies ≥ 65% rainbow is now drawn by Road.js immediately after
       // the sky bands so it sits BEHIND road / scenery / NPCs (per user
-      // request).  Road.render reads `effects.shroomsBar` to gate it.
+      // request).  Road.render reads `effects.gummiesBar` to gate it.
 
-      // LSD: per-hit brightness boost (8% per pickup) + geometric lines
+      // Hot Dog: per-hit brightness boost (8% per pickup) + geometric lines
       // at higher levels.  Above 90% the screen flips to a heavy grey
       // wash, reading as "everything's gone B&W".
-      if (lsd > 0.05) {
-        const lsdPickups = d.pickupCounts?.[VICES.HOTDOG] ?? 0;
-        const brightness = Math.min(1, lsdPickups * 0.08);
+      if (hotdog > 0.05) {
+        const hotdogPickups = d.pickupCounts?.[VICES.HOTDOG] ?? 0;
+        const brightness = Math.min(1, hotdogPickups * 0.08);
         // Flat white wash for the brightness lift.
         this.overlay.fillStyle(0xFFFFFF, brightness * 0.30);
         this.overlay.fillRect(-150, -150, 1100, 750);
         // Geometric lines remain at higher bar levels.
-        if (lsd > 0.3) {
-          this.overlay.lineStyle(1, 0xFFFFFF, lsd * 0.15);
+        if (hotdog > 0.3) {
+          this.overlay.lineStyle(1, 0xFFFFFF, hotdog * 0.15);
           for (let i = 0; i < 6; i++) {
             const x = (Math.sin(t * 0.9 + i * 1.05) * 0.5 + 0.5) * 800;
             this.overlay.strokeRect(x - 40, 0, 80, 450);
           }
         }
       }
-      if (lsd >= 0.90) {
+      if (hotdog >= 0.90) {
         // Heavy grey wash leans the world toward greyscale.  Real
         // desaturation needs a shader pipeline (deferred) — this is the
         // arcade-cheap version, and it still reads as "B&W trip".
-        const a = Math.min(1, (lsd - 0.90) / 0.10) * 0.60;
+        const a = Math.min(1, (hotdog - 0.90) / 0.10) * 0.60;
         this.overlay.fillStyle(0x808080, a);
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
-      // LSD transient grayscale flips — every 2-5 sec a 0.3s burst of
+      // Hot Dog transient grayscale flips — every 2-5 sec a 0.3s burst of
       // 0x808080 at 0.20 alpha.  Psychedelic combo halves the next-burst
       // window so flips fire ~2x as often.
-      if (lsd > 0.4) {
-        if (this._lsdGrayTimer > 0) {
-          this._lsdGrayTimer -= dt;
+      if (hotdog > 0.4) {
+        if (this._hotdogGrayTimer > 0) {
+          this._hotdogGrayTimer -= dt;
           this.overlay.fillStyle(0x808080, 0.20);
           this.overlay.fillRect(-150, -150, 1100, 750);
         } else {
-          this._lsdNextGray -= dt;
-          if (this._lsdNextGray <= 0) {
-            this._lsdGrayTimer = 0.3;
+          this._hotdogNextGray -= dt;
+          if (this._hotdogNextGray <= 0) {
+            this._hotdogGrayTimer = 0.3;
             const freqMul = this._comboPsychedelic ? 0.5 : 1.0;
-            this._lsdNextGray = (2 + Math.random() * 3) * freqMul;
+            this._hotdogNextGray = (2 + Math.random() * 3) * freqMul;
           }
         }
       }
 
-      // LSD chromatic aberration — small red + blue offsets.
-      if (lsd > 0.5) {
-        const aberrAlpha = (lsd - 0.5) * 0.18;
+      // Hot Dog chromatic aberration — small red + blue offsets.
+      if (hotdog > 0.5) {
+        const aberrAlpha = (hotdog - 0.5) * 0.18;
         const offset = 4 + Math.sin(t * 1.3) * 2;
         // CB: swap the red/blue split for a warm/cool amber↔cyan one, which
         // survives protan/deutan/tritan (the red half washes out otherwise).
@@ -316,27 +316,27 @@ export class EffectsSystem {
         this.overlay.fillRect(-150 + offset, -150, 1100, 750);
       }
 
-      // LSD slow brightness wash — cycles bright/dim (clamped at 0).
-      if (lsd > 0.3) {
-        const brightAlpha = Math.sin(t * 0.4) * 0.04 * lsd;
+      // Hot Dog slow brightness wash — cycles bright/dim (clamped at 0).
+      if (hotdog > 0.3) {
+        const brightAlpha = Math.sin(t * 0.4) * 0.04 * hotdog;
         if (brightAlpha > 0) {
           this.overlay.fillStyle(0xFFFFFF, brightAlpha);
           this.overlay.fillRect(-150, -150, 1100, 750);
         }
       }
 
-      // LSD ≥ 70%: translucent pastel blobs that fade in / hold / fade
+      // Hot Dog ≥ 70%: translucent pastel blobs that fade in / hold / fade
       // out at random screen positions.  Same three-pass blob style as
       // the Milky Way puffs — outer halo, mid wash, bright core.  The
       // pool is pre-allocated; we just cycle entries between active
       // and idle so no objects are created per frame.
-      if (lsd > 0.7) {
-        const lsdMix = Math.min(1, (lsd - 0.7) / 0.3);
-        // Spawn cadence ramps with bar level — at lsd=1.0 a new blob
-        // every 0.3-0.8s; at lsd=0.7 every 0.6-1.4s.
-        this._lsdBlobSpawnTimer -= dt;
-        if (this._lsdBlobSpawnTimer <= 0) {
-          for (const b of this._lsdBlobs) {
+      if (hotdog > 0.7) {
+        const hotdogMix = Math.min(1, (hotdog - 0.7) / 0.3);
+        // Spawn cadence ramps with bar level — at hotdog=1.0 a new blob
+        // every 0.3-0.8s; at hotdog=0.7 every 0.6-1.4s.
+        this._hotdogBlobSpawnTimer -= dt;
+        if (this._hotdogBlobSpawnTimer <= 0) {
+          for (const b of this._hotdogBlobs) {
             if (b.active) continue;
             b.active   = true;
             // Spawn anywhere in the visible play area.  Slight bias
@@ -362,13 +362,13 @@ export class EffectsSystem {
             break;
           }
           // Next-spawn delay — tighter at higher bar levels.
-          const minDelay = 0.3 + (1 - lsdMix) * 0.3;    // 0.3–0.6s
-          const range    = 0.5 + (1 - lsdMix) * 0.3;    // +0–0.8s
-          this._lsdBlobSpawnTimer = minDelay + Math.random() * range;
+          const minDelay = 0.3 + (1 - hotdogMix) * 0.3;    // 0.3–0.6s
+          const range    = 0.5 + (1 - hotdogMix) * 0.3;    // +0–0.8s
+          this._hotdogBlobSpawnTimer = minDelay + Math.random() * range;
         }
 
         // Update + paint active blobs.  Three-pass for soft edges.
-        for (const b of this._lsdBlobs) {
+        for (const b of this._hotdogBlobs) {
           if (!b.active) continue;
           b.age += dt;
           if (b.age >= b.lifetime) { b.active = false; continue; }
@@ -380,7 +380,7 @@ export class EffectsSystem {
           else                 env = 1;
           // Smoothstep the envelope so the edges aren't linear.
           env = env * env * (3 - 2 * env);
-          const a = env * 0.32 * lsdMix;
+          const a = env * 0.32 * hotdogMix;
           this.overlay.fillStyle(b.color, a * 0.32);
           this.overlay.fillCircle(b.x, b.y, b.radius * 1.4);
           this.overlay.fillStyle(b.color, a * 0.55);
@@ -390,38 +390,38 @@ export class EffectsSystem {
         }
       }
 
-      // Heroin: subtle dark-blue dreaminess.  Cut the alpha sharply (was
+      // Combo: subtle dark-blue dreaminess.  Cut the alpha sharply (was
       // 0.35) so the screen isn't washed dim — the heavy lifting is done
       // by the vignette below, which gives a tunnel-vision closing-in
       // feel rather than a flat dark wash.
-      // ── Heroin: continuous "nodding off" envelope ──────────────
+      // ── Combo: continuous "nodding off" envelope ──────────────
       // Replaced the random staged blackouts with a slow nod cycle.
       // (1 − cos(t·ω))/2 gives a smooth 0→1→0 wave; cubing biases the
       // envelope LOW most of the time and spikes high at peak nods, so
       // the player feels mostly heavy with periodic "head dips".
-      // Frequency ramps with the hero level (slower nods at low doses,
+      // Frequency ramps with the combo level (slower nods at low doses,
       // faster as it builds).  Drives vignette boost, eyelid droop,
       // input lag, and throttle sag — exposed via getPhysics().
-      const nodFreq = 0.45 + hero * 0.35;
+      const nodFreq = 0.45 + combo * 0.35;
       const nodRaw  = (1 - Math.cos(this.time * nodFreq)) * 0.5;
-      const nod     = hero > 0.05
-        ? Math.pow(nodRaw, 3) * Math.min(1, hero * 2)
+      const nod     = combo > 0.05
+        ? Math.pow(nodRaw, 3) * Math.min(1, combo * 2)
         : 0;
-      this._heroNodAmount = nod;
+      this._comboNodAmount = nod;
 
       // Warm dim wash — sedated/heavy room feel, not the prior chemical
       // blue wash.  Vignette + eyelid droop carry most of the visual
       // weight, so this layer stays subtle.
-      if (hero > 0.05) {
-        this.overlay.fillStyle(0x1A120C, hero * 0.10);
+      if (combo > 0.05) {
+        this.overlay.fillStyle(0x1A120C, combo * 0.10);
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
-      // Ketamine "detachment" — neutral grey wash above 40% pulls the
+      // Slushie "detachment" — neutral grey wash above 40% pulls the
       // world toward greyscale (cheap pseudo-desaturation).  Reads as
       // "everything's far away" — pairs with the existing tilt + static.
-      if (ket > 0.40) {
-        this.overlay.fillStyle(0x808080, (ket - 0.40) * 0.08);
+      if (slushie > 0.40) {
+        this.overlay.fillStyle(0x808080, (slushie - 0.40) * 0.08);
         this.overlay.fillRect(-150, -150, 1100, 750);
       }
 
@@ -783,27 +783,27 @@ export class EffectsSystem {
       // computed (reported in getState) in case a quieter cue is wanted later.
     }
 
-    // ── Vignette (heroin, fentanyl, ketamine K-hole) ───────────────────
+    // ── Vignette (Combo, Coma, Slushie dissociation) ───────────────────
     if (this.vignetteGfx) {
       this.vignetteGfx.clear();
 
-      // Ketamine vignette pulses on a 10s cycle: 4s dark / 6s lighter.
+      // Slushie vignette pulses on a 10s cycle: 4s dark / 6s lighter.
       // Base contribution dropped from 0.4 → 0.32 (20% lighter overall);
       // during the "lighter" phase it drops further to 0.13 so the dark
       // doesn't sit on the screen for minutes at a time.
-      // Ketamine contributes a SUBTLE screen-edge vignette — the heavy
-      // K-hole signal is now the TV static layered below this block,
+      // Slushie contributes a SUBTLE screen-edge vignette — the heavy
+      // dissociation signal is now the TV static layered below this block,
       // so we only need a mild edge-darkening to frame the noise.
-      // (Old: ket × 1.0 with pulse → too dark.  New: ket × 0.45 max —
+      // (Old: slushie × 1.0 with pulse → too dark.  New: slushie × 0.45 max —
       // user wanted the rings 50% darker than the prior 0.30 setting.)
-      const ketPhase  = this.time % 10;
-      const ketPulse  = ketPhase < 4 ? 1.0 : 0.7;
-      const ketCore   = Math.max(0, ket - 0.20) * 0.45;
-      const ketVig    = ketCore * ketPulse;
+      const slushiePhase  = this.time % 10;
+      const slushiePulse  = slushiePhase < 4 ? 1.0 : 0.7;
+      const slushieCore   = Math.max(0, slushie - 0.20) * 0.45;
+      const slushieVig    = slushieCore * slushiePulse;
       // Track nod cycles for the every-4th full-closure logic below.
-      // nodFreq matches the envelope frequency: 0.45 + hero * 0.35.
+      // nodFreq matches the envelope frequency: 0.45 + combo * 0.35.
       {
-        const _nodFreq = 0.45 + hero * 0.35;
+        const _nodFreq = 0.45 + combo * 0.35;
         const nodCycleIdx = Math.floor(this.time * _nodFreq / (Math.PI * 2));
         if (nodCycleIdx !== this._lastNodCycleIdx) {
           this._lastNodCycleIdx = nodCycleIdx;
@@ -813,33 +813,33 @@ export class EffectsSystem {
           this._fullCloseThisCycle = (nodCycleIdx % 2) === 1;
         }
       }
-      // Heroin no longer contributes to the rectangular ring-vignette —
-      // the perimeter blobs below carry the entire heroin look, since
+      // Combo no longer contributes to the rectangular ring-vignette —
+      // the perimeter blobs below carry the entire Combo look, since
       // the rectangle in the centre of the screen was reading as a UI
-      // artifact.  Fent/ket/rx/tranq still use the ring vignette.
-      const rxTunnelBoost = (this._rxRoll === 3) ? 0.25 : 0;
+      // artifact.  Fent/slushie/coldbrew/tranq still use the ring vignette.
+      const coldbrewTunnelBoost = (this._coldbrewRoll === 3) ? 0.25 : 0;
       const tranqBoost    = this._comboTranq ? 0.20 : 0;
       const vigStrength   = clamp(
-        fent * 1.8 + ketVig + rxTunnelBoost + tranqBoost,
+        coma * 1.8 + slushieVig + coldbrewTunnelBoost + tranqBoost,
         0, 1);
       if (vigStrength > 0.02) {
         this._drawVignette(this.vignetteGfx, vigStrength);
       }
 
-      // Fentanyl tunnel vision — extend past screen edges so a rotated
-      // camera (ketamine tilt) doesn't reveal black corners outside.
-      if (fent > 0.1) {
-        const border = fent * 120;
-        this.vignetteGfx.fillStyle(0x000000, fent * 0.85);
+      // Coma tunnel vision — extend past screen edges so a rotated
+      // camera (Slushie tilt) doesn't reveal black corners outside.
+      if (coma > 0.1) {
+        const border = coma * 120;
+        this.vignetteGfx.fillStyle(0x000000, coma * 0.85);
         this.vignetteGfx.fillRect(-150, -150, border + 150, 750);
         this.vignetteGfx.fillRect(800 - border, -150, border + 150, 750);
         this.vignetteGfx.fillRect(-150, -150, 1100, border * 0.6 + 150);
         this.vignetteGfx.fillRect(-150, 450 - border * 0.6, 1100, border * 0.6 + 150);
-        // Flat fent dim — paints the FULL screen (including the otherwise-
+        // Flat coma dim — paints the FULL screen (including the otherwise-
         // clear vignette center) so the world goes visibly dimmer the
         // higher the bar climbs.  User feedback (twice): not dark enough.
-        // Now ~0.70 black at fent=1.0, on top of the ring vignette.
-        this.vignetteGfx.fillStyle(0x000000, fent * 0.70);
+        // Now ~0.70 black at coma=1.0, on top of the ring vignette.
+        this.vignetteGfx.fillStyle(0x000000, coma * 0.70);
         this.vignetteGfx.fillRect(-150, -150, 1100, 750);
         // Center-only second dim — kills the visible "rectangle outline"
         // where the ring vignette's inner clear band meets the first ring.
@@ -850,16 +850,16 @@ export class EffectsSystem {
         // Center patch matches the innermost ring's alpha (0.50) so the
         // gradient transitions seamlessly from the clear band into the
         // ring zone — no visible "rectangle outline" boundary.
-        this.vignetteGfx.fillStyle(0x000000, fent * 0.50);
+        this.vignetteGfx.fillStyle(0x000000, coma * 0.50);
         this.vignetteGfx.fillRect(220, 130, 360, 190);
 
         // Heartbeat (≥ 30%) — vignette-edge swell every beat.  Two-beat
         // lub-dub: primary thump + softer echo.  ~60 bpm (1 Hz primary).
-        if (fent > 0.30) {
+        if (coma > 0.30) {
           const beat   = this.time * Math.PI * 2;
           const lub    = Math.max(0, Math.sin(beat));
           const dub    = Math.max(0, Math.sin(beat - 1.05)) * 0.55;
-          const heart  = (lub + dub) * (fent - 0.30) / 0.70;
+          const heart  = (lub + dub) * (coma - 0.30) / 0.70;
           const hb = 60 * heart;
           this.vignetteGfx.fillStyle(0x000000, Math.min(1, 0.35 + 0.45 * heart));
           this.vignetteGfx.fillRect(-150, -150, hb + 150, 750);
@@ -869,26 +869,26 @@ export class EffectsSystem {
         }
 
         // Severe darkness (≥ 50%) — additional black wash on top.
-        if (fent > 0.50) {
-          this.vignetteGfx.fillStyle(0x000000, (fent - 0.50) * 0.30);
+        if (coma > 0.50) {
+          this.vignetteGfx.fillStyle(0x000000, (coma - 0.50) * 0.30);
           this.vignetteGfx.fillRect(-150, -150, 1100, 750);
         }
       }
 
-      // Heroin "tunnel vision" — pulsing translucent grey blobs around
+      // Combo "tunnel vision" — pulsing translucent grey blobs around
       // the screen perimeter instead of rectangular eyelid bars.  The
       // blobs grow + brighten during each nod, contracting between
       // them so the frame visibly breathes.  Every 4th nod the blobs
       // swell large enough to fully overlap and close the view.
-      if (hero > 0.25) {
-        const heroIntensity = Math.min(1, (hero - 0.25) / 0.75); // 0..1
-        const nod           = this._heroNodAmount ?? 0;
-        // Base radius scales with hero level + breathes with the nod.
+      if (combo > 0.25) {
+        const comboIntensity = Math.min(1, (combo - 0.25) / 0.75); // 0..1
+        const nod           = this._comboNodAmount ?? 0;
+        // Base radius scales with combo level + breathes with the nod.
         // Full-close cycle adds a big extra so the blobs slam shut.
         // Boost bumped from 130 → 195 (50% bigger blobs when fully
         // closing) so the closed state really constricts the view.
         const fullCloseBoost = this._fullCloseThisCycle ? 195 * nod : 0;
-        const baseR = 70 + heroIntensity * 35 + nod * 75 + fullCloseBoost;
+        const baseR = 70 + comboIntensity * 35 + nod * 75 + fullCloseBoost;
 
         // Perimeter blob count per side — top/bottom denser than sides
         // because the screen is wider than tall.
@@ -941,7 +941,7 @@ export class EffectsSystem {
         // EYES SHUT = BLIND.  Nodding off closes your eyes, so black the
         // screen out proportional to the nod on EVERY nod (per user: "how
         // would you see cars if your eyes are closed?").  The nod envelope
-        // only climbs high once heroin is real (~0.4+), so light doses still
+        // only climbs high once Combo is real (~0.4+), so light doses still
         // just droop; deep nods slam fully shut.  Full-close cycles go to pure
         // black; regular nods reach near-black at their peak, fading in/out
         // smoothly with the droop so it reads as eyelids, not a hard cut.
@@ -952,15 +952,15 @@ export class EffectsSystem {
         }
       }
 
-      // Ketamine TV static — old-CRT "snow" noise that ramps with the
+      // Slushie TV static — old-CRT "snow" noise that ramps with the
       // bar.  Three bands:
       //    30–85%  → light to moderate snow (count + alpha grow)
       //    85–100% → OVERDRIVE: heavy snow that buries the road, plus
       //              big speck blocks so the screen is genuinely hard
       //              to see through (per user spec).
-      if (ket > 0.30) {
-        const t01       = clamp((ket - 0.30) / 0.70, 0, 1);    // 0 at 30%, 1 at 100%
-        const overdrive = clamp((ket - 0.85) / 0.15, 0, 1);    // 0 below 85%, 1 at 100%
+      if (slushie > 0.30) {
+        const t01       = clamp((slushie - 0.30) / 0.70, 0, 1);    // 0 at 30%, 1 at 100%
+        const overdrive = clamp((slushie - 0.85) / 0.15, 0, 1);    // 0 below 85%, 1 at 100%
         const COUNT  = Math.floor(150 + 750 * t01 + 2200 * overdrive); // up to ~3000 at peak
         const alpha  = clamp(0.45 + 0.45 * t01 + 0.20 * overdrive, 0, 1);
         const W = 1100, H = 750, X0 = -150, Y0 = -150;
@@ -1000,14 +1000,14 @@ export class EffectsSystem {
       }
     }
 
-    // ── Camera Zoom Pulse (weed / shrooms) ────────────────────────────
+    // ── Camera Zoom Pulse (burrito / gummies) ────────────────────────────
     // Pulse amplitude bumped — was 0.04 (4% sway, easy to miss).  Now
     // 0.10 base + frequency lifted slightly so the breathing reads as
     // an obvious "world inhaling" rather than a subliminal nudge.
-    if (shrooms > 0.15 || weed > 0.3) {
-      const zoomBase  = 1 + (shrooms * 0.10 + weed * 0.04);
-      const zoomPulse = Math.sin(t * (0.6 + shrooms * 0.9))
-                      * (shrooms * 0.10 + weed * 0.02);
+    if (gummies > 0.15 || burrito > 0.3) {
+      const zoomBase  = 1 + (gummies * 0.10 + burrito * 0.04);
+      const zoomPulse = Math.sin(t * (0.6 + gummies * 0.9))
+                      * (gummies * 0.10 + burrito * 0.02);
       camera.setZoom(clamp(zoomBase + zoomPulse, 0.85, 1.30));
     } else {
       const currZoom = camera.zoom;
@@ -1016,7 +1016,7 @@ export class EffectsSystem {
       }
     }
 
-    // ── Ketamine camera tilt (≥ 40%, capped at 20°) ───────────────────
+    // ── Slushie camera tilt (≥ 40%, capped at 20°) ───────────────────
     // Above 40% the bar drives the camera tilt amplitude.  At 40% →
     // ±0°, 50% → ±5°, …, 80% → ±20° cap (margin around the viewport
     // is 150 px; going harder would reveal black corners).  The tilt
@@ -1024,8 +1024,8 @@ export class EffectsSystem {
     // the dissociation reads as the head rolling, not just leaning.
     // Period ~6 s feels woozy without making the player nauseous.
     let targetTiltRad = 0;
-    if (ket >= 0.40) {
-      const ampDeg = Math.min(20, (ket - 0.40) / 0.10 * 5);
+    if (slushie >= 0.40) {
+      const ampDeg = Math.min(20, (slushie - 0.40) / 0.10 * 5);
       const ampRad = ampDeg * Math.PI / 180;
       // sin(t * ω) gives -1..+1; multiply by amplitude.  Frequency
       // ~0.17 Hz (full +20 → -20 → +20 cycle every ~6 s).
@@ -1041,7 +1041,7 @@ export class EffectsSystem {
     // progressively darker concentric frame rings extending outward.
     // The OLD implementation paint slices that overlapped at the centre,
     // accidentally inverting the gradient (centre was darkest, edges
-    // were lightest) — which is why ketamine "felt pitch black at 70%".
+    // were lightest) — which is why Slushie "felt pitch black at 70%".
     //
     // Each ring is 4 thin frame strips (top/bottom/left/right) hugging
     // a clear-rect boundary that grows outward.  Outer rings hit fewer
@@ -1112,37 +1112,37 @@ export class EffectsSystem {
 
   /** Physics modifiers returned as plain object for Player to read */
   getPhysics(vices) {
-    const alc   = vices.get(VICES.SUSHI);
-    const weed  = vices.get(VICES.BURRITO);
+    const sushi   = vices.get(VICES.SUSHI);
+    const burrito  = vices.get(VICES.BURRITO);
     const energy  = vices.get(VICES.ENERGY);
-    const shrooms = vices.get(VICES.GUMMIES);
-    const lsd   = vices.get(VICES.HOTDOG);
-    const hero  = vices.get(VICES.COMBO);
-    const fent  = vices.get(VICES.COMA);
-    const ket   = vices.get(VICES.SLUSHIE);
-    const rx    = vices.get(VICES.COLDBREW);
+    const gummies = vices.get(VICES.GUMMIES);
+    const hotdog   = vices.get(VICES.HOTDOG);
+    const combo  = vices.get(VICES.COMBO);
+    const coma  = vices.get(VICES.COMA);
+    const slushie   = vices.get(VICES.SLUSHIE);
+    const coldbrew    = vices.get(VICES.COLDBREW);
     const caffeine  = vices.get(VICES.CAFFEINE);
 
     const t = this.time;
 
-    // Energy burns off some of alcohol's debuffs
-    const alcEnergyNet = Math.max(0, alc - energy * 0.55);
-    // Effective alcohol for STEER DRIFT only — first beer (0.07) shouldn't
+    // Energy burns off some of Sushi's debuffs
+    const sushiEnergyNet = Math.max(0, sushi - energy * 0.55);
+    // Effective Sushi for STEER DRIFT only — the first hit (0.07) shouldn't
     // feel impaired.  Deadzone of 0.10 means drift kicks in around the 2nd
-    // beer (0.14 → effective 0.04).  Overall magnitude reduced by ⅓
+    // hit (0.14 → effective 0.04).  Overall magnitude reduced by ⅓
     // vs the pre-deadzone baseline (rescale 1/0.90 × 2/3 ≈ 0.741) so even
     // a full bar drifts gentler than before.
-    const alcDriftAmt = Math.max(0, alcEnergyNet - 0.10) * (1 / 0.90) * (2 / 3);
+    const sushiDriftAmt = Math.max(0, sushiEnergyNet - 0.10) * (1 / 0.90) * (2 / 3);
 
-    // Weed only slows the car when it's the ONLY vice active
-    const weedAlone  = weed > 0.05
-      && alc < 0.05 && energy < 0.05 && hero < 0.05 && fent < 0.05
-      && shrooms < 0.05 && lsd < 0.05 && rx < 0.05 && ket < 0.05 && caffeine < 0.05;
-    const weedSpeedPenalty = weedAlone ? weed * 0.22 : 0;
-    const weedTimePenalty  = weedAlone ? weed * 0.18 : 0;
+    // Burrito only slows the car when it's the ONLY vice active
+    const burritoAlone  = burrito > 0.05
+      && sushi < 0.05 && energy < 0.05 && combo < 0.05 && coma < 0.05
+      && gummies < 0.05 && hotdog < 0.05 && coldbrew < 0.05 && slushie < 0.05 && caffeine < 0.05;
+    const burritoSpeedPenalty = burritoAlone ? burrito * 0.22 : 0;
+    const burritoTimePenalty  = burritoAlone ? burrito * 0.18 : 0;
 
-    // Fentanyl: -10 mph per 10 % of bar (per spec).  Top speed reads
-    // 120 mph at multiplier 1.0, so each 10 % fent should drop the
+    // Coma: -10 mph per 10 % of bar (per spec).  Top speed reads
+    // 120 mph at multiplier 1.0, so each 10 % coma should drop the
     // multiplier by ~0.083 (10/120).  Applied as a smooth proportional
     // subtraction — no hard cap.
     // Caffeine's speed effect lives ENTIRELY in ViceSystem.getCaffeineSpeedBonusMPH
@@ -1152,21 +1152,21 @@ export class EffectsSystem {
     // bar-level multiplier the player had no way to see or reason about).
     const baseSpeedMult = clamp(
       1 + energy * 0.55
-        - hero * 0.5
-        - fent * (10 / 12)              // -10 mph per 10 % fent (from 120 mph cap)
-        - weedSpeedPenalty
-        - ket  * 0.35
-        - rx   * 0.15,
+        - combo * 0.5
+        - coma * (10 / 12)              // -10 mph per 10 % coma (from 120 mph cap)
+        - burritoSpeedPenalty
+        - slushie  * 0.35
+        - coldbrew   * 0.15,
       0.1, 1.8
     );
     let _speedMult = baseSpeedMult;
-    // Tranq combo (hero + ket): final speed × 0.85.
+    // Tranq combo (combo + slushie): final speed × 0.85.
     if (this._comboTranq) _speedMult *= 0.85;
-    // Speedball combo (energy + hero): energy pulse fights heroin nod —
+    // Speedball combo (energy + combo): energy pulse fights Combo nod —
     // brief speed boost at nod TROUGH (when nodAmount low), no boost at
     // peak.  Drives the "fighting" sensation.
     if (this._comboSpeedball) {
-      const _nod = this._heroNodAmount ?? 0;
+      const _nod = this._comboNodAmount ?? 0;
       _speedMult += 0.25 * energy * (1 - _nod);
     }
     const speedMult = _speedMult;
@@ -1176,99 +1176,96 @@ export class EffectsSystem {
       // Raw contributions behind speedMult, for the F5 speed debugger — so
       // "why is speedMult 1.55" is answerable on-screen instead of grepping
       // this file.  Mirrors the terms above exactly (deltas, not vice
-      // levels) so it can't drift from the real computation.  Keys are the
-      // CURRENT vice names (VICES.*) — this file's local variables (hero/
-      // fent/ket/weed/rx) are leftover pre-rename internal names, never
-      // player-facing; do not let them leak into anything user-visible.
+      // levels) so it can't drift from the real computation.
       speedMultParts: {
         energy: energy * 0.55,
-        combo: -hero * 0.5, coma: -fent * (10 / 12),
-        burrito: -weedSpeedPenalty, slushie: -ket * 0.35, coldbrew: -rx * 0.15,
+        combo: -combo * 0.5, coma: -coma * (10 / 12),
+        burrito: -burritoSpeedPenalty, slushie: -slushie * 0.35, coldbrew: -coldbrew * 0.15,
         comboTranq: this._comboTranq ? -baseSpeedMult * 0.15 : 0,
         comboSpeedball: this._comboSpeedball
-          ? 0.25 * energy * (1 - (this._heroNodAmount ?? 0)) : 0,
+          ? 0.25 * energy * (1 - (this._comboNodAmount ?? 0)) : 0,
         clamped: baseSpeedMult <= 0.1 || baseSpeedMult >= 1.8,
       },
 
       // Energy bumped from +0.2 → +0.45 (sharper, brittle precision).
       steerSensitivity: clamp(
-        1 - alcEnergyNet * 0.4
-          - hero * 0.6
-          - fent * 0.8
-          - ket  * 0.5
+        1 - sushiEnergyNet * 0.4
+          - combo * 0.6
+          - coma * 0.8
+          - slushie  * 0.5
           + energy * 0.45
           + caffeine * 0.35,
         0.1, 1.7
       ),
 
-      // Snow-Cone (alc + energy) suppresses alcohol's swerve 50% but adds
-      // a high-freq tremor.  Rx jitter roll bumps swerve too.
+      // Snow-Cone (sushi + energy) suppresses Sushi's swerve 50% but adds
+      // a high-freq tremor.  Cold Brew jitter roll bumps swerve too.
       steerDrift: (
-          Math.sin(t * 2.1 + 0.5) * alcDriftAmt * 0.80
+          Math.sin(t * 2.1 + 0.5) * sushiDriftAmt * 0.80
             * (this._comboSnowCone ? 0.5 : 1.0)
-        + Math.sin(t * 0.7 + 1.2) * hero  * 0.3
-        + Math.sin(t * 3.2 + 0.9) * fent  * 0.4
-        + Math.sin(t * 1.5 + 2.1) * ket   * 0.25
+        + Math.sin(t * 0.7 + 1.2) * combo  * 0.3
+        + Math.sin(t * 3.2 + 0.9) * coma  * 0.4
+        + Math.sin(t * 1.5 + 2.1) * slushie   * 0.25
         + Math.sin(t * 12.0 + 0.3) * caffeine * 0.55
         + Math.sin(t * 17.5 + 1.7) * caffeine * 0.35
-        + (this._comboSnowCone ? Math.sin(t * 8) * 0.2 * alc * energy : 0)
-        + ((this._rxRoll === 2) ? Math.sin(t * 9) * 0.4 * rx : 0)
+        + (this._comboSnowCone ? Math.sin(t * 8) * 0.2 * sushi * energy : 0)
+        + ((this._coldbrewRoll === 2) ? Math.sin(t * 9) * 0.4 * coldbrew : 0)
       ),
 
-      // Shrooms back at 0.005 (user wanted the higher road sway restored).
-      // Snow-Cone suppresses alcohol curve; Psychedelic combo boosts
-      // shrooms 2x.
-      extraCurve: Math.sin(t * 1.8) * alcEnergyNet * 0.003
+      // Gummies back at 0.005 (user wanted the higher road sway restored).
+      // Snow-Cone suppresses Sushi curve; Psychedelic combo boosts
+      // gummies 2x.
+      extraCurve: Math.sin(t * 1.8) * sushiEnergyNet * 0.003
                     * (this._comboSnowCone ? 0.5 : 1.0)
-                + Math.sin(t * 0.6) * shrooms * 0.005
+                + Math.sin(t * 0.6) * gummies * 0.005
                     * (this._comboPsychedelic ? 2.0 : 1.0)
                 + Math.sin(t * 9.0) * caffeine    * 0.004,
 
-      invertSteering: lsd > 0.72,
+      invertSteering: hotdog > 0.72,
 
-      dtMultiplier: clamp(1 - weedTimePenalty - hero * 0.4, 0.3, 1.2),
+      dtMultiplier: clamp(1 - burritoTimePenalty - combo * 0.4, 0.3, 1.2),
 
-      // ── Heroin sedation (ket also lags input, layered) ─────────
-      nodAmount:       this._heroNodAmount ?? 0,
-      inputLag:        hero * 0.45 + ket * 0.30,
-      steerReturnSlow: hero * 0.50 + ket * 0.25,
-      microsleep: (hero >= 0.65 && (this._heroNodAmount ?? 0) > 0.85),
+      // ── Combo sedation (slushie also lags input, layered) ─────────
+      nodAmount:       this._comboNodAmount ?? 0,
+      inputLag:        combo * 0.45 + slushie * 0.30,
+      steerReturnSlow: combo * 0.50 + slushie * 0.25,
+      microsleep: (combo >= 0.65 && (this._comboNodAmount ?? 0) > 0.85),
 
-      // ── Alcohol overcorrection ─────────────────────────────────
+      // ── Sushi overcorrection ─────────────────────────────────
       // After releasing input, steerVelocity holds in last direction
-      // briefly — drunk-driver overshoot feel.  Drives a snow-slip-style
-      // holdover branch in _updatePlayer.  Uses the deadzoned alcDriftAmt
-      // and a reduced 0.30 scale so 4-beer drift isn't catastrophic.
-      alcoholHoldover: alcDriftAmt * 0.30,
+      // briefly — an overshoot feel.  Drives a snow-slip-style
+      // holdover branch in _updatePlayer.  Uses the deadzoned sushiDriftAmt
+      // and a reduced 0.30 scale so a heavy dose's drift isn't catastrophic.
+      sushiHoldover: sushiDriftAmt * 0.30,
 
       // ── Energy wired ──────────────────────────────────────────
       cameraTremor:   energy * 1.5,           // tiny per-frame shake amplitude
       energyStarMul: 1 + energy * 0.5,       // CopSystem.addStar multiplier
 
-      // ── Caffeine + LSD HUD flicker (additive) ──────────────────────
+      // ── Caffeine + Hot Dog HUD flicker (additive) ──────────────────────
       hudFlicker: (caffeine > 0.5 ? (caffeine - 0.5) * 0.20 : 0)
-                + (lsd  > 0.5 ? (lsd  - 0.5) * 0.15 : 0),
+                + (hotdog  > 0.5 ? (hotdog  - 0.5) * 0.15 : 0),
 
-      // ── Weed cushion ───────────────────────────────────────────
-      accelMul:           weedAlone ? 1 - weed * 0.30 : 1,
-      collisionShakeDamp: weed * 0.5,
+      // ── Burrito cushion ───────────────────────────────────────────
+      accelMul:           burritoAlone ? 1 - burrito * 0.30 : 1,
+      collisionShakeDamp: burrito * 0.5,
 
-      // ── Fentanyl HUD fade ──────────────────────────────────────
-      hudAlphaMul: 1 - fent * 0.45,
+      // ── Coma HUD fade ──────────────────────────────────────
+      hudAlphaMul: 1 - coma * 0.45,
 
-      // ── Ketamine retinal drift (px lateral on tire shadow) ────
-      kRetinalDrift: ket * 4,
+      // ── Slushie retinal drift (px lateral on tire shadow) ────
+      slushieRetinalDrift: slushie * 4,
 
-      // ── Shrooms world-breathing (consumer not yet wired) ───────
-      worldBreathing: shrooms * 0.04,
+      // ── Gummies world-breathing (consumer not yet wired) ───────
+      worldBreathing: gummies * 0.04,
 
-      // ── Rx roulette (only the active roll's field is non-zero) ─
-      // _rxRoll: 0=focus 1=drowsy 2=jitter 3=tunnel 4=traffic-boost
-      rxFocus:        (this._rxRoll === 0) ? 0.15                          : 0,
-      rxLag:          (this._rxRoll === 1) ? 0.10                          : 0,
-      rxJitter:       (this._rxRoll === 2) ? Math.sin(t * 9) * 0.4 * rx    : 0,
-      rxTunnel:       (this._rxRoll === 3) ? 0.25                          : 0,
-      rxTrafficBoost: (this._rxRoll === 4) ? 1.5                           : 1.0,
+      // ── Cold Brew roulette (only the active roll's field is non-zero) ─
+      // _coldbrewRoll: 0=focus 1=drowsy 2=jitter 3=tunnel 4=traffic-boost
+      coldbrewFocus:        (this._coldbrewRoll === 0) ? 0.15                          : 0,
+      coldbrewLag:          (this._coldbrewRoll === 1) ? 0.10                          : 0,
+      coldbrewJitter:       (this._coldbrewRoll === 2) ? Math.sin(t * 9) * 0.4 * coldbrew    : 0,
+      coldbrewTunnel:       (this._coldbrewRoll === 3) ? 0.25                          : 0,
+      coldbrewTrafficBoost: (this._coldbrewRoll === 4) ? 1.5                           : 1.0,
 
       // ── Combo flags ────────────────────────────────────────────
       comboSnowCone:    !!this._comboSnowCone,

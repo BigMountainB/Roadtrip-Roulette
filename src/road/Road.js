@@ -149,11 +149,11 @@ export class Road {
     // signGfx overlay (above tunnel walls).
     this._effects      = effects;
 
-    // Render with margin so alcohol-sway, crash-shake, AND ketamine-tilt
+    // Render with margin so Sushi-sway, crash-shake, AND Slushie-tilt
     // (up to ~20°) on the main camera don't reveal the void past the
-    // painted area.  150px covers sway + ket tilts; the K-hole quad-split
+    // painted area.  150px covers sway + ket tilts; the dissociation quad-split
     // at peak ket replaces the old 80° rotation that needed more.
-    // Base 150 covers alcohol-sway / crash-shake / ket-tilt past the painted
+    // Base 150 covers Sushi-sway / crash-shake / Slushie-tilt past the painted
     // area; HUD_OFFSET_X extends it further so the decoupled-width canvas (the
     // world is scrolled −HUD_OFFSET_X to center) is filled edge-to-edge with no
     // bare strip on the widened side.  All sky/ground fills key off MARGIN.
@@ -190,7 +190,7 @@ export class Road {
     const skyBands = 64;
     const skyH     = H() + 14;
     // Cap the sky region with a solid block of the top-band colour so a
-    // rotated camera (ketamine tilt) doesn't reveal black above the
+    // rotated camera (Slushie tilt) doesn't reveal black above the
     // gradient.
     bg.fillStyle(skyTopMix, 1);
     bg.fillRect(-MARGIN, SKY_TOP, W, -SKY_TOP);
@@ -203,12 +203,12 @@ export class Road {
       bg.fillRect(-MARGIN, bandY, W, bandH);
     }
 
-    // --- Shrooms rainbow (≥ 65%) — drawn AFTER the sky but BEFORE
+    // --- Gummies rainbow (≥ 65%) — drawn AFTER the sky but BEFORE
     // any road / scenery, so the rainbow sits behind everything but
     // the sky bands.  Six ROYGBV arcs across the upper sky. ---
-    const shroomsBar = effects?.shroomsBar ?? 0;
-    if (shroomsBar >= 0.65) {
-      const a = Math.min(1, (shroomsBar - 0.65) / 0.35) * 0.55;
+    const gummiesBar = effects?.gummiesBar ?? 0;
+    if (gummiesBar >= 0.65) {
+      const a = Math.min(1, (gummiesBar - 0.65) / 0.35) * 0.55;
       const cx = 400, cy = 300, baseR = 220;
       const arcCols = [0xFF3333, 0xFF8800, 0xFFEE00, 0x33CC33, 0x3388FF, 0x8833FF];
       for (let i = 0; i < arcCols.length; i++) {
@@ -1250,26 +1250,26 @@ export class Road {
     const pivotFIdx = (PLAYER_VIRTUAL_Z + cameraZ - SEG_LENGTH / 2) / SEG_LENGTH;
     const pivotOffset = _slopeAt(pivotFIdx);
 
-    // At high mushroom dosage, bend the projected world as one liquid
+    // At high Gummies dosage, bend the projected world as one liquid
     // surface. Entity placement reads the matching surface cache below, so
     // traffic and pickups remain planted on the pavement while it ripples.
-    const shroomMelt = clamp(effects?.shroomMelt ?? 0, 0, 1);
-    const shroomPhase = effects?.shroomPhase ?? 0;
+    const gummiesMelt = clamp(effects?.gummiesMelt ?? 0, 0, 1);
+    const gummiesPhase = effects?.gummiesPhase ?? 0;
     const _meltStrengthAt = (depthIdx) => {
       const near = 1 - clamp(depthIdx / DRAW_DIST, 0, 1);
       return 0.24 + Math.pow(near, 0.72) * 0.76;
     };
     const _meltXAt = (depthIdx) => {
-      if (shroomMelt <= 0.001) return 0;
-      const phase = shroomPhase * 1.10 + depthIdx * 0.105;
+      if (gummiesMelt <= 0.001) return 0;
+      const phase = gummiesPhase * 1.10 + depthIdx * 0.105;
       return (Math.sin(phase) + Math.sin(phase * 0.39 + 1.8) * 0.55)
-        * 32 * shroomMelt * _meltStrengthAt(depthIdx);
+        * 32 * gummiesMelt * _meltStrengthAt(depthIdx);
     };
     const _meltYAt = (depthIdx) => {
-      if (shroomMelt <= 0.001) return 0;
-      const phase = shroomPhase * 0.74 + depthIdx * 0.088 + 1.2;
+      if (gummiesMelt <= 0.001) return 0;
+      const phase = gummiesPhase * 0.74 + depthIdx * 0.088 + 1.2;
       return (Math.sin(phase) + Math.sin(phase * 0.51 + 2.4) * 0.45)
-        * 9 * shroomMelt * _meltStrengthAt(depthIdx);
+        * 9 * gummiesMelt * _meltStrengthAt(depthIdx);
     };
 
     // We store projected data so we can draw far→near
@@ -1596,10 +1596,10 @@ export class Road {
     // ── Overpasses (wildlife crossing + I-405 freeway overpass) ──
     this._drawOverpasses(g, drawn);
 
-    // Double-vision ghost pass (alcohol effect).  Pass the lateral
+    // Double-vision ghost pass (Sushi effect).  Pass the lateral
     // offset as a parameter instead of cloning the drawn[] entries —
     // the old `{ ...curr, screenX: curr.screenX + offset }` allocated
-    // 200-350 short-lived objects per frame at 60fps when drunk.
+    // 200-350 short-lived objects per frame at 60fps when impaired.
     if (ghostG && effects && effects.doubleVision > 0.01) {
       const offset = toInt(effects.doubleVision * 38);
       ghostG.clear();
@@ -2872,7 +2872,7 @@ export class Road {
   }
 
   _drawSegment(g, curr, next, palette, effects, xOffset = 0, isGhost = false) {
-    // xOffset is added to the segment's screenX so the alcohol-ghost
+    // xOffset is added to the segment's screenX so the Sushi-ghost
     // pass can request a laterally-offset draw without cloning curr/next.
     // M: ground/flank fill margin.  150 (sway/tilt cover) + HUD_OFFSET_X so the
     // decoupled-width canvas (world scrolled −HUD_OFFSET_X to center) is filled
@@ -3759,7 +3759,7 @@ export class Road {
     // Houses + buildings paint to the dedicated props Graphics layer (if
     // provided) so they live in the higher-depth band and don't hide
     // behind image-based trees rendered by GameScene._renderSceneSprites.
-    // Skipped during the ghost (alcohol double-vision) pass — that overlay
+    // Skipped during the ghost (Sushi double-vision) pass — that overlay
     // owns its own Graphics with a translucent global alpha; diverting
     // houses elsewhere would erase them from the doubled image.
     if ((type === 'house' || type === 'building') && this._propsG && !isGhost) {
