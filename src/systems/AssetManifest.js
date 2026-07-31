@@ -344,7 +344,11 @@ export const ASSET_MANIFEST = {
     { key: 'shop_bg_am_bm',         path: 'assets/businesses/storefront_am_bm.png' },
     { key: 'shop_bg_parkride',      path: 'assets/businesses/storefront_park-and-ride.png' },
     // v2 art (owner-supplied, was sitting unwired in businesses/raw/).
-    { key: 'shop_bg_les_schwasted', path: 'assets/businesses/raw/les_schwasted_v2.png' },
+    // Was pointed at raw/les_schwasted_v2.png — which is the LOGO BADGE
+    // (1918x820), not a storefront, so the shop screen stretched a floating
+    // sign across the whole frame (owner 2026-07-31: "wrong storefront art").
+    // The real 1672x941 building shot had been moved to Archive/; restored.
+    { key: 'shop_bg_les_schwasted', path: 'assets/businesses/storefront_les_schwasted.png' },
     { key: 'shop_bg_fap',           path: 'assets/businesses/storefront_fap.png' },
     // Highway shield badges — composited onto green exit signs.
     { key: 'hwy_i90',   path: 'assets/businesses/hwy_i90.svg' },
