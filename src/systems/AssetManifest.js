@@ -58,34 +58,12 @@ export const ASSET_MANIFEST = {
 
     { key: 'car_player',      path: 'assets/cars/player.webp' },
     { key: 'car_beater',      path: 'assets/cars/beater.png' },
-    { key: 'car_sports',      path: 'assets/cars/sports.png' },
-    { key: 'car_truck',       path: 'assets/cars/truck.png' },
     // (muscle / lowrider / interceptor / van removed — only Garage.js
     //  referenced them and Garage was vestigial / deleted in cleanup.)
-    // Front + back paired sedan/SUV variants. Same-direction NPCs use the
-    // back image (player sees them from behind), oncoming NPCs and
-    // oncoming cops use the front. Each variant has both directions.
-    { key: 'car_back_blue',     path: 'assets/cars/car_back_blue.png' },
-    { key: 'car_back_blue2',    path: 'assets/cars/car_back_blue2.png' },
-    { key: 'car_back_green',    path: 'assets/cars/car_back_green.png' },
-    { key: 'car_back_grey',     path: 'assets/cars/car_back_grey.png' },
-    { key: 'car_back_orange',   path: 'assets/cars/car_back_orange.png' },
-    { key: 'car_back_red',      path: 'assets/cars/car_back_red.png' },
-    { key: 'car_back_red2',     path: 'assets/cars/car_back_red2.png' },
-    { key: 'car_back_white',    path: 'assets/cars/car_back_white.png' },
-    { key: 'car_back_white2',   path: 'assets/cars/car_back_white2.png' },
-    { key: 'car_front_blue',    path: 'assets/cars/car_front_blue.png' },
-    { key: 'car_front_blue2',   path: 'assets/cars/car_front_blue2.png' },
-    { key: 'car_front_green',   path: 'assets/cars/car_front_green.png' },
-    { key: 'car_front_grey',    path: 'assets/cars/car_front_grey.png' },
-    { key: 'car_front_orange',  path: 'assets/cars/car_front_orange.png' },
-    { key: 'car_front_red',     path: 'assets/cars/car_front_red.png' },
-    { key: 'car_front_red2',    path: 'assets/cars/car_front_red2.png' },
-    { key: 'car_front_white',   path: 'assets/cars/car_front_white.png' },
-    { key: 'car_front_white2',  path: 'assets/cars/car_front_white2.png' },
-    // Truck — only the blue variant has front/back so far.
-    { key: 'car_back_truck_blue',  path: 'assets/cars/car_truck_back_blue.png' },
-    { key: 'car_front_truck_blue', path: 'assets/cars/car_truck_front_blue.png' },
+    // (car_sports/car_truck + the flat car_back_*/car_front_*/car_*_truck_blue
+    //  color-variant set removed 2026-07-30 — dead since CAR_COLOR_SETS
+    //  migrated to the codex_*/npc_* art below; the files never existed in
+    //  public/assets/cars/ either, so these were pure 404 noise on every boot.)
     // Police — front/back pair used by all police cop kinds.
     { key: 'car_back_police',  path: 'assets/cars/car_back_police.png' },
     { key: 'car_front_police', path: 'assets/cars/car_front_police.png' },

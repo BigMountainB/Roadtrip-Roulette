@@ -495,12 +495,6 @@ const _boot = () => {
   // texture key (car_back_truck_blue → car_truck_back_blue.png), so
   // map it explicitly here.
   const VEHICLE_IMG_URL = {
-    car_back_white:       'assets/cars/car_back_white.png',
-    car_back_blue:        'assets/cars/car_back_blue.png',
-    car_back_truck_blue:  'assets/cars/car_truck_back_blue.png',
-    car_back_orange:      'assets/cars/car_back_orange.png',
-    car_back_green:       'assets/cars/car_back_green.png',
-    car_back_blue2:       'assets/cars/car_back_blue2.png',
     codex_beater_back:          'assets/cars/codex/codex_beater_back.png',
     codex_suv4x4_back:          'assets/cars/codex/codex_suv4x4_back.png',
     codex_used_truck_back:      'assets/cars/codex/codex_used_truck_back.png',
