@@ -115,10 +115,10 @@ const RUN_DEFS = {
   // bar reaches exactly 100% without the player passing out (which now only
   // happens on overflow past 100%).
   maxed_energy:      { label: 'MAXED ENERGY',      icon: '⚡', desc: 'Hit 99% energy shot without jittering out.' },
-  maxed_heroin:      { label: 'MAXED COMBO',       icon: '🍟', desc: 'Hit 99% combo meal without passing out.' },
-  maxed_rx:          { label: 'MAXED COLD BREW',   icon: '🥤', desc: 'Hit 99% cold brew without passing out.' },
-  maxed_fentanyl:    { label: 'MAXED FOOD COMA',   icon: '😵', desc: 'Hit 99% food coma without passing out.' },
-  maxed_ketamine:    { label: 'MAXED SLUSHIE',     icon: '🧊', desc: 'Hit 99% slushie without passing out.' },
+  maxed_combo:       { label: 'MAXED COMBO',       icon: '🍟', desc: 'Hit 99% combo meal without passing out.' },
+  maxed_coldbrew:    { label: 'MAXED COLD BREW',   icon: '🥤', desc: 'Hit 99% cold brew without passing out.' },
+  maxed_coma:        { label: 'MAXED FOOD COMA',   icon: '😵', desc: 'Hit 99% food coma without passing out.' },
+  maxed_slushie:     { label: 'MAXED SLUSHIE',     icon: '🧊', desc: 'Hit 99% slushie without passing out.' },
   maxed_caffeine:        { label: 'MAXED CAFFEINE',    icon: '☕', desc: 'Hit 99% caffeine pills without passing out.' },
 };
 

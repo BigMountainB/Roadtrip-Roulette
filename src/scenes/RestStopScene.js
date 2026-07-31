@@ -808,7 +808,7 @@ export class RestStopScene extends Phaser.Scene {
     const _pickupCounts = this.registry.get('vicePickupCounts')
       ?? this._vicePickupCounts ?? {};
     SECTIONS.gas.items     = [...SECTIONS.gas.items,     ...shopViceItems('gas',     _pickupCounts)];
-    // Cowbellas (hunting) sells hunting GEAR only — no food/beer (owner
+    // Cowbellas (hunting) sells hunting GEAR only — no food/vices (owner
     // 2026-07-16). Base items (Diesel Tune, Fireworks, Donuts, Passport) stand.
     // Camp repair guard — if the player's HP is already higher than
     // 65 % of this vehicle's max, the "repair to 65 %" purchase would

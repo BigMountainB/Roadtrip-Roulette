@@ -241,7 +241,7 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'thorp_motel_pool',
     stopId: 'TH', weight: 2,
     portrait: 'swimsuit_girl', speaker: 'Swimsuit Girl',
-    line: "Thorp gets so quiet once the interstate clears — but the pool's still warm, and so are the beers.",
+    line: "Thorp gets so quiet once the interstate clears — but the pool's still warm, and so are the cheers.",
     fact: "Thorp's a speck by the Yakima's bend, home to a century-old grist mill, my friend.",
     choices: [
       {
