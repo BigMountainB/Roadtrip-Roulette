@@ -4093,7 +4093,7 @@ export class GameScene extends Phaser.Scene {
     phys.invertSteering   = false;
     phys.steerDrift       = 0;
     phys.extraCurve       = 0;
-    phys.alcoholHoldover  = 0;
+    phys.sushiHoldover  = 0;
     phys.steerSensitivity = 1;
     phys.energyStarMul   = 1;
     const dt    = rawDt * phys.dtMultiplier;
@@ -5757,33 +5757,33 @@ export class GameScene extends Phaser.Scene {
     const _inSnow = Weather.isSnow(_mileForSnow);
     let effectiveSteerDir = steerDir;
 
-    // ── Alcohol overcorrection holdover ──────────────────────────
+    // ── Sushi overcorrection holdover ──────────────────────────
     // Layered AFTER snow slip (snow takes priority — if snow already
     // overrode effectiveSteerDir we won't do it again).  When the
-    // player releases input and alcoholHoldover > 0, keep steering in
+    // player releases input and sushiHoldover > 0, keep steering in
     // the last committed direction for 0.3-0.5s scaled by hold level
-    // before the bleed-off resumes.  Drunk drivers overshoot — this is
-    // the input layer of that feel.
-    const alcHold = phys.alcoholHoldover ?? 0;
-    if (!_inSnow && alcHold > 0.05) {
+    // before the bleed-off resumes.  A queasy driver overshoots — this
+    // is the input layer of that feel.
+    const sushiHold = phys.sushiHoldover ?? 0;
+    if (!_inSnow && sushiHold > 0.05) {
       // Hold-direction duration in seconds.  Halved vs the original
-      // (0.30 + 0.40*hold) so 4-beer drift doesn't span multiple lanes.
-      const alcMaxBase = 0.12 + alcHold * 0.25;
+      // (0.30 + 0.40*hold) so a heavy dose's drift doesn't span multiple lanes.
+      const sushiMaxBase = 0.12 + sushiHold * 0.25;
       if (steerDir !== 0) {
-        this._alcHoldDir   = steerDir;
-        this._alcHoldTimer = 0;
-        this._alcHoldMax   = alcMaxBase;
-      } else if (this._alcHoldDir
-              && (this._alcHoldTimer ?? 0) < (this._alcHoldMax ?? 0)) {
-        effectiveSteerDir  = this._alcHoldDir;
-        this._alcHoldTimer = (this._alcHoldTimer ?? 0) + dt;
+        this._sushiHoldDir   = steerDir;
+        this._sushiHoldTimer = 0;
+        this._sushiHoldMax   = sushiMaxBase;
+      } else if (this._sushiHoldDir
+              && (this._sushiHoldTimer ?? 0) < (this._sushiHoldMax ?? 0)) {
+        effectiveSteerDir  = this._sushiHoldDir;
+        this._sushiHoldTimer = (this._sushiHoldTimer ?? 0) + dt;
       } else {
-        this._alcHoldDir   = 0;
-        this._alcHoldTimer = 0;
+        this._sushiHoldDir   = 0;
+        this._sushiHoldTimer = 0;
       }
     } else {
-      this._alcHoldDir   = 0;
-      this._alcHoldTimer = 0;
+      this._sushiHoldDir   = 0;
+      this._sushiHoldTimer = 0;
     }
 
     // ── Vantage crosswind ───────────────────────────────────────────
@@ -5980,7 +5980,7 @@ export class GameScene extends Phaser.Scene {
     const grip = vehicleGrip * surfaceGrip * speedGripPen * brakeInTurnPen;
 
     // Desired lateral velocity from the driver's intent.  Snow slip +
-    // alcoholHoldover already baked into effectiveSteerDir above.
+    // sushiHoldover already baked into effectiveSteerDir above.
     // DIGITAL snow oversensitivity (per user): on snow, L/R + tap throw the
     // car harder so a press overcorrects on the low-grip ice — jarring, to
     // push players toward smooth analog tilt.  It's a SENSITIVITY (not grip),
@@ -12193,9 +12193,9 @@ export class GameScene extends Phaser.Scene {
       palette, {
         doubleVision: _dbgClean ? 0 : this.effects.doubleVision,
         currentStars: this.cops.starDisplay,
-        shroomsBar:   this.vices?.get?.(VICES.GUMMIES) ?? 0,
-        shroomMelt:   _dbgClean ? 0 : (this.effects.shroomMelt ?? 0),
-        shroomPhase:  this.effects.time ?? 0,
+        gummiesBar:   this.vices?.get?.(VICES.GUMMIES) ?? 0,
+        gummiesMelt:  _dbgClean ? 0 : (this.effects.gummiesMelt ?? 0),
+        gummiesPhase: this.effects.time ?? 0,
       },
       this.propsGfx,
       this.bridgeFrontGfx,
@@ -14378,7 +14378,7 @@ export class GameScene extends Phaser.Scene {
       const shW = PW * 0.82;
       const shH = Math.max(2, PH * 0.18);
       const phys2 = this.effects?.getPhysics?.(this.vices);
-      const drift = phys2?.kRetinalDrift ?? 0;
+      const drift = phys2?.slushieRetinalDrift ?? 0;
       // Shadow tilts subtly OPPOSITE the car's lean — "body leans into
       // the turn, wheels stay planted" cue.  Applies in all steering
       // modes (classic / tilt / flappy).
