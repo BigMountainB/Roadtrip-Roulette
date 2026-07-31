@@ -1172,11 +1172,14 @@ export class EffectsSystem {
       // Raw contributions behind speedMult, for the F5 speed debugger — so
       // "why is speedMult 1.55" is answerable on-screen instead of grepping
       // this file.  Mirrors the terms above exactly (deltas, not vice
-      // levels) so it can't drift from the real computation.
+      // levels) so it can't drift from the real computation.  Keys are the
+      // CURRENT vice names (VICES.*) — this file's local variables (hero/
+      // fent/ket/weed/rx) are leftover pre-rename internal names, never
+      // player-facing; do not let them leak into anything user-visible.
       speedMultParts: {
         energy: energy * 0.55, caffeine: caffeine * 0.45,
-        heroin: -hero * 0.5, fent: -fent * (10 / 12),
-        weed: -weedSpeedPenalty, ket: -ket * 0.35, rx: -rx * 0.15,
+        combo: -hero * 0.5, coma: -fent * (10 / 12),
+        burrito: -weedSpeedPenalty, slushie: -ket * 0.35, coldbrew: -rx * 0.15,
         comboTranq: this._comboTranq ? -baseSpeedMult * 0.15 : 0,
         comboSpeedball: this._comboSpeedball
           ? 0.25 * energy * (1 - (this._heroNodAmount ?? 0)) : 0,
