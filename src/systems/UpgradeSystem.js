@@ -63,13 +63,20 @@ export function buyUpgrade(save, vehicleId, upgradeId, opts = {}) {
   veh[up.slot] = upgradeId;
   _write(save, permKey, { ...all, [vehicleId]: veh });
 
-  // Clear any entry of the same slot in the OTHER tier map so a permanent
-  // upgrade supersedes a temporary patch (and vice-versa) cleanly.
-  const other = _read(save, otherKey);
-  if (other[vehicleId]?.[up.slot]) {
-    const ov = { ...other[vehicleId] };
-    delete ov[up.slot];
-    _write(save, otherKey, { ...other, [vehicleId]: ov });
+  // A PERMANENT purchase retires any temp patch in the same slot — you don't
+  // need the duct-tape once the real part is in. The reverse must NEVER
+  // happen: a temp/Custom-sandbox buy (permKey === 'tempUpgrades') clearing
+  // the permanent store would silently delete a real, paid-for upgrade
+  // (found 2026-07-30 — a single Custom-mode purchase was wiping the
+  // player's permanent part in that slot; getInstalled's shadow model
+  // requires perm to stay intact underneath temp, not get erased by it).
+  if (permKey === 'upgrades') {
+    const other = _read(save, otherKey);
+    if (other[vehicleId]?.[up.slot]) {
+      const ov = { ...other[vehicleId] };
+      delete ov[up.slot];
+      _write(save, otherKey, { ...other, [vehicleId]: ov });
+    }
   }
   return { ok: true, reason: '', replaced };
 }
