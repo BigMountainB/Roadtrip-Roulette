@@ -10,6 +10,7 @@ import { Difficulty } from '../systems/Difficulty.js';
 import {
   pickEncounterForStop, resolveChoice, applyEncounterEffects,
   isDialogueTree, getStartNode, getEncounterNode, choiceLocked,
+  SHOP_GREETERS,
 } from '../data/encounters.js';
 import { getPortrait } from '../data/npcPortraits.js';
 import { nextTownFact } from '../data/townFacts.js';
@@ -1005,8 +1006,7 @@ export class RestStopScene extends Phaser.Scene {
     // Tapping it pays THAT job (wallet + payoff banner via collect());
     // hitting the road without tapping fails it as 'not_delivered'.
     const _missionsSys = this.registry?.get?.('missions');
-    this._readyJobs = (Difficulty.noScore?.() === true) ? []
-      : (_missionsSys?.readyMissions?.(this._stop?.id) ?? []);
+    this._readyJobs = _missionsSys?.readyMissions?.(this._stop?.id) ?? [];
     const _readyRowH = 42, _readyGap = 6;
     const _readyBlockH = this._readyJobs.length * (_readyRowH + _readyGap);
 
@@ -1031,7 +1031,9 @@ export class RestStopScene extends Phaser.Scene {
                                 :                        (_gtm.cargoPayMult ?? 1);
     this._readyJobs.forEach((m, i) => {
       const ry    = 110 + i * (_readyRowH + _readyGap);
-      const total = Math.round((m.payout + (m.tip ?? 0)) * _payMultFor(m.type));
+      // payoutFor() applies the slice-2 pay modifiers (damageDock, speed tip);
+      // the genre trait multiplies on top of that.
+      const total = Math.round((_missionsSys?.payoutFor?.(m) ?? (m.payout + (m.tip ?? 0))) * _payMultFor(m.type));
       const label = m.type === 'passenger'
         ? `🧍 DROP OFF ${(m.passenger?.name ?? 'PASSENGER').toUpperCase()} — $${total.toLocaleString()}`
         : m.type === 'heat'
@@ -1049,7 +1051,7 @@ export class RestStopScene extends Phaser.Scene {
         ptr.event?.stopPropagation?.();
         const paid = _missionsSys?.collect?.(m.id);
         if (!paid) return;                       // double-tap / rewind safe
-        const pay = Math.round((paid.payout + (paid.tip ?? 0)) * _payMultFor(paid.type));
+        const pay = Math.round((_missionsSys?.payoutFor?.(paid) ?? (paid.payout + (paid.tip ?? 0))) * _payMultFor(paid.type));
         this._score += pay;
         this._stats?.recordEarn?.(pay, 'mission');
         this._stats?.recordMissionComplete?.(paid.type, pay);
@@ -1156,9 +1158,9 @@ export class RestStopScene extends Phaser.Scene {
           this._activeDealerBrand = stopBrands[key]?.name ?? null;
           this._activeDealerKey   = key;
           this._applyDealerTierGate();
-          this._showDealerChooser();
+          this._showShopGreeter(key, () => this._showDealerChooser());
         } else {
-          this._showSection(key);
+          this._showShopGreeter(key, () => this._showSection(key));
         }
       });
     });
@@ -1366,12 +1368,16 @@ export class RestStopScene extends Phaser.Scene {
     if (firstVisit) { visited.add(stopId); save?.set?.('stopsVisited', [...visited]); }
     // Mission ("Favors") contact — every stop carries side work (Ch. 8;
     // Pullman is payoff-only, gated inside offersForStop).  Queued but NOT
-    // shown on arrival: a separate contact pitches it when the player HITS THE
-    // ROAD (owner 2026-07-26), so any job COMPLETED here first frees its type
-    // slot for a re-take.  Custom mode = unranked sandbox, no missions.
-    this._pendingMissionCard = Difficulty.noScore?.() !== true;
+    // shown on arrival: reachable ONLY by finding this stop's mission shop
+    // (owner 2026-07-30 — see _missionShopKeyFor / _showShopGreeter; the old
+    // automatic HIT THE ROAD pitch is gone), so any job COMPLETED here first
+    // still frees its type slot for a re-take before the player goes looking.
+    // Custom mode used to switch missions OFF entirely, which made the whole
+    // system unreachable in the exact mode it gets playtested in.  It now runs
+    // there; MissionSystem just refuses to bank rep or lifetime stats from a
+    // sandbox run (owner 2026-07-30).
+    this._pendingMissionCard = true;
     // First visit → guaranteed welcome intro; later visits → 60% chance.
-    // The job offer is deferred to exit either way, so nothing to chain here.
     if (!firstVisit && Math.random() > 0.60) return;
     const seen = new Set(save?.get?.('encountersSeen', []) ?? []);
     const enc  = pickEncounterForStop(stopId, {
@@ -1381,32 +1387,24 @@ export class RestStopScene extends Phaser.Scene {
       heat:    this._stars ?? 0,
     });
     if (enc) {
-      // Remember the welcome NPC so the EXIT job pitch can pick a DIFFERENT
-      // face (owner 2026-07-26: "another NPC" approaches you on the way out).
+      // Remember the welcome NPC so the mission contact (found in their shop,
+      // if the player goes looking) can pick a DIFFERENT face — owner
+      // 2026-07-26: "another NPC", not the one who already greeted you here.
       this._welcomeNpc = { portrait: enc.portrait, speaker: enc.speaker };
       this._showEncounterCard(enc, save, seen);
     }
-    // No welcome encounter this visit → nothing to show now; the job offer
-    // still fires on HIT THE ROAD.
+    // No welcome encounter this visit → nothing to show now; the mission
+    // contact is still waiting in their shop for whoever goes looking.
   }
 
-  /** HIT THE ROAD hook — a fresh contact pitches this stop's side work on the
-   *  way out (deferred from arrival so a job completed here has freed its type
-   *  slot).  Returns true when a card was shown (caller must wait to leave);
-   *  false when there's nothing to offer (caller proceeds to leave).  Once per
-   *  visit.  When the shown card closes, its terminal branch calls _continue()
-   *  so the player leaves right after resolving it. */
-  _tryExitMissionCard() {
-    if (!this._pendingMissionCard) return false;
-    this._pendingMissionCard = false;
-    const missions = this.registry.get('missions');
-    if (!missions) return false;
-    const enc = this._buildMissionEncounter(missions);
-    if (!enc) return false;
-    this._showingExitMission = true;
-    this._showEncounterCard(enc, this.registry.get('save'), new Set());
-    return true;
-  }
+  // (The old HIT THE ROAD exit-mission pitch — _tryExitMissionCard — was
+  // REMOVED 2026-07-30, owner directive: "if people wanna do missions, they
+  // can go to the different shops and talk to the NPCs. And if they don't,
+  // they can hit the road." Missions are now ONLY reachable by finding the
+  // stop's mission shop (_missionShopKeyFor / _showShopGreeter) — hitting the
+  // road is a clean, uninterrupted exit whether or not you found it.
+  // _buildMissionEncounter() is UNCHANGED and still used by that shop path;
+  // only the automatic exit interruption is gone.)
 
   /** Synthesize a Phase-1 dialogue-tree card from this stop's persisted
    *  mission offers — the ask · the destination · the catch · the money —
@@ -1450,6 +1448,18 @@ export class RestStopScene extends Phaser.Scene {
         ? 'the Vantage wind is HOWLING the whole way'
         : 'the pass is a mess — rain into snow, all of it');
       if (o.terms?.no_chains)  t.push("the DARE: no chains — strap them on and the deal's dead");
+      if (o.terms?.chain)      t.push(`it's a hand-off — the next ${o.terms.chain.label} takes it, wherever that lands`);
+      if (o.terms?.noEating)   t.push("you don't touch it — eat or drink ANYTHING on the road and it's void");
+      if (o.terms?.pacifist)   t.push('a quiet run — fire so much as one thing and the deal is dead');
+      if (o.terms?.speedFloor) t.push(`don't crawl — under ${o.terms.speedFloor.mph} mph for long and it's ruined`);
+      if (o.terms?.speedCap)   t.push(`don't push it — over ${o.terms.speedCap.mph} mph for long and the load's gone`);
+      if (o.terms?.fuelFloor)  t.push(`roll in with the tank still over ${o.terms.fuelFloor.pct}%`);
+      if (o.terms?.alertFloor) t.push(`get them there awake — Alertness over ${o.terms.alertFloor.pct}%`);
+      if (o.terms?.cashExact)  t.push(`arrive holding $${o.terms.cashExact.amount.toLocaleString()}, give or take $${o.terms.cashExact.tol}`);
+      if (o.terms?.heatCarried) t.push(`the bag brings its own heat — ${o.terms.heatCarried.stars}★ the whole way`);
+      if (o.terms?.survivalDrain) t.push('a full car drains your food and water twice as fast');
+      if (o.terms?.damageDock) t.push(`every HP you lose costs you $${o.terms.damageDock.perHp} of the fee`);
+      if (o.terms?.tipBySpeed) t.push('she tips on speed — the faster it lands, the better it pays');
       return t.length ? `The catch: ${t.join('; ')}.` : 'No strings. Easy money.';
     };
     // Condensed terms for the scannable deal-summary row (owner 2026-07-21):
@@ -1465,13 +1475,26 @@ export class RestStopScene extends Phaser.Scene {
         ? 'WIND · Vantage gusts the whole way'
         : 'STORM · rain into snow over the pass');
       if (o.terms?.no_chains)  t.push('DARE · no chains allowed');
+      if (o.terms?.chain)      t.push(`HAND-OFF · the next ${o.terms.chain.label}`);
+      if (o.terms?.noEating)   t.push('NO EATING · one bite = void');
+      if (o.terms?.pacifist)   t.push('QUIET · fire nothing');
+      if (o.terms?.speedFloor) t.push(`KEEP MOVING · over ${o.terms.speedFloor.mph} mph`);
+      if (o.terms?.speedCap)   t.push(`EASY · under ${o.terms.speedCap.mph} mph`);
+      if (o.terms?.fuelFloor)  t.push(`TANK · arrive over ${o.terms.fuelFloor.pct}%`);
+      if (o.terms?.alertFloor) t.push(`AWAKE · Alertness over ${o.terms.alertFloor.pct}%`);
+      if (o.terms?.cashExact)  t.push(`EXACT · hold $${o.terms.cashExact.amount.toLocaleString()} ±${o.terms.cashExact.tol}`);
+      if (o.terms?.heatCarried) t.push(`HOT · ${o.terms.heatCarried.stars}★ while carrying`);
+      if (o.terms?.survivalDrain) t.push('THIRSTY · 2× food/water drain');
+      if (o.terms?.damageDock) t.push(`DOCKED · −$${o.terms.damageDock.perHp}/HP`);
+      if (o.terms?.tipBySpeed) t.push('TIPS · faster pays more');
       return t.length ? t.join('  ·  ') : 'No strings — easy money';
     };
-    // Drop-off callout — plain stop name.  Used to name "the CarGo in X"
-    // when the destination carried that business; CarGo is gone (2026-07-29).
-    // Per-business delivery targets are future work (see the business-
-    // missions directive) — for now every delivery just names the stop.
-    const dropAt = (o) => o.targetName;
+    // Drop-off callout.  A CHAIN run is aimed at a business, not just a town
+    // ("the next AM/BM"), so name both — that's the whole flavor of the
+    // business-to-business haul (owner 2026-07-30).
+    const dropAt = (o) => (o.terms?.chain
+      ? `${o.terms.chain.label} in ${o.targetName}`
+      : o.targetName);
     // Passenger quirk warning — the rider states their own terms.
     const quirkLine = {
       nervous:       "One hard crash and I'm walking — deal's off; so drive it soft.",
@@ -1482,7 +1505,10 @@ export class RestStopScene extends Phaser.Scene {
 
     // Busy is PER TYPE (one active per type, Ch. 8) — an occupied slot still
     // shows the pitch, just without the accept button.
-    const busyType = (t) => missions.hasActiveOfType(t);
+    // Busy = that TYPE is already running, or this STOP has already hired
+    // (owner 2026-07-30: three categories pitched, exactly one taken here).
+    const hiredHere = !!missions.acceptedAtStop?.(stopId);
+    const busyType = (t) => hiredHere || missions.hasActiveOfType(t);
     const anyBusy  = open.some(o => busyType(o.type));
 
     // NPC continuity (Ch. 8 Phase 6): the contact remembers you — greeting
@@ -1507,11 +1533,15 @@ export class RestStopScene extends Phaser.Scene {
     // The contact wants "a driver who doesn't ask questions", so the replies are
     // STATEMENTS, not questions (owner 2026-07-19 flagged the irony).
     const greetChoices = open.map((o, i) => ({
-      label: o.type === 'passenger'
-        ? `Size up the ${o.targetName} rider`
+      label: o.type === 'challenge'
+        ? `Hear the ${o.bizLabel ?? 'local'} dare`
+        : o.type === 'passenger'
+        ? `Size up the ${o.bizLabel ?? o.targetName} rider`
         : o.type === 'heat'
           ? "Bring up the heat you're wearing"
-        : (open.length > 1 ? `Hear out the ${o.targetName} job` : 'Hear the job out'),
+        : (o.bizLabel
+            ? `Hear out the ${o.bizLabel} job`
+            : (open.length > 1 ? `Hear out the ${o.targetName} job` : 'Hear the job out')),
       next:  `offer${i}`,
       ...(ackFail ? { setMemory: { failAckPending: false } } : {}),
     }));
@@ -1533,9 +1563,11 @@ export class RestStopScene extends Phaser.Scene {
     ];
     const _greet = GREETS[Math.abs(h) % GREETS.length];
     nodes.greet = {
-      line: memLine ?? (anyBusy
-        ? "You're hauling for someone — I can tell by your park; still, hear me out before you embark."
-        : (open.length > 1 ? `${_greet} I've got ${open.length}, in fact — pick one and let's transact.` : _greet)),
+      line: memLine ?? (hiredHere
+        ? "You've taken your one from me already, friend — one job a stop, and that's where it ends."
+        : anyBusy
+          ? "You're hauling for someone — I can tell by your park; still, hear me out before you embark."
+          : (open.length > 1 ? `${_greet} I've got ${open.length}, in fact — pick one and let's transact.` : _greet)),
       choices: greetChoices,
     };
     open.forEach((o, i) => {
@@ -1544,7 +1576,9 @@ export class RestStopScene extends Phaser.Scene {
       if (!busy) {
         // Acceptance is idempotent (MissionSystem.accept is double-tap safe).
         choices.push({
-          label: o.type === 'passenger' ? `Take the rider — $${o.payout}` : `Take the job — $${o.payout}`,
+          label: o.type === 'passenger' ? `Take the rider — $${o.payout}`
+               : o.type === 'challenge' ? `Take the dare — $${o.payout}`
+               : `Take the job — $${o.payout}`,
           effects: {}, end: true, missionAccept: o.id,
         });
       }
@@ -1558,12 +1592,15 @@ export class RestStopScene extends Phaser.Scene {
         const p = o.passenger ?? {};
         const riderName = p.name ? `${p.name}` : 'A rider';
         nodes[`offer${i}`] = {
-          line: (`${tierIntro(o)}Here's a rider who needs a lift, you see. `
-              + `"${p.ask ?? 'I need a ride — would you carry me?'}" ${quirkLine[p.quirk] ?? ''}`).trim()
+          line: (o.pitch
+              ? `${tierIntro(o)}${o.pitch} ${quirkLine[p.quirk] ?? ''}`
+              : `${tierIntro(o)}Here's a rider who needs a lift, you see. `
+                + `"${p.ask ?? 'I need a ride — would you carry me?'}" ${quirkLine[p.quirk] ?? ''}`).trim()
               + (busy ? " …though your shotgun seat's already taken, it seems to me." : ''),
           deal: {
-            head: 'JOB · RIDER',
+            head: o.missionName ? `RIDER · ${o.missionName.toUpperCase()}` : 'JOB · RIDER',
             rows: [
+              ...(o.bizLabel ? [['For', o.bizLabel]] : []),
               ['Take',  `${riderName} → ${dropAt(o)}`],
               ['Trip',  `${o.routeMiles} mi`],
               ['Pay',   `$${o.payout} on arrival`],
@@ -1590,13 +1627,45 @@ export class RestStopScene extends Phaser.Scene {
           },
           choices,
         };
-      } else {
+      } else if (o.type === 'challenge') {
+        const g = o.goal ?? {};
+        const goalLine = g.kind === 'useItemsInTime'
+            ? `use all ${g.count} in ${g.sec}s`
+          : g.kind === 'speedBand'
+            ? `hold ${g.maxMph ? `${g.minMph}-${g.maxMph}` : `${g.minMph}+`} mph for ${g.holdSec}s`
+          : g.kind === 'boostSeconds'
+            ? `${g.sec}s of boost, cumulative`
+            : 'pull it off';
         nodes[`offer${i}`] = {
-          line: `${tierIntro(o)}Something needs up the road and off the books, no trace — you in for the run, and up for the pace?`
-              + (busy ? " …but your trunk's packed tight; come back when there's space." : ''),
+          line: `${tierIntro(o)}${o.pitch}`
+              + (busy ? " …though you've already got a dare running." : ''),
           deal: {
-            head: o.type === 'timed' ? 'JOB · RUSH DELIVERY' : 'JOB · DELIVERY',
+            head: `DARE · ${(o.missionName ?? 'CHALLENGE').toUpperCase()}`,
             rows: [
+              ...(o.bizLabel ? [['For', o.bizLabel]] : []),
+              ...(o.cargo ? [['Get', `${o.cargo} — free, right now`]] : []),
+              ['Do',    goalLine],
+              ['Pay',   `$${o.payout} the moment you do it`],
+              ['Catch', 'the clock starts when you hit the road'],
+            ],
+          },
+          choices,
+        };
+      } else {
+        // Business-sourced work leads with that business's own pitch (owner
+        // 2026-07-28 pool); the generic pool keeps the old rhyming opener.
+        nodes[`offer${i}`] = {
+          line: (o.pitch
+                  ? `${tierIntro(o)}${o.pitch}`
+                  : `${tierIntro(o)}Something needs up the road and off the books, no trace — you in for the run, and up for the pace?`)
+              + (hiredHere ? " …but you've had your pick here; one job a stop, that's the trick."
+                 : busy ? " …but your trunk's packed tight; come back when there's space." : ''),
+          deal: {
+            head: o.missionName
+              ? `${o.type === 'timed' ? 'RUSH' : 'JOB'} · ${o.missionName.toUpperCase()}`
+              : (o.type === 'timed' ? 'JOB · RUSH DELIVERY' : 'JOB · DELIVERY'),
+            rows: [
+              ...(o.bizLabel ? [['For', o.bizLabel]] : []),
               ['Haul',  `${o.cargo} → ${dropAt(o)}`],
               ['Trip',  `${o.routeMiles} mi`],
               ['Pay',   `$${o.payout} on delivery`],
@@ -1641,6 +1710,66 @@ export class RestStopScene extends Phaser.Scene {
    *  Handles BOTH flat legacy cards and multi-node dialogue trees — the
    *  renderer walks nodes (nodeId re-entry); effects still resolve only
    *  through resolveChoice/applyEncounterEffects when a choice is picked. */
+  /**
+   * Which shop at THIS stop is today's real mission contact (owner
+   * 2026-07-30: "only 1-2 shops provide missions, it's up to the player to
+   * find them" + "switch it up" — varies stop to stop, not a fixed brand).
+   * Deterministic per stopId (same hash pattern as NPC_NAMES/portrait picks
+   * elsewhere in this file) so it's stable for the whole visit but not
+   * predictable across stops — restricted to shops this stop actually has
+   * AND that carry a generic greeter, so it's never a tile the player can't
+   * see or a screen with no fallback.
+   */
+  _missionShopKeyFor(stopId) {
+    const present = (this._stop?.amenities ?? []).filter(k => SHOP_GREETERS[k]);
+    if (!present.length) return null;
+    let h = 0; for (let i = 0; i < String(stopId).length; i++) h = (h * 31 + String(stopId).charCodeAt(i)) | 0;
+    return present[Math.abs(h) % present.length];
+  }
+
+  /**
+   * Shop entry gate (owner 2026-07-30): "the shop-staff portraits take over
+   * the original NPC images, same place same setup — after questions are
+   * answered, then the storefront displays." First tap on a shop shows that
+   * brand's staffer on the SAME `_showEncounterCard` used for roadside
+   * encounters; `proceed` (open the actual shop screen) fires once any
+   * choice resolves.
+   *
+   * Two card sources, in priority order:
+   *  1. THE mission contact for this stop (`_missionShopKeyFor`) — reuses
+   *     `_buildMissionEncounter`, gated on `_pendingMissionCard` (set once on
+   *     arrival). This is the ONLY way to reach a mission offer as of
+   *     2026-07-30 — the old automatic HIT THE ROAD pitch was removed,
+   *     owner directive: "if people wanna do missions, they can go to the
+   *     different shops and talk to the NPCs. And if they don't, they can
+   *     hit the road" — clean exit either way, no forced interruption.
+   *  2. Otherwise the generic `SHOP_GREETERS[shopKey]` — "once: true" means
+   *     a one-time doorway per shop per save; after that `proceed` runs
+   *     immediately so a shop you've already met isn't friction.
+   */
+  _showShopGreeter(shopKey, proceed) {
+    const save = this.registry.get('save');
+    const seen = new Set(save?.get?.('encountersSeen', []) ?? []);
+
+    if (this._pendingMissionCard && shopKey === this._missionShopKeyFor(this._stop?.id)) {
+      const missions = this.registry.get('missions');
+      const enc = missions ? this._buildMissionEncounter(missions) : null;
+      if (enc) {
+        this._pendingMissionCard = false;
+        this._pendingGreeterProceed = proceed;
+        this._showEncounterCard(enc, save, seen);
+        return;
+      }
+      // No real offers today (e.g. Custom/no-score mode) — fall through to
+      // the ordinary greeter rather than leaving the shop looking broken.
+    }
+
+    const enc = SHOP_GREETERS[shopKey];
+    if (!enc || (enc.once && seen.has(enc.id))) { proceed(); return; }
+    this._pendingGreeterProceed = proceed;
+    this._showEncounterCard(enc, save, seen);
+  }
+
   _showEncounterCard(enc, save, seen, nodeId = null) {
     // Recurring-NPC memory (GLOBAL save bucket) + current node view.
     const memAll = save?.get?.('npcMemory', {}) ?? {};
@@ -1835,6 +1964,14 @@ export class RestStopScene extends Phaser.Scene {
       if (choice.missionAccept) {
         const m = this.registry.get('missions')?.accept?.(
           choice.missionAccept, this._odometer ?? 0, this._partyClockSec ?? null);
+        // A CHALLENGE hands its kit over at acceptance ("I'll load you to
+        // three") — routed through the same _purchases.f12 channel a shop
+        // purchase uses, so GameScene's resume path needs no new case.
+        if (m?.type === 'challenge' && m.grant?.item) {
+          const _n = Math.max(1, Math.floor(m.grant.count ?? 1));
+          this._purchases.f12 ??= [];
+          for (let _i = 0; _i < _n; _i++) this._purchases.f12.push(m.grant.item);
+        }
         // Job terms are a contract the player has to actually READ — they go
         // on a tap-to-dismiss card, not a fading toast (owner 2026-07-29).
         if (m?.type === 'passenger') {
@@ -1848,9 +1985,6 @@ export class RestStopScene extends Phaser.Scene {
         } else if (m) {
           this._showMenuPopup(`📦 Job taken — ${m.cargo} to ${m.targetName}.\n\n$${m.payout} on delivery.`, '#88FF88');
         }
-        // The exit pitch auto-leaves on resolve — the card now holds the terms
-        // until the player dismisses it, so the old 5s status hold is gone.
-        if (m) this._exitJobTaken = true;
       }
       if (choice.missionDecline) {
         this.registry.get('missions')?.decline?.(choice.missionDecline);
@@ -1861,19 +1995,16 @@ export class RestStopScene extends Phaser.Scene {
         this._showEncounterCard(enc, save, seen, choice.next);   // walk the tree
       } else {
         if (enc.once) { seen.add(enc.id); save?.set?.('encountersSeen', [...seen]); }
-        // If this was the EXIT job pitch (shown on HIT THE ROAD), resolving it
-        // means the player is leaving — finish the exit now.  The welcome card
-        // no longer chains into a job pitch (that's deferred to HIT THE ROAD).
-        // A job taken here holds ~5s so its confirmation is readable before the
-        // fade; clicking HIT THE ROAD again skips the wait (_continue guards).
-        if (this._showingExitMission) {
-          this._showingExitMission = false;
-          if (this._exitJobTaken) {
-            this._exitJobTaken = false;
-            this.time.delayedCall(5000, () => this._continue());
-          } else {
-            this._continue();
-          }
+        // Shop-greeter gate (owner 2026-07-30): _showShopGreeter stashes the
+        // "now actually open the shop" callback here before showing the card.
+        // Every choice on a greeter is terminal (flat card, no `next`), so
+        // this fires on the very first tap — exactly the "questions answered,
+        // then the storefront displays" behavior asked for.
+        if (this._pendingGreeterProceed) {
+          const proceed = this._pendingGreeterProceed;
+          this._pendingGreeterProceed = null;
+          proceed();
+          return;
         }
       }
     };
@@ -2063,7 +2194,12 @@ export class RestStopScene extends Phaser.Scene {
     if (bgKey && !on) this._loadMissingShopBg(chromeKey, bgKey);
     if (on) this._shopBg.setTexture(bgKey).setDisplaySize(SCREEN_W, SCREEN_H);
     this._shopBg?.setVisible(on);
-    this._shopScrim?.setVisible(on);
+    // Menu-column scrim: FAP ONLY (owner 2026-07-30).  It runs the full screen
+    // height while the menu column stops `bottomBand` short of the bottom, so
+    // everywhere else its tail showed as a bare black block under the last row
+    // — "covering some of the menu".  Finesse keeps it because its 7-tab
+    // toolbar needs a dark bed down there.
+    this._shopScrim?.setVisible(on && chromeKey === 'fap');
     // The sign and the storefront are mutually exclusive — a blue panel on top
     // of a photograph is the worst of both.
     this._signBody?.setVisible(!on);
@@ -2919,11 +3055,9 @@ export class RestStopScene extends Phaser.Scene {
 
   _continue() {
     if (this._continuing) return;
-    // A fresh contact pitches this stop's side work as you head out — deferred
-    // to now (not arrival) so any job you COMPLETED here has freed its type
-    // slot for a re-take.  When the pitch resolves it re-calls _continue() and
-    // this returns false (already shown), so the player leaves.
-    if (this._tryExitMissionCard()) return;
+    // No exit-mission pitch here anymore (removed 2026-07-30) — HIT THE ROAD
+    // is a clean, uninterrupted exit. Missions are only found by walking into
+    // this stop's mission shop; see _showShopGreeter / _missionShopKeyFor.
     // Uncollected READY drop-offs — the route is one-way, so leaving now
     // fails them for good.  Confirm first; LEAVE ANYWAY re-enters with the
     // flag set and fails them as 'not_delivered' (no payout, rep unchanged).

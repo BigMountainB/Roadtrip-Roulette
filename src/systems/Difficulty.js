@@ -23,6 +23,7 @@ const MODES = {
     trafficMul:       1.0,
     starGainMul:      0.5,        // half the wanted-star attraction
     arrest:           { rear: 7, headOn: 5, pit: 5 },  // takes more hits to jail
+    speedGraceMul:    2.0,        // most forgiving speed-band grace (owner 2026-07-30)
     partyClockSec:    50 * 60,    // 50 min
     onTimeBonusMul:   1.0,        // no bonus on Easy (per user spec)
   },
@@ -35,6 +36,7 @@ const MODES = {
     damageMul:        1.0,
     copEscalationMul: 1.0,
     trafficMul:       1.0,
+    speedGraceMul:    1.4,        // more grace than Hard, less than Easy
     partyClockSec:    40 * 60,    // 40 min
     onTimeBonusMul:   1.5,        // 1.5× cash on time
   },
@@ -47,6 +49,7 @@ const MODES = {
     damageMul:        1.5,
     copEscalationMul: 1.5,
     trafficMul:       1.10,
+    speedGraceMul:    1.0,        // the tightest budget — Hard is the baseline
     partyClockSec:    30 * 60,    // 30 min
     onTimeBonusMul:   2.0,        // 2× cash on time
   },
@@ -139,6 +142,10 @@ export const Difficulty = {
   /** Arrest hit-counters for the active mode, falling back to the
    *  Normal/Hard defaults.  { rear, headOn, pit }. */
   arrest()           { return this._gameplaySrc().arrest ?? DEFAULT_ARREST; },
+  /** Mission speed-band grace multiplier (owner 2026-07-30): Hard runs the
+   *  raw budget, Normal gets more time, Easy more still.  Custom inherits
+   *  from its sub-difficulty like every other gameplay multiplier. */
+  speedGraceMul()    { return this._gameplaySrc().speedGraceMul ?? 1.0; },
   partyClockSec()    { return this.current().partyClockSec ?? 40 * 60; },
   onTimeBonusMul()   { return this.current().onTimeBonusMul ?? 1.0; },
   noScore()          { return !!this.current().noScore; },

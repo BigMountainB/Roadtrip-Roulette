@@ -236,6 +236,24 @@ export const REST_STOP_ENCOUNTERS = [
     ],
   },
 
+  // ── Thorp (TH) — motel pool at the edge of nowhere ────────────────────
+  {
+    id: 'thorp_motel_pool',
+    stopId: 'TH', weight: 2,
+    portrait: 'swimsuit_girl', speaker: 'Swimsuit Girl',
+    line: "Thorp gets so quiet once the interstate clears — but the pool's still warm, and so are the beers.",
+    fact: "Thorp's a speck by the Yakima's bend, home to a century-old grist mill, my friend.",
+    choices: [
+      {
+        label: "Rent the room ($40)",
+        cost: 40,
+        effects: { tiredness: -40, timeSec: +45, dialogue: "She flips you the key with a wink, sly and slow — \"Shower's hot, bed's made… take it slow.\"" },
+      },
+      { label: "Take a poolside drink", effects: { hydration: +10, dialogue: "She hands you a glass, ice clinking with cheer — \"On the house, cowboy. Long roads breed thirst, I hear.\"" } },
+      { label: "Politely decline and go", effects: {} },
+    ],
+  },
+
   // ── Ellensburg (E) — rodeo-town diner (recurring NPC via npcMemory) ──────
   {
     id: 'ellensburg_diner',
@@ -356,6 +374,56 @@ export const REST_STOP_ENCOUNTERS = [
     ],
   },
 ];
+
+// ── Shop greeters (owner 2026-07-30, revised same day) ────────────────────
+// One per business brand — NOT part of the random per-stop encounter pool
+// above (no stopId/weight; keyed by SHOP key instead and shown deterministically
+// by RestStopScene the first time that specific shop is entered, same
+// `_showEncounterCard` renderer as everything above). `once: true` — after the
+// first visit to a given shop the greeter is skipped and the storefront opens
+// straight to the menu. Portrait is a close-up of the SAME character already
+// visible in that shop's full-bleed storefront background (see
+// `npcBusinesses:` in AssetManifest.js).
+//
+// REVISED (owner, same day): only 1-2 shops are meant to be actual mission
+// contacts — "it's up to the player to find them." Everywhere else is
+// intentionally GENERIC filler, not bespoke personality — a first draft here
+// gave all 11 unique lines, which was scope creep past what was asked.
+// `fact` is deliberately omitted below: `_showEncounterCard` already prefers
+// `this._townFact` (the rotating per-stop fact) over a card's own `fact`, so
+// leaving it unset means these automatically surface the SAME rotating facts
+// every other card at this stop uses — no duplicate fact system needed.
+//
+// STILL OPEN: which 1-2 shop keys are the real mission contacts, and what
+// that card should actually show (presumably reusing `_buildMissionEncounter`
+// / the existing NPC_NAMES mission-contact system in MissionSystem.js, rather
+// than a new one) — do not guess a shop for this; ask.
+const GENERIC_GREETER_CHOICES = [
+  { label: "Let me see what you have", effects: {} },
+  { label: "Just window shopping today", effects: { dialogue: "\"No rush. Holler if you need anything.\"" } },
+  { label: "Any idea what the road's like up ahead?", effects: { dialogue: "\"Same as it's been — watch your speed and you'll be fine.\"" } },
+];
+function genericGreeter(shopKey, portrait, speaker) {
+  return {
+    id: `greeter_${shopKey}`, once: true,
+    portrait, speaker,
+    line: "Welcome in! What can I help you with?",
+    choices: GENERIC_GREETER_CHOICES,
+  };
+}
+export const SHOP_GREETERS = {
+  gas:       genericGreeter('gas',       'biz_huffs',     "Huff's Attendant"),
+  cargo:     genericGreeter('cargo',     'biz_cargo',     'CarGo Dispatcher'),
+  hunting:   genericGreeter('hunting',   'biz_cowbellas', 'CowBella Shopkeeper'),
+  camp:      genericGreeter('camp',      'biz_aok',       'AOK Camp Host'),
+  lord:      genericGreeter('lord',      'biz_lord',      'Lord Motors Manager'),
+  suck:      genericGreeter('suck',      'biz_suck',      "Sam's Owner"),
+  vices:     genericGreeter('vices',     'biz_gasnsip',   'Gas-N-Sip Clerk'),
+  ambm:      genericGreeter('ambm',      'biz_am_bm',     'AM/BM Clerk'),
+  parkride:  genericGreeter('parkride',  'biz_parkride',  'Metro Park & Ride Courier'),
+  schwasted: genericGreeter('schwasted', 'biz_schwasted', 'Les Schwasted Tech'),
+  fap:       genericGreeter('fap',       'biz_fap',       'Finesse Technician'),
+};
 
 /** Deterministic-ish weighted pick without Math.random (pass an rng()->[0,1)).
  *  Filters by stopId, first-visit intro priority, once-seen, and conditions. */

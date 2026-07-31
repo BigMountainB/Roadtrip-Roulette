@@ -195,6 +195,26 @@ export const ASSET_MANIFEST = {
     { key: 'npc_diner_waitress', path: 'assets/npc/diner_waitress.png' },
     { key: 'npc_grandma',        path: 'assets/npc/grandma.png' },
     { key: 'npc_tow_driver',     path: 'assets/npc/tow_driver.png' },
+    { key: 'npc_swimsuit_girl',  path: 'assets/npc/swimsuit_girl.png' },
+  ],
+  // Shop-staff portraits — one per business brand, same 1086x1448 spec as the
+  // npc: array above.  Each is a close-up of the SAME character already
+  // visible in that brand's full-bleed storefront background (see
+  // shop_bg_* in the businesses: array).  Keyed to match SHOP_BG /
+  // stopBrands in RestStopScene.js so a future render pass can look one up
+  // by shop id directly.  NOT YET RENDERED anywhere — registered only.
+  npcBusinesses: [
+    { key: 'npc_biz_huffs',      path: 'assets/npc/businesses/huffs_attendant.png' },
+    { key: 'npc_biz_cargo',      path: 'assets/npc/businesses/cargo_dispatcher.png' },
+    { key: 'npc_biz_cowbellas',  path: 'assets/npc/businesses/cowbellas_shopkeeper.png' },
+    { key: 'npc_biz_aok',        path: 'assets/npc/businesses/aok_host.png' },
+    { key: 'npc_biz_lord',       path: 'assets/npc/businesses/lord_manager.png' },
+    { key: 'npc_biz_suck',       path: 'assets/npc/businesses/sams_owner.png' },
+    { key: 'npc_biz_gasnsip',    path: 'assets/npc/businesses/gasnsip_clerk.png' },
+    { key: 'npc_biz_am_bm',      path: 'assets/npc/businesses/ambm_clerk.png' },
+    { key: 'npc_biz_parkride',   path: 'assets/npc/businesses/parkride_courier.png' },
+    { key: 'npc_biz_schwasted',  path: 'assets/npc/businesses/les_schwasted_tech.png' },
+    { key: 'npc_biz_fap',        path: 'assets/npc/businesses/fap_technician.png' },
   ],
   buildings: [
     { key: 'space_needle', path: 'assets/buildings/codex/space_needle_landmark.png' },

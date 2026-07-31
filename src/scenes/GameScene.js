@@ -825,6 +825,10 @@ export class GameScene extends Phaser.Scene {
         }
         return sourceCap === undefined ? _origAddStar(amount) : _origAddStar(amount, sourceCap);
       };
+      // heatCarried clause (slice 2) — an Armored Run rides with its own heat:
+      // the wanted level is FLOORED while the bag is aboard, and drops back to
+      // whatever you'd earned on your own the moment it's handed off.
+      this._missionHeatFloor = () => (this.missions?.activeEffects?.().heatStars ?? 0);
     }
     this.haptics = new HapticSystem();
     // Honor the phone-menu Settings → Haptics toggle (persisted in save).
@@ -4184,6 +4188,9 @@ export class GameScene extends Phaser.Scene {
       let _drainMul = this._traitMod('survivalDrainMult');
       if (this._displayMPH() < 100) _drainMul *= this._traitMod('survivalDrainLoSpeedMult');
       if (this._isBoost())          _drainMul *= this._traitMod('survivalDrainBoostMult');
+      // survivalDrain clause (slice 2) — "they eat your snacks, they drink
+      // your water".  Multiplies on top of the genre modifiers.
+      _drainMul *= (this.missions?.activeEffects?.().drainMult ?? 1);
       this.survival.update(this._odometer ?? 0, { curvature: _curv, drainMul: _drainMul });
       this._checkViceUnlocks();
 
@@ -4433,6 +4440,13 @@ export class GameScene extends Phaser.Scene {
     this._tickPassenger();
     // Sex-worker dirt buff: enforce the star cap and expire it once
     // the player passes the buff's end position.
+    {
+      // heatCarried floor (slice 2): applied before the cap so the star-cap
+      // buy still wins — you can pay off the heat you EARNED, but not the
+      // heat that's sitting in your trunk.
+      const _hf = this._missionHeatFloor?.() ?? 0;
+      if (_hf > 0 && (this.cops.stars ?? 0) < _hf) this.cops.stars = _hf;
+    }
     this.cops.tickStarCap?.(this.player.position);
     if (this.cops.starCapMax != null && this.cops.stars > this.cops.starCapMax) {
       this.cops.stars = this.cops.starCapMax;
@@ -4806,6 +4820,36 @@ export class GameScene extends Phaser.Scene {
         this._showPopup?.(`❌ MISSION FAILED — you passed ${_m.targetName}.\n`
           + `${_m.type === 'passenger' ? (_m.passenger?.name ?? 'Your rider') + ' is not pleased.' : 'No payout.'}`,
           '#FF4444', 5);
+      }
+      // CHALLENGE class (slice 3) — armed on the first ROAD tick (never while
+      // the player is still in the shop), then fed real seconds.  Pays here,
+      // on the road: a challenge has no destination to collect at.
+      for (const _c of (this.missions?.armChallenges?.() ?? [])) {
+        this._showPopup?.(`⏱ ${_c.missionName ?? 'CHALLENGE'} — GO!`, '#FFD24D', 3);
+      }
+      {
+        const _ch = this.missions?.tickChallenges?.(rawDt, {
+          mph: this._displayMPH(), boosting: this._isBoost(),
+        }) ?? { done: [], failed: [] };
+        for (const _c of _ch.done) {
+          const _pay = _c.payout ?? 0;
+          if (Difficulty.noScore?.() !== true) this.score += _pay;
+          this.stats?.recordEarn?.(_pay, 'mission');
+          this.stats?.recordMissionComplete?.('challenge', _pay);
+          this._showPopup?.(`✅ ${_c.missionName ?? 'CHALLENGE'} — +$${_pay.toLocaleString()}`, '#88FF88', 4);
+        }
+        for (const _c of _ch.failed) {
+          this._showPopup?.(`⏱ ${_c.missionName ?? 'CHALLENGE'} — time's up.`, '#FF4444', 3);
+        }
+      }
+      // SPEED BAND clauses (slice 2) — a floor ("don't crawl, it melts") or a
+      // cap ("tall load, keep it down"), each with a few seconds of grace so
+      // traffic or a corner can't auto-fail an otherwise clean run.
+      const _mSpd = this.missions?.sampleSpeed?.(this._displayMPH(), rawDt) ?? [];
+      for (const _m of _mSpd) {
+        this._showPopup?.(_m.failReason === 'too_slow'
+          ? `🧊 TOO SLOW — ${_m.cargo ?? 'the load'} didn't make it. Job failed.`
+          : `📦 TOO FAST — ${_m.cargo ?? 'the load'} shifted. Job failed.`, '#FF4444', 4);
       }
       // Fugitive passengers bail past the heat cap; every passenger tracks
       // peak stars for the thrill-seeker tip.  No-op without a passenger.
@@ -10218,6 +10262,11 @@ export class GameScene extends Phaser.Scene {
       // ── Survival model: apply the item to the survival bars. ──────────
       const itemId = sprite.type;
       const ev = this.survival.applyItem(itemId, undefined, this._survivalItemMods());
+      // NO-EATING clause (slice 2): "counted, weighed, and I'll count it
+      // again" — consuming anything off the road voids that haul.
+      for (const _m of (this.missions?.noteEat?.() ?? [])) {
+        this._showPopup(`JOB FAILED\n${_m.cargo ?? 'cargo'} — you ate it`, '#FF4444');
+      }
       this.stats?.recordViceCollected(itemId);
       if (this._dailyTracker) {
         this._dailyTracker.viceTypes.add(itemId);
@@ -11289,6 +11338,22 @@ export class GameScene extends Phaser.Scene {
                          && base !== 'coal';
     const result = this.cops.useF12Token(base, this.player.position, dir, this.traffic, this._collectEncounterCops());
     if (result?.ok) {
+      // PACIFIST clause (slice 2) — "carry it quiet".  Disguise and paint are
+      // not weapons (hide / repaint), matching the cop-escalation exemption
+      // right above, so they don't void the run.
+      if (base !== 'disguise' && base !== 'paint_bomb') {
+        for (const _m of (this.missions?.noteWeaponFired?.() ?? [])) {
+          this._showPopup(`JOB FAILED\n${_m.missionName ?? 'Quiet run'} — you fired`, '#FF4444');
+        }
+      }
+      // Challenge progress — "burn all three inside forty-five seconds".
+      for (const _c of (this.missions?.noteItemUsed?.(base) ?? [])) {
+        const _pay = _c.payout ?? 0;
+        if (Difficulty.noScore?.() !== true) this.score += _pay;
+        this.stats?.recordEarn?.(_pay, 'mission');
+        this.stats?.recordMissionComplete?.('challenge', _pay);
+        this._showPopup(`✅ ${_c.missionName ?? 'CHALLENGE'} — +$${_pay.toLocaleString()}`, '#88FF88', 4);
+      }
       if (weaponOnTrooper) {
         this._trapPursuitActive = false;
         this._trapStopping      = false;
@@ -20578,13 +20643,34 @@ export class GameScene extends Phaser.Scene {
     // player collects each one via its gold drop-off button on the
     // rest-stop landing (RestStopScene → MissionSystem.collect), where the
     // payoff banner + tier-up moment now live.
-    if (Difficulty.mode?.() !== 'custom') {
+    {
+      // Graded in EVERY mode including Custom (owner 2026-07-30) — Custom is
+      // where the mission system actually gets playtested, so a job accepted
+      // there has to be gradeable on arrival.  MissionSystem withholds rep and
+      // lifetime stats from a sandbox run instead (see _sandbox).
       // Heat-escape jobs must land at 0 stars (Ch. 8) — pass current heat so
       // gradeArrivals can fail a hot arrival; catch those for the fail popup.
       const _arrStars = this.cops?.starDisplay ?? 0;
       const _heatHere = (this.missions?.activeMissions?.() ?? [])
         .filter(m => m.type === 'heat' && m.targetStopId === rs.id);
-      const _mReady = this.missions?.gradeArrivals?.(rs.id, this._odometer, _arrStars) ?? [];
+      // Arrival state the slice-2 clauses judge: tank %, Alertness %, cash on
+      // hand, and how long this leg actually took (for the speed tip).
+      const _arrCtx = {
+        fuelPct:  this._gasMaxMi > 0 ? (this.player.gasMi / this._gasMaxMi) * 100 : null,
+        alertPct: this.survival ? (100 - this.survival.tiredness) : null,
+        cash:     Math.round(this.score ?? 0),
+        clockSec: this._partyClockSec ?? null,
+      };
+      const _mReady = this.missions?.gradeArrivals?.(rs.id, this._odometer, _arrStars, _arrCtx) ?? [];
+      // Name the arrival clause that killed a job — "no payout" with no reason
+      // reads as a bug.
+      for (const _m of (this.missions?._allMissions?.() ?? [])) {
+        if (_m.targetStopId !== rs.id || _m.status !== 'failed') continue;
+        const _why = { tank_too_low: 'you rolled in on fumes',
+                       rider_nodded_off: 'your rider fell asleep',
+                       books_dont_balance: "the cash in your pocket didn't match the slip" }[_m.failReason];
+        if (_why) this._showPopup?.(`❌ ${_m.missionName ?? 'JOB'} FAILED — ${_why}.`, '#FF4444', 4);
+      }
       for (const _m of _heatHere) {
         if (_m.status === 'failed') {
           this._showPopup?.(`🔥 STILL HOT — you pulled in wearing ${_arrStars}★. No payout.`, '#FF4444', 4);

@@ -35,6 +35,9 @@ to jump straight to the chapter you need to read or change.
 - **[Chapter 6 — Work History (DUI lineage, pre-fork)](#chapter-6--work-history-dui-lineage-pre-fork)** — dated session notes carried from DUI
 - **[Chapter 7 — Legacy Engine & Systems Reference](#chapter-7--legacy-engine--systems-reference-dui-era-partly-superseded)** — pre-fork DUI overview (shared engine, partly stale)
 - **[Chapter 8 — Mission System Plan](#chapter-8--mission-system-plan-locked-2026-07-13-rev-b-after-external-review)** — "Favors": dialogue-tree offers, 5 types + terms modifiers, rep ladder (×1/×2.5/×5), 7 build phases
+- **[Chapter 9 — Ground Tile Art Spec](#chapter-9--ground-tile-art-spec)** — the 8 per-biome overhead ground textures (1024×1024, seamless both axes), scale/resolution rules, which are done vs. outstanding
+- **[Chapter 10 — Biome Band Art Spec](#chapter-10--biome-parallax-band-art-spec)** — the 24 horizon-silhouette images (8 biomes × 3 parallax layers), tiling/transparency rules, per-biome subject notes
+- **[Chapter 11 — NPC Dialogue Reference](#chapter-11--npc-dialogue-reference)** — every rest-stop encounter, mission passenger/contact, and crowd-chatter line, verbatim; companion spreadsheet `npc_dialogue.csv` in the repo root; rewrite-in-progress toward "edgier, funnier"
 
 ---
 
@@ -116,6 +119,413 @@ genre pick, and a "Rotate Phone to Enter Game Play" prompt follows. Remaining: e
 genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
+
+### 2026-07-31 (pt 2) — Missions enabled in CUSTOM (sandbox rule), shop scrim → FAP only, crash hunt
+Local + test-passing (515) + builds clean. Uncommitted.
+
+**Missions were unreachable in Custom — the one mode they get playtested in.** Owner reported
+"no offers or missions were generated"; the storefront staffer greeted and the shop opened, but
+no work was ever pitched. Three INDEPENDENT gates were switching it off:
+`_pendingMissionCard = Difficulty.noScore() !== true` (RestStopScene), the `_readyJobs` drop-off
+list, and the pull-in `gradeArrivals` block in GameScene. All three now run in every mode.
+
+Progression is withheld instead of content: `MissionSystem._sandbox()` (true when
+`Difficulty.noScore()`) makes `_bumpRep` / `_bumpStat` no-ops, so a sandbox run can complete and
+be PAID but can never inflate `missionRep` / `missionStats` / tier. Tested both directions —
+Custom banks neither, Normal still banks both, and a road-paid CHALLENGE obeys the same rule.
+**NPC contact memory is deliberately still written in Custom**: it is flavour, not progression,
+and a contact who forgets you mid-sandbox reads as a bug.
+
+**Shop menu-column scrim is now FAP-only.** `_shopScrim` is a dark rect over the left third at
+FULL screen height, but the menu column stops `bottomBand` (84 px) short of the bottom — so its
+tail showed as a bare black block under the last row in every storefront ("it's covering some of
+the menu"). Gated to `chromeKey === 'fap'`, which keeps the dark bed its 7-tab toolbar needs.
+Watch for legibility on the brightest daylight storefronts now that the bed is gone elsewhere.
+
+**Crash hunt — NOT reproduced.** Owner hit a repeatable crash approaching mile 3 in Custom while
+warping to Seattle. Built a headless repro (`tmp/repro.mjs`, playwright-core, drives
+`window.__phaserGame` directly): Custom mode → warp → drive through mile 3.3 → `_takeRestStopExit`
+→ RestStop opens, zero JS errors, twice. Two things learned worth keeping:
+- **The windshield tip AMBUSHES a warp.** Warping past mile 0.25 fires it immediately, and it
+  sets `_paused = true` and waits for a tap. Frozen car, frozen HUD — indistinguishable from a
+  hang if the tap doesn't land. Strong candidate for what "kept crashing" actually was. NOT yet
+  gated (owner hasn't picked a fix); the obvious ones are "never within N seconds of a warp" and
+  "never in Custom".
+- **`main.js` already paints a full-screen crash overlay** with message + stack for any uncaught
+  throw (see its `window.addEventListener('error')` block). If a crash recurs, that overlay IS
+  the diagnostic — screenshot it rather than guessing. A black screen / "Aw, Snap" / self-reload
+  instead means it is NOT a JS exception and points elsewhere.
+
+**Two reported "bugs" that are working as built** (no change made): only some shops greet you
+because `SHOP_GREETERS` entries are `once: true` — one per shop per SAVE, so previously-met shops
+open straight to the menu; and the greeter DOES answer the road/weather question, with a canned
+"Same as it's been — watch your speed" that ignores live conditions, so it reads as no answer.
+Weather/heat/time-aware greeter dialogue is an unbuilt content pass.
+
+**⚠ Parallel-session change to know about:** mission offers are now reachable ONLY through the
+stop's mission shop (`_missionShopKeyFor` picks one amenity per stop deterministically →
+`_showShopGreeter` → `_buildMissionEncounter`). The old automatic HIT THE ROAD exit pitch
+(`_tryExitMissionCard`) was REMOVED per owner directive. Consequence for playtesting: if the
+first shop you enter opens straight to its menu, that stop's contact is in a DIFFERENT shop.
+
+### 2026-07-31 — Tap-mode steering fix + unused-asset archive
+Local + test-passing + builds clean. Committed as `422fc2d`, `8f240ff`.
+
+**Tap steering snapped too fast side to side in the Vantage crosswind (owner report).**
+Traced the wind-pull code and found it's a complete no-op in tap ("flappy") mode: tap's
+steerIn is already pinned to full ±1 with no ramp before the wind's left-nudge ever runs,
+so there's nothing left to nudge. The lateral-velocity settle rate for tap had been bumped
+from classic's baseline of 8 up to 14 specifically to fix an earlier "feels sluggish
+fighting the wind" complaint — but since wind never actually touched tap's steering to
+begin with, that fix was chasing the wrong cause. It just made every tap-mode swing,
+everywhere on the route (not just in wind), snap at ~1.75× the classic rate — most
+noticeable in the wind zone specifically because that's where the player corrects almost
+continuously, so every release is a full whiplash snap. Backed the settle rate off to 10
+(`GameScene.js` — the `_baseSettle` constant near the lateral-velocity settle code) — still
+snappier than classic/tilt (tap's whole identity), just less jarring. Owner may want it
+tuned further after testing; the fix is a single constant.
+
+**Archived 99 unused asset files (~153MB) out of `public/assets/` into `Archive/`** (already
+gitignored, not pushed — moved rather than deleted so anything can be restored by path).
+Cross-referenced every file on disk against actual usage: the manifest (imported directly
+in Node via `flattenManifest()` so computed/templated paths — e.g. the biome-band template
+literals — resolve correctly rather than being regex-guessed), the per-genre culture-art
+system expanded across all 10 genres, literal paths in the handful of files that load
+assets outside the manifest, and `index.html`'s own inline dynamic path construction
+(phone-menu skins, business logos, music-genre icons). Checked candidates against
+`website/sync-assets.sh` too so nothing the marketing site still uses got swept up.
+
+Mostly one thing: a full superseded generation of North Bend / Cascades landmark /
+Snoqualmie-spike scenery art from before the current biome system, left behind after the
+rework instead of cleaned up — the single biggest chunk, and very likely why the earlier
+demo/embed staleness investigation (2026-07-30) found the neon-grid missing-texture bug in
+the first place. Also: the removed CarGo business's art, superseded storefront art
+versions, "previous_police" car art (explicitly named as superseded), 7 of 8
+`iphone_menu_bg_<vehicle>.png` variants (dead since the purchasable-vehicle system was
+removed 2026-07-19), an orphaned JPG tutorial slideshow superseded by the current in-game
+tutorial, and a stray VSCode `.code-workspace` file that had ended up inside the art
+folder. Verified zero regressions: full test suite green, clean build, and a headless
+Playwright pass driving actual gameplay across 4 genre switches with zero new
+missing-texture warnings. Refreshed `website/demo/` afterward too — dropped from 401MB to
+267MB as a side effect.
+
+**Confirmed the biome parallax backdrop system is fully built and correctly layered**
+(owner question: "wouldn't they be one of the furthest layers down?"). Yes — `depth 0.5`,
+explicitly documented as above the sky (depth 0) and below everything else (terrain at
+1.3, then road/buildings/trees/traffic). Verified live by warping through several mile
+markers: distinct art renders correctly per biome (blue-grey pine ridgeline at North Bend,
+golden wheat hills at Palouse), nothing missing or misordered. No code changes needed —
+this was a verification pass, not a build.
+
+### 2026-07-30 (pt 4) — Trip-summary screen, cop-diverted tracking, upgrade-wipe bug fix
+Local + test-passing (upgrades.test.mjs new, 3/3) + builds clean. Committed as `2da19bb`,
+`20a4ac5`, `9177283`.
+
+**Trip summary (owner 2026-07-29 directive, closes the last open gap).** GameOverScene
+now shows a 📊 SUMMARY button on a genuine Pullman arrival (`finish` /
+`finish_on_time` / `finish_late` only — not busted/crash/OD/demo) that opens a 5-tab
+modal: Overview, Money, Missions, Road, Rest Stops. Fed by a `StatsTracker.summarize()`
+snapshot GameScene takes at the exact moment the trip ends and threads through the
+`scene.start('GameOver', ...)` payload as `tripSummary`, so it can't be disturbed by a
+later run's `tripStart()` resetting the live session. Verified end-to-end with a
+headless Playwright harness driving the real `_openTripSummary()` / tab-switch code
+against injected data — all 5 tabs render, no console errors, button correctly absent
+on non-completion endings.
+
+**StatsTracker gap:** several fields added across this feature's earlier slices
+(`spent.{gas,repairs,upgrades}`, `earned.bySource`, `missions.byType`, `copsDiverted`)
+lived only on the LIFETIME `stats` object, not the per-trip `session` — so the summary
+screen would have shown all-time totals instead of "this trip." Added session-scoped
+mirrors (`spentByCategory`, `earnedBySource`, `missions`, `copsDiverted`) and dual-write
+in every recorder; `summarize()` now exposes all four.
+
+**Cop-diverted tracking (the last real gap from the trip-summary spec).** CopSystem
+counts two distinct outcomes: a WEAPON dismissal (coal smoke-out, donut lure, fireworks
+kill — found via reading `useF12Token` fresh that its `victims`/`removeAll` array is
+actually dead code no current weapon populates; the real per-weapon hook points are
+`_coalSmokeOut`, `_donutDivert`, and the fireworks `deferred` array) and a DISTANCE
+escape (the existing `carDist < -COP_ESCAPE_UNITS` cull-loop splice). Plain counters on
+CopSystem, drained once/frame by GameScene into `StatsTracker.recordCopOutcome` — no
+new coupling into the chase logic itself.
+
+**Upgrade-data-loss bug, found while tracing a different report.** Investigating the
+"shop may re-sell installed upgrades" lead in `project_rtr_wallet_upgrade_bugs`
+(owner-reported, triaged 2026-07-28) turned up a worse bug than suspected:
+`buyUpgrade()`'s "clear the other tier map" step ran unconditionally, so writing to
+`tempUpgrades` — ANY Custom-sandbox purchase, or a normal-run buy of a
+`persistent:false` item like Coolant Flush — silently DELETED the player's real
+permanent upgrade in that same slot. Reproduced with a plain harness (own `eng_3`
+permanently, buy any engine part in Custom mode, `eng_3` vanishes from the save).
+Fixed: only a PERMANENT purchase retires a temp patch now, never the reverse. Added
+`tests/upgrades.test.mjs` guarding all three directions. The separate "shop-vs-road
+wallet drift" report was traced end-to-end (GameScene ↔ RestStopScene is a direct
+scene-data pass, no stale-read window exists) — no live bug found; likely already
+fixed by the 2026-07-23 wallet-persistence commit, which predates the triage note.
+
+All three landed on a shared working tree with a second, actively-running session mid-
+edit on `GameScene.js` / `RestStopScene.js` (the business-missions build below). Commits
+were staged surgically — `git hash-object` + `git update-index --cacheinfo` to commit
+only the specific hunks authored here, leaving the other session's uncommitted work
+untouched in the working tree throughout (confirmed via diff before every commit).
+
+### 2026-07-30 (pt 5) — BUSINESS MISSIONS slice 3: the CHALLENGE class (31/51 live)
+Local + test-passing (509) + builds clean. Uncommitted.
+
+The owner's canonical dare finally works: **Fireworks Frenzy** — "I'll load you to three. Burn all
+three inside forty-five seconds and there's $250 in it." Plus Sugar Rush (hold 100+ for 30s),
+Test Drive (hold the 70-80 BAND for 60s), Dyno Dash (20 cumulative boost seconds).
+
+**A challenge is structurally unlike every other type**, and that drove the design:
+- **No destination.** It's explicitly skipped by `gradeArrivals` and `checkMissedTargets`, both of
+  which assume a target stop exists.
+- **It pays ON THE ROAD.** Every other type is active → ready (graded at pull-in) → collect (paid
+  at the stop); a dare has no stop to pull into, so `_completeChallenge()` closes the ledger
+  itself and GameScene banks the cash where the player is standing. It still writes `_outcomes`,
+  so a checkpoint rewind can't un-pay or re-pay it (covered by a test).
+- **Its clock is REAL seconds, not party-clock seconds.** A 45-second dare on the 4×-compressed
+  party clock would be an 11-second dare.
+- **The clock starts on the ROAD, not at acceptance** (`armChallenges()` on the first road tick),
+  so the timer can't burn while the player is still shopping.
+- **The kit is handed over at acceptance** through the same `_purchases.f12` channel a shop
+  purchase uses — GameScene's resume path needed no new case.
+
+**Bug caught by its own test:** `sec` was doing two jobs — the goal AMOUNT for `boostSeconds` and
+the DEADLINE for the others — so a 20-second boost goal was also a 20-second fuse and killed
+itself while the player wasn't boosting. Split into `limitSec` (the fuse, optional — omit it and
+the dare is untimed) vs the goal fields. Item-burning dares are asserted to always carry a fuse,
+since without one they could never be failed.
+
+Semantics worth keeping straight: `speedBand` is a CONTINUOUS hold (drop out and it resets — that
+IS the challenge) while `boostSeconds` is CUMULATIVE (let off whenever). Both are tested.
+
+12 challenge offers generate across the route at a sample seed.
+
+### 2026-07-30 (pt 3) — BUSINESS MISSIONS slice 2: condition clauses (27/51 templates now live)
+Local + test-passing (472) + builds clean. Uncommitted.
+
+Eleven clauses, in two kinds — the distinction is the design, not an implementation detail:
+- **FAIL clauses** kill the job on violation: `noEating` (eat anything off the road and the
+  Munchie Mule haul is void), `pacifist` (fire anything and the quiet run is dead), `speedFloor` /
+  `speedCap` (with a **grace budget** — a few seconds outside the band, repaid by time back
+  inside, so ordinary traffic or a corner can't auto-fail a clean run), and the arrival checks
+  `fuelFloor` / `alertFloor` / `cashExact`, judged at pull-in.
+  **Grace scales with difficulty** (owner 2026-07-30): `Difficulty.speedGraceMul()` — Hard ×1.0
+  (the raw authored `graceSec` IS the Hard budget), Normal ×1.4, Easy ×2.0, Custom inheriting from
+  its sub-difficulty like every other gameplay multiplier. The mph BAND never moves with
+  difficulty — only how long you may sit outside it. Note for test authors: the module default
+  mode is Easy, so any test written against a raw `graceSec` must pin the difficulty (two slice-2
+  tests silently got 2× their intended budget until they did).
+- **EFFECT clauses** change the drive or the pay and never fail on their own: `heatCarried` (the
+  Armored Run rides with its own star floor — applied BEFORE the star-cap buy, so you can pay off
+  heat you EARNED but not the heat in your trunk), `survivalDrain` (a full car drains food/water
+  2×), `damageDock` (every HP costs you part of the fee, floored at 25% — a zeroed payout reads as
+  a bug), `tipBySpeed` (tip scales with how far under par the leg landed).
+
+Wired into GameScene at the existing choke points: the pickup-consume path, the single
+`_useTopF12` fire path (disguise / paint-bomb exempt, matching the cop-escalation carve-out), the
+per-tick mission feed for speed sampling, and the pull-in grader, which now takes an arrival ctx
+(`fuelPct`, `alertPct`, `cash`, `clockSec`). Missing ctx fields SKIP their clause rather than
+failing the job, so any older caller stays safe. Leg timing is per-mission (`acceptedClockSec` off
+the party clock), not a scene-level timer. Collect pays through `payoutFor()` so the dock and the
+tip land, with the genre trait still multiplying on top. Every clause has offer-card copy in both
+the prose catch and the scannable row, and a `TERM_BONUS` premium priced by how much it fights the
+way the game wants you to play (pacifist 70 > fuelFloor 35).
+
+**Offer coverage fixed along the way.** Distinct DESTINATIONS were a nice-to-have inherited from
+the old 2–3-offer era, and they were starving the three-category promise: a used target could drop
+a stop to one job. Backfill now reuses a destination rather than pitching fewer jobs, and a
+**sparse-basin fallback** covers the eastern gap where a Rookie window can be genuinely empty
+(Ellensburg's next neighbour is 28 mi out, past the 22 mi cap) by falling back to the nearest stop
+ahead. Result: every stop on the route now pitches 3 categories at every seed tested, with Pullman
+correctly still payoff-only.
+
+**Still waiting on later slices (24 templates):** the challenge class (Fireworks Frenzy, Sugar
+Rush, Test Drive, Dyno Dash, Stud Test, Decoy Deploy, Wolf Scare, Recall Notice, Meter Maid) plus
+world-entity clauses — `npcFlee`, `npcRescue`, `escort`, `carSwap`, `multiDrop`, `hpLock`,
+`brakePenalty`, `steerPenalty`, `wetPaint`, `decayHeat`, `smelly`, `duskTimer`, `bustOnSpeed`,
+`cashAdvance`, `vicePayout`.
+
+### 2026-07-30 (pt 2) — BUSINESS MISSIONS slice 1: per-business pools, run rotation, chain runs, one job per stop
+Local + test-passing (433, up from 379) + builds clean. Uncommitted.
+
+The owner's 50-mission pool (10 businesses × 5, drafted 2026-07-28) is now **captured as data** in
+`src/data/businessMissions.js` — recovered from that session's transcript rather than re-invented,
+since the owner had already seen and reacted to the list.
+
+**The staged-build contract (the important part).** Every template declares the condition clauses
+it `needs`; a template is offerable only when all of them are in `IMPLEMENTED_CLAUSES`. That is
+why all 50 can live in the file from day one while only ~13 are live: the rotation draws from what
+the engine can actually ENFORCE, and each clause a later slice adds widens the live pool with no
+edit to the data file. Shipping a watered-down version of a mission whose catch isn't implemented
+would be worse than not offering it — "Bear Canister" without the smell mechanic is just another
+fragile crate, so it waits.
+
+**What slice 1 built:**
+- **Work is sourced from BUSINESSES, not stops.** Offers are drawn from the businesses a stop
+  actually has (`REST_STOPS.amenities`), so the amenity map finally drives content.
+- **Per-run rotation** — `ACTIVE_PER_BUSINESS = 2` of each pool, seeded Fisher-Yates off the run
+  seed, stable all run and across reloads (the seed serializes), different every new run.
+- **Three offers per stop, one per CATEGORY, one hire per stop** (owner 2026-07-30). The contact
+  pitches three types; `accept()` refuses a second job at a stop that has already hired, and the
+  ledger serializes so a checkpoint rewind can't re-hire. Passed-over jobs are NOT burned — they
+  stay in the rotation and can resurface later. A generic backfill tops a thin stop up to three
+  distinct categories so the contact always has a spread.
+- **CHAIN RUNS (owner 2026-07-30: "make a lot of the deliveries business to like business").**
+  `destBiz: 'same'|'<key>'` aims a haul at the NEXT branch of that business — "Take this package
+  to my brother. He's at the next AM/BM. Don't look inside. He'll know." (owner's line, verbatim,
+  now `ambm_brother`). Chain runs deliberately **ignore the rep-tier mileage window** — the branch
+  is where it is — so they run long and pay for it: per-mile rate plus `TERM_BONUS.chain`. Eight
+  of the ready deliveries are chain runs; the card names the destination as a business
+  ("AM/BM in Cle Elum"), not just a town.
+
+**Verified by generating real offers**, not just unit tests — e.g. seed 42 at Cle Elum pitches
+Gas-N-Sip Restock → Thorp (17 mi, chain) and Huff's Price War → Ellensburg (25 mi, chain); reseeding
+produces a different spread.
+
+**Test contract changes** (9 pre-existing tests updated, all intentional): the Phase-4 "slot 0 is
+always a delivery" anchor rule is retired (there is no anchor type now, only distinct categories);
+timed budgets may be AUTHORED per template (Price War 4 min, Hot Springs Water 2 min) as well as
+derived from miles; and any test holding several actives at once now hires at several DIFFERENT
+stops, because one-job-per-stop is real. One sub-test ("a later success repairs the fail-ack")
+moved to a fresh run, since a stop can no longer hire twice.
+
+**Open / next:**
+- **Passenger offers are nearly all generic backfill** — only ONE passenger template is currently
+  implementable (`gas_hitcher`), and few stops carry `gas`. Slice 2's `alertFloor` / `multiDrop` /
+  `survivalDrain` clauses fix this.
+- **Payouts look hot at Rookie** ($800–2,300 once the chain bonus lands on top of the mission
+  formula's own `PAYOUT_MULT = 5`). Wants a tuning pass with real play data before release.
+  NOTE (owner 2026-07-30): `PAYOUT_MULT` is a MISSION-ONLY scalar inside `computePayout` — the
+  game's score multiplier (`GameScene._scoreMult`, survival conditions + wanted stars) does NOT
+  apply to mission pay. Collect pays `(payout + tip) × _payMultFor(type)`, i.e. only the genre
+  trait multipliers (`cargoPayMult` / `timedPayMult` / `passengerPayMult`; heat is fixed at 1).
+  Don't reason about mission balance as if the HUD multiplier stacks on it.
+- Slice 2 = condition clauses (noEating, speedFloor/Band, pacifist, fuelFloor, cashExact,
+  heatCarried…). Slice 3 = the challenge class (Fireworks Frenzy et al). Slice 4 = author the
+  remaining templates onto that vocabulary + payout tuning.
+- Storefront greeter NPCs + shop "deals" (owner is generating the art) are a separate slice —
+  the shop NPC sells, the road NPC hires.
+
+### 2026-07-29 → 30 — INVISIBLE COPS root-caused (mirror parallax), cops kept BEHIND the player, tutorial chrome, rest-stop message cards
+Test-passing (379) + builds clean. Not deployed.
+
+**Commit state:** the GameScene + CopSystem half (items 1-6) is COMMITTED — it landed in HEAD via
+the parallel session's commits (`6874eca` → `b943405`, 2026-07-29 22:59-23:47), which also
+**stripped the `_copDebug` trace overlay** described below once it had done its job. The
+RestStopScene half (items 7-8) is UNCOMMITTED in the working tree alongside that session's
+encounters / npcPortraits / AssetManifest edits. Nothing is pushed.
+
+⚠️ **Two sessions were editing this repo simultaneously on 2026-07-29.** Check `git log` and
+`git status` before assuming your working tree is yours alone.
+
+**1. "PURSUIT — 2 ft behind" with no cruiser anywhere — ROOT CAUSE: mirror lateral parallax.**
+The long-standing report was NOT the cull, the near plane, or the standoff. The cop was being
+drawn every frame, correctly textured, `visible=true`, `alpha=1` — at **x258 against a glass
+spanning 274-526**, i.e. 16 px outside the mirror, where the geometry mask clipped it.
+
+`GameScene` shifted the whole mirror road by a **constant** `-playerLane * glassW * 0.55` at every
+depth — up to 55% of the glass width, vanishing point included — and then `projectRear` applied
+the player's lateral offset a SECOND time, depth-scaled. Near sprites survived because the second
+term is small up close; far sprites (dT 0.14 here) rode almost entirely on the constant and slid
+off the edge. Worst exactly when a cop was far enough away to be small, which is why it read as
+"cops never appear."
+
+Fixed by making the shift depth-scaled — `lateralShiftAt(depthT) = -playerLane * (roadHalfW *
+depthT + 4)` — so a laterally-offset camera moves the NEAR road but never the vanishing point,
+which is what actually happens. The road slices and `projectRear` now share that one term (and
+`projectRear` no longer subtracts `playerLn` again; `mb._playerLane` deleted). Same cop now lands
+at x≈379, mid-glass. Mirror cop sprites also got a `minH` floor — `max(6, glassH * 0.13)` — since
+one 76 ft back was drawing 4 px in a 26 px-tall road band.
+
+**The old KNOWN-OPEN note blaming a camera-vs-player origin mismatch was stale** and had been
+sending sessions down the wrong path: `getCopsForRender(camPos)` already passes the camera origin
+and both the mirror and the chevron measure from `p.position + PLAYER_VIRTUAL_Z`. Corrected below.
+
+Found with a purpose-built trace (`_drawCopDebug`, since removed) printing per cop: ft-behind,
+mirror vz, cull verdict, projected x/y/depthT, pool slot, sprite visibility, forward relZ + screen
+Y. Three sessions of static reasoning had produced wrong answers; the trace produced the right one
+in one run. **If an "invisible / wrong-looking sprite" mystery recurs, re-add a readout — do not
+reason from screenshots.**
+
+Two process traps cost most of the time here, both worth remembering:
+- The game was being tested at **`roadtrip-roulette.pages.dev`** (deployed, weeks stale) while
+  every fix landed in local source, so no instrumentation could ever have appeared. **Confirm the
+  URL before debugging.** `curl localhost:3000/src/... | grep` proves what the dev server serves;
+  it does not prove what the browser loaded.
+- A key-toggle and a `?flag=1` URL param both failed silently for the same reason. When
+  instrumenting, prefer **forced-on** output that needs no interaction to appear.
+
+**2. Cops are the same size as every other car.** `COP_VISUAL_SCALE = 1` replaces the 1.4×
+("imposing") / 1.5× parked inflation and the 1.3×-player-width hard cap is gone — traffic has
+never needed one. Body and light bar both derive from the constant so they can't drift. Size
+differences are now honest perspective: a pursuer sits nearer the camera than the player sprite,
+so it draws slightly larger closing from behind and converges as it comes level.
+
+**3. Cops stay BEHIND the player — and the forward view can't show that, by design.** The camera
+sits `PLAYER_VIRTUAL_Z` (3000, ~49 ft) behind the player's car sprite, so anything genuinely
+behind you still projects in FRONT of the camera: lower on screen and larger than you, which
+reads as "driving alongside me". No standoff fixes it — pushing them back only drives them lower
+and bigger until they cross the camera plane. So:
+- **Rear pursuers are mirror-only.** `_rearCopForwardFade()` fades a rear unit out over ~8 ft as
+  it drops behind the player's car. Parked/roadside cruisers you drive PAST, oncoming units,
+  barricades and fleeing cops (own exit animation) are exempt, and cops that legitimately LEAD
+  (4-5★ overtakes, onramp reinforcements) are ahead of the camera so they still draw.
+- **Standoff 600 → 1800 units** (~10 ft → ~30 ft), about two car lengths.
+- **Rams became LUNGES.** The real "alongside" mechanism wasn't the gap — it was a *permanent*
+  exemption: any cop within a flat `RAM_STRIKE_Z` (2000) of the bumper could ignore the standoff,
+  so it closed to the player's exact depth and parked there. Raising that constant re-creates the
+  bug. Replaced with an intermittent commit: hold the standoff, lunge every 3.5-7 s for 2.5 s,
+  fall back. A lunge is exempt from GUARD 1's speed ceiling (a 1★ cap of 1.03× the player makes
+  the strike take ~6 s and never land); GUARD 2 still bars passing. `RAM_STRIKE_Z` deleted.
+- **`endLunge()` on a landed ram** — fixes a real bug: a cop pinned at the player's depth was
+  re-registering a rear ram EVERY FRAME it sat there.
+
+**4. Star line + custom-mode wanted control.** RAM / HEAD-ON / PIT tallies dropped from the star
+line (they pushed the glyphs left into the weapon cells, unreadable); stars alone now centre on
+the line's own anchor. In Custom the empty `☆☆☆☆☆` row stays on screen and is **drag-to-set**,
+matching the vice and status bars: press a star to set that level, drag to scrub 0-5, drag off the
+left edge for 0. Steering is suppressed during the drag. Live cops are deliberately NOT wiped on a
+drop to 0 — they break off normally instead of vanishing every time a scrub passes through zero.
+
+**5. Tutorial chrome.** Both tours (title-screen Stage 1b and the in-game HUD tour) used a single
+3px stroked rectangle as the "highlight", which read as a flat yellow bar next to the phone
+menu's CSS `box-shadow` bloom. `_drawTourGlow()` stacks six concentric rounded strokes with
+distance falloff (0.05 → 1.0) plus a 0.10 interior wash — the Phaser equivalent of `@keyframes
+tutFlash`. `_placeTourBox()` now guarantees the copy never covers what it's describing: picks a
+band that clears the highlight (below → above → right → left) and steps the font down (×0.88,
+floor 15px) until it fits. This retires the title tour's hand-authored `box:{x,y,w}` coords (the
+plates step placed a 720px box at x590 and the clamp dragged it back over the plate column) and
+the HUD tour's "opposite half" rule (a tall box still reached back over its target).
+
+**Genre descriptions were on the wrong elements** and are swapped: `radio` (the station-name
+readout, display-only) now reads "Shows you what you're jamming to"; `btn_genre` (the note button,
+whose handler is `audio.nextStation()` — it CHANGES the station) gets the "plenty more to earn"
+copy.
+
+**6. First-drive windshield nudge.** At 0.25 mi the game freezes and shows, in the tutorial's own
+chrome: *"The first upgrade I recommend is replacing this busted ass windshield. Keep an eye out
+for the next rest stop."* Once ever (`rtr_tutWindshield`), stands down while any tour / the title
+screen / an existing pause is up, and the dismissing tap can't fall through into a steer (resume
+is deferred a tick). Re-testing onboarding means clearing `rtr_tutorialSeen`, `rtr_tutStage1/2`
+and `rtr_tutWindshield`.
+
+**7. TAKE A SNOOZE moved to AOK Camp.** Dropped from the shared `viceItems()` list, which removes
+it from AM/BM *and* Gas-N-Sip in one edit. At camp it REPLACES the free ad-gated `NAP IT OFF`.
+Owner call was a straight replacement; the snooze payload **keeps the nap's full Alertness
+restore** (`reduceVices: 0` + `tiredness: -100`) so the campground still has an alertness reset
+and you don't sleep off every drug only to wake up drowsy — flagged to the owner, revert to
+vices-only on request. Nothing sets `sleep`/`sleepAdMs` any more; GameScene's consumer was left
+intact for a future ad-gated item.
+
+**8. Rest-stop outcomes are tap-to-dismiss cards.** `_showMenuPopup()` (scrim + panel + TAP TO
+CONTINUE, depth 600, above the encounter card's 500, queued). Now on cards: every purchase
+confirmation, robbed-at-the-pump (now naming the amount), hot-springs bonus HP, radar detector
+installed, and all five job-accept lines (reflowed — the player has time to read the terms).
+Still fading toasts: "Need $X more", "CUSTOMERS ONLY", "Not available" — rejections shouldn't cost
+a tap per mis-click. Outcomes that used to fire their own toast now stash into `_buyOutcomeMsg`
+and REPLACE the generic "✓ BOUGHT X" line, so one purchase never stacks two cards. The job-accept
+path's special 5s status hold is deleted — the card holds until dismissed. **Menu-only:** on the
+road, GameScene's `_showPopup` transient text is untouched.
 
 ### 2026-07-28 (pt 2) — Custom mode: real pickups, real prices, unlimited wallet
 Local + test-passing (348) + builds clean. Not deployed.
@@ -451,8 +861,11 @@ Placeholder frames only; never playtested.
 **KNOWN OPEN — see `project_rtr_session_handoff` memory:**
 - Textured scrolling ground NOT built. Tile is registered (`ground_pnw_roadside`, seamless top-down
   1024px) but nothing draws it; ground is still the flat `palette.grass1` fill.
-- **Cop near-cull origin mismatch**: traffic uses camera-relative `relZ`, cops use player-relative
-  `cop.relativePos`, so a cop *behind* you is culled while the pursuit HUD counts down to 1.
+- ~~**Cop near-cull origin mismatch**: traffic uses camera-relative `relZ`, cops use
+  player-relative `cop.relativePos`, so a cop *behind* you is culled while the pursuit HUD counts
+  down to 1.~~ **WRONG DIAGNOSIS — CLOSED 2026-07-29.** The origins already agreed
+  (`getCopsForRender(camPos)`); the cop was drawn OUTSIDE the mirror glass by a double-counted,
+  non-depth-scaled lateral parallax term. See the 2026-07-29 → 30 changelog entry.
 - **HP starts at 100 on an un-upgraded beater** (base is 25, so `_upgradeFx.hp` is contributing +75).
 - **Unexplained green bar** at the horizon. Guessed the North Bend plate's ground band twice, wrong
   both times, both reverted. Isolate layers rather than guessing again.
@@ -5738,3 +6151,709 @@ to players as "Favors" / "Side Work" — shady character-driven roadside deals, 
 7. **Balance & abuse testing** — income per run by source (recordEarn tags), offer/accept/
    complete rates, checkpoint-reload duplication tests. Sprite/distance income revisited
    HERE with real data (sprites stay $10×mult until then).
+
+---
+
+# Chapter 9 — Ground Tile Art Spec
+
+# Road Trip Roulette — roadside ground tile spec
+
+**This is NOT the same as the biome parallax bands** (see Chapter 10). Those are distant
+mountain silhouettes on the horizon, seen edge-on. These are the **ground surface itself** —
+the dirt, grass and gravel immediately beside the road — seen from **straight above**.
+
+The renderer takes this flat overhead tile and applies the road's own perspective to it per
+segment, so it tracks hills and curves. Which means:
+
+> **Do not draw any perspective into the tile.** No vanishing point, no
+> receding ground, no horizon. If perspective is baked in, it gets applied
+> twice and the ground shears.
+
+Finished PNGs go in `public/assets/scenery/ground_textures/final/`.
+
+---
+
+## Non-negotiable technical rules
+
+1. **1024 × 1024 px PNG. Power-of-two is mandatory.**
+   The tile is uploaded with `GL_REPEAT`, which on WebGL1 requires
+   power-of-two dimensions. A non-POT tile makes the code disable the whole
+   ground layer and log a warning — it will not render at all. 1024 is the
+   proven size; 512 or 2048 also work. 1000 or 1200 do **not**.
+
+2. **Seamless in BOTH axes.** It tiles infinitely left-right *and*
+   forward-back. Check by assembling a 2×2 and looking for edges or a cross.
+
+3. **Straight-down orthographic view.** Camera directly overhead, no tilt,
+   no perspective, no horizon.
+
+4. **Flat, even, directionless lighting.**
+   No cast shadows, no sun direction, no vignette, no darkened corners. Baked
+   lighting repeats visibly across the tile grid and fights the game's own
+   time-of-day and headlight system. Ambient, overcast, shadowless.
+
+5. **Fully opaque.** No alpha channel needed.
+
+6. **No dominant hero feature.** One distinctive boulder, log or bush will
+   reappear on a regular grid and instantly read as wallpaper. Keep it evenly
+   busy — many small features, no focal point.
+
+---
+
+## Scale — the thing that got this wrong the first time
+
+Each tile covers roughly **48 feet of real ground** (`TILE_FT` in
+`src/road/GroundPlane.js`). At 1024 px that is about **21 px per foot**:
+
+| Real feature | Size in the tile |
+|---|---|
+| 3 ft grass clump | ~64 px |
+| 1 ft weed tuft | ~21 px |
+| 6 in stone | ~11 px |
+| 2 in gravel | ~4 px |
+
+Aim for detail at that scale. The first tile was authored assuming ~6 ft per
+tile, which made every feature roughly 8× too small — the game renders at
+940 × 450 internally, so it all averaged out to a flat olive wash with no
+visible texture at all. **Err on the side of larger, bolder features.**
+
+---
+
+## The tiles
+
+One per biome. All 8 currently fall back to the single PNW tile, so any
+subset is useful — they can be added one at a time.
+
+Naming: `<name>_ground_1024.png`, registered as texture key `ground_<name>`.
+
+| File | Biome / miles | What it should be |
+|---|---|---|
+| `pnw_roadside_ground_1024.png` ✅ *exists* | West Side forest, mi 20–45 | Wet PNW roadside: mossy dirt, patchy grass, pine needles, small dark stones |
+| `north_bend_ground_1024.png` | North Bend, mi 26–40 | Same wet greenery but coarser — fir needle litter, moss, damp gravel shoulder |
+| `pass_alpine_ground_1024.png` | Snoqualmie Pass, mi 45–58 | Coarse alpine gravel, sparse tough grass, granite chips, bare wet rock. **No snow — the engine adds that.** |
+| `easton_ground_1024.png` | Easton transition, mi 58–78 | Drying out: pine needles over dusty soil, sparse bunchgrass, more bare dirt |
+| `kittitas_ground_1024.png` | Kittitas foothills, mi 78–122 | Dry tan bunchgrass, cracked pale soil, sage twigs, scattered pebbles |
+| `vantage_basalt_ground_1024.png` | Vantage, mi 122–142 | Dark basalt scree and angular broken rock, sparse dry grass between |
+| `columbia_ground_1024.png` | Columbia Basin, mi 142–210 | Irrigated-farm shoulder: silty pale soil, sparse green weeds, tyre-flattened grass |
+| `palouse_ground_1024.png` | Palouse, mi 210–293 | Golden wheat stubble and dry straw over dark loess soil |
+
+### Not needed
+
+- **No snow variants.** Snow is applied by the engine — the tile fades out
+  under the blanket and the road/roadside go pure white at mile 55.
+- **No road surface.** The tarmac, lane lines and rumble strip are drawn
+  procedurally. These tiles are the ground *beside* the road only.
+
+---
+
+## Delivery
+
+PNG, 1024 × 1024, opaque, seamless both axes, overhead, flat lighting.
+Drop into `public/assets/scenery/ground_textures/final/` — then it's one line
+per tile in the `GROUND_TILES` table in `src/road/GroundPlane.js` to wire up.
+
+Live scale check once a tile is in: `localhost:3000/?dev=1&tile=48` — change
+the number to preview the tile at a different real-world size without a
+rebuild.
+
+---
+
+# Chapter 10 — Biome Parallax Band Art Spec
+
+# Road Trip Roulette — biome parallax band art spec
+
+24 images. These replace the procedural placeholders generated by
+`scripts/buildBiomeBands.js`. Drop the finished PNGs into
+`public/assets/biomes/` using the **exact filenames** below — nothing in code
+needs to change.
+
+---
+
+## Non-negotiable technical rules
+
+These four are what make or break the art. Everything else is taste.
+
+1. **2048 × 640 px PNG with a real alpha channel.**
+   Not JPG. Not a white background. Transparency is load-bearing.
+
+2. **Horizontal tiling — DON'T try to solve this in the art.**
+   Each band scrolls sideways forever, so it ultimately has to loop. But
+   generative tools do not reliably produce a seamless loop no matter how the
+   prompt is phrased, and burning attempts on it wastes everyone's time.
+
+   **Instead: draw a straight panorama, wider than 2048 if convenient, and
+   hand it over as-is.** The looping is a mechanical post-process (offset by
+   half the width, heal the join) and is done on the code side. Just don't
+   put anything unique or eye-catching hard against the left or right edge —
+   the join lands there.
+
+3. **Bottom-anchored silhouette, transparent sky.**
+   The terrain is drawn UP from the bottom edge of the canvas. Everything
+   above the ridgeline must be fully transparent. **Do not draw sky, clouds,
+   sun, gradient, or ground plane** — the game supplies all of that. Each
+   band is a cutout that gets seated on the horizon line.
+
+4. **No horizon line, no foreground, no road.**
+   Just the landform. The road, roadside and weather are rendered separately
+   and drawn on top.
+
+Authoring at 2048 px wide is deliberate: bands are scaled DOWN to an 800 px
+game viewport, so detail needs headroom.
+
+### Three layers per biome
+
+Each biome is three bands at different parallax speeds. Treat them as
+receding depth planes and apply **aerial perspective** — the far layer should
+be the palest, haziest, lowest-contrast; the near layer the darkest and most
+saturated.
+
+| Layer   | Scroll rate | Role |
+|---------|-------------|------|
+| `far`   | 0.06 (slowest) | Distant range on the horizon, heavy atmospheric haze |
+| `ridge` | 0.14 | Mid-distance hills, some form and shading |
+| `near`  | 0.30 (fastest) | Closest treeline / bluffs, darkest, most detail |
+
+The `near` layer is seated 26 px lower than `far`, so only its crowns clear
+the horizon. Don't fill the whole canvas height on `near` — a band roughly
+1/3 the canvas height is right.
+
+---
+
+## The 24 files
+
+Route is I-90 from Seattle to Vantage (mile 132), then **WA-26** east across
+the Columbia Basin to Pullman. Eastern I-90 scenery (Moses Lake, Sprague) is
+**not** on this route.
+
+### 1. `westside_forest` — miles 20–26 and 40–45
+
+Wet, enclosed Douglas fir forest west of the Cascades. Dense, dark, green.
+You cannot see any distant range from in here — that is the point.
+
+| File | Notes |
+|---|---|
+| `bio_westside_forest_far.png` | **FULLY TRANSPARENT — draw nothing.** An enclosed wet forest has no visible distant range. A low flat shape here renders as a dead-straight rule across the horizon, which is worse than nothing. |
+| `bio_westside_forest_ridge.png` | Soft conifer-covered hills, muted blue-green haze |
+| `bio_westside_forest_near.png` | Dense fir treeline, very dark green, irregular crown heights |
+
+### 2. `north_bend` — miles 26–40
+
+North Bend / Mount Si country. Steep forested walls of the Snoqualmie valley,
+one dominant rocky-faced peak. Green and wet, not alpine.
+
+| File | Notes |
+|---|---|
+| `bio_north_bend_far.png` | Distant valley walls, pale blue-grey haze |
+| `bio_north_bend_ridge.png` | Steep timbered ridge with one prominent rocky summit shoulder |
+| `bio_north_bend_near.png` | Close fir treeline, deep green |
+
+### 3. `pass_alpine` — miles 45–58  *(the only biome with snow)*
+
+Snoqualmie Pass. **Important:** at 3,015 ft this is the *lowest* major I-90
+crossing of the Cascades — broad, rounded, heavily timbered ridges with
+conifers nearly to the summits and bare rock only on a few high faces.
+It is **not** the Alps, Tetons or Sawtooths. Avoid razor spires and uniform
+sawtooth peaks; that was exactly what was wrong with the placeholder.
+
+Deep winter: the road is a total whiteout here, so the range should read as
+substantially snow-covered, with the snowline wandering with terrain and
+aspect rather than cutting flat across.
+
+| File | Notes |
+|---|---|
+| `bio_pass_alpine_far.png` | Broad snow-capped ridges, 1–2 dominant summits with long shoulders, cool blue-grey rock, heavy snow above an irregular snowline |
+| `bio_pass_alpine_ridge.png` | Mid ridges, snow-dusted timber, grey-green |
+| `bio_pass_alpine_near.png` | Snow-laden fir treeline, near-black green |
+
+### 4. `easton_transition` — miles 58–78
+
+The rain shadow crossing. Forest thins and dries out — fir gives way to
+ponderosa pine, green shifts toward olive and straw.
+
+| File | Notes |
+|---|---|
+| `bio_easton_transition_far.png` | Rounded drying hills, grey-green |
+| `bio_easton_transition_ridge.png` | Open pine slopes, olive |
+| `bio_easton_transition_near.png` | Sparse ponderosa treeline, gaps between trees |
+
+### 5. `kittitas_foothills` — miles 78–122
+
+Dry Kittitas valley foothills. Treeless, tan and gold grass hills with
+occasional rimrock benches. Big open sky country.
+
+| File | Notes |
+|---|---|
+| `bio_kittitas_foothills_far.png` | Smooth bare tan ridges |
+| `bio_kittitas_foothills_ridge.png` | Grass hills with low rimrock steps, dusty gold |
+| `bio_kittitas_foothills_near.png` | Low sage bluffs, near-flat, brown-gold |
+
+### 6. `vantage_basalt` — miles 122–142  *(route landmark)*
+
+The Columbia River gorge at Vantage. **Flat-topped basalt benches and
+columnar cliffs** — stacked horizontal terraces, vertical column striation in
+the rock faces. This silhouette is the most recognisable on the whole route;
+it must read as terraced plateau, not as generic brown hills.
+
+| File | Notes |
+|---|---|
+| `bio_vantage_basalt_far.png` | Distant flat-topped mesa rim, pale tan |
+| `bio_vantage_basalt_ridge.png` | Basalt cliff with visible vertical columns, warm grey-brown |
+| `bio_vantage_basalt_near.png` | Close columnar basalt bench, dark brown-grey |
+
+### 7. `columbia_irrigated` — miles 142–210 (WA-26)
+
+Irrigated Columbia Basin farmland. Almost flat — circle-pivot fields, the
+occasional windbreak, a distant low rim. Green crops against dry ground.
+
+| File | Notes |
+|---|---|
+| `bio_columbia_irrigated_far.png` | Near-level distant rim, very low relief, pale |
+| `bio_columbia_irrigated_ridge.png` | Low rolling field edges, muted green |
+| `bio_columbia_irrigated_near.png` | Flat crop line with occasional tree windbreaks, deeper green |
+
+### 8. `palouse_hills` — miles 210–293
+
+The Palouse into Pullman. Famously smooth, steep, dune-like wheat hills —
+rounded, sensuous, no trees, contour-farmed stripes. Gold and tan.
+
+| File | Notes |
+|---|---|
+| `bio_palouse_hills_far.png` | Soft rolling wheat hills, pale gold |
+| `bio_palouse_hills_ridge.png` | Steeper dune-like hills, contour stripes, gold |
+| `bio_palouse_hills_near.png` | Close wheat hill shoulders, deeper amber |
+
+---
+
+## Delivery note
+
+Deliver whatever the tool produces most naturally — these are all fixed on
+the code side, so none of them are worth a retry:
+
+- **No alpha?** Put the terrain on **flat magenta (#FF00FF)**. Keys out cleanly.
+- **Bands stacked in one image?** Fine, they get sliced.
+- **Wrong size?** Fine, they get resized to 2048 × 640.
+- **Not seamlessly tiling?** Expected — the loop is made in post (see rule 2).
+
+The only things that genuinely have to be right in the source, because they
+cannot be recovered afterwards:
+
+1. **Straight-down framing with no sky** — the band is a cutout seated on the
+   horizon, so a photo with sky, sun or clouds baked in is unusable.
+2. **No perspective ground plane or road** in the image.
+3. **Correct subject** — right landform for the right biome (see the table).
+4. **Nothing unique jammed against the left or right edge** — that's where
+   the loop join gets made.
+
+---
+
+# Chapter 11 — NPC Dialogue Reference
+
+# Road Trip Roulette — NPC Dialogue Reference
+
+**Companion spreadsheet: `npc_dialogue.csv` in the repo root** — same content, long/tidy
+format (one row per quote/fact/choice, filterable `Category` column), opens directly in
+Excel/Numbers/Sheets. **Status as of 2026-07-29: rewrite in progress.** The owner is editing
+both toward "edgier, funnier" and will hand back edits to paste into the actual data files
+(`src/data/encounters.js`, `src/systems/MissionSystem.js`, `src/scenes/RestStopScene.js`) —
+this chapter is the reference snapshot, not necessarily what's live in code by the time it's
+read.
+
+Three separate systems, all rest-stop only (nothing pops up while driving):
+
+1. **Encounter cards** (`src/data/encounters.js`) — 14 named NPCs with a portrait, a quote, a real-world "fact" line, and 2-4 dialogue choices. One shows per pull-in, weighted by rarity. This is the meat — rewrite these.
+2. **Mission passengers & contacts** (`src/systems/MissionSystem.js`) — a separate system entirely. 6 named riders you can accept as a paid "Favor" job (ask/pickup/mid-route/dropoff lines), plus 8 generic job-giver names with tiered greeting lines that scale with how many jobs you've run for them.
+3. **Vignette lines** (`src/scenes/RestStopScene.js`) — one throwaway line of "party crowd" chatter per stop, no choices, no portrait. 3 variants per stop, picked at random. Lowest priority.
+
+---
+
+## 1. Encounter cards
+
+### Street Weirdo — `seattle_intro_weirdo`
+Seattle, mile 4. **Guaranteed on your very first pull-in, never repeats.**
+> "Pullman by night? In THIS old heap? That mountain eats such rides for cheap."
+
+*Fact: I-90 lifts from Seattle's sea-level shore to three thousand feet where the Pass-winds roar.*
+
+- **Ask about the pass** → reveals the snow hazard ahead
+  - *"Past North Bend it's chains or a prayer — pick one, pal, and climb up there."*
+- **Give him a buck** ($1)
+  - *"A giver! How noble, how dumb — you'll die as humble as you've become."*
+- **Just drive** — no effect
+
+---
+
+### Chain Guy — `north_bend_chain_guy`
+North Bend, mile 32. **3-node branching dialogue.**
+
+**greet:**
+> "The pass turns cruel, the snow won't quit — chains beat a physics class dug in a pit."
+
+- **Buy chains** ($80) → grants snow-chains buff, reveals snow hazard, ends
+- **Eighty bucks? Let's talk.** → goes to *haggle*
+- **How bad is it up there, really?** → goes to *passInfo*
+- **Thanks anyway — I'll risk it** — no effect, ends
+
+**haggle:**
+> "Fifty-five cash — no receipt, no refund, no eye; that's my whole pitch, so buy or say bye."
+
+- **Deal** ($55) → 65% chains buff / 35%: *"He sold you chains that just look tough. Society rolls on, unbothered enough."*
+- **Back to full price** → returns to *greet*
+- **Walk away** — no effect, ends
+
+**passInfo:**
+> "Bad enough I'm here and not in bed — whiteout up top, and the plows are losing, it's said."
+
+- **Fine. The chains.** → returns to *greet*, reveals snow hazard
+- **Thank him and leave** → reveals snow hazard, ends
+
+---
+
+### Ski Bum — `pass_ski_bum`
+Snoqualmie Pass, mile 53. *(Same face reappears as a mission passenger — see §2. Same portrait art, different context: a one-off roadside chat here vs. a paid ride-along there.)*
+> "Past the tunnel it's whiteout, thick and dread — slow is smooth, and smooth is not-yet-dead."
+
+*Fact: Snoqualmie's summit, three-oh-one-five high, is the lowest I-90 Cascade pass you'll spy.*
+
+- **Buy his thermos** ($15) → warm buff, +10s, alertness up
+  - *"Coffee so strong it could strip a door — you're wide awake and craving more."*
+- **Ask the safe line** → reveals whiteout hazard
+- **Wave and go** — no effect
+
+---
+
+### Long-Haul Mike — `vantage_wind_trucker`
+Vantage, mile 137.
+> "The Vantage wind flings semis like carts astray — two hands on the wheel, or you'll blow away."
+
+*Fact: At Vantage the Columbia's crossing runs wide, with bare, hard crosswinds on every side.*
+
+- **Take the wind tip** → wind-ready buff, reveals crosswind hazard
+  - *"Lean in, don't fight it — that's the trick; out here you bend, or the wind hits quick."*
+- **Split his fuel run** ($30) → 70%: +40 mi fuel / 30%: +15 mi fuel
+  - *"Half the diesel he swore he'd hand — that's trucker math, you understand."*
+- **Head out** — no effect
+
+---
+
+### Farm Worker — `othello_farm_gas`
+Othello, mile 184.
+> "Real station's far — a hike, a slog; I've a jerry can out back… don't mind the color or the smog."
+
+*Fact: Round Othello the Basin's irrigated and wide — long dark stretches, no service, no guide.*
+
+- **Buy the can** ($40) → 80%: +55 mi fuel / 20%: +25 mi fuel and −3 HP
+  - *"That was NOT just gas, it's plain — the engine coughs and bucks in pain."*
+- **Ask about the road ahead** → reveals farm-equipment hazard
+  - *"Watch for tractors dark as pitch — they own these nights, and every ditch."*
+- **Risk it on empty** — no effect
+
+---
+
+### Startup Founder — `bellevue_traffic_app`
+Bellevue, mile 12.5.
+> "Our app dodges every trap clear to Pullman's gate — freemium, of course; the free tier's the letdown you'll hate."
+
+*Fact: Bellevue rose from a sleepy suburb's hush to glass-tower tech in two decades' rush.*
+
+- **Buy premium** ($60) → 70%: −1 wanted star, +30s
+  - *"It actually works — two traps glide by unseen; she's already pitching a Series B, it seems."*
+  - 30%: *"'Servers are scaling!' she chirps — then the app falls flat; and so does your sixty, just like that."*
+- **Ask for the free version** → reveals speed-trap hazard
+- **Keep your data** — no effect
+
+---
+
+### Hitchhiker — `issaquah_hitcher`
+Issaquah, mile 18. *(Same face reappears as a mission passenger — see §2.)*
+> "I need a pass-bound lift, that's true — cash up front, no chit-chat too; best offer you'll hear the whole day through."
+
+*Fact: Issaquah rests where the Cascades rear up, the last place the suburbs finally give up.*
+
+- **Pick her up** → 60%: +$40
+  - *"She pays, reads the curves better than your GPS could, then's gone at the summit — a passenger good."*
+  - 40%: +1 wanted star — *"Turns out she's on some watch-list, it seems — now you're right beside it, in the cops' bad dreams."*
+- **Take gas money, no ride** → +$20
+  - *"'Cold. Respect,' she says, unfazed — hands you a twenty and walks off unamazed."*
+- **Drive on** — no effect
+
+---
+
+### Park Ranger — `cleelum_ranger`
+Cle Elum, mile 84.
+> "Elk cross at dusk and don't check their blind side — and neither, it seems, do you when you ride."
+
+*Fact: The wooded Cle Elum run, foothill-lined, is prime elk country of the roaming kind.*
+
+- **Heed the warning** → elk-ready buff, reveals elk hazard
+  - *"Slow at the tree lines, mind your speed — they're bigger than your car's whole creed."*
+- **Point her at a "lost hiker" up the road** → −1 wanted star
+  - *"She radios it in, thrown off the scent — your record breathes; the heat's misspent."*
+- **Nod and leave** — no effect
+
+---
+
+### Swimsuit Girl — `thorp_motel_pool` — NEW, built 2026-07-29
+Thorp, mile 101.
+> "Thorp gets so quiet once the interstate clears — but the pool's still warm, and so are the beers."
+
+*Fact: Thorp's a speck by the Yakima's bend, home to a century-old grist mill, my friend.*
+
+- **Rent the room** ($40) → −40 tiredness, +45s (costs time — the "big rest" option)
+  - *"She flips you the key with a wink, sly and slow — 'Shower's hot, bed's made… take it slow.'"*
+- **Take a poolside drink** (free) → +10 hydration
+  - *"She hands you a glass, ice clinking with cheer — 'On the house, cowboy. Long roads breed thirst, I hear.'"*
+- **Politely decline and go** — no effect
+
+---
+
+### Diner Waitress — `ellensburg_diner`
+Ellensburg, mile 109. **3-node dialogue, remembers if you've met her before.**
+
+**greetFirst** (first visit):
+> "Rodeo's in, so the coffee's fresh and the regulars are wild; you look on the run from something, child — pie?"
+
+- **Coffee & pie** ($12) → +4 HP, +15s, fullness up, alertness up
+  - *"Best call you've made the whole trip long — low bar, sure, but it's not wrong."*
+- **What's ahead of me?** → goes to *roadTalk*
+- **Just the check, thanks** — no effect
+
+**greetReturn** (subsequent visits):
+> "Well, look who survived the road's mean tricks — same booth's free, and you're getting pie; don't fight it, that's the fix."
+
+- **The usual** ($12) → same as above
+  - *"Knew it," she grins; the pie appears before you've sat, allaying fears.*
+- **Any news up the road?** → goes to *roadTalk*
+- **Just passing through — take care** — no effect
+
+**roadTalk:**
+> "Past Vantage the wind will part your hair through the screen — all morning the truckers came in white and green."
+
+- **Better fuel up on pie then** ($12) → same food buffs, reveals wind hazard
+  - *"Smart — nobody fights the wind and wins when their stomach's thin."*
+- **Thank her and hit the road** → reveals wind hazard
+
+---
+
+### Roadside Grandma — `hatton_grandma`
+Hatton, mile 205. **3-node dialogue.** *(Same face reappears as a mission passenger — see §2.)*
+
+**greet:**
+> "Few stop in Hatton, dear, it's true — I keep gas for the ones who do, and cookies… but the gas is safer for you."
+
+- **Buy her gas** ($35) → +50 mi fuel
+  - *"Drive safe, or don't, my dear — either way, the news'll reach my ear."*
+- **Safer? What's in the cookies?** → goes to *cookies*
+- **Why Hatton, of all places?** → goes to *whyHatton*
+- **Politely flee** — no effect
+
+**cookies:**
+> "Butter and sugar and a recipe old — one the county begged me to leave untold; one won't hurt you… or so I'm told."
+
+- **Take a cookie** → 70%: +3 HP, fullness up
+  - *"Strangely restoring, warm to the bone — you feel watched, but not alone."*
+  - 30%: fullness up, but lose 20s — *"You blink, and twenty minutes have flown — that's one fine cookie you've been thrown."*
+- **Maybe the gas instead** → returns to *greet*
+- **Decline politely and leave** — no effect
+
+**whyHatton:**
+> "Somebody must watch this stretch, my dear; the road claims the careless who wander near — I just tidy the mess they leave here."
+
+- **…About that gas** → returns to *greet*
+- **Thank her and back away slowly** — no effect
+
+---
+
+### Tow Driver — `washtucna_tow`
+Washtucna, mile 228.
+> "Three wrecks a week I haul from this bend — business is good, which should worry you, friend."
+
+*Fact: Washtucna's a thin wheat-country line, with long, long gaps 'twixt help and sign.*
+
+- **Prepay a tow discount** ($50) → tow-insurance buff
+  - *"Crash, and I'll judge you — but only a bit; call it a discount on your fit."*
+- **Have her bang out a dent** ($40) → +12 HP
+  - *"A mallet, a grunt, a whack, a tad — and your car looks marginally less sad."*
+- **Wave her off** — no effect
+
+---
+
+### Shade-Tree Mechanic — `ellensburg_coolant`
+Ellensburg, mile 109 (alternate to the Diner Waitress at the same stop).
+> "Basin-bound? Top your coolant off right here — past Vantage the shade quits and the gauge climbs, I fear."
+
+*Fact: East of the Cascades the road drops to high desert's face — long, hot, and shadeless, the Columbia Basin's embrace.*
+
+- **Top off the coolant** ($25) → cools the engine
+  - *"He fills the radiator, spins the fan with care: 'That'll hold — probably. Say a prayer.'"*
+- **Fill your jug from his hose** → hydration up
+  - *"Warm hose water — not cold, but wet; he waves off your coins, no debt."*
+- **I'll risk it** — no effect
+
+---
+
+### Lemonade Kids — `othello_lemonade`
+Othello, mile 184 (alternate to the Farm Worker at the same stop).
+> "Ice-cold lemonade, mister — best in the Basin, we swear! (It's also the ONLY one anywhere.)"
+
+*Fact: The Columbia Basin bakes and reels each summer's turn — past the Saddle Mountains, triple digits burn.*
+
+- **Buy the whole pitcher** ($5) → hydration up a lot
+  - *"Worth every cent you're giving — your parched tongue rejoins the living."*
+- **Just one cup** ($1) → hydration up a little
+  - *"Cold and impossibly sweet, that sip — you smack your lips and resume the trip."*
+- **Wave and go** — no effect
+
+---
+
+## 2. Mission passengers & contacts
+
+Separate system, offered as paid "Favor" jobs at rest stops — accept one, drive them to their drop-off. Each has 4 lines routed through the popup machinery at pickup / mid-route / drop-off, plus the pitch line ("ask") shown when the job is offered.
+
+### Nervous Student
+Quirk: **nervous** (a single hard crash and they bail).
+- **Ask:** "I missed the last bus and my finals won't wait — I can pay; just drive like my mom's at the gate."
+- **Pickup:** "Seatbelt. Both hands. Great. Perfect. Love it."
+- **Mid-route:** "You're doing great. I'm saying that for both of us."
+- **Dropoff:** "We lived! Here — take it before I count it."
+
+### Hitchhiker
+Quirk: **thrill-seeker** (tips extra if the ride got spicy). *Same portrait as the Issaquah encounter NPC.*
+- **Ask:** "Need a lift up the road a spell — I chip in for gas, don't scream, ride well, and tip good coin for a story you tell."
+- **Pickup:** "Music's yours, pedal's yours. Impress me."
+- **Mid-route:** "Is that all this thing does? Kidding. Mostly."
+- **Dropoff:** "Decent run. Here's the fare."
+
+### Desert Oddball
+Quirk: **fugitive** (bails at the next stop if you hit 2+ wanted stars).
+- **Ask:** "I need to be gone from here, and swift — and skip any cops, if you catch my drift."
+- **Pickup:** "If anyone asks, I've been asleep since Tuesday."
+- **Mid-route:** He checks the mirror more than you do.
+- **Dropoff:** "You never saw me. The money saw you, though."
+
+### Roadside Grandma (passenger)
+Quirk: **carsick** (cumulative crash damage runs her out of patience). *Same portrait as the Hatton encounter NPC.*
+- **Ask:** "My grandson never calls or drives me a lick — you look sturdy, dear; smooth roads, and no tricks."
+- **Pickup:** "I get queasy, dear. Pretend you're carrying soup."
+- **Mid-route:** "My late husband drove like this. He's late for a reason."
+- **Dropoff:** "A gentleman. Or close enough. Here you are, dear."
+
+### Ski Bum (passenger)
+Quirk: **nervous**. *Same portrait as the Snoqualmie Pass encounter NPC.*
+- **Ask:** "Board's waxed, but my ride just fell right through — get me up the road and the lift-ticket money's for you."
+- **Pickup:** "Powder day, man. Every minute counts. But like, safely."
+- **Mid-route:** "Whoa. Okay. The mountain isn't going anywhere, right?"
+- **Dropoff:** "Righteous. Here's the cash — first run's for you."
+
+### Old-Timer
+Quirk: **carsick**.
+- **Ask:** "Truck died. There's a doctor waiting down the way, and my gut's older than your car — go easy, I pray."
+- **Pickup:** "Drove this road before it had lines painted on it."
+- **Mid-route:** "Mind the bumps, son. Breakfast is negotiating."
+- **Dropoff:** "Smoother than my nephew, and he does it for a living."
+
+### Mission contacts (generic job-givers)
+Every stop's plain delivery/rush/heat/weather jobs are labeled with one of **8 names, picked deterministically per stop**: Marcy, Dale, Rhonda, Gus, Pep, Lorna, Sal, Tick. No individual personality — just a name on the offer — but the greeting scales with your history:
+
+- **After a failed job:** "Heard how the last one hit the wall — cargo's gone, we'll square it all; clean slate, driver, no more said, if you're still rolling on ahead."
+- **1 job completed:** "You delivered last time, I recall — got more to move, if you're up for the haul."
+- **2-7 jobs completed:** "Back again? That's [N] runs you've made — I'm saving the sweetest jobs for your trade."
+- **8+ jobs completed:** "There's my legend, come to call — the big runs go to you, that's all; nobody else gets word of these, so take your pick of them with ease."
+
+---
+
+## 3. Rest-stop crowd chatter (vignette lines)
+
+One-liners shown on entry, no choices. 3 per stop, one picked at random each visit.
+
+**Bellevue:** "Tell Mike I'll be there as soon as I find my keys." · "Bellevue Square parking lot, 11pm — bring the good stuff." · "My ex works at the bank — no, the OTHER bank."
+
+**Issaquah:** "Saw two cops at the QFC on 17th. Take the back roads." · "Did you grab the salmon? It's a Pullman tradition." · "My cousin's couch is open if you blow the clock."
+
+**North Bend:** "Twin Peaks reruns at the diner — order pie, not the coffee." · "Snow chains on sale next door. Just sayin'." · "The pass is closing in three hours. MOVE."
+
+**Cle Elum:** "You driving?? You're WASTED." · "Bakery's got those salted-caramel things. Ten minutes max." · "My truck broke down. Five star, no luck."
+
+**Ellensburg:** "WSU rivalry game tonight — half of Pullman is on this road already." · "Coffee's on. You look like hell." · "Watch for state troopers around Kittitas. They love a quota."
+
+**Vantage:** "The bridge view is unreal. Don't crash into it." · "Last gas before the basin. I'm serious." · "Wind's up — mind the trailer."
+
+**Royal City:** "Free apples in the orchard, just don't get caught." · "My uncle says the cops here all play poker on Friday nights." · "It's gonna be a desert sunset. Floor it."
+
+**Othello:** "Mexican food at the truck stop — life-changing." · "You missed Royal? They had the good energy drinks." · "Watch for combines on 26 — those things are rolling roadblocks."
+
+**Washtucna:** "Population: 200. Cop: 1. Don't test him." · "My grandma made cookies for the party. Don't eat them all." · "Last shower in 50 miles. Fair warning."
+
+**La Crosse:** "Almost there. Don't blow it now." · "Everyone's asking where the f— you are." · "Pullman's lit up like a Christmas tree tonight."
+
+---
+
+## Loose ends worth knowing
+
+- **4 registered NPCs still have zero dialogue anywhere:** `night_clerk`, `patrol_sympath` (Off-Duty Deputy), `chip_seller` (Chip Guy), `hiker_one_boot` (Hiker, One Boot). Say the word and draft encounters or passenger jobs for them.
+- **Most portraits now have real art, not placeholders.** 13 of the 14 encounter NPCs render actual artwork (`public/assets/npc/*.png`) — only **Shade-Tree Mechanic** and **Lemonade Kids** still fall back to a color-tinted name placeholder. Verify current state with `ls public/assets/npc/` before trusting this claim — it goes stale fast (this doc said "no portrait art exists yet" for several days after it stopped being true).
+- **Three characters share a portrait across both systems, deliberately:** Ski Bum, Hitchhiker, and Roadside Grandma each appear once as a rest-stop encounter and once as a hireable mission passenger, using the *same* portrait art both times — same face, two different situations, not a naming collision.
+- Nothing here is HUD or vice-bar code, so this is safe to edit freely.
+
+## 4. Shop-staff greeters (`SHOP_GREETERS`) — built 2026-07-30, revised same day
+
+Separate from the two systems above — these gate the shop screen itself, not a rest-stop
+pull-in. `public/assets/npc/businesses/` holds one staff portrait per shop brand, each a
+close-up of the SAME character already visible in that shop's storefront background art.
+First time you tap a shop placard, that brand's staffer greets you on the same portrait-card
+UI the roadside encounters use; picking any choice closes the card and opens the actual shop
+(item list + storefront photo). `once: true` — a shop you've already met opens straight to the
+menu on every visit after the first.
+
+**First draft gave all 11 unique personality lines — the owner walked that back same-day as
+scope creep.** Only 1-2 shops per stop are meant to be real content; everywhere else is
+deliberately generic. Every shop now uses the SAME template unless it's today's mission shop
+(below):
+
+> *"Welcome in! What can I help you with?"* — plus the rotating town fact, and exactly 3
+> choices: **"Let me see what you have"** / **"Just window shopping today"** / **"Any idea
+> what the road's like up ahead?"** (the last two carry a short flavor-only reply, no
+> mechanical effects — this fires on every first shop ENTRY, not as a rare gamble, so giving it
+> real economic stakes would make bouncing between shops farmable).
+
+### The mission shop — "it's up to the player to find them"
+
+One shop per STOP (not per brand) is that stop's real mission contact — reusing the EXISTING
+mission system unchanged (the same 8-name contact pool, same job-offer cards, same portrait
+pool `long_haul_mike`/`tow_driver`/`farm_worker`/`street_weirdo` already used by the exit-pitch
+card). Nothing new was authored for this — it's the pre-existing `_buildMissionEncounter()`,
+now ALSO reachable by walking into the right shop, not just by hitting the road.
+
+- **Which shop:** `RestStopScene._missionShopKeyFor(stopId)` — deterministic hash of the stop
+  id (same pattern as the existing per-stop contact-name pick), restricted to shop keys this
+  stop's `amenities` actually include. Owner's spec: **"switch it up"** — varies stop to stop
+  (North Bend landed on Les Schwasted in testing), not a fixed brand, and stable for the whole
+  visit (doesn't reshuffle while you're standing there).
+- **One shared gate, both discovery paths:** finding the contact in their shop and the old
+  exit-pitch (HIT THE ROAD) both consume the SAME `_pendingMissionCard` flag — whichever
+  happens first for this visit is the only one that fires. The exit pitch was NOT removed;
+  this is additive. (Flagged to the owner as an open question: whether the exit pitch should go
+  away now that shops are discoverable, or intentionally stay as a catch-all for missing it.)
+- **Fallback:** if the mission system has no open offers for this stop when the mission shop is
+  entered (e.g. Custom/no-score mode), it falls through to the ordinary generic greeter rather
+  than leaving the shop looking broken.
+
+| Shop key | Brand | Generic speaker |
+|---|---|---|
+| `gas` | Huff's Gas | Huff's Attendant |
+| `cargo` | CarGo | CarGo Dispatcher |
+| `hunting` | CowBella | CowBella Shopkeeper |
+| `camp` | AOK Camp | AOK Camp Host |
+| `lord` | Lord Motors | Lord Motors Manager |
+| `suck` | Sam's Used Car Kingdom | Sam's Owner |
+| `vices` | Gas-N-Sip | Gas-N-Sip Clerk |
+| `ambm` | AM/BM | AM/BM Clerk |
+| `parkride` | Metro Park & Ride | Park & Ride Courier |
+| `schwasted` | Les Schwasted | Les Schwasted Tech |
+| `fap` | Finesse Autobody & Performance | Finesse Technician |
+
+**Status:** built and verified end-to-end in a live browser — generic greeter renders
+correctly on a non-mission shop, the mission shop correctly shows a real contact (Dale, 4 open
+jobs, in the North Bend test) instead of the generic line, dismissing either opens the shop
+behind it, and a second visit to an already-met shop skips straight through. Data lives in
+`SHOP_GREETERS` in `src/data/encounters.js`; the gate and the mission-shop pick are both in
+`RestStopScene.js` (`_showShopGreeter()`, `_missionShopKeyFor()`).

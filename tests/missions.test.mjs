@@ -14,8 +14,11 @@ import {
   FRAGILE_MAX_DAMAGE, TIMED_SEC_PER_MI, TIMED_GRACE_SEC,
   HARD_CRASH_HP, CARSICK_MAX_DAMAGE, FUGITIVE_MAX_STARS, THRILL_TIP,
   HEAT_ESCAPE_MIN_STARS, HEAT_ESCAPE_MILES, WEATHER_CONTRACTS,
+  OFFERS_PER_STOP, ACTIVE_PER_BUSINESS,
 } from '../src/systems/MissionSystem.js';
 import { REST_STOPS } from '../src/constants.js';
+import { BUSINESS_MISSIONS, BUSINESS_LABELS, templateReady } from '../src/data/businessMissions.js';
+import { Difficulty } from '../src/systems/Difficulty.js';
 import { readFileSync } from 'node:fs';
 
 let passed = 0, failed = 0;
@@ -66,14 +69,29 @@ function deliver(m, stopId, mile = 0, stars = 0) {
   check('mix includes deliveries', byType.delivery > 0);
   check('mix includes timed jobs', byType.timed > 0);
   check('mix includes passengers', byType.passenger > 0);
-  check('no unknown types', offers.every(o => ['delivery', 'timed', 'passenger'].includes(o.type)));
+  check('no unknown types', offers.every(o => ['delivery', 'timed', 'passenger', 'challenge'].includes(o.type)));
   check('2–3 offers per generating stop', Object.values(m._offersByStop).every(l => l.length === 0 || (l.length >= 1 && l.length <= 3)));
-  check('slot 0 is always a delivery (anchor guarantee)',
-    Object.values(m._offersByStop).every(l => !l.length || l[0].type === 'delivery'));
+  // Superseded 2026-07-30: the contact pitches up to OFFERS_PER_STOP jobs,
+  // each a DIFFERENT category, and the player takes one.  (The old rule was
+  // "slot 0 is always a delivery"; there is no anchor type any more.)
+  check('at most one offer per category at a stop',
+    Object.values(m._offersByStop).every((l) => {
+      const t = l.map(o => o.type);
+      return new Set(t).size === t.length;
+    }));
+  check('no stop pitches more than OFFERS_PER_STOP',
+    Object.values(m._offersByStop).every(l => l.length <= OFFERS_PER_STOP));
   check('Pullman is payoff-only', m.offersForStop('P').length === 0);
-  check('targets are ahead of origin', offers.every(o => o.targetMile > REST_STOPS.find(r => r.id === o.originStopId).mileage));
+  // Challenges have no destination at all — they're excluded by design.
+  check('targets are ahead of origin', offers.filter(o => o.type !== 'challenge')
+    .every(o => o.targetMile > REST_STOPS.find(r => r.id === o.originStopId).mileage));
+  // Budget is derived from route miles UNLESS the business template authors a
+  // fixed one (Price War = 4 min, Hot Springs Water = 2 min, Cold Chain = 90s).
   check('timed offers carry a rush budget', offers.filter(o => o.type === 'timed')
-    .every(o => o.terms.rush?.budgetSec === Math.round(o.routeMiles * TIMED_SEC_PER_MI + TIMED_GRACE_SEC)));
+    .every(o => o.terms.rush?.budgetSec > 0));
+  check('generic timed budgets derive from route miles',
+    offers.filter(o => o.type === 'timed' && !o.templateId?.includes('_'))
+      .every(o => o.terms.rush.budgetSec === Math.round(o.routeMiles * TIMED_SEC_PER_MI + TIMED_GRACE_SEC)));
   check('passenger offers carry a quirk + lines', offers.filter(o => o.type === 'passenger')
     .every(o => o.passenger?.quirk && o.terms[o.passenger.quirk] === true
              && o.passenger.ask && o.passenger.pickup && o.passenger.mid && o.passenger.dropoff && o.passenger.portrait));
@@ -110,21 +128,35 @@ function firstOfType(m, type) {
   return allOffers(m).find(o => o.type === type) ?? null;
 }
 
+// One job per REST STOP (owner 2026-07-30), so any test that holds several
+// actives at once has to hire at several different stops.  Returns one
+// offerable mission per requested type, each from a stop that hasn't hired.
+function acrossStops(m, types) {
+  const used = new Set(Object.keys(m._acceptedAtStop ?? {}));
+  const out = {};
+  for (const t of types) {
+    const o = allOffers(m).find(x => x.type === t && x.status === 'offered'
+      && !used.has(x.originStopId));
+    if (o) { used.add(o.originStopId); out[t] = o; }
+  }
+  return out;
+}
+
 // ── One active per type, simultaneous actives across types ───────────────
 {
   const m = sys(42);
-  const dlv = firstOfType(m, 'delivery');
-  const rsh = firstOfType(m, 'timed');
-  const pax = firstOfType(m, 'passenger');
+  const pick = acrossStops(m, ['delivery', 'timed', 'passenger']);
+  const dlv = pick.delivery, rsh = pick.timed, pax = pick.passenger;
   check('one of each type found', !!(dlv && rsh && pax));
   check('accept delivery', m.accept(dlv.id, 0) === dlv && dlv.status === 'active');
   check('accept timed alongside delivery', m.accept(rsh.id, 0, 1000) === rsh);
   check('accept passenger alongside both', m.accept(pax.id, 0) === pax);
   check('three simultaneous actives', m.activeMissions().length === 3);
-  const dlv2 = allOffers(m).find(o => o.type === 'delivery' && o.status === 'offered');
-  check('second delivery blocked while one is active', dlv2 && m.accept(dlv2.id, 0) === null);
-  const rsh2 = allOffers(m).find(o => o.type === 'timed' && o.status === 'offered');
-  check('second timed blocked while one is active', rsh2 && m.accept(rsh2.id, 0, 1000) === null);
+  // Drawn from UNHIRED stops so the type rule is what blocks them, not the
+  // one-job-per-stop rule.
+  const p2 = acrossStops(m, ['delivery', 'timed']);
+  check('second delivery blocked while one is active', p2.delivery && m.accept(p2.delivery.id, 0) === null);
+  check('second timed blocked while one is active', p2.timed && m.accept(p2.timed.id, 0, 1000) === null);
   check('re-accept is idempotent', m.accept(rsh.id, 5, 900) === rsh && rsh.acceptedAtMile === 0);
 }
 
@@ -279,7 +311,7 @@ function firstOfType(m, type) {
 // ── failAllActive covers every type ───────────────────────────────────────
 {
   const m = sys(42);
-  for (const t of ['delivery', 'timed', 'passenger']) m.accept(firstOfType(m, t).id, 0, 1000);
+  for (const o of Object.values(acrossStops(m, ['delivery', 'timed', 'passenger']))) m.accept(o.id, 0, 1000);
   const f = m.failAllActive('busted');
   check('run end fails all three actives', f.length === 3 && m.activeMissions().length === 0);
   check('rep untouched by failures', Object.keys(m._save.get('missionRep', {})).length === 0);
@@ -417,7 +449,8 @@ function firstOfType(m, type) {
   mL.accept(rL.id, 0, 9000);
   deliver(mL, rL.targetStopId, rL.targetMile);
   check('Known→Legend tier-up tagged at 8', rL.tierUp?.name === 'Legend' && rL.tierUp?.mult === 5);
-  const dL = allOffers(mL).find(o => o.type === 'delivery' && o.status === 'offered');
+  const dL = allOffers(mL).find(o => o.type === 'delivery' && o.status === 'offered'
+    && !mL.acceptedAtStop(o.originStopId));
   mL.accept(dL.id, 0);
   deliver(mL, dL.targetStopId, dL.targetMile);
   check('mid-tier completion carries no tag', dL.paid && !dL.tierUp);
@@ -435,8 +468,8 @@ function firstOfType(m, type) {
     && e.lastOutcome === 'completed' && e.failAckPending === false);
 
   // A failure arms the acknowledgment flag (flavor only — rep untouched).
-  const r = allOffers(m).find(o => o.type === 'timed' && o.originStopId === d.originStopId
-    && o.status === 'offered') ?? firstOfType(m, 'timed');
+  const r = allOffers(m).find(o => o.type === 'timed' && o.status === 'offered'
+    && !m.acceptedAtStop(o.originStopId));
   const rId = contactIdFor(r.originStopId);
   m.accept(r.id, 0, 1000);
   m.failAllActive('busted');
@@ -444,17 +477,19 @@ function firstOfType(m, type) {
   check('failure counted + fail-ack armed', e?.jobsFailed === 1
     && e.lastOutcome === 'failed' && e.failAckPending === true);
 
-  // A later success for the same contact repairs it.
-  const r2 = allOffers(m).find(o => o.originStopId === r.originStopId && o.status === 'offered');
-  if (r2) {
-    m.accept(r2.id, 0, 9000);
-    deliver(m, r2.targetStopId, r2.targetMile);
-    e = m._save.get('npcMemory', {})[rId];
-    check('next success clears the fail-ack flag', e.failAckPending === false
-      && e.lastOutcome === 'completed');
-  } else {
-    check('open offer left at the failed contact\'s stop', false);
-  }
+  // A later success for the same contact repairs it.  A stop only hires once
+  // per run now, so the repair is exercised on a fresh run whose contact is
+  // carrying the pending failure (identical code path in _noteNpcOutcome).
+  const m3 = sys(42);
+  const d3 = firstOfType(m3, 'delivery');
+  const id3 = contactIdFor(d3.originStopId);
+  m3._save.set('npcMemory', { [id3]: { jobsCompleted: 0, jobsFailed: 1,
+    lastOutcome: 'failed', failAckPending: true } });
+  m3.accept(d3.id, 0);
+  deliver(m3, d3.targetStopId, d3.targetMile);
+  const e3 = m3._save.get('npcMemory', {})[id3];
+  check('next success clears the fail-ack flag', e3.failAckPending === false
+    && e3.lastOutcome === 'completed');
 }
 
 // ── Phase 6: memory-driven greeting selection ─────────────────────────────
@@ -545,6 +580,428 @@ function firstOfType(m, type) {
   check('no scene calls the retired halving hook',
     !src('../src/scenes/RestStopScene.js').includes('noteHeatClearPaid')
     && !src('../src/scenes/GameScene.js').includes('noteHeatClearPaid'));
+}
+
+// ── 2026-07-30: per-business pools, rotation, chain runs, one job per stop ──
+{
+  // Every template's business key must be a real amenity key, or it can never
+  // be offered anywhere.
+  const amenityKeys = new Set(REST_STOPS.flatMap(r => r.amenities ?? []));
+  check('every business pool maps to a real amenity',
+    Object.keys(BUSINESS_MISSIONS).every(b => amenityKeys.has(b)));
+  check('every business is labelled',
+    Object.keys(BUSINESS_MISSIONS).every(b => !!BUSINESS_LABELS[b]));
+  check('template ids are unique',
+    (() => { const all = Object.values(BUSINESS_MISSIONS).flat().map(t => t.id);
+             return new Set(all).size === all.length; })());
+  check('every business carries a pool of ~5',
+    Object.values(BUSINESS_MISSIONS).every(l => l.length >= 5 && l.length <= 6));
+  check('every template declares its needs + a pitch',
+    Object.values(BUSINESS_MISSIONS).flat().every(t => Array.isArray(t.needs) && !!t.pitch && !!t.name));
+
+  // Rotation: a business activates at most ACTIVE_PER_BUSINESS per run, the
+  // pick is stable within a run, and different seeds pick differently.
+  const mA = sys(42), mB = sys(1337);
+  for (const biz of Object.keys(BUSINESS_MISSIONS)) {
+    const a = mA._activeTemplates(biz);
+    check(`${biz}: rotation capped`, a.length <= ACTIVE_PER_BUSINESS);
+    check(`${biz}: rotation stable within a run`,
+      JSON.stringify(a) === JSON.stringify(mA._activeTemplates(biz)));
+    check(`${biz}: rotation only offers implemented work`, a.every(templateReady));
+  }
+  const rotA = Object.keys(BUSINESS_MISSIONS).map(b => mA._activeTemplates(b).map(t => t.id).join(','));
+  const rotB = Object.keys(BUSINESS_MISSIONS).map(b => mB._activeTemplates(b).map(t => t.id).join(','));
+  check('different seeds roll a different rotation', rotA.join('|') !== rotB.join('|'));
+
+  // Business-sourced offers only come from businesses the stop actually has.
+  const m = sys(42);
+  const all = allOffers(m);
+  const bizOffers = all.filter(o => o.biz);
+  check('business offers exist', bizOffers.length > 0);
+  check('offers only from businesses present at the stop', bizOffers.every((o) => {
+    const stop = REST_STOPS.find(r => r.id === o.originStopId);
+    return (stop.amenities ?? []).includes(o.biz);
+  }));
+  check('business offers carry pitch + label + name',
+    bizOffers.every(o => o.pitch && o.bizLabel && o.missionName));
+
+  // Chain runs land at a branch of the named business, ahead of the origin.
+  const chains = all.filter(o => o.terms?.chain);
+  check('chain runs generated', chains.length > 0);
+  check('chain target actually carries that business', chains.every((o) => {
+    const t = REST_STOPS.find(r => r.id === o.targetStopId);
+    return (t.amenities ?? []).includes(o.terms.chain.biz) && t.mileage > REST_STOPS.find(r => r.id === o.originStopId).mileage;
+  }));
+  check('chain target is the NEXT such branch', chains.every((o) => {
+    const origin = REST_STOPS.find(r => r.id === o.originStopId);
+    const first = REST_STOPS.find(r => r.mileage > origin.mileage && (r.amenities ?? []).includes(o.terms.chain.biz));
+    return first?.id === o.targetStopId;
+  }));
+  check('chain runs carry the chain term bonus', chains.every(o => o.terms.chain.label));
+  // A chain run may exceed the tier window — that's the point (owner: further,
+  // pays more).  Pay must beat the identical haul without the chain premium,
+  // and must rise with the haul.
+  check('chain beats the same haul with no chain', chains.every((o) => {
+    const bare = { ...o.terms }; delete bare.chain;
+    return computePayout({ routeMiles: o.routeMiles, terms: o.terms })
+         > computePayout({ routeMiles: o.routeMiles, terms: bare });
+  }));
+  check('chain pay is monotonic in distance',
+    computePayout({ routeMiles: 60, terms: { chain: { biz: 'ambm' } } })
+    > computePayout({ routeMiles: 20, terms: { chain: { biz: 'ambm' } } }));
+  check('a chain run can outrun the Rookie window',
+    chains.some(o => o.routeMiles > MISSION_TIERS[0].milesMax));
+
+  // ONE job per rest stop.
+  const m5 = sys(42);
+  const withThree = REST_STOPS.map(r => r.id).find(id =>
+    (m5.offersForStop(id) ?? []).filter(o => o.status === 'offered').length >= 2);
+  check('a stop pitches multiple categories', !!withThree);
+  const list = m5.offersForStop(withThree).filter(o => o.status === 'offered');
+  check('first hire at a stop succeeds', !!m5.accept(list[0].id, 0, 9000));
+  check('second hire at the SAME stop is refused', m5.accept(list[1].id, 0, 9000) === null);
+  check('the stop records who it hired', m5.acceptedAtStop(withThree) === list[0].id);
+  check('passed-over offers stay offered (not burned)', list[1].status === 'offered');
+  // …and it survives a snapshot round-trip, so a rewind can't re-hire.
+  const m6 = new MissionSystem(fakeSave());
+  m6.restore(m5.serialize());
+  check('one-job-per-stop survives restore', m6.acceptedAtStop(withThree) === list[0].id
+    && m6.accept(list[1].id, 0, 9000) === null);
+}
+
+// ── 2026-07-30 slice 2: condition clauses ─────────────────────────────────
+{
+  // Speed-band grace now scales with difficulty, so these tests pin it rather
+  // than inheriting the module default (Easy) and silently getting 2× the
+  // budget they were written against.  Hard = the raw authored graceSec.
+  Difficulty.set('hard');
+
+  // Build a live mission carrying an arbitrary clause, without depending on
+  // which templates the rotation happened to activate.
+  const withTerms = (terms, extra = {}) => {
+    const m = sys(42);
+    const o = firstOfType(m, 'delivery');
+    o.terms = { ...terms };
+    Object.assign(o, extra);
+    m.accept(o.id, 0, 1000);
+    return { m, o };
+  };
+
+  // noEating — any consumed pickup voids the haul.
+  {
+    const { m, o } = withTerms({ noEating: true });
+    check('noEating survives an untouched run', m.noteEat.length >= 0 && o.status === 'active');
+    const failed = m.noteEat();
+    check('noEating fails on a bite', failed.length === 1 && o.status === 'failed'
+      && o.failReason === 'ate_the_cargo');
+    // A job without the clause is untouched.
+    const { m: m2, o: o2 } = withTerms({});
+    m2.noteEat();
+    check('noEating leaves other jobs alone', o2.status === 'active');
+  }
+
+  // pacifist — firing anything voids the run.
+  {
+    const { m, o } = withTerms({ pacifist: true });
+    check('pacifist fails on a shot', m.noteWeaponFired().length === 1
+      && o.status === 'failed' && o.failReason === 'opened_fire');
+    const { m: m2, o: o2 } = withTerms({});
+    m2.noteWeaponFired();
+    check('pacifist leaves other jobs alone', o2.status === 'active');
+  }
+
+  // speedFloor / speedCap — grace absorbs brief violations, sustained ones kill.
+  {
+    const { m, o } = withTerms({ speedFloor: { mph: 60, graceSec: 4 } });
+    m.sampleSpeed(40, 2);                       // 2s under — inside grace
+    check('brief dip under the floor is survivable', o.status === 'active');
+    m.sampleSpeed(90, 2);                       // back in band, debt drains
+    check('time in band repays the debt', (o.progress.speedDebt ?? 0) === 0);
+    m.sampleSpeed(40, 5);                       // sustained
+    check('sustained crawl fails the floor', o.status === 'failed' && o.failReason === 'too_slow');
+  }
+  {
+    const { m, o } = withTerms({ speedCap: { mph: 70, graceSec: 4 } });
+    m.sampleSpeed(100, 5);
+    check('sustained speeding fails the cap', o.status === 'failed' && o.failReason === 'too_fast');
+  }
+  {
+    const { m, o } = withTerms({});
+    m.sampleSpeed(10, 60);
+    check('speed sampling ignores jobs with no band', o.status === 'active');
+  }
+
+  // Arrival clauses.
+  {
+    const { m, o } = withTerms({ fuelFloor: { pct: 90 } });
+    m.gradeArrivals(o.targetStopId, o.targetMile, 0, { fuelPct: 40 });
+    check('fuelFloor fails a low tank', o.status === 'failed' && o.failReason === 'tank_too_low');
+    const { m: m2, o: o2 } = withTerms({ fuelFloor: { pct: 90 } });
+    m2.gradeArrivals(o2.targetStopId, o2.targetMile, 0, { fuelPct: 95 });
+    check('fuelFloor passes a full tank', o2.status === 'ready');
+    // A caller that doesn't know the tank must not fail the job.
+    const { m: m3, o: o3 } = withTerms({ fuelFloor: { pct: 90 } });
+    m3.gradeArrivals(o3.targetStopId, o3.targetMile, 0, {});
+    check('missing arrival ctx skips the clause', o3.status === 'ready');
+  }
+  {
+    const { m, o } = withTerms({ alertFloor: { pct: 50 } });
+    m.gradeArrivals(o.targetStopId, o.targetMile, 0, { alertPct: 20 });
+    check('alertFloor fails a drowsy arrival', o.status === 'failed' && o.failReason === 'rider_nodded_off');
+  }
+  {
+    const { m, o } = withTerms({ cashExact: { amount: 2000, tol: 50 } });
+    m.gradeArrivals(o.targetStopId, o.targetMile, 0, { cash: 2500 });
+    check('cashExact fails when the books are off', o.status === 'failed'
+      && o.failReason === 'books_dont_balance');
+    const { m: m2, o: o2 } = withTerms({ cashExact: { amount: 2000, tol: 50 } });
+    m2.gradeArrivals(o2.targetStopId, o2.targetMile, 0, { cash: 2040 });
+    check('cashExact passes inside tolerance', o2.status === 'ready');
+  }
+
+  // Difficulty scales the grace budget, never the band (owner 2026-07-30):
+  // Hard tightest, Normal more, Easy the most.
+  {
+    const survives = (mode, badSec) => {
+      Difficulty.set(mode);
+      const { m, o } = withTerms({ speedFloor: { mph: 60, graceSec: 4 } });
+      m.sampleSpeed(30, badSec);
+      return o.status === 'active';
+    };
+    check('Hard runs the tightest budget', !survives('hard', 5) && survives('hard', 3));
+    check('Normal gives more room than Hard', survives('normal', 5));
+    check('Easy gives more room than Normal', survives('easy', 7) && !survives('normal', 7));
+    check('grace ordering is Easy > Normal > Hard', (() => {
+      const g = (mode) => { Difficulty.set(mode); return Difficulty.speedGraceMul(); };
+      return g('easy') > g('normal') && g('normal') > g('hard');
+    })());
+    // The BAND itself is difficulty-independent — only the budget moves.
+    Difficulty.set('easy');
+    const { m: mE, o: oE } = withTerms({ speedFloor: { mph: 60, graceSec: 4 } });
+    mE.sampleSpeed(30, 30);
+    check('enough time outside the band still fails on Easy', oE.status === 'failed');
+    Difficulty.set('hard');            // back to the raw budget for what follows
+  }
+
+  // EFFECT clauses never fail on their own.
+  {
+    const { m, o } = withTerms({ heatCarried: { stars: 2 }, survivalDrain: { mult: 2 } });
+    const fx = m.activeEffects();
+    check('heatCarried reports its star floor', fx.heatStars === 2);
+    check('survivalDrain reports its multiplier', fx.drainMult === 2);
+    m.sampleSpeed(0, 30); m.noteEat(); m.noteWeaponFired();
+    check('effect clauses never fail the job', o.status === 'active');
+    check('no effects with nothing aboard', (() => {
+      const e = sys(42).activeEffects();
+      return e.heatStars === 0 && e.drainMult === 1;
+    })());
+  }
+
+  // damageDock — pay shrinks with damage, floored at a quarter of the fee.
+  {
+    const { m, o } = withTerms({ damageDock: { perHp: 40 } });
+    o.payout = 1000; o.progress.damageTaken = 0;
+    check('undamaged run pays in full', m.payoutFor(o) === 1000);
+    o.progress.damageTaken = 10;
+    check('damage docks the fee', m.payoutFor(o) === 600);
+    o.progress.damageTaken = 100;
+    check('dock floors at 25% of the fee', m.payoutFor(o) === 250);
+  }
+
+  // tipBySpeed — beating par tips, par or worse doesn't.
+  {
+    const mk = (elapsed) => {
+      const { m, o } = withTerms({ tipBySpeed: { maxTip: 400, parSecPerMi: 26 } });
+      o.routeMiles = 20;                 // par = 520s
+      o.acceptedClockSec = 10000;
+      m.gradeArrivals(o.targetStopId, o.targetMile, 0, { clockSec: 10000 - elapsed });
+      return o;
+    };
+    check('a fast run tips', (mk(260).tip ?? 0) === 200);
+    check('an instant run tips the max', (mk(0).tip ?? 0) === 400);
+    check('a slow run tips nothing', (mk(900).tip ?? 0) === 0);
+  }
+
+  // Clause premiums are real money, and the templates that declare a clause
+  // actually carry it once built.
+  {
+    for (const k of ['noEating', 'pacifist', 'speedFloor', 'speedCap', 'fuelFloor',
+                     'alertFloor', 'cashExact', 'heatCarried', 'survivalDrain',
+                     'damageDock', 'tipBySpeed']) {
+      check(`${k} pays a premium`, computePayout({ routeMiles: 20, terms: { [k]: true } })
+        > computePayout({ routeMiles: 20 }));
+    }
+    const m = sys(42);
+    const all = allOffers(m);
+    const clauseOffers = all.filter(o => o.terms?.noEating || o.terms?.pacifist
+      || o.terms?.speedFloor || o.terms?.speedCap || o.terms?.fuelFloor
+      || o.terms?.alertFloor || o.terms?.cashExact || o.terms?.heatCarried);
+    check('clause-bearing offers reach the road', clauseOffers.length > 0);
+    check('clause defaults are filled in', clauseOffers.every(o =>
+      !o.terms.speedFloor || (o.terms.speedFloor.mph > 0 && o.terms.speedFloor.graceSec > 0)));
+  }
+}
+
+// ── 2026-07-30 slice 3: the CHALLENGE class ───────────────────────────────
+{
+  const challengeOf = (goal, pay = 250, grant = null) => {
+    const m = sys(42);
+    const o = firstOfType(m, 'delivery');          // recycle a live offer shell
+    o.type = 'challenge'; o.goal = goal; o.payout = pay; o.grant = grant;
+    o.targetStopId = null; o.targetMile = null; o.terms = {};
+    m.accept(o.id, 0, 1000);
+    return { m, o };
+  };
+
+  // The clock does NOT run until the player is back on the road.
+  {
+    const { m, o } = challengeOf({ kind: 'boostSeconds', sec: 5 });
+    m.tickChallenges(10, { boosting: true });
+    check('an unarmed challenge ignores the road feed', (o.progress.hold ?? 0) === 0
+      && o.status === 'active');
+    check('arming reports the challenge', m.armChallenges().length === 1 && o.progress.armed);
+    check('arming is idempotent', m.armChallenges().length === 0);
+  }
+
+  // useItemsInTime — the owner's fireworks dare.
+  {
+    const { m, o } = challengeOf({ kind: 'useItemsInTime', item: 'fireworks', count: 3, limitSec: 45 });
+    m.armChallenges();
+    m.noteItemUsed('fireworks'); m.noteItemUsed('fireworks');
+    check('partial burn does not pay', o.status === 'active' && o.progress.used === 2);
+    check('wrong item does not count', (m.noteItemUsed('coal'), o.progress.used === 2));
+    const done = m.noteItemUsed('fireworks');
+    check('third one completes it', done.length === 1 && o.status === 'completed' && o.paid === true);
+    check('completion counts rep', (m._save.get('missionRep', {}).challenge ?? 0) === 1);
+  }
+  {
+    const { m, o } = challengeOf({ kind: 'useItemsInTime', item: 'fireworks', count: 3, limitSec: 45 });
+    m.armChallenges();
+    m.noteItemUsed('fireworks');
+    const r = m.tickChallenges(46, {});
+    check('running out of time fails it', r.failed.length === 1
+      && o.status === 'failed' && o.failReason === 'challenge_expired');
+    check('a failed challenge stops accepting item uses', m.noteItemUsed('fireworks').length === 0);
+  }
+
+  // speedBand — CONTINUOUS hold, and a band has a lid.
+  {
+    const { m, o } = challengeOf({ kind: 'speedBand', minMph: 100, holdSec: 30, limitSec: 120 });
+    m.armChallenges();
+    m.tickChallenges(20, { mph: 110 });
+    check('holding builds progress', (o.progress.hold ?? 0) === 20 && o.status === 'active');
+    m.tickChallenges(1, { mph: 80 });
+    check('dropping out of the band RESETS the hold', o.progress.hold === 0);
+    m.tickChallenges(30, { mph: 105 });
+    check('a full continuous hold pays', o.status === 'completed' && o.paid === true);
+  }
+  {
+    const { m, o } = challengeOf({ kind: 'speedBand', minMph: 70, maxMph: 80, holdSec: 10, limitSec: 120 });
+    m.armChallenges();
+    m.tickChallenges(20, { mph: 120 });
+    check('over the band lid does not count', o.progress.hold === 0 && o.status === 'active');
+    m.tickChallenges(10, { mph: 75 });
+    check('inside the band completes', o.status === 'completed');
+  }
+
+  // boostSeconds — CUMULATIVE, so letting off is fine.
+  {
+    const { m, o } = challengeOf({ kind: 'boostSeconds', sec: 20 });
+    m.armChallenges();
+    m.tickChallenges(8, { boosting: true });
+    m.tickChallenges(30, { boosting: false });
+    check('boost time is cumulative, not continuous', o.progress.hold === 8 && o.status === 'active');
+    m.tickChallenges(12, { boosting: true });
+    check('cumulative boost completes', o.status === 'completed');
+  }
+
+  // A challenge has no destination — it must be invisible to the stop flow.
+  {
+    const { m, o } = challengeOf({ kind: 'boostSeconds', sec: 20 });
+    m.armChallenges();
+    check('challenges are never graded at a stop',
+      m.gradeArrivals('N', 500, 0).every(r => r.id !== o.id));
+    check('challenges are never failed for a missed target',
+      m.checkMissedTargets(9999).every(f => f.id !== o.id) && o.status === 'active');
+  }
+
+  // Paying on the road still respects the rewind ledger.
+  {
+    const { m, o } = challengeOf({ kind: 'boostSeconds', sec: 5 });
+    m.armChallenges();
+    m.tickChallenges(6, { boosting: true });
+    check('road payout writes the outcome ledger',
+      m._outcomes[o.id]?.status === 'completed' && m._outcomes[o.id]?.paid === true);
+    const m2 = new MissionSystem(fakeSave());
+    m2.restore(m.serialize());
+    check('a rewind cannot un-pay a challenge', m2.byId(o.id)?.paid === true
+      && m2.byId(o.id)?.status === 'completed');
+  }
+
+  // The authored templates are well-formed: a goal the engine knows, a pay,
+  // and a grant where the pitch promises one.
+  {
+    const chal = Object.values(BUSINESS_MISSIONS).flat().filter(t => t.type === 'challenge');
+    check('challenge templates exist', chal.length >= 4);
+    const live = chal.filter(templateReady);
+    check('the fireworks dare is live', live.some(t => t.id === 'hunt_fireworks'));
+    check('live challenges carry a known goal + pay', live.every(t =>
+      t.pay > 0 && t.goal && ['useItemsInTime', 'speedBand', 'boostSeconds'].includes(t.goal.kind)));
+    // A fuse is optional, but an item-burning dare MUST have one or it can
+    // never be failed.
+    check('item dares carry a fuse', live.every(t =>
+      t.goal.kind !== 'useItemsInTime' || t.goal.limitSec > 0));
+    check('item-burning challenges grant the items', live.every(t =>
+      t.goal.kind !== 'useItemsInTime'
+      || (t.grant?.item === t.goal.item && (t.grant?.count ?? 0) >= t.goal.count)));
+    // …and they actually reach the road, with a payout and no destination.
+    const m = sys(42);
+    const offers = allOffers(m).filter(o => o.type === 'challenge');
+    check('challenge offers generate', offers.length > 0);
+    check('challenge offers have no destination',
+      offers.every(o => o.targetStopId === null && o.routeMiles === 0));
+    check('challenge offers carry pay + goal', offers.every(o => o.payout > 0 && o.goal?.kind));
+    check('challenge pay scales with rep tier', (() => {
+      const mL = sys(42);
+      mL._save.set('missionRep', { challenge: 8 });     // Legend
+      const legend = allOffers(mL).find(o => o.type === 'challenge');
+      const rookie = offers.find(o => o.templateId === legend?.templateId);
+      return !legend || !rookie || legend.payout > rookie.payout;
+    })());
+  }
+}
+
+// ── 2026-07-30: Custom is a SANDBOX — missions RUN, progression doesn't ────
+{
+  Difficulty.set('custom');
+  const m = sys(42);
+  const d = firstOfType(m, 'delivery');
+  check('missions are acceptable in custom', m.accept(d.id, 0, 1000) === d);
+  const paid = deliver(m, d.targetStopId, d.targetMile);
+  check('missions complete + pay in custom', paid.length === 1 && d.paid === true
+    && d.status === 'completed');
+  check('custom banks NO rep', Object.keys(m._save.get('missionRep', {})).length === 0);
+  check('custom banks NO lifetime stats', Object.keys(m._save.get('missionStats', {})).length === 0);
+  // A challenge closes its own ledger on the road — same rule must hold there.
+  const c = firstOfType(m, 'delivery');
+  if (c && c.id !== d.id) {
+    c.type = 'challenge'; c.goal = { kind: 'boostSeconds', sec: 5 };
+    c.targetStopId = null; c.terms = {};
+    m.accept(c.id, 0, 1000); m.armChallenges();
+    m.tickChallenges(6, { boosting: true });
+    check('a custom challenge still completes', c.status === 'completed');
+    check('custom challenge banks no rep', (m._save.get('missionRep', {}).challenge ?? 0) === 0);
+  }
+  // …and the same run on a scored difficulty DOES bank both.
+  Difficulty.set('normal');
+  const m2 = sys(42);
+  const d2 = firstOfType(m2, 'delivery');
+  m2.accept(d2.id, 0, 1000);
+  deliver(m2, d2.targetStopId, d2.targetMile);
+  check('a scored run still banks rep', (m2._save.get('missionRep', {}).delivery ?? 0) === 1);
+  check('a scored run still banks stats',
+    (m2._save.get('missionStats', {}).delivery?.completed ?? 0) === 1);
+  Difficulty.set('normal');
 }
 
 console.log(`\nmissions.test: ${passed} passed, ${failed} failed`);

@@ -33,6 +33,22 @@
 //   serialize()/restore() ride inside GameScene._collectSaveSnapshot().
 
 import { REST_STOPS } from '../constants.js';
+import { Difficulty } from './Difficulty.js';
+import { BUSINESS_MISSIONS, BUSINESS_LABELS, templateReady } from '../data/businessMissions.js';
+
+// ── Per-business pools (owner spec 2026-07-28, built 2026-07-30) ──────────
+// Work is sourced from the BUSINESSES a stop actually has (REST_STOPS
+// .amenities), not from the stop itself.  Each business activates only
+// ACTIVE_PER_BUSINESS of its pool per run, rolled from the run seed, so the
+// same stop offers different work run to run.
+//
+// The rotation draws from templates whose clauses the engine can enforce
+// (see IMPLEMENTED_CLAUSES in businessMissions.js) — as later slices add
+// clauses, the live pool widens with no change here.
+export const ACTIVE_PER_BUSINESS = 2;
+// The contact pitches this many jobs, each a DIFFERENT type, and the player
+// may take exactly one per stop (owner 2026-07-30).
+export const OFFERS_PER_STOP = 3;
 
 // ── Reputation tiers (Brendan's override: ×1 / ×2.5 / ×5) ────────────────
 // Tier is per TYPE, keyed off lifetime completions of that type.  The tier
@@ -58,6 +74,71 @@ export const TERM_BONUS    = {
   // Phase 5 — Heat-escape premium + authored weather-corridor premiums.
   // no_chains is the Legend dare (big bonus, never the default — Ch. 8).
   heat_escape: 100, weather_run: 90, no_chains: 150,
+  // Chain runs (owner 2026-07-30) — hand-off at the next branch of the same
+  // business.  The destination is dictated by the chain rather than the tier
+  // window, so these often run LONG; the per-mile rate carries most of the
+  // reward and this is the premium on top.
+  chain: 80,
+  // ── Slice 2 condition clauses ───────────────────────────────────────────
+  // Priced by how much they constrain the DRIVE.  A clause you can satisfy by
+  // paying attention (fuelFloor) is worth less than one that fights the way
+  // the game wants you to play (pacifist, speedCap).
+  noEating: 45, pacifist: 70, speedFloor: 55, speedCap: 65,
+  fuelFloor: 35, alertFloor: 40, cashExact: 50,
+  heatCarried: 90, survivalDrain: 55, damageDock: 30, tipBySpeed: 25,
+};
+
+// ── CHALLENGE class (slice 3, owner spec 2026-07-28) ──────────────────────
+// "Reactive" work, and structurally unlike every other type: no cargo, no
+// destination, no rest stop at the far end.  The NPC hands you something and
+// starts a clock — "I'll load you to three; burn all three inside forty-five
+// seconds and there's $250 in it" (the owner's canonical example).
+//
+// Consequences that shape the code below:
+//   • It PAYS ON THE ROAD.  Every other type goes active → ready (graded at
+//     pull-in) → collect (paid at the stop).  A challenge has no stop to pull
+//     into, so completeChallenge() closes the ledger itself and GameScene
+//     banks the cash where the player is standing.
+//   • Its clock is REAL seconds, not party-clock seconds.  A 45-second dare is
+//     a twitch challenge; running it on the 4×-compressed party clock would
+//     make it an 11-second one.
+//   • The clock starts on the ROAD, not at acceptance — you accept it in a
+//     menu, and the timer must not burn while you're still shopping.
+// `limitSec` is the FUSE (omit it and the dare is untimed); every other field
+// is the goal itself.  Keeping those separate matters: `sec` used to mean both,
+// so a 20-second boost goal was also a 20-second fuse and killed itself while
+// the player wasn't boosting.
+export const CHALLENGE_GOALS = {
+  // Burn N of an item before the fuse runs out.
+  useItemsInTime: { item: 'fireworks', count: 3, limitSec: 45 },
+  // Hold a speed band for `holdSec` CONTINUOUS seconds (drop out and the
+  // hold resets — that's the challenge).
+  speedBand:      { minMph: 100, maxMph: null, holdSec: 30, limitSec: 120 },
+  // Accumulate `sec` seconds of boost — cumulative, and untimed.
+  boostSeconds:   { sec: 20 },
+};
+
+// ── Condition clauses (slice 2, owner pool 2026-07-28) ────────────────────
+// Two kinds, and the difference matters:
+//   FAIL clauses  — a violation kills the job (noEating, pacifist, speed
+//                   bands, and the arrival checks).
+//   EFFECT clauses — they change the DRIVE or the PAY, never fail on their own
+//                   (heatCarried, survivalDrain, damageDock, tipBySpeed).
+// Defaults live here so a template can say `noEating: true` and still be
+// tunable in one place.
+// `graceSec` is the HARD-mode budget; Difficulty.speedGraceMul() stretches it
+// on Normal (×1.4) and Easy (×2).  The mph band never changes with difficulty
+// — only how long you're allowed to sit outside it.
+export const CLAUSE_DEFAULTS = {
+  speedFloor:    { mph: 55, graceSec: 4 },   // brief dips are allowed…
+  speedCap:      { mph: 70, graceSec: 4 },   // …so traffic doesn't auto-fail you
+  fuelFloor:     { pct: 90 },
+  alertFloor:    { pct: 50 },
+  cashExact:     { amount: 2000, tol: 50 },
+  heatCarried:   { stars: 2 },
+  survivalDrain: { mult: 2 },
+  damageDock:    { perHp: 25 },
+  tipBySpeed:    { maxTip: 400, parSecPerMi: 26 },
 };
 
 // Fragile HP-damage cap and perishable deadline slack (deadline miles =
@@ -265,6 +346,7 @@ export class MissionSystem {
     this._outcomes = {};               // { missionId: { status, paid } } — survives rewind
     this._failCounts = {};             // { type: n } — run-scoped; 3 fails of a type
                                        // lock that type's offers for the rest of the run
+    this._acceptedAtStop = {};         // { stopId: missionId } — ONE job per stop
   }
 
   /** Run-state snapshot — rides inside GameScene._collectSaveSnapshot(). */
@@ -274,6 +356,7 @@ export class MissionSystem {
       offersByStop: JSON.parse(JSON.stringify(this._offersByStop)),
       outcomes: { ...this._outcomes },
       failCounts: { ...this._failCounts },
+      acceptedAtStop: { ...this._acceptedAtStop },
     };
   }
 
@@ -291,6 +374,9 @@ export class MissionSystem {
     for (const [t, n] of Object.entries(snap.failCounts ?? {})) {
       this._failCounts[t] = Math.max(this._failCounts[t] ?? 0, n | 0);
     }
+    // One-job-per-stop ledger: union, snapshot first, so a rewind can't hand
+    // the player a second job at a stop they already hired on at.
+    this._acceptedAtStop = { ...(snap.acceptedAtStop ?? {}), ...this._acceptedAtStop };
     for (const m of this._allMissions()) {
       const o = this._outcomes[m.id];
       if (o) { m.status = o.status; m.paid = !!o.paid; }
@@ -402,33 +488,210 @@ export class MissionSystem {
     }
   }
 
+  /** The slice of a business's pool that is LIVE this run — ACTIVE_PER_BUSINESS
+   *  templates, drawn from the ones the engine can currently enforce, shuffled
+   *  by the run seed.  Same seed → same rotation all run (and across a reload,
+   *  since the seed is serialized), different seed → different work. */
+  _activeTemplates(biz) {
+    const pool = (BUSINESS_MISSIONS[biz] ?? []).filter(templateReady);
+    if (pool.length <= ACTIVE_PER_BUSINESS) return pool;
+    const rng = mulberry32((this._seed ^ hashStr('biz:' + biz)) >>> 0);
+    const idx = pool.map((_, i) => i);
+    for (let i = idx.length - 1; i > 0; i--) {          // seeded Fisher-Yates
+      const j = Math.floor(rng() * (i + 1));
+      [idx[i], idx[j]] = [idx[j], idx[i]];
+    }
+    return idx.slice(0, ACTIVE_PER_BUSINESS).sort((a, b) => a - b).map(i => pool[i]);
+  }
+
+  /** Nearest stop AHEAD of `origin` carrying `biz` — the "next AM/BM". */
+  _nextStopWithBusiness(origin, biz) {
+    return REST_STOPS.find(r => r.mileage > origin.mileage
+                             && (r.amenities ?? []).includes(biz)) ?? null;
+  }
+
+  /** Template terms shorthand → engine terms object. */
+  _termsFromTemplate(t, routeMiles, chainBiz = null) {
+    const terms = {};
+    if (t.fragile != null) terms.fragile = { maxDamage: t.fragile };
+    if (t.perishable)      terms.perishable = true;
+    if (t.illegal)         terms.illegal = true;
+    if (t.rushSec)         terms.rush = { budgetSec: t.rushSec };
+    else if (t.rush)       terms.rush = { budgetSec: Math.round(routeMiles * TIMED_SEC_PER_MI + TIMED_GRACE_SEC) };
+    if (t.quirk)           terms[t.quirk] = true;
+    if (chainBiz)          terms.chain = { biz: chainBiz, label: BUSINESS_LABELS[chainBiz] ?? chainBiz };
+    // Slice-2 clauses: `true` takes the tuned default, an object overrides it.
+    for (const k of Object.keys(CLAUSE_DEFAULTS)) {
+      if (t[k] === true)              terms[k] = { ...CLAUSE_DEFAULTS[k] };
+      else if (t[k] && typeof t[k] === 'object') terms[k] = { ...CLAUSE_DEFAULTS[k], ...t[k] };
+    }
+    // Flag-only clauses (no tunables).
+    if (t.noEating) terms.noEating = true;
+    if (t.pacifist) terms.pacifist = true;
+    return terms;
+  }
+
+  /** Build a live offer from a business template, or null when this stop
+   *  can't host it (no chain branch ahead, no target in the tier window). */
+  _buildFromTemplate(t, origin, rng, usedTargets, npcName, i) {
+    const tier = tierFor(this._repOf(t.type));
+    // ── CHALLENGE: no target, no cargo, no tier window.  The pay is AUTHORED
+    // (the owner's numbers: $250 for the fireworks dare, $300, $350, $400),
+    // scaled by rep tier like everything else, and it pays on the road.
+    if (t.type === 'challenge') {
+      if (!t.goal) return null;                       // data error — never offer it
+      return {
+        id: `chl_${t.id}_${origin.id}_${i}`,
+        templateId: t.id,
+        type: 'challenge',
+        biz: t.biz,
+        bizLabel: BUSINESS_LABELS[t.biz] ?? t.biz,
+        pitch: t.pitch,
+        missionName: t.name,
+        originStopId: origin.id,
+        targetStopId: null,
+        targetName:   null,
+        routeMiles:   0,
+        acceptedAtMile: null,
+        targetMile:   null,
+        deadlineMile: null,
+        npcName,
+        status: 'offered',
+        progress: { damageTaken: 0, armed: false },
+        paid: false,
+        payout: Math.max(5, Math.round((t.pay ?? 250) * tier.mult / 5) * 5),
+        cargo: t.grantLabel ?? null,
+        grant: t.grant ?? null,                       // { item, count } handed over on accept
+        goal:  { ...(CHALLENGE_GOALS[t.goal.kind] ?? {}), ...t.goal },
+        terms: {},
+      };
+    }
+    // Destination: authored stop → chain branch → tier window.
+    let target = null, chainBiz = null;
+    if (t.targetStopId) {
+      const s = REST_STOPS.find(r => r.id === t.targetStopId);
+      if (!s || s.mileage <= origin.mileage) return null;   // already past it
+      target = s;
+    } else if (t.destBiz) {
+      chainBiz = t.destBiz === 'same' ? t.biz : t.destBiz;
+      // Chain runs ignore the tier mileage window on purpose — the next branch
+      // is where it is, and the extra miles are the point (owner 2026-07-30).
+      target = this._nextStopWithBusiness(origin, chainBiz);
+      if (!target) return null;                              // last branch on the route
+    } else {
+      const inWindow = REST_STOPS.filter(r =>
+        r.id !== origin.id &&
+        r.mileage - origin.mileage >= tier.milesMin &&
+        r.mileage - origin.mileage <= tier.milesMax);
+      const fresh = inWindow.filter(r => !usedTargets.has(r.id));
+      const pool  = fresh.length ? fresh : inWindow;   // reuse before dropping
+      if (!pool.length) return null;
+      target = pool[Math.floor(rng() * pool.length)];
+    }
+    usedTargets.add(target.id);
+
+    const routeMiles = Math.round(target.mileage - origin.mileage);
+    const risk  = riskBonus(origin.mileage, target.mileage);
+    const terms = this._termsFromTemplate(t, routeMiles, chainBiz);
+    const pre   = t.type === 'timed' ? 'rsh' : t.type === 'passenger' ? 'pax' : 'dlv';
+    const base = {
+      id: `${pre}_${t.id}_${origin.id}_${i}`,
+      templateId: t.id,
+      type: t.type,
+      biz: t.biz,
+      bizLabel: BUSINESS_LABELS[t.biz] ?? t.biz,
+      pitch: t.pitch,
+      missionName: t.name,
+      originStopId: origin.id,
+      targetStopId: target.id,
+      targetName:   target.name.replace(/, WA$/, ''),
+      routeMiles,
+      acceptedAtMile: null,
+      targetMile:   target.mileage,
+      deadlineMile: null,
+      npcName,
+      status:  'offered',
+      progress: { damageTaken: 0 },
+      paid: false,
+      payout: computePayout({ routeMiles, risk, terms, repMult: tier.mult }),
+      cargo: t.cargo,
+      terms,
+    };
+    if (t.type === 'timed')     base.deadlineClockSec = null;
+    if (t.type === 'passenger') {
+      const p = PASSENGERS.find(x => x.quirk === t.quirk) ?? PASSENGERS[0];
+      base.passenger = { id: p.id, name: p.name, portrait: p.portrait, quirk: p.quirk,
+                         ask: p.ask, pickup: p.pickup, mid: p.mid, dropoff: p.dropoff };
+      base.cargo = p.name;
+      base.commentAtMile = null;
+    }
+    return base;
+  }
+
   _generateOffers(stopId) {
     const origin = REST_STOPS.find(r => r.id === stopId);
     if (!origin) return [];
     const rng = mulberry32((this._seed ^ hashStr(stopId)) >>> 0);
     const npcName = NPC_NAMES[hashStr(stopId) % NPC_NAMES.length];
-    // Phase 4 offer mix: 2–3 offers per stop across delivery/timed/passenger.
-    // Slot 0 is always a delivery (the Ch. 8 "at least one persisted offer"
-    // guarantee stays on the anchor type); slot 1 is timed OR passenger
-    // (coin flip), slot 2 — when it rolls — is the other one, so every
-    // multi-offer stop actually spreads across the types instead of leaving
-    // the mix to a die that starves passengers at narrow Rookie windows.
-    const count = 2 + (rng() < 0.35 ? 1 : 0);
-    const slot1 = rng() < 0.5 ? 'timed' : 'passenger';
-    const types = ['delivery', slot1, slot1 === 'timed' ? 'passenger' : 'timed'];
+
+    // ── Business-sourced offers (owner 2026-07-28/30) ─────────────────────
+    // Candidates = the live rotation of every business this stop actually has.
+    // The contact pitches OFFERS_PER_STOP jobs, each a DIFFERENT type, and the
+    // player may take one (see accept()).
+    const cands = [];
+    for (const biz of (origin.amenities ?? [])) {
+      for (const t of this._activeTemplates(biz)) cands.push({ ...t, biz });
+    }
+    for (let i = cands.length - 1; i > 0; i--) {        // seeded shuffle
+      const j = Math.floor(rng() * (i + 1));
+      [cands[i], cands[j]] = [cands[j], cands[i]];
+    }
     const offers = [];
     const usedTargets = new Set();
-    for (let i = 0; i < count; i++) {
-      const type = types[i];
+    const usedTypes   = new Set();
+    for (const t of cands) {
+      if (offers.length >= OFFERS_PER_STOP) break;
+      if (usedTypes.has(t.type)) continue;              // one per category
+      const built = this._buildFromTemplate(t, origin, rng, usedTargets, npcName, offers.length);
+      if (!built) continue;
+      usedTypes.add(t.type);
+      offers.push(built);
+    }
+    // Backfill from the generic pool so the contact always has three DISTINCT
+    // categories to pitch, even at a thin stop or when a business's rotation
+    // rolled work it can't host (no chain branch left ahead, say).
+    this._backfillOffers(offers, usedTypes, usedTargets, origin, rng, npcName);
+    return offers;
+  }
+
+  /** Generic (non-business) offers — the original Ch. 8 pool, now used to top
+   *  a stop up to OFFERS_PER_STOP distinct types. */
+  _backfillOffers(offers, usedTypes, usedTargets, origin, rng, npcName) {
+    const stopId = origin.id;
+    for (const type of ['delivery', 'timed', 'passenger']) {
+      if (offers.length >= OFFERS_PER_STOP) break;
+      if (usedTypes.has(type)) continue;
       const tier = tierFor(this._repOf(type));
-      // Candidate targets ahead of this stop within the TYPE's tier window.
-      const pool = REST_STOPS.filter(r =>
-        r.id !== stopId && !usedTargets.has(r.id) &&
+      const inWindow = REST_STOPS.filter(r =>
+        r.id !== stopId &&
         r.mileage - origin.mileage >= tier.milesMin &&
         r.mileage - origin.mileage <= tier.milesMax);
+      const fresh = inWindow.filter(r => !usedTargets.has(r.id));
+      let pool = fresh.length ? fresh : inWindow;
+      // Sparse-basin fallback: east of Vantage the stops are far enough apart
+      // that a Rookie window (6-22 mi) can be EMPTY — Ellensburg's next
+      // neighbour is 28 mi out.  Rather than leave a stop pitching one job,
+      // fall back to the nearest stop ahead and let the haul run long.  The
+      // per-mile rate already pays for the distance.
+      if (!pool.length) {
+        const ahead = REST_STOPS.filter(r => r.mileage > origin.mileage);
+        if (ahead.length) pool = [ahead[0]];
+      }
       if (!pool.length) continue;
       const target = pool[Math.floor(rng() * pool.length)];
       usedTargets.add(target.id);
+      usedTypes.add(type);
+      const i = offers.length;
       const routeMiles = Math.round(target.mileage - origin.mileage);
       const risk = riskBonus(origin.mileage, target.mileage);
       const base = {
@@ -490,7 +753,6 @@ export class MissionSystem {
         });
       }
     }
-    return offers;
   }
 
   // ── Queries ─────────────────────────────────────────────────────────────
@@ -521,6 +783,10 @@ export class MissionSystem {
     if (m.status === 'active') return m;                 // double-tap safe
     if (m.status !== 'offered') return null;
     if (this.hasActiveOfType(m.type)) return null;       // one active per type
+    // ONE job per rest stop (owner 2026-07-30): the contact pitches three
+    // categories, you pick one.  The two you passed on are NOT burned — they
+    // stay in the run's rotation and can resurface at a later stop.
+    if (this.acceptedAtStop(m.originStopId)) return null;
     m.status = 'active';
     m.acceptedAtMile = mile;
     if (m.terms.perishable) {
@@ -532,15 +798,23 @@ export class MissionSystem {
     if (m.terms.rush) {
       m.deadlineClockSec = (clockSec != null) ? clockSec - m.terms.rush.budgetSec : null;
     }
+    // Party clock at acceptance — the speed tip measures THIS job's leg
+    // (clock counts DOWN, so elapsed = acceptedClockSec − now).
+    m.acceptedClockSec = clockSec ?? null;
     // Passenger: schedule the one mid-route comment; start the heat tracker.
     if (m.type === 'passenger') {
       m.commentAtMile = mile + m.routeMiles * 0.5;
       m.progress.maxStars = 0;
     }
     m.progress.damageTaken = 0;
+    if (m.originStopId) this._acceptedAtStop[m.originStopId] = m.id;
     this._bumpStat(m.type, 'accepted');
     return m;
   }
+
+  /** The job (if any) already taken at this stop — the other offers there are
+   *  unavailable for the rest of the run. */
+  acceptedAtStop(stopId) { return this._acceptedAtStop?.[stopId] ?? null; }
 
   /** Decline an offer — stays declined for the rest of the run. */
   decline(missionId) {
@@ -593,6 +867,155 @@ export class MissionSystem {
       }
     }
     return failed;
+  }
+
+  // ── Slice-2 condition clauses ───────────────────────────────────────────
+
+  /** Player ate or drank something.  Fails NO-EATING hauls ("counted, weighed,
+   *  and I'll count it again").  Returns newly failed. */
+  noteEat() {
+    const failed = [];
+    for (const m of this.activeMissions()) {
+      if (m.terms?.noEating) { this._fail(m, 'ate_the_cargo'); failed.push(m); }
+    }
+    return failed;
+  }
+
+  /** Player fired a weapon / deployed anything.  Fails PACIFIST runs.
+   *  Returns newly failed. */
+  noteWeaponFired() {
+    const failed = [];
+    for (const m of this.activeMissions()) {
+      if (m.terms?.pacifist) { this._fail(m, 'opened_fire'); failed.push(m); }
+    }
+    return failed;
+  }
+
+  /** Speed feed (called each tick with the live mph and the frame's dt).
+   *  A speed FLOOR or CAP tolerates brief violations — `graceSec` of accrued
+   *  time outside the band before the job dies — so ordinary traffic, a
+   *  corner, or a rest-stop pull-in doesn't auto-fail an otherwise clean run.
+   *  Time inside the band drains the accrued debt at the same rate.
+   *  Returns newly failed. */
+  sampleSpeed(mph = 0, dt = 0) {
+    if (!(dt > 0)) return [];
+    const failed = [];
+    for (const m of this.activeMissions()) {
+      const floor = m.terms?.speedFloor, cap = m.terms?.speedCap;
+      if (!floor && !cap) continue;
+      const bad = (floor && mph < floor.mph) || (cap && mph > cap.mph);
+      // Grace scales with difficulty (owner 2026-07-30): Hard runs the raw
+      // authored budget, Normal gets more time, Easy more still.  The band
+      // itself (the mph) never moves — only how long you may sit outside it.
+      const grace = (floor?.graceSec ?? cap?.graceSec ?? 4)
+                  * (Difficulty.speedGraceMul?.() ?? 1);
+      const acc = (m.progress.speedDebt ?? 0) + (bad ? dt : -dt);
+      m.progress.speedDebt = Math.max(0, acc);
+      if (m.progress.speedDebt > grace) {
+        this._fail(m, floor && mph < floor.mph ? 'too_slow' : 'too_fast');
+        failed.push(m);
+      }
+    }
+    return failed;
+  }
+
+  // ── Challenge class (slice 3) ───────────────────────────────────────────
+
+  /** Active challenges, newest first. */
+  activeChallenges() { return this.activeMissions().filter(m => m.type === 'challenge'); }
+
+  /** Called on the first ROAD tick after acceptance — starts the clock.  Kept
+   *  separate from accept() so browsing the shop can't burn the timer. */
+  armChallenges() {
+    const armed = [];
+    for (const m of this.activeChallenges()) {
+      if (m.progress.armed) continue;
+      m.progress.armed    = true;
+      m.progress.timeLeft = m.goal?.limitSec ?? null;   // null = untimed dare
+      m.progress.hold     = 0;
+      m.progress.used     = 0;
+      armed.push(m);
+    }
+    return armed;
+  }
+
+  /** Player used an F12 item — feeds `useItemsInTime`.  Returns any newly
+   *  completed challenges (the caller pays them). */
+  noteItemUsed(itemType) {
+    const done = [];
+    for (const m of this.activeChallenges()) {
+      const g = m.goal;
+      if (g?.kind !== 'useItemsInTime' || !m.progress.armed) continue;
+      if (g.item && itemType !== g.item) continue;
+      m.progress.used = (m.progress.used ?? 0) + 1;
+      if (m.progress.used >= (g.count ?? 3)) { this._completeChallenge(m); done.push(m); }
+    }
+    return done;
+  }
+
+  /** Per-tick challenge feed.  `dt` in REAL seconds; ctx { mph, boosting }.
+   *  Returns { done: [], failed: [] } — the caller pays the first and pops a
+   *  message for the second. */
+  tickChallenges(dt = 0, ctx = {}) {
+    const done = [], failed = [];
+    if (!(dt > 0)) return { done, failed };
+    for (const m of this.activeChallenges()) {
+      const g = m.goal;
+      if (!g || !m.progress.armed) continue;
+      if (g.kind === 'speedBand') {
+        const inBand = (g.minMph == null || ctx.mph >= g.minMph)
+                    && (g.maxMph == null || ctx.mph <= g.maxMph);
+        // CONTINUOUS hold — dropping out resets it, which is the whole ask.
+        m.progress.hold = inBand ? (m.progress.hold ?? 0) + dt : 0;
+        if (m.progress.hold >= (g.holdSec ?? 30)) { this._completeChallenge(m); done.push(m); continue; }
+      } else if (g.kind === 'boostSeconds') {
+        if (ctx.boosting) m.progress.hold = (m.progress.hold ?? 0) + dt;
+        if ((m.progress.hold ?? 0) >= (g.sec ?? 20)) { this._completeChallenge(m); done.push(m); continue; }
+      }
+      // The fuse burns only for dares that HAVE one.
+      if (m.progress.timeLeft != null) {
+        m.progress.timeLeft -= dt;
+        if (m.progress.timeLeft <= 0) { this._fail(m, 'challenge_expired'); failed.push(m); }
+      }
+    }
+    return { done, failed };
+  }
+
+  /** Close a challenge out on the road: completed + paid in one step, through
+   *  the SAME ledger the stop-based flow uses so a rewind can't pay it twice. */
+  _completeChallenge(m) {
+    m.status = 'completed';
+    m.paid   = true;
+    this._outcomes[m.id] = { status: 'completed', paid: true };
+    this._bumpRep(m.type);
+    this._bumpStat(m.type, 'completed');
+    this._noteNpcOutcome(m, 'completed');
+    return m;
+  }
+
+  /** Live effects of the cargo currently aboard — GameScene applies these each
+   *  tick.  `heatStars` is ADDITIVE wanted pressure while carrying; `drainMult`
+   *  multiplies survival-bar drain.  Both default to the no-op values. */
+  activeEffects() {
+    let heatStars = 0, drainMult = 1;
+    for (const m of this.activeMissions()) {
+      if (m.terms?.heatCarried)   heatStars = Math.max(heatStars, m.terms.heatCarried.stars ?? 2);
+      if (m.terms?.survivalDrain) drainMult = Math.max(drainMult, m.terms.survivalDrain.mult ?? 2);
+    }
+    return { heatStars, drainMult };
+  }
+
+  /** Final pay for a graded mission, after the EFFECT clauses that modify it:
+   *  damageDock (docked per HP of crash damage) and tipBySpeed (tip scaled by
+   *  how far under par the run landed).  Never drops below a quarter of the
+   *  agreed price — a bad run still beats no run, and a zeroed payout reads as
+   *  a bug to the player.  RestStopScene multiplies the genre trait on top. */
+  payoutFor(m) {
+    if (!m) return 0;
+    let pay = (m.payout ?? 0) + (m.tip ?? 0);
+    const dock = m.terms?.damageDock;
+    if (dock) pay -= Math.round((m.progress?.damageTaken ?? 0) * (dock.perHp ?? 25));
+    return Math.max(Math.round((m.payout ?? 0) * 0.25), Math.round(pay));
   }
 
   /** Odometer feed for passenger flavor — returns { mission, line } for each
@@ -671,6 +1094,7 @@ export class MissionSystem {
     const failed = [];
     for (const m of this.activeMissions()) {
       if (m.status !== 'active') continue;
+      if (m.type === 'challenge') continue;      // no target to drive past
       if ((mile ?? 0) > (m.targetMile ?? Infinity) + graceMi) {
         this._fail(m, 'missed_stop');
         failed.push(m);
@@ -691,14 +1115,38 @@ export class MissionSystem {
    *  `stars` = current wanted stars at pull-in: a HEAT-escape job must land
    *  at 0 stars (Ch. 8 "arrive at 0 stars") — arriving hot terminally fails
    *  it instead of grading ready.  Returns the newly-READY missions. */
-  gradeArrivals(stopId, mile = 0, stars = 0) {
+  /** Pull-in grading.  `ctx` carries the arrival state the slice-2 clauses
+   *  judge: { fuelPct, alertPct, cash, elapsedSec }.  Missing fields simply
+   *  skip their clause, so older callers keep working. */
+  gradeArrivals(stopId, mile = 0, stars = 0, ctx = {}) {
     const ready = [];
     for (const m of this.activeMissions()) {
+      if (m.type === 'challenge') continue;      // no destination to arrive at
       if (m.targetStopId !== stopId) continue;
       if (m.paid) continue;
       if (m.type === 'heat' && stars > 0) { this._fail(m, 'still_hot'); continue; }
+      // ── Arrival conditions (slice 2) ────────────────────────────────────
+      // Judged HERE rather than en route: they're all "show up like this".
+      const t = m.terms ?? {};
+      if (t.fuelFloor && ctx.fuelPct != null && ctx.fuelPct < t.fuelFloor.pct) {
+        this._fail(m, 'tank_too_low'); continue;
+      }
+      if (t.alertFloor && ctx.alertPct != null && ctx.alertPct < t.alertFloor.pct) {
+        this._fail(m, 'rider_nodded_off'); continue;
+      }
+      if (t.cashExact && ctx.cash != null
+          && Math.abs(ctx.cash - t.cashExact.amount) > (t.cashExact.tol ?? 50)) {
+        this._fail(m, 'books_dont_balance'); continue;
+      }
       // Thrill-seeker tip condition: the ride actually got spicy (any heat).
       m.tip = (m.terms?.thrill_seeker && (m.progress?.maxStars ?? 0) >= 1) ? THRILL_TIP : 0;
+      // Speed tip: pay for beating par, pro-rated, never negative.
+      if (t.tipBySpeed && ctx.clockSec != null && m.acceptedClockSec != null) {
+        const elapsed = Math.max(0, m.acceptedClockSec - ctx.clockSec);
+        const par  = (m.routeMiles ?? 0) * (t.tipBySpeed.parSecPerMi ?? 26);
+        const frac = par > 0 ? Math.max(0, Math.min(1, (par - elapsed) / par)) : 0;
+        m.tip = (m.tip ?? 0) + Math.round((t.tipBySpeed.maxTip ?? 400) * frac);
+      }
       m.status = 'ready';
       m.arrivedAtMile = mile;
       ready.push(m);
@@ -747,7 +1195,14 @@ export class MissionSystem {
   _repOf(type)  { return (this._save?.get?.('missionRep', {}) ?? {})[type] ?? 0; }
   tierOf(type)  { return tierFor(this._repOf(type)); }
 
+  /** Custom is a SANDBOX (owner 2026-07-30): missions run there so they can be
+   *  playtested, but completions must not inflate real progression — no rep,
+   *  no lifetime stats.  NPC contact memory is left alone; it's flavour, not
+   *  progression, and a contact who forgets you mid-sandbox reads as broken. */
+  _sandbox() { return Difficulty.noScore?.() === true; }
+
   _bumpRep(type) {
+    if (this._sandbox()) return;
     if (!this._save?.set) return;
     const rep = this._save.get('missionRep', {}) ?? {};
     rep[type] = (rep[type] ?? 0) + 1;
@@ -778,6 +1233,7 @@ export class MissionSystem {
   }
 
   _bumpStat(type, key) {
+    if (this._sandbox()) return;
     if (!this._save?.set) return;
     const stats = this._save.get('missionStats', {}) ?? {};
     const s = stats[type] ?? { accepted: 0, completed: 0, failed: 0 };
