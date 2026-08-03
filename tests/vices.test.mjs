@@ -101,20 +101,24 @@ const run = (v, secs, step = 1 / 60) => {
 }
 
 // ── 7. Speed impact — what this was all for ──
-// Owner rule (2026-07-31, revised): caffeine pills are +2 mph per pickup,
-// capped at +20 mph total, fading per-dose over that pill's own 60 s
-// clock — NOT a percentage speedMult on an invisible bar (the old
-// `1 + c*0.45` mechanism, which double-counted against this same flat
-// bonus and was removed from EffectsSystem entirely). getCaffeineSpeedBonusMPH
-// is the only place caffeine touches speed.
+// Owner rule (2026-08-03, revised): caffeine pills are a FLAT +2 mph per
+// pickup for the pill's ENTIRE 60 s clock — no gradual fade (the fading
+// version averaged +1/pill and read as "no change" on the speedo) — then
+// drop off when that dose expires. Capped at +20 mph total. NOT a
+// percentage speedMult on an invisible bar (the old `1 + c*0.45`
+// mechanism double-counted and was removed from EffectsSystem entirely).
+// getCaffeineSpeedBonusMPH is the only place caffeine touches speed.
 {
   const v = mk();
   for (let i = 0; i < 4; i++) v.pickup('caffeine');
   const peakMph = v.getCaffeineSpeedBonusMPH();
-  ok('4 pickups ≈ 8 mph peak (2 mph each, no dilution)', near(peakMph, 8, 0.3), `got ${peakMph.toFixed(2)} mph`);
-  run(v, 60.5);
-  ok('caffeine mph bonus back to 0 in 60 s', v.getCaffeineSpeedBonusMPH() === 0, `got ${v.getCaffeineSpeedBonusMPH()}`);
-  console.log(`\n  caffeine speed bonus: peak +${peakMph.toFixed(1)} mph for <60 s (flat, was a x1.45 speedMult for 204 s)`);
+  ok('4 pickups = 8 mph (2 mph each, no dilution)', near(peakMph, 8, 0.3), `got ${peakMph.toFixed(2)} mph`);
+  run(v, 45);
+  const heldMph = v.getCaffeineSpeedBonusMPH();
+  ok('still the FULL 8 mph at 45 s — flat, no fade', near(heldMph, 8, 0.3), `got ${heldMph.toFixed(2)} mph`);
+  run(v, 15.5);
+  ok('caffeine mph bonus drops to 0 when the 60 s doses expire', v.getCaffeineSpeedBonusMPH() === 0, `got ${v.getCaffeineSpeedBonusMPH()}`);
+  console.log(`\n  caffeine speed bonus: flat +${peakMph.toFixed(1)} mph for the full 60 s, then off`);
 }
 
 // ── 8. One pickup alone is a real, visible bonus (the regression this

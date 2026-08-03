@@ -544,19 +544,19 @@ export class ViceSystem {
     return 4 * (1 - d.t / d.dur);
   }
 
-  /** Caffeine Pill speed boost in MPH — owner rule (2026-07-31, revised):
-   *  each pill is worth ~2 mph, fading out over that PILL's own 60 s clock
-   *  (DOSE_SECONDS.caffeine), not diluted by the total bar level, capped at
-   *  a combined +20 mph no matter how many are stacked. Summing live doses
-   *  directly (each up to 2 mph, scaled by its own fitted amt if a
-   *  near-full bar clipped it) means the bonus is always visible per-pill
-   *  instead of hiding behind a bar-fraction multiplier. */
+  /** Caffeine Pill speed boost in MPH — owner rule (2026-08-03, revised):
+   *  each pill is a FLAT +2 mph for its ENTIRE 60 s clock, then drops off
+   *  when that pill's dose expires — no gradual fade. (The fading version
+   *  averaged +1/pill and was imperceptible on the speedo: "I've been
+   *  consuming caffeine and not noticing increase in speed".) Still capped
+   *  at a combined +20 mph, still scaled by each dose's fitted amt so a
+   *  pill clipped by a near-full bar contributes proportionally less. */
   getCaffeineSpeedBonusMPH() {
     const doses = this._doses[VICES.CAFFEINE];
     if (!doses?.length) return 0;
     const fullAmt = DOSE_SECONDS[VICES.CAFFEINE] ? 0.10 : 0;   // one full-strength pill's fill
     let mph = 0;
-    for (const d of doses) mph += 2 * (fullAmt ? d.amt / fullAmt : 1) * (1 - d.t / d.dur);
+    for (const d of doses) mph += 2 * (fullAmt ? d.amt / fullAmt : 1);
     return Math.min(20, mph);
   }
 
