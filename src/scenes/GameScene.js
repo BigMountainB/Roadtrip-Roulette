@@ -19179,7 +19179,12 @@ export class GameScene extends Phaser.Scene {
     const baseEngX = this._leftHanded ? 640 : (SCREEN_W - 640 - 120);
     const bx = baseEngX + o.dx;
     const by = 361 + o.dy;
-    const frac = Math.max(0, Math.min(1, (temp - 30) / 85));
+    // Bar scale is DERIVED from the limp threshold (owner 2026-08-03: the car
+    // must not overheat until the gauge reads FULL) — the fill hits 100% at
+    // exactly ENGINE_LIMP_TEMP, so the two can never drift apart under tuning.
+    // (The old hardcoded /85 scale topped out at 115° while limp fired at 92°,
+    // i.e. "OVERHEATING" with a quarter of the bar still empty.)
+    const frac = Math.max(0, Math.min(1, (temp - 30) / (ENGINE_LIMP_TEMP - 30)));
     const warn = temp >= ENGINE_WARN_TEMP, limp = this._engineLimp;
     const col  = limp ? 0xFF3B30 : (warn ? 0xFF8C1A : 0x39C0D9);
     g.fillStyle(0x0A0F1A, 0.8); g.fillRoundedRect(bx, by, bw, bh, 2);

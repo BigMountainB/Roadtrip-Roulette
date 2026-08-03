@@ -642,11 +642,18 @@ export const FUEL_BURN_BOOST  = 0.35;  // + while boosting
 export const FUEL_BURN_HOT    = 0.35;  // + while the engine is in limp/overheat
 
 // ── Engine heat / overheating ────────────────────────────────────────────
-// engineTemp 0–100 lerps toward a target set by ambient heat (eastern desert),
+// engineTemp lerps toward a target set by ambient heat (eastern desert),
 // climbs, and speed; the Cooling stat lowers the target and speeds recovery.
+// The heat TARGET clamps at 115 (GameScene), so LIMP_TEMP must sit
+// comfortably below that or the asymptotic lerp can never reach it.
+// Owner 2026-08-03: no overheat until the gauge is FULL — the HUD bar reads
+// full at exactly ENGINE_LIMP_TEMP (GameScene._drawEngineTemp derives its
+// scale from this constant), and 92→105 gives real extra headroom: flat-
+// ground flooring in the cool west (target ≈85) can no longer limp; it now
+// takes the desert and/or a sustained climb while flogging it.
 export const ENGINE_TEMP_START  = 35;
 export const ENGINE_WARN_TEMP   = 80;   // gauge warns + steam wisps
-export const ENGINE_LIMP_TEMP   = 92;   // top speed capped (limp mode)
-export const ENGINE_LIMP_CLEAR  = 78;   // must cool below this to exit limp
+export const ENGINE_LIMP_TEMP   = 105;  // top speed capped (limp mode) — gauge FULL here
+export const ENGINE_LIMP_CLEAR  = 90;   // must cool below this to exit limp (~15° hysteresis)
 export const ENGINE_LIMP_MULT   = 0.60; // top-speed multiplier while limping
 export const ENGINE_HP_DPS      = 3.0;  // HP/sec lost while redlining (Normal/Hard)
