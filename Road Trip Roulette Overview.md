@@ -38,6 +38,7 @@ to jump straight to the chapter you need to read or change.
 - **[Chapter 9 — Ground Tile Art Spec](#chapter-9--ground-tile-art-spec)** — the 8 per-biome overhead ground textures (1024×1024, seamless both axes), scale/resolution rules, which are done vs. outstanding
 - **[Chapter 10 — Biome Band Art Spec](#chapter-10--biome-parallax-band-art-spec)** — the 24 horizon-silhouette images (8 biomes × 3 parallax layers), tiling/transparency rules, per-biome subject notes
 - **[Chapter 11 — NPC Dialogue Reference](#chapter-11--npc-dialogue-reference)** — every rest-stop encounter, mission passenger/contact, and crowd-chatter line, verbatim; companion spreadsheet `npc_dialogue.csv` in the repo root; rewrite-in-progress toward "edgier, funnier"
+- **[Chapter 12 — Dead Code Inventory](#chapter-12--dead-code-inventory)** — audited 2026-08-03: orphaned files (`src/cops/`, `CarPhysics.js`, the stale `Road 2.js`), the vice-bar layer stranded by the survival migration, dead methods/constants/asset keys, and a suggested order of work
 
 ---
 
@@ -120,7 +121,232 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
-### 2026-07-31 (pt 2) — Missions enabled in CUSTOM (sandbox rule), shop scrim → FAP only, crash hunt
+### 2026-08-04 — Chase realism pass · near-field cop projection · skyline/tunnel layering · weapon-exit tuning · challenge-mission crash
+Uncommitted. Tests: chase **50** (13 new), coal 25, missions 256, genreTraits 179, vices 26, upgrades 3 — all green.
+
+**Chase rebuilt around the owner's model of a real pursuit** (`CopSystem.js`). Aggression is now
+star-scaled instead of uniform:
+- **1★ is a TAIL** — the lone cruiser closes, holds station, and **never strikes**. Drive clean and
+  it follows indefinitely; shake it with the existing 1.5-mi escape.
+- **Backup calls** — a pursuer within `EYES_ON_FT` (1000 ft) *witnesses* erratic driving and radios
+  it in: **+1 whole star, capped at 3★** (weapons stay the only path to 4-5★). Triggers: a civilian
+  collision (instant, hooked in `_applyDamage`), or ~2 s sustained at 90+ mph / across the
+  double-yellow. 15 s cooldown, and the reinforcement spawn is forced so backup visibly arrives.
+  Owner chose **erratic-acts-only** over a timer — you can be tailed forever if you behave.
+- **Strikes begin at 2★**, cadence by tier (2★ holds 5 s / rams every ~5-8.5 s; 3★ holds 2.5 s /
+  every ~3.5-5.7 s). **PIT gate moved 4★ → 2★** (owner call): an alongside rear-quarter tap is a
+  pursuit manoeuvre, exempt from the no-lead rule — *blocking/overtaking* still needs
+  `MIN_STARS_AHEAD` 4. Reachable only mid-lunge, so a 1★ tail can never arm one.
+- **One striker at a time** — units rotate attacks instead of mobbing the bumper.
+- **Wanted decay PAUSES while a cop has eyes on you.** You can't wait out a star mid-chase.
+- **Formation lanes** — every guarded unit clamped at the same depth *and* converged on the
+  player's lane, stacking three cruisers into one sprite. Now the primary tracks your bumper and
+  wingmen hold flanking slots (±0.42, ±0.8): "if 3 police are chasing, show 3 full police cars."
+- **Reaction lag (1.5-4 s, per unit)** — owner: *"I can speed up or slow down and the cops don't
+  seem to lose or gain 1 ft."* `CopSystem` keeps a 4.5 s history of player speed; every
+  throttle-following decision reads it **lagged**. Three places had made the gap rigid — the
+  closing rate, GUARD 1's ceiling, and the real culprit, **the station clamp, which re-synced the
+  cop to the player's exact throttle every frame it touched**. Deliberately NOT lagged: position
+  math (the cop can *see* you), the anti-pass clamp (owner law), and a committed lunge (drives off
+  live speed so strikes land when you're accelerating).
+
+**Near-field cop projection — "cops sit on the player"** (`GameScene._nearSynthProj`).
+`getVehicleProjection` returns nothing usable below ~4400 units from the camera, and a pursuit cop
+lives at **2100-3000** — *all* of its life is under the floor, so it drew at the player's own
+screen height, beside the car. Now the projection is clamped at the floor and extrapolated down
+with real perspective: width ∝ 1/distance, lateral offset scaled to match, seat-Y fitted through
+two known-good anchors (the floor projection and the player's own seat at `PLAYER_VIRTUAL_Z`).
+The cruiser seats **bigger and lower**, tucked behind the bumper, growing as it lunges.
+- **Owner chose cop-over-player** (depth 9.96-9.98, world-z gated) over the standing no-crossover
+  rule — it is between the camera and your car, so perspective says it overlaps you. Civilian
+  traffic ahead still paints under 9.95. Light bars got their own layer at 9.985.
+- **Flee continuity** — owner: *"the cop jumps on the player's car when I select rolling coal."*
+  Every flee path (coal / donut / fireworks) now keeps the **same** synthetic seat; flipping to the
+  raw below-floor projection on the frame a weapon landed was teleporting the cruiser onto the
+  player. No sudden movement on deploy — it recedes from exactly where it stood.
+- Removed the stale `[depthdbg2]` TEMP console probe (its bug was fixed weeks ago).
+
+**Weapon exits retuned** (owner 2026-08-04): **donuts 3× faster** (keep-pace 0.8 → 0.4, so the
+diverted cruiser clears screen in a third of the time) and **rolling coal 3× slower** (0.45 → 0.82)
+**plus a spin-out**: the smoked cop's sprite flashes rear↔front at ~2.8 flips/s — the same trick
+crashed traffic uses — reading as a car spinning out in the smoke. This supersedes the 2026-07-21
+"donut flees ease back GENTLY" call.
+
+**Layering fixes.**
+- **City silhouette vs. the road** (`Road.js`) — the layer paints at depth 6.9, necessarily above
+  `roadGfx` (1.5), so wherever pavement rose above the flat horizon line it stamped over the
+  roadway. The projection pass now builds a per-8px-column **road-top map**, read one frame stale
+  by the painter (invisible at horizon distance) to clip hills, blocks and window dots. Ground/water
+  rows span the full screen width, so a risen row clips **every** column — that's the floating-bridge
+  "buildings on the water" case the owner caught after the first pass.
+- **Skyline pop at the tunnel approach** — it was a hard on/off switch (`_upcomingTunnelClose`),
+  visible as silhouettes present at 6.78 mi and gone at 6.80. Replaced with `_citySilFade`, a
+  distance-driven alpha on the whole layer, dissolving over the same ~600-segment stretch where the
+  real embankment hill grows in.
+- **Tunnel walls vs. pickups** — the wall shell (9.82) swallowed on-road pickups (max 9.5). Pickups
+  now get the same in-tunnel lift cars have (9.83, halos 9.825) **but run the wall-occlusion test
+  first**, so a pickup around the bend stays hidden. Owner's rule: *"walls not seen through, but
+  don't cover images that should be visible."*
+
+**PURSUIT chevron** now hides once the cruiser is actually on screen (car-rel −1500, where the
+forward view starts drawing it) — it only tracks pursuit you can't see yet.
+
+**Crash fix — challenge missions had no destination.** Owner hit
+`TypeError: Cannot read properties of null (reading 'toUpperCase')` in `_drawMissionChip` mid-drive.
+Challenges are built with `targetName`/`targetMile` **null by design**, but three call sites assumed
+every job has a destination: the HUD chip (crashed the whole HUD update), the rest-stop JOBS list
+(printed `null · NaN MI`), and the accept popup ("Job taken — 3 fireworks to **null**"). All three
+now branch on `targetName == null` → `🎯 NAME · $PAY`, and null distance sorts as ∞ so a real
+delivery always wins the chip over a dare. **This is very likely the unreproduced "crash just
+before mile 3" from the 2026-07-31 session.**
+
+**Two pre-existing flaky tests hardened** (surfaced, not caused, by this work): the 5★ token check
+now measures max-over-time (also the stronger pool guarantee) rather than a single end frame; the
+3★ clamp sweep now filters to rear pursuers — 3★ star-spawns roll ~45% oncoming, which is ahead
+*by design*, making that assertion a coin flip. Also fixed an unbounded `do/while` in the barricade
+gap picker that the decay-pause change exposed (it never terminated with `Math.random` pinned).
+
+### 2026-08-03 (pt 2) — Rest-stop menus: one tap was firing on two screens
+Uncommitted (`RestStopScene.js`). Tests 550 green, build clean — no test covers scene input, so
+this is a playtest-verified fix, not a test-verified one.
+
+Owner: "if I click an option it often times also clicks the next screen behind that option."
+**Two separate causes, both real:**
+
+1. **Down/up straddle.** The menus mix event types *by design* — placards, dealer cards and dialog
+   choices act on pointer**DOWN**; shop buy buttons act on pointer**UP** (2026-07-29, so a scroll
+   swipe can't buy what sits under the finger at the start of the drag). So one tap on a business
+   tile fired DOWN → the shop screen built instantly → that same tap's UP landed on whatever buy
+   button the new screen had just placed under the finger. Instant unwanted purchase.
+2. **The scrims never blocked anything.** `_showEncounterCard`'s full-screen scrim was commented
+   "eats clicks to the shop underneath" — it did not. `setInteractive()` alone doesn't stop Phaser;
+   Phaser dispatches to *every* interactive object under the pointer, depth-sorted. The existing
+   `pointer.event.stopPropagation()` calls stop the **DOM** event, which is unrelated to Phaser's
+   own dispatch — that takes Phaser's event object, the **4th arg** of a game-object handler.
+   So a tap on a dialog choice also hit the shop button behind the dialog.
+
+**The fix** — three small helpers on the scene, `MENU_GATE_MS = 300`:
+- `_eatTap(ptr, ev)` — stops the tap in the DOM *and* in Phaser (`ev.stopPropagation()`).
+- `_gateTaps(ms)` — called on every screen swap and popup open/close. Locks menu input for 300 ms
+  and, if the finger is still down, records `pointer.downTime` so the arriving screen refuses that
+  press's release. Keyed on `downTime` (unique per press) so it self-clears and doesn't depend on
+  Phaser's handler ordering.
+- `_tapBlocked(ptr)` — guard at the top of every menu handler.
+- `_swallowTaps(obj, onTap)` — makes a scrim genuinely eat both halves of a tap.
+
+Wired into `_showLanding` / `_showDealerChooser` / `_showSection` (so `_popScreen` is covered),
+the landing tiles, dealer chooser, garage tabs, mission-collect rows, BACK, HIT THE ROAD, the buy
+button's pointerup, encounter-card choices, leave-confirm, `_drainMenuPopup` and the payoff banner.
+300 ms was chosen over the owner's suggested 1 s: the straddle is now impossible by construction,
+so the timer only has to cover double-taps — one constant to raise if a ghost click ever survives.
+
+### 2026-08-03 — Caffeine/energy speed bonuses were never firing · coffee+energy flat on/off · all OD terminology purged · dead-code audit
+Committed as `f4d340d` (flat caffeine) and the follow-up OD/live-path commit. Tests 546 green, build clean.
+
+**The bonuses were wired to code the game never runs.** Owner: "I've been consuming caffeine
+and not noticing increase in speed." The mechanism was fine — it just never executed.
+`getCaffeineSpeedBonusMPH()` / `getEnergySpeedBonusMPH()` read dose ledgers that only
+`ViceSystem.pickup()` fills, and **`pickup()` has had no production caller since vice pickups
+moved to the survival model** (`GameScene._onCollect` → `survival.applyItem`). Proved it by
+instrumenting the live path: it ran (Tiredness moved), `pickup()` was called zero times, bonus
+stayed 0. Two prior tuning passes (2026-07-31 +2 mph, 2026-08-03 flat-no-fade) were both
+editing dead code. **Verification lesson:** those passes "verified" by calling
+`vices.pickup()` directly from Playwright — the one path the game doesn't use. Always drive
+the real entry point (`_onCollect`), not the system method underneath it.
+Fixed with `noteCaffeinePickup()` / `noteEnergyPickup()` on their own dose ledgers (the coffee
+pattern), called from `_onCollect`. Verified end-to-end: 1 pill 94→96.8 mph, 4 pills + a shot
+→ 108.8, holding flat.
+
+**Coffee and energy are now ON or OFF, never fading** (owner rule), matching caffeine's flat
++2/cap-20 from earlier the same day. Coffee was the only one of the three that already worked,
+since it comes through the rest-stop purchase channel rather than road pickups.
+
+**"There are no OD's in the game — this isn't DUI."** Swept all 77 overdose references to 0.
+Player-facing text already read "PASSED OUT"; the DUI vocabulary survived in internals:
+`canOD`→`canPassOut`, `odThreshold`→`passOutThreshold`, `checkOD`→`checkPassOut`,
+`_onOverdose`→`_onPassOut`, end-cause `'overdose'`→`'passed_out'`, `noOD`→`noPassOut`,
+`onlyODVices`→`onlyPassOutVices`, tracker `.odd`→`.passedOut`, asset key **and file**
+`end_overdose_neon.webp`→`end_passed_out_neon.webp` (re-verified HTTP 200 + texture loads at
+boot), plus ~35 comment/prose fixes. The retired pass-out branch was dropped from `pickup()`'s
+return.
+
+**Dead-code audit → new [Chapter 12](#chapter-12--dead-code-inventory).** The finding above
+prompted a full sweep. Headlines: `src/cops/` (4 files, ~800 lines) and `src/car/CarPhysics.js`
+are never imported; `src/road/Road 2.js` (4,458 lines) is **back** after being deleted in
+`bf00890` and is untracked; the whole vice-bar layer is stranded by the survival migration
+(and `tests/vices.test.mjs` largely tests it); ~40 dead methods incl. `_maxSpeedWithBoost`
+(which was still being maintained — it got a `coffeeBonus` term on 08-01 that can never run);
+3 dead constants; 9 dead asset keys costing boot bandwidth; and a `refuelMi` payload flag that
+does nothing. Nothing deleted yet — Ch.12 has the inventory and a suggested order of work.
+
+### 2026-08-01 → 08-03 — Speed-rules overhaul: F5 debugger, zero drug references, 160 mph hard cap, car ladder retune, overheat-at-full-gauge
+Committed as `77bbb3c`/`4045172`/`ebdc853`/`6338154`/`558fb09`/`b8b8e50`/`2debf87`/`bf00890` (07-31),
+`17e2714` (08-01), `dfc24db` (08-02), `2c818f2` (08-03). All tests + build green at each commit.
+
+**F5 speed debugger (dev mode).** New overlay showing the exact per-frame speed math:
+cur/target mph, cruise/boost bases, every flat mph bonus one decimal each, speedMult with
+per-vice breakdown, grade, engine temp, and a `⛔CAP 160` flag when the limiter is pinning
+the target. `_updatePlayer` stashes the raw numbers into `this._speedDbg` every frame (the
+overlay only formats — it can never drift from what actually drove the car). Built to answer
+the owner's "top speed jumped 150→177 and nothing was picked up" — which turned out to be
+EffectsSystem's invisible ×1.55 energy-bar multiplier (since removed, see below).
+
+**ZERO drug references (owner directive — standing rule).** All drug-era terminology purged
+from the codebase: identifiers, comments, dialogue, achievement keys. `alc/weed/shrooms/lsd/
+hero/fent/ket/rx` locals → `sushi/burrito/gummies/hotdog/combo/coma/slushie/coldbrew` across
+EffectsSystem, ViceSystem, AudioSystem, Road.js, constants, GameScene (~200+ renames);
+`alcoholHoldover`→`sushiHoldover`, `shroomPhase`→`gummiesPhase` (cross-file contract — the
+rename exposed and fixed a real bug where GameScene still wrote the old key and Road.js read 0
+every frame). Dead `maxed_heroin`-family achievement keys renamed (confirmed never awarded —
+no save risk). Deliberately UNCHANGED: `'permastoned'` achievement key and `methPhase1`/
+`cocainePeak` fallbacks in `hydrateProgress()` (persisted save-schema ids; renaming silently
+drops player progress). GameScene has ~100 more scattered references in mission/encounter/UI
+text NOT yet swept — needs its own pass; blanket sed is unsafe there (`weed` = tumbleweed
+props, `rx` = rect-x layout vars).
+
+**Consumable speed bonuses — final owner rules, all dose-based, all visible in F5:**
+- Caffeine pill: **+2 mph each, cap +20, FLAT for the pill's entire 60 s** then off (`f4d340d`
+  08-03; the original fading version averaged +1/pill and the owner couldn't feel it —
+  "I've been consuming caffeine and not noticing increase in speed").
+- Coffee (rest-stop item): **+1 mph per cup, cap +10, fades over 30 s** — the old
+  `coffee: true` payload flag was completely dead; now counted in `_applyPurchase` →
+  `coffeeCount` → `ViceSystem.noteCoffeePurchase()` on resume (clocks start when you're
+  back on the road, not while browsing the shop).
+- Energy shot: **a SINGLE +4 mph fading over 30 s — never stacks.** A new shot RESTARTS the
+  clock. Replaced the unbounded `energyPickupCount × 4 × bar` formula AND deleted the ×1.55
+  energy speedMult in EffectsSystem (same shot counted twice; the multiplier was the mystery
+  speed climb). Speedball combo (energy+combo) keeps its post-clamp speedMult kick as that
+  combo's identity — the 160 cap contains it.
+
+**160 mph hard cap + car ladder retune (owner: "game gets hard past 140").**
+`SPEED_CAP_MPH = 160` clamps the FINAL target speed after every bonus and multiplier —
+nothing escapes it, and >160 is reserved as a deliberate future punishment mechanic (lift the
+clamp on purpose, never by accident). All 10 genre cars shifted down keeping their spread:
+EDM 165→150, Classic Rock 150→140, K-Pop 145→135, Hip-Hop 140→130, Reggaeton 135→126,
+Norteño 130→122, Pop-Punk 125→117, Country 120→112, Metal 110→104, Reggae 100→95; cruise
+moved with each car's gap; plain beater boost 130→120 (`topMph` 110→100). EDM+ECU = 165 raw
+rides the limiter at 160 — the only car that can touch the cap on hardware alone. Verified
+live headless: forced +300 mph of bonuses → target pins at exactly 160.0, `capped` flag set.
+
+**Engine never limps until the temp gauge reads FULL (owner 2026-08-03).**
+`ENGINE_LIMP_TEMP` 92→105, `ENGINE_LIMP_CLEAR` 78→90 (~15° hysteresis kept). The HUD bar's
+scale is now DERIVED from `ENGINE_LIMP_TEMP` (fill hits 100% exactly at the limp trigger)
+instead of the hardcoded /85 that topped out at 115° while limp fired at 92° — i.e.
+"OVERHEATING" with a quarter of the bar empty. Balance effect: flat-ground flooring in the
+cool west (heat target ≈85°) can no longer limp at all; overheating now requires the eastern
+desert and/or a sustained climb while flogging it. Warn (`ENGINE_WARN_TEMP` 80) unchanged =
+~⅔ of the new bar. Verified live: no limp ≤100°, engages ≥105°, holds to 90°, clears below.
+
+**Tests:** vices.test.mjs grew to 31 (energy no-stack/restart/fade, caffeine 2 mph + 20 cap,
+coffee 1 mph + 10 cap + 30 s fade); genreTraits.test.mjs speed tables updated to the new
+ladder (179 green).
+
+**⚠ Two-session workflow note.** This session ran in parallel with the cop-chase-realism
+session in the same working tree. GameScene.js commits used the surgical
+`git hash-object`/`update-index` technique to commit ONLY this session's hunks. One near-miss
+to not repeat: a `git stash push --keep-index` probe silently swept BOTH sessions' uncommitted
+work into a stash; `git stash pop` restored everything intact — never stash in this tree while
+the other session is live.
 Local + test-passing (515) + builds clean. Uncommitted.
 
 **Missions were unreachable in Custom — the one mode they get playtested in.** Owner reported
@@ -167,6 +393,38 @@ stop's mission shop (`_missionShopKeyFor` picks one amenity per stop determinist
 `_showShopGreeter` → `_buildMissionEncounter`). The old automatic HIT THE ROAD exit pitch
 (`_tryExitMissionCard`) was REMOVED per owner directive. Consequence for playtesting: if the
 first shop you enter opens straight to its menu, that stop's contact is in a DIFFERENT shop.
+
+### 2026-07-31 — Mercer Island approach: floating "building" silhouette fixed
+Local, uncommitted.
+
+**Owner report: "the image layering going into Mercer Island looks really bad — building
+silhouettes showing over the roadway, trees floating on the tunnel."** Reproduced live by
+scripting a headless Chromium against the running dev server (`playwright-core`, already a
+devDependency): loaded the title screen, warped via `scene._warpToMile()` to mile 6.6-7.4
+(the Lacey V. Murrow Bridge approach to the Mercer Island Lid Tunnel), froze the car
+(`player.speed = 0`), and screenshotted. Confirmed a flat dark rectangle sitting disconnected
+above the tan tunnel-embankment hill, matching the owner's screenshot almost exactly.
+
+**Root cause: two independent "fake horizon" layers that don't know about each other.**
+`Road.js` procedurally paints a generic downtown-skyline silhouette (random flat rectangles,
+`_cityBack` block) across the FULL screen width for the whole "urban stretch" (mile 0–12.5),
+completely independent of the road's curve/perspective. Separately, the real Mt Baker / Mercer
+Island Lid Tunnel embankment hill (`_drawTunnelFacade`) IS curve- and perspective-correct, but
+only covers a limited footprint around the tunnel mouth. Approaching a tunnel, both render at
+once — generic skyline blocks land outside the real hill's silhouette (since they don't track
+the curve) and read as buildings floating disconnected above/beside the actual hillside and
+roadside trees. Ruled out the per-segment sprite pool and the biome parallax backdrop first by
+instrumenting a live dump of `road.segments[].sprites` and `scene._sceneSpritePool` — neither
+had anything near the screen position of the artifact, which is what pointed at the procedural
+skyline block instead.
+
+**Fix:** added a bounded lookahead in `Road.js` (`_upcomingTunnelClose`, peeking
+`DRAW_DIST + 600` segments — the same window the embankment hill's own far-out projection
+already uses) that switches the generic skyline off once a real tunnel embankment is close
+enough to own that stretch of horizon. Verified live: mile 6.88 (the reported spot) now
+clean; mile 1.66 (West Seattle, far from any tunnel) still shows the normal skyline — the
+fix is scoped to tunnel proximity, not a global suppression; mile 4.72 (Mt Baker tunnel
+approach, same underlying issue, not previously reported) also clean.
 
 ### 2026-07-31 — Tap-mode steering fix + unused-asset archive
 Local + test-passing + builds clean. Committed as `422fc2d`, `8f240ff`.
@@ -870,6 +1128,46 @@ Placeholder frames only; never playtested.
 - **Unexplained green bar** at the horizon. Guessed the North Bend plate's ground band twice, wrong
   both times, both reverted. Isolate layers rather than guessing again.
 
+
+### 2026-07-31 — /demo AND /fully both found stale + fixed + redeployed; CI root cause diagnosed; website/fully untracked from git
+
+- User reported "the demo game on the main site is missing images." Root cause: **both** `/demo`
+  and `/fully` were stale — each hand-built once on 2026-07-27 and never refreshed since (CI can't
+  deploy — see below), so 15 commits of shop-greeter portraits, storefront fixes, and biome art
+  never reached the live site. Verified with a headless-browser console-error sweep (playwright-core
+  launched from inside the RTR `node_modules`, listening for Phaser's `"Failed to process file"`
+  console errors), not just curl — a URL can return 200 while the browser still fails to decode the
+  image under load, so a single curl check isn't proof; re-ran the sweep 3x to separate real
+  404-class misses from transient decode noise before trusting the result.
+- Rebuilt + redeployed both. Wrote **`website/build-fully.sh`** (new — this is the script the
+  "Deploy conflict" fix below already called for) which builds the full game fresh and re-applies
+  the `<base href="/fully/">` + `manifest.webmanifest` patches that a plain `vite build` loses, the
+  same way `website/build-demo.sh` already did for the demo.
+- **CI root cause found (previously mis-stated as "the token expired" — corrected):** a
+  non-expiring replacement token (`rtr-dui-deploys`, created 2026-07-26, lives in
+  `DUI/.cloudflare.env`) already exists and works — it's what manual deploys use. But the GitHub
+  Actions secret `CF_PAGES_API_TOKEN` was never actually updated to it: `gh secret list` shows it
+  untouched since 2026-07-04, still holding the token that expired 2026-07-22. `gh run list`
+  confirms the exact split — every run through 07-22 succeeded, every run 07-23 onward fails with
+  `Authentication error [code: 10000]`. **Still an owner TODO** (unchanged from 07-27, Claude is
+  blocked from writing repo secrets): paste the `rtr-dui-deploys` token into GitHub → Settings →
+  Secrets for BOTH `BigMountainB/Roadtrip-Roulette` and `BigMountainB/DUI`.
+  ⚠️ **Do not fix the token without also rewiring `cloudflare-pages.yml`** per "Deploy conflict"
+  below — fixing only the token makes CI green again, and a green CI run still runs
+  `wrangler pages deploy dist`, which clobbers `/fully` and the marketing site on the very next push.
+- `website/fully/` had been tracked in git this whole time — 601MB of build output, unlike
+  `website/demo/` which was correctly gitignored from the start. Almost certainly why past pushes
+  in this repo have been huge and slow (one earlier push this arc uploaded 584MB). Added it to
+  `.gitignore` and `git rm -r --cached` to untrack (local files kept) — both `/demo` and `/fully`
+  are now pure build output, deployed straight via `wrangler`, never committed.
+- `GameOverScene.js`'s demo-complete end screen still had a dead App-Store-era CTA
+  (`APP_STORE_URL` was `''`, so it showed "Full game coming soon to the App Store" with no link
+  anywhere) — leftover from before the 2026-07-26 pivot to web-first monetization. Now shows
+  "GET THE FULL GAME", opens `/fully/` in a new tab.
+- Also flagged, not yet acted on: the 11 shop-staff portrait PNGs
+  (`public/assets/npc/businesses/*.png`) are 3.2–3.5MB each for a 1086×1448 image — compressing to
+  PNG/WebP should get each well under 500KB with no visible quality loss. Owner hasn't confirmed
+  they want this done.
 
 ### 2026-07-27 — Game DEPLOYED to CF Pages (local wrangler); GitHub-Actions deploy still broken until secret update
 Committed + pushed the whole accumulated batch (4375424: website, worker entitlements, trait
@@ -1719,18 +2017,43 @@ and is superseded by this chapter).
 > ```
 > Site is ~1.2 GB / 1,422 files — inside the 20,000-file and 25 MiB-per-file caps. Uploads are
 > fast after the first because Pages dedupes by content hash.
+>
+> **Status update (2026-07-31):** the two post-build patches described above are no longer manual —
+> `website/build-fully.sh` applies both automatically (see "How to deploy" below). `website/fully/`
+> and `website/demo/` are both gitignored build output now, never committed. **The workflow file
+> itself is still unfixed** — `.github/workflows/cloudflare-pages.yml` still runs
+> `wrangler pages deploy dist`, so this whole conflict is still live; only the manual path is safe.
+> Also: CI is currently failing outright regardless (dead `CF_PAGES_API_TOKEN` — see the
+> 2026-07-31 changelog entry above), which has been *accidentally* preventing the clobber. Fixing
+> the token without also rewiring this workflow will make the clobber start happening again.
 
 ## How to deploy
 
-**Pushing to `origin/main` triggers the GitHub Action → Cloudflare Pages auto-deploy.** No CLI,
-no manual build.
+**In theory**, pushing to `origin/main` triggers the GitHub Action → Cloudflare Pages auto-deploy,
+no CLI or manual build needed. **In practice, as of 2026-07-31, CI is broken** (dead token, see the
+Deploy conflict callout above) — the only path that currently reaches the live site is the manual
+one below. Check `gh run list` before trusting a push alone to have deployed anything.
 
 ```bash
 cd "/Users/brendanbaughn/Documents/Claude/Road trip roulette"
 git add -A                 # or stage specific paths
 git commit -m "Short description of what changed"
-git push origin main       # GitHub Action builds + deploys to Cloudflare Pages
+git push origin main       # GitHub Action builds + deploys to Cloudflare Pages (currently broken)
 ```
+
+**The actual working deploy (manual, until CI is fixed):**
+```bash
+cd "/Users/brendanbaughn/Documents/Claude/Road trip roulette"
+cd website && sh build-demo.sh   # refreshes /demo — only if game source changed
+cd website && sh build-fully.sh  # refreshes /fully — only if game source changed
+cd "/Users/brendanbaughn/Documents/Claude/Road trip roulette"
+set -a; . ../DUI/.cloudflare.env; set +a
+npx --yes wrangler@3 pages deploy website --project-name roadtrip-roulette --branch main --commit-dirty=true
+```
+Both build scripts do a full `rm -rf` + rebuild every time — they can't drift silently stale again
+the way the old hand-curated `/demo` and `/fully` did (each went 4+ days stale before anyone noticed,
+see the 2026-07-31 changelog entry). Run them before every manual deploy if game source changed
+since the last one; skip them if you're only touching marketing-site pages (`website/*.html`, `css/`).
 
 - Live URL: **https://roadtrip-roulette.pages.dev**
 - Build typically lands in ~45–60s. Watch runs with `gh run list`.
@@ -1758,7 +2081,10 @@ git push origin main       # GitHub Action builds + deploys to Cloudflare Pages
 - **Music-menu dependency:** committed `index.html` already expects `s.culture`; if the matching
   `AudioSystem.js` mapping is missing, `cultureArt` is empty even when the HTML/CSS deployed cleanly.
   If the PNG directory is missing, the mapping exists but image requests 404. Ship both together.
-- **`dist/` is build output** — never edit or commit it; CI runs `npm run build` itself.
+- **`dist/`, `website/demo/`, and `website/fully/` are all build output** — never edit or commit
+  them (all three are gitignored). `dist/` comes from CI's `npm run build`; the other two come
+  from `website/build-demo.sh` / `website/build-fully.sh` and must be rebuilt by hand before a
+  manual deploy if game source changed.
 - **`ios/App/App/public/`** is the Capacitor sync target (`npx cap sync ios`) — don't hand-edit.
 - **`Images/`** at the repo root is a local-only art archive (large PSDs) — don't ship it; keep it gitignored so `git pack-objects` doesn't choke on push.
 - **Old code in production after a deploy** = browser cache. Hard-refresh (Cmd+Shift+R) or reopen the saved-to-home-screen PWA.
@@ -6857,3 +7183,92 @@ jobs, in the North Bend test) instead of the generic line, dismissing either ope
 behind it, and a second visit to an already-met shop skips straight through. Data lives in
 `SHOP_GREETERS` in `src/data/encounters.js`; the gate and the mission-shop pick are both in
 `RestStopScene.js` (`_showShopGreeter()`, `_missionShopKeyFor()`).
+
+---
+
+# Chapter 12 — Dead Code Inventory
+
+**Audited 2026-08-03.** Method-level scan of `src/` (definitions vs. real call sites), plus
+module-import, exported-constant, asset-key and shop-payload passes. Framework callbacks
+(Phaser `renderWebGL` / `renderCanvas` / `preload` / `create` / `update`) and dynamically
+built keys (`` `vomit_${n}` ``, `` `tumbleweed_${n}` ``, `car_back_<set>` / `car_front_<set>`
+from `CAR_COLOR_SETS`, `vice_<id>`) were verified and are NOT dead — they are excluded below.
+
+Nothing here has been deleted. This is the list to work from, not a record of removals.
+
+## 12.1 Fully orphaned files (never imported)
+
+| Path | Lines | Notes |
+|---|---|---|
+| `src/cops/` — `CopAI.js`, `CopFleet.js`, `Helicopter.js`, `SWATVan.js` | ~800 | Already banner-marked **"⚠️ SUPERSEDED — NOT WIRED INTO THE GAME (verified 2026-07-29)"**. The live police AI is `src/systems/CopSystem.js` + `src/systems/Deployables.js`. Every remaining mention of `CopAI`/`Helicopter` is a cross-reference *inside this dead directory*. Kept deliberately as a role/state design sketch. |
+| `src/car/CarPhysics.js` | 160 | Zero references anywhere, and no banner. Real car physics is inline in `GameScene._updatePlayer`. |
+| `src/road/Road 2.js` | 4458 | **Stale duplicate of `Road.js`, UNTRACKED.** Deleted in `bf00890`, has since reappeared in the working tree. Not in the repo, but it is on disk and will catch greps/edits aimed at `Road.js` — a real footgun (it already carries a diverged copy of the `_isPatch` code). |
+
+## 12.2 The vice-bar layer is orphaned by the survival migration
+
+The biggest live-code finding, and the root cause of the 2026-08-03 caffeine bug (see the
+changelog entry): **`ViceSystem.pickup()` has no production caller.** Road vice pickups run
+`GameScene._onCollect` → `survival.applyItem()` (the survival model). Anything reachable only
+through `pickup()` is therefore dead in a real run:
+
+- `ViceSystem.pickup()` — called **only by `tests/vices.test.mjs`**. Much of that suite is
+  therefore testing code the game never executes.
+- `ViceSystem.checkPassOut()` — never called (pass-out from vices is retired; the only
+  terminal is "fell asleep at the wheel" from Tiredness).
+- `ViceSystem.isPermastoned()`, `ViceSystem.isOn()`
+- `VICE_CONFIG`'s `canPassOut` / `passOutThreshold` — now read only by the near-max HUD
+  border warning in `GameScene`, not by any terminal logic.
+- `GameScene._onPassOut()` — never called. The live "PASSED OUT" ending is reached from the
+  fell-asleep branch via `_endGame('passed_out', { charge: 'FATIGUE' })`.
+- `GameScene._tryEspresso()` — never called. The espresso *pickup* still works (clears
+  Tiredness); only its pass-out-reversal role is orphaned.
+- Daily-challenge `noPassOut` objective + `onlyPassOutVices` mod (`DailyChallenges.js`) —
+  `onlyPassOutVices` is never consumed at all, and `noPassOut` is now trivially satisfied
+  because nothing can set the tracker's `passedOut` flag.
+
+**Decision needed:** either delete this layer, or re-wire the parts worth keeping. Do not
+leave it half-live — this is exactly the shape that produced a bonus that silently never fired.
+
+## 12.3 Dead methods (defined, never called)
+
+`GameScene.js` — `_maxSpeedWithBoost` · `_tryEspresso` · `_drawViceIcons` ·
+`_drawViceBarsOld_disabled` · `_projectVehicle` · `_buildAchievementsModal` ·
+`_setVehicleAccessories` · `_drawTopRowIcon` · `_groupUnderPoint` · `_onPassOut`
+
+> ⚠️ `_maxSpeedWithBoost` is dead **and was still being maintained** — it got a `coffeeBonus`
+> term on 2026-08-01 that can never run. Dead code that looks live attracts edits; this one
+> duplicates the mph-bonus formula, so it also reads as a second source of truth that isn't.
+
+Other modules — `DamageModel`: `getStage`, `isWrecked`, `getStageVisuals`, `getRepairCost`
+(file *is* imported, these four are not) · `AchievementSystem.earnedTier` ·
+`StatsTracker.recordTopSpeed`, `recordSexWorker` · `UpgradeSystem.hasUpgrade` ·
+`SaveSystem.resetProfile`, `hasSave` · `DailyChallenges.rewardForAttempt`, `weekKey` ·
+`Difficulty.allModes`, `customMode` · `CloudSave.checkPlate` · `CopSystem.countOf`,
+`_closestCop` · `AudioSystem._runScheduler` · `Colors.hexToPhaser` ·
+`VehicleStats.debugPrintVehicleStats` · `Road.renderVehicle`, `roadScreenYAtDepth` ·
+`GroundPlane.setTile` · `encounters.validateEncounterTrees` ·
+`businessMissions.allTemplates` (`templateReady` is test-only) · `Wallet.getLog`
+
+## 12.4 Dead constants, asset keys, payload flags
+
+- **Constants:** `COP_SPAWN_Z` (`constants.js`), `VICE_PRICE` (`RestStopScene.js`),
+  `UNTABBED_SLOTS` (`data/upgrades.js`) — exported, no consumer.
+- **Asset manifest keys (9)** — loaded at boot, never used: the seven
+  `codex_*_front` player-vehicle arts left behind when purchased vehicles were removed
+  2026-07-19 (`codex_suv4x4_front`, `codex_used_truck_front`, `codex_new_truck_front`,
+  `codex_ev_truck_front`, `codex_sports_car_front`, `codex_bestla_roadster_front`,
+  `codex_playdout_s3x_front`), plus `tree_generic` and `ui_phone_menu_bg`. These cost real
+  download + VRAM on every boot. (Related: the known "23 dead car-art entries" item.)
+- **Payload flag:** `refuelMi` — set on the gas item's payload in `RestStopScene.js:599`,
+  never read. Same class of bug as the `coffee: true` flag that did nothing until 2026-08-01;
+  `refuel: true` is what actually drives the refuel.
+
+## 12.5 Suggested order of work
+
+1. **`Road 2.js`** — delete it (again) and find what recreates it. Highest risk-per-byte:
+   it's a 4,458-line near-copy that silently absorbs edits meant for `Road.js`.
+2. **Decide the vice-bar layer's fate** (§12.2) — it's the only cluster that has already
+   caused a real gameplay bug, and it invalidates part of the test suite.
+3. **9 dead asset keys** — trivial to remove, immediate boot-time win.
+4. **`src/car/CarPhysics.js`** — delete; unlike `src/cops/` it isn't marked as a keeper.
+5. Dead methods/constants — safe cleanup, no behaviour change.

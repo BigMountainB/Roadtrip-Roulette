@@ -29,6 +29,18 @@ import { GENRE_VEHICLE_TRAITS } from '../data/genreVehicleTraits.js';
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 
+// ── Menu tap gate (owner 2026-08-03) ─────────────────────────────────────
+// One physical tap must never fire on two screens.  These menus mix event
+// types by design: placards, dealer cards and dialog choices act on pointer
+// DOWN, while shop buy buttons act on pointer UP (so a scroll swipe can't
+// buy — see _makeButton).  A tap that opened a screen was therefore landing
+// its UP on whatever button the NEW screen had just put under the finger.
+// Every screen swap / popup now eats the remainder of the tap that caused it
+// and ignores menu input for this long.  Short on purpose — long enough to
+// swallow a stray release, short enough that tapping through screens still
+// feels instant.  Raise it if a ghost click ever survives.
+const MENU_GATE_MS = 300;
+
 // Vice texture key — every vice's pickup asset is named vice_<id>.
 const VICE_TEX = (id) => `vice_${id}`;
 
@@ -952,6 +964,11 @@ export class RestStopScene extends Phaser.Scene {
           : m.type === 'weather' ? (m.terms?.weather_run?.tag === 'wind' ? '🌬' : '🌨')
           : '📦');
         const _lines = _jobs.map((m) => {
+          // Challenges carry no destination (targetName/targetMile null) —
+          // list them by name with no mileage leg.
+          if (m.targetName == null) {
+            return `🎯 ${m.missionName ?? 'CHALLENGE'} · $${m.payout.toLocaleString()}${_flags(m)}`;
+          }
           const _left = Math.max(0, m.targetMile - this._odometer);
           const _mi   = _left < 10 ? _left.toFixed(1) : String(Math.round(_left));
           return `${_icon(m)} ${m.targetName} · ${_mi} MI · $${m.payout.toLocaleString()}${_flags(m)}`;
@@ -1046,8 +1063,9 @@ export class RestStopScene extends Phaser.Scene {
       }).setOrigin(0.5);
       bg.on('pointerover', () => bg.setFillStyle(0xFFE585));
       bg.on('pointerout',  () => { if (bg.input?.enabled) bg.setFillStyle(0xFFD23D); });
-      bg.on('pointerdown', (ptr) => {
-        ptr.event?.stopPropagation?.();
+      bg.on('pointerdown', (ptr, _x, _y, ev) => {
+        this._eatTap(ptr, ev);
+        if (this._tapBlocked(ptr)) return;
         const paid = _missionsSys?.collect?.(m.id);
         if (!paid) return;                       // double-tap / rewind safe
         const pay = Math.round((_missionsSys?.payoutFor?.(paid) ?? (paid.payout + (paid.tip ?? 0))) * _payMultFor(paid.type));
@@ -1147,8 +1165,9 @@ export class RestStopScene extends Phaser.Scene {
 
       card.on('pointerover', () => card.setFillStyle(0xF0E8C0));
       card.on('pointerout',  () => card.setFillStyle(0xFFFFFF));
-      card.on('pointerdown', (ptr) => {
-        ptr.event?.stopPropagation?.();
+      card.on('pointerdown', (ptr, _x, _y, ev) => {
+        this._eatTap(ptr, ev);
+        if (this._tapBlocked(ptr)) return;
         // Dealers sell CARS again (owner 2026-07-23 — the genre-car showroom),
         // so a dealer tile opens the Cars/Accessories chooser.  Remember which
         // brand was tapped: headers show it, and Sam's caps parts at level 2
@@ -1214,8 +1233,9 @@ export class RestStopScene extends Phaser.Scene {
         const img = this.add.image(0, 0, 'ui_garage_toolbar', _fk)
           .setOrigin(0, 0).setVisible(false)
           .setInteractive({ useHandCursor: true });
-        img.on('pointerdown', (ptr) => {
-          ptr.event?.stopPropagation?.();
+        img.on('pointerdown', (ptr, _x, _y, ev) => {
+          this._eatTap(ptr, ev);
+          if (this._tapBlocked(ptr)) return;
           this._selectGarageCategory(this._activeSection, cat.id);
         });
         this._garageTabs.push({ cat, img });
@@ -1255,8 +1275,9 @@ export class RestStopScene extends Phaser.Scene {
         }).setOrigin(0.5);
         card.on('pointerover', () => card.setFillStyle(0xF0E8C0));
         card.on('pointerout',  () => card.setFillStyle(0xFFFFFF));
-        card.on('pointerdown', (ptr) => {
-          ptr.event?.stopPropagation?.();
+        card.on('pointerdown', (ptr, _x, _y, ev) => {
+          this._eatTap(ptr, ev);
+          if (this._tapBlocked(ptr)) return;
           // ACCESSORIES routes to Sam's own dedicated section when Sam's is
           // the active dealer — dealer_acc and sam_acc are genuinely
           // separate SECTIONS entries (see the sam_acc definition), not one
@@ -1289,7 +1310,11 @@ export class RestStopScene extends Phaser.Scene {
       }).setOrigin(0.5).setVisible(false);
       this._backBtnBg.on('pointerover', () => this._backBtnBg.setFillStyle(0xF0E8C0));
       this._backBtnBg.on('pointerout',  () => this._backBtnBg.setFillStyle(0xFFFFFF));
-      this._backBtnBg.on('pointerdown', () => this._popScreen());
+      this._backBtnBg.on('pointerdown', (ptr, _x, _y, ev) => {
+        this._eatTap(ptr, ev);
+        if (this._tapBlocked(ptr)) return;
+        this._popScreen();
+      });
       // Section header text — repurposed when a sub-menu opens.
       this._sectionHeader = this.add.text(this._contentX + this._contentW / 2, headerY + 13, '', {
         fontSize: '15px', fontFamily: IMPACT,
@@ -1334,7 +1359,11 @@ export class RestStopScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this._continueBtnBg.on('pointerover', () => this._continueBtnBg.setFillStyle(0x66CC66));
     this._continueBtnBg.on('pointerout',  () => this._continueBtnBg.setFillStyle(0x44AA44));
-    this._continueBtnBg.on('pointerdown', () => this._continue());
+    this._continueBtnBg.on('pointerdown', (ptr, _x, _y, ev) => {
+      this._eatTap(ptr, ev);
+      if (this._tapBlocked(ptr)) return;
+      this._continue();
+    });
 
     // ── Status line ─────────────────────────────────────────────────────
     this._statusText = this.add.text(CX, SCREEN_H - 118, '', {
@@ -1782,9 +1811,12 @@ export class RestStopScene extends Phaser.Scene {
     const add = (...n) => { objs.push(...n); return n[0]; };
     const dismiss = () => { for (const o of objs) o?.destroy?.(); };
 
-    // Full-screen scrim that eats clicks to the shop underneath.
-    add(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.82)
-      .setDepth(D).setInteractive());
+    // Full-screen scrim that eats clicks to the shop underneath.  setInteractive
+    // alone does NOT do that — Phaser keeps dispatching to the objects below
+    // it — so the scrim has to stop propagation itself (_swallowTaps).
+    this._gateTaps();
+    add(this._swallowTaps(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.82)
+      .setDepth(D)));
 
     // Big near-full-screen card, SPLIT: NPC portrait pane on the left
     // (fully uncovered), text + choices pane on the right.
@@ -1981,6 +2013,9 @@ export class RestStopScene extends Phaser.Scene {
           this._showMenuPopup(`🔥 Deal — land at ${m.targetName} with ZERO stars.\n\n$${m.payout} clean, half if you pay your way out.`, '#88FF88');
         } else if (m?.type === 'weather') {
           this._showMenuPopup(`${m.terms?.weather_run?.tag === 'wind' ? '🌬' : '🌨'} Contract taken — ${m.cargo} to ${m.targetName}, intact.\n\n$${m.payout}.`, '#88FF88');
+        } else if (m?.type === 'challenge') {
+          // Dares have no destination — the fallback below printed "to null".
+          this._showMenuPopup(`🎯 Dare's on — ${m.missionName ?? 'challenge'}.\n\n$${m.payout} the moment you pull it off.`, '#88FF88');
         } else if (m) {
           this._showMenuPopup(`📦 Job taken — ${m.cargo} to ${m.targetName}.\n\n$${m.payout} on delivery.`, '#88FF88');
         }
@@ -2029,7 +2064,14 @@ export class RestStopScene extends Phaser.Scene {
         bg.setInteractive({ useHandCursor: true });
         bg.on('pointerover', () => bg.setFillStyle(0x1E5280));
         bg.on('pointerout',  () => bg.setFillStyle(0x143A5A));
-        bg.on('pointerdown', (p) => { p.event?.stopPropagation?.(); choose(c); });
+        bg.on('pointerdown', (p, _x, _y, ev) => {
+          this._eatTap(p, ev);
+          if (this._tapBlocked(p)) return;
+          // Gate BEFORE resolving: dismiss() tears the scrim down, so without
+          // this the same tap's release lands on the shop button underneath.
+          this._gateTaps();
+          choose(c);
+        });
       }
       by += bh + gap;
     }
@@ -2081,6 +2123,7 @@ export class RestStopScene extends Phaser.Scene {
   }
 
   _showLanding() {
+    this._gateTaps();
     this._screenStack = ['landing'];
     this._activeSection = null;
     this._applyShopChrome(null);   // back to the blue highway sign
@@ -2097,6 +2140,7 @@ export class RestStopScene extends Phaser.Scene {
 
   /** Show the dealer chooser (Cars / Accessories). */
   _showDealerChooser() {
+    this._gateTaps();
     this._applyShopChrome(this._activeDealerKey);
     this._screenStack = ['landing', 'dealer'];
     this._activeSection = null;
@@ -2143,6 +2187,7 @@ export class RestStopScene extends Phaser.Scene {
   /** Show a sub-menu for a section key.  parent (optional) = the
    *  intermediate screen to return to on BACK; defaults to 'landing'. */
   _showSection(key, parent = 'landing') {
+    this._gateTaps();
     this._screenStack = parent === 'dealer'
       ? ['landing', 'dealer', key]
       : ['landing', key];
@@ -2288,6 +2333,49 @@ export class RestStopScene extends Phaser.Scene {
     }
     this._sectionContentH[key] = Math.max(0, row * (rec.cellH + 6) - 6);
     this._setSectionScroll(key, 0);
+  }
+
+  /** Stop this tap here — in the DOM *and* in Phaser's own dispatch.
+   *  `pointer.event` is the raw DOM event; stopping that does NOT stop Phaser
+   *  walking on down its depth-sorted hit list to the objects underneath.
+   *  That takes Phaser's OWN event object, handed to a game-object handler as
+   *  the 4th arg — which is why an interactive scrim never actually blocked
+   *  the shop buttons below it. */
+  _eatTap(ptr, ev) {
+    ptr?.event?.stopPropagation?.();
+    ev?.stopPropagation?.();
+  }
+
+  /** Close the menus to further input for a beat.  Called on every screen
+   *  swap and every popup open/close. */
+  _gateTaps(ms = MENU_GATE_MS) {
+    this._inputLockUntil = (this.time?.now ?? 0) + ms;
+    const p = this.input?.activePointer;
+    // Finger still down: this tap has already done its job.  Its release
+    // belongs to the screen that's leaving, not the one arriving — remember
+    // the press so the incoming screen can refuse the matching pointerup.
+    // Keyed on downTime (unique per press) so it needs no clearing and
+    // doesn't depend on handler ordering.
+    if (p?.isDown) this._eatenTapAt = p.downTime;
+  }
+
+  /** True when a menu handler must ignore this pointer event. */
+  _tapBlocked(ptr) {
+    if ((this.time?.now ?? 0) < (this._inputLockUntil ?? 0)) return true;
+    return ptr != null && this._eatenTapAt != null && ptr.downTime === this._eatenTapAt;
+  }
+
+  /** Make a full-screen scrim genuinely swallow the tap — both halves of it,
+   *  so neither the press nor the release reaches the shop underneath.
+   *  onTap (optional) is the scrim's own dismiss action. */
+  _swallowTaps(obj, onTap = null) {
+    obj.setInteractive({ useHandCursor: !!onTap });
+    obj.on('pointerdown', (p, _x, _y, ev) => {
+      this._eatTap(p, ev);
+      if (onTap && !this._tapBlocked(p)) onTap();
+    });
+    obj.on('pointerup', (p, _x, _y, ev) => this._eatTap(p, ev));
+    return obj;
   }
 
   /** BACK pops one screen off the stack. */
@@ -2468,8 +2556,11 @@ export class RestStopScene extends Phaser.Scene {
     // this button" from "started a scroll here": a real tap barely moves
     // between down and up; a scroll swipe moves well past this in every case.
     const TAP_MAX_DRIFT = 12;
-    bg.on('pointerup', (ptr) => {
-      ptr.event?.stopPropagation?.();
+    bg.on('pointerup', (ptr, _x, _y, ev) => {
+      this._eatTap(ptr, ev);
+      // The press that opened THIS screen doesn't get to buy on the way out
+      // (see MENU_GATE_MS) — that's the tap landing on two screens at once.
+      if (this._tapBlocked(ptr)) return;
       if (ptr.getDistance() > TAP_MAX_DRIFT) return;   // was a scroll, not a tap
       if (item.disabled) {
         this._flash(bg, 0xFF4444);
@@ -2897,8 +2988,9 @@ export class RestStopScene extends Phaser.Scene {
     const tipStr = (m.tip ?? 0) > 0 ? `+$${m.tip} tip  ·  ` : '';
 
     const objs = [];
+    this._gateTaps();
     const scrim = this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.72)
-      .setDepth(D).setInteractive({ useHandCursor: true });
+      .setDepth(D);
     objs.push(scrim);
     objs.push(this.add.text(CX, SCREEN_H * 0.28, head, {
       fontSize: '18px', fontFamily: IMPACT, color: '#F4F7FF',
@@ -2926,8 +3018,8 @@ export class RestStopScene extends Phaser.Scene {
         }).setOrigin(0.5).setDepth(D + 1));
     }
     let done = false;
-    const dismiss = () => { if (done) return; done = true; for (const o of objs) o?.destroy?.(); };
-    scrim.on('pointerdown', (p) => { p.event?.stopPropagation?.(); dismiss(); });
+    const dismiss = () => { if (done) return; done = true; this._gateTaps(); for (const o of objs) o?.destroy?.(); };
+    this._swallowTaps(scrim, dismiss);
     this.time.delayedCall(3400, dismiss);
   }
 
@@ -2938,9 +3030,10 @@ export class RestStopScene extends Phaser.Scene {
     const names = ready.map(m =>
       m.type === 'passenger' ? (m.passenger?.name ?? 'your passenger') : m.cargo).join(', ');
     const objs = [];
-    const dismiss = () => { for (const o of objs) o?.destroy?.(); };
-    objs.push(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.82)
-      .setDepth(D).setInteractive());
+    const dismiss = () => { this._gateTaps(); for (const o of objs) o?.destroy?.(); };
+    this._gateTaps();
+    objs.push(this._swallowTaps(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.82)
+      .setDepth(D)));
     const pw = 520, ph = 190;
     const panel = this.add.graphics().setDepth(D + 1);
     panel.fillStyle(0x060A14, 0.97); panel.fillRoundedRect(CX - pw / 2, SCREEN_H / 2 - ph / 2, pw, ph, 12);
@@ -2977,7 +3070,11 @@ export class RestStopScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(D + 3);
       bg.on('pointerover', () => bg.setFillStyle(b.hover));
       bg.on('pointerout',  () => bg.setFillStyle(b.color));
-      bg.on('pointerdown', (p) => { p.event?.stopPropagation?.(); b.act(); });
+      bg.on('pointerdown', (p, _x, _y, ev) => {
+        this._eatTap(p, ev);
+        if (this._tapBlocked(p)) return;
+        b.act();
+      });
       objs.push(bg, lb);
     });
   }
@@ -3006,13 +3103,14 @@ export class RestStopScene extends Phaser.Scene {
     const objs = [];
     const add = (o) => { objs.push(o); return o; };
     const dismiss = () => {
+      this._gateTaps();
       for (const o of objs) { try { o.destroy(); } catch (_) {} }
       this._drainMenuPopup();          // show the next one, or close out
     };
 
-    add(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.78)
-      .setDepth(D).setInteractive())
-      .on('pointerdown', (p) => { p.event?.stopPropagation?.(); dismiss(); });
+    this._gateTaps();
+    this._swallowTaps(add(this.add.rectangle(CX, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.78)
+      .setDepth(D)), dismiss);
 
     const pw = Math.min(660, SCREEN_W - 60);
     const txt = this.add.text(CX, 0, next.msg, {
