@@ -1,10 +1,10 @@
 /**
- * ViceSystem — tracks active vice levels, unlocks, OD state
+ * ViceSystem — tracks active vice levels and unlocks
  *
  * Each vice has a level 0–1.
  * Level fills on pickup, decays over time.
- * At threshold: OD triggers (game over for most vices).
- * Burrito is the exception — cannot OD, just makes you very slow.
+ * At threshold most vices end the run (you pass out).
+ * Burrito is the exception — it just makes you very slow.
  *
  * Unlock tree (checked each update):
  *   energy   → sushi > 0.3 for > 30s total
@@ -25,13 +25,13 @@ const PICKUP_AMOUNTS = {
   sushi:  0.18,    // 18% — a bigger bite so one hit spikes a real effect that
                      // survives the realistic ~65s decay (raised from 7% 2026-06-22)
   burrito:     0.125,   // 12.5% base; tolerance kicks in past 60%
-  energy:  0.10,    // 10% per line → 10 lines fills the bar, 11th ODs (per
-                     // user 2026-07-01: "10 lines OD, each hit is 10%")
+  energy:  0.10,    // 10% per shot → 10 shots fills the bar, the 11th tips you over (per
+                     // user 2026-07-01: "10 hits to max, each hit is 10%")
   gummies:  0.20,    // 20% — fastest visual ramp
   hotdog:      0.25,    // 25% — fastest of all
   combo:   0.30,    // 30%
   coldbrew:       0.10,    // 10% — per-dose timer, see DOSE_SECONDS (was 0.18)
-  coma: 0.55,    // 55% — 2 hits OD at ≥1.00
+  coma: 0.55,    // 55% — 2 hits tips you over at ≥1.00
   slushie: 0.15,    // 15% — dissociative, scales with redosing (was 10%)
   caffeine:     0.10,    // 10% — per-dose timer, see DOSE_SECONDS (was 0.25)
 };
@@ -80,11 +80,15 @@ export class ViceSystem {
     this._comboActivatedAt  = {};
     // Coffee speed-bonus doses (owner 2026-07-31: "coffee adds 1mph, up to
     // 10mph"). Coffee isn't a VICES entry — it's a rest-stop purchase with
-    // no bar/OD/unlock semantics — so it gets its own tiny dose ledger
+    // no bar/unlock semantics — so it gets its own tiny dose ledger
     // instead of living in the VICES/_doses machinery above. Same shape as
     // a real dose ({t, dur}) but no `amt`/fitting: every cup is worth a
     // flat 1 mph at full strength, decaying linearly over its own 30s.
     this._coffeeDoses = [];
+    // Caffeine-pill speed doses — same dedicated-ledger pattern as coffee, and
+    // for the same reason: the LIVE pickup path (GameScene._onCollect →
+    // noteCaffeinePickup) must not depend on the retired vice-bar machinery.
+    this._caffeineDoses = [];
     for (const id of Object.values(VICES)) this.pickupCounts[id] = 0;
     // Per-dose ledgers for the DOSE_SECONDS vices: `_doses[id]` is the list of
     // live doses, `_doseSum[id]` is the level this system last wrote.  The pair
@@ -145,7 +149,7 @@ export class ViceSystem {
   }
 
   /** Top up every unlocked vice bar to a safe 60% — keeps the player from
-   *  walking out of a rest stop into an instant Coma OD.  Bars already
+   *  walking out of a rest stop into an instant Coma blackout.  Bars already
    *  above 60% are left alone.  IMPORTANT: do NOT bump `maxReached` —
    *  the Hot Dog / Coma unlock gates read maxReached for Gummies /
    *  Combo, so writing CAP there would chain-unlock the downstream
@@ -239,6 +243,11 @@ export class ViceSystem {
       d.t += dt;
       if (d.t >= d.dur) this._coffeeDoses.splice(i, 1);
     }
+    for (let i = this._caffeineDoses.length - 1; i >= 0; i--) {
+      const d = this._caffeineDoses[i];
+      d.t += dt;
+      if (d.t >= d.dur) this._caffeineDoses.splice(i, 1);
+    }
 
     // The single energy speed-bonus window ages the same way (see
     // getEnergySpeedBonusMPH) — nulled once spent.
@@ -257,7 +266,7 @@ export class ViceSystem {
    *  never waiting on an earlier dose to drain first.  The bar is the sum.
    *
    *  Reconciliation: GameScene writes `vices.levels[id]` directly in ~13 places
-   *  (rest-stop "reduce vices" buys, the Espresso OD-save flush, save restore,
+   *  (rest-stop "reduce vices" buys, the Espresso rescue flush, save restore,
    *  the dev slider, and the cross-vice drops inside `pickup`).  Those writes must win,
    *  so whenever the level no longer matches what this method last produced, the
    *  live doses are rescaled to the externally-set total — preserving their
@@ -510,72 +519,64 @@ export class ViceSystem {
       }
     }
 
-    // Energy speed bonus (owner 2026-08-02): RESTART the single +4 mph
-    // window — deliberately no stacking, and deliberately not gated on
-    // whether the bar had room (a shot at a full bar still re-ups the
-    // clock; you drank it either way).
-    if (id === VICES.ENERGY) {
-      this._energySpeedDose = { t: 0, dur: DOSE_SECONDS[VICES.ENERGY] ?? 30 };
-    }
+    // Speed-bonus windows — routed through the same note* methods the LIVE
+    // road-pickup path uses, so both paths can never disagree.  Deliberately
+    // not gated on whether the bar had room: you consumed it either way.
+    if (id === VICES.ENERGY)   this.noteEnergyPickup();
+    if (id === VICES.CAFFEINE) this.noteCaffeinePickup();
     // Per-pickup counters — addiction bias (chooseAddictedVice) and the
     // Cold-Brew-driven NPC traffic-speed shift (+/-7 mph / pickup).
     this.pickupCounts[id] = (this.pickupCounts[id] ?? 0) + 1;
 
-    // Immediate OD check (2026-06-20) — every OD-capable vice now uses
-    // odThreshold 1.0001, so OD fires only when a pickup would OVERFILL an
-    // already-maxed bar.  The stored level is capped at 1.0, so we test the
-    // UNCAPPED dose (prevLevel + amount): you OD by taking one hit too many on
-    // a full bar, uniform across all dangerous vices.  Sushi/Burrito are
-    // canOD:false, so they still fill safely.
-    const odThr = cfg.odThreshold ?? 1.0;
-    if (cfg.canOD && (prevLevel + amount) >= odThr) {
-      return { overdose: true, vice: id };
-    }
-    return { overdose: false, vice: id };
+    return { vice: id };
   }
 
-  /** Energy speed boost in MPH — owner rule (2026-08-02): a single +4 mph,
-   *  fading over the shot's own clock (DOSE_SECONDS.energy).  Only ONE is
-   *  ever active: a new pickup restarts the fade at full strength, it never
-   *  adds another +4 on top. */
+  /** Log an energy-shot pickup — called from GameScene._onCollect on the LIVE
+   *  road-pickup path (see noteCaffeinePickup for why the old `pickup()`-only
+   *  wiring never fired in a real run).  Restarts the single window; never
+   *  stacks a second +4. */
+  noteEnergyPickup() {
+    this._energySpeedDose = { t: 0, dur: DOSE_SECONDS[VICES.ENERGY] ?? 30 };
+  }
+
+  /** Energy speed boost in MPH — owner rule (2026-08-03): ON or OFF, never
+   *  fading.  A flat +4 mph for the shot's whole clock (DOSE_SECONDS.energy),
+   *  then nothing.  Only ONE is ever active: a new pickup restarts the clock
+   *  at full strength, it never adds another +4 on top. */
   getEnergySpeedBonusMPH() {
-    const d = this._energySpeedDose;
-    if (!d) return 0;
-    return 4 * (1 - d.t / d.dur);
+    return this._energySpeedDose ? 4 : 0;
   }
 
-  /** Caffeine Pill speed boost in MPH — owner rule (2026-08-03, revised):
-   *  each pill is a FLAT +2 mph for its ENTIRE 60 s clock, then drops off
-   *  when that pill's dose expires — no gradual fade. (The fading version
-   *  averaged +1/pill and was imperceptible on the speedo: "I've been
-   *  consuming caffeine and not noticing increase in speed".) Still capped
-   *  at a combined +20 mph, still scaled by each dose's fitted amt so a
-   *  pill clipped by a near-full bar contributes proportionally less. */
+  /** Log a caffeine-pill pickup — called from GameScene._onCollect on the
+   *  LIVE road-pickup path. Own ledger, exactly like coffee: the old version
+   *  read `_doses[CAFFEINE]`, which only `pickup()` ever filled, and `pickup()`
+   *  has no production caller since vices moved to the survival model — so the
+   *  speed bonus never fired in a real run ("I've been consuming caffeine and
+   *  not noticing increase in speed"). */
+  noteCaffeinePickup() {
+    this._caffeineDoses.push({ t: 0, dur: DOSE_SECONDS[VICES.CAFFEINE] ?? 60 });
+  }
+
+  /** Caffeine Pill speed boost in MPH — owner rule (2026-08-03): ON or OFF,
+   *  never fading. Each live pill is a flat +2 mph for its whole 60 s clock,
+   *  then drops off. Capped at a combined +20 mph however many are stacked. */
   getCaffeineSpeedBonusMPH() {
-    const doses = this._doses[VICES.CAFFEINE];
-    if (!doses?.length) return 0;
-    const fullAmt = DOSE_SECONDS[VICES.CAFFEINE] ? 0.10 : 0;   // one full-strength pill's fill
-    let mph = 0;
-    for (const d of doses) mph += 2 * (fullAmt ? d.amt / fullAmt : 1);
-    return Math.min(20, mph);
+    return Math.min(20, 2 * this._caffeineDoses.length);
   }
 
   /** Log a rest-stop Coffee purchase — called once per cup on GameScene
    *  resume (see the `coffeeCount` purchase field). Each cup gets its own
-   *  fresh 30s clock, independent of any others still fading. */
+   *  fresh 30s clock, independent of any others still running. */
   noteCoffeePurchase() {
     this._coffeeDoses.push({ t: 0, dur: 30 });
   }
 
-  /** Coffee speed boost in MPH — owner rule (2026-07-31): each cup is
-   *  worth ~1 mph, fading out over its own 30s clock, capped at a combined
-   *  +10 mph no matter how many cups are stacked. Same shape as
-   *  getCaffeineSpeedBonusMPH but Coffee has no bar/fitting to scale by —
-   *  every cup is always full-strength at the moment it's poured. */
+  /** Coffee speed boost in MPH — owner rule (2026-08-03): ON or OFF, never
+   *  fading.  Each live cup is a flat +1 mph for its whole 30s clock, then
+   *  drops off, capped at a combined +10 mph no matter how many are stacked.
+   *  Coffee has no bar/fitting to scale by — every cup is full-strength. */
   getCoffeeSpeedBonusMPH() {
-    let mph = 0;
-    for (const d of this._coffeeDoses) mph += 1 * (1 - d.t / d.dur);
-    return Math.min(10, mph);
+    return Math.min(10, this._coffeeDoses.length);
   }
 
   /** Cold-Brew-driven NPC traffic-speed offset in MPH (±7 mph per pickup),
@@ -623,7 +624,7 @@ export class ViceSystem {
       let w = 1 + Math.sqrt(count) * 1.6;
       if (upDominant && DOWNERS.has(id)) w *= 0.45;
       if (dnDominant && UPPERS.has(id))  w *= 0.45;
-      // Coma is RARE — single hit = 50%, two = OD.  Knock its weight
+      // Coma is RARE — single hit = 50%, two tips you over.  Knock its weight
       // way down so it shows up only occasionally even when the player
       // has piled up a heavy-vice pickup history.
       if (id === VICES.COMA) w *= 0.08;
@@ -658,16 +659,16 @@ export class ViceSystem {
     return map[type] ?? null;
   }
 
-  checkOD() {
-    // Per-frame safety net.  Under the 1.0001 scheme (2026-06-20) OD is
+  checkPassOut() {
+    // Per-frame safety net.  Under the 1.0001 scheme (2026-06-20) it is
     // actually triggered at pickup time by the overfill check (prev+dose ≥
     // 1.0001), since stored bars cap at 1.0 and never reach 1.0001 here.  Kept
     // as a guard in case a bar is ever pushed past its threshold by other
-    // means.  Sushi/Burrito are canOD:false, so they fill safely.
+    // means.  Sushi/Burrito are canPassOut:false, so they fill safely.
     for (const id of Object.values(VICES)) {
       const cfg = VICE_CONFIG[id];
-      const odThr = cfg.odThreshold ?? 1.0;
-      if (cfg.canOD && this.levels[id] >= odThr) {
+      const odThr = cfg.passOutThreshold ?? 1.0;
+      if (cfg.canPassOut && this.levels[id] >= odThr) {
         return id;
       }
     }

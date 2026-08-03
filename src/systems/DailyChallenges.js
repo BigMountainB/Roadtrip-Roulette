@@ -28,7 +28,7 @@ export function rewardForAttempt(attempt) {
 //                           stage spawns at `from` and completes at `to`
 //   group                 — 1 (build first) | 2 (the rest)
 //   mods                  — dailyStage spawn overrides (null-safe in GameScene):
-//                           onlyODVices, pickupDensityMult, npcDensityMult,
+//                           onlyPassOutVices, pickupDensityMult, npcDensityMult,
 //                           startViceLevels{id:0..1}, startingStars, startHP,
 //                           trapCount, trapsRotate
 //   objective             — detection spec interpreted by GameScene:
@@ -39,8 +39,8 @@ export const DAILY_CHALLENGES = [
     id: 'threshold', name: 'Threshold', group: 1,
     from: 'Cle Elum', to: 'Ellensburg',
     blurb: "Push a vice to the edge — and don't fall off.",
-    mods: { onlyODVices: true },
-    objective: { type: 'peak_vice', threshold: 0.90, noOD: true },
+    mods: { onlyPassOutVices: true },
+    objective: { type: 'peak_vice', threshold: 0.90, noPassOut: true },
   },
   {
     id: 'comedown', name: 'Sober by the Line', group: 1,

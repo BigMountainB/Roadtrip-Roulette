@@ -210,26 +210,26 @@ export const VICES = {
 
 // Vice config — decayRate (per second, linear) tuned 2026-06-20 to match a
 // REAL relative duration-of-effects ordering, compressed to a ~30s–4min game
-// range (energy shortest → Hot Dog longest).  odThreshold 1.0001 on every
-// OD-capable vice means OD fires only when a pickup OVERFILLS a maxed bar
-// (the pickup OD check compares the uncapped prev+dose).  Non-OD vices keep
-// canOD:false.
+// range (energy shortest → Hot Dog longest).  passOutThreshold 1.0001 on every
+// pass-out-capable vice means it fires only when a pickup OVERFILLS a maxed bar
+// (the check compares the uncapped prev+dose).  Vices that can't pass out keep
+// canPassOut:false.
 //   full-life ≈ 1/decayRate sec:  energy 30s, slushie 36s, coma 42s,
 //   burrito/sushi 65s, combo 112s, gummies 123s, coldbrew 135s,
 //   caffeine 205s, hotdog 240s.
 export const VICE_CONFIG = {
-  sushi:    { label: '🍣 Sushi',     color: 0x9ACD32, hexCss: '#9ACD32', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
-  burrito:  { label: '🌯 Burrito',   color: 0xC8862B, hexCss: '#C8862B', decayRate: 0.0154, odThreshold: 1.0,    canOD: false, unlocked: true  },
-  energy:   { label: '⚡ Energy',    color: 0x3AC8FF, hexCss: '#3AC8FF', decayRate: 0.0333, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  gummies:  { label: '🐻 Gummies',   color: 0xFF5FA2, hexCss: '#FF5FA2', decayRate: 0.0081, odThreshold: 1.0,    canOD: false, unlocked: false },
-  hotdog:   { label: '🌭 Hot Dog',   color: 0xD2691E, hexCss: '#D2691E', decayRate: 0.0042, odThreshold: 1.0,    canOD: false, unlocked: false },
-  combo:    { label: '🍔 Combo',     color: 0xE8A33D, hexCss: '#E8A33D', decayRate: 0.0089, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  coldbrew: { label: '🧋 Cold Brew', color: 0x8B5A2B, hexCss: '#8B5A2B', decayRate: 0.0074, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  coma:     { label: '💀 Buffet',    color: 0xB0303A, hexCss: '#B0303A', decayRate: 0.0238, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  slushie:  { label: '🥤 Slushie',   color: 0x3AA0FF, hexCss: '#3AA0FF', decayRate: 0.0278, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  caffeine: { label: '💊 Caffeine',  color: 0xE8E8E8, hexCss: '#E8E8E8', decayRate: 0.0049, odThreshold: 1.0001, canOD: true,  unlocked: false },
-  water:     { label: '💧 Water',     color: 0x4FC3F7, hexCss: '#4FC3F7', decayRate: 0.0154, odThreshold: 1.0, canOD: false, unlocked: true  },
-  dramamine: { label: '💊 Dramamine', color: 0xBA68C8, hexCss: '#BA68C8', decayRate: 0.0154, odThreshold: 1.0, canOD: false, unlocked: false },
+  sushi:    { label: '🍣 Sushi',     color: 0x9ACD32, hexCss: '#9ACD32', decayRate: 0.0154, passOutThreshold: 1.0,    canPassOut: false, unlocked: true  },
+  burrito:  { label: '🌯 Burrito',   color: 0xC8862B, hexCss: '#C8862B', decayRate: 0.0154, passOutThreshold: 1.0,    canPassOut: false, unlocked: true  },
+  energy:   { label: '⚡ Energy',    color: 0x3AC8FF, hexCss: '#3AC8FF', decayRate: 0.0333, passOutThreshold: 1.0001, canPassOut: true,  unlocked: false },
+  gummies:  { label: '🐻 Gummies',   color: 0xFF5FA2, hexCss: '#FF5FA2', decayRate: 0.0081, passOutThreshold: 1.0,    canPassOut: false, unlocked: false },
+  hotdog:   { label: '🌭 Hot Dog',   color: 0xD2691E, hexCss: '#D2691E', decayRate: 0.0042, passOutThreshold: 1.0,    canPassOut: false, unlocked: false },
+  combo:    { label: '🍔 Combo',     color: 0xE8A33D, hexCss: '#E8A33D', decayRate: 0.0089, passOutThreshold: 1.0001, canPassOut: true,  unlocked: false },
+  coldbrew: { label: '🧋 Cold Brew', color: 0x8B5A2B, hexCss: '#8B5A2B', decayRate: 0.0074, passOutThreshold: 1.0001, canPassOut: true,  unlocked: false },
+  coma:     { label: '💀 Buffet',    color: 0xB0303A, hexCss: '#B0303A', decayRate: 0.0238, passOutThreshold: 1.0001, canPassOut: true,  unlocked: false },
+  slushie:  { label: '🥤 Slushie',   color: 0x3AA0FF, hexCss: '#3AA0FF', decayRate: 0.0278, passOutThreshold: 1.0001, canPassOut: true,  unlocked: false },
+  caffeine: { label: '💊 Caffeine',  color: 0xE8E8E8, hexCss: '#E8E8E8', decayRate: 0.0049, passOutThreshold: 1.0001, canPassOut: true,  unlocked: false },
+  water:     { label: '💧 Water',     color: 0x4FC3F7, hexCss: '#4FC3F7', decayRate: 0.0154, passOutThreshold: 1.0, canPassOut: false, unlocked: true  },
+  dramamine: { label: '💊 Dramamine', color: 0xBA68C8, hexCss: '#BA68C8', decayRate: 0.0154, passOutThreshold: 1.0, canPassOut: false, unlocked: false },
 };
 
 // Named vice combos — every constituent vice's bar must be ≥ threshold for

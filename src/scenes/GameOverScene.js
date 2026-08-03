@@ -32,11 +32,11 @@ const CAUSE = {
     subtitle: 'NOT WORTH THE RISK.',
     image:    'ui_end_busted_screen',
   },
-  overdose: {
+  passed_out: {
     headline: 'PASSED OUT',
     color:    '#FF3BAF',
     subtitle: 'ONE DECISION. A LIFETIME OF CONSEQUENCES.',
-    image:    'ui_end_overdose_neon',
+    image:    'ui_end_passed_out_neon',
   },
   crash: {
     headline: 'CRASHED',
@@ -115,7 +115,7 @@ export class GameOverScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.scale.off('resize', _applyVP, this));
 
     const meta = CAUSE[this.cause] ?? CAUSE.busted;
-    if (this.cause === 'overdose') {
+    if (this.cause === 'passed_out') {
       this._createNeonEnding(meta);
       return;
     }
@@ -131,7 +131,7 @@ export class GameOverScene extends Phaser.Scene {
     // ── Background ─────────────────────────────────────────────────────
     this.add.rectangle(0, 0, SCREEN_W, SCREEN_H, 0x000000).setOrigin(0);
 
-    // Crash artwork (collision OR overdose) covering the upper half so
+    // Crash artwork (collision OR passing out) covering the upper half so
     // the player has visual context for the cause.
     if (meta.image && this.textures.exists(meta.image)) {
       const img = this.add.image(CX, CY - 40, meta.image).setOrigin(0.5);
@@ -155,7 +155,7 @@ export class GameOverScene extends Phaser.Scene {
 
     // ── Subtitle / "why they died" ─────────────────────────────────────
     let subtitle = meta.subtitle;
-    if (this.cause === 'overdose' && this.deathVice) {
+    if (this.cause === 'passed_out' && this.deathVice) {
       const label = VICE_CONFIG[this.deathVice]?.label ?? this.deathVice;
       subtitle = `${label} got you. ${meta.subtitle}`;
     }
@@ -214,7 +214,7 @@ export class GameOverScene extends Phaser.Scene {
     }
     // Trip-summary tabbed recap (owner 2026-07-29) — only on a genuine
     // Pullman arrival, where there's a full trip's worth of missions/
-    // money/road data to show, not a mid-run bust/crash/OD.
+    // money/road data to show, not a mid-run bust/crash/pass-out.
     if (this.tripSummary
         && (this.cause === 'finish' || this.cause === 'finish_on_time' || this.cause === 'finish_late')) {
       this._makeButton(
@@ -906,7 +906,7 @@ export class GameOverScene extends Phaser.Scene {
       // Busted already displayed/applied its bail loss before this screen.
       restartData.checkpointRestartScore = this.finalScore ?? 0;
     } else {
-      // Wreck/OD checkpoint retries use the existing half-cash consequence.
+      // Wreck/pass-out checkpoint retries use the existing half-cash consequence.
       restartData.crashRestartScore = this.finalScore ?? 0;
     }
     this.scene.start('Game', restartData);

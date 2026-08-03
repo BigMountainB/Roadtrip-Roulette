@@ -607,9 +607,9 @@ export class GameScene extends Phaser.Scene {
     this._girlThread          = [];
     this._girlStreak          = 0;
     this._steerHistory        = null;     // drunk-delay input ring
-    // Overdose freezes the final frame until GameOver appears. Phaser
+    // Passing out freezes the final frame until GameOver appears. Phaser
     // reuses this GameScene instance on restart, so clear the latch or a
-    // checkpoint respawn after an OD stays permanently frozen.
+    // checkpoint respawn after a pass-out stays permanently frozen.
     this._odEnding            = false;
     // Restart-from-pause / GameOver re-attach: the title-screen "any key
     // dismisses the title" listener is `once`-style.  After it fires the
@@ -1801,7 +1801,7 @@ export class GameScene extends Phaser.Scene {
     this._rageUntilMile = -1;
     this._rageSpawnTimer = 70 + Math.random() * 60;  // sec to first chance
     this._rageWasActive  = false;
-    // Espresso — inventory item (max 3) that auto-reverses an OPIOID overdose
+    // Espresso — inventory item (max 3) that auto-reverses a food-coma blackout
     // (fentanyl/heroin/rx) the instant it would kill you.
     this._espressoCount       = 0;
     this._espressoSpawnTimer  = 90 + Math.random() * 60;
@@ -2132,9 +2132,9 @@ export class GameScene extends Phaser.Scene {
     } else if (this._dailyStage) {
       // ── Daily Challenge stage start ──────────────────────────────────
       // A short start-city→end-city run.  Forced to "normal" rules so
-      // weather/cops/overdose behave predictably.  Spawn at the start city;
+      // weather/cops/pass-out behave predictably.  Spawn at the start city;
       // the stage completes at the target city (see the checkpoint loop).
-      // Easy mods (start ★, vice pre-load) applied here; density / OD-filter
+      // Easy mods (start ★, vice pre-load) applied here; density / pass-out filter
       // / traps land in the next increment.  Whole branch only runs when a
       // dailyStage config was passed, so normal/custom runs never reach it.
       Difficulty.set?.('normal', this.registry);
@@ -2165,7 +2165,7 @@ export class GameScene extends Phaser.Scene {
       }
       // ── Objective tracker ────────────────────────────────────────────
       // One bag of telemetry the gameplay hooks feed (vice pickups, car
-      // hits, OD, stars, combo continuity, barrier/off-road scrapes).
+      // hits, pass-out, stars, combo continuity, barrier/off-road scrapes).
       // _gradeDailyObjective() reads it at the end city.  Only ever created
       // in daily-stage mode, so the hooks below no-op on normal/custom runs.
       this._dailyTracker = {
@@ -2174,7 +2174,7 @@ export class GameScene extends Phaser.Scene {
         viceTypes:       new Set(),   // distinct vice ids collected
         viceCount:       0,           // total vice pickups
         peakVice:        0,           // highest any single bar reached
-        odd:             false,       // overdosed at any point
+        passedOut:       false,       // passed out at any point
         maxStars:        0,           // peak wanted level
         comboEverActive: false,       // a combo was lit at least once
         comboBroken:     false,       // …and later dropped to none
@@ -4047,7 +4047,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Overdose exit: leave the last road frame frozen behind the blackout
+    // Pass-out exit: leave the last road frame frozen behind the blackout
     // while the tween finishes, then move into the dedicated ending scene.
     if (this._odEnding) {
       this._renderFrame();
@@ -4059,7 +4059,7 @@ export class GameScene extends Phaser.Scene {
     // `_gameFinished` is set the instant the Pullman finish is crossed, for
     // EVERY finish path: the on-time/late park-in cinematic AND the too-late+5★
     // technical loss (restart-checkpoint modal).  Freeze ALL gameplay here so
-    // nothing can crash / bust / OD / drain cash+gas AFTER the player has
+    // nothing can crash / bust / pass out / drain cash+gas AFTER the player has
     // already finished (and so no stale autosave is written post-finish).  The
     // only thing still animated is the park cinematic — `_updatePlayer` is pure
     // kinematics (eases to a stop + drifts left to the house); the NPC/cop
@@ -4246,7 +4246,7 @@ export class GameScene extends Phaser.Scene {
       if (this.survival.isAsleep() && !this._asleepHandled) {
         this._asleepHandled = true;
         this._showPopup?.('😴 YOU FELL ASLEEP AT THE WHEEL', '#FF5C7A');
-        this._endGame?.('overdose', { charge: 'FATIGUE' });
+        this._endGame?.('passed_out', { charge: 'FATIGUE' });
       }
 
       // ── Bladder → VOMIT (owner 2026-07-17): 1 mile past a FULL (100%) bladder,
@@ -4492,9 +4492,9 @@ export class GameScene extends Phaser.Scene {
     this._updateVehicleCrashes();   // NPC↔NPC and cop↔NPC crashes (no more phasing through)
 
     // ── Arrested ──────────────────────────────────────────────────────
-    // (OD retired — the survival model's only terminal is "fell asleep at the
+    // (Vice pass-out retired — the survival model's only terminal is "fell asleep at the
     // wheel" at max Tiredness, handled in the survival update block. The old
-    // frame-level checkOD is skipped so synthetic effect-levels can't trip it.)
+    // frame-level checkPassOut is skipped so synthetic effect-levels can't trip it.)
     if (this.cops.arrestPending) { this._onArrested(); return; }
 
     // ── Probation timer ───────────────────────────────────────────────
@@ -4741,7 +4741,7 @@ export class GameScene extends Phaser.Scene {
         this._issueTrafficTicket();     // Stage 3 — charge the fine / DUI / bust
       }
     } else if (this._trapLightWasOn) {
-      // Stop ended some other way (warp/OD/reset) — kill the flash.
+      // Stop ended some other way (warp/pass-out/reset) — kill the flash.
       this._trapLightGfx?.clear();
       this._trapLightWasOn = false;
     }
@@ -4765,7 +4765,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // (Finish-cinematic timing is handled in the terminal-freeze block near
-    // the top of update() so collisions/cops/OD can't fire after the finish.)
+    // the top of update() so collisions/cops/pass-out can't fire after the finish.)
 
     // After the first star, all further star changes are STATIC additions
     // from collision events (see _onCopCollision and friends).  No heat trickle.
@@ -10319,6 +10319,12 @@ export class GameScene extends Phaser.Scene {
       // ── Survival model: apply the item to the survival bars. ──────────
       const itemId = sprite.type;
       const ev = this.survival.applyItem(itemId, undefined, this._survivalItemMods());
+      // Speed-bonus windows (owner 2026-08-03).  These used to hang off
+      // ViceSystem.pickup(), which has had NO production caller since vices
+      // moved to the survival model above — so the caffeine/energy top-speed
+      // bonuses never once fired in a real run.  Wired to the live path here.
+      if (itemId === 'caffeine') this.vices?.noteCaffeinePickup?.();
+      if (itemId === 'energy')   this.vices?.noteEnergyPickup?.();
       // NO-EATING clause (slice 2): "counted, weighed, and I'll count it
       // again" — consuming anything off the road voids that haul.
       for (const _m of (this.missions?.noteEat?.() ?? [])) {
@@ -10416,7 +10422,7 @@ export class GameScene extends Phaser.Scene {
       this._showPopup(`🤝 NICE FOLKS!\n+$${bonus}, sobered up`, '#88FFCC');
       return;
     }
-    // ── 14% — party favor: random non-OD vice bar filled to 90% + cash ──
+    // ── 14% — party favor: random safe vice bar filled to 90% + cash ──
     if (r < 0.70) {
       const safeVices = [VICES.SUSHI, VICES.BURRITO, VICES.GUMMIES, VICES.HOTDOG]
         .filter(id => this.vices.isUnlocked?.(id));
@@ -17974,7 +17980,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Top speed: 120 MPH base + 5 MPH per energy pickup (capped at OD).
+    // Top speed: 120 MPH base + 5 MPH per energy pickup (capped).
     // ceil so a car actually rolling (< 0.5 mph) doesn't read as "0 MPH".
     const rawMph   = this._displayMPH();
     const _spd     = this._unitsKmh ? rawMph * 1.60934 : rawMph;
@@ -19742,8 +19748,8 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1, 0x000000, 0.6);
       g.strokeRoundedRect(x, y, iconW, iconH, 4);
 
-      // OD warning — pulsing red border at near-OD levels.
-      if (cfg.canOD && level > cfg.odThreshold * 0.80) {
+      // Near-max warning — pulsing red border as a bar approaches full.
+      if (cfg.canPassOut && level > cfg.passOutThreshold * 0.80) {
         if (this._colorblind) {
           // CB: always-on amber border (white on the pulse peak) + a warning
           // triangle in the corner — danger read by SHAPE + luminance, not red.
@@ -19854,7 +19860,7 @@ export class GameScene extends Phaser.Scene {
         g.fillRect(bx, y, Math.round(barW * level), Math.ceil(barH * 0.30));
       }
 
-      if (cfg.canOD && level > cfg.odThreshold * 0.80) {
+      if (cfg.canPassOut && level > cfg.passOutThreshold * 0.80) {
         if (Math.abs(Math.sin(this.gameTime * 7)) > 0.5) {
           g.lineStyle(2, 0xFF2222, 1);
           g.strokeRect(bx - 2, y - 2, barW + 4, barH + 4);
@@ -22800,9 +22806,9 @@ export class GameScene extends Phaser.Scene {
     this._showPopup?.('☕ EMERGENCY ESPRESSO AHEAD!', '#42A5F5');
   }
 
-  /** If an OPIOID overdose (fentanyl/heroin/rx) is about to kill the player
+  /** If a food-coma blackout (Coma/Combo/Cold Brew) is about to kill the player
    *  and a Espresso is in inventory, consume it: flash the screen red, flush
-   *  all opioid bars, and cancel the OD.  Returns true if the OD was saved. */
+   *  all three bars, and cancel it.  Returns true if the run was saved. */
   _tryEspresso(viceId) {
     const OPIOIDS = [VICES.COMA, VICES.COMBO, VICES.COLDBREW];
     if (!OPIOIDS.includes(viceId)) return false;   // Espresso only reverses opioids
@@ -22992,8 +22998,8 @@ export class GameScene extends Phaser.Scene {
       fine > 0 ? '#FFDD44' : '#88FF88');
   }
 
-  /** Overdose handler — freezes the last frame and fades into the
-   *  dedicated Overdosed ending screen.  Checkpoint retry handles the
+  /** Pass-out handler — freezes the last frame and fades into the
+   *  dedicated PASSED OUT ending screen.  Checkpoint retry handles the
    *  existing monetary/reset consequence from there. */
   /** Grade the active daily challenge against its tracked telemetry.
    *  Returns { pass:boolean, reason:string }.  Called once, at the end city.
@@ -23008,7 +23014,7 @@ export class GameScene extends Phaser.Scene {
     const pct = (v) => `${Math.round((v ?? 0) * 100)}%`;
     switch (o.type) {
       case 'peak_vice': {
-        if (o.noOD && t.odd) return { pass: false, reason: 'You passed out at the wheel' };
+        if (o.noPassOut && t.passedOut) return { pass: false, reason: 'You passed out at the wheel' };
         const need = o.threshold ?? 0.90;
         return t.peakVice >= need
           ? { pass: true,  reason: `Peaked at ${pct(t.peakVice)}` }
@@ -23080,14 +23086,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  _onOverdose(viceId) {
+  _onPassOut(viceId) {
     if (this._odEnding) return;
     this._odEnding = true;
     this.audio?.setPaused?.(true);
-    if (this._dailyTracker) this._dailyTracker.odd = true;
+    if (this._dailyTracker) this._dailyTracker.passedOut = true;
 
-    // Keep overdose quiet and final: gameplay freezes, vision fades to
-    // black, and only then does the dedicated OVERDOSED ending appear.
+    // Keep the pass-out quiet and final: gameplay freezes, vision fades to
+    // black, and only then does the dedicated PASSED OUT ending appear.
     const fade = this.add.rectangle(0, 0, SCREEN_W, SCREEN_H, 0x000000, 1)
       .setOrigin(0)
       .setDepth(1000)
@@ -23099,7 +23105,7 @@ export class GameScene extends Phaser.Scene {
       alpha: 1,
       duration: 1100,
       ease: 'Sine.In',
-      onComplete: () => this._endGame('overdose', { vice: viceId }),
+      onComplete: () => this._endGame('passed_out', { vice: viceId }),
     });
   }
 
@@ -23136,7 +23142,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Pause the music so the OD/crash dirge isn't the kart-radio loop.
+    // Pause the music so the pass-out/crash dirge isn't the kart-radio loop.
     this.audio?.setPaused?.(true);
 
     // ── Technical-loss path (TOO LATE + 5★) ─────────────────────────
@@ -23182,12 +23188,12 @@ export class GameScene extends Phaser.Scene {
 
     // ── Persistent wallet settlement ────────────────────────────────────
     // Money stays with the player.  Busted already docked its bail in
-    // _onArrested; crashes/overdoses dock the SAME shape here (half of
+    // _onArrested; crashes/pass-outs dock the SAME shape here (half of
     // earnings since the last checkpoint, tow-insurance halves it).  What's
     // left banks to the save and seeds the next run.  Custom = sandbox, no
     // wallet.  Guarded by _statsTripEnded's once-per-run gate below.
     if (!this._statsTripEnded && Difficulty.mode?.() !== 'custom') {
-      if (cause === 'crash' || cause === 'overdose') {
+      if (cause === 'crash' || cause === 'passed_out') {
         const cp = this._lastCheckpoint ?? { scoreAtCP: 0 };
         const earnedSince = Math.max(0, this.score - (cp.scoreAtCP ?? 0));
         let lost = Math.floor(earnedSince / 2);
@@ -23200,7 +23206,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Career stats: a Pullman finish is a completion; everything else
-    // (crash / busted / overdose) is an incomplete run.  Both fold the
+    // (crash / busted / passed out) is an incomplete run.  Both fold the
     // run into lifetime records and flush.  (busted_late returns earlier.)
     // Guarded so a double _endGame() in one frame can't double-count trips.
     if (!this._statsTripEnded) {

@@ -161,7 +161,7 @@ export const ASSET_MANIFEST = {
     { key: 'vice_water',     path: 'assets/vices/water.png?v=reskin-4' },
     { key: 'vice_dramamine', path: 'assets/vices/dramamine.png?v=reskin-4' },
   ],
-  // Power-ups: Redneck Rage (invincible rampage) + Emergency Espresso (OD save).
+  // Power-ups: Redneck Rage (invincible rampage) + Emergency Espresso (rescue).
   powerups: [
     { key: 'powerup_rage',     path: 'assets/vices/redneck_rage.png?v=reskin-4' },
     { key: 'powerup_espresso', path: 'assets/vices/emergency_espresso.png?v=reskin-4' },
@@ -443,7 +443,7 @@ export const ASSET_MANIFEST = {
     // title-quality neon splash behind the live progress bar.
     { key: 'ui_loading_screen',   path: 'assets/ui/loading_screen.png?v=rtr-1' },
     { key: 'ui_end_crashed_neon', path: 'assets/ui/end_crashed_neon.webp' },
-    { key: 'ui_end_overdose_neon', path: 'assets/ui/end_overdose_neon.webp' },
+    { key: 'ui_end_passed_out_neon', path: 'assets/ui/end_passed_out_neon.webp' },
     { key: 'ui_end_busted_screen', path: 'assets/ui/end_busted_screen.webp' },
     // License-plate art — one US state plate per save slot (slot 0/1/2 →
     // WA/OR/ID).  Used on the title-screen "WHO'S DRIVING?" slots AND on the

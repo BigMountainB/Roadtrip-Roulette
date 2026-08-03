@@ -138,10 +138,10 @@ const run = (v, secs, step = 1 / 60) => {
   ok('12 pickups still cap at 20 mph', cappedMph <= 20 && near(cappedMph, 20, 0.3), `got ${cappedMph.toFixed(2)} mph`);
 }
 
-// ── 10. Energy speed bonus — owner rule (2026-08-02): a SINGLE +4 mph that
-//        fades over the shot's 30 s clock; a new shot RESTARTS the clock,
-//        it never stacks another +4.  (Replaced the unbounded
-//        energyPickupCount × 4 × bar formula.) ──
+// ── 10. Energy speed bonus — owner rule (2026-08-03): ON or OFF, never
+//        fading. A SINGLE flat +4 mph for the shot's whole 30 s clock, then
+//        nothing; a new shot RESTARTS the clock, it never stacks another +4.
+//        (Replaced the unbounded energyPickupCount × 4 × bar formula.) ──
 {
   const v = mk();
   v.pickup('energy');
@@ -150,7 +150,7 @@ const run = (v, secs, step = 1 / 60) => {
 
   run(v, 15);
   const midMph = v.getEnergySpeedBonusMPH();
-  ok('half-faded ≈ 2 mph at 15 s', near(midMph, 2, 0.3), `got ${midMph.toFixed(2)} mph`);
+  ok('still the FULL 4 mph at 15 s — flat, no fade', near(midMph, 4, 0.1), `got ${midMph.toFixed(2)} mph`);
 
   v.pickup('energy');   // restart, NOT stack
   const restartMph = v.getEnergySpeedBonusMPH();
@@ -165,21 +165,46 @@ const run = (v, secs, step = 1 / 60) => {
     `got ${v.getEnergySpeedBonusMPH()}`);
 }
 
-// ── 11. Coffee speed bonus — separate item, own 30 s dose clock, no
-//       vice bar / no VICES entry at all (noteCoffeePurchase / getCoffeeSpeedBonusMPH). ──
+// ── 11. Coffee speed bonus — owner rule (2026-08-03): ON or OFF, never
+//       fading. Separate item, own 30 s clock, no vice bar / no VICES entry
+//       at all (noteCoffeePurchase / getCoffeeSpeedBonusMPH). ──
 {
   const v = mk();
   v.noteCoffeePurchase();
   const oneCupMph = v.getCoffeeSpeedBonusMPH();
-  ok('one cup ≈ 1 mph', near(oneCupMph, 1, 0.1), `got ${oneCupMph.toFixed(2)} mph`);
+  ok('one cup = 1 mph', near(oneCupMph, 1, 0.1), `got ${oneCupMph.toFixed(2)} mph`);
+
+  run(v, 15);
+  ok('still the FULL 1 mph at 15 s — flat, no fade', near(v.getCoffeeSpeedBonusMPH(), 1, 0.1),
+    `got ${v.getCoffeeSpeedBonusMPH().toFixed(2)} mph`);
 
   for (let i = 0; i < 20; i++) v.noteCoffeePurchase();
   const cappedMph = v.getCoffeeSpeedBonusMPH();
   ok('many cups cap at 10 mph', cappedMph <= 10 && near(cappedMph, 10, 0.3), `got ${cappedMph.toFixed(2)} mph`);
 
   run(v, 30.5);
-  ok('coffee mph bonus back to 0 in 30 s', v.getCoffeeSpeedBonusMPH() === 0, `got ${v.getCoffeeSpeedBonusMPH()}`);
-  console.log(`\n  coffee speed bonus: peak +${cappedMph.toFixed(1)} mph for <30 s (1 mph/cup, cap 10)`);
+  ok('coffee mph bonus drops to 0 when the 30 s cups expire', v.getCoffeeSpeedBonusMPH() === 0, `got ${v.getCoffeeSpeedBonusMPH()}`);
+  console.log(`\n  coffee speed bonus: flat +${cappedMph.toFixed(1)} mph while live (1 mph/cup, cap 10), then off`);
+}
+
+// ── 12. The LIVE pickup path must actually grant the speed bonus.
+//        Regression guard for the real bug behind "I've been consuming
+//        caffeine and not noticing increase in speed": the bonuses hung off
+//        ViceSystem.pickup(), which has had NO production caller since vices
+//        moved to the survival model, so they never fired in a real run.
+//        GameScene._onCollect now calls these note* methods directly. ──
+{
+  const v = mk();
+  ok('caffeine bonus starts at 0', v.getCaffeineSpeedBonusMPH() === 0);
+  v.noteCaffeinePickup();
+  ok('noteCaffeinePickup grants +2 mph', near(v.getCaffeineSpeedBonusMPH(), 2, 0.1),
+    `got ${v.getCaffeineSpeedBonusMPH().toFixed(2)} mph`);
+  v.noteEnergyPickup();
+  ok('noteEnergyPickup grants +4 mph', near(v.getEnergySpeedBonusMPH(), 4, 0.1),
+    `got ${v.getEnergySpeedBonusMPH().toFixed(2)} mph`);
+  run(v, 60.5);
+  ok('both expire on their own clocks',
+    v.getCaffeineSpeedBonusMPH() === 0 && v.getEnergySpeedBonusMPH() === 0);
 }
 
 console.log(`\ndose.test: ${pass} passed, ${fail} failed`);

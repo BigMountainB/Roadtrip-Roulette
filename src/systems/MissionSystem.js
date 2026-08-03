@@ -1065,7 +1065,7 @@ export class MissionSystem {
     return failed;
   }
 
-  /** Run-ending event (busted / crash / overdose / too-late): every active
+  /** Run-ending event (busted / crash / passed out / too-late): every active
    *  mission terminally fails — no payout, rep untouched (Ch. 8). */
   failAllActive(reason = 'run_ended') {
     const failed = [];
