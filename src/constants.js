@@ -144,6 +144,12 @@ export const ACCEL        = 195;
 export const BRAKE        = 340;
 export const DECEL        = 76;
 export const MAX_SPEED    = 27000; // internal world-units/sec; speedometer reads 120 MPH at this top (raised by energy pickups)
+// Absolute speed ceiling (owner 2026-08-02): the game gets hard past 140 mph,
+// so no stack of car + ECU + pills/energy/NOS + downhill may ever exceed this.
+// Clamped on the FINAL target speed in GameScene._updatePlayer, after every
+// bonus and multiplier.  Exceeding it is reserved as a possible future
+// punishment mechanic — lift the clamp deliberately, never by accident.
+export const SPEED_CAP_MPH = 160;
 export const TURN_SPEED   = 2.8;
 export const OFFROAD_SLOW = 0.6;
 export const CENTRIFUGAL  = 0.3;
@@ -599,7 +605,7 @@ export const PASS_THROUGH_CITIES = _PASS_THROUGH_CITY_DEF.map(c => ({
 //   sprite       — texture key; falls back to 'car_player' if absent
 export const VEHICLES = {
   beater: {
-    id: 'beater', label: 'Used Sedan', hp: 25,  rangeMi: 75, topMph: 110, boostMph: 20,
+    id: 'beater', label: 'Used Sedan', hp: 25,  rangeMi: 75, topMph: 100, boostMph: 20,
     grip: 1.00, turnRate: 1.00, stability: 1.00, offroadGrip: 1.00,
     drive: '2WD', fuel: 'gas', heat: 0.85, priceUsd: 0,
     sprite: 'car_player', spriteBack: 'codex_beater_back', spriteFront: 'codex_beater_front',

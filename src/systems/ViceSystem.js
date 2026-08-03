@@ -64,8 +64,13 @@ export class ViceSystem {
     this.routeProgress    = 0; // 0–1, updated by GameScene
     // Lifetime NPC-crash counter — feeds the Cold Brew unlock gate.
     this.npcCrashesTotal   = 0;
-    this.energyPickupCount = 0; // each pickup permanently raises top speed +4 mph
     this.pickupCounts       = {};
+    // Energy speed-bonus dose (owner 2026-08-02): a SINGLE +4 mph window —
+    // never stacks.  Picking up another shot RESTARTS this clock; it does
+    // not add another 4.  (Replaced the old `energyPickupCount × 4 × bar`
+    // formula, which grew without bound over a run and also double-counted
+    // through EffectsSystem's ×1.55 speedMult term — both removed.)
+    this._energySpeedDose   = null;   // { t, dur } | null
     // Vices that crossed their unlock gate THIS frame — GameScene drains this
     // to force a guaranteed first pickup of the new vice so the player can
     // actually try what they just earned (esp. on short runs).
@@ -233,6 +238,13 @@ export class ViceSystem {
       const d = this._coffeeDoses[i];
       d.t += dt;
       if (d.t >= d.dur) this._coffeeDoses.splice(i, 1);
+    }
+
+    // The single energy speed-bonus window ages the same way (see
+    // getEnergySpeedBonusMPH) — nulled once spent.
+    if (this._energySpeedDose) {
+      this._energySpeedDose.t += dt;
+      if (this._energySpeedDose.t >= this._energySpeedDose.dur) this._energySpeedDose = null;
     }
 
     return anyActive;
@@ -498,10 +510,15 @@ export class ViceSystem {
       }
     }
 
-    // Per-pickup permanent stat counters — read by GameScene for cumulative
-    // top-speed bonuses (+4 mph / energy bag, +4 mph / caffeine pickup) and
-    // for Cold-Brew-driven NPC traffic-speed shifts (+/-7 mph / pickup).
-    if (id === VICES.ENERGY) this.energyPickupCount += 1;
+    // Energy speed bonus (owner 2026-08-02): RESTART the single +4 mph
+    // window — deliberately no stacking, and deliberately not gated on
+    // whether the bar had room (a shot at a full bar still re-ups the
+    // clock; you drank it either way).
+    if (id === VICES.ENERGY) {
+      this._energySpeedDose = { t: 0, dur: DOSE_SECONDS[VICES.ENERGY] ?? 30 };
+    }
+    // Per-pickup counters — addiction bias (chooseAddictedVice) and the
+    // Cold-Brew-driven NPC traffic-speed shift (+/-7 mph / pickup).
     this.pickupCounts[id] = (this.pickupCounts[id] ?? 0) + 1;
 
     // Immediate OD check (2026-06-20) — every OD-capable vice now uses
@@ -517,12 +534,14 @@ export class ViceSystem {
     return { overdose: false, vice: id };
   }
 
-  /** Energy speed boost in MPH (additive on top of 120 base).  +4 mph per
-   *  bag picked up, scaled by the CURRENT bar so the boost fades to 0 as the
-   *  vice leaves your system (effect is tied to the active high, not lifetime
-   *  count). */
+  /** Energy speed boost in MPH — owner rule (2026-08-02): a single +4 mph,
+   *  fading over the shot's own clock (DOSE_SECONDS.energy).  Only ONE is
+   *  ever active: a new pickup restarts the fade at full strength, it never
+   *  adds another +4 on top. */
   getEnergySpeedBonusMPH() {
-    return this.energyPickupCount * 4 * (this.levels[VICES.ENERGY] ?? 0);
+    const d = this._energySpeedDose;
+    if (!d) return 0;
+    return 4 * (1 - d.t / d.dur);
   }
 
   /** Caffeine Pill speed boost in MPH — owner rule (2026-07-31, revised):

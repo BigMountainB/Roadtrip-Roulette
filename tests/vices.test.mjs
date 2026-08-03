@@ -134,7 +134,34 @@ const run = (v, secs, step = 1 / 60) => {
   ok('12 pickups still cap at 20 mph', cappedMph <= 20 && near(cappedMph, 20, 0.3), `got ${cappedMph.toFixed(2)} mph`);
 }
 
-// ── 10. Coffee speed bonus — separate item, own 30 s dose clock, no
+// ── 10. Energy speed bonus — owner rule (2026-08-02): a SINGLE +4 mph that
+//        fades over the shot's 30 s clock; a new shot RESTARTS the clock,
+//        it never stacks another +4.  (Replaced the unbounded
+//        energyPickupCount × 4 × bar formula.) ──
+{
+  const v = mk();
+  v.pickup('energy');
+  const oneMph = v.getEnergySpeedBonusMPH();
+  ok('one shot = 4 mph', near(oneMph, 4, 0.1), `got ${oneMph.toFixed(2)} mph`);
+
+  run(v, 15);
+  const midMph = v.getEnergySpeedBonusMPH();
+  ok('half-faded ≈ 2 mph at 15 s', near(midMph, 2, 0.3), `got ${midMph.toFixed(2)} mph`);
+
+  v.pickup('energy');   // restart, NOT stack
+  const restartMph = v.getEnergySpeedBonusMPH();
+  ok('second shot restarts at 4 mph, never 8', near(restartMph, 4, 0.1), `got ${restartMph.toFixed(2)} mph`);
+
+  for (let i = 0; i < 5; i++) v.pickup('energy');
+  ok('spamming shots still caps at 4 mph', v.getEnergySpeedBonusMPH() <= 4.001,
+    `got ${v.getEnergySpeedBonusMPH().toFixed(2)} mph`);
+
+  run(v, 30.5);
+  ok('energy mph bonus back to 0 in 30 s', v.getEnergySpeedBonusMPH() === 0,
+    `got ${v.getEnergySpeedBonusMPH()}`);
+}
+
+// ── 11. Coffee speed bonus — separate item, own 30 s dose clock, no
 //       vice bar / no VICES entry at all (noteCoffeePurchase / getCoffeeSpeedBonusMPH). ──
 {
   const v = mk();

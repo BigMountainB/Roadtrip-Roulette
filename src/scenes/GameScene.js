@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   SCREEN_W, SCREEN_H, SEG_LENGTH, ROUTE_SEGS, ROAD_WIDTH, DRAW_DIST,
-  MAX_SPEED, ACCEL, BRAKE, DECEL, TURN_SPEED, OFFROAD_SLOW, CENTRIFUGAL,
+  MAX_SPEED, SPEED_CAP_MPH, ACCEL, BRAKE, DECEL, TURN_SPEED, OFFROAD_SLOW, CENTRIFUGAL,
   PTS_DIST, PTS_CRASH, PTS_HITCH, HITCH_REVEAL_MILES, VICE_MULT, VICE_PTS, FULL_BAR_THRESHOLD,
   VICES, VICE_CONFIG, VICE_COMBOS, CHECKPOINTS, TOTAL_ROUTE_MILES, REST_STOPS, PASS_THROUGH_CITIES,
   getLocationName,
@@ -5457,8 +5457,9 @@ export class GameScene extends Phaser.Scene {
     const p = this.player;
 
     // Speed: cruise at the vehicle's topMph; boost adds vehicle.boostMph
-    // on top.  Energy + caffeine pickups raise both cruise + boost by 4 mph
-    // each.  NOS tier (per-vehicle accessory) adds +5 mph per tier.
+    // on top.  Flat mph bonuses stack on both (energy +4 single/refreshing,
+    // caffeine +2/pill cap 20, coffee +1/cup cap 10, NOS +5/tier), then the
+    // whole thing clamps at SPEED_CAP_MPH — see the cap below gradeMult.
     // Pass-3 change: cruise / boost are now PER-VEHICLE instead of
     // hardcoded 120 / 140 — sports cars cruise faster, trucks slower.
     const _vehSpec  = VEHICLES[this.player.vehicleId] ?? VEHICLES.beater;
@@ -5535,6 +5536,13 @@ export class GameScene extends Phaser.Scene {
     const gradeMult = Math.max(0.85, Math.min(1.15, 1 - curGrade * 2.0));
     targetSpeed *= gradeMult;
 
+    // Absolute ceiling (owner 2026-08-02) — after EVERY bonus and multiplier
+    // has stacked, nothing exceeds SPEED_CAP_MPH.  Sits before the engine-heat
+    // block so limp mode still cuts speed BELOW the cap, never above it.
+    const _capUnits = mphToUnits(SPEED_CAP_MPH);
+    const _capped   = targetSpeed > _capUnits;
+    if (_capped) targetSpeed = _capUnits;
+
     // ── Engine heat / overheating ─────────────────────────────────────────
     // engineTemp lerps toward a target driven by ambient desert heat, the
     // current climb, and how hard you're working the ACCELERATOR.  The
@@ -5601,7 +5609,7 @@ export class GameScene extends Phaser.Scene {
       energyBonus, caffeineBonus, coffeeBonus, nosBonus, upMph,
       speedMult:  phys.speedMult ?? 1,
       speedMultParts: phys.speedMultParts ?? null,
-      gradeMult, curGrade,
+      gradeMult, curGrade, capped: _capped,
       engineLimp: this._engineLimp, engineTemp: this._engineTemp,
       genreVehicle: _gvt?.vehicleName ?? null,
       genre: window.__genre?.get?.() ?? null,
@@ -13488,7 +13496,8 @@ export class GameScene extends Phaser.Scene {
     const mph1 = (n) => `${n.toFixed(1)}`;
     const pct = (n) => `${n >= 1 ? '+' : ''}${Math.round((n - 1) * 100)}%`;
     this._speedDebugText.setText([
-      `SPEED DEBUG (F5)  cur=${mph(s.curMph)}  target=${mph(s.targetMph)}`,
+      `SPEED DEBUG (F5)  cur=${mph(s.curMph)}  target=${mph(s.targetMph)}` +
+        (s.capped ? `  ⛔CAP ${SPEED_CAP_MPH}` : ''),
       `cruise=${mph(s.cruiseMph)}  boost=${mph(s.boostMph)}` +
         (s.genreVehicle ? `  [${s.genreVehicle}${s.genre ? '/' + s.genre : ''}]` : '  [beater]'),
       `base: cruise=${mph(s.cruiseBase)} boost=${mph(s.boostBase)}  topPct=${pct(s.topPct)}`,
@@ -22869,8 +22878,8 @@ export class GameScene extends Phaser.Scene {
 
   // Displayed MPH = (current speed / current top-speed) × top-MPH.
   _displayMPH() {
-    // +4 mph per energy bag, +2 mph per caffeine pill (cap 20), +1 mph per
-    // coffee (cap 10), +5 mph per NOS tier.
+    // +4 mph energy (single, refreshing), +2 mph per caffeine pill (cap 20),
+    // +1 mph per coffee (cap 10), +5 mph per NOS tier.
     const energyBonus = this.vices?.getEnergySpeedBonusMPH?.() ?? 0;
     const caffeineBonus = this.vices?.getCaffeineSpeedBonusMPH?.()    ?? 0;
     const coffeeBonus = this.vices?.getCoffeeSpeedBonusMPH?.() ?? 0;

@@ -1145,14 +1145,16 @@ export class EffectsSystem {
     // 120 mph at multiplier 1.0, so each 10 % coma should drop the
     // multiplier by ~0.083 (10/120).  Applied as a smooth proportional
     // subtraction — no hard cap.
-    // Caffeine's speed effect lives ENTIRELY in ViceSystem.getCaffeineSpeedBonusMPH
-    // now (owner rule: ~4 mph per pickup, fading over that pill's own clock) — it
-    // used to ALSO add a percentage term here, which double-counted the same pill
-    // through two different, disagreeing mechanisms (one visible, one an invisible
-    // bar-level multiplier the player had no way to see or reason about).
+    // Caffeine's AND energy's speed effects live ENTIRELY in ViceSystem
+    // (getCaffeineSpeedBonusMPH / getEnergySpeedBonusMPH) as flat, visible
+    // mph bonuses now — each used to ALSO add a percentage term here, which
+    // double-counted the same pickup through two different, disagreeing
+    // mechanisms (one visible, one an invisible bar-level multiplier the
+    // player had no way to see or reason about; energy's ×1.55 was the
+    // source of the "top speed climbed 150→177 with no pickup" mystery).
+    // Only speed PENALTIES remain percentage-based here.
     const baseSpeedMult = clamp(
-      1 + energy * 0.55
-        - combo * 0.5
+      1 - combo * 0.5
         - coma * (10 / 12)              // -10 mph per 10 % coma (from 120 mph cap)
         - burritoSpeedPenalty
         - slushie  * 0.35
@@ -1178,7 +1180,6 @@ export class EffectsSystem {
       // this file.  Mirrors the terms above exactly (deltas, not vice
       // levels) so it can't drift from the real computation.
       speedMultParts: {
-        energy: energy * 0.55,
         combo: -combo * 0.5, coma: -coma * (10 / 12),
         burrito: -burritoSpeedPenalty, slushie: -slushie * 0.35, coldbrew: -coldbrew * 0.15,
         comboTranq: this._comboTranq ? -baseSpeedMult * 0.15 : 0,

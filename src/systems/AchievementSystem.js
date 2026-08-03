@@ -42,7 +42,7 @@ const VICE_INFO = {
     label: 'WIRED',
     icon:  '⚡',
     unlockHint: 'Stay woozy (sushi > 30%) for 30 seconds total to unlock the energy stand.',
-    desc:  '10% per shot. +4 mph top speed each pickup. Burns 7% off your sushi buzz. Jitter out at 100% — don\'t grab another at 90%+.',
+    desc:  '10% per shot. +4 mph top speed for 30s — a fresh shot restarts the clock, never stacks. Burns 7% off your sushi buzz. Jitter out at 100% — don\'t grab another at 90%+.',
   },
   [VICES.GUMMIES]: {
     id:    'tripping',
@@ -91,7 +91,7 @@ const VICE_INFO = {
     label: 'THE SHAKES',
     icon:  '☕',
     unlockHint: 'Peak your energy at 40%+, then come down to 0 and stay clean for 30 seconds.',
-    desc:  '10% per pickup. +4 mph top speed each pickup, but +1 extra HP damage on every collision. Risk vs reward.',
+    desc:  '10% per pickup. +2 mph top speed per pill (max +20), but +1 extra HP damage on every collision. Risk vs reward.',
   },
 };
 

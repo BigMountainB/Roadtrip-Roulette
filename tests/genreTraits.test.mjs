@@ -25,14 +25,17 @@ const KEYS = [
   'hiphop_phonk', 'country', 'reggaeton', 'k_pop', 'metal',
   'classic_rock', 'edm_rave', 'reggae', 'pop_punk_emo', 'norteno',
 ];
+// Owner ladder 2026-08-02: same personality spread as before, shifted down
+// so EDM tops at 150 and nothing can cross the 160 hard cap with ECU alone.
 const TOP_SPEEDS = {
-  hiphop_phonk: 140, country: 120, reggaeton: 135, k_pop: 145, metal: 110,
-  classic_rock: 150, edm_rave: 165, reggae: 100, pop_punk_emo: 125, norteno: 130,
+  hiphop_phonk: 130, country: 112, reggaeton: 126, k_pop: 135, metal: 104,
+  classic_rock: 140, edm_rave: 150, reggae: 95, pop_punk_emo: 117, norteno: 122,
 };
-// Explicit no-pedal cruise per car (owner 2026-07-19 table).
+// Explicit no-pedal cruise per car (same per-car cruise/boost gap as the
+// original 2026-07-19 table).
 const CRUISE_SPEEDS = {
-  hiphop_phonk: 120, country: 100, reggaeton: 115, k_pop: 125, metal: 90,
-  classic_rock: 135, edm_rave: 145, reggae: 80, pop_punk_emo: 105, norteno: 110,
+  hiphop_phonk: 110, country: 92, reggaeton: 106, k_pop: 115, metal: 84,
+  classic_rock: 125, edm_rave: 130, reggae: 75, pop_punk_emo: 97, norteno: 102,
 };
 
 // ── 1. Resolution for all 10 keys (only on the starter/beater) ────────────
