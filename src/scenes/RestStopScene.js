@@ -715,13 +715,34 @@ export class RestStopScene extends Phaser.Scene {
       { ...waterItem(0), label: '💧  FREE WATER',
         desc: 'Complimentary. A small Drinks top-up.' },
     );
-    if (_vNosTier < 3) {
-      const nextTier = _vNosTier + 1;
+    // NOS — now a THREE-ROW LADDER under the ENGINE tab (owner 2026-08-04),
+    // matching how the tiered part-slots list below.  It used to be a single
+    // "next tier" row with its price frozen at scene-build time AND no
+    // post-purchase disable, so tapping "LV 1" three times in one visit bought
+    // tier 3 for $15k instead of $30k.  One row per tier kills that: each row
+    // names the exact tier it installs (payload.nosTier), owned tiers are
+    // inert, and tiers past the next one are locked until their predecessor is
+    // in.  `category: 'engine'` files it with the other go-fast parts (same
+    // trick the traction tyres use to sit under TIRES).
+    for (let _t = 1; _t <= 3; _t++) {
+      const _owned  = _t <= _vNosTier;
+      const _locked = _t > _vNosTier + 1;
+      const _buyLbl = `⚡  NOS UPGRADE — LV ${_t}`;
+      const _ownLbl = `✓  NOS UPGRADE — LV ${_t}`;
       fapItems.push({
-        id: 'nos', label: `⚡  NOS UPGRADE — LV ${nextTier}`,
-        cost: NOS_PRICES[_vNosTier],
-        desc: `+5 mph cruise & boost (total +${nextTier * 5}).`,
-        payload: { vehicleAccessory: 'nos' },
+        id: `nos_${_t}`,
+        label: _owned ? _ownLbl : _locked ? `🔒  NOS UPGRADE — LV ${_t}` : _buyLbl,
+        _buyLabel: _buyLbl, _ownedLabel: _ownLbl,
+        cost: NOS_PRICES[_t - 1],
+        desc: `+5 mph cruise & boost (total +${_t * 5}).`,
+        category: 'engine', icon: 'garage_ico_engine',
+        slot: 'nos', lvl: _t,
+        disabled: _owned || _locked, _locked,
+        disabledReason: _owned ? '✓ Already installed on this car.'
+                               : `🔒 Install NOS LV ${_t - 1} first.`,
+        showCost: _locked,                          // locked rows still quote a price
+        disabledCostText: _owned ? 'OWNED' : undefined,
+        payload: _owned ? {} : { vehicleAccessory: 'nos', nosTier: _t },
       });
     }
     if (!_vHasBumper) {
@@ -753,11 +774,19 @@ export class RestStopScene extends Phaser.Scene {
     }
     // ── Slot part-upgrades (owner 2026-07-21): the CAR SHOP is now the ONLY
     // place to BUY tiered part-upgrades (tires / brakes / engine / …). The
-    // phone Garage is read-only (browse tiers + "save for" goals). Each
-    // non-maxed slot lists its NEXT tier as a buyable item; buying installs it
-    // into the save and spends the single rest-stop wallet (this._score), so
-    // the old dual-wallet double-spend is gone. Cost carries the same genre
-    // discount the garage used to apply (handled in _repairMult below).
+    // phone Garage is read-only (browse tiers + "save for" goals). Buying
+    // installs into the save and spends the single rest-stop wallet
+    // (this._score), so the old dual-wallet double-spend is gone. Cost carries
+    // the same genre discount the garage used to apply (see _repairMult below).
+    //
+    // FULL LADDER (owner 2026-08-04): every slot lists ALL of its tiers, not
+    // just the next one.  Listing one row per category made each tab look
+    // empty and hid the price of what you were saving toward.  Rows read:
+    //   ✓ owned      inert, priced "OWNED"
+    //   🔩 next       the one buyable tier
+    //   🔒 locked     priced, but needs its predecessor installed first
+    // Buying a tier flips it to ✓ and unlocks the row below it in place — see
+    // _unlockTier.
     {
       const _installed = getInstalled(_save, this._vehicleId);
       for (const _slot of UPGRADE_SLOTS) {
@@ -765,44 +794,63 @@ export class RestStopScene extends Phaser.Scene {
         if (!_tiers.length) continue;
         const _curId  = _installed[_slot];
         const _curLvl = _curId ? (_tiers.find(t => t.id === _curId)?.level ?? 0) : 0;
-        const _next   = _tiers.find(t => t.level === _curLvl + 1);
-        if (!_next) continue;   // maxed on this vehicle — nothing to sell
         const _slotLbl = (SLOT_LABELS[_slot] ?? _slot).toUpperCase();
         // Which shop stocks this part is decided by its TOOLBAR CATEGORY, so
         // the tabs and the inventory can never disagree.  Untabbed slots
         // (body, police) fall through to Finesse as flat services.
         const _cat  = categoryForSlot(_slot);
-        const _item = {
-          id: `up_${_slot}`,
-          label: `🔩  ${_slotLbl} — ${_next.label}`,
-          cost: _next.cost,
-          desc: (_next.desc ?? '') + (_next.tradeoff ? `  ⚠ ${_next.tradeoff}` : ''),
-          lvl: _next.level,   // read by _applyDealerTierGate (level-3 gate)
-          slot: _slot,
-          category: _cat?.id ?? null,   // drives the toolbar tab
-          // Row thumbnail — the same 1254px hero shot the toolbar tab uses,
-          // scaled down by _makeButton's existing icon path.  Untabbed slots
-          // (body, police) have no category and fall back to their emoji.
-          icon: _cat?.icon ?? undefined,
-          payload: { upgradeInstall: _next.id },
-        };
-        // Finesse is full-service; Les Schwasted additionally carries its
-        // three specialist categories. Use separate row objects because a
-        // purchase mutates the row's disabled/receipt state.
-        if (_cat && SHOP_CATEGORIES.les_schwasted.includes(_cat.id)) {
-          schwastedItems.push({ ..._item, payload: { ..._item.payload } });
-        }
-        if (!_cat || (_cat && SHOP_CATEGORIES.fap.includes(_cat.id))) {
-          fapItems.push({ ..._item, payload: { ..._item.payload } });
-        }
-        // Sam's Used Car Kingdom (owner 2026-07-30): windshield, headlights,
-        // wipers — Level 1 only. These three are single-tier slots (no
-        // ladder past level 1 at all — see the à-la-carte comment on
-        // UPGRADE_SLOTS), so `_next.level === 1` is really "not yet owned,"
-        // but the explicit check keeps the promise literal ("Level 1
-        // upgrades") rather than relying on that being incidentally true.
-        if (['windshield', 'headlights', 'wipers'].includes(_slot) && _next.level === 1) {
-          samItems.push({ ..._item, payload: { ..._item.payload } });
+        // The ladder is a TAB feature.  Untabbed slots (body, police) render as
+        // uncategorized SERVICES, which _selectGarageCategory pins to the top of
+        // every tab — laddering them would stack 6 permanent rows above the
+        // parts you actually opened the tab for.  They keep the next-tier-only
+        // listing until the toolbar art grows BODY / POLICE tabs of their own.
+        const _rungs = _cat ? _tiers : _tiers.filter(t => t.level === _curLvl + 1);
+        for (const _tier of _rungs) {
+          const _owned  = _tier.level <= _curLvl;
+          const _locked = _tier.level >  _curLvl + 1;
+          const _prev   = _tiers.find(t => t.level === _tier.level - 1);
+          const _buyLbl = `🔩  ${_slotLbl} — ${_tier.label}`;
+          const _ownLbl = `✓  ${_slotLbl} — ${_tier.label}`;
+          const _item = {
+            id: `up_${_slot}_${_tier.level}`,
+            label: _owned ? _ownLbl : _locked ? `🔒  ${_slotLbl} — ${_tier.label}` : _buyLbl,
+            _buyLabel: _buyLbl, _ownedLabel: _ownLbl,
+            cost: _tier.cost,
+            desc: (_tier.desc ?? '') + (_tier.tradeoff ? `  ⚠ ${_tier.tradeoff}` : ''),
+            lvl: _tier.level,   // read by _applyDealerTierGate (level-3 gate)
+            slot: _slot,
+            category: _cat?.id ?? null,   // drives the toolbar tab
+            // Row thumbnail — the same 1254px hero shot the toolbar tab uses,
+            // scaled down by _makeButton's existing icon path.  Untabbed slots
+            // (body, police) have no category and fall back to their emoji.
+            icon: _cat?.icon ?? undefined,
+            disabled: _owned || _locked, _locked,
+            disabledReason: _owned
+              ? '✓ Already installed on this car.'
+              : `🔒 Install ${_prev?.label ?? 'the previous tier'} first.`,
+            showCost: _locked,                        // locked rows still quote a price
+            disabledCostText: _owned ? 'OWNED' : undefined,
+            // An owned row carries NO install payload: it must never charge, and
+            // _applyDealerTierGate keys off payload.upgradeInstall, so a bought
+            // level 3 can't be re-gated back into "Lord Motors exclusive".
+            payload: _owned ? {} : { upgradeInstall: _tier.id },
+          };
+          // The two garages split the catalog by lane (SHOP_CATEGORIES); the
+          // untabbed slots fall through to Finesse. Use separate row objects
+          // because a purchase mutates the row's disabled/receipt state.
+          if (_cat && SHOP_CATEGORIES.les_schwasted.includes(_cat.id)) {
+            schwastedItems.push({ ..._item, payload: { ..._item.payload } });
+          }
+          if (!_cat || (_cat && SHOP_CATEGORIES.fap.includes(_cat.id))) {
+            fapItems.push({ ..._item, payload: { ..._item.payload } });
+          }
+          // Sam's Used Car Kingdom (owner 2026-07-30): windshield, headlights,
+          // wipers — Level 1 only. These three are single-tier slots (no
+          // ladder past level 1 at all — see the à-la-carte comment on
+          // UPGRADE_SLOTS), so the level check is really "the entry tier."
+          if (['windshield', 'headlights', 'wipers'].includes(_slot) && _tier.level === 1) {
+            samItems.push({ ..._item, payload: { ..._item.payload } });
+          }
         }
       }
     }
@@ -2184,6 +2232,45 @@ export class RestStopScene extends Phaser.Scene {
     this._buttonRefresh?.forEach?.(fn => fn());
   }
 
+  /** Turn a just-bought row into an inert "✓ OWNED" rung of the ladder.
+   *  Emptying the payload is what actually kills the double-buy: the row can
+   *  no longer charge, re-apply, or be picked up by _applyDealerTierGate. */
+  _markRowOwned(item) {
+    item.disabled = true;
+    item.disabledReason = '✓ Already installed on this car.';
+    item._locked = false;
+    item.showCost = false;
+    item.disabledCostText = 'OWNED';
+    item.payload = {};
+    item.label = item._ownedLabel ?? `✓  ${item.label.replace(/^[^\w]+\s*/, '')}`;
+    const ui = item._ui;
+    if (ui?.label?.scene) ui.label.setText(item.label);
+    if (ui?.cost?.scene)  ui.cost.setText('OWNED');
+    this._buttonRefresh?.forEach?.(fn => fn());
+  }
+
+  /** Open the next rung of a slot's ladder without rebuilding the shop —
+   *  called right after its predecessor is installed, so buying Lv1 and Lv2
+   *  back to back works in a single visit. */
+  _unlockTier(slot, level) {
+    if (!slot || !level) return;
+    for (const key of GARAGE_KEYS) {
+      for (const it of (SECTIONS[key]?.items ?? [])) {
+        if (it.slot !== slot || it.lvl !== level || !it._locked) continue;
+        it._locked = false;
+        it.disabled = false;
+        it.disabledReason = undefined;
+        it.showCost = false;
+        it.label = it._buyLabel ?? it.label;
+        if (it._ui?.label?.scene) it._ui.label.setText(it.label);
+      }
+    }
+    // A newly unlocked level 3 is still Lord-Motors-only at a stop without one,
+    // so re-run the gate rather than the plain refresh — it repaints every
+    // button on its way out anyway.
+    this._applyDealerTierGate();
+  }
+
   /** Show a sub-menu for a section key.  parent (optional) = the
    *  intermediate screen to return to on BACK; defaults to 'landing'. */
   _showSection(key, parent = 'landing') {
@@ -2416,8 +2503,22 @@ export class RestStopScene extends Phaser.Scene {
       return { x: this._contentX, y: this._contentY, w: this._contentW, h: this._contentH };
     }
     const colW = Math.round(SCREEN_W / 3) - 20;
-    const bottomBand = GARAGE_KEYS.has(key) ? 108 : 84;
-    return { x: 10, y: 74, w: colW, h: SCREEN_H - 74 - bottomBand };
+    // The survival mini-bars run y 44..92 (see _drawSurvivalMini: by = 44,
+    // 4 rows at gap 13, bar height 9).  Starting the item column at 74 put
+    // the first button straight over the bottom two bars, so Drinks and Food
+    // were unreadable in every storefront.  Clear them by starting below 92.
+    //
+    // The garage menus (FAP, Les Schwasted) are excluded per owner: they have
+    // their own taller bottom band and category strip, and their first row
+    // already sits clear.
+    const garage = GARAGE_KEYS.has(key);
+    const top    = garage ? 74 : 98;
+    // Reclaim the dead strip under the column at the same time.  Nothing else
+    // occupies the left third down here — the continue button (SCREEN_H-30),
+    // the JOBS block and the status line are centred or right-aligned — so the
+    // list can run lower and ends up TALLER than before despite starting later.
+    const bottomBand = garage ? 108 : 52;
+    return { x: 10, y: top, w: colW, h: SCREEN_H - top - bottomBand };
   }
 
   _buildTabContent(key, x, y, w, h) {
@@ -2515,22 +2616,31 @@ export class RestStopScene extends Phaser.Scene {
 
     // -5: the price sat on the baseline of the description text and collided
     // with long descriptions (and with the wider "FREE" string).
+    //
+    // A disabled row normally reads "N/A", but the upgrade ladder needs two
+    // exceptions (owner 2026-08-04): a LOCKED tier still quotes its real price
+    // (`showCost`) so you can see what you're saving toward, and an OWNED tier
+    // says so outright (`disabledCostText: 'OWNED'`).
+    const priceStr = effectiveCost > 0 ? `$${effectiveCost}` : 'FREE';
     const cost = this.add.text(x + w - 8, y + h / 2 - 5,
-      disabled              ? 'N/A' :
-      effectiveCost > 0     ? `$${effectiveCost}` : 'FREE', {
+      !disabled || item.showCost ? priceStr : (item.disabledCostText ?? 'N/A'), {
         fontSize: compact ? '11px' : '13px', fontFamily: IMPACT,
         color: '#FFEE00', stroke: '#000', strokeThickness: 2,
       }).setOrigin(1, 0.5);
     created.push(label, desc, cost);
+    // Handles for cross-row updates — installing a tier has to retitle the row
+    // BELOW it (see _unlockTier), which can't reach these through its own
+    // closure.  Rebuilt every time the row is built, and every reader checks
+    // `.scene` first because a destroyed row keeps its stale refs.
+    item._ui = { bg, label, desc, cost };
 
     // item.disabled is read LIVE (not the build-time `disabled` const) so a
     // purchase can flip it — e.g. REFUEL greys itself out after one buy.
     const refresh = () => {
-      // Row may have been DESTROYED (the installed-upgrade fade removes the
-      // whole row 3 s after purchase) while this callback stays registered
-      // in _buttonRefresh — touching a destroyed Text crashes Phaser in
-      // updateUVs (seen scrolling the FAP shop).  Destroyed objects have no
-      // scene; bail for the whole row.
+      // Row may have been DESTROYED (screen rebuild) while this callback stays
+      // registered in _buttonRefresh — touching a destroyed Text crashes
+      // Phaser in updateUVs (seen scrolling the FAP shop).  Destroyed objects
+      // have no scene; bail for the whole row.
       if (!bg.scene || !label.scene || !cost.scene) return;
       const ok = !item.disabled && this._score >= effectiveCost;
       bg.setFillStyle(ok ? 0x2A1808 : 0x1A0E04);
@@ -2579,70 +2689,120 @@ export class RestStopScene extends Phaser.Scene {
         this._setStatus('🚻 CUSTOMERS ONLY', '#FF6666', true);
         return;
       }
-      if (effectiveCost > 0) {
-        // Custom: the purchase is REAL (price charged to stats, business
-        // unlocked, item applied) but the wallet doesn't drain — money in the
-        // sandbox is unlimited, not free.  Everything else about the buy is
-        // untouched, so prices, affordability and spend tracking stay honest.
-        if (!this._infiniteMoney()) this._score -= effectiveCost;
-        if (bizKey) this._boughtAt.add(bizKey);   // unlocks THIS business's restroom only
-        const _si = this._statsSpendInfo(item);
-        this._stats?.recordSpend(effectiveCost, _si.category, _si.subId);
-      }
-      this._refreshScore();
-      this._buyOutcomeMsg = null;   // _applyPurchase may stash one (see below)
-      this._applyPurchase(item);
-      // REFUEL fills the tank fully and is SINGLE-USE (owner 2026-07-17):
-      // grey it out + relabel so it can't be bought again this visit.
-      if (item.payload?.refuel) {
-        item.disabled = true;
-        item.disabledReason = '⛽ Tank\'s already full.';
-        label.setText('⛽  TANK FULL');
-        desc.setText('Topped off.');
-        cost.setText('N/A');
-      }
-      if (item.payload?.repair) {
-        item.disabled = true;
-        item.disabledReason = 'Car is already at full health.';
-        label.setText('✓  CAR REPAIRED');
-        desc.setText('Restored to full health.');
-        cost.setText('N/A');
-      }
-      // Slot upgrade installed — grey it out for this visit; the next tier
-      // shows up on the next stop (matches the NOS tiering behavior).
-      if (item.payload?.upgradeInstall) {
-        item.disabled = true;
-        item.disabledReason = '✓ Installed on this car.';
-        // Owner 2026-07-28: no "INSTALLED / next tier" placeholder — a part
-        // this shop no longer sells shows NOTHING.  Brief ✓ receipt, then
-        // the whole row (icon, label, desc, cost, backing) fades away.
-        label.setText('✓  INSTALLED');
-        desc.setText('');
-        cost.setText('');
-        this.time.delayedCall(3000, () => {
-          const row = created.filter(o => o?.scene);
-          if (!row.length) return;
-          this.tweens.add({
-            targets: row, alpha: 0, duration: 450,
-            onComplete: () => row.forEach(o => o.destroy()),
-          });
-        });
-      }
-      // Genre car bought/swapped — this row becomes YOUR RIDE for the visit.
-      // (Other rows re-derive owned/active state on the next stop.)
-      if (item.payload?.buyGenre || item.payload?.driveGenre) {
-        item.disabled = true;
-        item.disabledReason = 'Already driving it.';
-        label.setText('✓  YOUR RIDE');
-        desc.setText(item.payload?.buyGenre ? 'Keys in hand — drove it off the lot.' : 'Swapped in.');
-        cost.setText('N/A');
-      }
-      this._showMenuPopup(this._purchaseConfirmation(item), '#88FF88');
-      this._flash(bg, 0x44FF44);
-      this._buttonRefresh.forEach(fn => fn());
+      // Everything from here down is the COMMIT half of the tap — charging,
+      // stats, applying the item, greying out single-use rows.  It now runs
+      // only after the player confirms (owner 2026-08-03): the tap itself
+      // just asks.  NO closes the popup with nothing bought or applied.
+      const doBuy = () => {
+        if (effectiveCost > 0) {
+          // Custom: the purchase is REAL (price charged to stats, business
+          // unlocked, item applied) but the wallet doesn't drain — money in the
+          // sandbox is unlimited, not free.  Everything else about the buy is
+          // untouched, so prices, affordability and spend tracking stay honest.
+          if (!this._infiniteMoney()) this._score -= effectiveCost;
+          if (bizKey) this._boughtAt.add(bizKey);   // unlocks THIS business's restroom only
+          const _si = this._statsSpendInfo(item);
+          this._stats?.recordSpend(effectiveCost, _si.category, _si.subId);
+        }
+        this._refreshScore();
+        this._buyOutcomeMsg = null;   // _applyPurchase may stash one (see below)
+        this._applyPurchase(item);
+        // REFUEL fills the tank fully and is SINGLE-USE (owner 2026-07-17):
+        // grey it out + relabel so it can't be bought again this visit.
+        if (item.payload?.refuel) {
+          item.disabled = true;
+          item.disabledReason = '⛽ Tank\'s already full.';
+          label.setText('⛽  TANK FULL');
+          desc.setText('Topped off.');
+          cost.setText('N/A');
+        }
+        if (item.payload?.repair) {
+          item.disabled = true;
+          item.disabledReason = 'Car is already at full health.';
+          label.setText('✓  CAR REPAIRED');
+          desc.setText('Restored to full health.');
+          cost.setText('N/A');
+        }
+        // Part installed — the row becomes an inert ✓ OWNED rung and the tier
+        // BELOW it unlocks in place (owner 2026-08-04).  It used to fade the
+        // whole row out after 3 s, which made sense when the shop listed only
+        // the next tier; in the full-ladder view that left a hole between
+        // "✓ Lv1" and "🔒 Lv3", so the rung now stays put and just flips state.
+        if (item.payload?.upgradeInstall || item.payload?.vehicleAccessory) {
+          this._markRowOwned(item);
+          if (item.slot && item.lvl) this._unlockTier(item.slot, item.lvl + 1);
+        }
+        // Genre car bought/swapped — this row becomes YOUR RIDE for the visit.
+        // (Other rows re-derive owned/active state on the next stop.)
+        if (item.payload?.buyGenre || item.payload?.driveGenre) {
+          item.disabled = true;
+          item.disabledReason = 'Already driving it.';
+          label.setText('✓  YOUR RIDE');
+          desc.setText(item.payload?.buyGenre ? 'Keys in hand — drove it off the lot.' : 'Swapped in.');
+          cost.setText('N/A');
+        }
+        this._showMenuPopup(this._purchaseConfirmation(item), '#88FF88');
+        this._flash(bg, 0x44FF44);
+        this._buttonRefresh.forEach(fn => fn());
+      };
+      this._confirmBuyPopup(item, doBuy);
     });
 
     return created;
+  }
+
+  /**
+   * Purchase confirmation (owner 2026-08-03): tapping a storefront item asks
+   * "You'd like a(n) X?" before anything is charged or applied.  YES runs the
+   * exact buy path the tap used to run directly; NO closes the popup and the
+   * item is neither purchased nor procured.  The affordability / disabled /
+   * customers-only guards still run BEFORE this, so a row you can't buy keeps
+   * its immediate red-flash feedback and never opens a popup.
+   */
+  _confirmBuyPopup(item, onYes) {
+    if (this._confirmObjs) return;               // one popup at a time
+    // Item name for the prompt — the row label minus its emoji prefix.
+    const name = item.label.replace(/[^\w' ]/g, ' ').replace(/\s+/g, ' ').trim();
+    const art  = /^[aeiou]/i.test(name) ? 'an' : 'a';
+    const CX = SCREEN_W / 2, CY = SCREEN_H / 2, D = 900;
+    const objs = this._confirmObjs = [];
+
+    // Full-screen dim, interactive so taps can't reach the shop behind it.
+    // Oversized so the widened-canvas margins (HUD_OFFSET_X) are covered too.
+    objs.push(this.add.rectangle(CX, CY, SCREEN_W * 3, SCREEN_H * 3, 0x000000, 0.55)
+      .setDepth(D).setInteractive());
+    objs.push(this.add.rectangle(CX, CY, 400, 158, 0x102038)
+      .setDepth(D).setStrokeStyle(2, 0x66AAFF));
+    objs.push(this.add.text(CX, CY - 36, `You'd like ${art} ${name}?`, {
+      fontSize: '18px', fontFamily: IMPACT, color: '#FFFFFF',
+      stroke: '#000', strokeThickness: 3,
+      wordWrap: { width: 368 }, align: 'center',
+    }).setOrigin(0.5).setDepth(D));
+
+    const close = () => {
+      (this._confirmObjs ?? []).forEach(o => o?.destroy());
+      this._confirmObjs = null;
+    };
+    // Same tap discipline as the shop rows: buy on pointerUP with a drift
+    // gate, and eat the tap so it can't fall through to whatever is behind.
+    const TAP_MAX_DRIFT = 12;
+    const mkBtn = (x, txt, fill, cb) => {
+      const b = this.add.rectangle(x, CY + 34, 150, 44, fill)
+        .setDepth(D).setStrokeStyle(2, 0xFFFFFF, 0.85)
+        .setInteractive({ useHandCursor: true });
+      const t = this.add.text(x, CY + 34, txt, {
+        fontSize: '20px', fontFamily: IMPACT, color: '#FFFFFF',
+        stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(D);
+      objs.push(b, t);
+      b.on('pointerup', (ptr, _x, _y, ev) => {
+        this._eatTap(ptr, ev);
+        if (ptr.getDistance() > TAP_MAX_DRIFT) return;
+        cb();
+      });
+    };
+    mkBtn(CX - 88, 'YES', 0x2E7D32, () => { close(); onYes(); });
+    mkBtn(CX + 88, 'NO',  0x8B2635, close);
   }
 
   _purchaseConfirmation(item) {
@@ -2804,7 +2964,11 @@ export class RestStopScene extends Phaser.Scene {
         if (p.vehicleAccessory === 'bumper')   cur.bumper   = true;
         if (p.vehicleAccessory === 'traction') cur.traction = true;
         if (p.vehicleAccessory === 'nos') {
-          cur.nos = Math.min(3, (cur.nos ?? 0) + 1);
+          // Install the tier the ROW names (p.nosTier), not "one more than
+          // whatever's fitted".  The blind increment let a repeated tap on the
+          // level-1 row walk up to tier 3 at the level-1 price; Math.max keeps
+          // it a ratchet so a stale row can never demote an installed kit.
+          cur.nos = Math.max(cur.nos ?? 0, Math.min(3, p.nosTier ?? ((cur.nos ?? 0) + 1)));
         }
         all[this._vehicleId] = cur;
         save.set('accessories', all);

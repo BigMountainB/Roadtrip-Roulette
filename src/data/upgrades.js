@@ -56,15 +56,24 @@ export const GARAGE_CATEGORIES = [
     slots: ['wipers', 'headlights', 'foglights', 'windshield'],            icon: 'garage_ico_wipers' },
 ];
 
-/** Which toolbar categories each garage brand stocks.  Les Schwasted is the
- *  tyre-and-brake specialist (fast, cheap, common); Finesse is full
- *  service (expensive, rare) and also carries the untabbed body/police
- *  slots plus repair, paint, bumper and NOS. */
+/** Which toolbar categories each garage brand stocks.
+ *
+ *  DISTINCT LANES (owner 2026-08-04).  Finesse used to stock all seven
+ *  categories, which made Les Schwasted a strict SUBSET of it — there was no
+ *  reason to ever stop at Schwasted except the free popcorn.  The two garages
+ *  now split the catalog with zero overlap, so which garage a stop carries
+ *  actually decides what you can buy there:
+ *
+ *    Les Schwasted  chassis  — tyres, brakes, suspension (cheap, common)
+ *    Finesse (FAP)  drivetrain + glass — engine (incl. NOS), fuel, coolant,
+ *                   wipers/lights/windshield, plus the untabbed body/police
+ *                   slots and repair/paint/bumper services (expensive, rare)
+ *
+ *  Sam's Used Car Kingdom is not a garage and has no tabs; it carries a small
+ *  entry-tier parts counter assembled separately in RestStopScene. */
 export const SHOP_CATEGORIES = {
   les_schwasted: ['tires', 'brakes', 'suspension'],
-  // Finesse is the full-service garage, so every toolbar category is
-  // available there. Les Schwasted remains the three-category specialist.
-  fap:           GARAGE_CATEGORIES.map(c => c.id),
+  fap:           ['engine', 'fuel', 'coolant', 'wipers'],
 };
 
 /** Slots with no toolbar tab — sold as flat services at Finesse. */

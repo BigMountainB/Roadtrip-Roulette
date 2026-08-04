@@ -121,6 +121,50 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-04 — Garage rework: NOS re-buy exploit fixed · full tier ladders · two distinct garage lanes
+Uncommitted. Tests: chase 50, coal 25, missions 256, genreTraits 179, dose 37, upgrades 3 — all green. `vite build` clean.
+
+**The NOS re-buy bug (owner report).** The buy handler in `RestStopScene._makeButton` greyed a row
+out after purchase for `refuel` / `repair` / `upgradeInstall` / genre cars but had **no case for
+`vehicleAccessory`** — the payload NOS, the reinforced bumper and traction tyres all use. Those rows
+stayed live for the whole visit. Worse than a cosmetic repeat: the NOS price was frozen at
+scene-build time (`NOS_PRICES[_vNosTier]`) while `_applyPurchase` blind-incremented the tier, so
+tapping "LV 1" three times bought **tier 3 for $15k instead of $30k**. Bumper/traction re-buys just
+burned money for nothing. Fixed three ways — the row disables itself (`_markRowOwned`), each NOS row
+names the exact tier it installs (`payload.nosTier`, applied with a `Math.max` ratchet), and NOS is
+now three separate rows rather than one mutating "next tier" row.
+
+**Full tier ladders in every category tab.** Each slot listed only its NEXT tier, so every tab held
+exactly one row and the shop read as empty — the owner's actual complaint ("only 1 thing in each
+part category"). All tiers now list together: `✓ owned` (inert, priced "OWNED"), `🔩` the one buyable
+tier, `🔒 locked` (**still quotes its real price** so you can save toward it). Buying a rung flips it
+to ✓ and unlocks the one below it *in place* via `_unlockTier`, so Lv1→Lv2 in one visit works.
+- Replaces the 2026-07-28 fade-the-row-out receipt: that made sense when only the next tier showed,
+  but in a ladder it left a hole between `✓ Lv1` and `🔒 Lv3`. Rows stay put and flip state.
+- `_makeButton` gained two optional item fields — `showCost` (a disabled row still prints its price)
+  and `disabledCostText` ("OWNED") — plus `item._ui`, the row's text handles, so a purchase can
+  retitle the row *below* it.
+- **Untabbed slots (body, police) are deliberately exempt** and keep next-tier-only. They render as
+  uncategorized SERVICES, which `_selectGarageCategory` pins above the parts on *every* tab —
+  laddering them would stack 6 permanent rows over whatever tab you opened. They get ladders when
+  the toolbar art grows BODY / POLICE tabs (see below).
+
+**Two garages, two lanes** (`SHOP_CATEGORIES`). Finesse stocked all seven categories while Les
+Schwasted stocked three of the same ones — Schwasted was a strict *subset*, so there was no reason
+to ever stop there except the free popcorn. Now zero overlap:
+- **Les Schwasted** — tyres, brakes, suspension (+ traction tyres). Cheap, common.
+- **Finesse (FAP)** — engine (**NOS moved here**, `category: 'engine'`, same trick traction uses to
+  sit under TIRES), fuel, coolant, wipers/lights/windshield, plus the untabbed body/police slots and
+  repair/paint/bumper. Expensive, rare.
+- **Sam's** unchanged: entry-tier windshield/headlights/wipers/bumper, no tabs.
+- Coverage check across the 19 stops: Schwasted at 10, Finesse at 9, both at 4, neither at 4 — no
+  slot becomes unbuyable over a full run.
+
+**Still art-blocked.** `assets/ui/garage_upgrade_toolbar.png` is ONE 1672×220 strip sliced into
+seven equal columns *by index*, so BODY and NITRO tabs cannot be added in code alone — the strip has
+to be re-cut to nine columns first. That constraint is why NOS went under ENGINE and body stayed a
+Finesse service.
+
 ### 2026-08-04 — Chase realism pass · near-field cop projection · skyline/tunnel layering · weapon-exit tuning · challenge-mission crash
 Uncommitted. Tests: chase **50** (13 new), coal 25, missions 256, genreTraits 179, vices 26, upgrades 3 — all green.
 
