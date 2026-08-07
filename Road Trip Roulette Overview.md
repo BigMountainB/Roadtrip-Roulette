@@ -53,7 +53,7 @@ upgrades, survival + heat/fuel pressure).
 
 **Built & deployed:** rest-stop encounter system (dialogue trees + npcMemory) · **MISSION SYSTEM
 complete (Ch. 8, all 7 phases — 5 types, rep ladder ×1/×2.5/×5, 123 tests)** · car stats layer ·
-part-upgrade system + garage UI · upgrades/buffs hooked into handling · survival rework
+**part-upgrade system + garage UI (shops as-built: Ch3 §18)** · upgrades/buffs hooked into handling · survival rework
 (Alertness/Bladder/Drinks/Food + restrooms/AM-BM + rest-stop mini bars; over-eating past 75% now
 fills the bladder) · engine overheating · analog E↔F gas gauge (75-mi tank, 1:1 burn, reserve-tank
 upgrades) · 🎆 fireworks weapon (spikes removed) · phone-menu notification dots · Hatton rest stop ·
@@ -72,7 +72,9 @@ ready; pickups+distance income the suspected inflators) · Steam-demo cut + wish
 on the COPY'd `controlsLayout` JSON — editor has the export button) · **genre earn/buy GATING**
 (deferred to post-dev-mode; every genre is freely selectable for now) · **Reggaeton dedicated music**
 (still borrowing the 9 hip-hop tracks; no `reggaeton/` folder yet) · texting-relationship layer
-(pinned idea) · SAVE tile replacement (owner deciding).
+(pinned idea) · SAVE tile replacement (owner deciding) · **9-column garage toolbar art** (the current
+strip is 7 columns sliced by index — BODY and NITRO tabs are art-blocked, not code-blocked; see
+Ch3 §18 "AS BUILT").
 
 ## 📌 PINNED — Soundtrack Culture Packs (SHIPPED 2026-07-17)
 
@@ -120,6 +122,135 @@ genre pick, and a "Rotate Phone to Enter Game Play" prompt follows. Remaining: e
 genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
+
+### 2026-08-04 — Road/material + fog-light + storefront batch DEPLOYED · phonk default car · `npm run deploy` rewired to RTR
+**DEPLOYED to https://roadtrip-roulette.pages.dev (root · /demo · /fully)** — first deploy since
+2026-07-31, so everything below is now live in the demo.  Tests 546 green, `vite build` clean.
+
+- **Road texture camera-scroll fix (the "texture missing on half the road" bug).**  RoadPlane and
+  GroundPlane use custom WebGL pipelines that apply only `camera.matrix` — camera SCROLL is a
+  per-object factor Phaser applies in each object's renderer, so both planes drew HUD_OFFSET_X px
+  left of every scrollFactor-1 Graphics.  On the road tile that uncovered a flat band down the
+  right side of every carriageway, sized by device aspect (~70 px on a 940 canvas, wider on
+  phones); the ground tile had carried the same bug invisibly since it was written (seamless grass
+  has no reference edges).  Both pipelines now subtract `camera.scrollX/Y` before the matrix.
+  Diagnosed by column-scan + live-geometry probe after two wrong theories (distance fade, ghost
+  pass) — the giveaway was the band's constant width and device-dependence.
+- **Bridge lane markings (two independent causes, both fixed).**  (1) A dash spans 3 segments; on
+  long flat sightlines ~5 segments collapse into one pixel row (relZ ~75k), so per-segment dash
+  slivers went sub-pixel VERTICALLY and vanished while the every-segment double-yellow survived.
+  Dashes are now emitted as ONE quad spanning the dash's full world length (16-slot far-boundary
+  ring cache in the far→near render loop; crest-culled fallback degrades to per-segment).  (2)
+  `paintFade` blended paint 62% toward pavement starting at relZ 5000 — retuned to a two-term
+  curve: ≤14% atmospheric blend through ~90% of the visible road (`PAINT_BASE_MAX`, owner-tuned
+  down from 25% after on-device review), full dissolve only past `PAINT_KNEE` 0.90; dash width
+  floored at 0.55 px.  Validated on the West Seattle + Lake Washington decks.
+- **Black horizon line on bridges** was a genuinely unpainted 3-px gap (pure 0x000000, ~450 px
+  wide) — the water/bridge branch of Road.render never had the land branch's fail-safe world
+  fill.  One opaque haze-toned backstop under everything that branch draws makes the gap
+  structurally impossible.
+- **Double-vision ghost no longer repaints the road.**  ghostGfx (1.55) sits above the asphalt
+  texture (1.42) and road (1.5); its untextured 62%-alpha carriageway repaint erased the aggregate
+  whenever drowsiness/Sushi kicked in.  The ghost now draws markings/edges/sprites only.
+- **Fog lights rebuilt as a BEAM (owner-directed, many iterations).**  The 2026-07-22 global
+  50%-thinning is GONE — fog is full density with or without the upgrade (`setFogClarity(1)`
+  always; note this also removed the upgrade's hidden see-sprites-sooner benefit).  The upgrade
+  now clears a headlight-shaped fan in the EffectsSystem haze: apex at the car's nose (top third
+  of the sprite, computed from origin/height), symmetric on the car's own x (NO road-sample lean
+  — that read as off-axis), widening 42→150 px half-width, clearing 65% of haze alpha
+  (`BEAM_CLEAR 0.35`), far end anchored to the road surface's projected height (`sampleSurface`
+  sy only) so the fan keeps one apparent pitch over crests/climbs, extending to just below the
+  horizon with a graduated dissolve (full strength through ~half the reach).  Knobs live in one
+  block in EffectsSystem.js: hwNear/hwFar, BEAM_CLEAR, fade span 0.48, throw 55000.
+- **Road-paint art pass**: centre yellow desaturated/darkened (0x988949/0x776C40), dashes ~20%
+  thinner + warmer grey (0xD2CCBE), subtle road-crown gradient bounded by each segment's own
+  projection, guardrail reflectors every ~9 segments with per-cell jitter (was uniform %6).
+- **Storefronts**: item column starts at y=98 so the survival bars (y 44–92) are never covered
+  (garages FAP/Les Schwasted keep their own layout); bottom band reclaimed (84→52) so the list is
+  taller.  NEW purchase-confirm popup — "You'd like a(n) X?" YES/NO — wraps the commit half of
+  every buy; guards (afford/disabled/customers-only) still run first and never open a popup.
+- **Vehicle sizing**: width pin refined to 78±2 by art aspect (≥0.86 → 80 px for the tall mud
+  truck, ≤0.72 → 76 px for low sleek cars); height ALWAYS follows the art's aspect — runtime
+  verified scaleY/scaleX = 1.0, nothing is flattened.
+- **Default car is the hip-hop/phonk starter** (`DEFAULT_GENRE` in constants.js) — every genre
+  fallback (boot art, `__genre.get`, plate-switch revert, dealership self-heal ownership) resolves
+  to phonk instead of base-beater art.  An explicit country pick still gets the mud truck.
+- **`npm run deploy` REWIRED to RTR** — it was still the DUI fork's script deploying `dist` to the
+  DUI Pages project (would have overwritten the DUI game).  It now runs the Chapter-2 manual path:
+  build-demo.sh + build-fully.sh + `wrangler pages deploy website --project-name
+  roadtrip-roulette`, creds from local `.cloudflare.env` or `../DUI/.cloudflare.env`.  Verified
+  end-to-end.  CI remains broken/clobber-wired — do not git push to deploy (see Chapter 2).
+
+
+### 2026-08-04 — Rest-stop dialogue rewrite: every conversation in the owner's voice · all 62 town facts web-verified
+Uncommitted. Tests: chase 50, coal 25, missions 256, genreTraits 179, dose 37, upgrades 3 — all green.
+`validateEncounterTrees()` clean. `vite build` clean.
+
+**The brief.** Owner rewrote nine encounter NPCs by hand (Street Weirdo, Chain Guy, Ski Bum,
+Long-Haul Mike, Farm Worker, Startup Founder, Hitchhiker, Park Ranger, Diner Waitress) and asked for
+that style applied to everything else at a rest stop: *"the others were lame and the facts weren't
+unique or even facts at times."*
+
+**The style, made explicit.** Three things separate the new voice from the old:
+1. **Choice labels are what the PLAYER says**, in quotes, in the player's own voice, often rhyming
+   back at the NPC — not terse menu verbs. `"Ask about the pass"` → `"Any idea what the weather is
+   doing up at the pass?"`. The old labels made every conversation read as a vending machine.
+2. **Every choice earns a response.** No branch dead-ends in silence any more, including the polite
+   exits — the "no thanks" option is now where a lot of the best jokes live.
+3. **Facts are real.** Specific, checkable, and preferring the strange true thing over the tidy
+   summary.
+
+**Two structural discoveries that had to be fixed first.**
+- *The facts nobody could see.* `_showEncounterCard` resolves `this._townFact ?? node.fact ?? enc.fact`,
+  and all 18 stops have entries in `townFacts.js` — so **every `fact:` written on an encounter card was
+  unreachable**. The real fact surface is `townFacts.js`, and that is where the weak lines lived
+  ("Snoqualmie Pass weather can change fast", "Thorp is little more than a fruit stand" — neither is a
+  fact). All 62 facts were rewritten and **web-verified individually** against HistoryLink, city/park
+  sources, and the relevant museums. Card `fact:` fields are kept as the documented fallback and held
+  in sync.
+- *Buttons that couldn't hold a sentence.* Choice buttons were fixed-height slabs (`t.bh`), and the
+  type-tier fitter measured the dialogue, the fact and the deal panel but **never the labels** — a
+  wrapped two-line label spilled straight out of its box. Buttons now size to their wrapped label
+  (`measureChoiceHeights`, `chHeights`), and that height feeds the tier fitter, so a tall choice stack
+  correctly pushes the type down a tier instead of overflowing.
+
+**Content rewritten.**
+- **14 encounter cards.** The owner's 9 applied verbatim (text *and* the new economy — see below),
+  plus the 5 that had never been touched: Roadside Grandma (Hatton), Tow Driver (Washtucna),
+  Shade-Tree Mechanic (Ellensburg alt), Lemonade Kids (Othello alt), Swimsuit Girl (Thorp).
+- **11 shop greeters.** All 11 shared one verbatim line — `"Welcome in! What can I help you with?"`,
+  the single most-repeated string in the game. Each brand now gets one couplet in its own voice.
+  Filler in *function* (once-only, terminal, zero mechanics) is not the same as filler in *voice*;
+  the three player choices stay shared so the action reads identically at every counter.
+- **Mission contacts** (5 tiers incl. the failure ack) and **7 passenger quirk sets** (ask / pickup /
+  mid-route / drop-off).
+- **33 crowd-chatter lines.** Deliberately NOT rhyming — the couplets belong to NPCs you actually
+  talk to; chatter is half a conversation you walk past. Each line is now either a joke or
+  information; the ones that were neither were cut.
+
+**Economy changes carried in from the owner's sheet** (his costs, applied as given): chains
+$80 → **$150** (haggle $55 → **$120**), traffic app $60 → **$100** (+30s → **+90s**), Mike's fuel split
+$30 → **$100**, farm gas can $40 → **$50**, diner $12 → **$40**, thermos +10s → **+100s**. Hitchhiker
+payout 60% +$40 → **+$80**, and the 40% bad branch now still pays +$20 alongside the wanted star.
+
+**One new effect verb.** `fullnessFloor` — raises Hunger *up to* a value and no-ops if already higher,
+per the owner's note that the diner should set fullness to 60% "if lower, don't adjust if higher".
+A flat `+16` wasted the whole $40 on a player who had just eaten. Implemented as
+`raiseSurvivalTo(bar, target)` in `RestStopScene`, reading the entry snapshot plus everything banked
+this visit so two meals in one stop can't double-count.
+
+**Judgement calls flagged for the owner** (all reversible, all in one place):
+- Chain Guy's haggle: his line says **$120** but the sheet's cost column still said $55 (unedited from
+  the old file). Priced at **$120** to match what he says out loud.
+- Two of his labels were written in the *seller's* voice ("You can pay full price here, or up there")
+  — kept the words, moved them to his response, and put a player line on the button.
+- Diner "I'll take the usual" → **"Who are you?"** was read as a *joke* (she doesn't remember you at
+  all) rather than a placeholder, and given a rhyming turn: *"The usual," she repeats. "Who ARE you?"
+  — then the plate lands hot, like she always knew.* Say the word if it was a placeholder.
+- Two truncated labels completed: `"Here's a dollar, pal. I hope you…"` → `…spend it fair.` and
+  `"Let me grab one of those thermoses…"` → `…off you.`
+- `revealHazard` is **written but never read anywhere in the codebase** — the ids (`fog`, `rain`, new
+  here) are pure flavor until something consumes them.
 
 ### 2026-08-04 — Garage rework: NOS re-buy exploit fixed · full tier ladders · two distinct garage lanes
 Uncommitted. Tests: chase 50, coal 25, missions 256, genreTraits 179, dose 37, upgrades 3 — all green. `vite build` clean.
@@ -249,6 +380,52 @@ now measures max-over-time (also the stronger pool guarantee) rather than a sing
 3★ clamp sweep now filters to rear pursuers — 3★ star-spawns roll ~45% oncoming, which is ahead
 *by design*, making that assertion a coin flip. Also fixed an unbounded `do/while` in the barricade
 gap picker that the decay-pause change exposed (it never terminated with `Math.random` pinned).
+
+### 2026-08-04 (pt 2) — Ending plates: genre-car endings, and OUT OF GAS becomes a decision
+Uncommitted (`src/data/endingArt.js` new; `GameOverScene.js`, `GameScene.js`, `constants.js`).
+Tests 550 green, build clean. BUSTED / CRASHED / PASSED OUT / DEMO / Pullman verified in-engine
+by screenshot; the OUT OF GAS card is build-verified only and still needs a playtest.
+
+**Which run-enders had no ending card (the audit that started this).** BUSTED (arrest *and* a cop
+landing the killing blow), CRASHED (HP 0 non-cop) and PASSED OUT (vice OD or asleep at the wheel)
+all had art already. Missing: **out of gas** — which turned out not to end the run at all, just a
+2.2 s toast then an automatic tow; **`busted_late`** (TOO LATE + 5★, `GameScene.js` ~5161) which
+ends the run but goes straight to the checkpoint-restart modal with no card *(still open)*; and
+the **Pullman finish** + **demo complete**, both `image: null` — every way to lose looked better
+than winning.
+
+**New art pipeline** (`src/data/endingArt.js`). Six photographic 800×450 plates — exactly the game
+canvas, so plate coordinates are 1:1 with screen space — each with the player's **genre car**
+composited on top, matching whatever they were driving when the run ended (`window.__genre.get()`).
+Two views per genre: `_rear3q` parked, `_rear3q_crashed` wrecked-and-smoking (CRASHED only).
+
+- **Cars are placed by their TRIMMED content box, not their frame.** All 30 PNGs are 560×400, but
+  the vehicle inside isn't: a classic-rock coupe trims to 472×217, a metal van to 453×339, with
+  different padding again. Scaling the raw frame floats or sinks cars at random. `ENDING_CAR_BBOX`
+  (generated from the art — regen command is in the file header) holds every trimmed box, and each
+  plate anchors the car by its wheels' contact point.
+- **Anchors** (x, y = contact point; w = on-plate car width), set by compositing the real art
+  offline and eyeballing each ground plane: busted 360/268/300 · crashed 450/262/300 ·
+  passed_out 300/330/330 · out_of_gas 330/300/300 · demo 250/414/292 · pullman 112/318/145
+  (left comic panel, x 8-262, so it stays small).
+- **Loaded on demand, not at boot.** Six plates is ~3.5 MB of art seen once per run; the plate and
+  its one car (~850 KB) are fetched when the ending appears and faded in. If the plate fails to
+  load, the old baked-webp builders still run — an ending that never draws would strand the player.
+- **The new plates carry no typography or button faces**, unlike the old baked webp art whose
+  headline AND button faces were painted in with invisible hit zones traced over them. So headline,
+  stats and buttons are now drawn for real, over a bottom gradient scrim (`_buildPlateUI`).
+
+**OUT OF GAS is a decision, not an automatic tow** (owner 2026-08-04). Running dry now opens the
+plate with three choices: **TOW — $1,500** (flat fee, back to the last rest stop, tank full, run
+continues), **START OVER**, **LOAD SAVE** (reuses `_titleLoadSave`). Can't afford the tow → the
+button greys out reading `NEED $340 MORE` and the only ways out are start over or load. The old
+rule is gone entirely: 50% of cash (which punished a rich run far harder than a broke one for the
+same mistake), the repo-to-Beater, and the free-tow-if-broke mercy case. `TOW_COST_USD` in
+`constants.js` is the knob.
+
+**Known rough edges, pending a look:** the Pullman comic's stats and button land over the middle
+(stage) panel, which is the busiest one; and the demo van's wheels sit behind the bottom button
+row. Both are anchor/layout numbers, not structure.
 
 ### 2026-08-03 (pt 2) — Rest-stop menus: one tap was firing on two screens
 Uncommitted (`RestStopScene.js`). Tests 550 green, build clean — no test covers scene input, so
@@ -2085,7 +2262,14 @@ git commit -m "Short description of what changed"
 git push origin main       # GitHub Action builds + deploys to Cloudflare Pages (currently broken)
 ```
 
-**The actual working deploy (manual, until CI is fixed):**
+**The actual working deploy — now one command (2026-08-04):**
+```bash
+cd "/Users/brendanbaughn/Documents/Claude/Road trip roulette"
+npm run deploy        # = scripts/deploy.sh: build-demo.sh + build-fully.sh + wrangler → roadtrip-roulette
+```
+`scripts/deploy.sh` was the DUI fork's script until 2026-08-04 — it deployed `dist` to the **DUI**
+Pages project and would have overwritten the DUI game.  It now runs exactly the manual sequence
+below (kept for reference / partial deploys):
 ```bash
 cd "/Users/brendanbaughn/Documents/Claude/Road trip roulette"
 cd website && sh build-demo.sh   # refreshes /demo — only if game source changed
@@ -2733,6 +2917,15 @@ Do not require lip sync, animation, or branching character memory for v1. That w
 
 The user specifically likes characters offering historic or area-specific facts. Good. This gives the route personality and makes the game feel researched.
 
+> **AS BUILT (2026-08-04) — read this before editing any fact.** The live fact list is
+> `src/data/townFacts.js`, 3-5 per stop, rotating on repeat visits. It **overrides** the `fact:` field
+> on an encounter card (`_showEncounterCard` resolves `_townFact ?? node.fact ?? enc.fact`, and all 18
+> stops have town facts), so **a fact written on a card will never reach the player** — put it in
+> `townFacts.js` or it doesn't exist. All 62 entries were rewritten and web-verified individually on
+> 2026-08-04; the bar is a *specific checkable claim* — a date, a number, a name, an event. "Weather
+> here can change fast" is not a fact. Prefer the strange true thing (Yesler raffling his sawmill and
+> keeping the money; the whaling fleet wintering in Bellevue) over the tidy summary.
+
 ### Rules for facts
 
 Facts should be:
@@ -3368,6 +3561,50 @@ Rest stops should not all sell the same things.
 | Vantage | Cooling, wind/stability upgrades |
 | Othello/Hatton | Fuel, patch repairs, farm-road intel |
 | Washtucna/Pullman | Last-chance repairs, heat reduction, party items |
+
+### AS BUILT (2026-08-04) — what the shops actually are
+
+Everything above this line is the original design intent. This is the shipped structure; where the
+two disagree, this wins.
+
+**Three parts vendors, distinct lanes.** The two garages carry ZERO overlapping categories, so which
+one a stop has decides what you can buy there (`SHOP_CATEGORIES` in `src/data/upgrades.js`):
+
+| Vendor | Stocks | Character |
+|---|---|---|
+| **Les Schwasted** | tires · brakes · suspension (+ traction tires, free popcorn/water) | Cheap, common — 10 of 19 stops |
+| **Finesse (FAP)** | engine (incl. NOS) · fuel · coolant · wipers/lights/windshield · body · police · repair · paint · bumper | Expensive, rare — 9 of 19 stops |
+| **Sam's Used Car Kingdom** | entry-tier windshield/headlights/wipers/bumper only | No tabs; a budget parts counter, not a garage |
+
+4 stops carry both garages, 4 carry neither. Finesse used to stock all seven categories, which made
+Schwasted a strict *subset* of it — there was no reason to ever stop there except the popcorn.
+
+**Tier ladders.** Each category tab lists ALL of a slot's tiers at once, not just the next one:
+
+| Row | State | Price shown |
+|---|---|---|
+| `✓ TIRES — Used All-Seasons` | owned, inert (no payload — can't charge or re-gate) | `OWNED` |
+| `🔩 TIRES — Good All-Seasons` | the one buyable tier | real price |
+| `🔒 TIRES — Snow Tires` | needs its predecessor installed | **real price** — you can see what you're saving toward |
+
+Installing a rung flips it to ✓ and unlocks the one below it *in place* (`_unlockTier`), so Lv1→Lv2
+in a single visit works. There is no fade-out receipt: a bought part stays visible as an ✓ OWNED
+rung, because in a ladder removing it leaves a hole between `✓ Lv1` and `🔒 Lv3`.
+
+**Untabbed slots are exempt.** `body` and `police` have no toolbar tab, so they render as
+uncategorized SERVICES — and `_selectGarageCategory` pins services above the parts on *every* tab.
+Laddering them would stack 6 permanent rows over whatever tab you opened, so they keep next-tier-only
+listing until they get tabs of their own.
+
+**The art constraint.** `assets/ui/garage_upgrade_toolbar.png` is ONE 1672×220 strip sliced into
+seven equal columns **by index** — the labels are baked into the pixels. Adding a BODY or NITRO tab
+is not a code change; the strip must be re-cut to nine columns first, and `GARAGE_CATEGORIES` order
+must keep matching the art left-to-right or every tab silently mislabels. This is the whole reason
+NOS sits under ENGINE (`category: 'engine'`) rather than owning a NITRO tab, and why body work is a
+Finesse service rather than a category.
+
+**Level 3 is Lord Motors exclusive** (`_applyDealerTierGate`) — a stop without a Lord Motors gates
+every level-3 part, re-evaluated whenever a garage screen opens.
 
 ---
 
