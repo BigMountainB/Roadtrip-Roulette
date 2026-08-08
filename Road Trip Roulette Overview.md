@@ -163,11 +163,28 @@ Hitchhiker/rain, Ranger/elk advice, Swimsuit Girl/the mill, and every shop greet
 The three that didn't were all-transactions-and-goodbyes, so they still played like the old
 vending-machine card; each got one authored question that teaches a real system:
 - **Tow Driver** — *"Three a week? What's actually putting them in the ditch?"* → the straight dark
-  road and the Tiredness bar (`revealHazard: 'drowsy'`).
+  road and the Tiredness bar.
 - **Lemonade Kids** — *"Is there anything at all between here and the next town?"* → the Basin's
-  service gap (`revealHazard: 'no_services'`). *"Dad says buy two. We only sell one."*
+  service gap. *"Dad says buy two. We only sell one."*
 - **Shade-Tree Mechanic** — *"What am I actually watching for — the gauge, or something else?"* →
-  engine heat, and that the smell beats the needle (`revealHazard: 'engine_heat'`).
+  engine heat, and that the smell beats the needle.
+
+**`revealHazard` DELETED — the whole verb.** It was written to `_purchases` and read by nothing, and
+the reason it was never wired up is structural: `Weather.state(mile)` is a **pure function of
+mileage** — fog 14–25, rain 30–40, snow 40–88, gated only on difficulty. Identical on every run. There
+is no hidden information for an NPC to reveal, so a "reveal" could never be worth anything; the
+warning the NPC speaks aloud IS the whole payload, and it costs nothing to deliver. Gone from the
+effect vocabulary, `applyEncounterEffects`, the `INFO_ONLY_EFFECTS` set, the RestStopScene ctx hook
+and all 14 call sites. Classification is unaffected — those choices are now `dialogue`-only, which the
+same rule still reads as a question.
+- **If you ever want asking to matter, the fix is upstream:** make which hazards go live a per-run
+  roll. Then "how bad is it up there" is real intel and the $150 chains are a real bet. Logged, not built.
+- **Fallout: two buffs are now provably inert.** `warm` and `elk_ready` have empty `effects`, no
+  `special`, and nothing anywhere reads `BUFF_EFFECTS.label` — `aggregateBuffEffects` and
+  `hasSpecialBuff` are the table's only consumers. Granting either is a no-op. Flagged in
+  `buffs.js`, not deleted, because `label` implies a planned buff readout in the HUD. The other
+  three are real: `snow_chains` (snowGrip +0.28, topMph −4), `wind_ready` (stability +0.10),
+  `tow_insurance` (halves the wreck loss).
 
 **Balance is unchanged on purpose.** Because every transaction exits, one NPC still pays out one
 resource per visit, exactly as when you only got one tap.

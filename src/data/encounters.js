@@ -46,7 +46,6 @@
 //   timeSec     +/- party-clock seconds
 //   buff        string id of a temporary buff (applied when buff system lands)
 //   grantUpgrade upgrade id (applied when upgrade system lands)
-//   revealHazard hazard id to surface in the HUD/next-zone hint
 //   hydration   +/- Thirst bar 0–100 (a drink raises it)
 //   fullness    +/- Hunger bar 0–100 (food raises it)
 //   fullnessFloor raise Hunger UP TO this value; no-op if already higher
@@ -92,7 +91,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Pullman by night? In THIS old heap? That mountain eats such rides for cheap.",
     fact: "Pike Place Market opened in 1907 because onions had gone from a dime a pound to a dollar and farmers were done splitting the take with middlemen.",
     choices: [
-      { label: "\"Any idea what the weather is doing up at the pass?\"", effects: { revealHazard: 'snow', dialogue: "\"Past North Bend it's chains or a prayer — I hear it's a whiteout up there.\"" } },
+      { label: "\"Any idea what the weather is doing up at the pass?\"", effects: { dialogue: "\"Past North Bend it's chains or a prayer — I hear it's a whiteout up there.\"" } },
       { label: "\"Here's a dollar, pal. I hope you spend it fair.\"", cost: 1, effects: { generous: true, dialogue: "\"A giver! How noble, chum — I need fifty, yet you've provided one.\"" } },
       { label: "\"This is not the establishment for me. Time to dip.\"", exit: true, effects: { dialogue: "He salutes you with a cup he found on the ground — \"Safe travels, moneybags. Try not to drown.\"" } },
     ],
@@ -109,7 +108,7 @@ export const REST_STOP_ENCOUNTERS = [
       greet: {
         line: "You made it this far, but it's about to get tricky. Buy some chains and make the road less slippy.",
         choices: [
-          { label: "\"Are you selling those tire chains?\" ($150)", exit: true, effects: { revealHazard: 'snow', storeOffer: { shop: 'schwasted', item: 'chains', price: 150, note: "Chain Guy's price" }, dialogue: "\"I don't carry stock in my truck — I run the counter at Schwasted's. Ask for me; it's $150 with your luck.\"" }, end: true },
+          { label: "\"Are you selling those tire chains?\" ($150)", exit: true, effects: { storeOffer: { shop: 'schwasted', item: 'chains', price: 150, note: "Chain Guy's price" }, dialogue: "\"I don't carry stock in my truck — I run the counter at Schwasted's. Ask for me; it's $150 with your luck.\"" }, end: true },
           { label: "\"Can you do any better on the price of those chains? Say $80?\"", next: 'haggle' },
           { label: "\"How bad can it be up there, really?\"", next: 'passInfo', effects: { dialogue: "\"If you have to ask, friend, here's my advice — stay in North Bend tonight and sleep on it twice.\"" } },
           { label: "\"I don't need chains. This isn't my first snowdeo.\"", exit: true, effects: { dialogue: "\"Snowdeo,\" he repeats, and spits in the slush. \"They all say that on the way up the brush.\"" }, end: true },
@@ -122,7 +121,6 @@ export const REST_STOP_ENCOUNTERS = [
             label: "\"Deal. Write it up before I think it through.\" ($120)",
             exit: true,
             effects: {
-              revealHazard: 'snow',
               storeOffer: { shop: 'schwasted', item: 'chains', price: 120, note: "haggled — no receipt" },
               dialogue: "\"$120, then. Tell the counter I sent you — and don't expect paperwork when you do.\"",
             },
@@ -135,8 +133,8 @@ export const REST_STOP_ENCOUNTERS = [
       passInfo: {
         line: "Bad enough I'm here and not in bed — whiteout up top, and the plows are losing, it's said.",
         choices: [
-          { label: "\"Not bad… if you have chains.\"", next: 'greet', effects: { revealHazard: 'snow' } },
-          { label: "\"Appreciate the offer, but I think I got this.\"", exit: true, effects: { revealHazard: 'snow', dialogue: "\"Everybody's got it,\" he says, \"'til they don't. I'd wish you luck, but honestly — I won't.\"" }, end: true },
+          { label: "\"Not bad… if you have chains.\"", next: 'greet' },
+          { label: "\"Appreciate the offer, but I think I got this.\"", exit: true, effects: { dialogue: "\"Everybody's got it,\" he says, \"'til they don't. I'd wish you luck, but honestly — I won't.\"" }, end: true },
         ],
       },
     },
@@ -151,7 +149,7 @@ export const REST_STOP_ENCOUNTERS = [
     fact: "The summit is 3,015 feet — the lowest major crossing of the Cascades, which tells you what the other ones are like.",
     choices: [
       { label: "\"Let me grab one of those thermoses off you.\" ($15)", cost: 15, conditions: { minCash: 15 }, effects: { buff: 'warm', timeSec: +100, tiredness: -25, generous: true, dialogue: "This coffee is so strong it could strip a door — you'll be wide awake and craving more." } },
-      { label: "\"Is there a safer route to take? I don't want to end up in the lake.\"", effects: { revealHazard: 'whiteout', dialogue: "\"It's crazy up there. Kind of storm only the bold would dare.\"" } },
+      { label: "\"Is there a safer route to take? I don't want to end up in the lake.\"", effects: { dialogue: "\"It's crazy up there. Kind of storm only the bold would dare.\"" } },
       { label: "\"Thanks, but no thanks.\"", exit: true, effects: { dialogue: "\"No worries, my guy. Stay alert, keep the road in your eyes.\"" } },
     ],
   },
@@ -164,7 +162,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "My company card was just declined. Can you help me fill half the tank? My timeline is already behind.",
     fact: "The 1927 Vantage Bridge was taken apart in 1963 and rebuilt across the Snake River at Lyons Ferry, where it still carries traffic today.",
     choices: [
-      { label: "\"I can't afford that kind of cash. Any idea what the road ahead holds? I'm hoping not to crash.\"", effects: { buff: 'wind_ready', revealHazard: 'crosswind', dialogue: "\"It's going to be a wild ride. If the wind takes you, you wouldn't be the first who died.\"" } },
+      { label: "\"I can't afford that kind of cash. Any idea what the road ahead holds? I'm hoping not to crash.\"", effects: { buff: 'wind_ready', dialogue: "\"It's going to be a wild ride. If the wind takes you, you wouldn't be the first who died.\"" } },
       {
         label: "\"It's your lucky day. My pockets are blessed and I'm willing to pay.\" ($100)",
         cost: 100, conditions: { minCash: 100 },
@@ -195,7 +193,7 @@ export const REST_STOP_ENCOUNTERS = [
           { p: 0.2, effects: { fuelMi: +25, hp: -3, dialogue: "That was NOT just gas, it's plain — the engine coughs and bucks in pain." } },
         ],
       },
-      { label: "\"Anything I should expect to see on the road ahead?\"", effects: { revealHazard: 'farm_equipment', dialogue: "\"Watch for tractors slow as tree pitch — they own the road, and every ditch.\"" } },
+      { label: "\"Anything I should expect to see on the road ahead?\"", effects: { dialogue: "\"Watch for tractors slow as tree pitch — they own the road, and every ditch.\"" } },
       { label: "\"You're very generous, but you make me nervous.\"", exit: true, effects: { dialogue: "He caps the can and grins with half a tooth — \"Smart man. Most folks can't handle the truth.\"" } },
     ],
   },
@@ -217,7 +215,7 @@ export const REST_STOP_ENCOUNTERS = [
           { p: 0.3, effects: { dialogue: "\"Servers are scaling!\" she chirps — then the app falls flat; and so does your hundred, just like that." } },
         ],
       },
-      { label: "\"It's not the cops I dread, but more of the weather. Do you know what lies ahead…\"", effects: { revealHazard: 'fog', dialogue: "\"The precip is mostly in the mountain heights, leaving Issaquah foggy AF. Might be worth upgrading to some fog lights.\"" } },
+      { label: "\"It's not the cops I dread, but more of the weather. Do you know what lies ahead…\"", effects: { dialogue: "\"The precip is mostly in the mountain heights, leaving Issaquah foggy AF. Might be worth upgrading to some fog lights.\"" } },
       { label: "\"You won't fool me. I know you collect info and track my location.\"", exit: true, effects: { dialogue: "\"We call it telemetry,\" she says, unbowed — \"and you agreed to it, out loud, in a crowd.\"" } },
     ],
   },
@@ -238,7 +236,7 @@ export const REST_STOP_ENCOUNTERS = [
           { p: 0.4, effects: { cash: +20, heatStars: +1, dialogue: "Turns out she's on some watch-list, it seems — now you're right beside it, in the cops' bad dreams." } },
         ],
       },
-      { label: "\"I don't really have the space. Do you know about the weather at the mountain's base?\"", effects: { revealHazard: 'rain', dialogue: "\"I heard it's dumping buckets of rain in North Bend. Hope your wipers are prepared for full send.\"" } },
+      { label: "\"I don't really have the space. Do you know about the weather at the mountain's base?\"", effects: { dialogue: "\"I heard it's dumping buckets of rain in North Bend. Hope your wipers are prepared for full send.\"" } },
       { label: "\"Mom said not to talk to strangers.\"", exit: true, effects: { dialogue: "\"Your mom sounds smart,\" she says, thumb still out — \"shame she raised whatever this is about.\"" } },
     ],
   },
@@ -251,7 +249,7 @@ export const REST_STOP_ENCOUNTERS = [
     line: "Elk cross at dusk and don't check their blind side — and neither, it seems, do you when you ride.",
     fact: "Cle Elum ran the last hand-operated telephone switchboard west of the Mississippi. The operators put through their final call on September 18, 1966.",
     choices: [
-      { label: "\"Great advice. I'll keep my eyes out and my foot down.\"", effects: { buff: 'elk_ready', revealHazard: 'elk', generous: true, dialogue: "\"Slow at the tree lines, mind your speed — they're bigger than your car's whole creed.\"" } },
+      { label: "\"Great advice. I'll keep my eyes out and my foot down.\"", effects: { buff: 'elk_ready', generous: true, dialogue: "\"Slow at the tree lines, mind your speed — they're bigger than your car's whole creed.\"" } },
       { label: "\"I heard you're looking for a lost hiker. I saw them at Commonwealth up at the pass.\"", effects: { heatStars: -1, dialogue: "She radios it in, thrown off the scent — your record breathes; the heat's misspent." } },
       { label: "\"Those elk better watch out for me!\"", exit: true, effects: { dialogue: "She writes nothing down, which is somehow worse — \"Seven hundred pounds,\" she says. \"You first.\"" } },
     ],
@@ -304,8 +302,8 @@ export const REST_STOP_ENCOUNTERS = [
       roadTalk: {
         line: "Have you been to Vantage before? That wind can blow with the best of whores.",
         choices: [
-          { label: "\"Then load me up first. I'm not fighting that hungry.\" ($40)", cost: 40, conditions: { minCash: 40 }, setMemory: { hadPie: true }, effects: { hp: +5, fullnessFloor: 60, tiredness: -18, revealHazard: 'wind', generous: true, dialogue: "\"Smart — nobody fights the wind and wins when their stomach's thin.\"" }, end: true },
-          { label: "\"Noted. Thanks for the warning.\"", exit: true, effects: { revealHazard: 'wind', dialogue: "\"All morning the truckers came in white and green. Two hands on that wheel, and mind what's unseen.\"" }, end: true },
+          { label: "\"Then load me up first. I'm not fighting that hungry.\" ($40)", cost: 40, conditions: { minCash: 40 }, setMemory: { hadPie: true }, effects: { hp: +5, fullnessFloor: 60, tiredness: -18, generous: true, dialogue: "\"Smart — nobody fights the wind and wins when their stomach's thin.\"" }, end: true },
+          { label: "\"Noted. Thanks for the warning.\"", exit: true, effects: { dialogue: "\"All morning the truckers came in white and green. Two hands on that wheel, and mind what's unseen.\"" }, end: true },
         ],
       },
     },
@@ -364,7 +362,7 @@ export const REST_STOP_ENCOUNTERS = [
     choices: [
       { label: "\"What's it cost to have you on call before I need you?\" ($50)", cost: 50, conditions: { minCash: 50 }, effects: { buff: 'tow_insurance', generous: true, dialogue: "\"Crash, and I'll judge you — but only a bit; call it a discount on your fit.\"" } },
       { label: "\"Can you bang this dent out before I head on?\" ($40)", cost: 40, conditions: { minCash: 40 }, effects: { hp: +12, dialogue: "A mallet, a grunt, a whack, a tad — and your car looks marginally less sad." } },
-      { label: "\"Three a week? What's actually putting them in the ditch?\"", effects: { revealHazard: 'drowsy', dialogue: "\"Straight road, no lights, and nothing to see — they nod off at seventy and wake up in a tree.\"" } },
+      { label: "\"Three a week? What's actually putting them in the ditch?\"", effects: { dialogue: "\"Straight road, no lights, and nothing to see — they nod off at seventy and wake up in a tree.\"" } },
       { label: "\"I don't plan on wrecking. That's the whole plan.\"", exit: true, effects: { dialogue: "She laughs once, hard, and turns to walk away — \"I'll leave the CB on anyway.\"" } },
     ],
   },
@@ -379,7 +377,7 @@ export const REST_STOP_ENCOUNTERS = [
     choices: [
       { label: "\"Top it off. I'd rather not boil over out there.\" ($25)", exit: true, effects: { storeOffer: { shop: 'fap', item: 'coolant', price: 25, note: "his price, not theirs" }, dialogue: "\"I don't keep jugs on me — I moonlight at Finesse. Ask inside, twenty-five, and say I said yes.\"" } },
       { label: "\"Mind if I fill my jug off your hose?\"", effects: { hydration: +15, dialogue: "Warm hose water — not cold, but wet; he waves off your coins, says you owe him no debt." } },
-      { label: "\"What am I actually watching for — the gauge, or something else?\"", effects: { revealHazard: 'engine_heat', dialogue: "\"Smell comes first — sweet, like syrup on the breeze. By the time that needle climbs, you're already on your knees.\"" } },
+      { label: "\"What am I actually watching for — the gauge, or something else?\"", effects: { dialogue: "\"Smell comes first — sweet, like syrup on the breeze. By the time that needle climbs, you're already on your knees.\"" } },
       { label: "\"She's run this far. She'll run the rest.\"", exit: true, effects: { dialogue: "\"They all run fine 'til the needle goes red. Then they run hot. Then they run dead.\"" } },
     ],
   },
@@ -394,7 +392,7 @@ export const REST_STOP_ENCOUNTERS = [
     choices: [
       { label: "\"I'll take the whole pitcher. Keep the change.\" ($5)", cost: 5, conditions: { minCash: 5 }, effects: { hydration: +35, generous: true, dialogue: "Worth every cent that you're forgiving — your parched tongue rejoins the living." } },
       { label: "\"Just the one cup. I'm rationing.\" ($1)", cost: 1, conditions: { minCash: 1 }, effects: { hydration: +18, dialogue: "Cold and impossibly sweet, that sip — you smack your lips and resume the trip." } },
-      { label: "\"Straight answer: is there anything at all between here and the next town?\"", effects: { revealHazard: 'no_services', dialogue: "\"Circles of corn and a whole lot of sun.\" The taller one shrugs. \"Dad says buy two. We only sell one.\"" } },
+      { label: "\"Straight answer: is there anything at all between here and the next town?\"", effects: { dialogue: "\"Circles of corn and a whole lot of sun.\" The taller one shrugs. \"Dad says buy two. We only sell one.\"" } },
       { label: "\"Shouldn't you two be in school?\"", exit: true, effects: { dialogue: "\"It's August.\" They stare you flat down, unimpressed — you pull away feeling less than blessed." } },
     ],
   },
@@ -540,7 +538,7 @@ export function resolveChoice(choice, rng = Math.random) {
 
 /** Apply resolved effects to game systems via a decoupled context of setters.
  *  ctx = { addCash, addFuelMi, addHp, addHeat, addTimeSec, addBuff,
- *          grantUpgrade, revealHazard } — each optional; missing ones are
+ *          grantUpgrade } — each optional; missing ones are
  *  skipped so this works before the upgrade/buff systems exist. */
 export function applyEncounterEffects(effects = {}, ctx = {}) {
   if (effects.cash        != null) ctx.addCash?.(effects.cash);
@@ -550,7 +548,6 @@ export function applyEncounterEffects(effects = {}, ctx = {}) {
   if (effects.timeSec     != null) ctx.addTimeSec?.(effects.timeSec);
   if (effects.buff)                ctx.addBuff?.(effects.buff);
   if (effects.grantUpgrade)        ctx.grantUpgrade?.(effects.grantUpgrade);
-  if (effects.revealHazard)        ctx.revealHazard?.(effects.revealHazard);
   // Survival bars (0–100): a drink raises hydration, food raises fullness,
   // caffeine lowers tiredness (negative = more awake).
   if (effects.hydration   != null) ctx.addSurvival?.('hydration', effects.hydration);
@@ -579,13 +576,13 @@ export function applyEncounterEffects(effects = {}, ctx = {}) {
  *      ("Time to dip", "Walk away"), which carry only a parting `dialogue` and
  *      are otherwise indistinguishable from a question.
  *    • a `cost` or a `chance` gamble — a transaction. Exits.
- *    • effects that are ONLY talk (`dialogue`, `revealHazard`, a prep `buff`,
- *      the `generous` karma flag) — a question. Stays open.
+ *    • effects that are ONLY talk (`dialogue`, a prep `buff`, the `generous`
+ *      karma flag) — a question. Stays open.
  *    • anything that moves cash / HP / fuel / heat / a survival bar — exits, so
  *      one NPC still pays out one resource per visit, exactly as before.
  *    • no effects at all ("Let's see what you've got") — exits.
  *  Repeats aren't a worry: the renderer strikes a question once it's asked. */
-const INFO_ONLY_EFFECTS = new Set(['dialogue', 'revealHazard', 'buff', 'generous']);
+const INFO_ONLY_EFFECTS = new Set(['dialogue', 'buff', 'generous']);
 export function isExitChoice(choice) {
   if (!choice) return true;
   if (typeof choice.exit === 'boolean') return choice.exit;

@@ -16,13 +16,20 @@ export const BUFF_EFFECTS = {
     label: 'Wind-Ready',
     effects: { stability: +0.10 },               // shrugs off Vantage crosswind
   },
+  // ⚠️ INERT (audited 2026-08-05).  These two have no `effects` and no
+  // `special`, and nothing reads `label` — aggregateBuffEffects and
+  // hasSpecialBuff are the only consumers of this table.  Granting either is
+  // a genuine no-op today.  They were carrying `revealHazard`, which has now
+  // been deleted (weather is a pure function of mileage, so there was never
+  // anything hidden to reveal).  Kept only because `label` implies a planned
+  // buff readout in the HUD — wire that up or delete these two.
   warm: {
     label: 'Caffeinated',
-    effects: {},                                 // flavor (already gave time/hp at the stop)
+    effects: {},                                 // (the thermos already gave time + alertness)
   },
   elk_ready: {
     label: 'Elk-Aware',
-    effects: {},                                 // flavor + hazard reveal
+    effects: {},
   },
   tow_insurance: {
     label: 'Tow Insurance',

@@ -2115,7 +2115,6 @@ export class RestStopScene extends Phaser.Scene {
       addTimeSec:   (n)  => { this._purchases.addPartyClockSec = (this._purchases.addPartyClockSec ?? 0) + n; },
       addBuff:      (id) => { this._purchases.encounterBuffs = [...(this._purchases.encounterBuffs ?? []), id]; },
       grantUpgrade: (id) => { this._purchases.encounterUpgrades = [...(this._purchases.encounterUpgrades ?? []), id]; },
-      revealHazard: (id) => { this._purchases.revealHazard = id; },
       addSurvival:  (bar, n) => {
         const d = (this._purchases.survivalDelta ??= {});
         d[bar] = (d[bar] ?? 0) + n;
