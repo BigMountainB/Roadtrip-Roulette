@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "DUI_HTTP=1 vite --port 3000 --strictPort",
     "dev:https": "vite --port 3000 --strictPort",
-    "build": "vite build",
-    "test": "node tests/missions.test.mjs && node tests/coal.test.mjs && node tests/genreTraits.test.mjs && node tests/vices.test.mjs && node tests/chase.test.mjs && node tests/upgrades.test.mjs",
+    "build": "node scripts/checkDuplicates.js && vite build",
+    "check:dupes": "node scripts/checkDuplicates.js",
+    "test": "node scripts/checkDuplicates.js && node tests/missions.test.mjs && node tests/coal.test.mjs && node tests/genreTraits.test.mjs && node tests/vices.test.mjs && node tests/chase.test.mjs && node tests/upgrades.test.mjs && node tests/encounters.test.mjs",
     "deploy": "bash scripts/deploy.sh",
     "preview": "vite preview",
     "build:signs": "node scripts/buildShoppingSigns.js",

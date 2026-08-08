@@ -39,6 +39,7 @@ to jump straight to the chapter you need to read or change.
 - **[Chapter 10 — Biome Band Art Spec](#chapter-10--biome-parallax-band-art-spec)** — the 24 horizon-silhouette images (8 biomes × 3 parallax layers), tiling/transparency rules, per-biome subject notes
 - **[Chapter 11 — NPC Dialogue Reference](#chapter-11--npc-dialogue-reference)** — every rest-stop encounter, mission passenger/contact, and crowd-chatter line, verbatim; companion spreadsheet `npc_dialogue.csv` in the repo root; rewrite-in-progress toward "edgier, funnier"
 - **[Chapter 12 — Dead Code Inventory](#chapter-12--dead-code-inventory)** — audited 2026-08-03: orphaned files (`src/cops/`, `CarPhysics.js`, the stale `Road 2.js`), the vice-bar layer stranded by the survival migration, dead methods/constants/asset keys, and a suggested order of work
+- **[Chapter 13 — Ending Plate Art Spec](#chapter-13--ending-plate-art-spec)** — the 6 photographic 800×450 ending plates + 3 car views × 10 genres, file naming, the trimmed-bbox placement rule, per-plate anchors, and how to add a genre or re-export art
 
 ---
 
@@ -60,7 +61,9 @@ upgrades) · 🎆 fireworks weapon (spikes removed) · phone-menu notification d
 **SOUNDTRACK CULTURE PACKS shipped** (per-plate genre reskin — vice + starter-vehicle art per genre,
 music-menu picker, tutorial genre pick, rotate-to-play prompt) · custom iOS motion-permission
 explainer · **all weapons cap at 3** (rolling coal 1/pickup) · **rolling-coal cop = touch-cloud →
-60 mph/30 s slow** · HUD-layout editor with a COPY-to-export button.
+60 mph/30 s slow** · HUD-layout editor with a COPY-to-export button ·
+**genre-car ENDING PLATES** (Ch. 13 — six photographic 800×450 plates, each composited with the
+player's genre car; OUT OF GAS is now a three-way decision card instead of an automatic tow).
 
 **Superseded vs the original design doc:** "DUI" framing removed (speeding stops only, reckless
 heat) · portable save/checkpoint codes removed (local LAST/SAVED kept) · sex worker → Hot Springs
@@ -74,7 +77,11 @@ on the COPY'd `controlsLayout` JSON — editor has the export button) · **genre
 (still borrowing the 9 hip-hop tracks; no `reggaeton/` folder yet) · texting-relationship layer
 (pinned idea) · SAVE tile replacement (owner deciding) · **9-column garage toolbar art** (the current
 strip is 7 columns sliced by index — BODY and NITRO tabs are art-blocked, not code-blocked; see
-Ch3 §18 "AS BUILT").
+Ch3 §18 "AS BUILT") · **`busted_late` still has no ending card** (TOO LATE + 5★ ends the run but
+jumps straight to the checkpoint-restart modal — the only run-ender left without a plate, Ch. 13) ·
+**ending-plate layout tuning** (Pullman comic puts its stats/button over the busy middle panel; the
+demo van's wheels sit behind the button row) · **`public/assets/ui/endings/source/` is 64 MB and
+ships in `dist/`** (keyed working art — should be parked outside `public/`, see Ch. 13).
 
 ## 📌 PINNED — Soundtrack Culture Packs (SHIPPED 2026-07-17)
 
@@ -122,6 +129,124 @@ genre pick, and a "Rotate Phone to Enter Game Play" prompt follows. Remaining: e
 genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
+
+### 2026-08-05 — Rest-stop cards are CONVERSATIONS · NPCs quote prices, shops take the money
+Uncommitted. Tests: chase 50, coal 25, missions 256, genreTraits 179, dose 37, upgrades 3,
+**encounters 181 (new file, wired into `npm test`)** — all green. `vite build` clean.
+
+**The complaint.** *"Only some of the responses should go on to the next screen. If the NPC has a
+response show that in the NPC convo menu. Player must select a sentence that moves off the
+conversation to get to the storefront."* Every choice used to call `dismiss()` and throw the reply up
+as a 2.6-second floating toast over a torn-down card — so you got exactly ONE interaction per NPC,
+and the answer to your question was the same tap that ended the conversation.
+
+**How a card works now.** A choice either ANSWERS or EXITS:
+- **Answers** — the reply replaces the NPC's line *in the same card*, the question is struck off the
+  list, and the card stays up. `convo.consumed` is keyed `nodeId::label`, so walking to another node
+  and back doesn't resurrect a spent question (and nothing repeatable can be farmed).
+- **Exits** — the card closes, and for a shop greeter *this* is what finally opens the storefront.
+  The parting line still plays as the old toast: the card is closing by definition, so there's
+  nothing left to print it into.
+
+**The rule is inferred, not hand-tagged** — `isExitChoice()` in `encounters.js`. *Words are free;
+resources cost you the conversation.* A `cost`, a `chance` gamble, or any effect moving
+cash/HP/fuel/heat/a survival bar exits. Effects that are only talk — `dialogue`, `revealHazard`, a
+prep `buff`, the `generous` karma flag — stay open. The one thing inference can't see is a *leave*
+line ("Time to dip", "Walk away"): it carries nothing but a parting `dialogue` and is otherwise
+identical to a question, so those 20 carry an explicit `exit: true`. Safety net: if a node has no
+free unconditional exit left, the renderer appends *"That's all I needed. Thanks."*, so the player
+can never be trapped behind a price they can't pay.
+
+**Every card has a question now** (verified by assertion, not by eye). Nine had one already —
+Weirdo/pass, Ski Bum/safe route, Mike/road ahead, Farm Worker/road ahead, Founder/fog,
+Hitchhiker/rain, Ranger/elk advice, Swimsuit Girl/the mill, and every shop greeter's road question.
+The three that didn't were all-transactions-and-goodbyes, so they still played like the old
+vending-machine card; each got one authored question that teaches a real system:
+- **Tow Driver** — *"Three a week? What's actually putting them in the ditch?"* → the straight dark
+  road and the Tiredness bar (`revealHazard: 'drowsy'`).
+- **Lemonade Kids** — *"Is there anything at all between here and the next town?"* → the Basin's
+  service gap (`revealHazard: 'no_services'`). *"Dad says buy two. We only sell one."*
+- **Shade-Tree Mechanic** — *"What am I actually watching for — the gauge, or something else?"* →
+  engine heat, and that the smell beats the needle (`revealHazard: 'engine_heat'`).
+
+**Balance is unchanged on purpose.** Because every transaction exits, one NPC still pays out one
+resource per visit, exactly as when you only got one tap.
+
+**NPCs quote prices; shops take the money.** Owner: *"any discounted items should be priced in the
+store, not sold at that moment."* New effect verb `storeOffer: { shop, item, price, note }` →
+`_applyStoreOffer()`, which reprices a row **in place**, this stop only, and refuses to go *above*
+list. Repricing rather than injecting a row is load-bearing: shop buttons are built once in
+`create()` into pre-rendered containers, long before any encounter card exists, so a brand-new row
+would simply never be drawn. Every routed product is therefore something the shop **always stocks**:
+- **SNOW CHAINS** — $200 list at every Les Schwasted. Chain Guy quotes $150, or $120 haggled.
+- **COOLANT TOP-OFF** — $40 list at every Finesse. The Shade-Tree Mechanic quotes $25.
+
+Two new purchase channels carry them: `payload.encounterBuff` (a buff bought over a counter, routed
+through the same `encounterBuffs` array the cards already use, so GameScene needs no new case) and
+`payload.coolEngine` (absolute temperature drop — the pint of oil's `coolEngineFrac` is the
+proportional one).
+
+**What deliberately still changes hands in conversation**, because there's no counter to walk to: the
+tow-insurance prepay ($50) and the traffic app ($100) are buffs no shop sells; the cookie, lemonade,
+pie, thermos and motel room are consumables with no SKU; and the **Washtucna dent knock-out** stays
+roadside because Washtucna is the one stop where an NPC's offer has no matching shop in town (no
+Finesse, no Sam's) — she has a mallet in the truck, so she does it herself.
+
+**Gamble lost in the move.** Routing chains to a counter dropped Chain Guy's 65/35 "these only LOOK
+tough" outcome — a shop row can't resolve a chance table today. The haggled price survives; the risk
+of being fleeced doesn't. Worth revisiting if that trade-off matters.
+
+**Still open — the three fuel offers.** Grandma's $35, the Farm Worker's $50 rocket fuel and Mike's
+$100 diesel split were mapped to Huff's `refuel` in the plan, and all three are still transacting in
+the conversation. Reason: none of them is *pump gas*. Mike siphons from his own tank, the Farm Worker
+is explicit that his mix is **not** what a station sells ("You can fill up at any fuel stop. But I've
+got a mix that makes your mileage pop"), and Grandma keeps cans at the house. Routing them to a
+Huff's counter deletes both the joke and the fiction, so they're left as-is pending a call.
+
+### 2026-08-05 — Bridge-entry bleed root-caused (two stages) · encounter cards resized · cop-array crash fix · fireworks down the chopper · cold-load black bar · storefront back button
+Tests 546 green, `vite build` clean.  **Deployed to roadtrip-roulette.pages.dev:** the encounter-card
+split tiers and stage 1 of the bridge fix.  **Local only, NOT yet deployed:** bridge fix stage 2, the
+cop-array crash fix, the helicopter kill, the cold-load fit, and the back-button rework.
+
+- **Bridge-entry "images under the road" (owner screenshots, two rounds).**  Bridge segments route
+  deck + guardrails to bridgeFrontGfx (depth 4, the crane-occlusion overlay) — during the APPROACH
+  nothing on the normal road layers could ever paint over them, so far rails bled through the
+  near roadway.  Stage 1 (deployed): route to the overlay only while the CAMERA is on the span
+  (`_camOnBridge`, from the player's segment).  Stage 2 (local): that alone still leaked, because
+  since the road-texture split the nearer normal road's asphalt base lives on roadBaseGfx (1.35) —
+  rails re-routed to roadGfx (1.5) still floated over it.  Off-span, ALL bridge/water structure
+  (deck, rails, fascia, piers) now draws into the BASE layer (`structG`), where far→near painter
+  order occludes it like any other distant geometry.  On-span routing unchanged (cranes still
+  occluded).  Capture-verified at mile 0.94: rails only at the actual deck edge.
+- **Encounter-card split tiers (deployed).**  The NPC dialogue card sized dialogue AND choices from
+  ONE type tier; five sentence-length choice buttons failed the fit test at every big tier and
+  dragged the whole card to the smallest pre-2026-07-15 sizes — tiny text plus a dead mid-card gap
+  (owner screenshot, Marcy card).  The bottom block (speaker/fact/choices) now takes the largest
+  tier that leaves room for at least a smallest-tier dialogue, then the dialogue independently takes
+  the largest tier that fits what actually remains.  Fact-drop pressure valve preserved.
+- **Cop-array crash (owner screenshot: `_checkCollisions` cop.parked on undefined).**
+  `endTrapPursuit()` and the sub-3.5★ SWAT drop did `this.cops = this.cops.filter(...)` — REPLACING
+  the array.  Landing inside a collision handler mid-loop, `_checkCollisions` kept indexing the new
+  shorter array with its old index → undefined.  Both filters now splice IN PLACE, the bust-reset
+  uses `length = 0`, and the loop guards a vanished index.  Rule for the future: never replace
+  `cops`, mutate it.
+- **Fireworks now take out the 5★ helicopter** — the one unit the wipe couldn't touch.  CopSystem
+  grounds it (`_heliDownT = 30`, gate on `helicopterActive`), GameScene detonates at the overlay's
+  live sway/bob position ~0.9 s in (timed to the first shell) with a CHOPPER DOWN popup + shake.
+  Relaunches only after the downtime, and only at true 5★.
+- **Cold-load black bar (landscape first load; rotating away/back cured it).**  Rotation runs a
+  settle ladder of re-fits, but a page loaded ALREADY in landscape got exactly one rAF fit — before
+  iOS resolves safe-area insets / collapses the toolbar, which doesn't reliably fire `resize`.
+  Boot now runs the same ladder (120 ms→1.6 s), plus a ResizeObserver on #game-root and a
+  visualViewport resize listener, so any later box change re-fits without a rotation.
+- **Storefront back button ("ignores my tap, worse in some shops").**  Two causes: 80×26 px ≈
+  39×13 pt on device (under half Apple's 44 pt minimum), and no depth — full-bleed shop art created
+  later in the display list stacked over it (the per-storefront variance).  Now 112×32 visual with
+  a padded input rect (~136×52 effective), 16 px label, depth 60.
+- **Scanner Q&A (no code change):** the pre-dispatch noise is the Scanner upgrade's two-tone
+  descending chirp (`playScannerChirp`), fired when the live cop count RISES (new pursuit /
+  roadblock units entering the world), 6 s cooldown — the radar detector's blip is single + rising.
+
 
 ### 2026-08-04 — Road/material + fog-light + storefront batch DEPLOYED · phonk default car · `npm run deploy` rewired to RTR
 **DEPLOYED to https://roadtrip-roulette.pages.dev (root · /demo · /fully)** — first deploy since
@@ -7475,7 +7600,8 @@ module-import, exported-constant, asset-key and shop-payload passes. Framework c
 built keys (`` `vomit_${n}` ``, `` `tumbleweed_${n}` ``, `car_back_<set>` / `car_front_<set>`
 from `CAR_COLOR_SETS`, `vice_<id>`) were verified and are NOT dead — they are excluded below.
 
-Nothing here has been deleted. This is the list to work from, not a record of removals.
+This is the list to work from. **Item 1 (`Road 2.js`) is DONE as of 2026-08-04 — see 12.6.**
+Everything else is still on disk, unremoved.
 
 ## 12.1 Fully orphaned files (never imported)
 
@@ -7483,7 +7609,7 @@ Nothing here has been deleted. This is the list to work from, not a record of re
 |---|---|---|
 | `src/cops/` — `CopAI.js`, `CopFleet.js`, `Helicopter.js`, `SWATVan.js` | ~800 | Already banner-marked **"⚠️ SUPERSEDED — NOT WIRED INTO THE GAME (verified 2026-07-29)"**. The live police AI is `src/systems/CopSystem.js` + `src/systems/Deployables.js`. Every remaining mention of `CopAI`/`Helicopter` is a cross-reference *inside this dead directory*. Kept deliberately as a role/state design sketch. |
 | `src/car/CarPhysics.js` | 160 | Zero references anywhere, and no banner. Real car physics is inline in `GameScene._updatePlayer`. |
-| `src/road/Road 2.js` | 4458 | **Stale duplicate of `Road.js`, UNTRACKED.** Deleted in `bf00890`, has since reappeared in the working tree. Not in the repo, but it is on disk and will catch greps/edits aimed at `Road.js` — a real footgun (it already carries a diverged copy of the `_isPatch` code). |
+| ~~`src/road/Road 2.js`~~ | ~~4458~~ | ✅ **RESOLVED 2026-08-04 — deleted, cause found, guard added. See 12.6.** |
 
 ## 12.2 The vice-bar layer is orphaned by the survival migration
 
@@ -7546,10 +7672,194 @@ Other modules — `DamageModel`: `getStage`, `isWrecked`, `getStageVisuals`, `ge
 
 ## 12.5 Suggested order of work
 
-1. **`Road 2.js`** — delete it (again) and find what recreates it. Highest risk-per-byte:
-   it's a 4,458-line near-copy that silently absorbs edits meant for `Road.js`.
+1. ~~**`Road 2.js`**~~ — ✅ **DONE 2026-08-04, see 12.6.**
 2. **Decide the vice-bar layer's fate** (§12.2) — it's the only cluster that has already
    caused a real gameplay bug, and it invalidates part of the test suite.
 3. **9 dead asset keys** — trivial to remove, immediate boot-time win.
 4. **`src/car/CarPhysics.js`** — delete; unlike `src/cops/` it isn't marked as a keeper.
 5. Dead methods/constants — safe cleanup, no behaviour change.
+
+## 12.6 `Road 2.js` — RESOLVED 2026-08-04 (cause: iCloud Drive)
+
+**What was recreating it: iCloud Drive conflict copies.** This repo lives under `~/Documents`, and
+`~/Library/Mobile Documents/com~apple~CloudDocs/` contains both `Desktop` and `Documents` — macOS
+"Desktop & Documents Folders" syncing is **on**, so the whole project is inside iCloud Drive. When
+iCloud cannot reconcile two versions of a file it does not warn or merge; it silently writes the
+loser beside the winner as `name 2.ext`.
+
+The evidence that settled it: `Road 2.js` was correctly deleted in `bf00890` on **2026-07-31**, yet
+sat on disk afterwards with an mtime of **2026-07-27** — four days *older* than the commit that
+removed it. Nothing recreated it from newer edits; iCloud restored a stale copy it had been holding.
+It was **untracked**, which is why no diff, no commit and no clean `git status` ever mentioned it.
+
+**Verified safe before deleting.** Line-level diffing is useless here (indentation churn made 177
+lines look "unique"), so the check was on method names: three existed only in the duplicate —
+`_drawShoulderRibbons`, `drawSide`, `flush`. All three were present in `Road.js` at `12291f6`
+(2026-07-28) and were removed after it by the scenery/biome-backdrop overhaul. So the duplicate was a
+pre-overhaul snapshot of superseded code, and that history lives in git regardless.
+
+**Deleted** (all untracked, all unimported):
+- `src/road/Road 2.js` (212 KB) · `src/systems/CopSystem 2.js` (100 KB — same story, zero unique
+  methods, stale against a `CopSystem.js` that had moved on)
+- 11 zero-byte conflict copies in `dist/`, including a duplicate `phaser-*.js` and `index 2.html`,
+  which were being **uploaded to Cloudflare Pages on every deploy**.
+- Left alone: `Archive/assets/culture/hiphop_phonk/vices/slushie 2.png` — `Archive/` is a deliberate
+  parking lot and is gitignored.
+
+**The guard: `scripts/checkDuplicates.js`.** Deleting is not a fix — iCloud can write another copy
+back tomorrow, and git structurally cannot catch an untracked file. The script scans `src`,
+`scripts`, `tests`, `public`, `website` for `name 2.ext` / `name copy.ext` and exits 1 with the exact
+`rm` commands. It is wired into **both `npm run build` and `npm test`**, so a conflict copy fails
+loudly the next time anyone touches the project instead of lurking for a week. `npm run check:dupes`
+runs it alone. The regex requires a **space** before the digit, so legitimately numbered files
+(`icon-512.png`, `favicon-32.png`) don't trip it — verified clean against the current tree.
+
+> **Note on `.gitignore`:** it already carried `package-lock 2.json` ("Duplicate package-lock created
+> by some npm runs") — the same iCloud symptom, patched narrowly a while back. Resist the urge to
+> ignore the pattern globally: ignoring conflict copies *hides* them, which is exactly how this one
+> survived for a week. Failing the build is the behaviour you want.
+
+**If this keeps happening,** the real fix is moving the repo out of iCloud-synced `~/Documents` (e.g.
+`~/dev/`). That's a bigger call — the guard makes the current setup survivable.
+
+---
+
+# Chapter 13 — Ending Plate Art Spec
+
+*Written 2026-08-04, when the plates + per-genre car art landed. Code: `src/data/endingArt.js`
+(placement data + loader), `GameOverScene._createPlateEnding` / `_buildPlateUI` (the ending
+screens), `GameScene._showOutOfGasCard` (the mid-run gas card).*
+
+## 13.1 What an ending plate is
+
+A **plate** is a photographic **800×450 PNG** — exactly the game canvas (`SCREEN_W` × `SCREEN_H`),
+so every coordinate in this chapter is 1:1 with screen space, no scaling maths anywhere. The plate
+is a *scene with a hole in it*: the composition deliberately leaves an empty stretch of road or lot
+where the player's car gets composited at runtime.
+
+Plates carry **no typography and no button faces**. This is the hard break from the old baked webp
+endings (`end_busted_screen.webp` etc.), which had the headline AND the RESTART/CONTINUE/MENU
+button faces painted into the art, with invisible hit zones traced over them in code. That coupled
+the art to the layout — re-exporting a plate meant re-tracing zones. Headline, stats and buttons
+are now drawn for real over a bottom gradient scrim. **Do not paint text or buttons into a plate.**
+
+The old webp trio is still loaded and still wired as the fallback: if a new plate fails to load,
+`_createPlateEnding` hands off to the legacy builder rather than leave the player on a blank Game
+Over screen with no way to restart.
+
+## 13.2 The six plates
+
+| Cause | File (`public/assets/ui/endings/`) | Run-ender? |
+|---|---|---|
+| `busted` | `end_busted_dynamic_plate.png` | yes — arrest, or a cop landing the killing blow |
+| `crash` | `end_crashed_dynamic_plate.png` | yes — HP 0 from anything non-cop |
+| `passed_out` | `end_passed_out_dynamic_plate.png` | yes — vice OD, or asleep at the wheel |
+| `out_of_gas` | `end_out_of_gas_plate.png` | **no** — decision card, run continues (§13.6) |
+| `demo_complete` | `end_demo_complete_plate.png` | yes — demo build reached Snoqualmie |
+| `finish` / `finish_on_time` / `finish_late` | `end_pullman_comic_plate.png` | yes — Pullman arrival |
+
+`busted_late` (TOO LATE + 5★) is the one run-ender with **no plate** — it still routes straight to
+the checkpoint-restart slider modal. Its popup already says "BUSTED", so pointing it at the busted
+plate is a small change whenever that's wanted.
+
+## 13.3 The car art
+
+Under `public/assets/ui/endings/cars/`, three views per genre, all **560×400 PNG with alpha**:
+
+| File | Used by |
+|---|---|
+| `endcar_<genre>.png` | head-on rear — **currently unused by any plate** |
+| `endcar_<genre>_rear3q.png` | busted · passed_out · out_of_gas · demo · pullman |
+| `endcar_<genre>_rear3q_crashed.png` | crashed only (damage + smoke) |
+
+Ten genres, matching `GENRE_VEHICLE_TRAITS` keys exactly: `classic_rock`, `country`, `edm_rave`,
+`hiphop_phonk`, `k_pop`, `metal`, `norteno`, `pop_punk_emo`, `reggae`, `reggaeton`. Which one draws
+comes from `window.__genre.get()` at the moment the run ended — the car on the ending screen is the
+car they were driving.
+
+`source/` holds the pre-key working files. **It is 64 MB and currently ships in `dist/`** — vite
+copies `public/` wholesale — which lands on Cloudflare Pages and in the iOS bundle. It belongs
+outside `public/`, parked like the `Images/` folder.
+
+## 13.4 Why cars are placed by their trimmed box
+
+Every car PNG is 560×400, but **the vehicle inside that frame is not a consistent size**:
+
+```
+endcar_classic_rock_rear3q   472 × 217   (low coupe)
+endcar_metal_rear3q          453 × 339   (tall van)
+endcar_country_rear3q        499 × 362
+```
+
+…and the transparent padding around each differs again. Anchoring by the frame would leave some
+cars hovering above the road and others sunk into it, per genre, with no pattern.
+
+So placement uses the **trimmed content box**: scale the car so its *trimmed* width matches the
+plate's target width, then offset so the *trimmed* bottom-centre — the wheels' contact point —
+lands on the plate's anchor. `ENDING_CAR_BBOX` in `endingArt.js` holds all 30 measured boxes.
+
+**That table is generated from the art, not hand-written.** Re-export a car and it must be
+regenerated (the command lives in the `endingArt.js` header comment):
+
+```
+node -e "const sharp=require('sharp'),fs=require('fs');const d='public/assets/ui/endings/cars';
+(async()=>{for(const f of fs.readdirSync(d).filter(f=>f.endsWith('.png')).sort()){
+const{info}=await sharp(d+'/'+f).trim({threshold:1}).toBuffer({resolveWithObject:true});
+console.log(f,-info.trimOffsetLeft,-info.trimOffsetTop,info.width,info.height);}})()"
+```
+
+## 13.5 Per-plate anchors
+
+`x, y` = where the car's contact point sits on the 800×450 plate. `w` = on-plate width of the
+trimmed car. Set by compositing the real art offline and eyeballing each ground plane.
+
+| Plate | View | x | y | w | Reads as |
+|---|---|---|---|---|---|
+| busted | `rear3q` | 360 | 268 | 300 | pulled over ahead of the cruiser |
+| crashed | `rear3q_crashed` | 450 | 262 | 300 | in the gap it punched through the guardrail |
+| passed_out | `rear3q` | 300 | 330 | 330 | parked on the wet overlook |
+| out_of_gas | `rear3q` | 330 | 300 | 300 | dead on the shoulder beside the gas can |
+| demo_complete | `rear3q` | 250 | 414 | 292 | parked at the sunset overlook |
+| pullman | `rear3q` | 112 | 318 | 145 | on the street in the comic's **left panel** |
+
+The Pullman comic is a triptych — the left panel spans roughly x 8–262, so its car has to stay
+small and inside that border or it breaks the panel gutter.
+
+## 13.6 OUT OF GAS is a decision, not an ending
+
+Running the tank dry does **not** end the run. It opens the out-of-gas plate as a modal over a
+paused game (`GameScene._showOutOfGasCard`) with three choices:
+
+- **TOW — $1,500** — flat fee, dragged back to the **previous** rest stop (never forward, so a tow
+  can't advance the run), tank full, run continues. `TOW_COST_USD` in `constants.js` is the knob.
+- **START OVER** — fresh run from mile 0, same vehicle; drops the `liveRun` autosave first so the
+  new run doesn't immediately auto-resume the dead one.
+- **LOAD SAVE** — newest save, local or server, via the title screen's `_titleLoadSave`.
+
+Can't afford the tow → that button greys out reading `NEED $340 MORE`, leaving START OVER and LOAD
+SAVE. Being broke on an empty tank is the fail state.
+
+**The old rule is gone entirely** (owner 2026-08-04): the 50%-of-cash charge — which punished a
+rich run far harder than a broke one for the same mistake — plus the repo-to-Beater when broke and
+the free-tow-if-broke mercy case.
+
+## 13.7 Loading
+
+Plate + car are fetched **when the ending appears**, not at boot: six plates is ~3.5 MB of art seen
+once per run, and only ever one plate and one car (~850 KB) are needed. They fade in over ~220 ms.
+`loadEndingArt()` always invokes its callback — including on load failure — because an ending
+screen that never draws would strand the player with no way to restart.
+
+## 13.8 Adding a genre, or re-exporting art
+
+1. Drop `endcar_<genre>_rear3q.png` and `endcar_<genre>_rear3q_crashed.png` (560×400, alpha) into
+   `public/assets/ui/endings/cars/`.
+2. Add the genre key to `ENDING_CAR_GENRES` in `endingArt.js`. A genre missing from that list
+   renders the plate alone rather than the wrong car — a safe degrade, not a crash.
+3. Regenerate `ENDING_CAR_BBOX` (§13.4).
+4. Check the grounding on every plate — a much taller or lower vehicle than the existing ten may
+   want its own anchor tweak.
+
+A new **plate** additionally needs an entry in `ENDING_PLATES` (texture key, filename, car view +
+anchor) and, if it's a new run-ending cause, a `CAUSE` entry in `GameOverScene.js` for its
+headline / colour / subtitle.
