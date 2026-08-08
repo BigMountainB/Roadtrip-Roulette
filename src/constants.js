@@ -425,6 +425,11 @@ function _computeDemoMode() {
 export const DEMO_MODE = _computeDemoMode();
 // Snoqualmie rest stop mileage (REST_STOPS 'SQ').  Crossing this ends the demo.
 export const DEMO_FINISH_MILE = 25;
+// Default culture/genre when none has been chosen (owner 2026-08-04): the
+// hip-hop/phonk starter IS the default car — a fresh player never sees the
+// base beater art.  Every genre-resolution fallback reads this.
+export const DEFAULT_GENRE = 'hiphop_phonk';
+
 // Playable genres in the demo — the other 8 still SHOW in the music grid (locked,
 // as full-game teasers) but can't be picked, and their heavy car/culture/music
 // assets aren't shipped in the demo bundle.  Culture keys match STATIONS.culture.
@@ -624,6 +629,11 @@ export const GAS_USD_PER_MI         = 0.50;        // $0.50/mi (was 0.333)
 export const GAS_LIGHT_AT_MI        = 30;          // warning threshold
 export const GAS_ROBBERY_CHANCE     = 0.20;        // 20% chance per gas fillup
 export const GAS_ROBBERY_FRAC       = 0.20;        // loses 20% of cash if robbed
+// Running the tank dry: flat tow fee back to the previous rest stop (owner
+// 2026-08-04).  Replaced the old 50%-of-cash charge, which punished a rich run
+// far harder than a broke one for the same mistake.  Can't afford it → the
+// OUT OF GAS card's only remaining choices are START OVER / LOAD SAVE.
+export const TOW_COST_USD           = 1500;
 
 // Party-clock HUD readout — mechanics (rush deadlines, rest-stop time buys,
 // arrival timing) always run; this flag only controls the ⏱ readout draw +

@@ -23,11 +23,8 @@ export const REGION_PALETTES = {
     horizon: 0x556778,
     grass1:  0x4A6048,   // urban greenery (street trees)
     grass2:  0x3B4E3A,
-    road1:   0x565656,
-    road2:   0x525252,                // narrow contrast — subtle parallax cue
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x545458,   // cool, dark, permanently damp city asphalt
+    lane:    0xD2CCBE,
   },
   downtown_seattle: {
     name: 'Downtown Seattle',
@@ -36,11 +33,8 @@ export const REGION_PALETTES = {
     horizon: 0x5C7080,
     grass1:  0x444444,   // city ground / pavement
     grass2:  0x393939,
-    road1:   0x545454,
-    road2:   0x505050,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x525256,   // shaded viaduct/SoDo pavement
+    lane:    0xD2CCBE,
   },
   lake_washington: {
     name: 'Lake Washington',
@@ -63,11 +57,8 @@ export const REGION_PALETTES = {
     // to float on what reads as continuous water.
     grass1:  0x5A9050,   // bright lawn green
     grass2:  0x447040,
-    road1:   0x646464,
-    road2:   0x606060,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x5E5E66,   // floating-bridge deck, cool overcast light
+    lane:    0xD2CCBE,
   },
   mercer_island: {
     name: 'Mercer Island',
@@ -76,11 +67,8 @@ export const REGION_PALETTES = {
     horizon: 0x556778,
     grass1:  0x3F6E40,   // suburban lawns + trees
     grass2:  0x2E5832,
-    road1:   0x606060,
-    road2:   0x5C5C5C,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x5C5C62,   // newer suburban overlay
+    lane:    0xD2CCBE,
   },
   eastside_urban: {
     name: 'Bellevue',
@@ -89,11 +77,8 @@ export const REGION_PALETTES = {
     horizon: 0x556B80,
     grass1:  0x4A4A48,   // city pavement / mixed greenery
     grass2:  0x3E3E3D,
-    road1:   0x5A5A5A,
-    road2:   0x565656,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x585860,   // Bellevue arterial, cool
+    lane:    0xD2CCBE,
   },
   eastside: {
     name: 'Eastside',
@@ -102,11 +87,8 @@ export const REGION_PALETTES = {
     horizon: 0x4F7790,
     grass1:  0x2E7A35,   // PNW evergreen
     grass2:  0x1F5A26,
-    road1:   0x626262,
-    road2:   0x5E5E5E,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x5E5E64,   // I-90 through the foothills
+    lane:    0xD2CCBE,
   },
   cascades: {
     name: 'Snoqualmie Pass',
@@ -115,11 +97,8 @@ export const REGION_PALETTES = {
     horizon: 0xC2CDD4,   // snowy peaks in the haze
     grass1:  0x265D2C,   // dense fir forest
     grass2:  0x174320,
-    road1:   0x5E5E5E,
-    road2:   0x5A5A5A,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x5C5C5C,   // coarse pass aggregate — material tile lightens it further
+    lane:    0xD2CCBE,
   },
   east_cascades: {
     name: 'Cle Elum / Ellensburg',
@@ -128,11 +107,8 @@ export const REGION_PALETTES = {
     horizon: 0x8B9D88,
     grass1:  0x9E9438,   // dry yellow-green grasslands, more golden
     grass2:  0x7A742B,
-    road1:   0x6A6A62,
-    road2:   0x66665E,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x6A665C,   // rain shadow: warming, sun-bleached
+    lane:    0xD2CCBE,
   },
   columbia_basin: {
     name: 'Columbia Basin',
@@ -141,11 +117,8 @@ export const REGION_PALETTES = {
     horizon: 0xCCB07A,   // basalt cliffs, dust haze
     grass1:  0xB0A35C,   // sagebrush yellow
     grass2:  0x8C7E40,
-    road1:   0x76725E,
-    road2:   0x726E5A,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x746E5A,   // dry chipseal over basalt, dusty
+    lane:    0xD2CCBE,
   },
   palouse: {
     name: 'Palouse',
@@ -154,11 +127,8 @@ export const REGION_PALETTES = {
     horizon: 0xC6B881,   // golden wheat horizon
     grass1:  0xC9B14F,   // golden wheat fields (mile 195+)
     grass2:  0x9C8636,
-    road1:   0x686860,
-    road2:   0x64645C,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x6A665C,   // sun-bleached two-lane
+    lane:    0xD2CCBE,
   },
   late_palouse: {
     name: 'Eastern Palouse',
@@ -167,11 +137,8 @@ export const REGION_PALETTES = {
     horizon: 0x9B7E4D,   // browning-out wheat at dusk
     grass1:  0x8B6B2C,   // dried-out late-summer brown
     grass2:  0x614E20,
-    road1:   0x686860,
-    road2:   0x64645C,
-    rumble1: 0xFFFFFF,
-    rumble2: 0xFFFFFF,
-    lane:    0xFFFFCC,
+    road:    0x68645A,   // older, greyer chipseal toward Colfax
+    lane:    0xD2CCBE,
   },
 };
 

@@ -718,6 +718,104 @@ export class EffectsSystem {
         const fi      = weatherInt * (Weather._fogClarityMul ?? 1);
         const horizon = Math.round(CAM.horizonY ?? 200);
         const FOG_RGB = 0xC9D2DA;                 // cool pale grey
+
+        // ── Fog-light beam clearing (owner 2026-08-03) ─────────────────
+        // The global 0.5 clarity factor alone read as "no difference" — a
+        // uniform change has nothing in-frame to compare against.  With the
+        // upgrade installed, the haze is now additionally CLEARED inside a
+        // headlight-shaped wedge running from the front of the car to the
+        // road's vanishing point: fog inside the beam drops to BEAM_CLEAR of
+        // its surrounding alpha, with a feathered edge so the wedge reads as
+        // thrown light, not a cut-out.  Everything outside the wedge keeps
+        // the normal haze, so the beam is visible BY CONTRAST — which is the
+        // whole point of fog lights.
+        const _ps  = this.scene?.playerSprite;
+        // Beam shape per owner 2026-08-03: the NARROW end sits at the car's
+        // nose and the fan WIDENS with distance, staying symmetrical about
+        // the car's own axis — a flashlight cone sticking out of the car.
+        // (An earlier cut converged toward the road's vanishing point, which
+        // read as the beam leaning off-axis — the same off-centre look as the
+        // widened-canvas road-texture bug.)  No road sampling, no lean: the
+        // fan is centred on the car, full stop.
+        // Apex sits at the TOP THIRD of the car sprite (owner 2026-08-03) —
+        // that's where the car's nose reads in the chase view, so the fan
+        // starts at the lamps instead of appearing to hang off the rear
+        // bumper.  Computed from the sprite's own origin/height so it holds
+        // for every vehicle's art.
+        const _noseY = _ps
+          ? (_ps.y - _ps.displayHeight * _ps.originY) + _ps.displayHeight / 3
+          : 0;
+        // The fan's FAR END anchors to the ROAD SURFACE at a fixed forward
+        // throw, not to the fixed screen horizon (owner 2026-08-03, two
+        // reference screenshots): pinned to the horizon, the same wedge read
+        // as "facing straight up" over a crest — road falling away under it —
+        // and as a shallow pancake on a climb.  Following the road's own
+        // projected height keeps one apparent pitch on every grade.  ONLY the
+        // sample's vertical is used — the centreline stays the car's own x,
+        // so the fan remains symmetrical about the car (the earlier off-axis
+        // lean came from borrowing the sample's x; that stays gone).  The
+        // clamp holds the top inside a middle band between the nose and the
+        // horizon, so neither extreme is reachable even on a wild crest.
+        // Reach (owner 2026-08-03, superseding the mid-band clamp): the
+        // clearing EXTENDS to just below the horizon — or to where the road
+        // itself appears, via the long road-surface sample — while the
+        // graduated fade below dissolves it progressively along the way, so
+        // the far end trails off instead of arriving as a hard-edged wall.
+        const _thrown = this.scene?.road?.sampleSurface?.(55000, 0, { allowClipped: true })?.sy;
+        const _yTopRaw = _thrown ?? (horizon + 4);
+        const _yTop = Math.max(horizon + 4, Math.min(_noseY - 24, _yTopRaw));
+        const beam = (this.scene?._hasFogLights && _ps) ? {
+          x0: _ps.x,                 // centreline of the fan = centre of the car
+          y0: _noseY,                // apex: the car's nose (top third)
+          yTop: _yTop,               // far end: the road at the lamp's throw
+          hwNear: 42,                // narrow end at the car's middle
+          hwFar: 150,                // wide end — a proper fan, ~3 car widths
+        } : null;
+        const BEAM_CLEAR = 0.35;   // beam drops the haze 65% (owner 2026-08-03) — against full-density fog now, not the old pre-thinned 50%
+        // Split one full-width haze slice into: full fog left | feather |
+        // cleared beam core | feather | full fog right.  Slices at or above
+        // the horizon (or with no beam) fall through to the single rect.
+        // The wedge exists ONLY between the horizon and the car's nose —
+        // above is sky-fog the lamps can't reach, and BELOW the bumper is
+        // behind the light source, where clearing painted a bright column
+        // trailing off the bottom of the screen in the first cut.
+        const sliceFog = (y, h, rgb, a) => {
+          if (!beam || y < beam.yTop || y > beam.y0 || a <= 0.002) {
+            this.overlay.fillStyle(rgb, a);
+            this.overlay.fillRect(-150, y, 1100, h);
+            return;
+          }
+          const bt = Math.min(1, Math.max(0, (beam.y0 - y) / Math.max(1, beam.y0 - beam.yTop)));
+          const c  = beam.x0;                          // symmetric about the car
+          const hw = beam.hwNear + (beam.hwFar - beam.hwNear) * bt;
+          const F  = Math.max(2, hw * 0.30);
+          const L  = c - hw, R = c + hw;
+          // Base fade: the clearing eases back to FULL fog over the last
+          // ~28 px above the bumper, so the wedge grows out of the light
+          // source instead of being chopped off at a hard horizontal line.
+          const bfT = Math.min(1, (beam.y0 - y) / 28);
+          const bf  = bfT * bfT * (3 - 2 * bfT);
+          // Graduated long fade: full clearing through the first ~35% of the
+          // reach, then a smooth dissolve across the remaining span, hitting
+          // zero just below the horizon — the beam extends the whole way but
+          // never ends on a shelf.
+          const ffT = Math.min(1, Math.max(0, (1 - bt) / 0.48));
+          const ff  = ffT * ffT * (3 - 2 * ffT);
+          const mix = (m) => a * (1 - (1 - m) * bf * ff);
+          this.overlay.fillStyle(rgb, a);
+          this.overlay.fillRect(-150, y, L - F * 2 + 150, h);
+          this.overlay.fillRect(R + F * 2, y, 950 - (R + F * 2), h);
+          // Two feather bands per side so the wedge edge grades instead of
+          // stepping — outer closer to full fog, inner closer to the core.
+          this.overlay.fillStyle(rgb, mix(0.76));
+          this.overlay.fillRect(L - F * 2, y, F, h);
+          this.overlay.fillRect(R + F, y, F, h);
+          this.overlay.fillStyle(rgb, mix(0.48));
+          this.overlay.fillRect(L - F, y, F, h);
+          this.overlay.fillRect(R, y, F, h);
+          this.overlay.fillStyle(rgb, mix(BEAM_CLEAR));
+          this.overlay.fillRect(L, y, R - L, h);
+        };
         // Cap below 1.0 so no slice clamps to fully-opaque — clamping flattens
         // a band of slices to alpha 1.0 and reads as a hard horizontal stripe
         // that "breaks" the fog.  Extra thickness comes from the veil + floor
@@ -737,15 +835,20 @@ export class EffectsSystem {
           const f = dy <= 0 ? 1 - (-dy / UP) : (1 - dy / DN) * 0.85;
           if (f <= 0) continue;
           const s = f * f * f * (f * (f * 6 - 15) + 10);   // smootherstep
-          this.overlay.fillStyle(FOG_RGB, peak * s);
-          this.overlay.fillRect(-150, y, 1100, STEP);
+          sliceFog(y, STEP, FOG_RGB, peak * s);
         }
         // Overall milkiness so the whole frame sits behind a veil.  Trimmed a
         // touch so the foreground (incl. the player's own car, which only
         // catches this veil) reads a bit sharper; the horizon band still
         // carries the heavy fog ahead.
+        // Above the horizon in one rect; below it in slices so the beam
+        // wedge clears the veil too — otherwise the wedge would only reach
+        // as deep as the horizon band and stop at a visible line.
         this.overlay.fillStyle(0xD2DAE1, 0.19 * fi);
-        this.overlay.fillRect(-150, -150, 1100, 750);
+        this.overlay.fillRect(-150, -150, 1100, horizon + 150);
+        for (let vy = horizon; vy < 600; vy += 3) {
+          sliceFog(vy, 3, 0xD2DAE1, 0.19 * fi);
+        }
         // Drifting mist wisps — big soft ellipses sliding across the
         // horizon band at varied speeds / heights / directions so the fog
         // feels volumetric and alive, not a flat sheet.

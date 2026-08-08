@@ -215,9 +215,22 @@ export class GroundPlane extends Phaser.GameObjects.Image {
     let unit = pipeline.setTexture2D(glTexture);
 
     // Screen-space coords go through the camera matrix by hand — the shake /
-    // tilt the camera applies has to move the ground with everything else.
+    // tilt the camera applies has to move this layer with everything else.
+    //
+    // CAMERA SCROLL, TOO.  The world camera is scrolled by -HUD_OFFSET_X to
+    // centre the world on a widened canvas, and every scrollFactor-1 object
+    // (roadGfx, terrainGfx — all the Graphics) is shifted by that scroll when
+    // it renders.  This custom pipeline applies only camera.matrix, which does
+    // NOT carry scroll — scroll is a per-object factor — so without the terms
+    // below the texture layer sat HUD_OFFSET_X px to the left of the road it
+    // belongs to.  On the road tile that painted an untextured band down the
+    // right side of every carriageway ("texture missing on half the road"),
+    // sized by the device aspect: ~70 px on a 940 px canvas, wider on phones.
+    // The ground tile had the same shift all along, invisible only because a
+    // seamless roadside field has no reference edges.
     const cm = camera.matrix;
     const ma = cm.a, mb = cm.b, mc = cm.c, md = cm.d, me = cm.e, mf = cm.f;
+    const sX = camera.scrollX, sY = camera.scrollY;
 
     const alphaMul = this.alpha * camera.alpha;
     const xL = -this._margin;
@@ -283,10 +296,12 @@ export class GroundPlane extends Phaser.GameObjects.Image {
             unit = pipeline.setTexture2D(glTexture);
           }
 
-          const tlx = xL * ma + yPrev * mc + me, tly = xL * mb + yPrev * md + mf;
-          const blx = xL * ma + y     * mc + me, bly = xL * mb + y     * md + mf;
-          const brx = xR * ma + y     * mc + me, bry = xR * mb + y     * md + mf;
-          const trx = xR * ma + yPrev * mc + me, try_ = xR * mb + yPrev * md + mf;
+          const yT = yPrev - sY, yB = y - sY;
+          const xLs = xL - sX, xRs = xR - sX;
+          const tlx = xLs * ma + yT * mc + me, tly = xLs * mb + yT * md + mf;
+          const blx = xLs * ma + yB * mc + me, bly = xLs * mb + yB * md + mf;
+          const brx = xRs * ma + yB * mc + me, bry = xRs * mb + yB * md + mf;
+          const trx = xRs * ma + yT * mc + me, try_ = xRs * mb + yT * md + mf;
 
           pipeline.batchVert(tlx, tly, uLT, vTop, unit, 0, tintTop);
           pipeline.batchVert(blx, bly, uLB, vBot, unit, 0, tintBot);

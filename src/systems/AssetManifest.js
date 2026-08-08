@@ -18,6 +18,25 @@ export const ASSET_MANIFEST = {
       path: 'assets/scenery/ground_textures/final/pnw_roadside_ground_1024.png' },
   ],
 
+  // Seamless overhead asphalt tiles, one per road material along the route.
+  // Same rules as the ground tile: flat/overhead art only (RoadPlane applies
+  // the perspective per road segment, so a pre-perspective source would get
+  // projected twice), and POWER-OF-TWO or GL_REPEAT is unavailable and the
+  // layer disables itself.
+  //
+  // These are DERIVED from the 1254px source art in assets/scenery/roads/ by
+  // scripts/buildRoadTextures.js, which resamples to 1024 and re-encodes to
+  // WebP (11 MB of PNG → 1.05 MB).  Re-run it after replacing the art, and
+  // paste the printed mean values into ROAD_MATERIALS in RoadMaterial.js.
+  roadTextures: [
+    { key: 'road_asphalt_westside',
+      path: 'assets/scenery/roads/final/road_asphalt_westside_wet_1024.webp' },
+    { key: 'road_asphalt_mountain',
+      path: 'assets/scenery/roads/final/road_asphalt_mountain_1024.webp' },
+    { key: 'road_asphalt_eastern',
+      path: 'assets/scenery/roads/final/road_asphalt_eastern_dry_1024.webp' },
+  ],
+
   northBend: [
     // Base plate: ground + side hills + valley notch, transparent sky.
     // 1672x941 is exactly 16:9, so it scales to the 800x450 viewport with no

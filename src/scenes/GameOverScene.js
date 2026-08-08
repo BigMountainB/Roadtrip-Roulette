@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SCREEN_W, SCREEN_H, VICE_CONFIG, VICES, HUD_OFFSET_X } from '../constants.js';
 import { getInstalled } from '../systems/UpgradeSystem.js';
 import { UPGRADE_SLOTS, getSlotTiers } from '../data/upgrades.js';
+import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
 
 // Per-vice unlock hints shown for any vice the player hasn't unlocked yet.
 // Order here drives the row order on the run-summary panel.
@@ -25,6 +26,9 @@ const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 const CX = SCREEN_W / 2;
 const CY = SCREEN_H / 2;
 
+// `image` is the LEGACY baked plate (old webp, typography and button faces
+// painted in).  It is only reached now if the new photographic plate in
+// ENDING_PLATES fails to load — see _createPlateEnding.
 const CAUSE = {
   busted: {
     headline: 'BUSTED',
@@ -115,6 +119,14 @@ export class GameOverScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.scale.off('resize', _applyVP, this));
 
     const meta = CAUSE[this.cause] ?? CAUSE.busted;
+    // Photographic plate + the player's genre car (owner 2026-08-04).  Every
+    // ending with authored plate art routes here; the legacy baked-webp
+    // builders below are now only the fallback when the plate can't load.
+    const plate = ENDING_PLATES[this.cause];
+    if (plate) {
+      this._createPlateEnding(meta, plate);
+      return;
+    }
     if (this.cause === 'passed_out') {
       this._createNeonEnding(meta);
       return;
@@ -228,6 +240,139 @@ export class GameOverScene extends Phaser.Scene {
     // Keyboard shortcuts.
     this.input.keyboard?.once('keydown-SPACE', () => this._retrySameSettings());
     this.input.keyboard?.once('keydown-ENTER', () => this._startOver());
+    this.input.keyboard?.on('keydown-L', () => this._openViceLog());
+    this.input.keyboard?.on('keydown-T', () => { if (this.tripSummary) this._openTripSummary(); });
+  }
+
+  /**
+   * Photographic ending plate + the player's genre car (owner 2026-08-04).
+   *
+   * The plate is a full-bleed 800x450 photo with NO typography or button faces
+   * in it — unlike the old baked webp art — so the headline and buttons are
+   * drawn for real here, over a gradient scrim that keeps them readable on the
+   * wet-road plates.
+   *
+   * Plate + car are fetched at this moment rather than at boot (six plates is
+   * ~3.5 MB of art the player sees once), so they arrive a frame or two late
+   * and fade in.  If the plate can't load at all, this hands off to the legacy
+   * baked-webp builder — an ending that never draws would strand the player.
+   */
+  _createPlateEnding(meta, spec) {
+    this.add.rectangle(0, 0, SCREEN_W, SCREEN_H, 0x03050F).setOrigin(0);
+    // Holding headline so the screen is never blank while the plate loads.
+    const holding = this.add.text(CX, 24, meta.headline, {
+      fontSize: '44px', fontFamily: IMPACT,
+      color: meta.color, stroke: '#000', strokeThickness: 6,
+    }).setOrigin(0.5, 0).setDepth(10);
+
+    const genre = activeEndingGenre(this);
+    loadEndingArt(this, spec, genre, (plateReady, carKey) => {
+      if (!this.scene?.isActive?.()) return;      // player already moved on
+      if (!plateReady) {
+        // No plate — fall back to whatever the old art path was for this cause.
+        holding.destroy();
+        if (this.cause === 'demo_complete')  { this._createDemoComplete(meta); return; }
+        if (this.cause === 'passed_out')     { this._createNeonEnding(meta);   return; }
+        if (this.cause === 'busted' || this.cause === 'crash') {
+          this._createBakedButtonEnding(meta);
+          return;
+        }
+        // Pullman finish has no legacy art — keep the holding headline and
+        // draw the normal UI over black.
+      } else {
+        const bg = this.add.image(CX, CY, spec.texture)
+          .setOrigin(0.5).setDisplaySize(SCREEN_W, SCREEN_H).setDepth(0).setAlpha(0);
+        this.tweens.add({ targets: bg, alpha: 1, duration: 220 });
+        const car = placeEndingCar(this, carKey, spec.car, 1);
+        if (car) { car.setAlpha(0); this.tweens.add({ targets: car, alpha: 1, duration: 220, delay: 60 }); }
+      }
+      holding.destroy();
+      this._buildPlateUI(meta);
+    });
+  }
+
+  /** Headline / stats / buttons drawn over an ending plate. */
+  _buildPlateUI(meta) {
+    const D = 10;
+    // Bottom scrim — a soft gradient rather than a hard box, so the photo
+    // still reads under the labels.
+    const scrim = this.add.graphics().setDepth(D - 1);
+    scrim.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.88, 0.88);
+    scrim.fillRect(0, 300, SCREEN_W, SCREEN_H - 300);
+    // Top scrim for the headline — much lighter, the sky carries most of it.
+    const top = this.add.graphics().setDepth(D - 1);
+    top.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.7, 0.7, 0, 0);
+    top.fillRect(0, 0, SCREEN_W, 96);
+
+    this.add.text(CX, 20, meta.headline, {
+      fontSize: '44px', fontFamily: IMPACT,
+      color: meta.color, stroke: '#000', strokeThickness: 6,
+    }).setOrigin(0.5, 0).setDepth(D);
+
+    let subtitle = meta.subtitle;
+    if (this.cause === 'passed_out' && this.deathVice) {
+      const label = VICE_CONFIG[this.deathVice]?.label ?? this.deathVice;
+      subtitle = `${label} got you. ${meta.subtitle}`;
+    }
+    this.add.text(CX, 70, subtitle, {
+      fontSize: '13px', fontFamily: 'Arial', color: '#DDDDDD',
+      stroke: '#000', strokeThickness: 3, align: 'center',
+      wordWrap: { width: SCREEN_W * 0.86 },
+    }).setOrigin(0.5, 0).setDepth(D);
+
+    this.add.text(CX, 330, `CASH  $${this.finalScore.toLocaleString()}`, {
+      fontSize: '24px', fontFamily: IMPACT,
+      color: '#FFCC44', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5, 0).setDepth(D);
+    this.add.text(CX, 362, `DISTANCE  ${this.finalMiles.toFixed(2)} mi`, {
+      fontSize: '14px', fontFamily: 'Arial', color: '#AACCFF',
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5, 0).setDepth(D);
+
+    // The demo's whole job is selling the full game — keep the pitch.
+    if (this.cause === 'demo_complete') {
+      this.add.text(CX, 104,
+        'The full 293-mile drive to Pullman —\nmore towns, vices, weapons, missions & mayhem.', {
+          fontSize: '14px', fontFamily: 'Arial', color: '#9FE8B5', align: 'center',
+          stroke: '#000', strokeThickness: 3, lineSpacing: 4, wordWrap: { width: SCREEN_W * 0.84 },
+        }).setOrigin(0.5, 0).setDepth(D);
+    }
+
+    const btnY   = SCREEN_H - 34;
+    const isWin  = this.cause === 'finish' || this.cause === 'finish_on_time'
+                || this.cause === 'finish_late' || this.cause === 'demo_complete';
+    // _makeButton already lands at depth 50/51, clear of the scrim.
+    const mk = (x, w, label, fill, txt, cb) =>
+      this._makeButton(x, btnY, w, 40, label, fill, txt, cb);
+
+    if (this.cause === 'demo_complete') {
+      mk(CX - 150, 250, 'GET THE FULL GAME', 0x44FF88, 0x000000,
+         () => { try { window.open(FULL_GAME_URL, '_blank'); } catch (_) {} });
+      mk(CX + 150, 230, 'PLAY DEMO AGAIN', 0x2A4A6A, 0xFFFFFF, () => this._startOver());
+    } else if (isWin) {
+      mk(CX, 240, 'DRIVE IT AGAIN', 0x44AA55, 0xFFFFFF, () => this._startOver());
+    } else {
+      // Same three actions the baked plates offered, now with real faces.
+      const cp = this.lastCheckpoint;
+      mk(CX - 250, 210, 'RESTART', 0xFF39AF, 0xFFFFFF, () => this._retrySameSettings());
+      mk(CX, 210, cp?.position != null ? 'CONTINUE' : 'RESTART RUN', 0x39A8FF, 0xFFFFFF, () => {
+        if (cp?.position != null) this._restartAtCheckpoint(cp.position);
+        else this._retrySameSettings();
+      });
+      mk(CX + 250, 210, 'MENU', 0xF4F7FF, 0x000000, () => this._returnToTitle());
+    }
+
+    if (this.viceSummary) {
+      this._makeButton(SCREEN_W - 70, 24, 120, 28, '📋 VICE LOG', 0x222244, 0xFFFFFF,
+                       () => this._openViceLog());
+    }
+    if (this.tripSummary && isWin) {
+      this._makeButton(SCREEN_W - 70, 58, 120, 28, '📊 SUMMARY', 0x224422, 0xFFFFFF,
+                       () => this._openTripSummary());
+    }
+
+    this.input.keyboard?.once('keydown-SPACE', () => this._retrySameSettings());
+    this.input.keyboard?.once('keydown-ENTER', () => this._returnToTitle());
     this.input.keyboard?.on('keydown-L', () => this._openViceLog());
     this.input.keyboard?.on('keydown-T', () => { if (this.tripSummary) this._openTripSummary(); });
   }

@@ -8,8 +8,20 @@
 //
 // NOTE (owner 2026-07-26): every NPC-spoken line, local fact, and follow-up
 // `dialogue` is written in light rhyming couplets — NPCs "talk in rhyme" for
-// chance opportunities.  Player-facing choice `label`s stay plain/functional
-// so the action is scannable.  Keep the rhyme when editing content.
+// chance opportunities.  Keep the rhyme when editing content.
+//
+// REVISED (owner 2026-08-04): choice `label`s are no longer terse verbs
+// ("Ask about the pass").  They are what the PLAYER says out loud, in quotes,
+// in the player's own voice — often rhyming back at the NPC.  The old labels
+// read as menu commands and made every conversation feel like a vending
+// machine.  Every choice now also earns a `dialogue` response, so no branch
+// dead-ends in silence.  Two consequences to respect when editing:
+//   • Labels are SENTENCES now — RestStopScene sizes each choice button to its
+//     wrapped label height.  Long is fine; endless still overflows the pane.
+//   • `fact` on a card is effectively DEAD — RestStopScene prefers the
+//     rotating `_townFact`, and every stop has town facts.  Real facts live in
+//     townFacts.js; the `fact` lines below are kept only as the per-card
+//     fallback and are held in sync with that file.
 //
 // ── Encounter shape ──────────────────────────────────────────────────────
 //   id        unique string
@@ -37,10 +49,18 @@
 //   revealHazard hazard id to surface in the HUD/next-zone hint
 //   hydration   +/- Thirst bar 0–100 (a drink raises it)
 //   fullness    +/- Hunger bar 0–100 (food raises it)
+//   fullnessFloor raise Hunger UP TO this value; no-op if already higher
 //   tiredness   +/- Tiredness 0–100 (caffeine LOWERS it → more awake)
 //   coolEngine  degrees of engine temperature removed (coolant/fan)
 //   generous    true = a generous act; ~30% chance of a random karma reward
 //   dialogue    follow-up line shown after the choice resolves
+//   storeOffer  { shop, item, price, note? } — the NPC does NOT sell you the
+//               thing; he QUOTES you a price and it's waiting on that shop's
+//               menu, this stop only (owner 2026-08-05: "any discounted items
+//               should be priced in the store, not sold at that moment").
+//               Merchandise only — a buff or a service with no counter to walk
+//               to (tow insurance, the traffic app, a cookie) still changes
+//               hands in the conversation.
 //
 // A choice may resolve randomly via `chance: [{ p, effects, dialogue }, …]`
 // (probabilities should sum to ~1).  `cost` is sugar for effects.cash = -cost.
@@ -70,11 +90,11 @@ export const REST_STOP_ENCOUNTERS = [
     stopId: 'S', intro: true, once: true,
     portrait: 'street_weirdo', speaker: 'Street Weirdo',
     line: "Pullman by night? In THIS old heap? That mountain eats such rides for cheap.",
-    fact: "I-90 lifts from Seattle's sea-level shore to three thousand feet where the Pass-winds roar.",
+    fact: "Pike Place Market opened in 1907 because onions had gone from a dime a pound to a dollar and farmers were done splitting the take with middlemen.",
     choices: [
-      { label: "Ask about the pass", effects: { revealHazard: 'snow', dialogue: "\"Past North Bend it's chains or a prayer — pick one, pal, and climb up there.\"" } },
-      { label: "Give him a buck", cost: 1, effects: { generous: true, dialogue: "\"A giver! How noble, how dumb — you'll die as humble as you've become.\"" } },
-      { label: "Just drive", effects: {} },
+      { label: "\"Any idea what the weather is doing up at the pass?\"", effects: { revealHazard: 'snow', dialogue: "\"Past North Bend it's chains or a prayer — I hear it's a whiteout up there.\"" } },
+      { label: "\"Here's a dollar, pal. I hope you spend it fair.\"", cost: 1, effects: { generous: true, dialogue: "\"A giver! How noble, chum — I need fifty, yet you've provided one.\"" } },
+      { label: "\"This is not the establishment for me. Time to dip.\"", exit: true, effects: { dialogue: "He salutes you with a cup he found on the ground — \"Safe travels, moneybags. Try not to drown.\"" } },
     ],
   },
 
@@ -83,39 +103,40 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'north_bend_chain_guy',
     stopId: 'N', weight: 3,
     portrait: 'chain_guy', speaker: 'Chain Guy',
-    fact: "Snoqualmie's mood can turn and bite 'twixt North Bend's calm and the summit's white.",
+    fact: "North Bend played the town of Twin Peaks in 1990 — Twede's Cafe on North Bend Way was the Double R Diner.",
     startNode: 'greet',
     nodes: {
       greet: {
-        line: "The pass turns cruel, the snow won't quit — chains beat a physics class dug in a pit.",
+        line: "You made it this far, but it's about to get tricky. Buy some chains and make the road less slippy.",
         choices: [
-          { label: "Buy chains ($80)", cost: 80, conditions: { minCash: 80 }, effects: { buff: 'snow_chains', revealHazard: 'snow', generous: true }, end: true },
-          { label: "Eighty bucks? Let's talk.", next: 'haggle' },
-          { label: "How bad is it up there, really?", next: 'passInfo' },
-          { label: "Thanks anyway — I'll risk it", effects: {}, end: true },
+          { label: "\"Are you selling those tire chains?\" ($150)", exit: true, effects: { revealHazard: 'snow', storeOffer: { shop: 'schwasted', item: 'chains', price: 150, note: "Chain Guy's price" }, dialogue: "\"I don't carry stock in my truck — I run the counter at Schwasted's. Ask for me; it's $150 with your luck.\"" }, end: true },
+          { label: "\"Can you do any better on the price of those chains? Say $80?\"", next: 'haggle' },
+          { label: "\"How bad can it be up there, really?\"", next: 'passInfo', effects: { dialogue: "\"If you have to ask, friend, here's my advice — stay in North Bend tonight and sleep on it twice.\"" } },
+          { label: "\"I don't need chains. This isn't my first snowdeo.\"", exit: true, effects: { dialogue: "\"Snowdeo,\" he repeats, and spits in the slush. \"They all say that on the way up the brush.\"" }, end: true },
         ],
       },
       haggle: {
-        line: "Fifty-five cash — no receipt, no refund, no eye; that's my whole pitch, so buy or say bye.",
+        line: "$120 — no receipt, no refund, no eye; that's my whole pitch, so buy or say bye.",
         choices: [
           {
-            label: "Deal ($55)",
-            cost: 55, conditions: { minCash: 55 },
-            chance: [
-              { p: 0.65, effects: { buff: 'snow_chains' } },
-              { p: 0.35, effects: { dialogue: "He sold you chains that just look tough. Society rolls on, unbothered enough." } },
-            ],
+            label: "\"Deal. Write it up before I think it through.\" ($120)",
+            exit: true,
+            effects: {
+              revealHazard: 'snow',
+              storeOffer: { shop: 'schwasted', item: 'chains', price: 120, note: "haggled — no receipt" },
+              dialogue: "\"$120, then. Tell the counter I sent you — and don't expect paperwork when you do.\"",
+            },
             end: true,
           },
-          { label: "Back to full price", next: 'greet' },
-          { label: "Walk away", effects: {}, end: true },
+          { label: "\"Fine — full price, then. You win.\"", next: 'greet', effects: { dialogue: "\"You can pay full price here, or up there. It's much cheaper here.\"" } },
+          { label: "\"I'll take my chances. Walk away.\"", exit: true, effects: { dialogue: "\"Suit yourself,\" he shrugs, already turned — \"the tow bill's steeper, but some folks like to learn.\"" }, end: true },
         ],
       },
       passInfo: {
         line: "Bad enough I'm here and not in bed — whiteout up top, and the plows are losing, it's said.",
         choices: [
-          { label: "Fine. The chains.", next: 'greet', effects: { revealHazard: 'snow' } },
-          { label: "Thank him and leave", effects: { revealHazard: 'snow' }, end: true },
+          { label: "\"Not bad… if you have chains.\"", next: 'greet', effects: { revealHazard: 'snow' } },
+          { label: "\"Appreciate the offer, but I think I got this.\"", exit: true, effects: { revealHazard: 'snow', dialogue: "\"Everybody's got it,\" he says, \"'til they don't. I'd wish you luck, but honestly — I won't.\"" }, end: true },
         ],
       },
     },
@@ -126,12 +147,12 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'pass_ski_bum',
     stopId: 'SP', weight: 2,
     portrait: 'ski_bum', speaker: 'Ski Bum',
-    line: "Past the tunnel it's whiteout, thick and dread — slow is smooth, and smooth is not-yet-dead.",
-    fact: "Snoqualmie's summit, three-oh-one-five high, is the lowest I-90 Cascade pass you'll spy.",
+    line: "Past the tunnel it's whiteout, thick and dread — slow is smooth, and smooth is not-dead.",
+    fact: "The summit is 3,015 feet — the lowest major crossing of the Cascades, which tells you what the other ones are like.",
     choices: [
-      { label: "Buy his thermos ($15)", cost: 15, effects: { buff: 'warm', timeSec: +10, tiredness: -18, generous: true, dialogue: "Coffee so strong it could strip a door — you're wide awake and craving more." } },
-      { label: "Ask the safe line", effects: { revealHazard: 'whiteout' } },
-      { label: "Wave and go", effects: {} },
+      { label: "\"Let me grab one of those thermoses off you.\" ($15)", cost: 15, conditions: { minCash: 15 }, effects: { buff: 'warm', timeSec: +100, tiredness: -25, generous: true, dialogue: "This coffee is so strong it could strip a door — you'll be wide awake and craving more." } },
+      { label: "\"Is there a safer route to take? I don't want to end up in the lake.\"", effects: { revealHazard: 'whiteout', dialogue: "\"It's crazy up there. Kind of storm only the bold would dare.\"" } },
+      { label: "\"Thanks, but no thanks.\"", exit: true, effects: { dialogue: "\"No worries, my guy. Stay alert, keep the road in your eyes.\"" } },
     ],
   },
 
@@ -140,20 +161,20 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'vantage_wind_trucker',
     stopId: 'V', weight: 3,
     portrait: 'long_haul_mike', speaker: 'Long-Haul Mike',
-    line: "The Vantage wind flings semis like carts astray — two hands on the wheel, or you'll blow away.",
-    fact: "At Vantage the Columbia's crossing runs wide, with bare, hard crosswinds on every side.",
+    line: "My company card was just declined. Can you help me fill half the tank? My timeline is already behind.",
+    fact: "The 1927 Vantage Bridge was taken apart in 1963 and rebuilt across the Snake River at Lyons Ferry, where it still carries traffic today.",
     choices: [
-      { label: "Take the wind tip", effects: { buff: 'wind_ready', revealHazard: 'crosswind', dialogue: "\"Lean in, don't fight it — that's the trick; out here you bend, or the wind hits quick.\"" } },
+      { label: "\"I can't afford that kind of cash. Any idea what the road ahead holds? I'm hoping not to crash.\"", effects: { buff: 'wind_ready', revealHazard: 'crosswind', dialogue: "\"It's going to be a wild ride. If the wind takes you, you wouldn't be the first who died.\"" } },
       {
-        label: "Split his fuel run ($30)",
-        cost: 30,
+        label: "\"It's your lucky day. My pockets are blessed and I'm willing to pay.\" ($100)",
+        cost: 100, conditions: { minCash: 100 },
         effects: { generous: true },
         chance: [
-          { p: 0.7, effects: { fuelMi: +40 } },
+          { p: 0.7, effects: { fuelMi: +40, dialogue: "He siphons you a fat share off his own tank — \"Company's problem now,\" he says, and you've got him to thank." } },
           { p: 0.3, effects: { fuelMi: +15, dialogue: "Half the diesel he swore he'd hand — that's trucker math, you understand." } },
         ],
       },
-      { label: "Head out", effects: {} },
+      { label: "\"Good luck with all that!\"", exit: true, effects: { dialogue: "\"Yeah,\" he says, to the wind and no one — \"luck. That's the one thing out here they don't run.\"" } },
     ],
   },
 
@@ -162,20 +183,20 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'othello_farm_gas',
     stopId: 'O', weight: 2,
     portrait: 'farm_worker', speaker: 'Farm Worker',
-    line: "Real station's far — a hike, a slog; I've a jerry can out back… don't mind the color or the smog.",
-    fact: "Round Othello the Basin's irrigated and wide — long dark stretches, no service, no guide.",
+    line: "You can fill up at any fuel stop. But I've got a mix that makes your mileage pop.",
+    fact: "Othello got its name from a post office in Roane County, Tennessee. Nothing to do with Shakespeare.",
     choices: [
       {
-        label: "Buy the can ($40)",
-        cost: 40,
+        label: "\"I'll take you up on that rocket fuel.\" ($50)",
+        cost: 50, conditions: { minCash: 50 },
         effects: { generous: true },
         chance: [
-          { p: 0.8, effects: { fuelMi: +55 } },
+          { p: 0.8, effects: { fuelMi: +55, dialogue: "Dang! The tank reads impossibly full — whatever that was, it's got some pull." } },
           { p: 0.2, effects: { fuelMi: +25, hp: -3, dialogue: "That was NOT just gas, it's plain — the engine coughs and bucks in pain." } },
         ],
       },
-      { label: "Ask about the road ahead", effects: { revealHazard: 'farm_equipment', dialogue: "\"Watch for tractors dark as pitch — they own these nights, and every ditch.\"" } },
-      { label: "Risk it on empty", effects: {} },
+      { label: "\"Anything I should expect to see on the road ahead?\"", effects: { revealHazard: 'farm_equipment', dialogue: "\"Watch for tractors slow as tree pitch — they own the road, and every ditch.\"" } },
+      { label: "\"You're very generous, but you make me nervous.\"", exit: true, effects: { dialogue: "He caps the can and grins with half a tooth — \"Smart man. Most folks can't handle the truth.\"" } },
     ],
   },
 
@@ -184,20 +205,20 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'bellevue_traffic_app',
     stopId: 'B', weight: 2,
     portrait: 'biz_founder', speaker: 'Startup Founder',
-    line: "Our app dodges every trap clear to Pullman's gate — freemium, of course; the free tier's the letdown you'll hate.",
-    fact: "Bellevue rose from a sleepy suburb's hush to glass-tower tech in two decades' rush.",
+    line: "Our app dodges every speed trap in this state — the free tier is what the reviewers hate.",
+    fact: "Until World War II an American whaling fleet wintered in Meydenbauer Bay — the lake's fresh water killed the barnacles off the hulls.",
     choices: [
       {
-        label: "Buy premium ($60)",
-        cost: 60,
+        label: "\"I'll support your vision. Sign me up for the annual subscription.\" ($100)",
+        cost: 100, conditions: { minCash: 100 },
         effects: { generous: true },
         chance: [
-          { p: 0.7, effects: { heatStars: -1, timeSec: +30, dialogue: "It actually works — two traps glide by unseen; she's already pitching a Series B, it seems." } },
-          { p: 0.3, effects: { dialogue: "\"Servers are scaling!\" she chirps — then the app falls flat; and so does your sixty, just like that." } },
+          { p: 0.7, effects: { heatStars: -1, timeSec: +90, dialogue: "It actually works — two traps glide by unseen; she's already pitching a Series B, it seems." } },
+          { p: 0.3, effects: { dialogue: "\"Servers are scaling!\" she chirps — then the app falls flat; and so does your hundred, just like that." } },
         ],
       },
-      { label: "Ask for the free version", effects: { revealHazard: 'speed_trap' } },
-      { label: "Keep your data", effects: {} },
+      { label: "\"It's not the cops I dread, but more of the weather. Do you know what lies ahead…\"", effects: { revealHazard: 'fog', dialogue: "\"The precip is mostly in the mountain heights, leaving Issaquah foggy AF. Might be worth upgrading to some fog lights.\"" } },
+      { label: "\"You won't fool me. I know you collect info and track my location.\"", exit: true, effects: { dialogue: "\"We call it telemetry,\" she says, unbowed — \"and you agreed to it, out loud, in a crowd.\"" } },
     ],
   },
 
@@ -206,19 +227,19 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'issaquah_hitcher',
     stopId: 'I', weight: 2,
     portrait: 'hiker_woman', speaker: 'Hitchhiker',
-    line: "I need a pass-bound lift, that's true — cash up front, no chit-chat too; best offer you'll hear the whole day through.",
-    fact: "Issaquah rests where the Cascades rear up, the last place the suburbs finally give up.",
+    line: "I need a pass-bound lift, that's true — cash up front, I won't even talk to you.",
+    fact: "The town incorporated as Gilman in 1892, then renamed itself Issaquah in 1899 to get closer to the Lushootseed word settlers had flattened into 'Squak.'",
     choices: [
       {
-        label: "Pick her up",
+        label: "\"Lucky for you, I need the cash and have room for one more ass.\"",
         effects: { generous: true },
         chance: [
-          { p: 0.6, effects: { cash: +40, dialogue: "She pays, reads the curves better than your GPS could, then's gone at the summit — a passenger good." } },
-          { p: 0.4, effects: { heatStars: +1, dialogue: "Turns out she's on some watch-list, it seems — now you're right beside it, in the cops' bad dreams." } },
+          { p: 0.6, effects: { cash: +80, dialogue: "She pays, reads the curves better than your GPS could, then's gone at the summit — a passenger good." } },
+          { p: 0.4, effects: { cash: +20, heatStars: +1, dialogue: "Turns out she's on some watch-list, it seems — now you're right beside it, in the cops' bad dreams." } },
         ],
       },
-      { label: "Take gas money, no ride", effects: { cash: +20, dialogue: "\"Cold. Respect,\" she says, unfazed — hands you a twenty and walks off unamazed." } },
-      { label: "Drive on", effects: {} },
+      { label: "\"I don't really have the space. Do you know about the weather at the mountain's base?\"", effects: { revealHazard: 'rain', dialogue: "\"I heard it's dumping buckets of rain in North Bend. Hope your wipers are prepared for full send.\"" } },
+      { label: "\"Mom said not to talk to strangers.\"", exit: true, effects: { dialogue: "\"Your mom sounds smart,\" she says, thumb still out — \"shame she raised whatever this is about.\"" } },
     ],
   },
 
@@ -228,11 +249,11 @@ export const REST_STOP_ENCOUNTERS = [
     stopId: 'C', weight: 2,
     portrait: 'park_ranger', speaker: 'Park Ranger',
     line: "Elk cross at dusk and don't check their blind side — and neither, it seems, do you when you ride.",
-    fact: "The wooded Cle Elum run, foothill-lined, is prime elk country of the roaming kind.",
+    fact: "Cle Elum ran the last hand-operated telephone switchboard west of the Mississippi. The operators put through their final call on September 18, 1966.",
     choices: [
-      { label: "Heed the warning", effects: { buff: 'elk_ready', revealHazard: 'elk', generous: true, dialogue: "\"Slow at the tree lines, mind your speed — they're bigger than your car's whole creed.\"" } },
-      { label: "Point her at a 'lost hiker' up the road", effects: { heatStars: -1, dialogue: "She radios it in, thrown off the scent — your record breathes; the heat's misspent." } },
-      { label: "Nod and leave", effects: {} },
+      { label: "\"Great advice. I'll keep my eyes out and my foot down.\"", effects: { buff: 'elk_ready', revealHazard: 'elk', generous: true, dialogue: "\"Slow at the tree lines, mind your speed — they're bigger than your car's whole creed.\"" } },
+      { label: "\"I heard you're looking for a lost hiker. I saw them at Commonwealth up at the pass.\"", effects: { heatStars: -1, dialogue: "She radios it in, thrown off the scent — your record breathes; the heat's misspent." } },
+      { label: "\"Those elk better watch out for me!\"", exit: true, effects: { dialogue: "She writes nothing down, which is somehow worse — \"Seven hundred pounds,\" she says. \"You first.\"" } },
     ],
   },
 
@@ -241,16 +262,16 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'thorp_motel_pool',
     stopId: 'TH', weight: 2,
     portrait: 'swimsuit_girl', speaker: 'Swimsuit Girl',
-    line: "Thorp gets so quiet once the interstate clears — but the pool's still warm, and so are the cheers.",
-    fact: "Thorp's a speck by the Yakima's bend, home to a century-old grist mill, my friend.",
+    line: "Thorp goes dead quiet once the interstate clears — but the pool's still warm, and so are the beers.",
+    fact: "The Thorp Mill started grinding Kittitas Valley wheat in April 1883 and didn't stop until 1946 — the oldest industrial artifact left in the county.",
     choices: [
       {
-        label: "Rent the room ($40)",
-        cost: 40,
+        label: "\"How much for a room? I'm running on fumes.\" ($40)",
+        cost: 40, conditions: { minCash: 40 },
         effects: { tiredness: -40, timeSec: +45, dialogue: "She flips you the key with a wink, sly and slow — \"Shower's hot, bed's made… take it slow.\"" },
       },
-      { label: "Take a poolside drink", effects: { hydration: +10, dialogue: "She hands you a glass, ice clinking with cheer — \"On the house, cowboy. Long roads breed thirst, I hear.\"" } },
-      { label: "Politely decline and go", effects: {} },
+      { label: "\"I won't say no to a drink by the water.\"", effects: { hydration: +10, dialogue: "Ice clinks in the glass she hands over, sincere — \"On the house, cowboy. Long roads breed thirst, I hear.\"" } },
+      { label: "\"Is that old mill the only thing open around here?\"", effects: { dialogue: "\"That mill shut down in '46, my dear. You're two hundred miles from anything here.\"" } },
     ],
   },
 
@@ -259,32 +280,32 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'ellensburg_diner',
     stopId: 'E', weight: 3,
     portrait: 'diner_waitress', speaker: 'Diner Waitress',
-    fact: "Ellensburg's a rodeo-college town, Kittitas' pride, roughly the halfway point of your statewide ride.",
+    fact: "Ellensburg was the front-runner to be state capital until a fire on the night of July 4, 1889 took out ten blocks of downtown. Investigators called it arson and never named anyone.",
     npcId: 'diner_waitress',
     // She remembers you — return visits open on a different greeting.
     startNode: (mem) => (mem?.met ? 'greetReturn' : 'greetFirst'),
     nodes: {
       greetFirst: {
-        line: "Rodeo's in, so the coffee's fresh and the regulars are wild; you look on the run from something, child — pie?",
+        line: "Rodeo's in town, so the crowds are thick. But tip me well and I'll serve you quick.",
         choices: [
-          { label: "Coffee & pie ($12)", cost: 12, conditions: { minCash: 12 }, setMemory: { met: true, hadPie: true }, effects: { hp: +4, timeSec: +15, fullness: +16, tiredness: -12, generous: true, dialogue: "Best call you've made the whole trip long — low bar, sure, but it's not wrong." }, end: true },
-          { label: "What's ahead of me?", next: 'roadTalk', setMemory: { met: true } },
-          { label: "Just the check, thanks", setMemory: { met: true }, effects: {}, end: true },
+          { label: "\"Whatever's hot, and keep the coffee coming.\" ($40)", cost: 40, conditions: { minCash: 40 }, setMemory: { met: true, hadPie: true }, effects: { hp: +5, timeSec: +90, fullnessFloor: 60, tiredness: -18, generous: true, dialogue: "Best call you've made the whole trip long — low bar, sure, but it's not wrong." }, end: true },
+          { label: "\"What's ahead of me?\"", next: 'roadTalk', setMemory: { met: true } },
+          { label: "\"This place smells like an ashtray. I'll get food on the road.\"", exit: true, setMemory: { met: true }, effects: { dialogue: "\"Suit yourself, sugar,\" she says, unimpressed — \"the gas station sushi is what you like best.\"" }, end: true },
         ],
       },
       greetReturn: {
         line: "Well, look who survived the road's mean tricks — same booth's free, and you're getting pie; don't fight it, that's the fix.",
         choices: [
-          { label: "The usual ($12)", cost: 12, conditions: { minCash: 12 }, setMemory: { hadPie: true }, effects: { hp: +4, timeSec: +15, fullness: +16, tiredness: -12, generous: true, dialogue: "\"Knew it,\" she grins; the pie appears before you've sat, allaying fears." }, end: true },
-          { label: "Any news up the road?", next: 'roadTalk' },
-          { label: "Just passing through — take care", effects: {}, end: true },
+          { label: "\"I'll take the usual.\" ($40)", cost: 40, conditions: { minCash: 40 }, setMemory: { hadPie: true }, effects: { hp: +5, timeSec: +90, fullnessFloor: 60, tiredness: -18, generous: true, dialogue: "\"The usual,\" she repeats. \"Who ARE you?\" — then the plate lands hot, like she always knew." }, end: true },
+          { label: "\"Any news up the road?\"", next: 'roadTalk' },
+          { label: "\"Just passing through — take care!\"", exit: true, effects: { dialogue: "\"Take care yourself. And slower, if you're able — I'd hate to read your name across this table.\"" }, end: true },
         ],
       },
       roadTalk: {
-        line: "Past Vantage the wind will part your hair through the screen — all morning the truckers came in white and green.",
+        line: "Have you been to Vantage before? That wind can blow with the best of whores.",
         choices: [
-          { label: "Better fuel up on pie then ($12)", cost: 12, conditions: { minCash: 12 }, setMemory: { hadPie: true }, effects: { hp: +4, fullness: +16, tiredness: -12, revealHazard: 'wind', generous: true, dialogue: "\"Smart — nobody fights the wind and wins when their stomach's thin.\"" }, end: true },
-          { label: "Thank her and hit the road", effects: { revealHazard: 'wind' }, end: true },
+          { label: "\"Then load me up first. I'm not fighting that hungry.\" ($40)", cost: 40, conditions: { minCash: 40 }, setMemory: { hadPie: true }, effects: { hp: +5, fullnessFloor: 60, tiredness: -18, revealHazard: 'wind', generous: true, dialogue: "\"Smart — nobody fights the wind and wins when their stomach's thin.\"" }, end: true },
+          { label: "\"Noted. Thanks for the warning.\"", exit: true, effects: { revealHazard: 'wind', dialogue: "\"All morning the truckers came in white and green. Two hands on that wheel, and mind what's unseen.\"" }, end: true },
         ],
       },
     },
@@ -295,38 +316,39 @@ export const REST_STOP_ENCOUNTERS = [
     id: 'hatton_grandma',
     stopId: 'H', weight: 3,
     portrait: 'grandma', speaker: 'Roadside Grandma',
-    fact: "Hatton's a speck on WA-26's thread, 'twixt Othello and Washtucna, sparse and spread.",
+    fact: "Hatton peaked at 500 people in 1913, with three grain elevators, two hotels, a bank, and electric street lights. Count what's left.",
     startNode: 'greet',
     nodes: {
       greet: {
         line: "Few stop in Hatton, dear, it's true — I keep gas for the ones who do, and cookies… but the gas is safer for you.",
         choices: [
-          { label: "Buy her gas ($35)", cost: 35, conditions: { minCash: 35 }, effects: { fuelMi: +50, generous: true, dialogue: "\"Drive safe, or don't, my dear — either way, the news'll reach my ear.\"" }, end: true },
-          { label: "Safer? What's in the cookies?", next: 'cookies' },
-          { label: "Why Hatton, of all places?", next: 'whyHatton' },
-          { label: "Politely flee", effects: {}, end: true },
+          { label: "\"I'll take the gas, ma'am. What's the damage?\" ($35)", cost: 35, conditions: { minCash: 35 }, effects: { fuelMi: +50, generous: true, dialogue: "\"Drive safe, or don't, my dear — either way, the news'll reach my ear.\"" }, end: true },
+          { label: "\"Safer? What exactly is in those cookies?\"", next: 'cookies' },
+          { label: "\"Why Hatton? There's nothing out here but wheat.\"", next: 'whyHatton' },
+          { label: "\"You're sweet, ma'am, but I've seen this movie.\"", exit: true, effects: { dialogue: "\"Everyone has, dear,\" she says, and waves — \"and yet the road out here is still full of graves.\"" }, end: true },
         ],
       },
       cookies: {
         line: "Butter and sugar and a recipe old — one the county begged me to leave untold; one won't hurt you… or so I'm told.",
         choices: [
           {
-            label: "Take a cookie",
+            label: "\"One cookie. For the road. What could go wrong?\"",
             chance: [
               { p: 0.7, effects: { hp: +3, fullness: +14, dialogue: "Strangely restoring, warm to the bone — you feel watched, but not alone." } },
               { p: 0.3, effects: { fullness: +14, timeSec: -20, dialogue: "You blink, and twenty minutes have flown — that's one fine cookie you've been thrown." } },
             ],
             end: true,
           },
-          { label: "Maybe the gas instead", next: 'greet' },
-          { label: "Decline politely and leave", effects: {}, end: true },
+          { label: "\"On second thought — let's stick to the gas.\"", next: 'greet' },
+          { label: "\"I'm allergic to whatever that is.\"", exit: true, effects: { dialogue: "\"To butter?\" she asks, and holds your eye too long — \"or to something you can't name, but know is wrong?\"" }, end: true },
         ],
       },
       whyHatton: {
-        line: "Somebody must watch this stretch, my dear; the road claims the careless who wander near — I just tidy the mess they leave here.",
+        line: "Five hundred lived here once — two hotels, a bank, three elevators, electric light. Somebody's got to stay and mind what's left of the night.",
         choices: [
-          { label: "…About that gas", next: 'greet' },
-          { label: "Thank her and back away slowly", effects: {}, end: true },
+          { label: "\"Where'd everybody go?\"", next: 'greet', effects: { dialogue: "\"West, mostly. The rest the road took its due — I just tidy up after, and wait on the few.\"" } },
+          { label: "\"…About that gas.\"", next: 'greet' },
+          { label: "\"Thank you, ma'am. I'll be going now. Slowly.\"", exit: true, effects: { dialogue: "She watches you the whole way to the door — grandmothers in Hatton have done this before." }, end: true },
         ],
       },
     },
@@ -338,11 +360,12 @@ export const REST_STOP_ENCOUNTERS = [
     stopId: 'W', weight: 2,
     portrait: 'tow_driver', speaker: 'Tow Driver',
     line: "Three wrecks a week I haul from this bend — business is good, which should worry you, friend.",
-    fact: "Washtucna's a thin wheat-country line, with long, long gaps 'twixt help and sign.",
+    fact: "Palouse Falls, twenty minutes south, drops 198 feet into a scabland gorge and has been the official state waterfall since 2014.",
     choices: [
-      { label: "Prepay a tow discount ($50)", cost: 50, effects: { buff: 'tow_insurance', generous: true, dialogue: "\"Crash, and I'll judge you — but only a bit; call it a discount on your fit.\"" } },
-      { label: "Have her bang out a dent ($40)", cost: 40, effects: { hp: +12, dialogue: "A mallet, a grunt, a whack, a tad — and your car looks marginally less sad." } },
-      { label: "Wave her off", effects: {} },
+      { label: "\"What's it cost to have you on call before I need you?\" ($50)", cost: 50, conditions: { minCash: 50 }, effects: { buff: 'tow_insurance', generous: true, dialogue: "\"Crash, and I'll judge you — but only a bit; call it a discount on your fit.\"" } },
+      { label: "\"Can you bang this dent out before I head on?\" ($40)", cost: 40, conditions: { minCash: 40 }, effects: { hp: +12, dialogue: "A mallet, a grunt, a whack, a tad — and your car looks marginally less sad." } },
+      { label: "\"Three a week? What's actually putting them in the ditch?\"", effects: { revealHazard: 'drowsy', dialogue: "\"Straight road, no lights, and nothing to see — they nod off at seventy and wake up in a tree.\"" } },
+      { label: "\"I don't plan on wrecking. That's the whole plan.\"", exit: true, effects: { dialogue: "She laughs once, hard, and turns to walk away — \"I'll leave the CB on anyway.\"" } },
     ],
   },
 
@@ -352,11 +375,12 @@ export const REST_STOP_ENCOUNTERS = [
     stopId: 'E', weight: 2,
     portrait: 'desert_mechanic', speaker: 'Shade-Tree Mechanic',
     line: "Basin-bound? Top your coolant off right here — past Vantage the shade quits and the gauge climbs, I fear.",
-    fact: "East of the Cascades the road drops to high desert's face — long, hot, and shadeless, the Columbia Basin's embrace.",
+    fact: "The Ellensburg Rodeo has run since September 1923, when it was bolted onto the county fair just to draw a bigger crowd.",
     choices: [
-      { label: "Top off the coolant ($25)", cost: 25, effects: { coolEngine: 55, generous: true, dialogue: "He fills the radiator, spins the fan with care: \"That'll hold — probably. Say a prayer.\"" } },
-      { label: "Fill your jug from his hose", effects: { hydration: +15, dialogue: "Warm hose water — not cold, but wet; he waves off your coins, no debt." } },
-      { label: "I'll risk it", effects: {} },
+      { label: "\"Top it off. I'd rather not boil over out there.\" ($25)", exit: true, effects: { storeOffer: { shop: 'fap', item: 'coolant', price: 25, note: "his price, not theirs" }, dialogue: "\"I don't keep jugs on me — I moonlight at Finesse. Ask inside, twenty-five, and say I said yes.\"" } },
+      { label: "\"Mind if I fill my jug off your hose?\"", effects: { hydration: +15, dialogue: "Warm hose water — not cold, but wet; he waves off your coins, says you owe him no debt." } },
+      { label: "\"What am I actually watching for — the gauge, or something else?\"", effects: { revealHazard: 'engine_heat', dialogue: "\"Smell comes first — sweet, like syrup on the breeze. By the time that needle climbs, you're already on your knees.\"" } },
+      { label: "\"She's run this far. She'll run the rest.\"", exit: true, effects: { dialogue: "\"They all run fine 'til the needle goes red. Then they run hot. Then they run dead.\"" } },
     ],
   },
 
@@ -366,11 +390,12 @@ export const REST_STOP_ENCOUNTERS = [
     stopId: 'O', weight: 2,
     portrait: 'lemonade_kids', speaker: 'Lemonade Kids',
     line: "Ice-cold lemonade, mister — best in the Basin, we swear! (It's also the ONLY one anywhere.)",
-    fact: "The Columbia Basin bakes and reels each summer's turn — past the Saddle Mountains, triple digits burn.",
+    fact: "Thousands of sandhill cranes stage here every March, and the town has thrown them a festival since 1998.",
     choices: [
-      { label: "Buy the whole pitcher ($5)", cost: 5, effects: { hydration: +35, generous: true, dialogue: "Worth every cent you're giving — your parched tongue rejoins the living." } },
-      { label: "Just one cup ($1)", cost: 1, effects: { hydration: +18, dialogue: "Cold and impossibly sweet, that sip — you smack your lips and resume the trip." } },
-      { label: "Wave and go", effects: {} },
+      { label: "\"I'll take the whole pitcher. Keep the change.\" ($5)", cost: 5, conditions: { minCash: 5 }, effects: { hydration: +35, generous: true, dialogue: "Worth every cent that you're forgiving — your parched tongue rejoins the living." } },
+      { label: "\"Just the one cup. I'm rationing.\" ($1)", cost: 1, conditions: { minCash: 1 }, effects: { hydration: +18, dialogue: "Cold and impossibly sweet, that sip — you smack your lips and resume the trip." } },
+      { label: "\"Straight answer: is there anything at all between here and the next town?\"", effects: { revealHazard: 'no_services', dialogue: "\"Circles of corn and a whole lot of sun.\" The taller one shrugs. \"Dad says buy two. We only sell one.\"" } },
+      { label: "\"Shouldn't you two be in school?\"", exit: true, effects: { dialogue: "\"It's August.\" They stare you flat down, unimpressed — you pull away feeling less than blessed." } },
     ],
   },
 ];
@@ -386,43 +411,56 @@ export const REST_STOP_ENCOUNTERS = [
 // `npcBusinesses:` in AssetManifest.js).
 //
 // REVISED (owner, same day): only 1-2 shops are meant to be actual mission
-// contacts — "it's up to the player to find them." Everywhere else is
-// intentionally GENERIC filler, not bespoke personality — a first draft here
-// gave all 11 unique lines, which was scope creep past what was asked.
+// contacts — "it's up to the player to find them." Everywhere else stays
+// FILLER in function: no jobs, no branching, no memory, straight into the
+// storefront on the first tap.
 // `fact` is deliberately omitted below: `_showEncounterCard` already prefers
 // `this._townFact` (the rotating per-stop fact) over a card's own `fact`, so
 // leaving it unset means these automatically surface the SAME rotating facts
 // every other card at this stop uses — no duplicate fact system needed.
+//
+// REVISED AGAIN (owner 2026-08-04): filler in FUNCTION is not the same as
+// filler in VOICE. All 11 shared one verbatim "Welcome in! What can I help you
+// with?", which is the single most-repeated line in the game. Each brand now
+// gets one couplet in its own voice — still `once: true`, still three terminal
+// choices, still zero mechanics. The three player choices stay shared: the
+// action must read the same at every counter.
 //
 // STILL OPEN: which 1-2 shop keys are the real mission contacts, and what
 // that card should actually show (presumably reusing `_buildMissionEncounter`
 // / the existing NPC_NAMES mission-contact system in MissionSystem.js, rather
 // than a new one) — do not guess a shop for this; ask.
 const GENERIC_GREETER_CHOICES = [
-  { label: "Let me see what you have", effects: {} },
-  { label: "Just window shopping today", effects: { dialogue: "\"No rush. Holler if you need anything.\"" } },
-  { label: "Any idea what the road's like up ahead?", effects: { dialogue: "\"Same as it's been — watch your speed and you'll be fine.\"" } },
+  { label: "\"Let's see what you've got.\"", effects: {} },
+  { label: "\"Just browsing. Don't hover.\"", exit: true, effects: { dialogue: "\"Wouldn't dream of it. Holler if you need me.\"" } },
+  { label: "\"Anything I should know about the road ahead?\"", effects: { dialogue: "\"Same as it ever is — too fast, too dark, and full of folks like you.\"" } },
 ];
-function genericGreeter(shopKey, portrait, speaker) {
-  return {
-    id: `greeter_${shopKey}`, once: true,
-    portrait, speaker,
-    line: "Welcome in! What can I help you with?",
-    choices: GENERIC_GREETER_CHOICES,
-  };
+function greeter(shopKey, portrait, speaker, line) {
+  return { id: `greeter_${shopKey}`, once: true, portrait, speaker, line, choices: GENERIC_GREETER_CHOICES };
 }
 export const SHOP_GREETERS = {
-  gas:       genericGreeter('gas',       'biz_huffs',     "Huff's Attendant"),
-  cargo:     genericGreeter('cargo',     'biz_cargo',     'CarGo Dispatcher'),
-  hunting:   genericGreeter('hunting',   'biz_cowbellas', 'CowBella Shopkeeper'),
-  camp:      genericGreeter('camp',      'biz_aok',       'AOK Camp Host'),
-  lord:      genericGreeter('lord',      'biz_lord',      'Lord Motors Manager'),
-  suck:      genericGreeter('suck',      'biz_suck',      "Sam's Owner"),
-  vices:     genericGreeter('vices',     'biz_gasnsip',   'Gas-N-Sip Clerk'),
-  ambm:      genericGreeter('ambm',      'biz_am_bm',     'AM/BM Clerk'),
-  parkride:  genericGreeter('parkride',  'biz_parkride',  'Metro Park & Ride Courier'),
-  schwasted: genericGreeter('schwasted', 'biz_schwasted', 'Les Schwasted Tech'),
-  fap:       genericGreeter('fap',       'biz_fap',       'Finesse Technician'),
+  gas:       greeter('gas',       'biz_huffs',     "Huff's Attendant",
+    "Pump six is honest, pump four is a liar — pay inside or you'll stand here 'til you retire."),
+  cargo:     greeter('cargo',     'biz_cargo',     'CarGo Dispatcher',
+    "Freight's freight and the clock doesn't care — load's out back if you're headed there."),
+  hunting:   greeter('hunting',   'biz_cowbellas', 'CowBella Shopkeeper',
+    "Everything in here is orange, lethal, or both — pick one and I'll spare you the safety oath."),
+  camp:      greeter('camp',      'biz_aok',       'AOK Camp Host',
+    "Tents, tarps, and a stove that half-works — everything you need to regret the outdoors and its perks."),
+  lord:      greeter('lord',      'biz_lord',      'Lord Motors Manager',
+    "Every car on this lot runs. That's the pitch. Past that, we negotiate which."),
+  suck:      greeter('suck',      'biz_suck',      "Sam's Owner",
+    "Sam's not here. Sam is never here. I do the wrenching and Sam does the beer."),
+  vices:     greeter('vices',     'biz_gasnsip',   'Gas-N-Sip Clerk',
+    "Coolers on the left, regrets on the right — I quit judging people around midnight."),
+  ambm:      greeter('ambm',      'biz_am_bm',     'AM/BM Clerk',
+    "Whatever you're after, don't say it out loud. Point, pay, and go rejoin the crowd."),
+  parkride:  greeter('parkride',  'biz_parkride',  'Metro Park & Ride Courier',
+    "I move what fits in a trunk and don't ask — point me at yours and name the task."),
+  schwasted: greeter('schwasted', 'biz_schwasted', 'Les Schwasted Tech',
+    "Free beef with every set of tires. Long story. Don't ask about the fires."),
+  fap:       greeter('fap',       'biz_fap',       'Finesse Technician',
+    "You want it fast, or you want it pretty? Both costs double. That's the city."),
 };
 
 /** Deterministic-ish weighted pick without Math.random (pass an rng()->[0,1)).
@@ -518,11 +556,44 @@ export function applyEncounterEffects(effects = {}, ctx = {}) {
   if (effects.hydration   != null) ctx.addSurvival?.('hydration', effects.hydration);
   if (effects.fullness    != null) ctx.addSurvival?.('fullness',  effects.fullness);
   if (effects.tiredness   != null) ctx.addSurvival?.('tiredness', effects.tiredness);
+  // A sit-down MEAL sets a floor rather than adding a delta — "fullness to
+  // 60% if lower, leave it alone if higher" (owner 2026-08-04, diner). Adding
+  // a flat +16 to an already-full player wasted the whole $40.
+  if (effects.fullnessFloor != null) ctx.raiseSurvivalTo?.('fullness', effects.fullnessFloor);
   // Engine heat: positive coolEngine = degrees of temperature removed.
   if (effects.coolEngine  != null) ctx.coolEngine?.(effects.coolEngine);
+  // Price quoted, not paid — the row is repriced on that shop's menu instead.
+  if (effects.storeOffer)          ctx.storeOffer?.(effects.storeOffer);
 }
 
 // ── Dialogue-tree helpers (renderer-side; NO effect resolution here) ──────
+
+/** Does this choice CLOSE the conversation (and open the storefront behind it),
+ *  or does the NPC answer and the card stay up?  Owner 2026-08-05: "only some
+ *  of the responses should go on to the next screen… player must select a
+ *  sentence that moves off the conversation to get to the storefront."
+ *
+ *  The rule, in one line: **words are free, resources cost you the conversation.**
+ *    • `next` — walks to another node, never an exit.
+ *    • `exit: true` — explicit, always wins. Needed on the *leave* lines
+ *      ("Time to dip", "Walk away"), which carry only a parting `dialogue` and
+ *      are otherwise indistinguishable from a question.
+ *    • a `cost` or a `chance` gamble — a transaction. Exits.
+ *    • effects that are ONLY talk (`dialogue`, `revealHazard`, a prep `buff`,
+ *      the `generous` karma flag) — a question. Stays open.
+ *    • anything that moves cash / HP / fuel / heat / a survival bar — exits, so
+ *      one NPC still pays out one resource per visit, exactly as before.
+ *    • no effects at all ("Let's see what you've got") — exits.
+ *  Repeats aren't a worry: the renderer strikes a question once it's asked. */
+const INFO_ONLY_EFFECTS = new Set(['dialogue', 'revealHazard', 'buff', 'generous']);
+export function isExitChoice(choice) {
+  if (!choice) return true;
+  if (typeof choice.exit === 'boolean') return choice.exit;
+  if (typeof choice.next === 'string') return false;
+  if (choice.cost || (Array.isArray(choice.chance) && choice.chance.length)) return true;
+  const keys = Object.keys(choice.effects ?? {});
+  return !(keys.length && keys.every(k => INFO_ONLY_EFFECTS.has(k)));
+}
 
 /** True when a card is a multi-node dialogue tree. */
 export function isDialogueTree(enc) {

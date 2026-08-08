@@ -8,7 +8,7 @@ import {
   getLastSignTown,
   CAR_LEN_Z, CAR_WIDTH_LANES, PLAYER_VIRTUAL_Z,
   VEHICLES,
-  FUEL_BURN_BASE, FUEL_BURN_CLIMB, FUEL_BURN_BOOST, FUEL_BURN_HOT,
+  FUEL_BURN_BASE, FUEL_BURN_CLIMB, FUEL_BURN_BOOST, FUEL_BURN_HOT, TOW_COST_USD,
   ENGINE_TEMP_START, ENGINE_WARN_TEMP, ENGINE_LIMP_TEMP, ENGINE_LIMP_CLEAR,
   ENGINE_LIMP_MULT, ENGINE_HP_DPS,
   setCameraMode, CAM, COP_TRAP_SPEED_MPH,
@@ -38,6 +38,7 @@ const UNITS_PER_MILE_HUD = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
 const COP_VISUAL_SCALE = 1;
 import { Road, snowBlanketAt, SNOW_WHITE, SNOW_MARKINGS_GONE } from '../road/Road.js';
 import { GroundPlane }   from '../road/GroundPlane.js';
+import { RoadPlane }     from '../road/RoadPlane.js';
 import { BAND, BIOMES, biomeAt, bandKey, bandHeight, bandRate } from '../road/Biomes.js';
 import { LANDMARKS, projectLandmark, activeLandmarks } from '../road/Landmarks.js';
 import geoData           from '../road/routeGeo.json';
@@ -47,6 +48,7 @@ import { EffectsSystem } from '../systems/EffectsSystem.js';
 import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
 import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
 import { genreArtPath, genreDefaultPath, GENRE_ART } from '../systems/AssetManifest.js';
+import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
 import { Difficulty }    from '../systems/Difficulty.js';
 import { TimeOfDay }     from '../world/TimeOfDay.js';
@@ -1026,6 +1028,21 @@ export class GameScene extends Phaser.Scene {
     // horizon and are untouched, so the mountains still read behind it.
     this.groundPlane = this.add.existing(new GroundPlane(this)).setDepth(1.3);
 
+    // ── Road surface, split the same way the ground was ────────────────
+    // roadBaseGfx carries ONLY the flat per-segment asphalt (and its paved
+    // shoulder); roadPlane paints the projected asphalt tile over it.  That
+    // opens a slot between the base colour and everything the road draws
+    // afterwards — wear, edge lines, markings, ramps, distance fog — all of
+    // which stay on roadGfx in their original order, so no draw was
+    // re-sequenced to get the texture in.
+    //
+    // 1.35 / 1.42 sit above the ground tile (1.3) and below roadGfx (1.5).
+    // Bridge and water segments opt out and keep their base on roadGfx: their
+    // piers and deck fascia are drawn first and are meant to be painted over
+    // by the surface (see Road._drawSegment).
+    this.roadBaseGfx = this.add.graphics().setDepth(1.35);
+    this.roadPlane   = this.add.existing(new RoadPlane(this)).setDepth(1.42);
+
     // ── Biome parallax backdrop ───────────────────────────────────────
     // Six TileSprites: three depth layers, doubled so adjacent biomes can
     // cross-fade at their boundary.  Depth 0.5 puts them above the sky
@@ -1381,6 +1398,10 @@ export class GameScene extends Phaser.Scene {
     // Dedicated overlay for cop light bars at higher depth than car sprites
     // (was drawing on roadGfx at depth 0, which was hidden behind the cars).
     this._copLightGfx = this.add.graphics().setDepth(9.75);
+    // Near-pursuit light bars — a cop drawn OVER the player (world-z behind
+    // the car, body depth 9.96-9.98) would hide its own bar if it stayed on
+    // the 9.75 layer; this one sits just above the near cop bodies.
+    this._copLightNearGfx = this.add.graphics().setDepth(9.985);
 
     // Tire-shadow overlay — small dark ellipses glued to the road-contact
     // point of every car (player + NPC + cop).  Sampled from the road
@@ -2367,7 +2388,7 @@ export class GameScene extends Phaser.Scene {
             if ('rearBumpCount' in this.cops) this.cops.rearBumpCount = 0;
             if ('headOnCount'   in this.cops) this.cops.headOnCount   = 0;
             if ('pitCount'      in this.cops) this.cops.pitCount      = 0;
-            this.cops.cops = [];
+            this.cops.cops.length = 0;   // in place — never orphan a live iterator
           }
           if (Array.isArray(buys.f12)) {
             if (buys.weaponsOnResume && this.cops) {
@@ -2563,7 +2584,7 @@ export class GameScene extends Phaser.Scene {
     this._worldObjects.push(
       ...[
         this._titleBlackout,
-        this.skyGfx, this.terrainGfx, this.cityBackdropGfx, this.groundPlane, this.roadGfx, this.ghostGfx, this.propsGfx, this._ruralFenceGfx, this._utilityLineGfx, this.bridgeFrontGfx, this.tunnelFacadeGfx, this.tunnelGfx, this._tunnelMaskGfx, this.tunnelDimGfx, ...this._signGfxPool, this._explosionGfx, this._smokeGfx, this._damageGlassGfx, this.overlayGfx, this.vignetteGfx,
+        this.skyGfx, this.terrainGfx, this.cityBackdropGfx, this.groundPlane, this.roadBaseGfx, this.roadPlane, this.roadGfx, this.ghostGfx, this.propsGfx, this._ruralFenceGfx, this._utilityLineGfx, this.bridgeFrontGfx, this.tunnelFacadeGfx, this.tunnelGfx, this._tunnelMaskGfx, this.tunnelDimGfx, ...this._signGfxPool, this._explosionGfx, this._smokeGfx, this._damageGlassGfx, this.overlayGfx, this.vignetteGfx,
         // Biome parallax bands — world objects, so the UI camera must
         // ignore them or it re-paints the horizon on top of the HUD.
         ...Object.values(this._biomeLayers.a), ...Object.values(this._biomeLayers.b),
@@ -2571,7 +2592,7 @@ export class GameScene extends Phaser.Scene {
         this._fogGlowGfx,
         this.weatherFxGfx, this.wipersGfx, ...this.chaseWipers,
         this.hudFlashGfx, this.playerSprite, this._rearPlateImg, this._rearPlate,
-        this._copLightGfx,
+        this._copLightGfx, this._copLightNearGfx,
         // World graphics that were NOT ignored by the UI camera — so the HUD
         // camera (which renders ON TOP of the world) re-painted them over the
         // cars: tire/car shadows appeared as a second shadow smeared on top,
@@ -4450,6 +4471,12 @@ export class GameScene extends Phaser.Scene {
         if (_cd.weapon)   this.stats?.recordCopOutcome?.('weapon', _cd.weapon);
         if (_cd.distance) this.stats?.recordCopOutcome?.('distance', _cd.distance);
       }
+      // Backup call landed (chase-realism pass) — surface the radio beat.
+      // CopSystem stamps the reason string; drain it once for the popup.
+      if (this.cops.backupCalled) {
+        this._showPopup(`📻 UNIT REQUESTING BACKUP — +1★\n(${this.cops.backupCalled})`, '#FF4444');
+        this.cops.backupCalled = null;
+      }
       this._updateScannerAlert();
 
       // ── FORWARD COUNTER (police-chase spec §6) ────────────────────────
@@ -4923,9 +4950,11 @@ export class GameScene extends Phaser.Scene {
       this.player.gasMi = Math.max(0, this.player.gasMi - _odoDelta * burnMul * _fuelMul);
       if (this.player.gasMi <= 0 && !this._strandedShown) {
         this._strandedShown = true;
-        this._showPopup?.('⛽ OUT OF GAS — calling tow…', '#FF4444');
-        // After a brief beat, run the tow logic.
-        this.time.delayedCall(2200, () => this._runTow());
+        this._showPopup?.('⛽ OUT OF GAS', '#FF4444');
+        // Running dry is a DECISION now (owner 2026-08-04), not an automatic
+        // tow: the ending-plate card asks whether to pay for the tow, start
+        // over, or load a save.
+        this.time.delayedCall(1400, () => this._showOutOfGasCard());
       }
     }
 
@@ -7906,6 +7935,10 @@ export class GameScene extends Phaser.Scene {
 
     for (let i = this.cops.cops.length - 1; i >= 0; i--) {
       const cop = this.cops.cops[i];
+      // A collision handler above may have removed several cops (bust reset,
+      // trap compliance, SWAT drop) — the backwards walk tolerates splices,
+      // but a shrunken array can still leave this index past the end.
+      if (!cop) continue;
       // NOTE: do NOT skip rear cops here.  Rear-pursuit cops (and SWAT, which
       // is also side:'rear') ARE the 2-3★ chase — _onCopCollision has a
       // dedicated rear-ram branch (registerRearBump → BUSTED at 5) and the
@@ -7925,12 +7958,21 @@ export class GameScene extends Phaser.Scene {
       if (cop.fleeing) continue;
       if (onBridge && (cop.speed ?? 0) < 0
           && Math.abs(playerLane - (cop.laneOffset ?? 0)) > BRIDGE_OPPDIR_GAP) continue;
-      // Same dual gate as the traffic loop above.
+      // Same dual gate as the traffic loop above — with one exception.
       const relZcam = cop.position - p.position;
+      const relCar  = cop.position - (p.position + PLAYER_VIRTUAL_Z);
       const proj    = relZcam > 0
         ? this.road.getVehicleProjection(relZcam, cop.laneOffset)
         : null;
-      const screenHit = proj ? classifyHit(proj) : null;
+      // SCREEN-space overlap only counts for a cop that is AHEAD of the player's
+      // car.  Behind it, overlap is a projection artefact, not a collision: the
+      // camera sits PLAYER_VIRTUAL_Z back, so a cruiser on your tail draws LOWER
+      // and WIDER than your sprite and its rect crosses your trapezoid while it
+      // is still a full car-length off your bumper.  With the standoff moved
+      // into view (2026-07-31) that meant a cop holding station rear-ended you
+      // EVERY FRAME — five rams and a bust inside two seconds, with nothing
+      // visibly touching the truck.  Behind the car, world distance rules.
+      const screenHit = (proj && relCar >= 0) ? classifyHit(proj) : null;
       const worldHit  = aabbHit(cop.position, cop.laneOffset, cop.speed);
       if (!worldHit && !screenHit) continue;
       const hit = screenHit || labelFromAABB(cop.position, cop.laneOffset);
@@ -9364,6 +9406,16 @@ export class GameScene extends Phaser.Scene {
     const vices = this.vices;
     const isCollision = source && source !== 'offroad_bleed';
 
+    // Backup call (chase-realism pass): crashing into a CIVILIAN car while a
+    // pursuer has eyes on you is an erratic act — the unit radios it in
+    // (+1★, capped at 3★; CopSystem gates witness range + cooldown).  Only
+    // the four civilian collision sources — cop_* hits carry their own heat
+    // at their call sites, and scenery/rail scrapes don't read as erratic.
+    if (source === 'head_on' || source === 'traffic'
+        || source === 'sideswipe' || source === 'corner') {
+      this.cops?.reportErraticCollision?.();
+    }
+
     // Daily objective: classify the damage source for no_barrier_scrape.
     // Off-road = any shoulder/dirt bleed; barrier = a struck pole / fence /
     // tree / scenery / bridge-or-tunnel rail.  Car/cop hits are neither.
@@ -9915,8 +9967,25 @@ export class GameScene extends Phaser.Scene {
    *  @returns {number} 0-1 alpha multiplier */
   _rearCopForwardFade(cop) {
     if (cop.kind !== 'rear' || cop.parked || cop.fleeing) return 1;
-    const gone = PLAYER_VIRTUAL_Z + 200;    // ~3 ft ahead of the car — fully hidden
-    const full = PLAYER_VIRTUAL_Z + 700;    // ~11 ft ahead — fully drawn
+    // Measured against the live projection (owner 2026-07-31, playerSprite
+    // y=331 w=78 on a 450-tall screen):
+    //   relCam 1200 (the 30 ft standoff) → no projection at all; mirror-only
+    //                                       is FORCED there, not a choice.
+    //   relCam 1800 → sy 381, sw 118  (below the player, 1.5x — reads as
+    //                                  looming under you)
+    //   relCam 2500 → sy 333, sw  85  (player's own line, 1.1x)
+    //   relCam 3000 (CONTACT) → sy 314, sw 70 — ABOVE the player and NARROWER,
+    //                                  i.e. exactly like a car on your bumper.
+    // The first cut of this faded out below 3200, which killed precisely the
+    // frames where a lunge lands — the owner got rammed by an invisible car.
+    // The band now sits at the bottom of the projectable range instead: a
+    // cruiser rises into view as it commits, is solid through the strike, and
+    // drops back out of frame when it returns to station.
+    // Station is now camera-rel 2100 (TAILGATE_GAP 900), so the band sits
+    // BELOW that: a holding cop is solid, and only a cop that has genuinely
+    // lost ground fades out and hands over to the mirror.
+    const gone = 1500;   // under here there's no projection to draw anyway
+    const full = 1900;   // solid from here up — station (2100) is always solid
     return Math.max(0, Math.min(1, (cop.relativePos - gone) / (full - gone)));
   }
 
@@ -11478,6 +11547,20 @@ export class GameScene extends Phaser.Scene {
       // Fireworks show — bottle rockets up from the car, staggered radial
       // bursts, crackle rings, screen flash + shake on the big boom.
       if (base === 'fireworks') this._startFireworksShow();
+      // Chopper down — CopSystem grounded the 5★ helicopter with this
+      // barrage; detonate at the overlay's current on-screen position
+      // (same sway/bob math as the HUD draw) so the kill reads.
+      if (base === 'fireworks' && this.cops._heliShotDown) {
+        this.cops._heliShotDown = false;
+        const phase = this.cops.helicopterPhase ?? 0;
+        const hx = SCREEN_W / 2 + Math.sin(phase * 2.4) * 60;
+        const hy = 96 + Math.sin(phase * 1.6) * 6;
+        this.time.delayedCall(900, () => {
+          this._spawnExplosion(hx, hy, 90);
+          this._showPopup('🚁 CHOPPER DOWN!', '#FFC24D');
+          this.effects.triggerShake(220, 0.01);
+        });
+      }
       // Fireworks WIPE — queue every deferred victim (cops, parked traps,
       // civilian traffic) for a staggered detonation so the explosions read
       // as the barrage raining down, not one simultaneous pop.  First boom
@@ -12224,6 +12307,8 @@ export class GameScene extends Phaser.Scene {
       this.skyGfx,
       this.groundPlane,
       this.cityBackdropGfx,
+      this.roadBaseGfx,
+      this.roadPlane,
     );
 
     this._renderBiomeBackdrop();    // biome parallax bands at the horizon
@@ -13558,10 +13643,15 @@ export class GameScene extends Phaser.Scene {
     const tw = src?.width || targetW;
     const th = src?.height || fallbackH;
     const ratio = tw > 0 ? th / tw : fallbackH / targetW;
-    // Every vehicle drives at the SAME on-road WIDTH as the default car (owner
-    // 2026-07-19). The art is now cropped tight — no transparent margins — so a
-    // plain frame-width pin gives equal VISIBLE widths; height follows aspect.
-    this.playerSprite.setDisplaySize(targetW, targetW * ratio);
+    // Every vehicle drives at ~the SAME on-road width (owner 2026-07-19),
+    // refined 2026-08-04 to ±2 px of personality: tall/boxy art (the lifted
+    // mud truck, aspect ≥0.86) gets +2, low sleek art (≤0.72) −2, so a big
+    // truck no longer renders at exactly compact-sedan width while the
+    // equal-width fairness stays within a couple of pixels (the hitbox reads
+    // displayWidth, so the swing is ±0.8 px of half-width — negligible).
+    // Height ALWAYS follows the art's own aspect — nothing is flattened.
+    const w = targetW + (ratio >= 0.86 ? 2 : ratio <= 0.72 ? -2 : 0);
+    this.playerSprite.setDisplaySize(w, w * ratio);
   }
 
   /** Paint the player's license-plate handle on the back bumper of the
@@ -13911,6 +14001,38 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Near-field synthetic projection (owner 2026-08-03, "cops sit on the
+   *  player").  getVehicleProjection stops returning sane positions below
+   *  ~FLEE_EXIT_HOLD_REL (4400) — and a pursuit cop lives at 2100-3000, so
+   *  it rendered at the player's own screen height, beside the car, instead
+   *  of bigger and lower (nearer the camera).  Given a VALID projection at
+   *  `holdRel` (the floor), extrapolate to the cop's true depth `nearRel`
+   *  with real perspective:
+   *    • width scales 1/r  (mag = holdRel / r)
+   *    • lateral offset from road centre scales with mag
+   *    • seat-Y follows sy(r) = b + C/r, fitted through the floor projection
+   *      and the player's own seat at PLAYER_VIRTUAL_Z — two known-good
+   *      anchors on the actual road surface this frame.
+   *  Floor of 1200 on r: below that the cruiser is falling past the camera
+   *  and _rearCopForwardFade has already faded it out. */
+  _nearSynthProj(proj, holdRel, nearRel) {
+    const r   = Math.max(nearRel, 1200);
+    const mag = holdRel / r;
+    const cx  = this.road.getVehicleProjection(holdRel, 0);
+    const py  = this.playerSprite?.y;
+    let sy = proj.sy;
+    if (py != null && py > proj.sy) {
+      const C = (py - proj.sy) / (1 / PLAYER_VIRTUAL_Z - 1 / holdRel);
+      sy = proj.sy + C * (1 / r - 1 / holdRel);
+    }
+    return {
+      ...proj,
+      sx: cx ? cx.sx + (proj.sx - cx.sx) * mag : proj.sx,
+      sy,
+      sw: proj.sw * mag,
+    };
+  }
+
   _renderVehicles() {
     const p = this.player;
     // Shared render-camera position — cockpit shifts the eye 3000 units
@@ -13990,7 +14112,7 @@ export class GameScene extends Phaser.Scene {
     // fade thin together instead of only this vehicle pass.)
     const _fogP = Weather.fogParams((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
     const nearCull = cockpit ? 100 : 300;
-    const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1, exitT = 0, spikeFrame = null) => {
+    const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1, exitT = 0, spikeFrame = null, nearSynthRel = null) => {
       if (relZ < nearCull || relZ > 76000 || alphaMul <= 0.01) return;
       // alphaMul folds a per-vehicle fade (e.g. a smoked cop's fleeFade)
       // into the same factor as the fog dissolve, so sprite + shadow +
@@ -14008,6 +14130,10 @@ export class GameScene extends Phaser.Scene {
       // collision now both use the real laneOffset.
       let proj = this.road.getVehicleProjection(relZ, laneOffset);
       if (!proj || proj.sw < 2) return;
+      // Pursuit cop nearer than the projection floor — the caller clamped
+      // relZ at the floor; extrapolate down to the cruiser's true depth so
+      // it seats bigger + lower instead of beside the player (see helper).
+      if (nearSynthRel != null) proj = this._nearSynthProj(proj, relZ, nearSynthRel);
       // Yaw-spike frames override the texture entirely.  They use a padded
       // framing convention (car centred on its footprint inside a fixed
       // world-width canvas) rather than the fit-to-frame convention of the
@@ -14170,6 +14296,16 @@ export class GameScene extends Phaser.Scene {
       let depth = (cameraInTunnel && inTunnel)
         ? 9.83
         : (inTunnel ? Math.min(baseDepth, 9.80) : baseDepth);
+      // COP-OVER-PLAYER exception (owner 2026-08-03): a pursuit cop whose
+      // WORLD-Z is behind the player's car sits between the camera and the
+      // car — real perspective says it overlaps the player from below, and
+      // the owner chose that over the no-crossover rule (cops only; civilian
+      // traffic ahead still paints under 9.95).  World-z test, not screen-y —
+      // the screen-y crossover was removed for misfiring on tailgated cars.
+      // 9.96→9.98 nearer = higher, always under the near light bar (9.985).
+      if (nearSynthRel != null && nearSynthRel < PLAYER_VIRTUAL_Z) {
+        depth = 9.96 + (PLAYER_VIRTUAL_Z - nearSynthRel) / PLAYER_VIRTUAL_Z * 0.02;
+      }
       // NO player-relative crossover (owner 2026-07-22): this render pass
       // culls everything behind the player (relZ < nearCull), so every car
       // drawn here is AHEAD in world space and must paint UNDER the player
@@ -14191,25 +14327,6 @@ export class GameScene extends Phaser.Scene {
         .setDepth(depth)
         .setAlpha(_fa)
         .setVisible(true);
-
-      // ── TEMP tailgate probe (remove after diagnosis) ────────────────────
-      // Auto-fires for any NPC that both overlaps the player horizontally AND
-      // is within ~120px of its bumper — the close/tailgate case that every
-      // earlier capture missed.  Shows the real depths, display-list indices,
-      // the pending-sort flag, and which one the LIST says is on top.  If the
-      // player's index is higher yet the NPC still paints over it on screen,
-      // it's a camera/render-pass issue, not a depth-sort one.
-      if (this.playerSprite
-          && Math.abs(proj.sx - this.playerSprite.x) < (proj.sw + this.playerSprite.displayWidth) * 0.5
-          && Math.abs(proj.sy - this.playerSprite.y) < 120) {
-        const dl = this.children ?? this.sys.displayList;
-        const nIdx = dl.getIndex(s), pIdx = dl.getIndex(this.playerSprite);
-        console.log('[depthdbg2]',
-          'NPC', useTex, 'depth', s.depth.toFixed(3), 'idx', nIdx, 'footY', proj.sy.toFixed(0),
-          '|| PLAYER depth', this.playerSprite.depth.toFixed(3), 'idx', pIdx, 'footY', this.playerSprite.y.toFixed(0),
-          '|| sortFlag', dl.sortChildrenFlag,
-          '|| listSaysOnTop', nIdx > pIdx ? 'NPC' : 'PLAYER');
-      }
 
       // Per-slot masked headlight Graphics — clear it for THIS frame.
       // (Same-direction traffic gets beams drawn here; oncoming /
@@ -14341,6 +14458,11 @@ export class GameScene extends Phaser.Scene {
       const facing =
         cop.kind === 'oncoming'  ? 'front' :
         cop.kind === 'barricade' ? 'front' :
+        // Rolling-coal spin-out (owner 2026-08-04): flash back↔front while
+        // the blinded cruiser recedes so it reads as spinning out of
+        // control — same trick the crashed-traffic wrecks use, on a timer
+        // (~2.8 rev/s) instead of a crash angle.
+        cop.coalFlee             ? (Math.floor((this.gameTime ?? 0) / 0.18) % 2 ? 'front' : 'back') :
         (cop.speed ?? 0) < 0     ? 'front' :
                                    'back';
       const texKey = this._carTexKey(cop.colorSet ?? 'police', facing);
@@ -14354,17 +14476,35 @@ export class GameScene extends Phaser.Scene {
       // fleeExit — the cruiser grows to near-field size, sinks off the
       // bottom of the screen and only THEN fades out (alpha hits 0 at exit
       // complete, never a mid-screen blink-out).
-      // ROLLING COAL (owner 2026-07-17): drive the bottom-edge sink from the
-      // cop's OWN relativePos, clamped at the real projection floor (~1500) —
-      // NOT the far 4400 hold, which teleports a close cop forward (jump/shrink)
-      // and leaves it to vanish. While above the floor it draws naturally and
-      // recedes DOWN; at the floor it holds and sinks off the bottom edge.
-      let exitT, drawRel;
+      // NEAR-FIELD SYNTH (owner 2026-08-03): a same-direction pursuer under
+      // the projection floor (station 2100, ram contact →3000 — ALL of it is
+      // below 4400) used to project at the player's own screen height,
+      // beside the car — "the cop sits on me".  Clamp the projection at the
+      // floor and let place() extrapolate the true seat: bigger + lower as
+      // it closes, tucking in behind the bumper.  Rear pursuit only; parked
+      // troopers keep their owned placement.
+      //
+      // FLEE CONTINUITY (owner 2026-08-03, "cop jumps on the player's car
+      // when coal fires"): every flee path keeps the SAME synthetic seat —
+      // flipping to the raw below-floor projection on the frame a weapon
+      // landed teleported the cruiser from its station seat onto the player.
+      // No sudden movement on deploy: the cop recedes/sinks from exactly
+      // where it stood.
+      let exitT, drawRel, nearSynthRel = null;
+      const _rearSynthOK = cop.kind === 'rear' && !cop.parked;
       if (cop.coalFlee) {
-        const COAL_FLOOR = 1500;
+        // ROLLING COAL (owner 2026-07-17): drive the bottom-edge sink from
+        // the cop's OWN relativePos — while above the synth floor it holds
+        // the extrapolated seat and recedes DOWN; at the floor it sinks off
+        // the bottom edge.  Floor 1200 = the synth helper's own clamp.
+        const COAL_FLOOR = 1200;
         exitT   = cop.relativePos >= COAL_FLOOR ? 0
                 : Math.min(1, (COAL_FLOOR - cop.relativePos) / 2600);
         drawRel = Math.max(cop.relativePos, COAL_FLOOR);
+        if (_rearSynthOK && drawRel < FLEE_EXIT_HOLD_REL) {
+          nearSynthRel = drawRel;
+          drawRel      = FLEE_EXIT_HOLD_REL;
+        }
       } else if (cop.donutFlee) {
         // Donut flee (owner 2026-07-21): keep the cruiser's on-screen SIZE fixed
         // and slide it straight DOWN off the bottom — no perspective shrink.
@@ -14373,14 +14513,22 @@ export class GameScene extends Phaser.Scene {
         // despawn/cull, so there's no mid-screen pop).
         exitT   = cop.fleeExit ?? 0;
         drawRel = cop.donutHoldRel ?? FLEE_EXIT_HOLD_REL;
+        if (_rearSynthOK && drawRel < FLEE_EXIT_HOLD_REL) {
+          nearSynthRel = drawRel;          // fixed seat — matches the drop frame
+          drawRel      = FLEE_EXIT_HOLD_REL;
+        }
       } else {
         exitT   = cop.fleeing ? (cop.fleeExit ?? 0) : 0;
         drawRel = exitT > 0 ? Math.max(cop.relativePos, FLEE_EXIT_HOLD_REL) : cop.relativePos;
+        if (_rearSynthOK && cop.relativePos < FLEE_EXIT_HOLD_REL) {
+          nearSynthRel = cop.relativePos;
+          drawRel      = FLEE_EXIT_HOLD_REL;
+        }
       }
       const copFa   = (exitT > 0
         ? Math.max(0, Math.min(1, (1 - exitT) / 0.3))   // fade only over the exit's last stretch
         : (cop.fleeFade ?? 1)) * this._rearCopForwardFade(cop);
-      place(drawRel, cop.laneOffset, 0xFFFFFF, COP_VISUAL_SCALE, 0, texKey, true, undefined, 'cop', cop.colorSet ?? 'police', copFa, exitT);
+      place(drawRel, cop.laneOffset, 0xFFFFFF, COP_VISUAL_SCALE, 0, texKey, true, undefined, 'cop', cop.colorSet ?? 'police', copFa, exitT, null, nearSynthRel);
     }
 
     // Player tire shadow — anchored to sprite.y (the actual on-screen
@@ -14458,6 +14606,8 @@ export class GameScene extends Phaser.Scene {
     // Cop light bars + night headlights / tail-lights (depth 9.75).
     const g = this._copLightGfx;
     g.clear();
+    const gNear = this._copLightNearGfx;   // above near cop bodies (9.985)
+    gNear?.clear();
 
     // ── Night headlights / tail-lights for ALL traffic ───────────────
     // Only visible from late dusk on (nightAmt > 0).  Oncoming cars get
@@ -14509,13 +14659,37 @@ export class GameScene extends Phaser.Scene {
       // downward screen shift) so a smoked cruiser's light bar stays glued
       // to the car as it sinks off the bottom of the screen.
       const _lbExit = cop.fleeing ? (cop.fleeExit ?? 0) : 0;
-      const _lbRel  = _lbExit > 0 ? Math.max(cop.relativePos, FLEE_EXIT_HOLD_REL) : cop.relativePos;
+      // Near-field synth — mirror the BODY's clamped-floor + extrapolated
+      // seat (see the cop render loop) so the bar stays glued to the roof of
+      // a cruiser on the player's bumper instead of using the broken
+      // below-floor projection.  Includes every FLEE path (flee continuity,
+      // owner 2026-08-03) so the bar doesn't jump the frame a weapon lands.
+      let _lbRel, _lbSynth = null;
+      const _lbSynthOK = cop.kind === 'rear' && !cop.parked;
+      if (cop.coalFlee) {
+        _lbRel = Math.max(cop.relativePos, 1200);
+      } else if (cop.donutFlee) {
+        _lbRel = cop.donutHoldRel ?? FLEE_EXIT_HOLD_REL;
+      } else {
+        _lbRel = _lbExit > 0 ? Math.max(cop.relativePos, FLEE_EXIT_HOLD_REL) : cop.relativePos;
+      }
+      if (_lbSynthOK && _lbRel < FLEE_EXIT_HOLD_REL) {
+        _lbSynth = _lbRel;
+        _lbRel   = FLEE_EXIT_HOLD_REL;
+      }
       let proj = this.road.getVehicleProjection(_lbRel, cop.laneOffset);
       if (!proj || proj.sw < 6) continue;
+      if (_lbSynth != null) proj = this._nearSynthProj(proj, FLEE_EXIT_HOLD_REL, _lbSynth);
       if (_lbExit > 0) {
         const sink = Math.pow(Math.min(1, _lbExit), 1.15);
         proj = { ...proj, sy: proj.sy + sink * (SCREEN_H + proj.sw * 1.2 - proj.sy) };
       }
+      // Bars for a cop drawn OVER the player (world-z behind the car) go to
+      // the above-player layer; everything else keeps the 9.75 layer.  Same
+      // test the body's depth override uses (on _lbSynth, matching the
+      // body's nearSynthRel), so bar and body always share a side of the
+      // player — a 9.75 bar under a 9.97 body would vanish behind it.
+      const bar = (_lbSynth != null && _lbSynth < PLAYER_VIRTUAL_Z && gNear) ? gNear : g;
       // Derived from the same scale as the cruiser BODY (see the cop render
       // loop) so the bar always tracks the car it sits on.
       // Light bar fades with the fleeing cruiser body — no lingering bar
@@ -14531,6 +14705,9 @@ export class GameScene extends Phaser.Scene {
       const facing =
         cop.kind === 'oncoming'  ? 'front' :
         cop.kind === 'barricade' ? 'front' :
+        // Match the body's rolling-coal spin-out flash so the bar sits on
+        // whichever face is currently showing.
+        cop.coalFlee             ? (Math.floor((this.gameTime ?? 0) / 0.18) % 2 ? 'front' : 'back') :
         (cop.speed ?? 0) < 0     ? 'front' : 'back';
       const texKey = this._carTexKey(cop.colorSet ?? 'police', facing);
       const tex = this.textures.get(texKey)?.source?.[0];
@@ -14550,22 +14727,22 @@ export class GameScene extends Phaser.Scene {
         // CB: red half → amber (red↔dark reads as near-black on/off for
         // protan/deutan), blue half unchanged, + a white center that blinks
         // with the bar so "active chase" reads by shape + blink, not hue.
-        g.fillStyle(cop.flash ? 0xFFB000 : 0x3A2600, _lbFa * 0.86);
-        g.fillEllipse(x + halfDx, y, glowW, glowH);
-        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
-        g.fillEllipse(x - halfDx, y, glowW, glowH);
+        bar.fillStyle(cop.flash ? 0xFFB000 : 0x3A2600, _lbFa * 0.86);
+        bar.fillEllipse(x + halfDx, y, glowW, glowH);
+        bar.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
+        bar.fillEllipse(x - halfDx, y, glowW, glowH);
         if (cop.flash) {
-          g.fillStyle(0xFFFFFF, _lbFa * 0.88);
-          g.fillRect(x - bodyW * 0.032, y - lensH, bodyW * 0.064, lensH * 2);
+          bar.fillStyle(0xFFFFFF, _lbFa * 0.88);
+          bar.fillRect(x - bodyW * 0.032, y - lensH, bodyW * 0.064, lensH * 2);
         }
       } else {
         // Artwork is blue on screen-left and red on screen-right in both
         // straight views; pulse each lens in place instead of repainting a
         // generic black bar over the car.
-        g.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
-        g.fillEllipse(x - halfDx, y, glowW, glowH);
-        g.fillStyle(cop.flash ? 0xFF3333 : 0x440000, _lbFa * 0.86);
-        g.fillEllipse(x + halfDx, y, glowW, glowH);
+        bar.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
+        bar.fillEllipse(x - halfDx, y, glowW, glowH);
+        bar.fillStyle(cop.flash ? 0xFF3333 : 0x440000, _lbFa * 0.86);
+        bar.fillEllipse(x + halfDx, y, glowW, glowH);
       }
     }
   }
@@ -15932,6 +16109,12 @@ export class GameScene extends Phaser.Scene {
     let ghostUsed = 0;
     // Reset halo gfx — repainted per-frame for ketamine + fentanyl pickups.
     this._viceHaloGfx?.clear();
+    // Halo layer follows the pickups through the in-tunnel lift (see the
+    // depth note below): 9.825 sits above the wall shell (9.82) but below
+    // the lifted pickup sprites (9.83), preserving glow-behind-pickup.
+    // Whole-layer toggle is safe — with the camera in a tunnel, every
+    // visible pickup is in the tunnel too.
+    this._viceHaloGfx?.setDepth(this.road?._cameraInTunnel ? 9.825 : 6.9);
 
     // Walk visible segments far→near. Render BOTH vice pickups and F12
     // weapon tokens through this pool — same depth, same sizing rules.
@@ -15969,6 +16152,16 @@ export class GameScene extends Phaser.Scene {
         const relZ = n * SEG_LENGTH + SEG_LENGTH / 2;
         const proj = this.road.getVehicleProjection(relZ, sp.offset);
         if (!proj || proj.sw < 4) continue;
+        // In-tunnel (owner 2026-08-03): lifted pickups (see the depth note
+        // below) must still respect the wall as an OCCLUDER — around a
+        // curving tunnel a pickup behind the nearer concrete side wall was
+        // shining through it.  Same test the car sprites use: the wall
+        // hides what's genuinely behind it, and nothing else.
+        const _pkInTunnel = !!seg.tunnel && !!this.road?._cameraInTunnel;
+        if (_pkInTunnel
+            && this.road.isTunnelVehicleOccluded?.(relZ, proj.sx, proj.sy - proj.sw * 0.4)) {
+          continue;
+        }
         if (used >= pool.length) break;
         const s = pool[used++];
         if (s.texture.key !== texKey) s.setTexture(texKey);
@@ -15992,7 +16185,14 @@ export class GameScene extends Phaser.Scene {
         // Unified depth scheme — pickups share the same z-banded depth as
         // buildings/cars, so a car between you and a vice pickup occludes it.
         // (Reuses relZ from above — was computed twice unnecessarily.)
-        const depth = 9.5 - Math.max(0, Math.min(1, relZ / 76000)) * 2.5;
+        // IN-TUNNEL LIFT (owner 2026-08-03): the tunnel wall shell paints at
+        // 9.82, so an on-road pickup (max 9.5) was swallowed by the wall the
+        // moment you drove in.  Same exemption cars already have — inside the
+        // tunnel, on-road objects paint above the shell (9.83); the walls
+        // only occlude what's genuinely OUTSIDE them (occlusion cull above).
+        const depth = _pkInTunnel
+          ? 9.83
+          : 9.5 - Math.max(0, Math.min(1, relZ / 76000)) * 2.5;
         // Bob + tilt — pickups gently hover and rock so they read as game
         // objects, never as static traffic.  Per-sprite phase (from lootSeed
         // / lane offset) desyncs the herd so they don't bob in lockstep.
@@ -17894,42 +18094,163 @@ export class GameScene extends Phaser.Scene {
     this._paused = false;   // resume the run
   }
 
-  /** Out-of-gas → AAA tow.  Charges 50% of player's cash + delivers
-   *  to the PREVIOUS rest stop (so they don't accidentally finish the
-   *  game on a freebie).  If player has $0, falls back to repo logic
-   *  (loses non-Beater vehicle, free tow back in the Beater). */
-  _runTow() {
-    const cash    = this.score ?? 0;
-    const aaaCost = this._cashLoss(Math.floor(cash * 0.50));
+  /** The rest stop the tow truck would drag you back to — the last one whose
+   *  mileage is behind the player (never forward, so a tow can't advance the
+   *  run). */
+  _prevRestStop() {
     const curMile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
-    // Previous rest stop = the last one whose mileage <= curMile.
     let prevStop = null;
     for (const rs of REST_STOPS) {
       if (rs.mileage <= curMile) prevStop = rs;
       else break;
     }
-    if (cash > 0) {
-      this.score -= aaaCost;
-      this._showPopup?.(`🚚 AAA — $${aaaCost.toLocaleString()}`, '#FFCC44');
-    } else if (this.player.vehicleId !== 'beater') {
-      // No cash AND non-Beater → repo.
-      this._showPopup?.(`💀 REPO'D — back to the Beater`, '#FF4444');
-      const owned = (this.registry.get('ownedVehicles') ?? ['beater'])
-        .filter(v => v !== this.player.vehicleId);
-      if (!owned.includes('beater')) owned.unshift('beater');
-      this.registry.set('ownedVehicles', owned);
-      this.registry.set('vehicleId',     'beater');
-      this.player.vehicleId = 'beater';
-    } else {
-      this._showPopup?.(`🚚 FREE TOW (broke + Beater)`, '#FFCC44');
-    }
+    return prevStop;
+  }
+
+  /** Out-of-gas → flat-fee tow back to the previous rest stop.  Charged and
+   *  driven only by the OUT OF GAS card's TOW button (owner 2026-08-04); the
+   *  old rule — 50% of cash, repo'ing a non-Beater when broke, free tow for a
+   *  broke Beater — is gone, replaced by that card's three choices. */
+  _runTow() {
+    const prevStop = this._prevRestStop();
+    this.score = Math.max(0, this.score - this._cashLoss(TOW_COST_USD));
+    this._showPopup?.(`🚚 TOWED — $${TOW_COST_USD.toLocaleString()}`, '#FFCC44');
     const _veh = VEHICLES[this.player.vehicleId];
     this.player.gasMaxMi = _veh.rangeMi;
     this.player.gasMi    = _veh.rangeMi;
     if (prevStop) {
       this.player.position = prevStop.t * (ROUTE_SEGS * SEG_LENGTH);
+      this.lastSegIdx      = Math.floor(this.player.position / SEG_LENGTH);
     }
+    this.player.speed   = 0;
     this._strandedShown = false;
+  }
+
+  /**
+   * OUT OF GAS card — the ending plate for a run that ran dry (owner
+   * 2026-08-04).  Unlike BUSTED / CRASHED this is NOT a run-ender: it's a
+   * decision point on the same photographic plate, with the player's genre car
+   * parked on the shoulder.
+   *
+   *   TOW ($1,500)  → back to the last rest stop, tank full, run continues
+   *   START OVER    → fresh run from mile 0, same vehicle
+   *   LOAD SAVE     → newest save (local or server), via the title-screen path
+   *
+   * Broke players can't tow — the button greys out with the shortfall shown,
+   * which is the whole fail state: no cash on an empty tank means the run is
+   * over one way or another.
+   */
+  _showOutOfGasCard() {
+    if (this._outOfGasCard) return;
+    this._outOfGasCard = true;
+    this._modalOpen    = true;
+    this._paused       = true;
+    this.audio?.setPaused?.(true);
+
+    const D    = 900;                 // above every HUD element
+    const spec = ENDING_PLATES.out_of_gas;
+    const objs = [];
+    const add  = (...o) => { objs.push(...o); this._addHudObjs(...o); return o[0]; };
+
+    // Input blocker first, so a stray tap can't reach the road behind the card.
+    const blocker = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, 4000, SCREEN_H + 800, 0x03050F, 1)
+      .setDepth(D).setInteractive();
+    blocker.on('pointerdown', (p) => { p.event?.stopPropagation?.(); });
+    add(blocker);
+
+    const genre = activeEndingGenre(this);
+    loadEndingArt(this, spec, genre, (plateReady, carKey) => {
+      if (!this._outOfGasCard) return;             // dismissed while loading
+      if (plateReady) {
+        add(this.add.image(SCREEN_W / 2, SCREEN_H / 2, spec.texture)
+          .setOrigin(0.5).setDisplaySize(SCREEN_W, SCREEN_H).setDepth(D + 1));
+        const car = placeEndingCar(this, carKey, spec.car, D + 2);
+        if (car) add(car);
+      }
+    });
+
+    // Scrim + copy sit above the plate whether or not the art arrives.
+    const scrim = this.add.graphics().setDepth(D + 3);
+    scrim.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.9, 0.9);
+    scrim.fillRect(0, 285, SCREEN_W, SCREEN_H - 285);
+    add(scrim);
+
+    add(this.add.text(SCREEN_W / 2, 22, 'OUT OF GAS', {
+      fontSize: '44px', fontFamily: IMPACT, color: '#FFCC44',
+      stroke: '#000', strokeThickness: 6,
+    }).setOrigin(0.5, 0).setDepth(D + 4));
+
+    const stop     = this._prevRestStop();
+    const stopName = stop?.name ?? 'the last stop';
+    add(this.add.text(SCREEN_W / 2, 74, `Dry on the shoulder. Nearest help is back at ${stopName}.`, {
+      fontSize: '14px', fontFamily: 'Arial', color: '#DDDDDD',
+      stroke: '#000', strokeThickness: 3, align: 'center',
+      wordWrap: { width: SCREEN_W * 0.8 },
+    }).setOrigin(0.5, 0).setDepth(D + 4));
+
+    const cash  = Math.max(0, Math.round(this.score ?? 0));
+    const short = Math.max(0, TOW_COST_USD - cash);
+    const canTow = short === 0;
+    add(this.add.text(SCREEN_W / 2, 312, `WALLET  $${cash.toLocaleString()}`, {
+      fontSize: '22px', fontFamily: IMPACT, color: canTow ? '#FFCC44' : '#FF7766',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5, 0).setDepth(D + 4));
+
+    const close = () => {
+      this._outOfGasCard = false;
+      this._modalOpen    = false;
+      for (const o of objs) { try { o.destroy(); } catch (_) {} }
+      objs.length = 0;
+    };
+
+    const btnY = SCREEN_H - 42, btnH = 44;
+    const mkBtn = (cx, w, label, neon, enabled, handler) => {
+      const g = this.add.graphics().setDepth(D + 4);
+      const draw = (hover = false) => {
+        g.clear();
+        g.fillStyle(0x050812, enabled ? (hover ? 1 : 0.92) : 0.6);
+        g.fillRoundedRect(cx - w / 2, btnY - btnH / 2, w, btnH, 6);
+        g.lineStyle(hover && enabled ? 3 : 2, enabled ? neon : 0x555F70, 1);
+        g.strokeRoundedRect(cx - w / 2, btnY - btnH / 2, w, btnH, 6);
+      };
+      draw(false);
+      g.setInteractive(new Phaser.Geom.Rectangle(cx - w / 2, btnY - btnH / 2, w, btnH),
+                       Phaser.Geom.Rectangle.Contains);
+      if (enabled) {
+        g.on('pointerover', () => draw(true));
+        g.on('pointerout',  () => draw(false));
+        g.on('pointerdown', (p) => { p.event?.stopPropagation?.(); handler(); });
+      } else {
+        g.on('pointerdown', (p) => { p.event?.stopPropagation?.(); });
+      }
+      const t = this.add.text(cx, btnY, label, {
+        fontSize: '15px', fontFamily: IMPACT,
+        color: enabled ? '#F4F7FF' : '#8A93A5', align: 'center',
+      }).setOrigin(0.5).setDepth(D + 5);
+      add(g, t);
+    };
+
+    mkBtn(SCREEN_W / 2 - 250, 220,
+          canTow ? `TOW — $${TOW_COST_USD.toLocaleString()}` : `NEED $${short.toLocaleString()} MORE`,
+          0xFFCC44, canTow, () => {
+            close();
+            this._runTow();
+            this._paused = false;
+            this.audio?.setPaused?.(false);
+          });
+    mkBtn(SCREEN_W / 2, 220, 'START OVER', 0xFF39AF, true, () => {
+      close();
+      // Deliberate restart — drop the live-run autosave so the fresh run
+      // doesn't immediately auto-resume the dead one (mirrors __startOver).
+      try { this.registry.get('save')?.set?.('liveRun', null); } catch (_) {}
+      this.audio?.setPaused?.(false);
+      this.scene.restart();
+    });
+    mkBtn(SCREEN_W / 2 + 250, 220, 'LOAD SAVE', 0x39A8FF, true, () => {
+      close();
+      this.audio?.setPaused?.(false);
+      this._titleLoadSave();
+    });
   }
 
   /** Black-screen ad placeholder for sleep / charging.  Pauses the game
@@ -18403,7 +18724,7 @@ export class GameScene extends Phaser.Scene {
       // Road surface — a single filled strip that follows the curved
       // centerline (left edge near→far, then right edge far→near).  The
       // geometry mask clips any overspill to the glass.
-      mg.fillStyle(_snowy(palette.road2 ?? palette.road1 ?? 0x2A2A2A), 1);
+      mg.fillStyle(_snowy(palette.road ?? 0x2A2A2A), 1);
       {
         const left = [], right = [];
         for (let n = 0; n <= ROAD_SAMPLES; n++) {       // uniform screen samples → smooth
@@ -18422,8 +18743,11 @@ export class GameScene extends Phaser.Scene {
       mg.strokePath();
       // ── Curved road markings — each stripe is a polyline that follows
       // the bent centerline (xRatio in [-1..+1]: -1 = left edge, +1 = right).
-      const yellowCol = 0xFFEE44;
-      const whiteCol  = 0xF6F2DC;
+      // Same weathered paint the forward view uses (Road._drawSegment) — a
+      // fluorescent yellow here against a desaturated centre line ahead was
+      // the mirror disagreeing with the road it reflects.
+      const yellowCol = 0xC9B04A;
+      const whiteCol  = 0xCFCCC2;
       const stripeCurve = (xRatio, color, alpha) => {
         mg.lineStyle(1, color, alpha);
         mg.beginPath();
@@ -18883,7 +19207,11 @@ export class GameScene extends Phaser.Scene {
       : this.cops.getRearCopInfo?.(p.position + PLAYER_VIRTUAL_Z);
     if (this._ctrlEditMode) {
       // Editor: keep the placeholder visible so it can be positioned.
-    } else if (rear?.count) {
+    } else if (rear?.count && rear.nearestRelZ < -1500) {
+      // The -1500 gate (owner 2026-08-03): car-rel -1500 = camera-rel 1500,
+      // where the forward view starts drawing the cruiser.  Once the police
+      // are VISIBLE on the game screen the countdown is redundant — the
+      // chevron only tracks pursuit you can't see yet (mirror / off-screen).
       // World units per foot, derived rather than guessed: the route is
       // ROUTE_SEGS x SEG_LENGTH units over TOTAL_ROUTE_MILES.  The old /10
       // divisor overstated every distance by ~6x.
@@ -19071,19 +19399,33 @@ export class GameScene extends Phaser.Scene {
       : m?.type === 'heat' ? '🔥'
       : m?.type === 'weather' ? (m.terms?.weather_run?.tag === 'wind' ? '🌬' : '🌨')
       : '📦');
+    // CHALLENGE missions have NO destination — targetName/targetMile are
+    // null by construction (_buildFromTemplate) — and this chip assumed a
+    // destination on every tracked mission, crashing on .toUpperCase() the
+    // moment a challenge was the tracked job (owner crash report 2026-08-04,
+    // "TypeError: Cannot read properties of null" in _drawMissionChip).
+    // Null-distance sorts as Infinity so a real destination run always wins
+    // the tracker over a road dare.
+    const _dist = (m) => (m.targetMile ?? Infinity) - odo;
     const tracked = editorPlaceholder ? null : [...active].sort((a, b) =>
-      (urgency(a) - urgency(b)) || ((a.targetMile - odo) - (b.targetMile - odo)))[0];
-    const remaining = tracked ? Math.max(0, tracked.targetMile - odo) : 14;
-    const near = tracked ? remaining <= 1 : false;
+      (urgency(a) - urgency(b)) || (_dist(a) - _dist(b)))[0];
+    const remaining = tracked
+      ? (tracked.targetMile != null ? Math.max(0, tracked.targetMile - odo) : null)
+      : 14;
+    const near = tracked ? (remaining != null && remaining <= 1) : false;
     // One-time approach popup per job.
     if (near && tracked && !this._dropCueShown?.has(tracked.id)) {
       this._dropCueShown?.add(tracked.id);
       this._showPopup?.(`${typeIcon(tracked)} DROP-OFF AHEAD — ${tracked.targetName}`, '#66FF99', 3);
     }
-    // Chip text — decision-relevant info only (Ch. 8).
-    const miTxt = remaining < 10 ? remaining.toFixed(1) : String(Math.round(remaining));
+    // Chip text — decision-relevant info only (Ch. 8).  Challenges show
+    // their name + payout; there is no "N MI" leg to count down.
+    const miTxt = remaining == null ? ''
+      : remaining < 10 ? remaining.toFixed(1) : String(Math.round(remaining));
     const line1 = tracked
-      ? `${typeIcon(tracked)} ${tracked.targetName.toUpperCase()} · ${miTxt} MI · $${tracked.payout.toLocaleString()}`
+      ? (tracked.targetName != null
+          ? `${typeIcon(tracked)} ${tracked.targetName.toUpperCase()} · ${miTxt} MI · $${tracked.payout.toLocaleString()}`
+          : `🎯 ${String(tracked.missionName ?? 'CHALLENGE').toUpperCase()} · $${tracked.payout.toLocaleString()}`)
       : '📦 VANTAGE · 14 MI · $185';   // editor placeholder
     const flags = [];
     if (tracked?.terms?.fragile) {
@@ -22844,11 +23186,15 @@ export class GameScene extends Phaser.Scene {
     this._hasFogLights     = !!getInstalledUpgrade?.(save, vehId, 'foglights');
     this._hasNewHeadlights = !!getInstalledUpgrade?.(save, vehId, 'headlights');
     this._hasNewWindshield = !!getInstalledUpgrade?.(save, vehId, 'windshield');
-    // Fog lights → 50% fog transparency (owner spec), applied CENTRALLY in
-    // Weather so every fog visual thins together: the screen haze
-    // (EffectsSystem), the distance fog (Road.js), and all fogParams sprite
-    // fades.  Physics (grip) reads Weather.intensity directly — unaffected.
-    Weather.setFogClarity?.(this._hasFogLights ? 0.5 : 1);
+    // Fog lights (owner 2026-08-03): the global 50%-thinning is GONE — fog
+    // now sits at full original density with or without the upgrade, for
+    // every consumer (screen haze, Road.js distance fog, fogParams sprite
+    // fades).  What the upgrade buys is the BEAM: EffectsSystem clears the
+    // haze inside a headlight-shaped fan ahead of the car (gated on
+    // _hasFogLights there).  Clarity is still set explicitly to 1 rather
+    // than left alone so a value from a previous run can never leak in.
+    // Physics (grip) reads Weather.intensity directly — unaffected as ever.
+    Weather.setFogClarity?.(1);
     return merged;
   }
 

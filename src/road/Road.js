@@ -1,5 +1,5 @@
 import {
-  SCREEN_W, SCREEN_H, ROAD_WIDTH, SEG_LENGTH, RUMBLE_SEGS, LANE_DASH_LEN, LANE_DASH_GAP,
+  SCREEN_W, SCREEN_H, ROAD_WIDTH, SEG_LENGTH, LANE_DASH_LEN, LANE_DASH_GAP,
   LANES, DRAW_DIST, CAM, FOG_DENSITY, ROUTE_SEGS, TOTAL_ROUTE_MILES,
   PLAYER_VIRTUAL_Z,
 } from '../constants.js';
@@ -12,6 +12,9 @@ import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '
 import { buildRoute } from './RouteData.js';
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
+import {
+  roadDetail, surfaceColor, nightFalloff, wheelPaths, hash1, noise1, smoothstep, WHEEL_HALF,
+} from './RoadMaterial.js';
 
 // H() is no longer a constant — it's the screen-Y of the HORIZON
 // LINE, which CAM.horizonY now controls per camera mode (chase = 225,
@@ -50,6 +53,41 @@ export function snowBlanketAt(mile) {
 /** Miles at/after which lane markings are fully buried. */
 export const SNOW_MARKINGS_GONE = 0.55;
 
+// Both road edges, hoisted so the per-segment edge loops don't allocate an
+// array per side per frame (this runs DRAW_DIST times every frame).
+const EDGE_SIDES = Object.freeze([-1, 1]);
+
+
+// Rumble-groove pitch in world Z units.  Z runs at 60 units per foot (see
+// RoadPlane / GroundPlane), so 60 = the ~12 in spacing of a real milled
+// shoulder rumble strip.  Grooves are placed at absolute multiples of this,
+// NOT per segment — segment-strided grooves are what turn into a barcode.
+const GROOVE_Z = 60;
+
+// Road-paint distance fade, in world units.  Derived from the draw distance so
+// the curve keeps its proportions if DRAW_DIST ever changes.
+//   PAINT_FAR        the full visible road depth (draw cap)
+//   PAINT_BASE_MAX   ceiling of the gentle atmospheric blend that accumulates
+//                    across the near/middle field
+//   PAINT_KNEE       where the terminal fade begins, as a fraction of the
+//                    visible depth — everything past it is the horizon handoff
+const PAINT_FAR      = DRAW_DIST * SEG_LENGTH;
+// 0.25 still washed the paint more than the owner wanted on the long bridge
+// sightlines (2026-08-04) — at 25% blend plus sub-pixel width, mid-deck paint
+// sat right at the edge of legibility.  0.14 keeps a whisper of atmospheric
+// softening while the paint itself stays clearly readable to the knee.
+const PAINT_BASE_MAX = 0.14;
+const PAINT_KNEE     = 0.90;
+
+// Concrete sidewalk slab pitch in world Z units (60 u/ft), i.e. the ~5 ft
+// joint spacing of a real poured walkway.
+const SLAB_Z = 300;
+
+// Nested feather profiles: [half-width multiplier, alpha multiplier].
+// Hoisted so the per-segment wear loops don't allocate every frame.
+const WHEEL_BANDS = Object.freeze([[2.0, 0.34], [1.0, 0.66]]);
+const PATCH_BANDS = Object.freeze([[1.00, 0.30], [0.78, 0.34], [0.52, 0.36]]);
+
 export class Road {
   constructor() {
     this.segments = [];
@@ -74,19 +112,30 @@ export class Road {
     // a scenery structure beyond a hill crest gets its lower half clipped
     // at the crest line instead of floating.  Rebuilt each frame.
     this._crestMinY = new Float32Array(DRAW_DIST + 1);
+    // ── Whole-dash emission ────────────────────────────────────────────
+    // A lane dash spans LANE_DASH_LEN segments.  Drawing one quad per segment
+    // gives each sliver only that segment's screen height, and on a long
+    // sightline (bridge decks, where ~5 segments collapse into a single pixel
+    // row at relZ ~75k) the paint goes sub-pixel VERTICALLY and the dash chain
+    // disappears — while the solid centre line, which paints on every segment
+    // and so accumulates coverage, survives.  That was the "markings stop
+    // part-way up the bridge" report.
+    //
+    // Fix: emit ONE quad spanning the dash's full world length.  The render
+    // loop runs far -> near, so by the time a dash's NEAREST segment is
+    // reached its farthest segment has already been projected; this ring
+    // caches the last few far boundaries so the span can be closed without
+    // re-projecting or restructuring the loop.  Allocation-free.
+    this._dashRingN = 16;
+    this._dashRing  = new Float32Array(this._dashRingN * 4);   // idx, x, y, w
+    this._dashRing.fill(-1);
+    // Per-column top edge of the drawn ROAD (screen-x column → min screenY),
+    // rebuilt each frame after the projection pass and read ONE FRAME STALE
+    // by the city-silhouette painter to clip blocks behind a road that has
+    // risen above the flat horizon line.  Lazily sized in render() (needs
+    // MARGIN, which is frame-local there).
+    this._roadTopCols = null;
     this._drawnByN = new Array(DRAW_DIST);
-    // Pre-allocated polyline points for the shoulder ribbons.  Sized
-    // for the worst case (every boundary visible).  Reused frame-to-
-    // frame by mutating x/y; the polygon's effective length is passed
-    // to fillPoints via a slice (one allocation per side per frame —
-    // unavoidable since fillPoints reads .length).
-    const maxPts = (DRAW_DIST + 1) * 2;
-    this._leftRibbonPts  = new Array(maxPts);
-    this._rightRibbonPts = new Array(maxPts);
-    for (let i = 0; i < maxPts; i++) {
-      this._leftRibbonPts[i]  = { x: 0, y: 0 };
-      this._rightRibbonPts[i] = { x: 0, y: 0 };
-    }
   }
 
   build() {
@@ -112,8 +161,17 @@ export class Road {
    *   projection so it tracks hills and curves.  Omit it and the ground stays
    *   flat-coloured — nothing else changes.
    */
-  render(g, ghostG, playerPos, playerX, palette, effects, propsG, frontG, terrainG, skyG, groundP, cityG) {
+  render(g, ghostG, playerPos, playerX, palette, effects, propsG, frontG, terrainG, skyG, groundP, cityG,
+         roadBaseG, roadP) {
     g.clear();
+    // Flat asphalt base + its projected texture, in the slot between the
+    // ground plane and the road layer.  Omit either and _drawSegment falls
+    // back to painting the base straight onto `g` with no tile — the exact
+    // pre-texture behaviour.
+    this._roadBaseG = roadBaseG ?? null;
+    this._roadP     = roadP ?? null;
+    if (roadBaseG) roadBaseG.clear();
+    if (roadP) roadP.beginFrame(playerPos);
     if (skyG) skyG.clear();
     if (cityG) cityG.clear();
     if (terrainG) terrainG.clear();
@@ -144,6 +202,18 @@ export class Road {
     // Stash so _drawSprites can render NPC cars at their correct depth
     // interleaved with the per-segment building sprites.
     this._playerPos    = playerPos;
+    // Camera on a bridge?  Gates the bridgeFrontGfx routing below: the
+    // depth-4 front overlay exists so the deck+railings occlude the crane
+    // sprites (depth 2) while you're ON the bridge — but during the APPROACH
+    // it also put the far deck's rails above the depth-1.5 road layer, where
+    // the nearer normal road could never paint over them.  On a curved,
+    // climbing entry the white railings showed straight through the roadway
+    // (owner 2026-08-04 screenshot, mile 0.94).  Off-bridge frames draw
+    // bridge geometry into the normal road layer instead, where far→near
+    // painter order occludes it exactly like every other segment.
+    const _camSeg = this.getSegment(playerPos);
+    this._camOnBridge = !!_camSeg?.bridge;
+    this._camOnSpan   = !!(_camSeg?.bridge || _camSeg?.water);
     this._lightFlash   = effects?.lightFlash ?? false;
     // Stash so _drawSprites can route sign frames to the high-depth
     // signGfx overlay (above tunnel walls).
@@ -881,6 +951,33 @@ export class Road {
     // tunnel pieces still draw over this per segment.
     const startSegIdx = Math.floor(playerPos / SEG_LENGTH) % this.segments.length;
     const startSeg = this.segments[startSegIdx];
+    // ── Upcoming tunnel embankment proximity ───────────────────────────
+    // The generic city-skyline silhouette below is a flat, screen-space
+    // backdrop that doesn't track the road's curve or perspective — it
+    // was overlapping the REAL Mt Baker / Mercer Island Lid Tunnel
+    // embankment hill (_drawTunnelFacade further down), which IS curve-
+    // and perspective-correct.  Random skyline building blocks sat
+    // outside the real hill's silhouette and read as buildings floating
+    // above/beside it.  Peeked far enough to cover every distance the
+    // embankment hill can already be visible at (DRAW_DIST + the same
+    // 600-segment EXTRA_PEEK used for the hill's own far-out projection
+    // below), so the generic backdrop switches off exactly when the real
+    // hill can start covering that part of the horizon instead.
+    let _tunnelDistSegs = Infinity;
+    for (let _tn = 0; _tn <= DRAW_DIST + 600; _tn++) {
+      if (this.segments[(startSegIdx + _tn) % this.segments.length]?.tunnel) {
+        _tunnelDistSegs = _tn;
+        break;
+      }
+    }
+    // FADE, not a switch (owner 2026-08-03: "silhouettes are here at 6.78 mi
+    // then disappear at 6.8 — fade them behind the hill instead").  Alpha 1
+    // while the tunnel is still beyond the far peek, easing to 0 across the
+    // outer 600-segment stretch of the approach window — the same span over
+    // which the real embankment hill grows in to own the horizon.  Applied
+    // to the WHOLE silhouette layer (it holds nothing else), so there are no
+    // per-rect alpha seams where adjacent blocks overlap.
+    const _citySilFade = Math.max(0, Math.min(1, (_tunnelDistSegs - DRAW_DIST) / 600));
     // waterLeft joins the gate (owner 2026-07-27): the West Seattle
     // approach (mile 0-1) is elevated, so the void beyond the draw cap is
     // tall — and this region's grass2 is city-pavement GREY, which rendered
@@ -910,6 +1007,21 @@ export class Road {
       // the first dark backing stripe against the sky as a black/blue ruler
       // line, especially on the opening West Seattle descent.
       const waterTop = H();
+      // ── Opaque backstop for the entire below-horizon void ──────────────
+      // The LAND branch (see the else below) lays a fail-safe world fill; this
+      // branch never did.  So wherever the water / port / city bands and the
+      // segment loop failed to meet, the camera's black background showed
+      // straight through as a hard horizontal rule — the "black horizon line".
+      // Measured on the West Seattle Bridge as a 3 px band of pure 0x000000 at
+      // y 247-249, still present with roadGfx, terrainGfx, bridgeFrontGfx and
+      // cityBackdropGfx each hidden in turn, which is what identified it as an
+      // unpainted gap rather than any art colour.
+      //
+      // One opaque fill beneath everything this branch draws makes the gap
+      // structurally impossible.  Haze-toned so that if it ever IS the visible
+      // pixel it reads as atmosphere at the draw cap, not as a shelf.
+      bg.fillStyle(lerpColor(palette.grass2, skyFogMix, 0.5), 1);
+      bg.fillRect(-MARGIN, waterTop, W, SCREEN_H - waterTop + 20 + MARGIN);
       // Bridge segments use a near-black charcoal tone instead of the
       // saturated blue used on plain water crossings (floating bridges,
       // lake spans).  The blue read as "lake under the bridge" and
@@ -1004,8 +1116,30 @@ export class Road {
 
       // Layer 1 — far hills.  Stepped silhouette of varying heights
       // forming a low, rolling ridgeline.  Step width 24 px keeps the
-      // shape readable but not blocky.
-      if (cityGap < 1) {
+      // shape readable but not blocky.  Also FADED OUT as a real tunnel
+      // embankment approaches to own the horizon (see _citySilFade
+      // above) — cityGap only opens a centered hole, which wouldn't
+      // clear the flat-screen-space building blocks the real curved
+      // hill doesn't reach at the edges.
+      this._cityG?.setAlpha(_citySilFade);
+      // Road-top clip (owner 2026-08-03): these blocks paint at depth 6.9,
+      // necessarily ABOVE roadGfx — so wherever the pavement has risen
+      // above the flat horizon line (bridge humps, crests) they stamped
+      // straight over the roadway.  Clip every column's bottom at the
+      // road's top edge (built after last frame's projection pass) so the
+      // city emerges from BEHIND the rising road instead.
+      const _rtCols = this._roadTopCols;
+      const _rtW    = this._roadTopColW || 8;
+      const _rtOff  = this._roadTopOff  || 0;
+      const _roadTopAt = (x) => {
+        if (!_rtCols) return Infinity;
+        const c = Math.round((x + _rtOff) / _rtW);
+        return (c < 0 || c >= _rtCols.length) ? Infinity : _rtCols[c];
+      };
+      const _clipBottom = (x0, x1) => Math.min(
+        horizonY, _roadTopAt(x0), _roadTopAt((x0 + x1) * 0.5), _roadTopAt(x1));
+
+      if (cityGap < 1 && _citySilFade > 0.01) {
         const farStep = 24;
         city.fillStyle(farHillCol, 0.95);
         for (let x = -MARGIN; x < SCREEN_W + MARGIN; x += farStep) {
@@ -1016,7 +1150,8 @@ export class Road {
           const hillTop = horizonY - h * 0.55;
           // Stop at (not one pixel below) the horizon. Adjacent rectangles
           // otherwise shared an opaque bottom row that read as a black line.
-          city.fillRect(x, hillTop, farStep + 1, horizonY - hillTop);
+          const hillBot = _clipBottom(x, x + farStep);
+          if (hillTop < hillBot) city.fillRect(x, hillTop, farStep + 1, hillBot - hillTop);
         }
         // Layer 2 — building blocks (warehouses + downtown skyline).
         // Deterministic per-block: width and height pseudo-randomised by
@@ -1032,16 +1167,23 @@ export class Road {
           const tall = (r3 - Math.floor(r3)) > 0.82;                 // ~18% are skyscrapers
           const realH = tall ? h + 10 + Math.floor((r3 - Math.floor(r3)) * 14) : h;
           if (!inCityGap(bx + w * 0.5)) {
-            city.fillStyle(buildingCol, 1);
+            const blockBot    = _clipBottom(bx, bx + w);
             const buildingTop = horizonY - realH + 6;
-            city.fillRect(bx, buildingTop, w, horizonY - buildingTop);
-            // Sparse warm window dots on tall blocks
-            if (tall && realH > 14) {
-              city.fillStyle(buildingLit, 0.7);
-              const winRows = Math.max(1, Math.floor(realH / 6));
-              for (let row = 0; row < winRows; row++) {
-                if ((blockI + row) % 3 === 0) {
-                  city.fillRect(bx + 2 + (row % 3) * 4, horizonY - realH + 8 + row * 5, 2, 2);
+            if (buildingTop < blockBot) {
+              city.fillStyle(buildingCol, 1);
+              city.fillRect(bx, buildingTop, w, blockBot - buildingTop);
+              // Sparse warm window dots on tall blocks — clipped with the
+              // block so no lit window floats over the pavement.
+              if (tall && realH > 14) {
+                city.fillStyle(buildingLit, 0.7);
+                const winRows = Math.max(1, Math.floor(realH / 6));
+                for (let row = 0; row < winRows; row++) {
+                  if ((blockI + row) % 3 === 0) {
+                    const wy = horizonY - realH + 8 + row * 5;
+                    if (wy + 2 <= blockBot) {
+                      city.fillRect(bx + 2 + (row % 3) * 4, wy, 2, 2);
+                    }
+                  }
                 }
               }
             }
@@ -1565,6 +1707,52 @@ export class Road {
         if ((d?.seg?.gradePct ?? 0) <= CREST_MIN_GRADE) continue;   // descent → not an occluder
         if (s.screenY < _runMinY) _runMinY = s.screenY;
       }
+
+      // ── Per-column ROAD TOP EDGE for the city-silhouette clip ────────
+      // screen-x column → min screenY among visible pavement samples at or
+      // above the horizon band.  The procedural skyline paints at the TOP
+      // of render() — before this frame's samples exist — so it reads this
+      // ONE FRAME STALE; 16 ms of lag is invisible at horizon distance.
+      // Why: the silhouette layer (depth 6.9) necessarily outranks roadGfx
+      // (1.5), so on a bridge hump / crest, where the pavement rises above
+      // the flat horizon line, the blocks stamped straight over the road
+      // (owner 2026-08-03).  Samples well below the horizon are skipped —
+      // the skyline lives entirely above horizonY and can never collide.
+      {
+        const colW  = 8;
+        const nCols = Math.ceil((SCREEN_W + MARGIN * 2) / colW) + 2;
+        if (!this._roadTopCols || this._roadTopCols.length !== nCols) {
+          this._roadTopCols = new Float32Array(nCols);
+        }
+        this._roadTopColW = colW;
+        this._roadTopOff  = MARGIN;
+        const cols = this._roadTopCols;
+        cols.fill(Infinity);
+        const hY = H();
+        // Ground/water rows span the FULL screen width at every segment
+        // (terrain fills, lake bands, port-yard flanks all paint edge to
+        // edge), so a row risen above the horizon occludes the skyline in
+        // EVERY column — the floating-bridge "buildings on the water" case
+        // (owner 2026-08-03), crest humps, and downhill looks alike.
+        // Tracked as a scalar and applied once below.
+        let rowMin = Infinity;
+        for (let n = 0; n <= DRAW_DIST; n++) {
+          const s = samples[n];
+          if (!s.valid || s.visible === false) continue;
+          if (s.screenY > hY + 24) continue;   // far below horizon — irrelevant
+          if (s.screenY < rowMin) rowMin = s.screenY;
+          // Guardrails ride a touch above the pavement sample; lift the
+          // clip line slightly with on-screen size over the ROAD span so
+          // rails clip too.
+          const topY = s.screenY - s.screenW * 0.06 - 2;
+          const x0 = Math.max(0, Math.floor((s.screenX - s.screenW + MARGIN) / colW));
+          const x1 = Math.min(nCols - 1, Math.ceil((s.screenX + s.screenW + MARGIN) / colW));
+          for (let c = x0; c <= x1; c++) if (topY < cols[c]) cols[c] = topY;
+        }
+        if (rowMin < Infinity) {
+          for (let c = 0; c < nCols; c++) if (rowMin < cols[c]) cols[c] = rowMin;
+        }
+      }
     }
 
     // ── Horizon haze fade (terrain layer) ─────────────────────────────
@@ -1585,10 +1773,6 @@ export class Road {
     //  the whole void between the horizon and the farthest drawn segment —
     //  a fixed 22 px strip could not, and left an unfogged band on descents.)
 
-    // ── Continuous shoulder ribbons (one polygon per side) ──────────
-    // Draw AFTER rebuilding _surfaceSamples, otherwise the side lines use
-    // the previous frame's road surface and visibly lag/jitter.
-    this._drawShoulderRibbons(g);
 
     // ── Suspension bridge structure (towers + main cables + hangers) ──
     this._drawSuspensionBridge(g, drawn);
@@ -2811,65 +2995,6 @@ export class Road {
     }
   }
 
-  _drawShoulderRibbons(g) {
-    const samples = this._surfaceSamples;
-    if (!samples) return;
-    const SHOULDER_RATIO = 0.016;
-
-    // Quick visibility count — bail if fewer than 2 boundaries paint.
-    let visCount = 0;
-    for (let n = 0; n <= DRAW_DIST; n++) {
-      const s = samples[n];
-      if (s.valid && s.visible !== false) visCount++;
-      if (visCount >= 2) break;
-    }
-    if (visCount < 2) return;
-
-    g.fillStyle(0xFFFFFF, 1);
-
-    // Draw one filled polygon per CONTIGUOUS run of visible boundaries.
-    // Previously the whole side was a single beginPath…closePath that just
-    // `continue`d past hidden samples — so at a hill crest, where a run of
-    // segments is clipped, the ribbon drew a straight white edge ACROSS the
-    // gap (a wedge/triangle over the grass).  Breaking the path at every gap
-    // makes the white stripe stop and restart exactly where the road does.
-    const drawSide = (sideSign) => {
-      let a = -1;   // run start index
-      const flush = (lo, hi) => {
-        if (hi - lo < 1) return;               // need ≥ 2 points for an area
-        g.beginPath();
-        // Outer edge far → near (x = screenX + sign*screenW)
-        let first = true;
-        for (let n = hi; n >= lo; n--) {
-          const s = samples[n];
-          const x = s.screenX + sideSign * s.screenW;
-          if (first) { g.moveTo(x, s.screenY); first = false; }
-          else       { g.lineTo(x, s.screenY); }
-        }
-        // Inner edge near → far (x = screenX + sign*(screenW - stripeW))
-        for (let n = lo; n <= hi; n++) {
-          const s = samples[n];
-          const sw = Math.max(0.8, s.screenW * SHOULDER_RATIO);
-          g.lineTo(s.screenX + sideSign * (s.screenW - sw), s.screenY);
-        }
-        g.closePath();
-        g.fillPath();
-      };
-      for (let n = 0; n <= DRAW_DIST; n++) {
-        const s = samples[n];
-        const ok = s.valid && s.visible !== false;
-        if (ok) {
-          if (a < 0) a = n;
-        } else if (a >= 0) {
-          flush(a, n - 1);
-          a = -1;
-        }
-      }
-      if (a >= 0) flush(a, DRAW_DIST);
-    };
-    drawSide(-1);   // left shoulder
-    drawSide(+1);   // right shoulder
-  }
 
   _drawSegment(g, curr, next, palette, effects, xOffset = 0, isGhost = false) {
     // xOffset is added to the segment's screenX so the Sushi-ghost
@@ -2892,43 +3017,64 @@ export class Road {
     const ny = next ? next.screenY + 1 : curr.screenY + 5;
     const segH = Math.max(1, ny - fy);
 
-    const stripe   = Math.floor(seg.index / RUMBLE_SEGS) % 2;
+    // ── EXACT segment bounds, for ALPHA-BLENDED fills only ──────────────
+    // fy/ny above carry a deliberate ±1 px overshoot as hairline-gap
+    // insurance.  That is correct and harmless for an OPAQUE fill: two
+    // opaque trapezoids overlapping by 2 px composite to exactly the same
+    // result as one, so the insurance is free.
+    //
+    // It is NOT free for a translucent fill.  Alpha compositing is not
+    // idempotent — a band covered twice at alpha a ends up at 1-(1-a)²
+    // instead of a — so every overshot overlap paints a 2 px darker line at
+    // EVERY segment boundary.  With the wear, shoulder tone, rumble band,
+    // grit fringe and markings all now alpha-blended, that stacked up into
+    // the uniformly-spaced horizontal ladder down the whole road.
+    //
+    // The segment loop passes curr = drawn[i], next = drawn[i-1], so
+    // neighbouring segments share the SAME boundary float: using it
+    // un-overshot makes the translucent quads tile exactly — no double
+    // composite, and no gap either, since the shared edge is bit-identical.
+    // Bridge/water STRUCTURE routing (owner 2026-08-05, second report).  The
+    // first camera-gate fix moved off-span bridge draws from the depth-4
+    // overlay down to roadGfx (1.5) — but since the texture split the nearer
+    // NORMAL road's asphalt base lives on roadBaseGfx (1.35), so rails and
+    // under-deck structure still floated over it.  Off the span they now go
+    // all the way down to the BASE layer, where far→near painter order
+    // occludes them exactly like any other distant geometry.  On the span the
+    // original routing (roadGfx / bridgeFrontGfx) is untouched.
+    const structG = (!isGhost && (seg.bridge || seg.water)
+                     && !this._camOnSpan && this._roadBaseG)
+      ? this._roadBaseG : null;
+
+    const fyA   = curr.screenY;
+    const nyA   = next ? next.screenY : curr.screenY + 4;
+    const segHA = Math.max(1, nyA - fyA);
+
     // Single grass shade — lighter of the two — so the roadside reads as
     // a continuous field instead of striped bands (matches the road's
     // single-tone treatment).
     let grass    = palette.grass1;
-    let road     = stripe ? palette.road1   : palette.road2;
-    let rumble   = stripe ? palette.rumble1 : palette.rumble2;
     let laneCol  = palette.lane;
     // Lane dashes use a real-road ratio (short paint, long gap) so each
     // dash reads as a discrete stripe at perspective distance rather
     // than stacking into a vertical column of cream blocks.  Paint when
     // the segment lands inside the LANE_DASH_LEN window of the cycle.
     const dashCycle = LANE_DASH_LEN + LANE_DASH_GAP;
+    // Per-segment flag — still what the snow burial and the ghost pass read.
     let   dashOn    = (seg.index % dashCycle) < LANE_DASH_LEN;
+    // The main pass emits a dash ONCE, at its nearest segment, spanning back
+    // to the far boundary cached below.  isGhost keeps the per-segment path:
+    // the ghost draws at a lateral xOffset the cache doesn't carry.
+    const dashHead  = !isGhost && (seg.index % dashCycle) === 0;
 
-    // ── Asphalt realism: stable per-segment procedural noise (cached once
-    // per segment so it never shimmers frame-to-frame).  _sn* ∈ [0,1). ──
-    if (seg._sn === undefined) {
-      const hash = (k) => {
-        const x = Math.sin((seg.index * 7.13 + k * 91.7) * 12.9898) * 43758.5453;
-        return x - Math.floor(x);
-      };
-      seg._sn  = hash(1);   // base tone jitter
-      seg._sn2 = hash(2);   // patch roll
-      seg._sn3 = hash(3);   // wear roll
-    }
-    // Tone jitter: nudge the asphalt ±5% lighter/darker per segment so the
-    // surface reads as real pavement, not a flat painted sheet.
-    road = lerpColor(road, seg._sn > 0.5 ? 0xFFFFFF : 0x000000, Math.abs(seg._sn - 0.5) * 0.10);
-    // Rare darker repair patch spanning a short run of segments (the
-    // "they filled a pothole" look) — gated so it's occasional.
-    const _isPatch = seg._sn2 < 0.05;
-    if (_isPatch) road = lerpColor(road, 0x000000, 0.16);
-    // ── Snow blanket: dissolve the road / rumble / grass toward white
+    // ── Snow blanket: dissolve the road / shoulder / grass toward white
     // and suppress lane markings entirely.  Intensity ramps with the
     // weather envelope so the transition into / out of the snow zone is
     // smooth instead of a hard color flip.
+    //
+    // Computed BEFORE the asphalt colour now: the surface colour folds
+    // weather in itself (see RoadMaterial.surfaceColor) rather than being
+    // built and then overwritten, so snow has to be known first.
     const segMile = (seg.index / this.segments.length) * TOTAL_ROUTE_MILES;
     // Ground-texture opacity.  Full outside the snow zone; inside it the tile
     // survives the accumulation and disappears under total cover (see below).
@@ -2954,19 +3100,82 @@ export class Road {
         // through a partial blanket) then reaches zero at full cover, so the
         // whiteout is genuinely white rather than moss seen through gauze.
         groundTexFade = Math.pow(1 - snowI, 0.6);
-        // Everything converges on ONE snow white — road, rumble and roadside
+        // Everything converges on ONE snow white — road, shoulder and roadside
         // alike.  Blending only 80-85% of the way (the old values) left the
         // pavement a readable grey ribbon, which is exactly the "you can still
-        // see the road" look the whiteout is meant to remove.
-        grass    = lerpColor(grass,   SNOW_WHITE, snowI);
-        road     = lerpColor(road,    SNOW_WHITE, snowI);
-        rumble   = lerpColor(rumble,  SNOW_WHITE, snowI);
-        laneCol  = lerpColor(laneCol, road,       snowI);  // lanes vanish into road
+        // see the road" look the whiteout is meant to remove.  (The road's own
+        // convergence happens inside surfaceColor; only the roadside is here.)
+        grass = lerpColor(grass, SNOW_WHITE, snowI);
         // Lane paint stops being drawn well before full cover — a dashed line
         // fading through grey reads as a rendering artefact, not as snow.
-        if (snowI > 0.55) dashOn = false;
+        if (snowI > SNOW_MARKINGS_GONE) dashOn = false;
       }
     }
+
+    // ── Road material + surface colour ─────────────────────────────────
+    // ONE stable colour for the whole segment.  What used to be here — an
+    // `index / RUMBLE_SEGS % 2` stripe picking between road1 and road2, plus
+    // an INDEPENDENT ±5% jitter per segment — is precisely what made the road
+    // read as alternating horizontal bands: neighbouring segments were
+    // uncorrelated samples, so every single boundary was a visible tone step.
+    //
+    // surfaceColor() replaces both with one regional base plus low-frequency
+    // noise interpolated across 11-27 segments, so the tone gradient across
+    // any one boundary is a fraction of a percent and no edge is visible.
+    const rd  = roadDetail(seg);
+    const mat = rd.mat;
+    let road  = surfaceColor(seg, palette, snowBlanket);
+
+    // Night: pavement past the headlight throw falls away toward black rather
+    // than the whole texture being globally dimmed.  Distance-based and
+    // smooth in relZ, so it grades away instead of stepping per segment.
+    const nightMul = nightFalloff(curr.relZ, segMile);
+    if (nightMul < 0.999) road = lerpColor(road, 0x02030A, 1 - nightMul);
+
+    // Lanes vanish into the road on the same schedule the dashes do.
+    if (snowBlanket > 0.001) {
+      laneCol = lerpColor(laneCol, road, Math.min(1, snowBlanket / SNOW_MARKINGS_GONE));
+    }
+
+    const rainAmt = Weather.isRain(segMile) ? Weather.intensity(segMile) : 0;
+    // Distance response shared by every painted marking.  Two smooth terms
+    // (owner 2026-08-03, bridge-markings report):
+    //
+    //   1. A gentle atmospheric blend that saturates at PAINT_BASE_MAX (25%)
+    //      by ~two-thirds of the visible depth — enough to soften the paint
+    //      into the scene without erasing it.
+    //   2. The terminal fade, confined to the last 12% of the draw distance
+    //      (past PAINT_KNEE), where the paint fully dissolves into the
+    //      pavement it hands off to the distance-fog veil.
+    //
+    // The previous single ramp — 62% blend building from relZ 5000 — combined
+    // with perspective narrowing to sub-pixel width and wiped the markings out
+    // at MIDDLE distance, which on a long flat sightline (the West Seattle and
+    // Lake Washington bridges) read as the paint stopping halfway up the deck.
+    // Markings now stay legible through ~88% of the visible road.  Both terms
+    // are smoothsteps of relZ only, so there is no threshold and no segment
+    // boundary in the response.
+    const paintFade = Math.min(1,
+      PAINT_BASE_MAX * smoothstep((curr.relZ - 8000) / (PAINT_FAR * 0.62)) +
+      (1 - PAINT_BASE_MAX) * smoothstep((curr.relZ - PAINT_FAR * PAINT_KNEE)
+                                        / (PAINT_FAR * (1 - PAINT_KNEE))));
+    // Retroreflective response — glass beads in the paint throw light straight
+    // back at the driver, so markings inside the headlight throw stay bright
+    // while the pavement around them goes dark.  Outside the throw they get no
+    // special treatment, which is what makes night driving read correctly.
+    const reflectAmt = TimeOfDay.darkness(segMile) * (1 - smoothstep((curr.relZ - 3000) / 13000));
+    // Wet paint picks up a little extra specular return.
+    const wetPaint = rainAmt * 0.22;
+
+    // Cache this segment's FAR boundary so the whole-dash span above can
+    // close against it when the loop reaches the dash's nearest segment.
+    if (!isGhost) {
+      const _rn = this._dashRingN;
+      const _ri = (seg.index % _rn) * 4;
+      const _r  = this._dashRing;
+      _r[_ri] = seg.index; _r[_ri + 1] = x2; _r[_ri + 2] = fy; _r[_ri + 3] = w2;
+    }
+
     const segLanes = seg.lanes ?? LANES;
 
     const rw1 = rumbleW(w1, segLanes);
@@ -3300,6 +3509,7 @@ export class Road {
     // the Lake Washington floating bridge. Drawn before railings/road
     // edge details, so it tucks under the deck instead of sitting on top.
     if (seg.water || seg.bridge) {
+      const gS = structG ?? g;
       const deckDrop1 = Math.max(2, segH * (seg.bridge ? 0.38 : 0.26));
       const deckDrop2 = Math.max(2, segH * (seg.bridge ? 0.42 : 0.28));
       const outerFarL  = x2 - w2 - rw2;
@@ -3309,10 +3519,10 @@ export class Road {
 
       // Dark fascia under the entire bridge deck, visible along both
       // road edges as the bridge bends away.
-      fillTrap(g, 0x3F423C,
+      fillTrap(gS, 0x3F423C,
         outerFarL, fy, outerFarR, fy,
         outerNearR, ny + deckDrop1, outerNearL, ny + deckDrop1);
-      fillTrap(g, 0x77746A,
+      fillTrap(gS, 0x77746A,
         outerFarL, fy, outerFarR, fy,
         outerNearR, ny + Math.max(1, deckDrop1 * 0.35),
         outerNearL, ny + Math.max(1, deckDrop1 * 0.35));
@@ -3333,18 +3543,18 @@ export class Road {
         const drawPier = (side) => {
           const farX = x2 + side * farInset;
           const nearX = x1 + side * nearInset;
-          fillTrap(g, 0x9C988E,
+          fillTrap(gS, 0x9C988E,
             farX - pierW2 * 0.5, pierTopFar,
             farX + pierW2 * 0.5, pierTopFar,
             nearX + pierW1 * 0.5, pierBotNear,
             nearX - pierW1 * 0.5, pierBotNear);
-          fillTrap(g, 0x5C584F,
+          fillTrap(gS, 0x5C584F,
             farX + side * pierW2 * 0.12, pierTopFar,
             farX + side * pierW2 * 0.5,  pierTopFar,
             nearX + side * pierW1 * 0.5, pierBotNear,
             nearX + side * pierW1 * 0.12, pierBotNear);
-          g.fillStyle(0x0A1E30, 0.32);
-          g.fillRect(nearX - pierW1 * 0.65, pierBotNear - Math.max(1, segH * 0.18),
+          gS.fillStyle(0x0A1E30, 0.32);
+          gS.fillRect(nearX - pierW1 * 0.65, pierBotNear - Math.max(1, segH * 0.18),
                      pierW1 * 1.3, Math.max(1, segH * 0.45));
         };
         drawPier(-1);
@@ -3368,7 +3578,7 @@ export class Road {
       const RAIL_TOP  = 0xE6E2D6;
       // Route bridge guardrails to the front-overlay layer so their edges
       // stay crisp.
-      const rg = (seg.bridge && this._frontG) ? this._frontG : g;
+      const rg = (seg.bridge && this._frontG && this._camOnBridge) ? this._frontG : (structG ?? g);
       // Left guardrail face
       fillTrap(rg, RAIL_BASE,
         x2 - w2 - rw2 - railW2, fy, x2 - w2 - rw2, fy,
@@ -3391,8 +3601,11 @@ export class Road {
       fillTrap(rg, RAIL_DARK,
         x2 + w2 + rw2,         fy, x2 + w2 + rw2 + Math.max(1, railW2 * 0.30), fy,
         x1 + w1 + rw1 + Math.max(1, railW1 * 0.30), ny, x1 + w1 + rw1, ny);
-      // Reflector posts every 6 segments — orange dots on top of the rail
-      if ((seg.index % 6) === 0) {
+      // Reflector posts — every ~9 segments with a per-cell jittered offset,
+      // so the chain reads as posts a crew actually planted rather than as a
+      // perfectly uniform dotted line.  World-anchored, so they never crawl.
+      const _rCell = Math.floor(seg.index / 9);
+      if (seg.index === _rCell * 9 + Math.floor(hash1(_rCell, 61) * 4)) {
         const postH = Math.max(2, segH * 0.45);
         rg.fillStyle(0xFF8800, 1);
         rg.fillRect(x2 - w2 - rw2 - railW2 - 1, fy - postH * 0.4, 2, postH * 0.4);
@@ -3420,19 +3633,21 @@ export class Road {
       fillTrap(g, SIDEWALK_DK,
         x2 + w2 + rw2,             fy, x2 + w2 + rw2 + sidewalkW2, fy,
         x1 + w1 + rw1 + sidewalkW1, ny, x1 + w1 + rw1,             ny);
-      // Pavement highlight strip down the middle of each sidewalk —
-      // gives the band visible volume under direct overhead sun.
-      const hi1 = sidewalkW1 * 0.40, hi2 = sidewalkW2 * 0.40;
-      fillTrap(g, SIDEWALK_LT,
-        x2 - w2 - rw2 - sidewalkW2 + hi2 * 0.5, fy,
-        x2 - w2 - rw2 - sidewalkW2 + hi2 * 1.5, fy,
-        x1 - w1 - rw1 - sidewalkW1 + hi1 * 1.5, ny,
-        x1 - w1 - rw1 - sidewalkW1 + hi1 * 0.5, ny);
-      fillTrap(g, SIDEWALK_LT,
-        x2 + w2 + rw2 + sidewalkW2 - hi2 * 1.5, fy,
-        x2 + w2 + rw2 + sidewalkW2 - hi2 * 0.5, fy,
-        x1 + w1 + rw1 + sidewalkW1 - hi1 * 0.5, ny,
-        x1 + w1 + rw1 + sidewalkW1 - hi1 * 1.5, ny);
+      // Restrained tonal variation instead of a bright centre stripe.  The
+      // old highlight was a hard, uniformly-bright band down the middle of
+      // every sidewalk, and combined with a seam on every 3rd segment it read
+      // as a row of glowing repeating slabs rather than as concrete.  A
+      // low-frequency wander (interpolated across ~9 segments, so no boundary
+      // is visible) does the job of giving the band volume.
+      const swTone = (noise1(seg.index / 9) - 0.5) * 0.16;
+      const swCol  = lerpColor(SIDEWALK_DK, swTone > 0 ? SIDEWALK_LT : 0x6E6A62,
+                               Math.abs(swTone) * 2);
+      for (const sd of EDGE_SIDES) {
+        const oIn2 = x2 + sd * (w2 + rw2),            oIn1 = x1 + sd * (w1 + rw1);
+        const oOut2 = oIn2 + sd * sidewalkW2,         oOut1 = oIn1 + sd * sidewalkW1;
+        fillTrap(g, swCol, oIn2, fyA, oOut2, fyA, oOut1, nyA, oIn1, nyA, 0.55);
+      }
+
       // Curb — thick dark line ALONGSIDE THE ROAD (between rumble and
       // sidewalk) — this is what reads as "step up to the sidewalk".
       const curbW1 = Math.max(1, sidewalkW1 * 0.16);
@@ -3443,13 +3658,36 @@ export class Road {
       fillTrap(g, CURB_SHADOW,
         x2 + w2 + rw2,         fy, x2 + w2 + rw2 + curbW2, fy,
         x1 + w1 + rw1 + curbW1, ny, x1 + w1 + rw1,         ny);
-      // Sidewalk seam lines (perpendicular cracks) every ~3 segments —
-      // keyed on segment index so they march past at speed instead of
-      // floating in place.
-      if ((seg.index % 3) === 0) {
-        g.fillStyle(CURB_SHADOW, 0.5);
-        g.fillRect(x2 - w2 - rw2 - sidewalkW2, fy, sidewalkW2, 1);
-        g.fillRect(x2 + w2 + rw2,             fy, sidewalkW2, 1);
+      // Slab joints, anchored to ABSOLUTE world Z at a real ~5 ft pitch and
+      // only drawn where that pitch actually resolves on screen — the same
+      // rule the shoulder rumble grooves use.  A joint on every 3rd SEGMENT
+      // was both the wrong spacing and, past the near field, sub-pixel, which
+      // is what turned the walkway into a uniform barcode of blocks.
+      const slabPitch = segHA * (SLAB_Z / SEG_LENGTH);
+      if (slabPitch > 3.5) {
+        const zF = curr.relZ, zN = next.relZ;
+        const invF = 1 / zF, dInv = (1 / zN) - invF;
+        if (dInv > 1e-9) {
+          const farAbs = (seg.index + 1) * SEG_LENGTH;
+          const k0 = Math.floor((farAbs - SEG_LENGTH) / SLAB_Z) + 1;
+          const k1 = Math.floor(farAbs / SLAB_Z);
+          const jA = 0.22 * smoothstep((slabPitch - 3.5) / 4);
+          for (let k = k0; k <= k1; k++) {
+            const zRel = zF - (farAbs - k * SLAB_Z);
+            if (zRel <= 1) continue;
+            const t = (1 / zRel - invF) / dInv;
+            if (t < 0 || t > 1) continue;
+            const jy = fyA + (nyA - fyA) * t;
+            const wf = w2 + (w1 - w2) * t, rf = rw2 + (rw1 - rw2) * t;
+            const sf = sidewalkW2 + (sidewalkW1 - sidewalkW2) * t;
+            const cx = x2 + (x1 - x2) * t;
+            g.fillStyle(CURB_SHADOW, jA);
+            for (const sd of EDGE_SIDES) {
+              const inX = cx + sd * (wf + rf);
+              g.fillRect(Math.min(inX, inX + sd * sf), jy, sf, 1);
+            }
+          }
+        }
       }
     }
 
@@ -3458,32 +3696,198 @@ export class Road {
     // paints OVER cranes (depth 2) — they can't be seen "through" the
     // road — while NPCs / cops / vices / signs (depth ≥ 7) still paint
     // on top of the road as expected.
-    const surfaceG = (seg.bridge && this._frontG) ? this._frontG : g;
+    const surfaceG = (seg.bridge && this._frontG && this._camOnBridge) ? this._frontG : (structG ?? g);
+
+    // ── Where the flat asphalt goes ────────────────────────────────────
+    // For ordinary land segments the base fill is routed one layer DOWN
+    // (roadBaseGfx, depth 1.35) so the projected asphalt texture (RoadPlane,
+    // 1.42) can sit between it and everything drawn on the road afterwards.
+    // Wear, shoulders, markings, ramps and the distance fog all still paint
+    // into roadGfx in exactly the order they always did — only the flat fill
+    // moved, so nothing else needed re-layering.
+    //
+    // Water / bridge segments keep their base on the original layer: the deck
+    // fascia, pontoons and piers are drawn BEFORE the surface there and are
+    // meant to be painted over by it (drawPier insets to 0.58w, i.e. INSIDE
+    // the carriageway), so dropping the fill below them would expose piers on
+    // the road.  Those segments are concrete decks and get no asphalt tile.
+    const texSeg = !isGhost && !seg.water && !seg.bridge;
+    const baseG  = (texSeg && this._roadBaseG) ? this._roadBaseG : surfaceG;
 
     // Road surface (top edge = far/narrow = curr; bottom edge = near/wide = next)
-    fillTrap(surfaceG, road,
-      x2 - w2, fy, x2 + w2, fy,
-      x1 + w1, ny, x1 - w1, ny);
+    //
+    // SKIPPED for the double-vision ghost.  The ghost layer sits at depth 1.55
+    // — above both the asphalt texture (1.42) and the road (1.5) — so an
+    // opaque flat repaint of the whole carriageway at 62% alpha wiped the
+    // aggregate out and left the road reading as a separate flat slab laid
+    // over the textured one.  Double vision should double what you can SEE —
+    // the paint, the edges, the sprites — not repaint the surface.  The
+    // markings, fog line and shoulder tone below still draw, so the ghost
+    // still reads as a doubled roadway, and the real texture shows through.
+    if (!isGhost) {
+      fillTrap(baseG, road,
+        x2 - w2, fy, x2 + w2, fy,
+        x1 + w1, ny, x1 - w1, ny);
+    }
 
-    // ── Asphalt detail (near land segments only, so far road stays clean
-    // and cheap): polished wheel-path bands + transverse tar seams. ──────
-    if (!isGhost && w2 > 8 && !seg.tunnel && !seg.water && !seg.bridge && !_isPatch) {
-      const wheelCol = lerpColor(road, 0x000000, 0.12);   // tire-polished, darker
-      // Two wheel-track bands per carriageway (±0.42w center, ~0.10w wide).
-      for (const s of (segLanes >= 2 ? [-0.42, 0.42] : [0])) {
-        const bw2 = w2 * 0.10, bw1 = w1 * 0.10;
-        const bc2 = x2 + s * w2, bc1 = x1 + s * w1;
-        fillTrap(surfaceG, wheelCol,
-          bc2 - bw2, fy, bc2 + bw2, fy,
-          bc1 + bw1, ny, bc1 - bw1, ny);
+    // Paved shoulder base, laid on the SAME layer so the asphalt tile runs
+    // across road and shoulder as one continuous surface rather than stopping
+    // at the fog line.  Tunnels keep concrete shoulders (drawn above).
+    //
+    // Deliberately the SAME colour as the carriageway here.  RoadPlane tints
+    // the whole row — road and shoulder alike — with the carriageway colour,
+    // so darkening the shoulder in the base fill would be cancelled by the
+    // texture in the near field and survive only where the texture has faded
+    // out, i.e. the shoulder would get progressively darker with distance.
+    // The darkening is applied ON TOP instead (see the road-edge block), which
+    // reads identically at every depth.
+    const shoulderCol = seg.tunnel ? lerpColor(road, 0x8F8A7D, 0.55) : road;
+    if (!isGhost) {
+      fillTrap(baseG, shoulderCol,
+        x2 - w2 - rw2, fy, x2 - w2, fy,
+        x1 - w1,       ny, x1 - w1 - rw1, ny);
+      fillTrap(baseG, shoulderCol,
+        x2 + w2, fy, x2 + w2 + rw2, fy,
+        x1 + w1 + rw1, ny, x1 + w1, ny);
+    }
+
+    // ── Projected asphalt texture ──────────────────────────────────────
+    // World-anchored, driven by this segment's OWN projection, so it tracks
+    // hills, crests and curves and slides with the road as you steer instead
+    // of sitting on the screen.  Under snow the tile is nearly suppressed but
+    // NOT removed: ~7% survives full cover, which is what keeps a whiteout
+    // reading as compacted snow rather than as a blank white polygon.
+    if (texSeg && this._roadP) {
+      const texA = 1 - snowBlanket * 0.93;
+      this._roadP.pushRow(
+        fyA, nyA, x2, x1, w2, w1, rw2, rw1,
+        curr.relZ, next.relZ,
+        rd.mix.a, rd.mix.b, rd.mix.t,
+        road, road, texA);
+    }
+
+    // ── Road crown ─────────────────────────────────────────────────────
+    // Real carriageways are cambered so water runs off, so the surface is very
+    // slightly brighter along the centreline and falls away toward each edge.
+    // Rendered as two outer shadows plus a faint centre lift, all bounded by
+    // this segment's OWN projection so the gradient sweeps with the roadway
+    // through curves instead of sitting in screen space.  Deliberately at the
+    // edge of perception — it should register as form, never as a stripe.
+    if (texSeg && !seg.tunnel && w2 > 4) {
+      const crownFade = 1 - smoothstep((curr.relZ - 9000) / 39000);
+      const cA = 0.055 * crownFade * (1 - snowBlanket) * nightMul;
+      if (cA > 0.004) {
+        for (const sd of EDGE_SIDES) {
+          fillTrap(surfaceG, 0x000000,
+            x2 + sd * w2 * 0.50, fyA, x2 + sd * w2, fyA,
+            x1 + sd * w1,        nyA, x1 + sd * w1 * 0.50, nyA, cA);
+        }
+        fillTrap(surfaceG, 0xFFFFFF,
+          x2 - w2 * 0.22, fyA, x2 + w2 * 0.22, fyA,
+          x1 + w1 * 0.22, nyA, x1 - w1 * 0.22, nyA, cA * 0.40);
       }
-      // Transverse expansion joint every ~10 segments — a thin dark seam
-      // across the full road at the segment's near edge.
-      if (seg.index % 10 === 0) {
-        const seamH = Math.max(1, Math.min(3, segH * 0.5));
-        fillTrap(surfaceG, lerpColor(road, 0x000000, 0.35),
-          x1 - w1, ny - seamH, x1 + w1, ny - seamH,
-          x1 + w1, ny, x1 - w1, ny);
+    }
+
+    // ── Asphalt wear ───────────────────────────────────────────────────
+    // All of it LONGITUDINAL and alpha-blended so the texture underneath
+    // still reads through.  The old version painted an opaque tone over the
+    // whole segment for a repair patch (a band across the road) and a dark
+    // seam on a fixed `index % 10` stride (a ladder of rungs marching up the
+    // carriageway); both are gone.  Everything here is anchored to world
+    // position via roadDetail(), so it can never flicker or crawl.
+    const wearFade = 1 - smoothstep((curr.relZ - 9000) / 39000);
+    if (texSeg && !seg.tunnel && w2 > 6 && wearFade > 0.02) {
+      // Broad, faint wheel-path darkening, one pair per travel lane.
+      const wearA = mat.wearAmt * wearFade * (1 - snowBlanket);
+      if (wearA > 0.008) {
+        const paths = wheelPaths(segLanes);
+        // TWO nested bands per track, wide+faint under narrow+stronger.  A
+        // single hard-edged band at full strength was reading as a broad dark
+        // rectangle down the lane rather than as tyre polish; the outer skirt
+        // gives the edge a falloff so it fades into the surrounding asphalt.
+        for (let i = 0; i < paths.length; i++) {
+          const sC = paths[i];
+          const bc2 = x2 + sC * w2, bc1 = x1 + sC * w1;
+          for (const [mul, aMul] of WHEEL_BANDS) {
+            const bw2 = w2 * WHEEL_HALF * mul, bw1 = w1 * WHEEL_HALF * mul;
+            fillTrap(surfaceG, 0x000000,
+              bc2 - bw2, fyA, bc2 + bw2, fyA,
+              bc1 + bw1, nyA, bc1 - bw1, nyA, wearA * aMul);
+          }
+        }
+      }
+
+      // Repair patch — a longitudinal rectangle of newer/darker asphalt that
+      // spans many segments, with wandering edges and tapered ends.
+      const p = rd.patch;
+      if (p && p.amt > 0.004) {
+        // Feathered in from the outside: three nested bands, each a bit
+        // narrower and darker.  The previous single opaque-edged trapezoid is
+        // what produced the rectangular blocks on the pavement — a patch of
+        // asphalt has a ragged, soft boundary, not a drawn rail.
+        const pa = p.amt * wearFade * (1 - snowBlanket);
+        const cx = (p.x0 + p.x1) * 0.5, hw = (p.x1 - p.x0) * 0.5;
+        for (const [mul, aMul] of PATCH_BANDS) {
+          const a0 = cx - hw * mul, a1 = cx + hw * mul;
+          fillTrap(surfaceG, 0x0A0A0C,
+            x2 + a0 * w2, fyA, x2 + a1 * w2, fyA,
+            x1 + a1 * w1, nyA, x1 + a0 * w1, nyA, pa * aMul);
+        }
+      }
+
+      // (Transverse seams removed from asphalt.  Even rare and jittered they
+      // are the one wear feature that runs ACROSS the road, which is exactly
+      // the read being eliminated — and a real asphalt overlay has no
+      // transverse joints at all.  Concrete decks keep the expansion joints
+      // drawn with their own bridge/tunnel structure.)
+    }
+
+    // ── Wet-asphalt sheen (rain) ───────────────────────────────────────
+    // Wet aggregate reflects specularly, and specular reflection off a plane
+    // climbs sharply toward grazing incidence — so the sheen belongs at mid
+    // distance, not under the bumper.  A broad, low-alpha sky-coloured band
+    // gives that without turning the road into a mirror or stamping repeated
+    // puddles on it.
+    if (rainAmt > 0.02 && texSeg) {
+      const z = curr.relZ;
+      // Bump peaking around 18k units, tailing off by ~50k.
+      const grazing = Math.max(0, Math.min(1, z / 18000)) * (1 - smoothstep((z - 18000) / 32000));
+      const a = rainAmt * grazing * 0.17 * nightMul;
+      if (a > 0.004) {
+        fillTrap(surfaceG, palette.fog ?? palette.sky ?? 0x9BB0C2,
+          x2 - w2, fyA, x2 + w2, fyA,
+          x1 + w1, nyA, x1 - w1, nyA, a);
+      }
+    }
+
+    // ── Partial snow: cleared wheel tracks and slush ───────────────────
+    // Peaks at half cover and vanishes at both ends: bare road has nothing to
+    // clear, and a total whiteout is meant to BE total (owner spec
+    // 2026-07-27), so the tracks must not survive into it and hand the player
+    // back a readable ribbon.
+    if (texSeg && snowBlanket > 0.02 && snowBlanket < 0.92 && w2 > 6) {
+      const peak = 4 * snowBlanket * (1 - snowBlanket);   // 0 at both ends, 1 at 0.5
+      const bare = surfaceColor(seg, palette, 0);         // the pavement under it
+      const trackA = peak * 0.62 * wearFade;
+      if (trackA > 0.01) {
+        const paths = wheelPaths(segLanes);
+        for (let i = 0; i < paths.length; i++) {
+          const s   = paths[i];
+          const bw2 = w2 * 0.14, bw1 = w1 * 0.14;
+          const bc2 = x2 + s * w2, bc1 = x1 + s * w1;
+          fillTrap(surfaceG, bare,
+            bc2 - bw2, fyA, bc2 + bw2, fyA,
+            bc1 + bw1, nyA, bc1 - bw1, nyA, trackA);
+        }
+        // Grey slush ridges between the lanes, where the tracks throw it.
+        const slush = lerpColor(bare, SNOW_WHITE, 0.55);
+        for (let lane = 1; lane < segLanes; lane++) {
+          const c = (lane / segLanes) * 2 - 1;
+          const sw2 = w2 * 0.07, sw1 = w1 * 0.07;
+          fillTrap(surfaceG, slush,
+            x2 + c * w2 - sw2, fyA, x2 + c * w2 + sw2, fyA,
+            x1 + c * w1 + sw1, nyA, x1 + c * w1 - sw1, nyA, peak * 0.5 * wearFade);
+        }
       }
     }
 
@@ -3538,18 +3942,44 @@ export class Road {
       const goreFrac = rs;
       const gap1   = w1 * 2.05 * goreFrac;
       const gap2   = w2 * 2.05 * goreFrac;
-      // Asphalt fill — same color as the active road stripe so the ramp
-      // doesn't read as a different road type, just a continuation.
-      fillTrap(g, road,
+      // Asphalt fill — same colour as the mainline so the ramp doesn't read
+      // as a different road type, just a continuation.  Routed to the base
+      // layer (and given its own texture row below) for the same reason: a
+      // flat-shaded ramp peeling off a textured highway is an obvious seam,
+      // and the ramp is the one place the player looks hardest.
+      fillTrap(baseG, road,
         x2 + w2 + gap2,         fy, x2 + w2 + gap2 + rampW2, fy,
         x1 + w1 + gap1 + rampW1, ny, x1 + w1 + gap1,         ny);
-      // White edge stripe along the OUTSIDE of the ramp — the unmistakable
-      // "ramp shoulder" stripe.
+      if (texSeg && this._roadP) {
+        // Reuse the road's own U mapping at the ramp's narrower width.
+        // pushRow lays the quad at centre ± (w + e) and maps U to
+        // U_EDGE * (w + e) / w, so passing the mainline half-width as `w` and
+        // the DIFFERENCE as `e` (negative here) puts the ramp edges in the
+        // right place AND keeps the texel scale identical to the highway —
+        // the aggregate matches across the gore instead of being squeezed
+        // into the narrower lane.
+        const rh2 = rampW2 * 0.5, rh1 = rampW1 * 0.5;
+        this._roadP.pushRow(
+          fyA, nyA,
+          x2 + w2 + gap2 + rh2, x1 + w1 + gap1 + rh1,
+          w2, w1, rh2 - w2, rh1 - w1,
+          curr.relZ, next.relZ,
+          rd.mix.a, rd.mix.b, rd.mix.t,
+          road, road, 1 - snowBlanket * 0.93);
+      }
+      // Edge stripe along the OUTSIDE of the ramp — the unmistakable
+      // "ramp shoulder" line.  Weathered, not pure white: the ramp edge is the
+      // same worn
+      // thermoplastic as the fog line on the mainline, so a 0xFFFFFF stripe
+      // here made the exit glow next to a road whose paint no longer does.
+      const rampEdgeCol = lerpColor(
+        lerpColor(0xC8C5B8, mat.gritCol, 0.22),
+        road, paintFade);
       const edgeW1 = Math.max(2, w1 * 0.025);
       const edgeW2 = Math.max(2, w2 * 0.025);
-      fillTrap(g, 0xFFFFFF,
-        x2 + w2 + gap2 + rampW2 - edgeW2, fy, x2 + w2 + gap2 + rampW2, fy,
-        x1 + w1 + gap1 + rampW1,         ny, x1 + w1 + gap1 + rampW1 - edgeW1, ny);
+      fillTrap(g, rampEdgeCol,
+        x2 + w2 + gap2 + rampW2 - edgeW2, fyA, x2 + w2 + gap2 + rampW2, fyA,
+        x1 + w1 + gap1 + rampW1,         nyA, x1 + w1 + gap1 + rampW1 - edgeW1, nyA, nightMul);
       // (Gore chevrons removed — at the game's perspective scale the
       // tiny V-arrows read as glitchy white triangles in the ramp wedge
       // rather than as a readable "do-not-cross" zone.  The white edge
@@ -3560,58 +3990,227 @@ export class Road {
       // game's perspective they stack into hash-mark-looking artifacts
       // across consecutive segments rather than reading as discrete
       // posts.)
-      // ── White edge stripe along INSIDE of the ramp (next to the gore).
+      // ── Edge stripe along the INSIDE of the ramp (next to the gore).
       // Pairs with the OUTSIDE edge stripe drawn earlier so the ramp has
       // a real lane boundary on both sides.
       const innerW1 = Math.max(2, w1 * 0.020);
       const innerW2 = Math.max(2, w2 * 0.020);
-      fillTrap(g, 0xFFFFFF,
-        x2 + w2 + gap2,         fy, x2 + w2 + gap2 + innerW2, fy,
-        x1 + w1 + gap1 + innerW1, ny, x1 + w1 + gap1,         ny);
+      fillTrap(g, rampEdgeCol,
+        x2 + w2 + gap2,         fyA, x2 + w2 + gap2 + innerW2, fyA,
+        x1 + w1 + gap1 + innerW1, nyA, x1 + w1 + gap1,         nyA, nightMul);
       // (EXIT chevron triangle removed 2026-05-30 — across consecutive
       // segments the per-segment triangles stacked into a row of white
       // hash marks on the ramp surface that didn't read as a chevron.)
     }
 
-    // Left rumble
-    fillTrap(surfaceG, rumble,
-      x2 - w2 - rw2, fy, x2 - w2, fy,
-      x1 - w1, ny, x1 - w1 - rw1, ny);
+    // ── Road edge ──────────────────────────────────────────────────────
+    // What used to be here was a PURE WHITE trapezoid spanning the whole
+    // rumble width on both sides, plus a second solid-white ribbon painted
+    // once per frame over the top of it.  Together they read as a glowing
+    // kerb running the length of the route.  Both are gone; the band now
+    // carries the real cross-section of a rural highway edge, outward:
+    //
+    //     carriageway → fog line → paved shoulder → rumble grooves → grit
+    //
+    // The paved-shoulder asphalt itself was already laid on the base layer
+    // (and is textured with the same tile as the road), so only the paint,
+    // the grooves and the outer fringe are drawn here.  Every band is a
+    // fraction of rw, so the whole cross-section tapers correctly with
+    // perspective and stays parallel through curves.
+    //
+    // Bridges and tunnels keep their concrete treatment (kerbs, barriers and
+    // portal shoulders are drawn elsewhere in this method); a milled rumble
+    // strip and a gravel fringe are wrong on a deck or inside a portal.
+    if (!seg.tunnel) {
+      const FOG_0 = 0.00, FOG_1 = 0.13;    // edge line
+      const RMB_0 = 0.45, RMB_1 = 0.70;    // milled grooves
+      const GRT_0 = 0.70;                  // gravel / dirt / vegetation
 
-    // Right rumble
-    fillTrap(surfaceG, rumble,
-      x2 + w2, fy, x2 + w2 + rw2, fy,
-      x1 + w1 + rw1, ny, x1 + w1, ny);
+      // Band edge at fraction f of the shoulder, on side `sd` (-1 left / +1 right).
+      const eF = (f, sd) => x2 + sd * (w2 + rw2 * f);
+      const eN = (f, sd) => x1 + sd * (w1 + rw1 * f);
 
-    // White shoulder line drawn once-per-frame as a continuous ribbon
-    // sourced from _surfaceSamples — see _drawShoulderRibbons() called
-    // at the end of render().  No per-segment paint here.
+      // Shoulder tone.  Translucent over the shared asphalt texture, so the
+      // shoulder reads as the same material as the carriageway — just dirtier
+      // and less trafficked — instead of as a separately-coloured strip.
+      const shA = mat.shoulderDark * (1 - snowBlanket) * nightMul;
+      if (shA > 0.01) {
+        for (const sd of EDGE_SIDES) {
+          fillTrap(surfaceG, 0x000000,
+            eF(FOG_1, sd), fyA, eF(1.00, sd), fyA,
+            eN(1.00, sd), nyA, eN(FOG_1, sd), nyA, shA);
+        }
+      }
+
+      // Fog line — narrow and weathered, never bright white.  Wears on its
+      // own slow cycle (independent of the lane dashes) and fades toward the
+      // pavement with distance so it doesn't stay a hard wire at the horizon.
+      if (snowBlanket < SNOW_MARKINGS_GONE) {
+        const fogWear = hash1(Math.floor(seg.index / 26), 41);
+        let edgeCol = lerpColor(0xC8C5B8, mat.gritCol, 0.18 + fogWear * 0.30);
+        edgeCol = lerpColor(edgeCol, road, Math.min(1, snowBlanket / SNOW_MARKINGS_GONE));
+        edgeCol = lerpColor(edgeCol, road, 0.55 * smoothstep((curr.relZ - 6000) / 44000));
+        // Retroreflective at night, but only inside the headlight throw.
+        const reflect = TimeOfDay.darkness(segMile) * (1 - smoothstep((curr.relZ - 3000) / 13000));
+        if (reflect > 0.01) edgeCol = lerpColor(edgeCol, 0xFFF4D2, reflect * 0.45);
+        else if (rainAmt > 0.02) edgeCol = lerpColor(edgeCol, 0xE8E6DC, rainAmt * 0.25);
+        // The odd washed-out stretch, held for ~26 segments so it reads as a
+        // worn section of line rather than as per-segment noise.
+        const edgeA = (fogWear > 0.90 ? 0.35 : 1) * nightMul;
+        for (const sd of EDGE_SIDES) {
+          fillTrap(surfaceG, edgeCol,
+            eF(FOG_0, sd), fyA, eF(FOG_1, sd), fyA,
+            eN(FOG_1, sd), nyA, eN(FOG_0, sd), nyA, edgeA);
+        }
+      }
+
+      // Everything past the fog line is a RURAL edge.  A bridge deck or a
+      // floating-bridge span has a barrier hard against the shoulder, not a
+      // milled strip crumbling into gravel, so those keep the concrete
+      // treatment drawn with their guardrails and take the fog line only.
+      //
+      // Urban segments are excluded for the same reason: they have a kerb and
+      // a concrete sidewalk butted against the shoulder (drawn above, at
+      // x ± (w + rw)), and the gravel fringe feathers out to 1.35 x rw — so
+      // on an urban street it would spray dirt across the kerb line.
+      const ruralEdge = !seg.water && !seg.bridge && !seg.urban;
+
+      // Rumble grooves.  Milled depressions sit ~12 in apart, which is a
+      // THIRD of a segment — drawing one per segment (or one every N) is what
+      // produces a horizontal barcode, so they are anchored to ABSOLUTE world
+      // Z and only resolved where the segment is tall enough on screen to
+      // separate them.  Farther out they collapse into the slightly darker
+      // band, which is exactly what a rumble strip looks like at distance.
+      const bandA = ruralEdge ? 0.28 * (1 - snowBlanket) * nightMul : 0;
+      if (bandA > 0.01) {
+        for (const sd of EDGE_SIDES) {
+          fillTrap(surfaceG, 0x000000,
+            eF(RMB_0, sd), fyA, eF(RMB_1, sd), fyA,
+            eN(RMB_1, sd), nyA, eN(RMB_0, sd), nyA, bandA * 0.5);
+        }
+      }
+      // Grooves may only be drawn where they actually RESOLVE.  Their screen
+      // pitch is segH x (GROOVE_Z / SEG_LENGTH) = segH x 0.3, so the old
+      // `segH > 3` gate was emitting ticks 0.9 px apart — far under one pixel
+      // per feature, which is not a rumble strip but an aliasing pattern, and
+      // is what read as a pixelated barcode down both shoulders.  Gate on the
+      // PITCH instead: nothing until ~3.5 px apart, full by ~7.5 px.  Beyond
+      // that the strip is carried by its darker band alone, which is what a
+      // real rumble strip looks like at distance anyway.
+      const groovePitch = ruralEdge ? segHA * (GROOVE_Z / SEG_LENGTH) : 0;
+      const grooveRes   = smoothstep((groovePitch - 3.5) / 4);
+      if (grooveRes > 0.02 && snowBlanket < 0.7) {
+        const zF = curr.relZ, zN = next.relZ;
+        const invF = 1 / zF, invN = 1 / zN;
+        const dInv = invN - invF;
+        if (dInv > 1e-9) {
+          const farAbs = (seg.index + 1) * SEG_LENGTH;
+          const k0 = Math.floor((farAbs - SEG_LENGTH) / GROOVE_Z) + 1;
+          const k1 = Math.floor(farAbs / GROOVE_Z);
+          const gA = grooveRes * 0.42 * (1 - snowBlanket) * nightMul;
+          for (let k = k0; k <= k1; k++) {
+            const zRel = zF - (farAbs - k * GROOVE_Z);
+            if (zRel <= 1) continue;
+            const t = (1 / zRel - invF) / dInv;
+            if (t < 0 || t > 1) continue;
+            const gy = fyA + (nyA - fyA) * t;
+            const gh = Math.max(1, segHA * (GROOVE_Z / SEG_LENGTH) * 0.45);
+            const wf = w2 + (w1 - w2) * t;
+            const rf = rw2 + (rw1 - rw2) * t;
+            const cx = x2 + (x1 - x2) * t;
+            for (const sd of EDGE_SIDES) {
+              fillTrap(surfaceG, 0x000000,
+                cx + sd * (wf + rf * RMB_0), gy,
+                cx + sd * (wf + rf * RMB_1), gy,
+                cx + sd * (wf + rf * RMB_1), gy + gh,
+                cx + sd * (wf + rf * RMB_0), gy + gh, gA);
+            }
+          }
+        }
+      }
+
+      // Grit fringe — the pavement's outer edge crumbling into gravel, dust
+      // and then the biome ground.  Painted at partial alpha so the ground
+      // texture beneath shows through and the two genuinely blend rather than
+      // meeting at a line.
+      const gritCol = snowBlanket > 0.1
+        // Dirty plowed buildup: snow shoved off the carriageway picks up grit.
+        ? lerpColor(lerpColor(mat.gritCol, SNOW_WHITE, 0.62), 0x6B6A66, 0.22)
+        : mat.gritCol;
+      if (ruralEdge) for (const sd of EDGE_SIDES) {
+        fillTrap(surfaceG, gritCol,
+          eF(GRT_0, sd), fyA, eF(1.00, sd), fyA,
+          eN(1.00, sd), nyA, eN(GRT_0, sd), nyA, 0.72 * nightMul);
+        // Soft outer feather past the paved edge, so there is no hard line
+        // where the shoulder ends and the roadside begins.
+        fillTrap(surfaceG, gritCol,
+          eF(1.00, sd), fyA, x2 + sd * (w2 + rw2 * 1.35), fyA,
+          x1 + sd * (w1 + rw1 * 1.35), nyA, eN(1.00, sd), nyA, 0.30 * nightMul);
+      }
+    }
 
     // Lane markers (dashed — short paint, long gap, independent of
     // the rumble parallax cycle).  Skip the centerline lane on
     // even-lane roads — the double yellow paints there instead, and
     // the white dashes were showing through the gap between the two
     // yellow lines.
-    if (dashOn) {
-      // Per-DASH paint wear (stable across the segments that make up one
-      // dash): faded brightness, width jitter, and the odd near-gone dash —
-      // so lane paint reads as real striping, not a uniform digital strip.
-      const _fr    = (x) => x - Math.floor(x);
+    if (dashHead || (isGhost && dashOn)) {
+      // Per-DASH paint wear (stable across the whole dash): faded brightness,
+      // width jitter, and the odd near-gone dash — so lane paint reads as real
+      // striping, not a uniform digital strip.
       const dashId = Math.floor(seg.index / dashCycle);
-      const dw     = _fr(Math.sin(dashId * 78.233) * 43758.5453);   // [0,1) per dash
+      const dw     = hash1(dashId, 78);                             // [0,1) per dash
       const gone   = dw > 0.94;                                     // ~6% missing/scuffed
-      // Fade fresh cream toward a grimy, sun-bleached grey by up to ~50%.
-      const wornLane = lerpColor(laneCol, 0x8C8778, dw * 0.5);
-      const jw2 = lw2 * (0.82 + dw * 0.32);
-      const jw1 = lw1 * (0.82 + dw * 0.32);
+      // Snow buries dashes UNEVENLY — each dash goes under at its own
+      // threshold, so markings disappear raggedly instead of all at once.
+      const buried = snowBlanket > SNOW_MARKINGS_GONE * (0.62 + dw * 0.60);
+      let wornLane = lerpColor(laneCol, 0x8C8778, dw * 0.5);
+      wornLane = lerpColor(wornLane, road, paintFade);
+      if (reflectAmt > 0.01)    wornLane = lerpColor(wornLane, 0xFFF6DC, reflectAmt * 0.55);
+      else if (wetPaint > 0.01) wornLane = lerpColor(wornLane, 0xEFEDE4, wetPaint);
       const skipLane = (segLanes % 2 === 0) ? segLanes / 2 : -1;
-      if (!gone) for (let lane = 1; lane < segLanes; lane++) {
+
+      // Far edge of the WHOLE dash.  The ring holds the far boundary of the
+      // dash's last segment; if that segment was crest-culled or has scrolled
+      // out, the entry won't match and we fall back to this segment's own far
+      // edge — degrading to the old per-segment look rather than dropping the
+      // dash entirely.
+      let fxD = x2, fyD = fy, fwD = w2;
+      if (dashHead) {
+        const _rn   = this._dashRingN;
+        const _want = seg.index + LANE_DASH_LEN - 1;
+        const _ri   = (_want % _rn) * 4;
+        const _r    = this._dashRing;
+        if (_r[_ri] === _want && _r[_ri + 3] > 0) {
+          fxD = _r[_ri + 1]; fyD = _r[_ri + 2]; fwD = _r[_ri + 3];
+        }
+      }
+      // Chipping shortens the single quad instead of dropping whole segments,
+      // so a chipped dash reads as paint worn through rather than a gap.
+      if (dw > 0.80 && dw <= 0.94) {
+        const keep = 0.35 + hash1(dashId, 79) * 0.45;
+        fyD = nyA + (fyD - nyA) * keep;
+        fxD = x1  + (fxD - x1)  * keep;
+        fwD = w1  + (fwD - w1)  * keep;
+      }
+      // ~20% thinner than the old 0.82-1.14 band (owner 2026-08-03).  Safe to
+      // narrow now that a dash is ONE quad spanning its full world length —
+      // its visibility at distance no longer depends on per-segment width, so
+      // trimming it doesn't reintroduce the vanishing-dash problem.
+      // Floored at ~0.4 px half-width: far dashes keep a minimum perceptual
+      // presence instead of dropping below the rasteriser entirely.  Sub-pixel
+      // coverage + the weathered colour + the 25% atmospheric blend keep this
+      // from reading as a bright pixel column.
+      const jwF = Math.max(0.55, laneW(fwD, segLanes) * (0.66 + dw * 0.26));
+      const jwN = Math.max(0.55, laneW(w1,  segLanes) * (0.66 + dw * 0.26));
+
+      if (!gone && !buried) for (let lane = 1; lane < segLanes; lane++) {
         if (lane === skipLane) continue;
-        const lx1 = x1 + (lane / segLanes) * 2 * w1 - w1;
-        const lx2 = x2 + (lane / segLanes) * 2 * w2 - w2;
+        const lxN = x1  + (lane / segLanes) * 2 * w1  - w1;
+        const lxF = fxD + (lane / segLanes) * 2 * fwD - fwD;
         fillTrap(surfaceG, wornLane,
-          lx2 - jw2, fy, lx2 + jw2, fy,
-          lx1 + jw1, ny, lx1 - jw1, ny);
+          lxF - jwF, fyD, lxF + jwF, fyD,
+          lxN + jwN, nyA, lxN - jwN, nyA, nightMul);
       }
     }
 
@@ -3622,21 +4221,34 @@ export class Road {
     // blend applied to `laneCol`, which left a bright yellow centre line
     // painted across an otherwise total whiteout.  It now dissolves into the
     // road on the same schedule the dashes do (gone by snowBlanket 0.55).
-    if (segLanes >= 2 && snowBlanket < 0.55) {
-      const clw1 = Math.max(1, Math.round(lw1 * 0.55));
-      const clw2 = Math.max(1, Math.round(lw2 * 0.55));
+    if (segLanes >= 2 && snowBlanket < SNOW_MARKINGS_GONE) {
+      // Widths stay float — rounding them to whole pixels was quantising the
+      // centre line to integer widths per segment, which put a visible step
+      // in the stripe every time the rounding flipped.
+      const clw1 = Math.max(0.8, lw1 * 0.55);
+      const clw2 = Math.max(0.8, lw2 * 0.55);
       const gap1 = lw1 * 1.1;
       const gap2 = lw2 * 1.1;
-      const wornYellow = lerpColor(
-        lerpColor(0xFFEE00, 0xB8A63A, (seg._sn3 ?? 0) * 0.45),
-        road, snowBlanket / 0.55,
-      );
+      // Highway centre-line yellow is a muted ochre, not a fluorescent
+      // primary — 0xFFEE00 was reading as a neon strip laid on the asphalt.
+      // Wear is keyed to a ~20-segment cell so the fading happens in stretches
+      // rather than flickering segment to segment.
+      const yWear = hash1(Math.floor(seg.index / 19), 31);
+      // Desaturated 20% toward its own luminance and darkened 22% from the
+      // previous C9B04A/9C8B45 pair.  Highway centre-line yellow is an ochre
+      // that has spent years in UV; the brighter mix still read as a lit
+      // strip laid on the asphalt rather than paint worn into it.
+      let wornYellow = lerpColor(0x988949, 0x776C40, yWear * 0.55);
+      wornYellow = lerpColor(wornYellow, road, paintFade);
+      wornYellow = lerpColor(wornYellow, road, Math.min(1, snowBlanket / SNOW_MARKINGS_GONE));
+      if (reflectAmt > 0.01)    wornYellow = lerpColor(wornYellow, 0xFFE9A0, reflectAmt * 0.50);
+      else if (wetPaint > 0.01) wornYellow = lerpColor(wornYellow, 0xE0CE86, wetPaint);
       fillTrap(surfaceG, wornYellow,
-        x2 - gap2 - clw2, fy, x2 - gap2,       fy,
-        x1 - gap1,        ny, x1 - gap1 - clw1, ny);
+        x2 - gap2 - clw2, fyA, x2 - gap2,       fyA,
+        x1 - gap1,        nyA, x1 - gap1 - clw1, nyA, nightMul);
       fillTrap(surfaceG, wornYellow,
-        x2 + gap2,        fy, x2 + gap2 + clw2, fy,
-        x1 + gap1 + clw1, ny, x1 + gap1,        ny);
+        x2 + gap2,        fyA, x2 + gap2 + clw2, fyA,
+        x1 + gap1 + clw1, nyA, x1 + gap1,        nyA, nightMul);
     }
 
     // ── Raised median (divided highway through the wildlife crossing) ──
@@ -3680,8 +4292,11 @@ export class Road {
       // horizon carry "beyond the cap" scenery now; this veil only needs
       // to soften the last rows, matching the world fill's 0.35 blend so
       // fill → veil → clear road is one continuous ramp.
+      // Exact bounds: this veil is translucent and per-segment, so the ±1
+      // overshoot double-darkened a 2 px line at every boundary — the same
+      // defect as the wear layers above, and pre-dating them.
       g.fillStyle(palette.fog ?? palette.sky, fog * 0.35);
-      g.fillRect(-M, fy, SCREEN_W + M * 2, segH);
+      g.fillRect(-M, fyA, SCREEN_W + M * 2, segHA);
     }
   }
 

@@ -9,7 +9,7 @@ import { ITEM_FX } from '../systems/SurvivalSystem.js';
 import { Difficulty } from '../systems/Difficulty.js';
 import {
   pickEncounterForStop, resolveChoice, applyEncounterEffects,
-  isDialogueTree, getStartNode, getEncounterNode, choiceLocked,
+  isDialogueTree, getStartNode, getEncounterNode, choiceLocked, isExitChoice,
   SHOP_GREETERS,
 } from '../data/encounters.js';
 import { getPortrait } from '../data/npcPortraits.js';
@@ -404,56 +404,63 @@ function brandsForStop(stop) {
 // Per-rest-stop NPC vignettes — 3 lines each, randomly picked on entry.
 // Builds the "party crowd" lore as the player progresses east.  All ten
 // rest stops keyed by their IDs (B, I, N, C, E, V, Y, O, W, L).
+//
+// VOICE (owner 2026-08-04): overheard fragments, NOT rhyme — the rhyming
+// couplets belong to the NPCs you actually talk to (encounters.js). These are
+// half a conversation you walk past. Each one should either be a joke or a
+// piece of information; the ones that were neither got cut. Where a line can
+// hang off something real about the town (Twede's, the Vantage horses, the
+// Kittitas troopers), it does.
 const VIGNETTES = {
   B: [   // Bellevue
-    'Tell Mike I\'ll be there as soon as I find my keys.',
-    'Bellevue Square parking lot, 11pm — bring the good stuff.',
-    'My ex works at the bank — no, the OTHER bank.',
+    'Tell Mike I\'m leaving in five. I\'ve been leaving in five since noon.',
+    'Parking garage at the Square, level six, 11pm. Nobody parks on six.',
+    'My ex works at the bank downtown. No — the other one. No, the OTHER other one.',
   ],
   I: [   // Issaquah
-    'Saw two cops at the QFC on 17th. Take the back roads.',
-    'Did you grab the salmon? It\'s a Pullman tradition.',
-    'My cousin\'s couch is open if you blow the clock.',
+    'Two cops sitting at the QFC on 17th. Take the back roads.',
+    'Somebody put a whole salmon in a trunk. It is not on ice. It is not going to be okay.',
+    'My cousin\'s couch is open if you blow the clock. It smells. But it\'s open.',
   ],
   N: [   // North Bend
-    'Twin Peaks reruns at the diner — order pie, not the coffee.',
-    'Snow chains on sale next door. Just sayin\'.',
-    'The pass is closing in three hours. MOVE.',
+    'Twede\'s is running Twin Peaks again. Order the pie. Do NOT order the coffee.',
+    'Chains next door are marked up four hundred percent and every single person is buying them.',
+    'Pass closes in three hours. MOVE.',
   ],
   C: [   // Cle Elum
-    'You driving?? You\'re WASTED.',
-    'Bakery\'s got those salted-caramel things. Ten minutes max.',
-    'My truck broke down. Five star, no luck.',
+    'You\'re DRIVING?? You are absolutely WASTED.',
+    'Bakery\'s got the salted caramel ones. Ten minutes, tops. Ten.',
+    'Town had a live switchboard operator until 1966. Still can\'t get anyone to pick up.',
   ],
   E: [   // Ellensburg
-    'WSU rivalry game tonight — half of Pullman is on this road already.',
-    'Coffee\'s on. You look like hell.',
-    'Watch for state troopers around Kittitas. They love a quota.',
+    'Rivalry game tonight — half of Pullman is already on this road ahead of you.',
+    'Coffee\'s on. You look like hell. Both of those are facts.',
+    'Troopers sit around Kittitas this time of night. They love a quota.',
   ],
   V: [   // Vantage
-    'The bridge view is unreal. Don\'t crash into it.',
-    'Last gas before the basin. I\'m serious.',
-    'Wind\'s up — mind the trailer.',
+    'Somebody\'s climbing up to the steel horses. In flip-flops. At night.',
+    'Last gas before the basin. I\'m not being dramatic. Last gas.',
+    'Wind\'s up. If you\'ve got anything on the roof, it\'s already gone.',
   ],
   Y: [   // Royal City
-    'Free apples in the orchard, just don\'t get caught.',
-    'My uncle says the cops here all play poker on Friday nights.',
-    'It\'s gonna be a desert sunset. Floor it.',
+    'Free apples in the orchard. Free-ish. Don\'t get caught.',
+    'My uncle swears every cop in this town plays poker on Fridays. It\'s Friday.',
+    'Desert sunset in twenty minutes and you\'re going to miss it. Floor it.',
   ],
   O: [   // Othello
-    'Mexican food at the truck stop — life-changing.',
-    'You missed Royal? They had the good energy drinks.',
-    'Watch for combines on 26 — those things are rolling roadblocks.',
+    'Truck stop taqueria. Life-changing. I\'m not exaggerating and I\'m not eating anywhere else.',
+    'You skipped Royal? They had the good energy drinks. The ones that are basically illegal.',
+    'Combines on 26 tonight. Those things are rolling roadblocks with lights.',
   ],
   W: [   // Washtucna
-    'Population: 200. Cop: 1. Don\'t test him.',
-    'My grandma made cookies for the party. Don\'t eat them all.',
-    'Last shower in 50 miles. Fair warning.',
+    'Population two hundred. One cop. Do not test him.',
+    'Somebody\'s grandma sent cookies for the party. Nobody can figure out whose grandma.',
+    'Last shower for fifty miles. Consider that carefully.',
   ],
   L: [   // La Crosse
-    'Almost there. Don\'t blow it now.',
-    'Everyone\'s asking where the f— you are.',
-    'Pullman\'s lit up like a Christmas tree tonight.',
+    'You\'re basically there. Do not blow it now.',
+    'Everyone is asking where the f— you are. Everyone.',
+    'Pullman\'s lit up like a Christmas tree. You can see it from the hill.',
   ],
 };
 
@@ -707,6 +714,12 @@ export class RestStopScene extends Phaser.Scene {
       { id: 'paint',   label: '🎨  PAINT JOB',  cost: 3500,
         desc: 'Drops ALL stars — only way out from under a 5★ chopper.',
         payload: { clearStars: true } },
+      // Stocked at every Finesse, list price $40. The Shade-Tree Mechanic
+      // outside Ellensburg quotes $25 for the same jug — he doesn't sell it
+      // to you, he reprices this row (see _applyStoreOffer).
+      { id: 'coolant', label: '🧊  COOLANT TOP-OFF', cost: 40,
+        desc: 'Drops engine temperature before the shadeless run east.',
+        payload: { coolEngine: 55 } },
     );
     schwastedItems.push(
       { id: 'popcorn', label: '🍿  FREE POPCORN', cost: 0,
@@ -714,6 +727,12 @@ export class RestStopScene extends Phaser.Scene {
         payload: { popcorn: true, survivalDelta: { fullness: 4 } } },
       { ...waterItem(0), label: '💧  FREE WATER',
         desc: 'Complimentary. A small Drinks top-up.' },
+      // A tire shop sells tire chains — list price $200 at every Les Schwasted.
+      // The Chain Guy at North Bend is the counter guy on his break: he quotes
+      // $150, or $120 if you haggle him down, and that reprices THIS row.
+      { id: 'chains', label: '⛓  SNOW CHAINS', cost: 200,
+        desc: 'Grip for the pass. Put them on before the snow, not after.',
+        payload: { encounterBuff: 'snow_chains' } },
     );
     // NOS — now a THREE-ROW LADDER under the ENGINE tab (owner 2026-08-04),
     // matching how the tiered part-slots list below.  It used to be a single
@@ -1347,15 +1366,27 @@ export class RestStopScene extends Phaser.Scene {
     // SAVE CODE / code text just below.  Section header still sits at
     // contentY - 32 since it belongs visually with the sub-menu content.
     {
-      const bx = 10, by = 8;
+      const bx = 8, by = 6;
       const headerY = contentY - 32;
-      this._backBtnBg = this.add.rectangle(bx, by, 80, 26, 0xFFFFFF, 1)
+      // Bigger target + padded hit area (owner 2026-08-05: "back button
+      // ignores my tap, worse in some storefronts").  The old 80×26 box was
+      // ~39×13 pt once the 800-wide design scales onto a phone — under half
+      // Apple's 44 pt minimum, jammed in the corner nearest the status bar.
+      // Visual box is 112×32; the INPUT rect pads ~12 px beyond it on every
+      // side (rectangle hit areas are in local space, so negative x/y reach
+      // outside the drawn box).  High depth so full-bleed shop art built
+      // later in the display list can never sit over it — that stacking is
+      // why some storefronts felt worse than others.
+      this._backBtnBg = this.add.rectangle(bx, by, 112, 32, 0xFFFFFF, 1)
         .setOrigin(0, 0).setStrokeStyle(2, 0x000000)
-        .setInteractive({ useHandCursor: true })
+        .setInteractive(new Phaser.Geom.Rectangle(-12, -8, 136, 52),
+                        Phaser.Geom.Rectangle.Contains)
+        .setDepth(60)
         .setVisible(false);
-      this._backBtnLbl = this.add.text(bx + 40, by + 13, '← BACK', {
-        fontSize: '13px', fontFamily: IMPACT, color: '#1E5BB8',
-      }).setOrigin(0.5).setVisible(false);
+      this._backBtnBg.input.cursor = 'pointer';
+      this._backBtnLbl = this.add.text(bx + 56, by + 16, '← BACK', {
+        fontSize: '16px', fontFamily: IMPACT, color: '#1E5BB8',
+      }).setOrigin(0.5).setDepth(61).setVisible(false);
       this._backBtnBg.on('pointerover', () => this._backBtnBg.setFillStyle(0xF0E8C0));
       this._backBtnBg.on('pointerout',  () => this._backBtnBg.setFillStyle(0xFFFFFF));
       this._backBtnBg.on('pointerdown', (ptr, _x, _y, ev) => {
@@ -1846,13 +1877,24 @@ export class RestStopScene extends Phaser.Scene {
     this._showEncounterCard(enc, save, seen);
   }
 
-  _showEncounterCard(enc, save, seen, nodeId = null) {
+  /** @param convo  Conversation state carried across re-renders of the SAME
+   *  conversation (owner 2026-08-05): `{ consumed:Set, reply:string|null }`.
+   *  A question's answer used to be a 2.6s toast over a torn-down card, so you
+   *  got exactly ONE interaction per NPC and the reply was easy to miss. Now an
+   *  answer lands IN the card — it replaces the NPC's line, the question that
+   *  earned it is struck from the list, and the conversation stays open. Only a
+   *  choice flagged `exit: true` closes the card and lets the storefront open.
+   *  `consumed` is keyed `nodeId::label` so walking to another node and back
+   *  doesn't resurrect a spent question. */
+  _showEncounterCard(enc, save, seen, nodeId = null, convo = null) {
     // Recurring-NPC memory (GLOBAL save bucket) + current node view.
     const memAll = save?.get?.('npcMemory', {}) ?? {};
     const mem    = enc.npcId ? (memAll[enc.npcId] ?? {}) : {};
     if (nodeId == null && isDialogueTree(enc)) nodeId = getStartNode(enc, mem);
     const node = getEncounterNode(enc, nodeId);
     if (!node) return;
+    convo ??= { consumed: new Set(), reply: null };
+    const ckey = (c) => `${nodeId ?? '_'}::${c.label}`;
 
     const D = 500;                       // above every shop element
     const objs = [];
@@ -1916,14 +1958,28 @@ export class RestStopScene extends Phaser.Scene {
     const fact = this._townFact ?? node.fact ?? enc.fact;
     const condCtx = { cash: this._score ?? 0, buffs: this._purchases.encounterBuffs ?? [], memory: mem };
     const choices = (node.choices ?? [{ label: 'Continue', effects: {}, end: true }])
-      .filter(c => !(c.hideWhenLocked && choiceLocked(c, condCtx)));
+      .filter(c => !(c.hideWhenLocked && choiceLocked(c, condCtx)))
+      // A question you've already asked is struck from the list — otherwise the
+      // conversation loops and a `generous`/paid branch could be farmed.
+      .filter(c => !convo.consumed.has(ckey(c)));
+    // Safety net: never strand the player. If nothing left on this node is a
+    // free unconditional way OUT, append one. Authored exits are always
+    // preferred — this only fires once they've all been spent.
+    if (!choices.some(c => isExitChoice(c) && !c.cost && !c.conditions)) {
+      choices.push({ label: "\"That's all I needed. Thanks.\"", effects: {}, end: true, exit: true });
+    }
+    // The NPC's answer to the last question REPLACES their opening line and is
+    // printed verbatim — these lines are a mix of speech and narration ("He
+    // salutes you with a cup he found on the ground"), so the card must not
+    // wrap them in quotes the way it does an NPC's own line.
+    const lineText = convo.reply ?? `"${node.line}"`;
     const TYPE_TIERS = [
       { dlg: 32, spk: 28, fct: 20, ch: 24, bh: 56 },   // full 2×
       { dlg: 26, spk: 22, fct: 16, ch: 20, bh: 46 },
       { dlg: 20, spk: 18, fct: 13, ch: 16, bh: 38 },
       { dlg: 16, spk: 14, fct: 10, ch: 13, bh: 28 },   // pre-2026-07-15 sizes
     ];
-    let T = TYPE_TIERS[TYPE_TIERS.length - 1];
+
     // Deal-summary block (mission offers only) — a scannable "JOB · TYPE"
     // header plus label/value rows, rendered as its own boxed panel below the
     // contact's spoken line so the facts (what · where · pay · catch) read at
@@ -1933,32 +1989,70 @@ export class RestStopScene extends Phaser.Scene {
         + node.deal.rows.map(([k, v]) => `${(k + '      ').slice(0, 6)}${v}`).join('\n')
       : null;
 
-    let dlgText = null, factText = null, dealText = null, botH = 0;
-    let fits = false;
+    // Choice labels are full spoken sentences as of 2026-08-04, so a button is
+    // no longer a fixed `t.bh` slab — it grows to whatever its wrapped label
+    // needs. Measured per tier alongside the dialogue, because a taller stack
+    // is exactly what should push the type down a tier.
+    const CH_PAD = 14;
+    const measureChoiceHeights = (t) => choices.map((c) => {
+      const probe = this.add.text(0, 0, c.label, {
+        fontSize: `${t.ch}px`, fontFamily: IMPACT,
+        wordWrap: { width: txW - 44 }, align: 'center',
+      }).setVisible(false);
+      const h = Math.max(t.bh, probe.height + CH_PAD);
+      probe.destroy();
+      return h;
+    });
+
+    // ── SPLIT tier selection (owner 2026-08-05: "lots of empty space and the
+    // text is too small").  A single shared tier meant a tall choice stack —
+    // five sentence-length buttons — failed the fit test at every big tier
+    // and dragged the DIALOGUE down to the smallest sizes too, even when the
+    // quote had half the pane free: tiny type at the top, a dead gap in the
+    // middle.  The two blocks now size independently: the bottom block
+    // (speaker + fact + choices) takes the largest tier that still leaves
+    // room for at least a smallest-tier dialogue, then the dialogue takes the
+    // largest tier that fits the space the bottom actually left.
+    const mkDlg = (t) => this.add.text(tx, py + 34, lineText, {
+      fontSize: `${t.dlg}px`, fontFamily: 'Georgia, serif', color: '#F4F7FF',
+      wordWrap: { width: tw }, lineSpacing: Math.round(t.dlg * 0.2),
+    }).setDepth(D + 4);
+    const mkFact = (t) => fact ? this.add.text(0, 0, `📍 ${fact}`, {
+      fontSize: `${t.fct}px`, fontFamily: 'Arial', color: '#9FB7D6',
+      fontStyle: 'italic', wordWrap: { width: tw }, lineSpacing: 1,
+    }).setDepth(D + 4).setVisible(false) : null;
+    const mkDeal = (t) => dealStr ? this.add.text(0, 0, dealStr, {
+      fontSize: `${t.fct + 3}px`, fontFamily: 'Menlo, Consolas, monospace',
+      color: '#DCE9FB', lineSpacing: 4, wordWrap: { width: tw - 16 },
+    }).setDepth(D + 5).setVisible(false) : null;
+    const topHAt = (t) => {
+      const d = mkDlg(t), dl = mkDeal(t);
+      const h = 34 + d.height + (dl ? dl.height + 26 : 0) + 10;
+      d.destroy(); dl?.destroy();
+      return h;
+    };
+
+    const tMin = TYPE_TIERS[TYPE_TIERS.length - 1];
+    const minTopH = topHAt(tMin);
+    let TB = tMin, chHeights = measureChoiceHeights(tMin);
     for (const t of TYPE_TIERS) {
-      const d = this.add.text(tx, py + 34, `"${node.line}"`, {
-        fontSize: `${t.dlg}px`, fontFamily: 'Georgia, serif', color: '#F4F7FF',
-        wordWrap: { width: tw }, lineSpacing: Math.round(t.dlg * 0.2),
-      }).setDepth(D + 4);
-      const f = fact ? this.add.text(0, 0, `📍 ${fact}`, {
-        fontSize: `${t.fct}px`, fontFamily: 'Arial', color: '#9FB7D6',
-        fontStyle: 'italic', wordWrap: { width: tw }, lineSpacing: 1,
-      }).setDepth(D + 4).setVisible(false) : null;
-      const dl = dealStr ? this.add.text(0, 0, dealStr, {
-        fontSize: `${t.fct + 3}px`, fontFamily: 'Menlo, Consolas, monospace',
-        color: '#DCE9FB', lineSpacing: 4, wordWrap: { width: tw - 16 },
-      }).setDepth(D + 5).setVisible(false) : null;
-      const dH = dl ? dl.height + 26 : 0;
-      const bot = (t.spk + 8) + (f ? f.height + 6 : 0) + choices.length * (t.bh + 6) + 8;
-      const last = t === TYPE_TIERS[TYPE_TIERS.length - 1];
-      const fitsHere = py + 34 + d.height + dH + 10 <= py + ph - bot;
-      if (fitsHere || last) {
-        T = t; dlgText = d; factText = f; dealText = dl; botH = bot;
-        fits = fitsHere;
-        break;
-      }
-      d.destroy(); f?.destroy(); dl?.destroy();
+      const f = mkFact(t);
+      const chH = measureChoiceHeights(t);
+      const bot = (t.spk + 8) + (f ? f.height + 6 : 0)
+                + chH.reduce((sum, h) => sum + h + 6, 0) + 8;
+      f?.destroy();
+      if (bot <= ph - minTopH || t === tMin) { TB = t; chHeights = chH; break; }
     }
+    let factText = mkFact(TB);
+    let botH = (TB.spk + 8) + (factText ? factText.height + 6 : 0)
+             + chHeights.reduce((sum, h) => sum + h + 6, 0) + 8;
+
+    let TD = tMin;
+    for (const t of TYPE_TIERS) { if (topHAt(t) <= ph - botH) { TD = t; break; } }
+    const dlgText = mkDlg(TD);
+    const dealText = mkDeal(TD);
+    const fits = 34 + dlgText.height + (dealText ? dealText.height + 26 : 0) + 10
+               <= ph - botH;
 
     // Even the smallest tier can overflow — a long quirk line on a mission
     // offer pushes the deal panel down into the speaker label and the town
@@ -1968,7 +2062,7 @@ export class RestStopScene extends Phaser.Scene {
     if (!fits && factText) {
       factText.destroy();
       factText = null;
-      botH = (T.spk + 8) + choices.length * (T.bh + 6) + 8;
+      botH = (TB.spk + 8) + chHeights.reduce((sum, h) => sum + h + 6, 0) + 8;
     }
     add(dlgText);
     let _dealBottom = 0;
@@ -1993,9 +2087,9 @@ export class RestStopScene extends Phaser.Scene {
     // block down past the panel whenever the panel reaches further.
     const _botY = Math.max(py + ph - botH, _dealBottom + 10);
     add(this.add.text(tx, _botY, (node.speaker ?? enc.speaker ?? port.name).toUpperCase(), {
-      fontSize: `${T.spk}px`, fontFamily: IMPACT, color: '#FFD23D',
+      fontSize: `${TB.spk}px`, fontFamily: IMPACT, color: '#FFD23D',
     }).setDepth(D + 4));
-    if (factText) add(factText.setPosition(tx, _botY + T.spk + 6).setVisible(true));
+    if (factText) add(factText.setPosition(tx, _botY + TB.spk + 6).setVisible(true));
 
     // Effect-application context — writes to _purchases (resumed by GameScene)
     // and to live _score/_stars for on-card display.
@@ -2027,7 +2121,21 @@ export class RestStopScene extends Phaser.Scene {
         d[bar] = (d[bar] ?? 0) + n;
         this._drawSurvivalMini();
       },
+      // Raise a bar UP TO a target and no further — a sit-down meal fills you
+      // to "fed", it doesn't stack on top of an already-full stomach. Reads
+      // through the entry snapshot plus everything banked this visit so two
+      // meals in one stop don't double-count.
+      raiseSurvivalTo: (bar, target) => {
+        const e = this._survAtEntry ?? { tiredness: 0, hydration: 50, fullness: 50 };
+        const d = (this._purchases.survivalDelta ??= {});
+        const cur = (e[bar] ?? 0) + (d[bar] ?? 0);
+        if (cur < target) {
+          d[bar] = (d[bar] ?? 0) + (target - cur);
+          this._drawSurvivalMini();
+        }
+      },
       coolEngine:   (n) => { this._purchases.coolEngine = (this._purchases.coolEngine ?? 0) + n; },
+      storeOffer:   (o) => { this._applyStoreOffer(o); },
     };
 
     const choose = (choice) => {
@@ -2072,22 +2180,38 @@ export class RestStopScene extends Phaser.Scene {
         this.registry.get('missions')?.decline?.(choice.missionDecline);
       }
       dismiss();
-      if (dialogue) this._showEncounterResult(dialogue);
       if (typeof choice.next === 'string') {
-        this._showEncounterCard(enc, save, seen, choice.next);   // walk the tree
-      } else {
-        if (enc.once) { seen.add(enc.id); save?.set?.('encountersSeen', [...seen]); }
-        // Shop-greeter gate (owner 2026-07-30): _showShopGreeter stashes the
-        // "now actually open the shop" callback here before showing the card.
-        // Every choice on a greeter is terminal (flat card, no `next`), so
-        // this fires on the very first tap — exactly the "questions answered,
-        // then the storefront displays" behavior asked for.
-        if (this._pendingGreeterProceed) {
-          const proceed = this._pendingGreeterProceed;
-          this._pendingGreeterProceed = null;
-          proceed();
-          return;
-        }
+        // Walking to another node: the answer (if any) rides along as that
+        // node's opening line, and `consumed` carries over so a question
+        // spent on the way out stays spent on the way back.
+        convo.reply = dialogue ?? null;
+        this._showEncounterCard(enc, save, seen, choice.next, convo);
+        return;
+      }
+      // ── Stay-open answer (owner 2026-08-05) ────────────────────────────
+      // Not an exit and not a walk: the NPC answers IN the card. Strike the
+      // question, put the reply where their line was, re-render the SAME node.
+      // The storefront stays shut — only an `exit` choice opens it.
+      if (!isExitChoice(choice)) {
+        convo.consumed.add(ckey(choice));
+        convo.reply = dialogue ?? convo.reply;
+        this._showEncounterCard(enc, save, seen, nodeId, convo);
+        return;
+      }
+      // ── Exit ───────────────────────────────────────────────────────────
+      // The parting line still plays as a toast on the way out: the card is
+      // closing by definition, so there is nothing left to print it into.
+      if (dialogue) this._showEncounterResult(dialogue);
+      if (enc.once) { seen.add(enc.id); save?.set?.('encountersSeen', [...seen]); }
+      // Shop-greeter gate (owner 2026-07-30): _showShopGreeter stashes the
+      // "now actually open the shop" callback here before showing the card.
+      // As of 2026-08-05 this fires on the EXIT choice only — "player must
+      // select a sentence that moves off the conversation to get to the
+      // storefront" — not on the first tap of any kind.
+      if (this._pendingGreeterProceed) {
+        const proceed = this._pendingGreeterProceed;
+        this._pendingGreeterProceed = null;
+        proceed();
       }
     };
 
@@ -2095,16 +2219,18 @@ export class RestStopScene extends Phaser.Scene {
     // committed type tier (2× at full scale).  Choices whose `conditions`
     // fail (cash / item / npcMemory) render grayed out like an unaffordable
     // cost, or vanish entirely with `hideWhenLocked` (filtered above).
-    const bh = T.bh, gap = 6;
+    const gap = 6;
     const bcx = txX + txW / 2;
-    let by = py + ph - (choices.length * (bh + gap)) - 6;
-    for (const c of choices) {
+    let by = py + ph - chHeights.reduce((s, h) => s + h + gap, 0) - 6;
+    for (let ci = 0; ci < choices.length; ci++) {
+      const c = choices[ci];
+      const bh = chHeights[ci] ?? TB.bh;
       const cost = c.cost ?? 0;
       const afford = cost <= (this._score ?? 0) && !choiceLocked(c, condCtx);
       const bg = this.add.rectangle(bcx, by + bh / 2, txW - 28, bh, afford ? 0x143A5A : 0x2A1010)
         .setStrokeStyle(2, afford ? 0x39A8FF : 0x662222).setDepth(D + 2);
       const lbl = this.add.text(bcx, by + bh / 2, c.label, {
-        fontSize: `${T.ch}px`, fontFamily: IMPACT, color: afford ? '#F4F7FF' : '#996666',
+        fontSize: `${TB.ch}px`, fontFamily: IMPACT, color: afford ? '#F4F7FF' : '#996666',
         wordWrap: { width: txW - 44 }, align: 'center',
       }).setOrigin(0.5).setDepth(D + 3);
       add(bg, lbl);
@@ -2247,6 +2373,34 @@ export class RestStopScene extends Phaser.Scene {
     if (ui?.label?.scene) ui.label.setText(item.label);
     if (ui?.cost?.scene)  ui.cost.setText('OWNED');
     this._buttonRefresh?.forEach?.(fn => fn());
+  }
+
+  /** An NPC QUOTED a price — reprice that shop's row in place, this stop only.
+   *  Owner 2026-08-05: "any discounted items should be priced in the store, not
+   *  sold at that moment." The conversation never takes the money; it changes
+   *  what the counter charges, and the player still has to walk in and buy it.
+   *
+   *  Repricing in place (rather than injecting a row) is what makes this work
+   *  at all: the shop's buttons are built once in create() and live in
+   *  pre-rendered containers, long before the encounter card ever appears — so
+   *  a brand-new row would never get drawn. Every routed product is therefore
+   *  a NORMAL item the shop always stocks, and the NPC only moves its price.
+   *  Returns false when the stop has no such counter, so the caller can fall
+   *  back to handing the thing over. */
+  _applyStoreOffer(offer) {
+    if (!offer?.shop || !offer.item) return false;
+    if (!(this._stop?.amenities ?? []).includes(offer.shop)) return false;
+    const item = (SECTIONS[offer.shop]?.items ?? []).find(it => it.id === offer.item);
+    if (!item) return false;
+    // Never let a "deal" cost MORE than the shelf price.
+    if (offer.price != null && offer.price >= (item.cost ?? Infinity)) return false;
+    item.cost = offer.price;
+    item._offerNote = offer.note ?? null;
+    if (offer.note) item.desc = `${item.desc} (${offer.note})`;
+    if (item._ui?.cost?.scene) item._ui.cost.setText(`$${offer.price.toLocaleString()}`);
+    if (item._ui?.desc?.scene) item._ui.desc.setText(item.desc);
+    this._buttonRefresh?.forEach?.(fn => fn());
+    return true;
   }
 
   /** Open the next rung of a slot's ladder without rebuilding the shop —
@@ -2941,6 +3095,16 @@ export class RestStopScene extends Phaser.Scene {
       const vehMax = this._vehMaxHp();
       const target = Math.round(vehMax * 0.65);
       this._purchases.durabilityOnResume = Math.max(this._purchases.durabilityOnResume ?? 0, target);
+    }
+    // Buff bought over a counter rather than handed over in a conversation —
+    // same channel the encounter cards use, so GameScene needs no new case.
+    if (p.encounterBuff) {
+      this._purchases.encounterBuffs = [...(this._purchases.encounterBuffs ?? []), p.encounterBuff];
+    }
+    // Absolute engine-temperature drop (coolant). The pint of oil below is the
+    // fractional version; both land in _purchases and GameScene applies them.
+    if (p.coolEngine) {
+      this._purchases.coolEngine = (this._purchases.coolEngine ?? 0) + p.coolEngine;
     }
     if (p.coolEngineFrac) {
       // Pint of oil: −5% engine heat per pint; stacks additively (two pints

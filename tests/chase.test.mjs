@@ -52,7 +52,14 @@ function runChase({ stars, playerSpeed, seconds = 2, copOffsets = [-4000, -1500,
     cs.update(dt, playerPos, playerSpeed, 0);
     playerPos += playerSpeed * dt;
     const carZ = playerPos + PLAYER_VIRTUAL_Z;
-    for (const c of cs.cops) worst = Math.max(worst, c.position - carZ);
+    // REAR pursuers only — the anti-pass guards govern exactly that kind.
+    // update() star-spawns at 3★ have a 45% roll for an ONCOMING cop, which
+    // is ahead BY DESIGN (guard-exempt); sweeping it into `worst` made this
+    // fail on spawn luck (~45% flake, pre-existing — surfaced 2026-08-03).
+    for (const c of cs.cops) {
+      if (c.kind !== 'rear') continue;
+      worst = Math.max(worst, c.position - carZ);
+    }
   }
   return { worst, cops: cs.cops };
 }
@@ -88,7 +95,12 @@ for (const s of [1, 2]) {
     cs.update(dt, playerPos, spd, 0);
     playerPos += spd * dt;
     const carZ = playerPos + PLAYER_VIRTUAL_Z;
-    for (const c of cs.cops) worst = Math.max(worst, c.position - carZ);
+    // Rear pursuers only — see the same filter in runChase (oncoming
+    // star-spawns are guard-exempt and ahead by design).
+    for (const c of cs.cops) {
+      if (c.kind !== 'rear') continue;
+      worst = Math.max(worst, c.position - carZ);
+    }
   }
   check('3 stars, hard brake from full speed — clamp catches the overrun', worst <= 0);
 }
@@ -120,10 +132,13 @@ for (const s of [1, 2]) {
   }
 }
 
-// ── PIT is unreachable below 4 stars ─────────────────────────────────────
+// ── PIT is unreachable at 1 star ─────────────────────────────────────────
+// (Chase-realism pass, owner 2026-08-01: gate moved 4★ → 2★.  The 1★ tail
+// never arms one; the 2★ boundary itself is covered at the bottom of the
+// file alongside the other realism-pass checks.)
 {
   const cs = new CopSystem();
-  cs.stars = 3;
+  cs.stars = 1;
   const playerPos = 100000;
   const cop = pursuitCop(playerPos + PLAYER_VIRTUAL_Z - 300);
   cop.laneOffset = 0;
@@ -135,7 +150,7 @@ for (const s of [1, 2]) {
     pp += sp3 * dt3;                 // advance the player, or the cop runs off
     cop.position = pp + PLAYER_VIRTUAL_Z - 300;   // hold it alongside
   }
-  check('3 stars — PIT never arms', !cop._pitArmed);
+  check('1 star — PIT never arms', !cop._pitArmed);
 }
 {
   const cs = new CopSystem();
@@ -264,15 +279,29 @@ for (const s of [1, 2]) {
   let pp = 100000;
   cs.cops = [-3000, -5000, -7000].map(o => pursuitCop(pp + PLAYER_VIRTUAL_Z + o));
   const before = cs.cops.length;
+  // Barricades held off: eyes-on decay pause (chase-realism pass) keeps
+  // stars pinned at exactly 5.0, so the >= 5 barricade gate now FIRES in
+  // this sim — and its 8-12 parked units would eat the pursuit cap and
+  // block the onramp merge this test is about.
+  cs._barricadeCooldown = 999;
   // 16 s, not 3: `stars` decays to 4.9998 on the first frame, so Math.floor
   // puts us in tier 4 whose onramp interval is 14 s.  A 3 s window never
   // reaches the first merge.
+  // Measure token holds ACROSS the sim, not just the final frame — holds
+  // expire after 15 s, so an end-state check at t=16 was one lane-timing
+  // shift away from reading 0 while grants worked perfectly (bit by the
+  // 2026-08-03 formation-lanes change).  Max-over-time is also the STRONGER
+  // form of the pool check: the pool must never be exceeded on ANY frame.
+  let maxHeld = 0;
   withRandom(0.5, () => {
-    for (let t = 0; t < 16; t += 1 / 60) { cs.update(1 / 60, pp, MAX_SPEED * 0.5, 0); pp += MAX_SPEED * 0.5 / 60; }
+    for (let t = 0; t < 16; t += 1 / 60) {
+      cs.update(1 / 60, pp, MAX_SPEED * 0.5, 0); pp += MAX_SPEED * 0.5 / 60;
+      const held = cs.cops.filter(c => c._overtakeToken).length;
+      if (held > maxHeld) maxHeld = held;
+    }
   });
-  const held = cs.cops.filter(c => c._overtakeToken).length;
-  check('5 stars — at least one overtake token is granted', held >= 1);
-  check('5 stars — never more tokens out than the pool (2)', held <= 2);
+  check('5 stars — at least one overtake token is granted', maxHeld >= 1);
+  check('5 stars — never more tokens out than the pool (2)', maxHeld <= 2);
   check('5 stars — onramp reinforcements merge in ahead',
         cs.cops.length > before && cs.cops.some(c => c._fromOnramp));
 }
@@ -335,14 +364,194 @@ for (const s of [1, 2]) {
 
   let pp = 100000;
   const spd = MAX_SPEED * (60 / 120);          // 60 mph
-  for (let t = 0; t < 12; t += 1 / 60) { cs.update(1 / 60, pp, spd, 0); pp += spd / 60; }
+  // Decay only runs with NO pursuer in eyes-on range (chase-realism pass),
+  // so this sim models a player who has already shaken the tail: strip any
+  // cop update() spawns after each frame, keeping eyes-on false throughout.
+  const step = () => { cs.update(1 / 60, pp, spd, 0); cs.cops.length = 0; pp += spd / 60; };
+  for (let t = 0; t < 12; t += 1 / 60) step();
   check('still 2 stars after half a mile', cs.starDisplay === 2);
 
-  for (let t = 12; t < 59; t += 1 / 60) { cs.update(1 / 60, pp, spd, 0); pp += spd / 60; }
+  for (let t = 12; t < 59; t += 1 / 60) step();
   check('still 2 stars just short of a full star of decay', cs.starDisplay === 2);
 
-  for (let t = 59; t < 62; t += 1 / 60) { cs.update(1 / 60, pp, spd, 0); pp += spd / 60; }
+  for (let t = 59; t < 62; t += 1 / 60) step();
   check('drops to 1 only after a WHOLE star has decayed', cs.starDisplay === 1);
+}
+
+// ═══ Chase-realism pass (owner 2026-08-01) ══════════════════════════════
+// 1★ is a tail: the cruiser holds station and never strikes.
+{
+  const cs = new CopSystem();
+  cs.stars = 1;
+  let pp = 100000;
+  const spd = MAX_SPEED * (60 / 120);
+  cs.cops = [pursuitCop(pp + PLAYER_VIRTUAL_Z - 1200)];
+  let struck = false;
+  for (let t = 0; t < 30; t += 1 / 60) {
+    cs.update(1 / 60, pp, spd, 0);
+    pp += spd / 60;
+    if (cs.cops.some(c => c._lungeT > 0)) struck = true;
+  }
+  check('1 star — the tail NEVER lunges', !struck);
+  check('1 star — the tail is still on station (not despawned)', cs.cops.length >= 1);
+}
+
+// …and at 2★ the same setup strikes after the ~5 s hold.
+{
+  const cs = new CopSystem();
+  cs.stars = 2;
+  let pp = 100000;
+  const spd = MAX_SPEED * (60 / 120);
+  cs.cops = [pursuitCop(pp + PLAYER_VIRTUAL_Z - 1200)];
+  let firstStrikeAt = null;
+  for (let t = 0; t < 15; t += 1 / 60) {
+    cs.update(1 / 60, pp, spd, 0);
+    pp += spd / 60;
+    if (firstStrikeAt == null && cs.cops.some(c => c._lungeT > 0)) firstStrikeAt = t;
+  }
+  check('2 stars — a strike lands', firstStrikeAt != null);
+  check('2 stars — but only after the on-station hold (>= ~5 s)',
+        firstStrikeAt == null || firstStrikeAt >= 4.5);
+}
+
+// One striker at a time: two cops on station never lunge simultaneously.
+{
+  const cs = new CopSystem();
+  cs.stars = 3;
+  let pp = 100000;
+  const spd = MAX_SPEED * (60 / 120);
+  cs.cops = [pursuitCop(pp + PLAYER_VIRTUAL_Z - 1200, 0.3),
+             pursuitCop(pp + PLAYER_VIRTUAL_Z - 1400, 0.6)];
+  let maxSimultaneous = 0;
+  for (let t = 0; t < 30; t += 1 / 60) {
+    cs.update(1 / 60, pp, spd, 0);
+    pp += spd / 60;
+    maxSimultaneous = Math.max(maxSimultaneous,
+      cs.cops.filter(c => c._lungeT > 0).length);
+  }
+  check('3 stars, two units — strikes happen', maxSimultaneous >= 1);
+  check('3 stars, two units — never more than ONE striker at a time', maxSimultaneous <= 1);
+}
+
+// Backup call: witnessed 90+ mph at 1★ escalates to 2★ once, with cooldown.
+{
+  const cs = new CopSystem();
+  cs.stars = 1;
+  let pp = 100000;
+  const fast = MAX_SPEED * (100 / 120);          // 100 mph — erratic
+  cs.cops = [pursuitCop(pp + PLAYER_VIRTUAL_Z - 1200)];
+  for (let t = 0; t < 4; t += 1 / 60) {
+    cs.update(1 / 60, pp, fast, 0);
+    pp += fast / 60;
+    // keep the witness pinned on station so eyes-on stays true
+    cs.cops[0].position = pp + PLAYER_VIRTUAL_Z - 1200;
+  }
+  check('backup call — witnessed 90+ mph escalates 1★ → 2★', cs.starDisplay === 2);
+  check('backup call — reason surfaced for the HUD beat', !!cs.backupCalled);
+  check('backup call — cooldown armed (no instant re-escalation)', cs._backupCd > 0);
+}
+
+// …but NOT without a witness: same speed, no cop in eyes-on range.
+{
+  const cs = new CopSystem();
+  cs.stars = 1;
+  let pp = 100000;
+  const fast = MAX_SPEED * (100 / 120);
+  for (let t = 0; t < 4; t += 1 / 60) {
+    cs.update(1 / 60, pp, fast, 0);
+    cs.cops.length = 0;                          // nobody ever gets eyes on
+    pp += fast / 60;
+  }
+  check('no witness — 90+ mph alone never escalates', cs.starDisplay === 1);
+}
+
+// …and backup calls cap at 3★ (weapons stay the only path to 4-5★).
+{
+  const cs = new CopSystem();
+  cs.stars = 3;
+  let pp = 100000;
+  const fast = MAX_SPEED * (100 / 120);
+  cs.cops = [pursuitCop(pp + PLAYER_VIRTUAL_Z - 1200)];
+  for (let t = 0; t < 4; t += 1 / 60) {
+    cs.update(1 / 60, pp, fast, 0);
+    pp += fast / 60;
+    cs.cops[0].position = pp + PLAYER_VIRTUAL_Z - 1200;
+  }
+  check('backup calls cap at 3★', cs.starDisplay === 3);
+}
+
+// Witnessed civilian collision = instant backup call.
+{
+  const cs = new CopSystem();
+  cs.stars = 1;
+  const pp = 100000;
+  cs.cops = [pursuitCop(pp + PLAYER_VIRTUAL_Z - 1200)];
+  cs.update(1 / 60, pp, MAX_SPEED * 0.5, 0);     // establishes eyes-on
+  cs.reportErraticCollision();
+  check('witnessed collision — instant +1★', cs.starDisplay === 2);
+  cs.reportErraticCollision();                   // inside the cooldown
+  check('second collision inside cooldown does not stack', cs.starDisplay === 2);
+}
+
+// ── Reaction lag (owner 2026-08-04) ─────────────────────────────────────
+// "I can speed up or slow down and the cops don't lose or gain 1 ft."  A
+// pursuer answers the throttle 1.5-4 s late, so the gap MUST move.
+{
+  const cs = new CopSystem();
+  cs.stars = 1;                                   // a tail: no lunges to muddy it
+  let pp = 100000;
+  const cruise = MAX_SPEED * (60 / 120);
+  const cop = pursuitCop(pp + PLAYER_VIRTUAL_Z - 1200);
+  cop._reactSec = 3;                              // pin the lag; no RNG flake
+  cs.cops = [cop];
+  const gap = () => (pp + PLAYER_VIRTUAL_Z) - cop.position;
+  // Settle on station at a steady 60 mph.
+  for (let t = 0; t < 8; t += 1 / 60) { cs.update(1 / 60, pp, cruise, 0); pp += cruise / 60; }
+  const settled = gap();
+  // Now floor it — for the lag window the cop is still driving 60.
+  const fast = MAX_SPEED * (110 / 120);
+  for (let t = 0; t < 1.5; t += 1 / 60) { cs.update(1 / 60, pp, fast, 0); pp += fast / 60; }
+  const opened = gap();
+  check('reaction lag — flooring it OPENS the gap', opened > settled + 500);
+
+  // …and braking lets the stale-fast cruiser surge back in.
+  const slow = MAX_SPEED * (25 / 120);
+  for (let t = 0; t < 1.5; t += 1 / 60) { cs.update(1 / 60, pp, slow, 0); pp += slow / 60; }
+  check('reaction lag — braking lets it close back in', gap() < opened);
+  check('reaction lag — but it still never passes the player', gap() >= 0);
+}
+
+// The lag is per-unit, so a pack doesn't react in lockstep.
+{
+  const cs = new CopSystem();
+  cs.stars = 3;
+  const pp = 100000;
+  cs.cops = [pursuitCop(pp + PLAYER_VIRTUAL_Z - 1200),
+             pursuitCop(pp + PLAYER_VIRTUAL_Z - 2400)];
+  cs.update(1 / 60, pp, MAX_SPEED * 0.5, 0);
+  const lags = cs.cops.map(c => c._reactSec);
+  check('reaction lag — every unit gets one, inside 1.5-4 s',
+        lags.every(l => l >= 1.5 && l <= 4));
+}
+
+// PIT arming: reachable at 2★ (alongside, mid-lunge), never at 1★.
+for (const [s, expectArmed] of [[1, false], [2, true]]) {
+  const cs = new CopSystem();
+  cs.stars = s;
+  const pp = 100000;
+  const spd = MAX_SPEED * 0.5;
+  const cop = pursuitCop(pp + PLAYER_VIRTUAL_Z - 400, 0);   // alongside, in lane
+  cop._lungeT = 2.5;                                        // mid-strike
+  cs.cops = [cop];
+  let p2 = pp;
+  for (let t = 0; t < 1.2; t += 1 / 60) {
+    cop._lungeT = 2.5;                                      // hold the strike open
+    cs.update(1 / 60, p2, spd, 0);
+    p2 += spd / 60;
+    cop.position = p2 + PLAYER_VIRTUAL_Z - 400;             // pin alongside
+  }
+  check(`PIT arming at ${s}★ — ${expectArmed ? 'arms' : 'never arms'}`,
+        !!cop._pitArmed === expectArmed);
 }
 
 // The original bug the floor was introduced to fix must stay fixed: a partial

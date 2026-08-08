@@ -2,133 +2,144 @@
 // 3-5 facts per rest-stop town, keyed by the REST_STOPS stop id. When the
 // player pulls into a stop, the fact shown on the welcome / job card ROTATES
 // through the town's list (nextTownFact advances a per-stop index in the save)
-// so repeat visits don't keep showing the same line. Facts are informative,
-// road-trip-radio tone — real Washington geography, not the dark-comedy NPC
-// dialogue (that lives in encounters.js).
+// so repeat visits don't keep showing the same line.
+//
+// NOTE (owner 2026-08-04): rewritten because the old list was padded with
+// non-facts ("Snoqualmie Pass weather can change fast", "Thorp is little more
+// than a fruit stand") and generic geography that read as filler. EVERY line
+// below is a specific, checkable claim — a date, a number, a name, or an
+// event — and every one was web-verified against HistoryLink, city/park
+// sources, or the relevant museum before it shipped. Pick the strange true
+// thing over the tidy summary; that is the whole point of the card.
+//
+// This list WINS over an encounter card's own `fact` (RestStopScene prefers
+// `_townFact`), so a fact only reaches the player if it lives here.
 
 export const TOWN_FACTS = {
   // S — Seattle
   S: [
-    "I-90 starts right here in Seattle and runs ~3,000 miles east to Boston.",
-    "Seattle's hills were literally sluiced flat with water cannons in the early 1900s to regrade downtown.",
-    "The Emerald City is famously overcast, yet it gets less total rain per year than New York City.",
-    "Pike Place Market, open since 1907, is one of the oldest continuously running public markets in the U.S.",
+    "Pike Place Market opened in 1907 because onions had gone from a dime a pound to a dollar and farmers were done splitting the take with middlemen.",
+    "Seattle washed Denny Hill into Puget Sound with water cannons — holdouts who refused to sell had the hill sluiced out from under them and were left on dirt islands.",
+    "I-90 starts here and runs about 3,000 miles east to Boston. You're doing the first 300.",
+    "The Emerald City gets less rain per year than New York City. It just spreads it out to break you slowly.",
   ],
   // M — Mercer Island
   M: [
-    "Mercer Island sits in the middle of Lake Washington, reached only by the I-90 bridges.",
-    "The I-90 floating bridges to Mercer Island are among the longest floating bridges on Earth.",
-    "Mercer Island is its own city — around 25,000 people on ~6 square miles of wooded lakefront.",
-    "Before the first floating bridge opened in 1940, you could only reach Mercer Island by boat.",
-    "Minutes from downtown Seattle, Mercer Island stays almost entirely residential — trees, not towers.",
+    "The 1940 floating bridge was the largest thing afloat on Earth, and the first ever built on reinforced-concrete pontoons. Nobody believed it would hold.",
+    "In November 1990 the Lacey V. Murrow bridge broke up and sank into Lake Washington — a contractor had left the pontoon hatches open during a renovation.",
+    "Before the bridge opened in 1940, the only way onto Mercer Island was by boat.",
+    "Mercer Island is its own city — about 25,000 people on six square miles, reachable only by the I-90 spans.",
   ],
   // B — Bellevue
   B: [
-    "Bellevue grew from a quiet suburb into a glass-tower tech hub in barely two decades.",
-    "Bellevue is French for 'beautiful view' — of the Cascades and Lake Washington.",
-    "Once strawberry-farm country, Bellevue now hosts major tech campuses and headquarters.",
+    "Until World War II an American whaling fleet wintered in Meydenbauer Bay — the lake's fresh water killed the barnacles off the hulls.",
+    "That fleet killed 160 whales in 1928 alone, run out of what is now a downtown full of glass towers.",
+    "Bellevue's Strawberry Festival started in 1925 and by 1935 pulled 15,000 people — about five times the town's population.",
+    "William Meydenbauer, a German-immigrant baker, rowed across Lake Washington in 1869 and claimed the bay that still carries his name.",
   ],
   // I — Issaquah
   I: [
-    "Issaquah sits at the foot of the Cascades, where the suburbs finally give up.",
-    "Issaquah's name comes from a Native word often translated as 'the sound of birds.'",
-    "Salmon still spawn in Issaquah Creek each fall, drawing crowds to the town hatchery.",
-    "The three peaks over town — Squak, Tiger, and Cougar — are called the Issaquah Alps.",
+    "The town incorporated as Gilman in 1892, then renamed itself Issaquah in 1899 to get closer to the Lushootseed word settlers had flattened into 'Squak.'",
+    "Squak, Tiger and Cougar mountains over town are known as the Issaquah Alps.",
+    "Salmon still run up Issaquah Creek every fall, straight through the middle of town to the hatchery.",
+    "The name is usually translated as the sound of water birds — though the sources have argued about it for a century.",
   ],
   // SQ — Snoqualmie
   SQ: [
-    "Snoqualmie Falls drops 268 feet — higher than Niagara — just north of the highway.",
-    "The town of Snoqualmie grew up around timber and the railroad in the Cascade foothills.",
-    "Snoqualmie Falls and the lodge above it featured in the TV series Twin Peaks.",
+    "Snoqualmie Falls drops 268 feet — a full hundred feet taller than Niagara.",
+    "The powerhouse under the falls went online in 1899, the world's first hydroelectric plant built entirely underground, 270 feet down in solid rock.",
+    "The Salish Lodge above the falls played the Great Northern Hotel in Twin Peaks.",
   ],
   // N — North Bend
   N: [
-    "North Bend sits right under Mount Si, a 4,000-ft rock wall that looms over the whole town.",
-    "North Bend is the last real stop for gas and chains before the climb to Snoqualmie Pass.",
-    "North Bend's diner and streets doubled as the town of Twin Peaks on screen.",
-    "The name comes from the big northward bend the Snoqualmie River takes here.",
+    "North Bend played the town of Twin Peaks in 1990 — Twede's Cafe on North Bend Way was the Double R Diner.",
+    "Mount Si rises roughly 4,000 feet directly behind town, close enough to feel like it's leaning on you.",
+    "The name comes from the hard northward bend the Snoqualmie River takes right here.",
+    "A century ago this was the last stop before drivers attempted the pass. Not much has changed about that part.",
   ],
   // SP — Snoqualmie Pass
   SP: [
-    "The Snoqualmie Pass summit sits at 3,015 ft — the lowest major I-90 crossing of the Cascades.",
-    "Snoqualmie Pass weather can change fast between North Bend and the summit.",
-    "The pass gets around 400 inches of snow a year — chains are often required in winter.",
-    "I-90 climbs from sea level in Seattle to just over 3,000 ft at the pass.",
+    "The summit is 3,015 feet — the lowest major crossing of the Cascades, which tells you what the other ones are like.",
+    "Seattle pioneer Henry Yesler raffled off his own sawmill in 1875 to fund a better pass road, then kept nearly all the money.",
+    "The Sunset Highway over this pass was dedicated on July 1, 1915 as the state's first passable route across the Cascades — mostly unpaved, closed every winter.",
+    "The pass takes around 400 inches of snow a year.",
+    "The road traces an 1867 wagon route, which traced a trail Native travelers had used for centuries.",
   ],
   // EA — Easton
   EA: [
-    "Easton is a tiny Cascade-foothill town near the east end of the old railroad tunnel.",
-    "Just east of Easton the forest thins as the road drops toward the dry side of the mountains.",
-    "Lake Easton and its state park sit right off the highway — a popular summer stop.",
+    "The Northern Pacific put Easton here in 1886 as a station at the east end of the Stampede Tunnel.",
+    "That tunnel, open since 1888, runs 1.86 miles straight through the Cascades a few ridges south of you.",
+    "The Milwaukee Road's Snoqualmie Tunnel was electrified in 1914 and is now a bike trail you can walk end to end in the dark.",
   ],
   // C — Cle Elum
   C: [
-    "The forested Cle Elum stretch is prime elk country in the Cascade foothills.",
-    "Cle Elum's name comes from a Native word for 'swift water.'",
-    "Coal mining built Cle Elum; the town once fueled locomotives across the state.",
-    "Cle Elum ran one of the last hand-operated telephone switchboards in the U.S. until 1966.",
+    "Cle Elum ran the last hand-operated telephone switchboard west of the Mississippi. The operators put through their final call on September 18, 1966.",
+    "The town was spelled 'Clealum' until 1908 — mail kept ending up in Clallam, on the far side of the mountains.",
+    "The name comes from a Kittitas word for 'swift water.'",
+    "Coal built Cle Elum; the mines here fueled locomotives clear across the state.",
   ],
   // TH — Thorp
   TH: [
-    "Thorp is a tiny farm town in the Kittitas Valley, known for its historic grist mill.",
-    "The Thorp Mill, built in the 1880s, ground grain and sawed lumber for decades.",
-    "Thorp is little more than a fruit stand and a highway exit between Cle Elum and Ellensburg.",
+    "The Thorp Mill started grinding Kittitas Valley wheat in April 1883 and didn't stop until 1946 — the oldest industrial artifact left in the county.",
+    "It opened as the North Star Mill, run by a horizontal water wheel fed by a canal off the Yakima River.",
+    "The mill's first grindstones were hauled in from The Dalles, Oregon, by wagon.",
   ],
   // E — Ellensburg
   E: [
-    "Ellensburg is Kittitas County's rodeo-and-college town, roughly halfway across the state.",
-    "The Ellensburg Rodeo, run every Labor Day since 1923, is one of the biggest in the country.",
-    "Central Washington University anchors the town of Ellensburg.",
-    "After an 1889 fire, Ellensburg nearly became the state capital — it lost the vote to Olympia.",
+    "Ellensburg was the front-runner to be state capital until a fire on the night of July 4, 1889 took out ten blocks of downtown. Investigators called it arson and never named anyone.",
+    "It lost the capital vote to Olympia in November 1890 and got the state normal school — now Central Washington University — as the consolation prize.",
+    "The Ellensburg Rodeo has run since September 1923, when it was bolted onto the county fair just to draw a bigger crowd.",
+    "Kittitas Valley residents spent two days in June 1923 clearing brush by hand to build the rodeo grounds.",
   ],
   // V — Vantage
   V: [
-    "The Columbia River crossing at Vantage is known for strong, exposed crosswinds.",
-    "At Vantage, I-90 drops to the Columbia and the Ginkgo Petrified Forest fossil beds.",
-    "Ginkgo Petrified Forest preserves ancient logs turned to stone by lava and mud.",
-    "The Wild Horses Monument overlooks the highway on the bluff just east of Vantage.",
+    "The 1927 Vantage Bridge was taken apart in 1963 and rebuilt across the Snake River at Lyons Ferry, where it still carries traffic today.",
+    "The old bridge had to go because Wanapum Dam was about to raise the river over it.",
+    "Ginkgo Petrified Forest here preserves petrified ginkgo logs found in 1932 — one of the most diverse fossil forests in North America.",
+    "The steel horses on the bluff are 'Grandfather Cuts Loose the Ponies' — 15 life-size horses raised for Washington's 1989 centennial.",
   ],
   // Y — Royal City
   Y: [
-    "Royal City sits in the irrigated farmland of the Columbia Basin, off WA-26.",
-    "The Royal Slope around here is dense with vineyards, orchards, and center-pivot circles.",
-    "Royal City's farms exist thanks to the Columbia Basin Project's canals and dams.",
+    "Royal City was laid out in 1956 and incorporated in 1962. Before that the townsite was just called Royal Flats.",
+    "There was a Titan I nuclear missile silo out in this farmland in the 1960s.",
+    "The Royal Slope became Washington's 15th designated wine region in September 2020.",
   ],
   // O — Othello
   O: [
-    "The Columbia Basin around Othello is heavy irrigated farmland — long dark stretches between services.",
-    "Othello hosts a Sandhill Crane Festival each spring as thousands of cranes pass through.",
-    "Othello grew as a railroad town, then boomed when irrigation reached the desert soil.",
+    "Othello got its name from a post office in Roane County, Tennessee. Nothing to do with Shakespeare.",
+    "Thousands of sandhill cranes stage here every March, and the town has thrown them a festival since 1998.",
+    "The Milwaukee Road arrived in 1907; the town later ran an ice plant just to keep produce cold in the rail cars.",
   ],
   // H — Hatton
   H: [
-    "Hatton is a tiny spot on WA-26, in the sparse country between Othello and Washtucna.",
-    "Hatton is nearly a ghost town — a grain elevator, a few homes, and a lot of wheat.",
-    "The Hatton Coulee rest area is one of the only stops for miles along WA-26.",
+    "Before 1890 this stop was called Twin Wells, after the two wells drilled to water the railroad crews.",
+    "'Hatton' is a mash-up of a wedding — postmistress Belle Sutton married railroad agent John Hackett, and the town took halves of both names.",
+    "Hatton peaked at 500 people in 1913, with three grain elevators, two hotels, a bank, and electric street lights. Count what's left.",
   ],
   // W — Washtucna
   W: [
-    "The Washtucna area is sparse wheat-country highway — long gaps between help.",
-    "Washtucna sits at the edge of the Channeled Scablands, carved by Ice Age megafloods.",
-    "Nearby Palouse Falls — Washington's state waterfall — drops 200 feet into a scabland gorge.",
+    "Washtucna was named for a Palouse leader; the name is also said to mean 'many waters,' after a big spring on the townsite.",
+    "Palouse Falls, twenty minutes south, drops 198 feet into a scabland gorge and has been the official state waterfall since 2014.",
+    "The canyons out here were cut in days, not eons — Ice Age megafloods scoured the Channeled Scablands about 13,000 years ago.",
+    "A WSU anthropologist dug artifacts out near those falls dated 10,000 to 12,000 years old.",
   ],
   // L — La Crosse
   L: [
-    "La Crosse is a small Whitman County wheat town on the western edge of the Palouse.",
-    "La Crosse is known for its 'Rock Wall,' a folk-art fence built from local basalt and odds and ends.",
-    "Out here the land rolls into the Palouse — some of the most productive dryland wheat country on Earth.",
+    "La Crosse started in 1888 when the railroad reached here and George Dawson built a shack out of leftover ties.",
+    "The town nearly ended up named 'Dunlor' — there's a signed 1889 petition for it.",
+    "This is the western edge of the Palouse, some of the most productive dryland wheat country on Earth.",
   ],
   // CO — Colfax
   CO: [
-    "Colfax is the Whitman County seat, tucked into the rolling hills of the Palouse.",
-    "The Palouse hills around Colfax are wind-deposited soil, farmed for wheat and lentils.",
-    "Colfax sits along the Palouse River on the old route between Spokane and the wheat country.",
+    "Colfax was first called Belleville, after the founder's hometown. The story goes his wife made him change it because it was too close to the name of his old girlfriend, Belle.",
+    "The 65-foot Codger Pole downtown is a chainsaw sculpture of the 1938 Colfax and St. John football teams, who played their rematch in 1988 in their seventies. Colfax won 6-0.",
+    "The Perkins House, built by the town's founder in 1886, was bought by the county historical society in 1973 for $13,900.",
   ],
   // P — Pullman
   P: [
-    "Pullman is home to Washington State University and its Cougars.",
-    "Pullman is built on seven hills in the heart of the Palouse.",
-    "WSU's creamery in Pullman is famous for Cougar Gold, a canned cheddar aged for years.",
+    "Pullman was called Three Forks until 1881, when a $50 donation from railcar magnate George Pullman bought the naming rights. He never once set foot in it.",
+    "WSU's creamery cans Cougar Gold cheddar — sealed in the tin it keeps in the fridge indefinitely and only gets better.",
+    "Cougar Gold is named for Dr. N. S. Golding, the professor whose research made canned cheese work at all.",
     "You made it — Pullman, the end of the road and the start of the party.",
   ],
 };

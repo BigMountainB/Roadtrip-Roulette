@@ -221,44 +221,44 @@ const PASSENGERS = [
   {
     id: 'student', name: 'Nervous Student', portrait: 'college_kid', quirk: 'nervous',
     ask: "I missed the last bus and my finals won't wait — I can pay; just drive like my mom's at the gate.",
-    pickup:  '"Seatbelt. Both hands. Great. Perfect. Love it."',
+    pickup:  '"Seatbelt. Both hands. Great. Perfect. Love it. Love this."',
     mid:     '"You\'re doing great. I\'m saying that for both of us."',
-    dropoff: '"We lived! Here — take it before I count it."',
+    dropoff: '"WE LIVED! Here — take it before I count it and change my mind."',
   },
   {
     id: 'hitcher', name: 'Hitchhiker', portrait: 'hiker_woman', quirk: 'thrill_seeker',
     ask: "Need a lift up the road a spell — I chip in for gas, don't scream, ride well, and tip good coin for a story you tell.",
-    pickup:  '"Music\'s yours, pedal\'s yours. Impress me."',
-    mid:     '"Is that all this thing does? Kidding. Mostly."',
-    dropoff: '"Decent run. Here\'s the fare."',
+    pickup:  '"Music\'s yours. Pedal\'s yours. Impress me."',
+    mid:     '"Is that all this thing does? ...Kidding. Mostly."',
+    dropoff: '"Decent run. Here\'s the fare, and here\'s a tip: nobody\'s ever impressed on the brakes."',
   },
   {
     id: 'oddball', name: 'Desert Oddball', portrait: 'desert_oddball', quirk: 'fugitive',
     ask: "I need to be gone from here, and swift — and skip any cops, if you catch my drift.",
     pickup:  '"If anyone asks, I\'ve been asleep since Tuesday."',
-    mid:     'He checks the mirror more than you do.',
-    dropoff: '"You never saw me. The money saw you, though."',
+    mid:     'He checks the mirror more than you do. He has not blinked in a while.',
+    dropoff: '"You never saw me. The money saw you, though. The money remembers."',
   },
   {
     id: 'grandma', name: 'Roadside Grandma', portrait: 'grandma', quirk: 'carsick',
     ask: "My grandson never calls or drives me a lick — you look sturdy, dear; smooth roads, and no tricks.",
-    pickup:  '"I get queasy, dear. Pretend you\'re carrying soup."',
-    mid:     '"My late husband drove like this. He\'s late for a reason."',
-    dropoff: '"A gentleman. Or close enough. Here you are, dear."',
+    pickup:  '"I get queasy, dear. Pretend you\'re carrying soup. Open soup."',
+    mid:     '"My late husband drove like this. He is late for a reason."',
+    dropoff: '"A gentleman. Or close enough at this hour. Here you are, dear."',
   },
   {
     id: 'skibum', name: 'Ski Bum', portrait: 'ski_bum', quirk: 'nervous',
     ask: "Board's waxed, but my ride just fell right through — get me up the road and the lift-ticket money's for you.",
-    pickup:  '"Powder day, man. Every minute counts. But like, safely."',
-    mid:     '"Whoa. Okay. The mountain isn\'t going anywhere, right?"',
-    dropoff: '"Righteous. Here\'s the cash — first run\'s for you."',
+    pickup:  '"Powder day, man. Every minute counts. But like — safely."',
+    mid:     '"Whoa. Okay. Cool. The mountain isn\'t going anywhere, right? Right?"',
+    dropoff: '"Righteous. Here\'s the cash. First run\'s for you, wherever you\'re dying next."',
   },
   {
     id: 'oldtimer', name: 'Old-Timer', portrait: 'old_timer', quirk: 'carsick',
     ask: "Truck died. There's a doctor waiting down the way, and my gut's older than your car — go easy, I pray.",
-    pickup:  '"Drove this road before it had lines painted on it."',
+    pickup:  '"Drove this road before anybody bothered painting lines on it."',
     mid:     '"Mind the bumps, son. Breakfast is negotiating."',
-    dropoff: '"Smoother than my nephew, and he does it for a living."',
+    dropoff: '"Smoother than my nephew, and he does this for a living. Don\'t tell him."',
   },
 ];
 
@@ -293,14 +293,14 @@ export function contactIdFor(stopId) { return `contact_${stopId}`; }
  *  fresh contact so the caller keeps its stock opener. */
 export function contactGreeting(mem = {}) {
   if (mem.failAckPending) {
-    return "Heard how the last one hit the wall — cargo's gone, we'll square it all; clean slate, driver, no more said, if you're still rolling on ahead.";
+    return "Heard the last one hit a wall — cargo's gone, I've eaten it all. Clean slate, driver, nothing said, long as you're still rolling ahead.";
   }
   const n = mem.jobsCompleted ?? 0;
-  if (n >= 8) return "There's my legend, come to call — the big runs go to you, that's all; nobody else gets word of these, so take your pick of them with ease.";
-  if (n >= 3) return `Back again? That's ${n} runs you've made — I'm saving the sweetest jobs for your trade.`;
+  if (n >= 8) return "There's my legend, come to call. The big runs go to you, that's all — nobody else hears these exist, so pick whichever's on the list.";
+  if (n >= 3) return `That's ${n} runs and not one lost. I've been holding back the sweet ones, and you're going to like the cost.`;
   if (n >= 1) return n === 1
     ? "You delivered last time, I recall — got more to move, if you're up for the haul."
-    : `That's ${n} runs you've run for me now — keep it up and I'll trust you somehow.`;
+    : `Two for two, and I don't say that twice. Got something bigger, if you're feeling nice.`;
   return null;
 }
 

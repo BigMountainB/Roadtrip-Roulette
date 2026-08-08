@@ -3,7 +3,7 @@ import { BootScene }    from './scenes/BootScene.js';
 import { GameScene }    from './scenes/GameScene.js';
 import { RestStopScene } from './scenes/RestStopScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
-import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, REST_STOPS, setWorldWidth, DEMO_MODE, DEMO_GENRES } from './constants.js';
+import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, REST_STOPS, setWorldWidth, DEMO_MODE, DEMO_GENRES, DEFAULT_GENRE } from './constants.js';
 // Expose demo flags for index.html's inline music/genre UI (the genre grid
 // locks non-demo genres when __DEMO is set).  Set at module load so the inline
 // scripts — which run after the module — can read them.
@@ -1003,7 +1003,8 @@ const _boot = () => {
     get: () => {
       const g = game.registry.get('save')?.get?.('genre', null);
       if (g) return g;
-      try { return localStorage.getItem('rtr.genre') || null; } catch (_) { return null; }
+      // No pick yet → the DEFAULT car (hip-hop/phonk), never the base beater.
+      try { return localStorage.getItem('rtr.genre') || DEFAULT_GENRE; } catch (_) { return DEFAULT_GENRE; }
     },
     // ── Genre-car ownership (dealership $25k buys; the tutorial pick is the
     // free starter).  Stored per-plate under 'genresOwned'; in a Custom run
@@ -1013,7 +1014,9 @@ const _boot = () => {
       let list = save?.get?.('genresOwned', null);
       if (!Array.isArray(list)) list = [];
       // Self-heal pre-dealership plates: the active genre is always owned.
-      const g = save?.get?.('genre', null);
+      // Effective genre (incl. the default) is always owned — the default car
+      // must never show as a $25k purchase in the dealership.
+      const g = window.__genre.get();
       if (g && !list.includes(g)) { list = [...list, g]; save?.set?.('genresOwned', list); }
       return list;
     },
@@ -1040,7 +1043,8 @@ const _boot = () => {
         else   localStorage.removeItem('rtr.genre');
       } catch (_) {}
       const s = game.scene?.getScene?.('Game');
-      try { s?._applyGenreArt?.(g); } catch (_) {}
+      // A plate with no stored genre reverts to the DEFAULT car, not base art.
+      try { s?._applyGenreArt?.(g || DEFAULT_GENRE); } catch (_) {}
       return g;
     },
   };
@@ -1271,6 +1275,24 @@ const _boot = () => {
   window.addEventListener('resize',            onOrientationChange);
   window.addEventListener('orientationchange', onOrientationChange);
   requestAnimationFrame(applyOrientation);
+  // ── Cold-load settle (owner 2026-08-05: black bar on first landscape load,
+  // cured only by rotating away and back).  A ROTATION gets the settle ladder
+  // in onOrientationChange, but a page loaded ALREADY in landscape got just
+  // the single rAF fit above — before iOS resolves the safe-area insets and
+  // collapses the toolbar, and that late settling doesn't reliably fire
+  // `resize`.  The canvas stayed fitted to the stale (shorter) box: an
+  // over-wide world with a letterboxed black bar underneath.  Run the same
+  // ladder on boot, and keep a ResizeObserver on #game-root so ANY later box
+  // change (toolbar show/hide, PWA chrome, split-view) re-fits without
+  // needing a rotation.  applyOrientation is idempotent + cheap.
+  for (const ms of [120, 300, 550, 900, 1600]) setTimeout(applyOrientation, ms);
+  try {
+    const _root = document.getElementById('game-root');
+    if (_root && 'ResizeObserver' in window) {
+      new ResizeObserver(() => applyOrientation()).observe(_root);
+    }
+  } catch (_) {}
+  try { window.visualViewport?.addEventListener?.('resize', onOrientationChange); } catch (_) {}
 };
 
 // If DOM is already parsed (modules execute after DOMContentLoaded

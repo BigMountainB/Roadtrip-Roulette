@@ -3,6 +3,7 @@ import { SCREEN_W, SCREEN_H, HUD_OFFSET_X } from '../constants.js';
 import { AudioSystem } from '../systems/AudioSystem.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { flattenManifest, genreArtPath } from '../systems/AssetManifest.js';
+import { DEFAULT_GENRE } from '../constants.js';
 import { Wallet } from '../economy/Wallet.js';
 import { StatsTracker } from '../systems/StatsTracker.js';
 
@@ -68,8 +69,8 @@ export class BootScene extends Phaser.Scene {
     if (loadingSplash) this.load.image(loadingSplash.key, loadingSplash.path);
     // Genre/culture art: if a genre was chosen, load its vice + starter-vehicle
     // art in place of the defaults (owner 2026-07-17).
-    let _genre = null;
-    try { _genre = window.localStorage?.getItem?.('rtr.genre') || null; } catch (_) {}
+    let _genre = DEFAULT_GENRE;
+    try { _genre = window.localStorage?.getItem?.('rtr.genre') || DEFAULT_GENRE; } catch (_) {}
     for (const { key, path } of manifest) {
       if (key === loadingSplash?.key) continue;
       this.load.image(key, genreArtPath(key, _genre) ?? path);
