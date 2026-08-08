@@ -523,6 +523,46 @@ now measures max-over-time (also the stronger pool guarantee) rather than a sing
 *by design*, making that assertion a coin flip. Also fixed an unbounded `do/while` in the barricade
 gap picker that the decay-pause change exposed (it never terminated with `Math.random` pinned).
 
+### 2026-08-04 (pt 3) — Shopping signs move in-engine (and stop lying about what's at the stop)
+Committed. Tests 737 green, build clean. Verified in-engine by screenshotting composed signs.
+
+**Why the signs were deleted.** Owner deleted all 19 `sign_*.png` because most looked broken —
+and they were, in two ways. `scripts/buildShoppingSigns.js` drew a fixed 2×3 grid of six white
+plaques and filled only as many as the stop had businesses, so a 3-shop stop shipped with three
+empty white boxes. Worse, the script carried its **own inline copy of the rest-stop list**, that
+copy had gone stale, and the signs were advertising the wrong businesses — Mercer Island's sign
+offered camping while the live stop sells Gas-N-Sip / Lord Motors / Park & Ride. The script also
+couldn't be re-run at all: its blank template and logo art lived in `Archive/Images/`, which is
+gitignored and no longer exists.
+
+**Now composed at runtime** (`src/data/shoppingSign.js`, `ensureStopSign`). Each stop's placard is
+built into a RenderTexture on first sight, from `REST_STOPS` + the `biz_*` logo textures the game
+already loads for the rest-stop landing placards, and saved under the same `sign_<id>` key the
+renderer always used. **The drift bug is now structurally impossible** — there is no baked artifact
+that can disagree with the data. 19 baked PNGs (2.4 MB) → 2 shipped inputs (~30 KB):
+`sign_blank.png` (border + header + flat blue) and `sign_plaque.png` (one empty slot with its
+bevel), both extracted from the original authored art so the blue (`rgb 27,47,180`), header
+typography and plaque bevel are unchanged. VRAM is a wash — 19 composed textures cost what 19
+loaded PNGs did — and they're lazy, so only the stops a run reaches are paid for.
+
+**Logo sizing** (owner: "the logos look smaller than I'd like"). Two causes, both fixed:
+- **Aspect mismatch.** Most brand logos are WIDE — FAP 3.3:1, Les Schwasted 3.0:1 — against a
+  1.37:1 plaque, so width binds first and a uniform pad wasted horizontal room while leaving
+  vertical dead space. Padding is now asymmetric (5% x, 10% y): wide logos run nearly edge to edge,
+  near-square ones like Huff's stay clear of the rounded corners. Les Schwasted went 26% → 36% of
+  its plaque, FAP 24% → 34%, AOK 35% → 49%.
+- **Plaques grew 20%.** Slot centres stay put so the grid still reads as the authored layout; the
+  plaques grow into the gutters, which drop from ~61×50 px to ~25×24 px.
+
+**`LOGO_BBOX`.** Several logo PNGs carry heavy transparent padding (park-and-ride 283×129, FAP
+197×126). The baked pipeline got this for free from sharp's `trim()`; in-engine it has to be
+measured, so the opaque box of each logo is a generated table — same pattern as `ENDING_CAR_BBOX`.
+Without it those logos would render visibly smaller than the rest and off-centre.
+
+Deleted: the 19 baked PNGs, `scripts/buildShoppingSigns.js`, the `build:signs` npm script, the
+now-dead `signKey` sprite field and the `STOPS_WITHOUT_BAKED_SIGN` gate (there is no longer such a
+thing as a stop whose art hasn't been baked).
+
 ### 2026-08-04 (pt 2) — Ending plates: genre-car endings, and OUT OF GAS becomes a decision
 Uncommitted (`src/data/endingArt.js` new; `GameOverScene.js`, `GameScene.js`, `constants.js`).
 Tests 550 green, build clean. BUSTED / CRASHED / PASSED OUT / DEMO / Pullman verified in-engine

@@ -2771,23 +2771,18 @@ export function buildRoute(count = ROUTE_SEGS) {
     // exit sign).  Sized to match exit_sign_green so the placard is held
     // up off the ground by tall steel legs (face occupies the upper ~62 %
     // of the sprite area, legs reach down to the road surface).  The
-    // pre-baked PNG is overlaid by GameScene._renderSignDecals at the
-    // PNG's natural 1277:840 aspect, centered inside the white frame
+    // composed sign is overlaid by GameScene._renderSignDecals at its
+    // natural 1277:840 aspect, centered inside the white frame
     // painted by Road.js's case 'amenities_sign'.
     //
-    // STOPS_WITHOUT_BAKED_SIGN: rest stops with no sign_<id>.png on disk
-    // (no overlay PNG → the placard renders as a blank white frame).
-    // Skip the placard spawn entirely for those stops until the asset is
-    // baked via `npm run build:signs`.  All stops now have baked signs
-    // (Hatton's sign_H.png was baked 2026-06-05).
-    const STOPS_WITHOUT_BAKED_SIGN = new Set();
-    if (!STOPS_WITHOUT_BAKED_SIGN.has(rs.id)) {
+    // Every stop gets a placard: the sign is composed in-engine from the stop's
+    // own amenities (src/data/shoppingSign.js), so there's no longer any such
+    // thing as a stop whose art hasn't been baked yet.
     const amenSegIdx = findDrySeg(((segAt(Math.max(0, rs.mileage - 0.75)) % count) + count) % count);
     segments[amenSegIdx].sprites.push({
       type:       'amenities_sign',
       stopId:     rs.id,
       amenities:  rs.amenities ?? [],
-      signKey:    `sign_${rs.id}`,                   // pre-baked PNG key
       // offset 2.4: largest sign (baseW 6700, face 1.30w → 2.42 road
       // units wide, half = 1.21).  Face spans offset 1.19 to 3.61 —
       // fully clear of the road (road ends at 1.0).
@@ -2798,7 +2793,6 @@ export function buildRoute(count = ROUTE_SEGS) {
       baseW: 6700, baseH: 9200,
       collected:  false,
     });
-    }   // end STOPS_WITHOUT_BAKED_SIGN gate
 
     // Paint the actual exit ramp.  rampStrength ramps 0 → 1 over the last
     // RAMP_WINDOW segments; Road.js reads it to widen the right shoulder

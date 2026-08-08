@@ -378,29 +378,12 @@ export const ASSET_MANIFEST = {
     // right travel lane; only the pole base on the shoulder is collidable.
     // Placed once near Vantage (mile ~137).
     { key: 'freeway_sign_wind', path: 'assets/businesses/freeway_sign_wind.png' },
-    // Per-stop "SHOPPING - NEXT RIGHT" signs — pre-baked by
-    // scripts/buildShoppingSigns.js from the user's blank template +
-    // brand logos.  One PNG per REST_STOP id; rerun `npm run build:signs`
-    // after editing any brand logo or amenity assignment.
-    { key: 'sign_S',  path: 'assets/businesses/sign_S.png'  },
-    { key: 'sign_M',  path: 'assets/businesses/sign_M.png'  },
-    { key: 'sign_B',  path: 'assets/businesses/sign_B.png'  },
-    { key: 'sign_I',  path: 'assets/businesses/sign_I.png'  },
-    { key: 'sign_SQ', path: 'assets/businesses/sign_SQ.png' },
-    { key: 'sign_N',  path: 'assets/businesses/sign_N.png'  },
-    { key: 'sign_SP', path: 'assets/businesses/sign_SP.png' },
-    { key: 'sign_EA', path: 'assets/businesses/sign_EA.png' },
-    { key: 'sign_C',  path: 'assets/businesses/sign_C.png'  },
-    { key: 'sign_TH', path: 'assets/businesses/sign_TH.png' },
-    { key: 'sign_E',  path: 'assets/businesses/sign_E.png'  },
-    { key: 'sign_V',  path: 'assets/businesses/sign_V.png'  },
-    { key: 'sign_Y',  path: 'assets/businesses/sign_Y.png'  },
-    { key: 'sign_O',  path: 'assets/businesses/sign_O.png'  },
-    { key: 'sign_H',  path: 'assets/businesses/sign_H.png'  },
-    { key: 'sign_W',  path: 'assets/businesses/sign_W.png'  },
-    { key: 'sign_L',  path: 'assets/businesses/sign_L.png'  },
-    { key: 'sign_CO', path: 'assets/businesses/sign_CO.png' },
-    { key: 'sign_P',  path: 'assets/businesses/sign_P.png'  },
+    // The per-stop "SHOPPING - NEXT RIGHT" placards are composed in-engine from
+    // these two pieces (src/data/shoppingSign.js) rather than shipped as 19 baked
+    // PNGs -- baked signs had no way to know a stop's shops had changed, and spent
+    // a while advertising businesses that weren't there.
+    { key: 'sign_blank',  path: 'assets/businesses/sign_blank.png'  },
+    { key: 'sign_plaque', path: 'assets/businesses/sign_plaque.png' },
   ],
   trees: [
     // Urban broadleaves — Seattle / Mercer Island / Bellevue street &

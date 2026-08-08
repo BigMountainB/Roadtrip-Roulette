@@ -49,6 +49,7 @@ import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
 import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
 import { genreArtPath, genreDefaultPath, GENRE_ART } from '../systems/AssetManifest.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
+import { ensureStopSign } from '../data/shoppingSign.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
 import { Difficulty }    from '../systems/Difficulty.js';
 import { TimeOfDay }     from '../world/TimeOfDay.js';
@@ -16075,15 +16076,20 @@ export class GameScene extends Phaser.Scene {
           const badgeX    = cx - signW * 0.5 + badgeSize * 0.5 + padX;
           const badgeY    = topY + badgeSize * 0.5 + padY;
           place(sp.hwyKey, badgeX, badgeY, badgeSize, badgeSize, depth, decalAlpha);
-        } else if (sp.type === 'amenities_sign' && sp.signKey) {
-          // Pre-baked "SHOPPING - NEXT RIGHT" PNG — preserve the
-          // source 1277:840 ≈ 1.52:1 aspect.  Bumped from 1.20→1.55
-          // so the brand logos fill more of the white frame and are
-          // readable from approach distance.
-          const pngW   = signW * 1.55;
-          const pngH   = pngW / 1.52;          // preserve source aspect
-          const pngCy  = topY + signW * 0.395; // center of white frame
-          place(sp.signKey, cx, pngCy, pngW, pngH, depth, decalAlpha);
+        } else if (sp.type === 'amenities_sign' && sp.stopId) {
+          // "SHOPPING - NEXT RIGHT" placard, composed in-engine on first sight
+          // of this stop (src/data/shoppingSign.js) so it can never disagree
+          // with REST_STOPS about which businesses are there.  Preserve the
+          // source 1277:840 ≈ 1.52:1 aspect.  Bumped from 1.20→1.55 so the
+          // brand logos fill more of the white frame and are readable from
+          // approach distance.
+          const signKey = ensureStopSign(this, REST_STOPS.find(r => r.id === sp.stopId) ?? sp);
+          if (signKey) {
+            const pngW   = signW * 1.55;
+            const pngH   = pngW / 1.52;          // preserve source aspect
+            const pngCy  = topY + signW * 0.395; // center of white frame
+            place(signKey, cx, pngCy, pngW, pngH, depth, decalAlpha);
+          }
         }
       }
     }
