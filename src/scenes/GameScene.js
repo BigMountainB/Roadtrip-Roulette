@@ -50,6 +50,8 @@ import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
 import { genreArtPath, genreDefaultPath, GENRE_ART } from '../systems/AssetManifest.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
 import { ensureStopSign } from '../data/shoppingSign.js';
+import { FAIL_REASON, selectTip, tipContext } from '../data/endingTips.js';
+import { showNextRunPanel } from '../ui/NextRunPanel.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
 import { Difficulty }    from '../systems/Difficulty.js';
 import { TimeOfDay }     from '../world/TimeOfDay.js';
@@ -965,6 +967,17 @@ export class GameScene extends Phaser.Scene {
     // HUD the player can see this coming, so auto-ending the run is fair.
     this.damage.on('wreck', ({ source } = {}) => {
       this.stats?.recordWreck();
+      // Classify the wreck for the ending screen's NEXT RUN advice: was this
+      // one big hit, or the last straw after a run of small ones?  The killing
+      // blow's size relative to max HP is the honest split — a hit worth a
+      // third of the bar is a crash, anything smaller is attrition.
+      {
+        const max = this.damage?.getMax?.() ?? 100;
+        const hit = this._lastHitAmount ?? 0;
+        this._failReason = hit >= max * 0.30
+          ? FAIL_REASON.CRASHED_MAJOR
+          : FAIL_REASON.CRASHED_ACCUMULATED;
+      }
       // A cop landing the killing blow (rear ram / PIT / barricade / smash —
       // all tagged 'cop_*') is a BUST: the police ran you down, not a solo
       // crash.  Route through the normal arrest path so the bail loss applies.
@@ -977,6 +990,9 @@ export class GameScene extends Phaser.Scene {
     // first-tap path clears.
     this.damage.on('damage', ({ amount } = {}) => {
       this.stats?.recordDamage(amount);
+      // Size of the most recent hit — the 'wreck' handler reads it to tell a
+      // single catastrophic collision from death by a thousand scrapes.
+      this._lastHitAmount = amount ?? 0;
       if (this._awaitingFirstGameTap || this._steerLockUntilTap) {
         this._awaitingFirstGameTap = false;
         this._steerLockUntilTap    = false;
@@ -4268,6 +4284,7 @@ export class GameScene extends Phaser.Scene {
       if (this.survival.isAsleep() && !this._asleepHandled) {
         this._asleepHandled = true;
         this._showPopup?.('😴 YOU FELL ASLEEP AT THE WHEEL', '#FF5C7A');
+        this._failReason = FAIL_REASON.PASSED_OUT;
         this._endGame?.('passed_out', { charge: 'FATIGUE' });
       }
 
@@ -4721,6 +4738,10 @@ export class GameScene extends Phaser.Scene {
         this._trapComplyTimer   = 0;
         this.cops.promoteTrapPursuit?.();
         this.cops.addStar(1, 3);   // ignored the stop → into the wanted system
+        // Remember WHY this pursuit exists, so a bust that follows is reported
+        // as "failed to pull over" rather than a generic chase.  Cleared once
+        // the heat is gone (below) — by then the pursuit is its own story.
+        this._trapIgnored = true;
         this._showPopup('Failed to pull over!  +1★', '#FF4444');
       }
     }
@@ -4798,6 +4819,9 @@ export class GameScene extends Phaser.Scene {
     // After the first star, all further star changes are STATIC additions
     // from collision events (see _onCopCollision and friends).  No heat trickle.
     if (this.cops.stars < 1) {
+      // Heat's gone — a later bust is its own pursuit, not the traffic stop
+      // this player once drove away from.
+      this._trapIgnored = false;
       this._npcCrashesReckless ??= 0;
       this._viceBumpCount      ??= 0;
       // Reckless driving draws heat: 3 NPC wrecks (pathA), or a longer tally of
@@ -6634,6 +6658,7 @@ export class GameScene extends Phaser.Scene {
       // Held traffic stop — pin the body flat so it can't lean/rock (steering
       // is already disabled and screen-X is frozen via the locked p.x).
       if (this._trapStopHeld) this.playerSprite.angle = 0;
+      this._updateSteerPose(dt, rawLean);
       // Crash i-frame blink — 7 Hz alpha toggle so the player can see
       // they're temporarily invulnerable.  Outside the window keep the
       // sprite fully opaque (other systems don't touch alpha).
@@ -13617,6 +13642,55 @@ export class GameScene extends Phaser.Scene {
     return terms.join(' ') + (parts.clamped ? '  [CLAMPED 0.1-1.8]' : '');
   }
 
+  /** Steering pose (owner 2026-08-08) — swap the player sprite between the
+   *  straight rear view and the rear-three-quarter turn art.  VISUAL ONLY:
+   *  reads the resolved lateral velocity (identical for touch / keyboard /
+   *  tilt by construction), writes nothing back to physics.
+   *
+   *  Direction mapping (verified against the art + capture): the turn PNGs
+   *  depict the car turning toward SCREEN-LEFT, and steerIn is −1 for left —
+   *  so lean < 0 shows the art unflipped and lean > 0 mirrors it.
+   *
+   *  Feel: 80 ms sustained input to turn in, 110 ms hold after release, with
+   *  a 0.30-engage / 0.14-release hysteresis band so analog noise and quick
+   *  taps never flicker the texture.  A direction reversal passes through the
+   *  straight pose (release → re-engage).  Turn art exists only for the genre
+   *  starter, so any other vehicle art keeps the straight sprite untouched.
+   */
+  _updateSteerPose(dt, rawLean) {
+    const ps = this.playerSprite;
+    if (!ps || this._cockpitActive) return;
+    const base = 'codex_beater_back', turn = 'codex_beater_back_turn';
+    if (this._playerArtKey !== base || !this.textures.exists(turn)) return;
+    const P = (this._steerPose ??= { dir: 0, pend: 0, engT: 0, relT: 0 });
+    const ENGAGE_LEAN = 0.30, RELEASE_LEAN = 0.14;
+    const ENGAGE_SEC  = 0.08, RELEASE_SEC  = 0.11;
+    const want = rawLean <= -ENGAGE_LEAN ? -1 : rawLean >= ENGAGE_LEAN ? 1 : 0;
+    if (P.dir === 0) {
+      if (want !== 0 && want === P.pend) {
+        P.engT += dt;
+        if (P.engT >= ENGAGE_SEC) { P.dir = want; P.relT = 0; }
+      } else { P.pend = want; P.engT = 0; }
+    } else {
+      const held = (P.dir < 0 && rawLean <= -RELEASE_LEAN)
+                || (P.dir > 0 && rawLean >=  RELEASE_LEAN);
+      if (held) P.relT = 0;
+      else {
+        P.relT += dt;
+        if (P.relT >= RELEASE_SEC) { P.dir = 0; P.pend = 0; P.engT = 0; }
+      }
+    }
+    const wantTex = P.dir === 0 ? base : turn;
+    if (ps.texture.key !== wantTex) {
+      ps.setTexture(wantTex);
+      // Same canvas dims by asset contract, but re-assert the ±2 sizing so a
+      // future art revision can never cause a scale jump on pose swap.
+      this._applyPlayerSpriteDisplaySize();
+    }
+    const wantFlip = P.dir > 0;
+    if (ps.flipX !== (P.dir !== 0 && wantFlip)) ps.setFlipX(P.dir !== 0 && wantFlip);
+  }
+
   /** Show the player's real car art as soon as it's loaded.  The sprite is
    *  mounted invisible (on a 1×1) if the texture wasn't ready at create time;
    *  this swaps in the real per-vehicle art and reveals it.  Cheap no-op once
@@ -13639,6 +13713,24 @@ export class GameScene extends Phaser.Scene {
     if (procedural) {
       this.playerSprite.setDisplaySize(targetW, fallbackH);
       return;
+    }
+    // TURN pose: size from the STRAIGHT art's pin factor, not from this
+    // texture's own canvas.  buildTurnSprites.mjs guarantees the two arts
+    // share pixels-per-car-unit and bottom padding, so rendering both at ONE
+    // px factor keeps the rear face, tire baseline and centre visually fixed
+    // — the turn canvas is WIDER (the newly visible side), and pinning that
+    // wider canvas to 78 px was exactly the "car shrinks when it turns" bug
+    // (owner 2026-08-09).
+    if (texKey === 'codex_beater_back_turn') {
+      const sSrc = this.textures.get('codex_beater_back')?.getSourceImage?.();
+      const tSrc = this.textures.get(texKey)?.getSourceImage?.();
+      if (sSrc?.width && tSrc?.width) {
+        const sRatio = sSrc.height / sSrc.width;
+        const w = targetW + (sRatio >= 0.86 ? 2 : sRatio <= 0.72 ? -2 : 0);
+        const f = w / sSrc.width;
+        this.playerSprite.setDisplaySize(tSrc.width * f, tSrc.height * f);
+        return;
+      }
     }
     const src = this.textures.get(texKey)?.getSourceImage?.();
     const tw = src?.width || targetW;
@@ -18235,6 +18327,18 @@ export class GameScene extends Phaser.Scene {
       }).setOrigin(0.5).setDepth(D + 5);
       add(g, t);
     };
+
+    // NEXT RUN advice, same panel as the ending screens. Anchored per plate so
+    // it clears the car; never interactive, so it can't eat a button tap.
+    {
+      const tip = selectTip(FAIL_REASON.OUT_OF_GAS, 'out_of_gas', tipContext(this));
+      if (tip && spec.tips) {
+        const panel = showNextRunPanel(this, tip, {
+          ...spec.tips, depth: D + 4, delay: 320, camera: this.cameras.main,
+        });
+        if (panel) objs.push(panel);
+      }
+    }
 
     mkBtn(SCREEN_W / 2 - 250, 220,
           canTow ? `TOW — $${TOW_COST_USD.toLocaleString()}` : `NEED $${short.toLocaleString()} MORE`,
@@ -23275,6 +23379,14 @@ export class GameScene extends Phaser.Scene {
     // player can be busted again later in the run.)
     if (this._arrestHandled) return;
     this._arrestHandled = true;
+    // Classify the bust for the ending screen's NEXT RUN advice, most specific
+    // first.  A trap that's still live means the trooper took you down at the
+    // trap itself; `_trapIgnored` means this pursuit only exists because you
+    // drove away from a traffic stop.  Anything else is an ordinary pursuit.
+    this._failReason =
+        (this._trapPursuitActive || this._trapStopHeld) ? FAIL_REASON.BUSTED_SPEED_TRAP
+      : this._trapIgnored                               ? FAIL_REASON.BUSTED_FAILED_STOP
+      :                                                   FAIL_REASON.BUSTED_PURSUIT;
     const cp         = this._lastCheckpoint ?? { scoreAtCP: 0, position: 0 };
     const earnedSince = Math.max(0, this.score - cp.scoreAtCP);
     let   lost        = Math.floor(earnedSince / 2);
@@ -23457,7 +23569,10 @@ export class GameScene extends Phaser.Scene {
       alpha: 1,
       duration: 1100,
       ease: 'Sine.In',
-      onComplete: () => this._endGame('passed_out', { vice: viceId }),
+      onComplete: () => {
+        this._failReason = FAIL_REASON.PASSED_OUT;
+        this._endGame('passed_out', { vice: viceId });
+      },
     });
   }
 
@@ -23603,6 +23718,10 @@ export class GameScene extends Phaser.Scene {
       distanceMi:      this._odometer ?? 0,
       runTimeSec:      Math.floor(this.gameTime ?? 0),
       cause,
+      // Why the run ended, as recorded at the trigger site — drives the ending
+      // screen's NEXT RUN advice.  Null on a cause nothing classified, which
+      // selectTip() resolves to a generic fallback for that cause.
+      reason:          this._failReason ?? null,
       vice:            extra.vice ?? null,
       charge:          extra.charge ?? null,
       losses:          Math.round(extra.losses ?? 0),

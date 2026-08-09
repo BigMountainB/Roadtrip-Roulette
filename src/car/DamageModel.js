@@ -107,6 +107,7 @@ export class DamageModel {
   // ── Queries ────────────────────────────────────────────────────────────────
 
   getDurability()         { return this._durability; }
+  getMax()                { return this._max; }
   getDurabilityFraction() { return this._durability / this._max; }
   getStage()              { return this._stage; }
   isWrecked()             { return this._durability <= 0; }

@@ -3,6 +3,8 @@ import { SCREEN_W, SCREEN_H, VICE_CONFIG, VICES, HUD_OFFSET_X } from '../constan
 import { getInstalled } from '../systems/UpgradeSystem.js';
 import { UPGRADE_SLOTS, getSlotTiers } from '../data/upgrades.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
+import { selectTip, tipContext, isFailureCause } from '../data/endingTips.js';
+import { showNextRunPanel } from '../ui/NextRunPanel.js';
 
 // Per-vice unlock hints shown for any vice the player hasn't unlocked yet.
 // Order here drives the row order on the run-summary panel.
@@ -90,6 +92,9 @@ export class GameOverScene extends Phaser.Scene {
     // GameScene now passes mileage already converted to miles.
     this.finalMiles     = data?.distanceMi ?? 0;
     this.cause          = data?.cause      ?? 'busted';
+    // Why the run ended, recorded at the gameplay trigger site. Absent on old
+    // saves / existing call sites -> selectTip falls back to a generic tip.
+    this.failReason     = data?.reason     ?? null;
     this.deathVice      = data?.vice       ?? null;
     this.charge         = data?.charge     ?? 'RECKLESS DRIVING';
     this.losses         = data?.losses     ?? 0;
@@ -371,10 +376,28 @@ export class GameOverScene extends Phaser.Scene {
                        () => this._openTripSummary());
     }
 
+    this._buildNextRunPanel();
+
     this.input.keyboard?.once('keydown-SPACE', () => this._retrySameSettings());
     this.input.keyboard?.once('keydown-ENTER', () => this._returnToTitle());
     this.input.keyboard?.on('keydown-L', () => this._openViceLog());
     this.input.keyboard?.on('keydown-T', () => { if (this.tripSummary) this._openTripSummary(); });
+  }
+
+  /**
+   * "NEXT RUN" advice panel — why this run ended and what to do differently.
+   * Losses only; a Pullman finish has nothing to advise. Anchored per plate
+   * (ENDING_PLATES[cause].tips) so it never covers the player's car, drawn
+   * BELOW the buttons' depth and never made interactive, so it can't swallow a
+   * tap meant for RESTART / CONTINUE / MENU.
+   */
+  _buildNextRunPanel() {
+    if (!isFailureCause(this.cause)) return;
+    const spec = ENDING_PLATES[this.cause];
+    if (!spec?.tips) return;
+    const tip = selectTip(this.failReason, this.cause, tipContext(this));
+    if (!tip) return;
+    showNextRunPanel(this, tip, { ...spec.tips, depth: 20, delay: 420 });
   }
 
   /** Demo build end screen — celebratory "made it to Snoqualmie" + a button

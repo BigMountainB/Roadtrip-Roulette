@@ -523,6 +523,56 @@ now measures max-over-time (also the stronger pool guarantee) rather than a sing
 *by design*, making that assertion a coin flip. Also fixed an unbounded `do/while` in the barricade
 gap picker that the decay-pause change exposed (it never terminated with `Math.random` pinned).
 
+### 2026-08-09 — NEXT RUN advice panels on the failure endings
+Committed. Tests 737 green, build clean. Screenshots reviewed for every reason at wide (1280x720)
+and narrow (740x420); ownership matrix probed in-engine.
+
+**What it is.** A run that ends badly now says WHY, and what to do about it, on the ending plate —
+Phaser text over the artwork, never baked into the PNGs. Keyed to the ACTUAL cause, not a random
+tip. Three pieces, deliberately separate:
+- **Classification** — `GameScene`, at the sites that already know what happened.
+- **Selection** — `src/data/endingTips.js`: reason -> copy, plus the personalisation pass.
+- **Rendering** — `src/ui/NextRunPanel.js`, which knows nothing about causes.
+
+**Reasons** (`FAIL_REASON`): `busted_pursuit`, `busted_speed_trap`, `busted_failed_stop`,
+`crashed_major_impact`, `crashed_accumulated_damage`, `out_of_gas`, `passed_out`, plus
+`busted_generic` / `crashed_generic` for anything unclassified (old saves, existing call sites).
+
+**How each is decided.**
+- Bust: a live trap encounter (`_trapPursuitActive || _trapStopHeld`) -> speed trap; else the
+  `_trapIgnored` flag set when `promoteTrapPursuit` fires -> failed to pull over; else pursuit.
+  `_trapIgnored` clears when heat hits zero, since by then it's just a chase.
+- Crash: the killing blow's size against max HP. >= 30% is one big impact; below that is attrition.
+  Needed `_lastHitAmount` (recorded on the `damage` event) and a new `DamageModel.getMax()`.
+
+**Personalisation.** Nothing installed -> buy tier 1. Partly upgraded -> buy the NEXT tier. Maxed ->
+never sold anything, gets a usage line instead ("REPAIR IT: top the car up at a garage"). Radar
+detector likewise: unowned -> buy it at CowBella; owned -> "LISTEN: faster beeps mean the trap is
+closer." All names come from `UPGRADE_CATALOG` (Zip-Tied Bumper, Reinforced Bumper, Jerry Can Rack,
+Radar Detector), never invented.
+
+**Bug found while validating:** `tipContext` resolved `vehicleId` to null on the ending screen —
+that scene has no `player`, and the registry key can be unset by then — so `getInstalled()` returned
+`{}` for everyone and a player with a maxed Body was still told to buy the $25 Zip-Tied Bumper.
+Now resolves registry -> player -> `'beater'`, the same order GameScene uses.
+
+**Also hardened:** `loadEndingArt` got a 2.5 s watchdog. The load callback is what draws the
+headline and buttons, so a loader that never reports back leaves the player on a blank screen with
+no way to restart — seen once under rapid scene restarts.
+
+**Layout.** 800x450 design space, same as the rest of the ending screen. Panel anchored per plate
+(`ENDING_PLATES[cause].tips`) so it never covers the car: right of it on busted / passed-out /
+out-of-gas, LEFT on crashed, where the wreck sits right of centre. Fill `#050812` at 90%, amber
+`#FFCC44` border with a 3-pass neon glow, cyan `#4FD8FF` Impact headings at 13px, 11.5px body with
+a heavy black stroke, 12px padding. Fades and slides in over 280 ms after a 420 ms delay so it
+never steps on the ending reveal. **Nothing in the panel is interactive**, so it cannot intercept a
+tap meant for RESTART / CONTINUE / MENU.
+
+**Not reachable:** a speed trap on its own never busts you — complying gives a ticket or a warning,
+ignoring it adds a star and becomes an ordinary pursuit. `busted_speed_trap` is therefore only
+reached when a trooper takes you down while the trap encounter is still live. Copy exists and is
+correct if that path widens.
+
 ### 2026-08-04 (pt 3) — Shopping signs move in-engine (and stop lying about what's at the stop)
 Committed. Tests 737 green, build clean. Verified in-engine by screenshotting composed signs.
 

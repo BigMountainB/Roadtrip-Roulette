@@ -68,6 +68,11 @@ export const ENDING_CAR_GENRES = [
  * art offline and eyeballing each one against its ground plane:
  *   x, y = where the car's contact point sits on the plate
  *   w    = on-plate width of the TRIMMED car
+ *
+ * `tips` is the anchor for the NEXT RUN advice panel (src/ui/NextRunPanel.js),
+ * chosen per plate so it never covers the player's car: right of the car on
+ * most plates, LEFT on crashed, where the wreck sits right of centre. y is the
+ * panel top; it grows downward and stops clear of the stats/buttons band.
  */
 export const ENDING_PLATES = {
   busted: {
@@ -75,23 +80,28 @@ export const ENDING_PLATES = {
     file:    'end_busted_dynamic_plate.png',
     // Pulled over ahead of the cruiser, cop at the driver's window.
     car: { view: 'rear3q', x: 360, y: 268, w: 300 },
+    tips: { x: 520, y: 100, w: 264 },
   },
   crash: {
     texture: 'ui_end_crashed_plate',
     file:    'end_crashed_dynamic_plate.png',
     // Sits in the gap it punched through the guardrail, at the end of the skid.
     car: { view: 'rear3q_crashed', x: 450, y: 262, w: 300 },
+    // LEFT here: this is the one plate whose car sits right of centre.
+    tips: { x: 16, y: 100, w: 268 },
   },
   passed_out: {
     texture: 'ui_end_passed_out_plate',
     file:    'end_passed_out_dynamic_plate.png',
     car: { view: 'rear3q', x: 300, y: 330, w: 330 },
+    tips: { x: 494, y: 100, w: 290 },
   },
   out_of_gas: {
     texture: 'ui_end_out_of_gas_plate',
     file:    'end_out_of_gas_plate.png',
     // On the shoulder beside the player and the empty gas can.
     car: { view: 'rear3q', x: 330, y: 300, w: 300 },
+    tips: { x: 500, y: 96, w: 284 },
   },
   demo_complete: {
     texture: 'ui_end_demo_plate',
@@ -156,10 +166,15 @@ export function loadEndingArt(scene, spec, genre, done) {
     return;
   }
 
-  const finish = () => done(
-    scene.textures.exists(spec.texture),
-    carKey && scene.textures.exists(carKey) ? carKey : null,
-  );
+  let settled = false;
+  const finish = () => {
+    if (settled) return;             // whichever of the three paths lands first
+    settled = true;
+    done(
+      scene.textures.exists(spec.texture),
+      carKey && scene.textures.exists(carKey) ? carKey : null,
+    );
+  };
 
   if (needPlate) scene.load.image(spec.texture, endingPlatePath(spec));
   if (needCar)   scene.load.image(carKey, endingCarPath(genre, spec.car.view));
@@ -167,6 +182,12 @@ export function loadEndingArt(scene, spec, genre, done) {
   // finish() are what decide whether each piece actually draws.
   scene.load.once('complete', finish);
   scene.load.once('loaderror', () => { /* handled by exists() in finish */ });
+  // WATCHDOG.  The callback is what draws the ending's headline and buttons, so
+  // a loader that never reports back leaves the player staring at a blank
+  // screen with no way to restart.  Seen once in testing with a rapid sequence
+  // of scene restarts, where the queue never delivered 'complete'.  Draw
+  // anyway; exists() then decides plate vs legacy fallback.
+  scene.time?.delayedCall?.(2500, finish);
   scene.load.start();
 }
 

@@ -91,6 +91,10 @@ export const ASSET_MANIFEST = {
     { key: 'car_front_swat',   path: 'assets/cars/car_front_swat.png' },
     // Codex upgraded vehicle art — front/back pairs for premium garage cars.
     { key: 'codex_beater_back',          path: 'assets/cars/codex/codex_beater_back.png' },
+    // Rear-three-quarter steering pose for the genre starter (~12-15° off
+    // straight, one direction only — the renderer mirrors it for the other).
+    // Default path = the DEFAULT_GENRE art; genreArtPath overrides per plate.
+    { key: 'codex_beater_back_turn',     path: 'assets/culture/hiphop_phonk/vehicles/starter_back_turn.png' },
     { key: 'codex_beater_front',         path: 'assets/cars/codex/codex_beater_front.png' },
     { key: 'codex_suv4x4_back',          path: 'assets/cars/codex/codex_suv4x4_back.png' },
     { key: 'codex_suv4x4_front',         path: 'assets/cars/codex/codex_suv4x4_front.png' },
@@ -531,6 +535,7 @@ export const GENRE_ART = {
   // Starting vehicle (the beater) front/back → the genre's starter art.
   codex_beater_front: 'vehicles/starter_front.png',
   codex_beater_back:  'vehicles/starter_back.png',
+  codex_beater_back_turn: 'vehicles/starter_back_turn.png',
 };
 
 /** Culture-art path for a manifest key under the given genre, or null if this
@@ -539,9 +544,11 @@ export function genreArtPath(key, genre) {
   if (!genre || !GENRE_ART[key]) return null;
   // Vehicle art gets its own revision so an installed/PWA build cannot keep
   // the former Metal/Reggae roof-speaker versions after refresh.
-  const vehicleRev = key === 'codex_beater_front' || key === 'codex_beater_back'
-    ? '&v=roof-clear-2'
-    : '';
+  const vehicleRev = key === 'codex_beater_back_turn'
+    ? '&v=turnfit-1'
+    : (key === 'codex_beater_front' || key === 'codex_beater_back')
+      ? '&v=roof-clear-2'
+      : '';
   return `assets/culture/${genre}/${GENRE_ART[key]}?g=${genre}${vehicleRev}`;
 }
 
