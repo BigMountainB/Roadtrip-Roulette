@@ -1551,6 +1551,17 @@ export class GameScene extends Phaser.Scene {
     // if the technique isn't adopted.
     this._spikeYawOn    = false;
     this._spikeYawDebug = false;
+    // TEMPORARY steering-orientation diagnostic (owner 2026-08-10) — G.
+    // Draws the rear tire-contact baseline, the ground anchor, the screen
+    // vertical through the car, and the road's local lane direction, so the
+    // "is it tipping or turning?" question can be answered by looking rather
+    // than by feel. Remove with the rest of the dev aids before release.
+    this.input.keyboard?.on('keydown-G', () => {
+      this._steerDiag = !this._steerDiag;
+      if (!this._steerDiag) this._steerDiagGfx?.clear();
+      console.log(`[steer-diag] ${this._steerDiag ? 'ON' : 'OFF'}`);
+    });
+
     this.input.keyboard?.on('keydown-Y', (ev) => {
       if (ev.shiftKey) { this._spikeYawDebug = !this._spikeYawDebug; return; }
       this._spikeYawOn = !this._spikeYawOn;
@@ -6649,15 +6660,22 @@ export class GameScene extends Phaser.Scene {
       // road-derived.
       const DEFAULT_W = 78, DEFAULT_H = 49;
       this._applyPlayerSpriteDisplaySize(DEFAULT_W, DEFAULT_H);
+      this._applyPlayerGroundAnchor();
       this.playerSprite.x = p.screenX;
-      // Lerp the angle for smoothness (raw leanDir can twitch on snow
-      // ice patches / impulses).  0.18 reaches 85 % of target in
-      // ~150 ms — fast enough to look responsive, slow enough to damp.
-      const targetAng = leanDir * 6;
-      this.playerSprite.angle = lerp(this.playerSprite.angle ?? 0, targetAng, 0.18);
-      // Held traffic stop — pin the body flat so it can't lean/rock (steering
-      // is already disabled and screen-X is frozen via the locked p.x).
-      if (this._trapStopHeld) this.playerSprite.angle = 0;
+      // NO BODY ROLL (owner 2026-08-10).  This used to rotate the whole sprite
+      // by leanDir * 6 (up to ±8.4°), which read as the car TIPPING/banking
+      // rather than turning — the rear tires lifted off the ground line and
+      // the roofline tilted.  Yaw is communicated by the rear-three-quarter
+      // TURN TEXTURE (_updateSteerPose) plus lateral movement across the road;
+      // the body itself stays planted.  The turn art already carries its own
+      // drawn perspective, so combining it with sprite rotation double-counted
+      // the turn.
+      //
+      // If a deliberate suspension/body-roll effect is ever added it belongs
+      // here, driven by something physical (camber, weight transfer) rather
+      // than raw steering input, and capped around 0.25-0.75° — 1° absolute
+      // ceiling.  Anything more re-creates the tipping.
+      this.playerSprite.angle = 0;
       this._updateSteerPose(dt, rawLean);
       // Crash i-frame blink — 7 Hz alpha toggle so the player can see
       // they're temporarily invulnerable.  Outside the window keep the
@@ -13664,7 +13682,7 @@ export class GameScene extends Phaser.Scene {
     if (this._playerArtKey !== base || !this.textures.exists(turn)) return;
     const P = (this._steerPose ??= { dir: 0, pend: 0, engT: 0, relT: 0 });
     const ENGAGE_LEAN = 0.30, RELEASE_LEAN = 0.14;
-    const ENGAGE_SEC  = 0.08, RELEASE_SEC  = 0.11;
+    const ENGAGE_SEC  = 0.055, RELEASE_SEC = 0.11;   // engage trimmed 80→55 ms (owner 2026-08-09: 'a tad too slow')
     const want = rawLean <= -ENGAGE_LEAN ? -1 : rawLean >= ENGAGE_LEAN ? 1 : 0;
     if (P.dir === 0) {
       if (want !== 0 && want === P.pend) {
@@ -13689,6 +13707,188 @@ export class GameScene extends Phaser.Scene {
     }
     const wantFlip = P.dir > 0;
     if (ps.flipX !== (P.dir !== 0 && wantFlip)) ps.setFlipX(P.dir !== 0 && wantFlip);
+    // Texture and/or mirror may have just changed — re-pin the ground anchor so
+    // the tire-contact midpoint stays on exactly the same road point.
+    this._applyPlayerGroundAnchor();
+  }
+
+  /**
+   * Ground anchor for a car texture: the midpoint between its REAR TIRE
+   * CONTACT POINTS, normalised to the texture frame (owner 2026-08-10).
+   *
+   * The sprite used to be anchored at the PNG's bottom-centre, which is not
+   * the same point: `starter_back_turn.png` is a rear-three-quarter view whose
+   * contact midpoint sits 14.5 px RIGHT of centre (320 vs 305.5 of 611). So
+   * every straight->turn swap slid the car sideways, and mirroring the pose
+   * flipped that offset to the other side — a ~4 px jump of the point that is
+   * supposed to be nailed to the road.
+   *
+   * Measured from the alpha channel rather than hard-coded, because the art is
+   * PER GENRE (assets/culture/<genre>/vehicles/) — ten different cars, each
+   * with its own body and framing, plus whatever ships later. Runs once per
+   * texture and is cached; a full 611x359 scan is a couple of milliseconds.
+   *
+   * Returns { u, v, contacts:{lu,ru,v} } in 0..1 frame coordinates, or the old
+   * bottom-centre behaviour if the art can't be measured (single contact blob,
+   * tainted canvas, missing texture).
+   */
+  _groundAnchorFor(texKey) {
+    const cache = (this._groundAnchorCache ??= new Map());
+    if (cache.has(texKey)) return cache.get(texKey);
+    const FALLBACK = { u: 0.5, v: 1, contacts: null };
+    let out = FALLBACK;
+    try {
+      const src = this.textures.get(texKey)?.getSourceImage?.();
+      const W = src?.width | 0, H = src?.height | 0;
+      if (W > 0 && H > 0) {
+        const cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        const ctx = cv.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(src, 0, 0);
+        const d = ctx.getImageData(0, 0, W, H).data;
+        // Lowest opaque pixel per column, and the lowest of those overall.
+        const low = new Int32Array(W).fill(-1);
+        let maxY = -1;
+        for (let x = 0; x < W; x++) {
+          for (let y = H - 1; y >= 0; y--) {
+            if (d[(y * W + x) * 4 + 3] > 40) { low[x] = y; if (y > maxY) maxY = y; break; }
+          }
+        }
+        if (maxY >= 0) {
+          // Columns within `tol` of the bottom-most row are touching ground.
+          // The tolerance absorbs the perspective already drawn into a 3/4
+          // view (the far tire sits a pixel or two higher) without swallowing
+          // bodywork.
+          const tol = Math.max(4, Math.round(H * 0.02));
+          const runs = [];
+          let start = -1;
+          for (let x = 0; x <= W; x++) {
+            const on = x < W && low[x] >= 0 && low[x] >= maxY - tol;
+            if (on && start < 0) start = x;
+            else if (!on && start >= 0) {
+              if (x - start >= 3) runs.push([start, x - 1]);   // ignore AA specks
+              start = -1;
+            }
+          }
+          if (runs.length >= 2) {
+            const first = runs[0], last = runs[runs.length - 1];
+            const lu = (first[0] + first[1]) / 2;
+            const ru = (last[0]  + last[1])  / 2;
+            const lv = Math.max(...Array.from({ length: first[1] - first[0] + 1 }, (_, i) => low[first[0] + i]));
+            const rv = Math.max(...Array.from({ length: last[1]  - last[0]  + 1 }, (_, i) => low[last[0]  + i]));
+            out = {
+              u: ((lu + ru) / 2) / W,
+              v: maxY / H,
+              contacts: { lu: lu / W, ru: ru / W, lv: lv / H, rv: rv / H },
+            };
+          }
+        }
+      }
+    } catch (_) { /* tainted canvas / no DOM — keep the fallback */ }
+    cache.set(texKey, out);
+    return out;
+  }
+
+  /** Pin the sprite's origin to its ground anchor, mirror included.
+   *  flipX mirrors the texture about the origin, so a feature at frame-u
+   *  renders at (1-u); putting the origin at (1-u) when flipped keeps the
+   *  SAME physical point under the sprite's x/y. Without this, turning left
+   *  vs right planted the car on two different points. */
+  _applyPlayerGroundAnchor() {
+    const ps = this.playerSprite;
+    const key = ps?.texture?.key;
+    if (!ps || !key || key === '__WHITE' || key === '__MISSING') return;
+    const a = this._groundAnchorFor(key);
+    const u = ps.flipX ? 1 - a.u : a.u;
+    if (ps.originX !== u || ps.originY !== a.v) ps.setOrigin(u, a.v);
+  }
+
+  /**
+   * TEMPORARY steering-orientation diagnostic (toggle: G).
+   *
+   * 1. horizontal line through both rear tire contact points (+ a dot on each)
+   * 2. the ground anchor the sprite is pinned to
+   * 3. the screen vertical through the car's centre
+   * 4. the road's local lane direction at the car
+   *
+   * On a straight road the two tire dots must sit on one horizontal line and
+   * the vertical must stand upright. On a curve the car may travel laterally
+   * along the lane-direction ray, but the baseline must stay horizontal — if
+   * it tilts, something is rotating the body again.
+   */
+  _drawSteerDiagnostic() {
+    if (!this._steerDiag) return;
+    const ps = this.playerSprite;
+    if (!ps || ps.visible === false) return;
+    let g = this._steerDiagGfx;
+    if (!g) {
+      g = this._steerDiagGfx = this.add.graphics().setDepth(9.99);
+      this._worldObjects?.push(g);
+      this._uiCam?.ignore(g);
+    }
+    g.clear();
+
+    const a = this._groundAnchorFor(ps.texture?.key);
+    const half = (ps.displayWidth || 78) / 2;
+
+    // (1) Rear tire-contact baseline — through the measured contacts when the
+    // art gave us two, else across the sprite at the anchor height.
+    let L = a.contacts ? this._playerSpriteFramePoint(a.contacts.lu, a.contacts.lv) : { x: ps.x - half, y: ps.y };
+    let R = a.contacts ? this._playerSpriteFramePoint(a.contacts.ru, a.contacts.rv) : { x: ps.x + half, y: ps.y };
+    // Mirroring swaps which contact is left ON SCREEN — order by x so the
+    // baseline is always drawn (and measured) left-to-right.
+    if (R.x < L.x) { const t = L; L = R; R = t; }
+    g.lineStyle(1, 0x00FF88, 0.95);
+    g.beginPath();
+    g.moveTo(ps.x - half - 26, L.y);
+    g.lineTo(ps.x + half + 26, R.y);
+    g.strokePath();
+    g.fillStyle(0x00FF88, 1);
+    g.fillCircle(L.x, L.y, 2.5);
+    g.fillCircle(R.x, R.y, 2.5);
+
+    // (2) Ground anchor — the point pinned to the road.
+    g.fillStyle(0xFFCC44, 1);
+    g.fillCircle(ps.x, ps.y, 3);
+    g.lineStyle(1, 0xFFCC44, 0.9);
+    g.strokeCircle(ps.x, ps.y, 6);
+
+    // (3) Screen vertical through the car centre.
+    g.lineStyle(1, 0xFF44AA, 0.85);
+    g.beginPath();
+    g.moveTo(ps.x, ps.y + 8);
+    g.lineTo(ps.x, ps.y - (ps.displayHeight || 49) - 14);
+    g.strokePath();
+
+    // (4) Road's local lane direction — sample the surface just ahead of and
+    // behind the car and draw the chord between them, extended.
+    const near = this.road?.sampleSurface?.(PLAYER_VIRTUAL_Z * 0.75, 0, { allowClipped: true });
+    const far  = this.road?.sampleSurface?.(PLAYER_VIRTUAL_Z * 2.4,  0, { allowClipped: true });
+    if (near && far && Number.isFinite(near.sx) && Number.isFinite(far.sx)) {
+      g.lineStyle(1, 0x39A8FF, 0.9);
+      g.beginPath();
+      g.moveTo(near.sx, near.sy);
+      g.lineTo(far.sx, far.sy);
+      g.strokePath();
+      g.fillStyle(0x39A8FF, 1);
+      g.fillCircle(far.sx, far.sy, 2);
+    }
+  }
+
+  /** Screen position of a point in the player sprite's texture frame (u,v in
+   *  0..1). Accounts for the ground-anchor origin and mirroring, so callers
+   *  that want "the middle of the PNG" or "a tire contact" don't have to care
+   *  where the origin currently sits. */
+  _playerSpriteFramePoint(u, v) {
+    const ps = this.playerSprite;
+    if (!ps) return { x: 0, y: 0 };
+    // flipX mirrors the texture inside the frame: content from texture-u renders
+    // at FRAME position (1-u). The origin does not move, so the offset is
+    // measured from originX in frame space either way.
+    const fu = ps.flipX ? (1 - u) : u;
+    const du = (fu - ps.originX) * (ps.displayWidth || 0);
+    const dv = (v - ps.originY) * (ps.displayHeight || 0);
+    return { x: ps.x + du, y: ps.y + dv };
   }
 
   /** Show the player's real car art as soon as it's loaded.  The sprite is
@@ -13786,8 +13986,14 @@ export class GameScene extends Phaser.Scene {
     const a = ANCHOR[this.player?.vehicleId] ?? { yUp: 0.51, w: 0.30 };
     const theta = car.rotation || 0;
     const up    = dispH * a.yUp;
-    const cx    = car.x + up * Math.sin(theta);
-    const cy    = car.y - up * Math.cos(theta);
+    // yUp is measured from the sprite's BOTTOM EDGE, which is no longer the
+    // origin (that's the tire-contact midpoint now — see _groundAnchorFor), so
+    // resolve the bottom-centre of the frame explicitly. Without this the plate
+    // drifted sideways on the turn pose, where the contact midpoint sits ~14 px
+    // right of the PNG centre.
+    const base  = this._playerSpriteFramePoint(0.5, 1);
+    const cx    = base.x + up * Math.sin(theta);
+    const cy    = base.y - up * Math.cos(theta);
     // Plate art fills the painted plate area (a.w of car width, aspect-correct).
     const plateW = dispW * a.w;
     if (img) {
@@ -14184,6 +14390,7 @@ export class GameScene extends Phaser.Scene {
     }
     // Glue the rear license plate to the (now-positioned) player car.
     this._updateRearPlate();
+    this._drawSteerDiagnostic();
 
     const cockpit = this._cockpitActive;
     // Near-cull threshold.  Chase view culls at 0.65×PLAYER_VIRTUAL_Z
@@ -14642,11 +14849,12 @@ export class GameScene extends Phaser.Scene {
       const shH = Math.max(2, PH * 0.18);
       const phys2 = this.effects?.getPhysics?.(this.vices);
       const drift = phys2?.slushieRetinalDrift ?? 0;
-      // Shadow tilts subtly OPPOSITE the car's lean — "body leans into
-      // the turn, wheels stay planted" cue.  Applies in all steering
-      // modes (classic / tilt / flappy).
-      const leanDir = (this.player?.steerVelocity ?? 0) / (TURN_SPEED || 1);
-      const shadowAngle = -leanDir * Phaser.Math.DegToRad(4);
+      // Shadow stays FLAT (owner 2026-08-10).  It used to tilt opposite the
+      // body's lean as the "body leans into the turn, wheels stay planted"
+      // counter-cue; with the body no longer rolling there is nothing to
+      // counter, and a rotating puddle under a level car reads as a detached
+      // shadow.  The car is planted, so its shadow is too.
+      const shadowAngle = 0;
       // Lift the shadow up ~10 px so it paints UNDER THE TIRES, not
       // below the sprite's transparent-padding bottom edge.  Without
       // the lift the car art reads as floating with a detached

@@ -1272,6 +1272,43 @@ const _boot = () => {
     // its own.  applyOrientation is idempotent + cheap, so extra calls are free.
     for (const ms of [120, 300, 550, 900]) setTimeout(applyOrientation, ms);
   };
+  // ── iOS GPU-eviction recovery (owner 2026-08-10) ────────────────────────
+  // Safari can evict a backgrounded tab's GPU textures WITHOUT firing
+  // webglcontextlost — the context object stays "valid" but every texture
+  // handle is dead, so on return each sprite samples whatever texture happens
+  // to bind (reported as "every image became the car after an hour away").
+  // Phaser only rebuilds on the contextrestored event, which never fires in
+  // this path.  So: when the page comes back after a LONG hide, rebuild every
+  // wrapped GL resource from its retained source — the same sequence, in the
+  // same order, as Phaser's own contextRestoredHandler.  On a healthy context
+  // this is just a one-off re-upload hitch; on an evicted one it's the
+  // difference between a running game and a texture salad.
+  let _hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { _hiddenAt = Date.now(); return; }
+    const away = Date.now() - _hiddenAt;
+    _hiddenAt = 0;
+    if (away < 30000) return;                      // brief app-switch: nothing to do
+    const r = game.renderer;
+    if (!r?.gl || r.contextLost) return;           // real loss → Phaser's own handler owns it
+    try {
+      for (const listName of ['glTextureWrappers', 'glBufferWrappers',
+        'glFramebufferWrappers', 'glProgramWrappers',
+        'glAttribLocationWrappers', 'glUniformLocationWrappers']) {
+        const list = r[listName];
+        if (list) for (const w of list) { try { w.createResource(); } catch (_) {} }
+      }
+      try { r.createTemporaryTextures(); } catch (_) {}
+      try { r.pipelines.restoreContext(); } catch (_) {}
+      // The texture planes hold raw-GL state (REPEAT / mipmaps / anisotropy)
+      // outside wrapper bookkeeping — drop their caches so it re-applies.
+      const s = game.scene?.getScene?.('Game');
+      if (s?.groundPlane) s.groundPlane._ok = false;
+      try { s?.roadPlane?._ready?.clear?.(); } catch (_) {}
+      console.warn(`[resume] GPU resources rebuilt after ${Math.round(away / 1000)}s hidden`);
+    } catch (e) { console.warn('[resume] texture refresh failed', e); }
+  });
+
   window.addEventListener('resize',            onOrientationChange);
   window.addEventListener('orientationchange', onOrientationChange);
   requestAnimationFrame(applyOrientation);

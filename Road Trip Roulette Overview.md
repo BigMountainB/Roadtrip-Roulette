@@ -50,7 +50,7 @@ forked from DUI on **2026-07-04** into its own repo and Cloudflare Pages site. R
 into an App-Store-safe survival road trip and adds the commercial glue (encounters, part
 upgrades, survival + heat/fuel pressure).
 
-## Current snapshot (as of 2026-07-19)
+## Current snapshot (as of 2026-07-19 — rest-stop / dialogue lines refreshed 2026-08-10)
 
 **Built & deployed:** rest-stop encounter system (dialogue trees + npcMemory) · **MISSION SYSTEM
 complete (Ch. 8, all 7 phases — 5 types, rep ladder ×1/×2.5/×5, 123 tests)** · car stats layer ·
@@ -63,7 +63,11 @@ music-menu picker, tutorial genre pick, rotate-to-play prompt) · custom iOS mot
 explainer · **all weapons cap at 3** (rolling coal 1/pickup) · **rolling-coal cop = touch-cloud →
 60 mph/30 s slow** · HUD-layout editor with a COPY-to-export button ·
 **genre-car ENDING PLATES** (Ch. 13 — six photographic 800×450 plates, each composited with the
-player's genre car; OUT OF GAS is now a three-way decision card instead of an automatic tow).
+player's genre car; OUT OF GAS is now a three-way decision card instead of an automatic tow) ·
+**REST-STOP CARDS ARE CONVERSATIONS** (2026-08-05 — a question is answered inside the card and the
+list stays open; only an exit choice closes it and opens the storefront. Choice labels are spoken
+player sentences, all 62 town facts are web-verified, and NPCs QUOTE prices that the shop then
+charges rather than selling to you on the spot).
 
 **Superseded vs the original design doc:** "DUI" framing removed (speeding stops only, reckless
 heat) · portable save/checkpoint codes removed (local LAST/SAVED kept) · sex worker → Hot Springs
@@ -82,6 +86,23 @@ jumps straight to the checkpoint-restart modal — the only run-ender left witho
 **ending-plate layout tuning** (Pullman comic puts its stats/button over the busy middle panel; the
 demo van's wheels sit behind the button row) · **`public/assets/ui/endings/source/` is 64 MB and
 ships in `dist/`** (keyed working art — should be parked outside `public/`, see Ch. 13).
+
+**Open from the rest-stop conversation pass (2026-08-05, all owner-decidable):**
+- **The three fuel offers still transact in conversation** — Grandma's $35, the Farm Worker's $50
+  rocket fuel, Mike's $100 diesel split. The plan routed them to Huff's `refuel`, but none of them is
+  *pump gas* (Mike siphons his own tank; the Farm Worker's whole joke is that his mix is **not** what
+  a station sells), so sending them to a counter deletes the fiction. Awaiting a call.
+- **Chain Guy's 65/35 "these only LOOK tough" gamble is gone** — lost when the chains moved to a shop
+  row, because a store item can't resolve a `chance` table today. The haggled price survived; the
+  risk of being fleeced didn't.
+- **`warm` and `elk_ready` are inert buffs.** Empty `effects`, no `special`, and nothing anywhere
+  reads `BUFF_EFFECTS.label` — granting either is a no-op. Flagged in `buffs.js`, not deleted,
+  because `label` implies a planned buff readout in the HUD. Wire that up or cut them.
+- **Weather is a pure function of mileage** (`Weather.state`: fog 14–25, rain 30–40, snow 40–88,
+  difficulty-gated), so it is identical on every run. That's why `revealHazard` was deleted — there
+  was never hidden information to reveal. If asking NPCs about the road should ever *matter*, the fix
+  is upstream: make which hazards go live a per-run roll. Then "how bad is it up there" is real
+  intel and the $150 chains are a real bet.
 
 ## 📌 PINNED — Soundtrack Culture Packs (SHIPPED 2026-07-17)
 
@@ -130,9 +151,163 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-08 → 09 — Player steering poses: rear-¾ turn sprites · shrink fix (art normalization + pixel-factor sizing) · 55 ms turn-in
+Tests green (7 files), `vite build` clean.  **Deployed to /demo + /fully** through the shrink fix
+(verified live by content: 611×359 art + `turnfit-1` in the served bundles).  **Local only:** the
+55 ms engage trim.
+
+- **Steering pose system** (`GameScene._updateSteerPose`, ~45 lines).  The genre starter swaps
+  between `starter_back.png` and the new rear-three-quarter `starter_back_turn.png` while
+  steering.  Driven by resolved lateral velocity (`steerVelocity / TURN_SPEED`) so touch, keys and
+  tilt behave identically by construction.  Art depicts a SCREEN-LEFT turn and steer input is −1
+  for left → left = unflipped, right = flipX (verified by probe: sv sign, p.x drift, capture grid).
+  Hysteresis 0.30-engage / 0.14-release; 80 ms turn-in (→ 55 ms, see below), 110 ms release hold;
+  direction reversals pass through straight.  `setTexture`/`setFlipX` only on state change; flip
+  touches only the car art — plate overlay stays unmirrored.  One texture key
+  (`codex_beater_back_turn`) + ONE `GENRE_ART` line covers boot loading AND live genre swaps.
+  Gated on the starter art key, so garage/codex vehicles are untouched.  Cockpit skips.
+- **"Car shrinks when turning" — root cause was the ART, not the sprite code.**  All 10 turn PNGs
+  matched their straight twin's CANVAS but drew the car 8–31 % smaller inside it (phonk worst,
+  ×1.311) and floated the tire baseline 15–46 px high.  Frame-pinning canvas width to 78 px made
+  the smaller car-in-canvas render smaller.  Fix in two halves:
+  1. `scripts/buildTurnSprites.mjs` (repeatable; originals preserved per genre as
+     `starter_back_turn_raw.png`): uniform-scales each turn car by straightVisH/turnVisH — height
+     is the yaw-invariant landmark; width is deliberately NOT force-matched (the visible side
+     legitimately widens) — then re-composites with the straight art's bottom padding, bbox
+     centred.  Canvas WIDTH grows where the scaled car no longer fits (8 of 10 genres; cropping
+     bodywork was not an option).  All ΔX corrections measured ZERO (art was pre-centred <1 px);
+     no per-genre metadata needed.
+  2. `_applyPlayerSpriteDisplaySize`: the TURN pose is sized by the STRAIGHT art's px-per-source-px
+     factor instead of re-pinning the turn canvas to 78 — the build contract (equal
+     pixels-per-car-unit + equal bottom pad) makes one shared factor keep rear face, tire baseline
+     and centre fixed.  Probe-verified: factor byte-identical across poses (phonk .1511, country
+     .179, reggae .1325, norteno .118), baseline ±1.5 px, transitions
+     straight→L→release→R→direct-reverse all stable.  Cache-rev `turnfit-1` forces installed PWAs
+     to re-fetch the corrected art.
+- **Turn-in trimmed 80 → 55 ms** (owner: "a tad too slow") — engage timer only; release hold and
+  hysteresis unchanged.  NOT yet deployed.
+- **Art notes:** k_pop and metal turn sprites read as barely 3–5° vs the ~12–15° of the rest —
+  pose effect is subtle on those two; re-render if consistency matters.  Two iCloud conflict
+  copies in `website/fully` (caught by the new checkDuplicates build guard) verified
+  identical/empty and removed.
+
+
+### 2026-08-10 — Steering read as the car TIPPING; body roll removed, sprite re-anchored to the tires
+Committed. Tests 737 green, build clean. Verified numerically in-engine (angle, anchor drift and
+tire-baseline tilt probed per pose); overlay screenshot still owed — see below.
+
+**The cause.** `_updatePlayer` rotated the whole sprite by `leanDir * 6`, clamped at ±1.4 — up to
+**±8.4° of body roll driven straight off steering input**. Rotating about the PNG centre lifted one
+rear tire off the ground line and tilted the roofline, so a lane change read as the car banking.
+The rear-three-quarter turn art already carries its own drawn perspective, so the rotation was
+double-counting the turn. **Now pinned at 0.** If a real suspension/body-roll effect is ever wanted
+it belongs in that spot, driven by something physical rather than raw steering input, and capped
+around 0.25-0.75° (1° absolute ceiling).
+
+**The shadow followed.** It tilted `-leanDir * 4°` as the "body leans in, wheels stay planted"
+counter-cue. With no body roll there's nothing to counter and a rotating puddle under a level car
+reads as detached, so it's flat now too.
+
+**The art is level — no asset fix needed.** Measured straight off the alpha channel:
+`starter_back.png` puts both contact patches at y=355; `starter_back_turn.png` at y=355 and y=354.
+**1 px across a 410 px span = 0.14°**, which is the perspective drawn into a 3/4 view, not a
+crooked export. Runtime compensation would have been the wrong fix.
+
+**But the anchor was wrong.** The sprite was anchored at the PNG's bottom-centre (origin 0.5, 1),
+which is NOT the tire-contact midpoint. On the turn art that midpoint sits at x=320 of 611 —
+**14.5 px right of centre** — so every straight->turn swap slid the car sideways, and mirroring the
+pose threw the offset the other way, a ~4 px jump of the point that is supposed to be nailed to the
+road. Now anchored at the measured contact midpoint, with the origin set to `1-u` when mirrored so
+the same physical point stays put. Measured per texture from the alpha at runtime, not hard-coded,
+because the car art is PER GENRE — ten bodies, each framed differently.
+
+**Verified per pose** (contact midpoint vs the anchor the sprite is pinned to):
+
+| pose | originX | anchor drift | tire-baseline tilt | sprite angle |
+|---|---|---|---|---|
+| straight | 0.4995 | 0.00 px | 0.00° | 0 |
+| turn | 0.5233 | 0.00 px | 0.14° (art perspective) | 0 |
+| turn mirrored | 0.4767 | 0.00 px | 0.14° | 0 |
+
+**Bug found while validating:** `_playerSpriteFramePoint` had `flipX` backwards — Phaser renders
+texture-u at FRAME position (1-u), so the offset is `((1-u) - originX)`, not `(originX - u)`. It
+reported a phantom 4.3 px drift on the mirrored pose, and since the rear licence plate is
+positioned through the same helper, the plate itself would have sat 4 px off when mirrored.
+
+**Rear plate** now resolves its bottom-centre through that helper instead of assuming the origin is
+the PNG bottom, so it didn't move when the anchor did.
+
+**TEMPORARY diagnostic — press G** (`_drawSteerDiagnostic`): green tire-contact baseline with a dot
+on each contact, amber ground anchor, pink screen vertical through the car, blue road lane-direction
+ray. On a straight road both dots must sit on one horizontal line; on a curve the car may travel
+along the lane ray but the baseline must stay horizontal. **Strip it with the other dev aids before
+release.**
+
+**Not captured:** a screenshot of the overlay on the road. Headless, an unsteered car wrecks in ~4 s
+(destroying the sprite mid-capture) and a paused pre-run scene sits behind the title art. The
+diagnostic runs without error and its numbers are the table above, but it wants an eyeball in a real
+playtest.
+
+### 2026-08-09 — NEXT RUN advice panels on the failure endings
+Committed. Tests 737 green, build clean. Screenshots reviewed for every reason at wide (1280x720)
+and narrow (740x420); ownership matrix probed in-engine.
+
+**What it is.** A run that ends badly now says WHY, and what to do about it, on the ending plate —
+Phaser text over the artwork, never baked into the PNGs. Keyed to the ACTUAL cause, not a random
+tip. Three pieces, deliberately separate:
+- **Classification** — `GameScene`, at the sites that already know what happened.
+- **Selection** — `src/data/endingTips.js`: reason -> copy, plus the personalisation pass.
+- **Rendering** — `src/ui/NextRunPanel.js`, which knows nothing about causes.
+
+**Reasons** (`FAIL_REASON`): `busted_pursuit`, `busted_speed_trap`, `busted_failed_stop`,
+`crashed_major_impact`, `crashed_accumulated_damage`, `out_of_gas`, `passed_out`, plus
+`busted_generic` / `crashed_generic` for anything unclassified (old saves, existing call sites).
+
+**How each is decided.**
+- Bust: a live trap encounter (`_trapPursuitActive || _trapStopHeld`) -> speed trap; else the
+  `_trapIgnored` flag set when `promoteTrapPursuit` fires -> failed to pull over; else pursuit.
+  `_trapIgnored` clears when heat hits zero, since by then it's just a chase.
+- Crash: the killing blow's size against max HP. >= 30% is one big impact; below that is attrition.
+  Needed `_lastHitAmount` (recorded on the `damage` event) and a new `DamageModel.getMax()`.
+
+**Personalisation.** Nothing installed -> buy tier 1. Partly upgraded -> buy the NEXT tier. Maxed ->
+never sold anything, gets a usage line instead ("REPAIR IT: top the car up at a garage"). Radar
+detector likewise: unowned -> buy it at CowBella; owned -> "LISTEN: faster beeps mean the trap is
+closer." All names come from `UPGRADE_CATALOG` (Zip-Tied Bumper, Reinforced Bumper, Jerry Can Rack,
+Radar Detector), never invented.
+
+**Bug found while validating:** `tipContext` resolved `vehicleId` to null on the ending screen —
+that scene has no `player`, and the registry key can be unset by then — so `getInstalled()` returned
+`{}` for everyone and a player with a maxed Body was still told to buy the $25 Zip-Tied Bumper.
+Now resolves registry -> player -> `'beater'`, the same order GameScene uses.
+
+**Also hardened:** `loadEndingArt` got a 2.5 s watchdog. The load callback is what draws the
+headline and buttons, so a loader that never reports back leaves the player on a blank screen with
+no way to restart — seen once under rapid scene restarts.
+
+**Layout.** 800x450 design space, same as the rest of the ending screen. Panel anchored per plate
+(`ENDING_PLATES[cause].tips`) so it never covers the car: right of it on busted / passed-out /
+out-of-gas, LEFT on crashed, where the wreck sits right of centre. Fill `#050812` at 90%, amber
+`#FFCC44` border with a 3-pass neon glow, cyan `#4FD8FF` Impact headings at 13px, 11.5px body with
+a heavy black stroke, 12px padding. Fades and slides in over 280 ms after a 420 ms delay so it
+never steps on the ending reveal. **Nothing in the panel is interactive**, so it cannot intercept a
+tap meant for RESTART / CONTINUE / MENU.
+
+**Not reachable:** a speed trap on its own never busts you — complying gives a ticket or a warning,
+ignoring it adds a star and becomes an ordinary pursuit. `busted_speed_trap` is therefore only
+reached when a trooper takes you down while the trap encounter is still live. Copy exists and is
+correct if that path widens.
+
 ### 2026-08-05 — Rest-stop cards are CONVERSATIONS · NPCs quote prices, shops take the money
-Uncommitted. Tests: chase 50, coal 25, missions 256, genreTraits 179, dose 37, upgrades 3,
+**Shipped in `4a5e4eb`** — ⚠️ that commit is titled *"Genre-car ending plates + OUT OF GAS decision
+card"*, because a parallel session swept this whole working tree into its own commit. **Searching the
+git log for the dialogue work by commit message will find nothing.** `4a5e4eb` is the one: it carries
+`encounters.js` (+321), `townFacts.js` (+149), `RestStopScene.js` (+336), `MissionSystem.js` (+38)
+and the new `tests/encounters.test.mjs` (+92).
+
+Tests at time of writing: chase 50, coal 25, missions 256, genreTraits 179, dose 37, upgrades 3,
 **encounters 181 (new file, wired into `npm test`)** — all green. `vite build` clean.
+Re-verified 2026-08-10 against the current tree: **encounters 187**, whole suite still green.
 
 **The complaint.** *"Only some of the responses should go on to the next screen. If the NPC has a
 response show that in the NPC convo menu. Player must select a sentence that moves off the
@@ -325,8 +500,10 @@ cop-array crash fix, the helicopter kill, the cold-load fit, and the back-button
 
 
 ### 2026-08-04 — Rest-stop dialogue rewrite: every conversation in the owner's voice · all 62 town facts web-verified
-Uncommitted. Tests: chase 50, coal 25, missions 256, genreTraits 179, dose 37, upgrades 3 — all green.
-`validateEncounterTrees()` clean. `vite build` clean.
+**Shipped in `4a5e4eb`**, together with the 2026-08-05 conversation pass above — see the warning
+there about that commit's misleading title. Tests at time of writing: chase 50, coal 25, missions
+256, genreTraits 179, dose 37, upgrades 3 — all green. `validateEncounterTrees()` clean.
+`vite build` clean.
 
 **The brief.** Owner rewrote nine encounter NPCs by hand (Street Weirdo, Chain Guy, Ski Bum,
 Long-Haul Mike, Farm Worker, Startup Founder, Hitchhiker, Park Ranger, Diner Waitress) and asked for
@@ -522,56 +699,6 @@ now measures max-over-time (also the stronger pool guarantee) rather than a sing
 3★ clamp sweep now filters to rear pursuers — 3★ star-spawns roll ~45% oncoming, which is ahead
 *by design*, making that assertion a coin flip. Also fixed an unbounded `do/while` in the barricade
 gap picker that the decay-pause change exposed (it never terminated with `Math.random` pinned).
-
-### 2026-08-09 — NEXT RUN advice panels on the failure endings
-Committed. Tests 737 green, build clean. Screenshots reviewed for every reason at wide (1280x720)
-and narrow (740x420); ownership matrix probed in-engine.
-
-**What it is.** A run that ends badly now says WHY, and what to do about it, on the ending plate —
-Phaser text over the artwork, never baked into the PNGs. Keyed to the ACTUAL cause, not a random
-tip. Three pieces, deliberately separate:
-- **Classification** — `GameScene`, at the sites that already know what happened.
-- **Selection** — `src/data/endingTips.js`: reason -> copy, plus the personalisation pass.
-- **Rendering** — `src/ui/NextRunPanel.js`, which knows nothing about causes.
-
-**Reasons** (`FAIL_REASON`): `busted_pursuit`, `busted_speed_trap`, `busted_failed_stop`,
-`crashed_major_impact`, `crashed_accumulated_damage`, `out_of_gas`, `passed_out`, plus
-`busted_generic` / `crashed_generic` for anything unclassified (old saves, existing call sites).
-
-**How each is decided.**
-- Bust: a live trap encounter (`_trapPursuitActive || _trapStopHeld`) -> speed trap; else the
-  `_trapIgnored` flag set when `promoteTrapPursuit` fires -> failed to pull over; else pursuit.
-  `_trapIgnored` clears when heat hits zero, since by then it's just a chase.
-- Crash: the killing blow's size against max HP. >= 30% is one big impact; below that is attrition.
-  Needed `_lastHitAmount` (recorded on the `damage` event) and a new `DamageModel.getMax()`.
-
-**Personalisation.** Nothing installed -> buy tier 1. Partly upgraded -> buy the NEXT tier. Maxed ->
-never sold anything, gets a usage line instead ("REPAIR IT: top the car up at a garage"). Radar
-detector likewise: unowned -> buy it at CowBella; owned -> "LISTEN: faster beeps mean the trap is
-closer." All names come from `UPGRADE_CATALOG` (Zip-Tied Bumper, Reinforced Bumper, Jerry Can Rack,
-Radar Detector), never invented.
-
-**Bug found while validating:** `tipContext` resolved `vehicleId` to null on the ending screen —
-that scene has no `player`, and the registry key can be unset by then — so `getInstalled()` returned
-`{}` for everyone and a player with a maxed Body was still told to buy the $25 Zip-Tied Bumper.
-Now resolves registry -> player -> `'beater'`, the same order GameScene uses.
-
-**Also hardened:** `loadEndingArt` got a 2.5 s watchdog. The load callback is what draws the
-headline and buttons, so a loader that never reports back leaves the player on a blank screen with
-no way to restart — seen once under rapid scene restarts.
-
-**Layout.** 800x450 design space, same as the rest of the ending screen. Panel anchored per plate
-(`ENDING_PLATES[cause].tips`) so it never covers the car: right of it on busted / passed-out /
-out-of-gas, LEFT on crashed, where the wreck sits right of centre. Fill `#050812` at 90%, amber
-`#FFCC44` border with a 3-pass neon glow, cyan `#4FD8FF` Impact headings at 13px, 11.5px body with
-a heavy black stroke, 12px padding. Fades and slides in over 280 ms after a 420 ms delay so it
-never steps on the ending reveal. **Nothing in the panel is interactive**, so it cannot intercept a
-tap meant for RESTART / CONTINUE / MENU.
-
-**Not reachable:** a speed trap on its own never busts you — complying gives a ticket or a warning,
-ignoring it adds a star and becomes an ordinary pursuit. `busted_speed_trap` is therefore only
-reached when a trooper takes you down while the trap encounter is still live. Copy exists and is
-correct if that path widens.
 
 ### 2026-08-04 (pt 3) — Shopping signs move in-engine (and stop lying about what's at the stop)
 Committed. Tests 737 green, build clean. Verified in-engine by screenshotting composed signs.
