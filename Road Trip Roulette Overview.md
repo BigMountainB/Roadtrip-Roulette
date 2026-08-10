@@ -151,6 +151,52 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-10 — Backdrop: North Bend plate moved below the mountain bands · biome blend 4 mi → 320 ft
+Uncommitted. Tests: 550 green (`npm test`), `vite build` clean.
+
+**Owner report (screenshot, mile 25.18):** *"I like how North Bend is looking, but I don't like the
+horizon background on top of the mountain layer. And I don't think any layer should be transparent."*
+Both traced to the same place.
+
+**The pale strip across the range = the base plate, drawn semi-transparent, over the bands.**
+`north_bend_transition_east.png` (`nb_base_plate`) is pinned `setOrigin(0.5, 0.55)` so its own horizon
+lands on the camera horizon. Measured on the art: it is fully transparent down to row ~380, and
+**100% opaque across the full width from row ~507** of 941 — i.e. its opaque region starts about
+12 px *above* the horizon. At depth **1.25** that sat above the biome bands (0.5), so it cut the
+bottom off the mountain range. And `_renderNorthBend` draws the plate at `setAlpha(w)` where `w` is
+the biome cross-fade weight — so mid-blend the covering region was see-through and the range ghosted
+through it. That is the pale horizontal band in the screenshot, not a separate "horizon background".
+
+**Plate → depth 0.45, below the bands** (owner's call, picked over a crop-split and over raising the
+bands). The mountains now draw in front of the plate's horizon instead of being sliced by it. What it
+gives up: at 1.25 the plate's ground outranked `terrainGfx` (1) and replaced the flat grass fill.
+In practice that was **already** lost — `GroundPlane` paints the textured ground at **1.3**, above
+where the plate sat, even though `GroundPlane`'s own header comment still claims the `1.1` slot it
+was written for. The plate now contributes hills and the valley notch; the ground comes from
+`GroundPlane`.
+
+**`BLEND_MILES` 4 → 0.06** (≈320 ft, ~2 s at highway speed). Four miles meant a *quarter* of the
+westside-forest stretch ran with two mountain ranges stacked, the incoming one at partial alpha — at
+mile 25.18 North Bend was painting at **79%** over the forest. Measured across the route, miles with
+two layers drawn drop from ~11% to **0.14%**. The old width existed so boundaries wouldn't read as a
+hard cut (Easton's drying-out especially); that trade is now reversed deliberately. Do not widen it
+back without re-checking the overlap — transparency is proportional to how long two biomes co-exist.
+
+**Fog fade kept** (owner) — `fogFade` still fades distant layers first in real fog weather. That is
+atmosphere, not the ghosting.
+
+**Verified** by driving the built game headless (Chrome + playwright-core) and warping to mile 30:
+`plateDepth 0.45 · plateAlpha 1.00 · bands a = far/ridge/near all 1.00 · set b entirely off`. No
+screenshot — the title-screen DOM overlays the canvas and four approaches to dismiss it failed, so
+the *look* still wants a human playtest.
+
+**Two open items found while in here, NOT fixed:**
+- **`bio_westside_forest_far.png` is completely blank** — `maxAlpha = 0`, every pixel transparent.
+  The westside forest runs on two of its three depth layers. It is the only empty one of the 24.
+- **The urban fade-up is still a 4-mile transparency.** `biomeAt` returns `alpha` ramping 0→1 across
+  miles 16→20, so the first range is see-through against sky for four miles. Different mechanism from
+  the biome blend, left alone deliberately — say the word and it narrows the same way.
+
 ### 2026-08-08 → 09 — Player steering poses: rear-¾ turn sprites · shrink fix (art normalization + pixel-factor sizing) · 55 ms turn-in
 Tests green (7 files), `vite build` clean.  **Deployed to /demo + /fully** through the shrink fix
 (verified live by content: 611×359 art + `turnfit-1` in the served bundles).  **Local only:** the

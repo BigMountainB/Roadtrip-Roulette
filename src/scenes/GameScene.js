@@ -1090,11 +1090,25 @@ export class GameScene extends Phaser.Scene {
     // A perspective triangle with its tip at the road's vanishing point and
     // its base past both bottom corners, so a curve can expose terrain on
     // either side without revealing a hole.
-    // Base plate — ground, side hills, valley notch.  Sits ABOVE terrainGfx
-    // (depth 1) so its detailed ground replaces the flat grass fill, and
-    // BELOW roadGfx (1.5) so the road still paints over it.
+    // Base plate — ground, side hills, valley notch.
+    //
+    // DEPTH 0.45 — BELOW the biome bands (0.5), owner's call 2026-08-10.  It
+    // used to sit at 1.25, above the bands, so its opaque region (which starts
+    // ~12 px above the horizon and runs the full width) cut the bottom off the
+    // mountain range behind it.  Worse, _renderNorthBend draws the plate at the
+    // biome cross-fade weight, so mid-blend that covering region was
+    // SEMI-TRANSPARENT and the range ghosted through it as a pale horizontal
+    // strip — the artifact the owner flagged.  Below the bands, the mountains
+    // draw in front of the plate's horizon instead of being sliced by it.
+    //
+    // What this gives up: at 1.25 the plate's own ground outranked terrainGfx
+    // (1) and replaced the flat grass fill.  It no longer does.  In practice
+    // that ground was already hidden — GroundPlane paints the textured ground
+    // at 1.3, above where the plate used to be (its own comment still claims
+    // the 1.1 slot it was written for).  The plate now contributes its hills
+    // and valley notch; the ground comes from GroundPlane.
     this._nbBasePlate = this.add.image(0, 0, 'nb_base_plate')
-      .setDepth(1.25)
+      .setDepth(0.45)
       .setScrollFactor(0)
       .setVisible(false);
 

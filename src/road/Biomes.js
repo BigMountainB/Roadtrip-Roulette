@@ -38,10 +38,22 @@ export const BAND = {
   rate: { far: 0.06, ridge: 0.14, near: 0.30 },
 };
 
-/** Miles over which adjacent biomes cross-fade.  Wide enough that no
- *  boundary reads as a hard cut — the Easton transition in particular is
- *  meant to feel like a gradual drying-out, not a curtain. */
-export const BLEND_MILES = 4;
+/** Miles over which adjacent biomes cross-fade.
+ *
+ *  0.06 mi ≈ 320 ft — about two seconds at highway speed (owner 2026-08-10).
+ *  It was 4 MILES, which meant a quarter of the westside-forest stretch was
+ *  spent with TWO mountain ranges drawn on top of each other, the incoming one
+ *  at partial alpha.  That is what "no layer should be transparent" was about:
+ *  at mile 25.18 the North Bend range was painting at 79% over the forest and
+ *  the two ghosted through each other.
+ *
+ *  The old width was chosen so a boundary wouldn't read as a hard cut (the
+ *  Easton transition especially was meant to feel like a gradual drying-out).
+ *  That trade is now the other way round: the blend is short enough that
+ *  nothing is visibly see-through, and long enough that the swap isn't a
+ *  single-frame pop.  Do NOT widen this back without re-checking the overlap —
+ *  the transparency is proportional to how long two biomes co-exist. */
+export const BLEND_MILES = 0.06;
 
 /** Mile at which the first biome starts fading up.  Below this the Seattle
  *  and Bellevue skyline systems own the horizon, and a forest ridge behind
