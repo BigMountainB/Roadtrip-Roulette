@@ -192,6 +192,51 @@ Tests green (7 files), `vite build` clean.  **Deployed to /demo + /fully** throu
   identical/empty and removed.
 
 
+### 2026-08-10 (pt 2) — Turn art now keys off steering INTENT, not lateral velocity
+Committed. Tests 737 green, build clean. All eight pose behaviours verified frame-by-frame in-engine.
+
+**Two complaints, one root cause.** "Still a little too slow", and "when I switch from left to right
+the car is driving the opposite direction it's facing."
+
+The pose was keyed to `p.steerVelocity` — the car's RESULTING lateral velocity, which is the last
+link in a three-stage lag chain: the 0.33 s input weight ramp (`STEER_RAMP_ENGAGE = 3.0`), then
+grip-limited lateral acceleration, then a `|lean| >= 0.30` gate held for 55 ms. The 55 ms debounce
+that got trimmed on 08-09 was the SMALLEST term — tuning it further could never have fixed this.
+
+The reversal bug fell out of the same design: the old machine had to fully RELEASE before it could
+engage the opposite side, so coming out of a left turn `lean` had to climb from −0.8 through the
+−0.14 release threshold, sit there 110 ms, then reach +0.30 for 55 ms. **Through that entire window
+the sprite showed LEFT art while the car was already travelling right.**
+
+**Now driven by `_steerIntent`** — the raw pre-ramp steering input, captured in `_updatePlayer`
+before the weight ramp. Known the frame the player presses; flips sign instantly on reversal.
+Inversion is applied when capturing it, so under a vice that inverts steering the art still follows
+where the car actually GOES rather than which key is down.
+
+Owner's calls, all verified:
+- **Engage instantly** — digital modes pose on frame 1. Tilt keeps a 0.18 deadzone + 30 ms debounce
+  because it's a real analog axis with wrist jitter.
+- **Reversal shows exactly ONE straight frame**, then the far side.
+- **Release holds through a drift** — no intent AND lateral velocity settled, ~100 ms. Letting go
+  mid-slide keeps the three-quarter view rather than snapping upright while visibly sideways.
+- **Flappy is always posed**, mirroring on each tap, since its input never reports neutral.
+
+Verified traces (`-` straight, `L`/`R` = pose + mirror):
+
+| case | trace |
+|---|---|
+| hold LEFT | `LLLLLL` (frame 1) |
+| hold RIGHT | `RRRRRR` |
+| reverse L->R | `LLLL-RRRRR` (one straight frame) |
+| release mid-drift | `LLLLLLLLLLL` (holds) |
+| release settled | `LLLLLLLLL----` (~100 ms) |
+| tilt jitter 0.1 | `------` (deadzone) |
+| tilt real 0.6 | `--RRRR` (~33 ms) |
+| flappy taps | `LLL-RR` |
+
+Lateral velocity still has one job: HOLDING a pose through a slide. It no longer decides when one
+starts.
+
 ### 2026-08-10 — Steering read as the car TIPPING; body roll removed, sprite re-anchored to the tires
 Committed. Tests 737 green, build clean. Verified numerically in-engine (angle, anchor drift and
 tire-baseline tilt probed per pose); overlay screenshot still owed — see below.

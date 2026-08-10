@@ -5803,6 +5803,20 @@ export class GameScene extends Phaser.Scene {
     } else {
       steerIn = (this._isLeft() ? -1 : this._isRight() ? 1 : 0);
     }
+    // ── Steering POSE intent (owner 2026-08-10) ───────────────────────
+    // What the player is ASKING for, captured BEFORE the weight ramp below.
+    // The turn-art pose keys off this rather than off the resulting lateral
+    // velocity: velocity sits at the end of a three-stage lag chain (0.33 s
+    // input ramp -> grip-limited lateral accel -> a 0.30 magnitude gate), which
+    // is why the pose used to arrive long after the player had turned, and why
+    // trimming the debounce could never fix it.
+    //
+    // Inversion is applied here so the art follows where the car actually GOES.
+    // Under a vice that inverts steering, matching raw input would face the car
+    // opposite its own travel.
+    this._steerIntent    = phys.invertSteering ? -steerIn : steerIn;
+    this._steerPoseMode  = _mode;
+
     // ── Steer-INPUT ramp (WEIGHT / INERTIA) ───────────────────────────
     // Digital steering hands us an instant -1 / 0 / 1.  Easing that toward
     // the target gives the wheel real WEIGHT: the car loads into a turn over
@@ -13660,53 +13674,91 @@ export class GameScene extends Phaser.Scene {
     return terms.join(' ') + (parts.clamped ? '  [CLAMPED 0.1-1.8]' : '');
   }
 
-  /** Steering pose (owner 2026-08-08) — swap the player sprite between the
-   *  straight rear view and the rear-three-quarter turn art.  VISUAL ONLY:
-   *  reads the resolved lateral velocity (identical for touch / keyboard /
-   *  tilt by construction), writes nothing back to physics.
+  /**
+   * Steering pose — swap the player sprite between the straight rear view and
+   * the rear-three-quarter turn art. VISUAL ONLY: writes nothing to physics.
    *
-   *  Direction mapping (verified against the art + capture): the turn PNGs
-   *  depict the car turning toward SCREEN-LEFT, and steerIn is −1 for left —
-   *  so lean < 0 shows the art unflipped and lean > 0 mirrors it.
+   * Driven by steering INTENT (`_steerIntent`, captured pre-ramp in
+   * _updatePlayer), NOT by the car's lateral velocity (owner 2026-08-10).
+   * Velocity is the last link in a three-stage lag chain — the 0.33 s input
+   * weight ramp, then grip-limited lateral acceleration, then a 0.30 magnitude
+   * gate — so a velocity-keyed pose always arrived visibly late, and no amount
+   * of debounce tuning could fix it. Intent is known the frame the player
+   * presses.
    *
-   *  Feel: 80 ms sustained input to turn in, 110 ms hold after release, with
-   *  a 0.30-engage / 0.14-release hysteresis band so analog noise and quick
-   *  taps never flicker the texture.  A direction reversal passes through the
-   *  straight pose (release → re-engage).  Turn art exists only for the genre
-   *  starter, so any other vehicle art keeps the straight sprite untouched.
+   * That also fixes the reversal bug: the old machine had to fully RELEASE
+   * before it could engage the opposite side, so through a left->right flip the
+   * sprite kept showing the LEFT art while the car was already travelling
+   * right. Intent flips sign instantly.
+   *
+   * Direction mapping: the turn art depicts the car turning toward SCREEN-LEFT,
+   * so dir < 0 renders it unflipped and dir > 0 mirrors it.
+   *
+   * Per mode:
+   *   classic  digital +/-1  -> engages the same frame (no debounce needed)
+   *   tilt     analog        -> 0.18 deadzone + 30 ms debounce vs hand jitter
+   *   flappy   never neutral -> always posed, mirroring on each tap (owner's call)
    */
   _updateSteerPose(dt, rawLean) {
     const ps = this.playerSprite;
     if (!ps || this._cockpitActive) return;
     const base = 'codex_beater_back', turn = 'codex_beater_back_turn';
     if (this._playerArtKey !== base || !this.textures.exists(turn)) return;
-    const P = (this._steerPose ??= { dir: 0, pend: 0, engT: 0, relT: 0 });
-    const ENGAGE_LEAN = 0.30, RELEASE_LEAN = 0.14;
-    const ENGAGE_SEC  = 0.055, RELEASE_SEC = 0.11;   // engage trimmed 80→55 ms (owner 2026-08-09: 'a tad too slow')
-    const want = rawLean <= -ENGAGE_LEAN ? -1 : rawLean >= ENGAGE_LEAN ? 1 : 0;
-    if (P.dir === 0) {
-      if (want !== 0 && want === P.pend) {
-        P.engT += dt;
+    const P = (this._steerPose ??= { dir: 0, pend: 0, engT: 0, relT: 0, blank: 0 });
+
+    const mode   = this._steerPoseMode ?? 'classic';
+    const intent = this._steerIntent ?? 0;
+    // Digital modes hand us a clean +/-1, so the deadzone only has to reject
+    // float noise. Tilt is a real analog axis and needs a wrist-jitter band.
+    const DEAD        = mode === 'tilt' ? 0.18  : 0.01;
+    const ENGAGE_SEC  = mode === 'tilt' ? 0.030 : 0;
+    const RELEASE_SEC = 0.10;
+    // Lateral velocity still counts for HOLDING a pose: if the player lets go
+    // mid-slide the car is visibly still going sideways, and snapping upright
+    // there looks worse than holding the three-quarter view a beat longer.
+    const DRIFT_HOLD  = 0.12;
+
+    const want = Math.abs(intent) >= DEAD ? Math.sign(intent) : 0;
+
+    if (P.blank > 0) {
+      // Reversal's single straight frame has been shown — take the new side.
+      P.blank = 0;
+      P.dir   = want;
+      P.pend  = want;
+      P.engT  = 0;
+      P.relT  = 0;
+    } else if (want !== 0 && P.dir !== 0 && want !== P.dir) {
+      // REVERSAL: one frame of straight (owner's call), then the far side.
+      P.dir   = 0;
+      P.blank = 1;
+      P.engT  = 0;
+      P.relT  = 0;
+    } else if (P.dir === 0) {
+      if (want === 0) { P.pend = 0; P.engT = 0; }
+      else {
+        if (want !== P.pend) { P.pend = want; P.engT = 0; }
+        else P.engT += dt;
+        // ENGAGE_SEC of 0 engages on this very frame.
         if (P.engT >= ENGAGE_SEC) { P.dir = want; P.relT = 0; }
-      } else { P.pend = want; P.engT = 0; }
+      }
     } else {
-      const held = (P.dir < 0 && rawLean <= -RELEASE_LEAN)
-                || (P.dir > 0 && rawLean >=  RELEASE_LEAN);
-      if (held) P.relT = 0;
+      const drifting = Math.abs(rawLean) >= DRIFT_HOLD && Math.sign(rawLean) === P.dir;
+      if (want === P.dir || drifting) P.relT = 0;
       else {
         P.relT += dt;
         if (P.relT >= RELEASE_SEC) { P.dir = 0; P.pend = 0; P.engT = 0; }
       }
     }
+
     const wantTex = P.dir === 0 ? base : turn;
     if (ps.texture.key !== wantTex) {
       ps.setTexture(wantTex);
-      // Same canvas dims by asset contract, but re-assert the ±2 sizing so a
+      // Same canvas dims by asset contract, but re-assert the +/-2 sizing so a
       // future art revision can never cause a scale jump on pose swap.
       this._applyPlayerSpriteDisplaySize();
     }
     const wantFlip = P.dir > 0;
-    if (ps.flipX !== (P.dir !== 0 && wantFlip)) ps.setFlipX(P.dir !== 0 && wantFlip);
+    if (ps.flipX !== wantFlip) ps.setFlipX(wantFlip);
     // Texture and/or mirror may have just changed — re-pin the ground anchor so
     // the tire-contact midpoint stays on exactly the same road point.
     this._applyPlayerGroundAnchor();
@@ -21148,14 +21200,22 @@ export class GameScene extends Phaser.Scene {
     // The pickup line still drops silently.
   }
 
-  /** Inject a synthesized F12 weapon sprite onto a segment ~30-80 segments
-   *  ahead so the player picks it up shortly.  Used at 4★+ to keep the
-   *  player armed under heavy heat.  Picks balanced forward / rear types. */
+  /** Inject a synthesized F12 weapon sprite just inside the draw cap so it
+   *  crests the horizon and approaches like any route-built pickup.  Used at
+   *  4★+ to keep the player armed under heavy heat.  Picks balanced
+   *  forward / rear types. */
   _injectBonusWeapon() {
     const segs = this.road?.segments;
     if (!segs?.length) return;
     const startSeg = Math.floor(this.player.position / SEG_LENGTH);
-    const ahead    = 30 + ((Math.random() * 50) | 0);
+    // 310-365 segments out — just inside DRAW_DIST (380), where the distance
+    // fog still owns the sprite.  The old 30-80 dropped the weapon at 10-20 %
+    // of the visible road: it POPPED into existence mid-roadway and swelled
+    // as you closed (owner 2026-08-10).  Spawning at the fog cap makes it
+    // emerge over the horizon like every route-built pickup, and at chase
+    // speeds it still reaches the player within a few seconds — the "keep
+    // them armed under heavy heat" purpose is unchanged.
+    const ahead    = 310 + ((Math.random() * 55) | 0);
     const seg      = segs[(startSeg + ahead) % segs.length];
     if (!seg) return;
     // Rear smokescreen vs. screen-clearing tools so F12 drops at high
