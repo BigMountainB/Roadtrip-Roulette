@@ -207,6 +207,37 @@ the *look* still wants a human playtest.
   miles 16→20, so the first range is see-through against sky for four miles. Different mechanism from
   the biome blend, left alone deliberately — say the word and it narrows the same way.
 
+### 2026-08-10 (pt 3) — Marketing site had no icons at all · Pages returns 200 for missing files
+Committed, NOT yet deployed.
+
+**Saving the site to an iPhone home screen gave a screenshot, not an icon** — because the root
+marketing site declared none. All 9 pages had viewport / title / description / stylesheet / Twitter
+cards and **no favicon, no apple-touch-icon, no manifest**, and there was no `website/icons/` at all.
+(`/fully` and `/demo` were always fine — vite rewrites them to relative `./icons/...` and they serve
+the real 43,960-byte icon.)
+
+Now installable: `website/icons/` (apple-touch-icon 180x180, favicon-32, icon-512, all alpha-free
+as iOS wants), `website/manifest.webmanifest` (`display: standalone`, scope `/`, sunset-orange
+`#ff7a1a` theme on the site's `#0b0d12` background), and favicon + apple-touch-icon + manifest +
+theme-color + `apple-mobile-web-app-title` in all 9 page heads. The game's own manifest is scoped
+`/fully/`, so the root manifest's `/` scope doesn't collide.
+
+**⚠️ THIS PAGES PROJECT RETURNS HTTP 200 FOR MISSING FILES.** A nonexistent path serves the
+4,680-byte 404 page *with a 200 status*: `curl /this-does-not-exist-xyz.png` → `200`. **Any deploy
+check that only reads the status code is worthless here.** That is how the 2026-08-04 "signs are
+live" verification passed while actually fetching the 404 page — the plates and car art in that same
+check were size-compared against local bytes and were genuinely fine, but `sign_M.png` was not.
+**Verify deployed assets by BYTE SIZE against the local file**, e.g.
+
+    lsz=$(stat -f%z "public/$f"); rsz=$(curl -s -o /dev/null -w "%{size_download}" "$URL/$f")
+
+Re-verified the current deploy that way: `sign_blank`, `sign_plaque`, `aok.png` and
+`starter_back_turn.png` all match local exactly.
+
+**Unrelated but worth recording:** the home-screen icon also won't appear when saving from the
+**dev server**, because Safari won't trust the self-signed `@vitejs/plugin-basic-ssl` cert for the
+icon fetch. Nothing to fix — test icons against a real cert (`/fully`).
+
 ### 2026-08-10 (pt 2) — Turn art now keys off steering INTENT, not lateral velocity
 Committed. Tests 737 green, build clean. All eight pose behaviours verified frame-by-frame in-engine.
 
