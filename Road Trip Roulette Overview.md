@@ -40,6 +40,7 @@ to jump straight to the chapter you need to read or change.
 - **[Chapter 11 — NPC Dialogue Reference](#chapter-11--npc-dialogue-reference)** — every rest-stop encounter, mission passenger/contact, and crowd-chatter line, verbatim; companion spreadsheet `npc_dialogue.csv` in the repo root; rewrite-in-progress toward "edgier, funnier"
 - **[Chapter 12 — Dead Code Inventory](#chapter-12--dead-code-inventory)** — audited 2026-08-03: orphaned files (`src/cops/`, `CarPhysics.js`, the stale `Road 2.js`), the vice-bar layer stranded by the survival migration, dead methods/constants/asset keys, and a suggested order of work
 - **[Chapter 13 — Ending Plate Art Spec](#chapter-13--ending-plate-art-spec)** — the 6 photographic 800×450 ending plates + 3 car views × 10 genres, file naming, the trimmed-bbox placement rule, per-plate anchors, and how to add a genre or re-export art
+- **[Chapter 14 — Player Car Steering & Pose](#chapter-14--player-car-steering--pose)** — the rules the player sprite obeys: no body roll, ground-anchored on the tire contacts, turn art keyed to steering INTENT, per-mode timings, and the G diagnostic
 
 ---
 
@@ -64,6 +65,10 @@ explainer · **all weapons cap at 3** (rolling coal 1/pickup) · **rolling-coal 
 60 mph/30 s slow** · HUD-layout editor with a COPY-to-export button ·
 **genre-car ENDING PLATES** (Ch. 13 — six photographic 800×450 plates, each composited with the
 player's genre car; OUT OF GAS is now a three-way decision card instead of an automatic tow) ·
+**NEXT RUN advice panels** (2026-08-09 — a failed run explains what killed it and what to do
+differently, keyed to the real cause and personalised against what the player already owns) ·
+**steering pose rules** (Ch. 14 — the car no longer rolls, it's ground-anchored on its tire
+contacts, and the turn art keys off steering intent) ·
 **REST-STOP CARDS ARE CONVERSATIONS** (2026-08-05 — a question is answered inside the card and the
 list stays open; only an exit choice closes it and opens the storefront. Choice labels are spoken
 player sentences, all 62 town facts are web-verified, and NPCs QUOTE prices that the shop then
@@ -85,7 +90,12 @@ Ch3 §18 "AS BUILT") · **`busted_late` still has no ending card** (TOO LATE + 5
 jumps straight to the checkpoint-restart modal — the only run-ender left without a plate, Ch. 13) ·
 **ending-plate layout tuning** (Pullman comic puts its stats/button over the busy middle panel; the
 demo van's wheels sit behind the button row) · **`public/assets/ui/endings/source/` is 64 MB and
-ships in `dist/`** (keyed working art — should be parked outside `public/`, see Ch. 13).
+ships in `dist/`** (keyed working art — should be parked outside `public/`, see Ch. 13) ·
+**STRIP THE DEV AIDS BEFORE RELEASE** — the `G` steering diagnostic (Ch. 14.5) and the `Y` yaw-spike
+toggle are both live in the shipped build · **playtest confirmations owed**: whether steering still
+reads as a turn now the body roll is gone, the `G` overlay on a real curve, and the OUT OF GAS
+card's advice panel (that one is geometry- and code-verified only — every attempt to screenshot a
+live GameScene headless either wrecked the car mid-capture or hit a node OOM).
 
 **Open from the rest-stop conversation pass (2026-08-05, all owner-decidable):**
 - **The three fuel offers still transact in conversation** — Grandma's $35, the Farm Worker's $50
@@ -197,47 +207,6 @@ the *look* still wants a human playtest.
   miles 16→20, so the first range is see-through against sky for four miles. Different mechanism from
   the biome blend, left alone deliberately — say the word and it narrows the same way.
 
-### 2026-08-08 → 09 — Player steering poses: rear-¾ turn sprites · shrink fix (art normalization + pixel-factor sizing) · 55 ms turn-in
-Tests green (7 files), `vite build` clean.  **Deployed to /demo + /fully** through the shrink fix
-(verified live by content: 611×359 art + `turnfit-1` in the served bundles).  **Local only:** the
-55 ms engage trim.
-
-- **Steering pose system** (`GameScene._updateSteerPose`, ~45 lines).  The genre starter swaps
-  between `starter_back.png` and the new rear-three-quarter `starter_back_turn.png` while
-  steering.  Driven by resolved lateral velocity (`steerVelocity / TURN_SPEED`) so touch, keys and
-  tilt behave identically by construction.  Art depicts a SCREEN-LEFT turn and steer input is −1
-  for left → left = unflipped, right = flipX (verified by probe: sv sign, p.x drift, capture grid).
-  Hysteresis 0.30-engage / 0.14-release; 80 ms turn-in (→ 55 ms, see below), 110 ms release hold;
-  direction reversals pass through straight.  `setTexture`/`setFlipX` only on state change; flip
-  touches only the car art — plate overlay stays unmirrored.  One texture key
-  (`codex_beater_back_turn`) + ONE `GENRE_ART` line covers boot loading AND live genre swaps.
-  Gated on the starter art key, so garage/codex vehicles are untouched.  Cockpit skips.
-- **"Car shrinks when turning" — root cause was the ART, not the sprite code.**  All 10 turn PNGs
-  matched their straight twin's CANVAS but drew the car 8–31 % smaller inside it (phonk worst,
-  ×1.311) and floated the tire baseline 15–46 px high.  Frame-pinning canvas width to 78 px made
-  the smaller car-in-canvas render smaller.  Fix in two halves:
-  1. `scripts/buildTurnSprites.mjs` (repeatable; originals preserved per genre as
-     `starter_back_turn_raw.png`): uniform-scales each turn car by straightVisH/turnVisH — height
-     is the yaw-invariant landmark; width is deliberately NOT force-matched (the visible side
-     legitimately widens) — then re-composites with the straight art's bottom padding, bbox
-     centred.  Canvas WIDTH grows where the scaled car no longer fits (8 of 10 genres; cropping
-     bodywork was not an option).  All ΔX corrections measured ZERO (art was pre-centred <1 px);
-     no per-genre metadata needed.
-  2. `_applyPlayerSpriteDisplaySize`: the TURN pose is sized by the STRAIGHT art's px-per-source-px
-     factor instead of re-pinning the turn canvas to 78 — the build contract (equal
-     pixels-per-car-unit + equal bottom pad) makes one shared factor keep rear face, tire baseline
-     and centre fixed.  Probe-verified: factor byte-identical across poses (phonk .1511, country
-     .179, reggae .1325, norteno .118), baseline ±1.5 px, transitions
-     straight→L→release→R→direct-reverse all stable.  Cache-rev `turnfit-1` forces installed PWAs
-     to re-fetch the corrected art.
-- **Turn-in trimmed 80 → 55 ms** (owner: "a tad too slow") — engage timer only; release hold and
-  hysteresis unchanged.  NOT yet deployed.
-- **Art notes:** k_pop and metal turn sprites read as barely 3–5° vs the ~12–15° of the rest —
-  pose effect is subtle on those two; re-render if consistency matters.  Two iCloud conflict
-  copies in `website/fully` (caught by the new checkDuplicates build guard) verified
-  identical/empty and removed.
-
-
 ### 2026-08-10 (pt 2) — Turn art now keys off steering INTENT, not lateral velocity
 Committed. Tests 737 green, build clean. All eight pose behaviours verified frame-by-frame in-engine.
 
@@ -338,6 +307,47 @@ release.**
 (destroying the sprite mid-capture) and a paused pre-run scene sits behind the title art. The
 diagnostic runs without error and its numbers are the table above, but it wants an eyeball in a real
 playtest.
+
+### 2026-08-08 → 09 — Player steering poses: rear-¾ turn sprites · shrink fix (art normalization + pixel-factor sizing) · 55 ms turn-in
+Tests green (7 files), `vite build` clean.  **Deployed to /demo + /fully** through the shrink fix
+(verified live by content: 611×359 art + `turnfit-1` in the served bundles).  **Local only:** the
+55 ms engage trim.
+
+- **Steering pose system** (`GameScene._updateSteerPose`, ~45 lines).  The genre starter swaps
+  between `starter_back.png` and the new rear-three-quarter `starter_back_turn.png` while
+  steering.  Driven by resolved lateral velocity (`steerVelocity / TURN_SPEED`) so touch, keys and
+  tilt behave identically by construction.  Art depicts a SCREEN-LEFT turn and steer input is −1
+  for left → left = unflipped, right = flipX (verified by probe: sv sign, p.x drift, capture grid).
+  Hysteresis 0.30-engage / 0.14-release; 80 ms turn-in (→ 55 ms, see below), 110 ms release hold;
+  direction reversals pass through straight.  `setTexture`/`setFlipX` only on state change; flip
+  touches only the car art — plate overlay stays unmirrored.  One texture key
+  (`codex_beater_back_turn`) + ONE `GENRE_ART` line covers boot loading AND live genre swaps.
+  Gated on the starter art key, so garage/codex vehicles are untouched.  Cockpit skips.
+- **"Car shrinks when turning" — root cause was the ART, not the sprite code.**  All 10 turn PNGs
+  matched their straight twin's CANVAS but drew the car 8–31 % smaller inside it (phonk worst,
+  ×1.311) and floated the tire baseline 15–46 px high.  Frame-pinning canvas width to 78 px made
+  the smaller car-in-canvas render smaller.  Fix in two halves:
+  1. `scripts/buildTurnSprites.mjs` (repeatable; originals preserved per genre as
+     `starter_back_turn_raw.png`): uniform-scales each turn car by straightVisH/turnVisH — height
+     is the yaw-invariant landmark; width is deliberately NOT force-matched (the visible side
+     legitimately widens) — then re-composites with the straight art's bottom padding, bbox
+     centred.  Canvas WIDTH grows where the scaled car no longer fits (8 of 10 genres; cropping
+     bodywork was not an option).  All ΔX corrections measured ZERO (art was pre-centred <1 px);
+     no per-genre metadata needed.
+  2. `_applyPlayerSpriteDisplaySize`: the TURN pose is sized by the STRAIGHT art's px-per-source-px
+     factor instead of re-pinning the turn canvas to 78 — the build contract (equal
+     pixels-per-car-unit + equal bottom pad) makes one shared factor keep rear face, tire baseline
+     and centre fixed.  Probe-verified: factor byte-identical across poses (phonk .1511, country
+     .179, reggae .1325, norteno .118), baseline ±1.5 px, transitions
+     straight→L→release→R→direct-reverse all stable.  Cache-rev `turnfit-1` forces installed PWAs
+     to re-fetch the corrected art.
+- **Turn-in trimmed 80 → 55 ms** (owner: "a tad too slow") — engage timer only; release hold and
+  hysteresis unchanged.  NOT yet deployed.
+- **Art notes:** k_pop and metal turn sprites read as barely 3–5° vs the ~12–15° of the rest —
+  pose effect is subtle on those two; re-render if consistency matters.  Two iCloud conflict
+  copies in `website/fully` (caught by the new checkDuplicates build guard) verified
+  identical/empty and removed.
+
 
 ### 2026-08-09 — NEXT RUN advice panels on the failure endings
 Committed. Tests 737 green, build clean. Screenshots reviewed for every reason at wide (1280x720)
@@ -8188,3 +8198,115 @@ screen that never draws would strand the player with no way to restart.
 A new **plate** additionally needs an entry in `ENDING_PLATES` (texture key, filename, car view +
 anchor) and, if it's a new run-ending cause, a `CAUSE` entry in `GameOverScene.js` for its
 headline / colour / subtitle.
+
+
+---
+
+# Chapter 14 — Player Car Steering & Pose
+
+*Written 2026-08-10 after two rounds of "it looks wrong when it turns". Code:
+`GameScene._updateSteerPose` (when the turn art shows), `_groundAnchorFor` /
+`_applyPlayerGroundAnchor` (where the car is pinned), `_playerSpriteFramePoint`
+(anything positioned against the sprite), `_drawSteerDiagnostic` (the overlay).*
+
+These are RULES, not tuning values. Each one exists because breaking it produced a specific
+visible bug, noted alongside.
+
+## 14.1 The car does not roll
+
+The sprite's rotation is **0**. It is not rotated to communicate steering, lane changes, or
+anything else.
+
+It used to rotate by `leanDir * 6` (clamped ±1.4, so up to **±8.4°**) straight off steering input.
+Rotating about the PNG centre lifted a rear tire off the ground line and tilted the roofline, so a
+lane change read as the car TIPPING rather than turning. The rear-three-quarter turn art already
+carries its own drawn perspective, so the rotation was double-counting the turn on top of it.
+
+If a deliberate suspension/body-roll effect is ever wanted, it belongs at that spot in
+`_updatePlayer`, driven by something physical (camber, weight transfer) rather than raw steering
+input, and capped around **0.25-0.75°, 1° absolute ceiling**. Anything more re-creates the tipping.
+
+The tire shadow is flat for the same reason — it used to counter-tilt at `-leanDir * 4°` as the
+"body leans in, wheels stay planted" cue, and a rotating puddle under a level car reads as detached.
+
+## 14.2 The car is anchored on its tires, not on its PNG
+
+The sprite origin is the **midpoint between the rear tire contact points**, measured from the
+texture's alpha channel, not the canvas centre or bottom.
+
+It used to sit at the PNG's bottom-centre (origin 0.5, 1). That is NOT the same point: the turn art
+is a three-quarter view whose contact midpoint sits **14.5 px right of centre** (320 of 611). So
+every straight->turn swap slid the car sideways, and mirroring the pose threw the offset the other
+way — a ~4 px jump of the one point that is supposed to be nailed to the road.
+
+- **Measured at runtime, not hard-coded.** The car art is PER GENRE
+  (`assets/culture/<genre>/vehicles/`) — ten different bodies, each framed differently, plus
+  whatever ships later. `_groundAnchorFor` scans the alpha once per texture and caches it.
+- **Mirroring sets the origin to `1 - u`.** Phaser's `flipX` renders texture-u at FRAME position
+  `(1 - u)`, so putting the origin at `1 - u` keeps the same physical point under the sprite's x/y.
+- **Anything positioned against the sprite must go through `_playerSpriteFramePoint(u, v)`**, which
+  accounts for both the origin and the mirror. The rear licence plate does. Assuming "the origin is
+  the PNG bottom" is what put the plate 4 px off when mirrored.
+- Falls back to the old bottom-centre behaviour if a texture can't be measured (one contact blob,
+  tainted canvas), so a new car with odd art degrades rather than breaks.
+
+## 14.3 The turn art keys off INTENT, not velocity
+
+`_updateSteerPose` reads `_steerIntent` — the raw steering input captured in `_updatePlayer`
+**before** the weight ramp — never `p.steerVelocity`.
+
+Velocity is the last link in a three-stage lag chain: the **0.33 s input weight ramp**
+(`STEER_RAMP_ENGAGE = 3.0`), then grip-limited lateral acceleration, then a magnitude gate. A pose
+keyed to it always arrived visibly late, and the per-frame debounce — the term that kept getting
+tuned — was the smallest of the three. **If the pose ever feels slow again, look at the chain, not
+at the debounce.**
+
+The same design caused a worse bug: the old machine had to fully RELEASE before it could engage the
+opposite side, so through a left->right reversal the sprite kept showing LEFT art while the car was
+already travelling right.
+
+**Steering inversion is applied when capturing intent**, so under a vice that inverts steering the
+art follows where the car actually GOES. Matching raw input there would face the car opposite its
+own travel — the same bug, drug-flavoured.
+
+Per mode:
+
+| mode | input | engage | notes |
+|---|---|---|---|
+| classic | digital ±1 | frame 1 | no debounce needed — the input is already clean |
+| tilt | analog axis | 0.18 deadzone + 30 ms | it's a real accelerometer; wrist jitter would flicker it |
+| flappy | never neutral | always posed | mirrors on each tap (owner's call) |
+
+- **Reversal shows exactly ONE straight frame**, then the far side.
+- **Release** needs no intent AND lateral velocity settled (`DRIFT_HOLD` 0.12, ~100 ms). Letting go
+  mid-slide holds the three-quarter view rather than snapping upright while visibly sideways.
+- Lateral velocity's only remaining job is HOLDING a pose through a drift. It never starts one.
+
+Direction mapping: the turn art depicts the car turning toward **screen-LEFT**, so `dir < 0` renders
+it unflipped and `dir > 0` mirrors it.
+
+## 14.4 The art itself is level — check before compensating
+
+Measured off the alpha, `starter_back.png` puts both contact patches at y=355;
+`starter_back_turn.png` at y=355 and y=354. **1 px across a 410 px span = 0.14°**, which is the
+perspective drawn into a three-quarter view, not a crooked export.
+
+If a future car looks tilted, measure the PNG first. Correct the ASSET; do not add runtime rotation
+to compensate — that is how the body-roll bug in §14.1 would come back through the side door.
+
+Regen command for the contact measurement is in the 2026-08-10 changelog entry.
+
+## 14.5 The G diagnostic (TEMPORARY)
+
+Press **G** in-game to overlay:
+
+1. green horizontal line through both rear tire contact points, with a dot on each
+2. amber ground anchor — the point pinned to the road
+3. pink screen vertical through the car's centre
+4. blue road lane-direction ray
+
+On a straight road both dots must sit on one horizontal line and the vertical must stand upright.
+On a curve the car may travel laterally along the lane ray, but **the baseline must stay
+horizontal** — if it tilts, something is rotating the body again.
+
+**Strip this with the rest of the dev aids before release** (see the pending list in Ch. 1).
