@@ -2882,7 +2882,16 @@ export class RestStopScene extends Phaser.Scene {
         // the next tier; in the full-ladder view that left a hole between
         // "✓ Lv1" and "🔒 Lv3", so the rung now stays put and just flips state.
         if (item.payload?.upgradeInstall || item.payload?.vehicleAccessory) {
-          this._markRowOwned(item);
+          // Some parts are shelved at MORE THAN ONE storefront as separate row
+          // objects (bumper at Finesse + Sam's; windshield/headlights/wipers L1
+          // at Sam's too), so marking only the tapped row left the sibling
+          // buyable — a second $4k bumper in the same visit bought nothing
+          // (owner 2026-08-11). Flip every same-id row to ✓ OWNED.
+          for (const _k of ['schwasted', 'fap', 'sam_acc']) {
+            for (const _it of (SECTIONS[_k]?.items ?? [])) {
+              if (_it.id === item.id) this._markRowOwned(_it);
+            }
+          }
           if (item.slot && item.lvl) this._unlockTier(item.slot, item.lvl + 1);
         }
         // Genre car bought/swapped — this row becomes YOUR RIDE for the visit.

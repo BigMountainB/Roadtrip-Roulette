@@ -13725,76 +13725,61 @@ export class GameScene extends Phaser.Scene {
    * Steering pose — swap the player sprite between the straight rear view and
    * the rear-three-quarter turn art. VISUAL ONLY: writes nothing to physics.
    *
-   * Driven by steering INTENT (`_steerIntent`, captured pre-ramp in
-   * _updatePlayer), NOT by the car's lateral velocity (owner 2026-08-10).
-   * Velocity is the last link in a three-stage lag chain — the 0.33 s input
-   * weight ramp, then grip-limited lateral acceleration, then a 0.30 magnitude
-   * gate — so a velocity-keyed pose always arrived visibly late, and no amount
-   * of debounce tuning could fix it. Intent is known the frame the player
-   * presses.
+   * Driven by WHEEL LOAD (owner 2026-08-11): a pose-local accumulator lerps
+   * toward `_steerIntent` at the SAME engage/release rates as the classic
+   * physics steer ramp, and the turn art engages only once the wheel is ~35 %
+   * loaded (~0.14 s of a real hold). A quick tap only ever builds ~20-25 %
+   * load, so it never flashes the turn art — the previous intent-keyed version
+   * posed the very frame the player touched the controls, which read as fake.
+   * Release hysteresis at 20 % keeps the pose from flickering at the line.
    *
-   * That also fixes the reversal bug: the old machine had to fully RELEASE
-   * before it could engage the opposite side, so through a left->right flip the
-   * sprite kept showing the LEFT art while the car was already travelling
-   * right. Intent flips sign instantly.
+   * The accumulator is deliberately NOT `_steerRamp` itself: physics only
+   * ramps in classic mode (tilt is analog, flappy is instant), but the owner
+   * wants the load gate in ALL modes — including flappy, which loses its old
+   * always-posed-per-tap behavior. In classic the two ramps track identically,
+   * so the pose still mirrors the real wheel.
+   *
+   * Reversals need no special casing anymore: the load unwinds through center
+   * on a left->right flip, so the sprite naturally shows straight for the
+   * beat the wheel crosses zero — which is what a real car does.
    *
    * Direction mapping: the turn art depicts the car turning toward SCREEN-LEFT,
    * so dir < 0 renders it unflipped and dir > 0 mirrors it.
-   *
-   * Per mode:
-   *   classic  digital +/-1  -> engages the same frame (no debounce needed)
-   *   tilt     analog        -> 0.18 deadzone + 30 ms debounce vs hand jitter
-   *   flappy   never neutral -> always posed, mirroring on each tap (owner's call)
    */
   _updateSteerPose(dt, rawLean) {
     const ps = this.playerSprite;
     if (!ps || this._cockpitActive) return;
     const base = 'codex_beater_back', turn = 'codex_beater_back_turn';
     if (this._playerArtKey !== base || !this.textures.exists(turn)) return;
-    const P = (this._steerPose ??= { dir: 0, pend: 0, engT: 0, relT: 0, blank: 0 });
+    const P = (this._steerPose ??= { dir: 0, load: 0 });
 
     const mode   = this._steerPoseMode ?? 'classic';
     const intent = this._steerIntent ?? 0;
     // Digital modes hand us a clean +/-1, so the deadzone only has to reject
     // float noise. Tilt is a real analog axis and needs a wrist-jitter band.
-    const DEAD        = mode === 'tilt' ? 0.18  : 0.01;
-    const ENGAGE_SEC  = mode === 'tilt' ? 0.030 : 0;
-    const RELEASE_SEC = 0.10;
+    const DEAD = mode === 'tilt' ? 0.18 : 0.01;
+    // Same per-second lerp rates as the classic physics steer ramp
+    // (STEER_RAMP_ENGAGE / STEER_RAMP_RELEASE in _updatePlayer) so the pose
+    // tracks the real wheel in classic mode.
+    const RAMP_ENGAGE  = 3.0;
+    const RAMP_RELEASE = 5.0;
+    const ENGAGE_AT  = 0.35;   // wheel load needed to show the turn art
+    const RELEASE_AT = 0.20;   // load below which the pose lets go (hysteresis)
     // Lateral velocity still counts for HOLDING a pose: if the player lets go
     // mid-slide the car is visibly still going sideways, and snapping upright
     // there looks worse than holding the three-quarter view a beat longer.
-    const DRIFT_HOLD  = 0.12;
+    const DRIFT_HOLD = 0.12;
 
-    const want = Math.abs(intent) >= DEAD ? Math.sign(intent) : 0;
+    const target = Math.abs(intent) >= DEAD ? intent : 0;
+    const rate   = target === 0 ? RAMP_RELEASE : RAMP_ENGAGE;
+    P.load += (target - P.load) * Math.min(1, rate * dt);
 
-    if (P.blank > 0) {
-      // Reversal's single straight frame has been shown — take the new side.
-      P.blank = 0;
-      P.dir   = want;
-      P.pend  = want;
-      P.engT  = 0;
-      P.relT  = 0;
-    } else if (want !== 0 && P.dir !== 0 && want !== P.dir) {
-      // REVERSAL: one frame of straight (owner's call), then the far side.
-      P.dir   = 0;
-      P.blank = 1;
-      P.engT  = 0;
-      P.relT  = 0;
-    } else if (P.dir === 0) {
-      if (want === 0) { P.pend = 0; P.engT = 0; }
-      else {
-        if (want !== P.pend) { P.pend = want; P.engT = 0; }
-        else P.engT += dt;
-        // ENGAGE_SEC of 0 engages on this very frame.
-        if (P.engT >= ENGAGE_SEC) { P.dir = want; P.relT = 0; }
-      }
+    if (P.dir === 0) {
+      if (Math.abs(P.load) >= ENGAGE_AT) P.dir = Math.sign(P.load);
     } else {
       const drifting = Math.abs(rawLean) >= DRIFT_HOLD && Math.sign(rawLean) === P.dir;
-      if (want === P.dir || drifting) P.relT = 0;
-      else {
-        P.relT += dt;
-        if (P.relT >= RELEASE_SEC) { P.dir = 0; P.pend = 0; P.engT = 0; }
-      }
+      const holding  = Math.sign(P.load) === P.dir && Math.abs(P.load) > RELEASE_AT;
+      if (!holding && !drifting) P.dir = 0;
     }
 
     const wantTex = P.dir === 0 ? base : turn;
