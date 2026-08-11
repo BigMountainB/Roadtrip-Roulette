@@ -7,7 +7,7 @@ to jump straight to the chapter you need to read or change.
 - **Live site:** https://roadtrip-roulette.pages.dev — the marketing site (as of 2026-07-27)
 - **Live game:** https://roadtrip-roulette.pages.dev/fully — the FULL game, free + public
 - **Demo embed:** https://roadtrip-roulette.pages.dev/demo — 25-mile browser demo
-- ⚠️ **CI will clobber all three** — see Chapter 2 “Deploy conflict”
+- ✅ **CI deploys `website/` as of 2026-08-10** (was `dist`, which would have clobbered all three) — see Chapter 2 “Deploy conflict”
 - **Repo:** `BigMountainB/Roadtrip-Roulette`
 - **Local path:** `/Users/brendanbaughn/Documents/Claude/Road trip roulette/`
 
@@ -160,6 +160,37 @@ genre pick, and a "Rotate Phone to Enter Game Play" prompt follows. Remaining: e
 genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
+
+### 2026-08-11 (pt 2) — Skyline drops below the ground; the horizon clamp is gone
+Uncommitted at time of writing. Tests: 550 green, `vite build` clean.
+
+**Owner:** *"Don't clip them on the horizon!! Let them fall behind the roadway."* Correct, and the
+reasoning was too — *"they should not be over the road or ground. Why would they be?"* They were only
+over it because `cityBackdropGfx` sat at depth **6.9**, above every road/fog/ground pass. The
+`horizonY` clamp in `_clipBottom` existed purely to stop them stamping on the roadway from up there.
+
+- **Silhouettes 6.9 -> 0.9** — below terrain (1), ground tile (1.3) and road (1.5), above sky (0).
+  They now can't paint over the world, so nothing needs to clamp them.
+- **Horizon clamp removed.** `_clipBottom` no longer takes `min(horizonY, ...)`. The skyline's base
+  is decided by where real, perspective-correct ground covers it, which follows the terrain instead
+  of a ruler-straight line at the `CAM.horizonY` constant. It still needs a finite bottom (the values
+  become fillRect heights and `_roadTopAt` is Infinity off-pavement), so `CITY_SKIRT = 30` px is how
+  far a block may fall before the ground takes over.
+- **Soft top edge on the below-horizon patch (`SOFT = 20`).** The `_cityBack` fill starts at a
+  dead-flat `H()`. With the skyline now underneath it, a hard opaque start would slice every building
+  at exactly the height the old clamp did — same cut, different layer holding the knife. Alpha now
+  ramps in over 20 px so buildings dissolve into the ground. The bridge blend went 10 px/5 steps ->
+  30 px/15 steps for the same reason.
+
+**Region coverage verified in-engine** (every 3rd mile, 1-292): all 8 biomes carry three bands AND
+their own ground tile — westside 16-43, north_bend 28-37, pass_alpine 46-55, easton 58-76, kittitas
+79-121, vantage 124-139, columbia 142-208, palouse 211-292.
+
+> **Known gap: miles 0-16 have NO biome bands.** `biomeAt` returns null below `URBAN_UNTIL = 16` by
+> design (a forest ridge behind downtown would look absurd). That is exactly where the owner's West
+> Seattle screenshot was taken, so the biome bands do NOT cover the horizon patch there — the urban
+> stretch relies on the skyline + the softened patch alone. Left as-is pending an owner call.
+
 
 ### 2026-08-11 — The ground was ONE tile for all 9 biomes (the "water" band, finally)
 Uncommitted. Tests: 550 green, `vite build` clean.
@@ -723,7 +754,7 @@ cop-array crash fix, the helicopter kill, the cold-load fit, and the back-button
   DUI Pages project (would have overwritten the DUI game).  It now runs the Chapter-2 manual path:
   build-demo.sh + build-fully.sh + `wrangler pages deploy website --project-name
   roadtrip-roulette`, creds from local `.cloudflare.env` or `../DUI/.cloudflare.env`.  Verified
-  end-to-end.  CI remains broken/clobber-wired — do not git push to deploy (see Chapter 2).
+  end-to-end.  (Superseded 2026-08-10: CI is no longer clobber-wired — it deploys `website/` now. The token is still dead, so pushing still does not deploy; see Chapter 2.)
 
 
 ### 2026-08-04 — Rest-stop dialogue rewrite: every conversation in the owner's voice · all 62 town facts web-verified
@@ -1961,7 +1992,7 @@ Placeholder frames only; never playtested.
   Secrets for BOTH `BigMountainB/Roadtrip-Roulette` and `BigMountainB/DUI`.
   ⚠️ **Do not fix the token without also rewiring `cloudflare-pages.yml`** per "Deploy conflict"
   below — fixing only the token makes CI green again, and a green CI run still runs
-  `wrangler pages deploy dist`, which clobbers `/fully` and the marketing site on the very next push.
+  `wrangler pages deploy dist`, which clobbers `/fully` and the marketing site on the very next push. **FIXED 2026-08-10 — it deploys `website/` now; see Chapter 2.**
 - `website/fully/` had been tracked in git this whole time — 601MB of build output, unlike
   `website/demo/` which was correctly gitignored from the start. Almost certainly why past pushes
   in this repo have been huge and slow (one earlier push this arc uploaded 584MB). Added it to
@@ -2840,6 +2871,28 @@ and is superseded by this chapter).
 > the site survived untouched: `/` still the marketing site, `/fully` and `/demo` both 200 serving
 > the game. The clobber risk is therefore **still armed and still only defused by a broken token**.
 > Anyone fixing that token must rewire `.github/workflows/cloudflare-pages.yml` in the same change.
+>
+> ## ✅ DISARMED 2026-08-10 — the workflow now deploys `website/`
+>
+> Owner call: stop relying on a broken credential as the safety mechanism. The workflow's last line
+> went from `pages deploy dist` to **`pages deploy website`**, and its `npm run build` step was
+> replaced by the same two scripts `scripts/deploy.sh` runs — `website/build-demo.sh` and
+> `website/build-fully.sh` — so CI and the manual path now produce identical output. Adding the
+> `CF_PAGES_API_TOKEN` / `CF_ACCOUNT_ID` secrets is **safe now**, and turns push-to-main into a real
+> auto-deploy of the live site rather than a site-wipe.
+>
+> The file carries a long header comment explaining the `dist` vs `website` distinction, because the
+> failure mode is entirely invisible from the diff: both are valid paths and both "work", but a Pages
+> deploy REPLACES the project instead of merging, so shipping `dist` silently deletes the landing
+> page, `/faq`, `/genres`, `/story`, `/map`, `/walkthrough`, `/leaderboard`, `/businesses`, `/demo`
+> and `/fully`. **Keep the workflow and `scripts/deploy.sh` in step — they must not drift.**
+>
+> Size check taken at the same time, since CI now uploads the whole thing: `website/` is **1,623
+> files / ~1.5 GB**, against Cloudflare's caps of 20,000 files and 25 MiB per file — comfortably
+> inside both, with no single file anywhere near the per-file limit. Expect a slow upload, not a
+> failing one. (Also noted: eight `* 2` iCloud conflict directories under `website/demo` and
+> `website/fully` are all **0 bytes and empty**, so they cost nothing and wrangler won't upload them.
+> `scripts/checkDuplicates.js` does scan `website/`; it tests files, not empty directories.)
 
 ## How to deploy
 

@@ -1030,7 +1030,15 @@ export class GameScene extends Phaser.Scene {
     // Above every road/fog/background pass, but below the complete scenery
     // sprite range (trees/buildings/vehicles bottom out at depth 7.0).
     // 9.44 incorrectly put the skyline over distant image-based scenery.
-    this.cityBackdropGfx = this.add.graphics().setDepth(6.9);
+    // DEPTH 0.9 — BELOW the ground, owner 2026-08-11.  Was 6.9, above every
+    // road/fog/ground pass, which is the ONLY reason _clipBottom in Road.js
+    // had to clamp the silhouettes at the horizon: up there they would have
+    // stamped straight over the roadway.  Below the ground they physically
+    // cannot, so the clamp goes away and the skyline's base is now decided by
+    // where real, perspective-correct ground actually covers it — which
+    // follows the terrain instead of a ruler-straight line at CAM.horizonY.
+    // Above skyGfx (0) so the sky never paints over it.
+    this.cityBackdropGfx = this.add.graphics().setDepth(0.9);
     this.roadGfx      = this.add.graphics().setDepth(1.5);
 
     // Textured ground, in the slot the terrain/road split opened.  Depth 1.3

@@ -1059,13 +1059,27 @@ export class Road {
         // verge immediately in front is olive/brown. Use the far-verge tone
         // here so the untextured projection cap visually joins that ground.
         const cityFarGround = lerpColor(palette.grass2, 0x465038, 0.78);
+        // SOFT TOP EDGE (owner 2026-08-11).  This fill is the patch over the
+        // below-horizon void, and it starts at H() — a dead-flat line.  With
+        // the skyline now rendering underneath it, a hard opaque start would
+        // slice every building at exactly the height the old clamp did, just
+        // with a different layer holding the knife.  Ramping the alpha in
+        // means the buildings dissolve into the ground instead of being cut,
+        // and the patch stops reading as a bar against the sky.
+        const SOFT = 20;
+        for (let i = 0; i < SOFT; i++) {
+          tg.fillStyle(cityFarGround, (i + 1) / SOFT);
+          tg.fillRect(-MARGIN, H() + i, W, 1);
+        }
         tg.fillStyle(cityFarGround, 1);
-        tg.fillRect(-MARGIN, H(), W, SCREEN_H - H() + 20 + MARGIN);
+        tg.fillRect(-MARGIN, H() + SOFT, W, SCREEN_H - H() - SOFT + 20 + MARGIN);
       } else {
         // Match the horizon row to atmospheric fog and transition to the real
         // water/bridge surface colour in fine steps.
-        const transitionH = _seattleBridge ? 10 : 48;
-        const transitionSteps = _seattleBridge ? 5 : 24;
+        // Bridge blend was 10 px / 5 steps — so short the backing read as a
+        // hard-edged slab right under the skyline (owner 2026-08-11).
+        const transitionH = _seattleBridge ? 30 : 48;
+        const transitionSteps = _seattleBridge ? 15 : 24;
         for (let b = 0; b < transitionSteps; b++) {
           const t = b / Math.max(1, transitionSteps - 1);
           const y = waterTop + Math.floor(t * transitionH);
@@ -1136,8 +1150,19 @@ export class Road {
         const c = Math.round((x + _rtOff) / _rtW);
         return (c < 0 || c >= _rtCols.length) ? Infinity : _rtCols[c];
       };
-      const _clipBottom = (x0, x1) => Math.min(
-        horizonY, _roadTopAt(x0), _roadTopAt((x0 + x1) * 0.5), _roadTopAt(x1));
+      // Owner 2026-08-11: DO NOT clip these at the horizon.  The silhouettes
+      // now draw at depth 0.9, underneath the terrain, ground tile and road,
+      // so they can no longer paint over the world and no clamp is needed to
+      // stop them — the ground occludes them for real, along its own
+      // perspective-correct edge rather than a flat line at CAM.horizonY.
+      //
+      // They still need a finite bottom (these values become fillRect heights,
+      // and _roadTopAt returns Infinity off-pavement).  SKIRT is how far below
+      // the horizon a block is allowed to fall before the ground takes over —
+      // enough material for the ground's soft edge to swallow, not so much
+      // that a building hangs over open water where nothing covers it.
+      const CITY_SKIRT = 30;
+      const _clipBottom = () => horizonY + CITY_SKIRT;
 
       if (cityGap < 1 && _citySilFade > 0.01) {
         const farStep = 24;
