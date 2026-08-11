@@ -402,6 +402,36 @@ the *look* still wants a human playtest.
   miles 16→20, so the first range is see-through against sky for four miles. Different mechanism from
   the biome blend, left alone deliberately — say the word and it narrows the same way.
 
+### 2026-08-10 (pt 4) — Deployed the 5-commit backlog · dev-server/iOS testing notes (Ch. 2)
+Deployed. Tests 737 green, build clean.
+
+**Live** at roadtrip-roulette.pages.dev — NEXT RUN advice panels, both steering fixes, Chapter 14,
+and the marketing-site icons/manifest. Verified by byte size and by grepping the deployed bundle for
+`WHY IT ENDED` and `_steerIntent` (status codes are useless here — see Ch. 2).
+
+**UNRESOLVED — dev server on the phone.** Mid-session the iPhone stopped loading the game from the
+LAN dev server: white screen from a home-screen save, then "network connection lost", then "server
+not found", and finally the game shell rendering with an empty music list. Owner's position, which
+outweighs the inference: **it had worked for a month up to this point**, so this is a regression in
+the setup, not an iOS limitation.
+
+Changes made to that server during the session, all mine and all suspect:
+1. switched `npm run dev` (http) -> `npm run dev:https`, introducing a self-signed cert into a flow
+   that never had one;
+2. deleted `node_modules/.vite`, forcing a full dep re-optimization;
+3. flipped protocols repeatedly, re-triggering that optimization each time.
+
+`vite.config.js` itself hasn't changed since 2026-07-20, so the config is not the regression.
+**Server has been restored to exactly the prior setup** — `npm run dev` on http, verified booting
+over `http://192.168.86.180:3000/` under an iPhone user-agent (Phaser up, audio registered, 10
+stations, canvas present, no failed requests). Owner is investigating.
+
+New in Ch. 2: the http-vs-https dev scripts and why it matters on a phone, the three separate iOS
+restrictions that make self-signed https painful on device, the noisy-but-harmless
+`docs/retired/press-kit-page.html` dep-scan error, and **a decoder for "Music is taking longer than
+usual to load"** — that message means `src/main.js` never executed, NOT that audio is slow, and it
+is the same fault as a blank game canvas.
+
 ### 2026-08-10 (pt 3) — Marketing site had no icons at all · Pages returns 200 for missing files
 Committed, NOT yet deployed.
 
@@ -533,6 +563,31 @@ release.**
 (destroying the sprite mid-capture) and a paused pre-run scene sits behind the title art. The
 diagnostic runs without error and its numbers are the table above, but it wants an eyeball in a real
 playtest.
+
+### 2026-08-09 → 10 — 55 ms turn-in · iOS silent-GPU-eviction recovery · bonus weapons crest the horizon
+Tests green (7 files), `vite build` clean.  **All three LOCAL ONLY — not yet deployed.**  One
+`npm run deploy` ships the batch to /demo + /fully.
+
+- **Steering-pose turn-in trimmed 80 → 55 ms** (owner: "a tad too slow") — engage timer only in
+  `_updateSteerPose`; release hold (110 ms) and the 0.30/0.14 hysteresis band unchanged.
+- **"Came back after an hour and every image was the car" — iOS silent GPU eviction.**  Diagnosed
+  by reproducing context loss locally (WEBGL_lose_context): a NORMAL lose→restore recovers
+  perfectly, so Phaser 3.90's event path is fine.  Safari's failure mode is different: it can
+  evict a backgrounded tab's GPU textures WITHOUT firing webglcontextlost — dead texture handles,
+  no rebuild, every sprite samples whatever binds (the car).  Fix in main.js: on visibilitychange
+  → visible after ≥30 s hidden, re-create every wrapped GL resource from its retained source
+  (textures → buffers → framebuffers → programs → locations, mirroring Phaser's own
+  contextRestoredHandler) + createTemporaryTextures + pipelines.restoreContext, then drop the
+  Road/GroundPlane raw-GL caches (`_ready`/`_ok`) so REPEAT/mipmaps/anisotropy re-apply.
+  Safety-verified: the rebuild is a visual no-op on a healthy context (frame-diff = live traffic
+  only), and the true lose/restore path still recovers.  Console logs `[resume] GPU resources
+  rebuilt after Ns hidden` when it fires — check that if the salad ever reappears.
+- **Bonus weapon pickups popped in mid-road** — `_injectBonusWeapon` (the 4★+ keep-them-armed
+  drip) spawned 30-80 segments ahead = 10-20 % of the 380-segment draw distance, materialising on
+  open roadway and swelling on approach.  Now 310-365 segments out, just inside the draw cap where
+  the distance fog owns the sprite — it crests the horizon like every route-built pickup.
+  Route-built weapon placement was never affected; this spawner only fires at 4★+.
+
 
 ### 2026-08-08 → 09 — Player steering poses: rear-¾ turn sprites · shrink fix (art normalization + pixel-factor sizing) · 55 ms turn-in
 Tests green (7 files), `vite build` clean.  **Deployed to /demo + /fully** through the shrink fix
@@ -3031,7 +3086,59 @@ since the last one; skip them if you're only touching marketing-site pages (`web
 - **`ios/App/App/public/`** is the Capacitor sync target (`npx cap sync ios`) — don't hand-edit.
 - **`Images/`** at the repo root is a local-only art archive (large PSDs) — don't ship it; keep it gitignored so `git pack-objects` doesn't choke on push.
 - **Old code in production after a deploy** = browser cache. Hard-refresh (Cmd+Shift+R) or reopen the saved-to-home-screen PWA.
+- **⚠️ THIS PAGES PROJECT SERVES MISSING FILES AS HTTP 200.** A path that doesn't exist returns the
+  4,680-byte 404 page *with a 200 status* — `curl /this-does-not-exist-xyz.png` → `200`. **A deploy
+  check that reads only the status code proves nothing here.** Verify by BYTE SIZE against the local
+  file:
 
+      lsz=$(stat -f%z "public/$f")
+      rsz=$(curl -s -o /dev/null -w "%{size_download}" "https://roadtrip-roulette.pages.dev/fully/$f")
+      [ "$lsz" = "$rsz" ] && echo OK || echo MISMATCH
+
+  This is how a 2026-08-04 "the signs are live" check passed while actually fetching the 404 page.
+- **Right after a deploy, the edge can serve the OLD file for a minute.** Seen twice: an `index.html`
+  still pointing at the previous bundle hash, and a freshly-uploaded favicon returning the 404 page
+  on first request and the correct bytes on retry. Re-request before concluding a deploy failed.
+
+## Local dev server & on-device (iPhone) testing
+
+Two scripts, and **which one you use matters on a phone**:
+
+| script | serves | notes |
+|---|---|---|
+| `npm run dev` | **http** (`DUI_HTTP=1`) | what on-device testing has historically used |
+| `npm run dev:https` | https via `@vitejs/plugin-basic-ssl` | self-signed cert |
+
+- **`localhost` is meaningless from the phone** — it means the phone. Use the Mac's LAN IP
+  (`ipconfig getifaddr en1`, currently `192.168.86.180`), e.g. `http://192.168.86.180:3000/`.
+- **Switching between the two scripts re-optimizes deps every time** — vite's resolved config
+  differs (the ssl plugin), so it logs `Re-optimizing dependencies because vite config has changed`
+  and does one automatic page reload on first load. Harmless, but don't mistake it for a fault.
+- **Self-signed https + iOS is a minefield** (why 2026-08-10 went sideways):
+  - iOS home-screen apps run in their own context and do **NOT** inherit the certificate exception
+    accepted in Safari — a standalone launch of a self-signed URL just fails.
+  - "Add to Home Screen" also won't use the declared `apple-touch-icon` through an untrusted cert;
+    it falls back to a screenshot thumbnail.
+  - A standalone web app needs its own **Local Network** permission for a LAN IP, and there's no
+    prompt for it outside Safari.
+  Prefer plain `npm run dev` over http for device testing; use the deployed URL when a real
+  certificate is actually needed (secure-context APIs like device-orientation/tilt).
+- **Known noisy startup error, non-fatal:** the dep scanner crawls
+  `docs/retired/press-kit-page.html`, which imports a `js/site.js?v=3` that doesn't exist, and
+  throws during scanning. Optimization still completes (`✨ new dependencies optimized: phaser`
+  lands right after). Worth excluding via `optimizeDeps.entries` eventually.
+
+### Decoding "Music is taking longer than usual to load."
+
+**That message does not mean the mp3s are slow.** It renders when `window.__music.list()` returns an
+empty station list for 3 s (`index.html`, `_renderMusicNow`), and `list()` just reads
+`registry.get('audio')`. `src/main.js` registers the AudioSystem **before Phaser boots**, precisely so
+the phone menu sees stations instantly — so an empty list means **`src/main.js` never executed at
+all**.
+
+The phone menu still renders because it's inline in `index.html`, independent of the game module. So
+this message and a **blank game canvas are the same fault**, not two: the module bundle didn't run.
+When it appears, look at why the JS failed to load, not at the audio system.
 
 ---
 
