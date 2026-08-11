@@ -162,7 +162,8 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 ## Changelog (newest first)
 
 ### 2026-08-10 (pt 2) — Backdrop: bands lifted above the terrain haze · depth stagger · near-layer zoom
-Uncommitted. Tests: 550 green, `vite build` clean.
+**Shipped in `add53be` and DEPLOYED LIVE** (2026-08-11, deployment `f6ea91ca`). Tests: 550 green,
+`vite build` clean.
 
 **Owner, two screenshots (Easton mi 68.79 in snow, Thorp mi 96.14):** *"Are they all stacked on top
 of each other? I think they should be spread out more. Something to cover the water looking body in
@@ -2790,6 +2791,13 @@ and is superseded by this chapter).
 > Also: CI is currently failing outright regardless (dead `CF_PAGES_API_TOKEN` — see the
 > 2026-07-31 changelog entry above), which has been *accidentally* preventing the clobber. Fixing
 > the token without also rewiring this workflow will make the clobber start happening again.
+>
+> **Re-tested live 2026-08-11.** Pushed 33 commits to `main` and watched what happened, rather than
+> trusting that CI was still dead. The workflow DID wake (run `31446448644`) and failed at
+> `Authentication error [code: 10000]` — the same dead token — *before* reaching the deploy step, so
+> the site survived untouched: `/` still the marketing site, `/fully` and `/demo` both 200 serving
+> the game. The clobber risk is therefore **still armed and still only defused by a broken token**.
+> Anyone fixing that token must rewire `.github/workflows/cloudflare-pages.yml` in the same change.
 
 ## How to deploy
 
