@@ -161,6 +161,36 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-11 (pt 4) — Seattle ground tile wired
+Uncommitted. Tests: 550 green, `vite build` clean.
+
+`seattle_ground_1024.png` arrived, closing the last colour mismatch: the urban miles were falling
+back to `ground_pnw_roadside` (olive `rgb(69,64,38)`) against downtown's pavement-grey `grass2`.
+
+- Registered as `ground_seattle` in `AssetManifest.groundTextures`, mapped `seattle_hills ->
+  ground_seattle` in `GROUND_TILES`.
+- Validated: 1024x1024 power-of-two, fully opaque, average `rgb(53,55,29)`.
+- Colour match across all five region palettes the biome crosses (mi 0-20): seattle_urban 37,
+  downtown_seattle 28, mercer_island 40, eastside_urban 34, eastside 42 — all under the ~45
+  no-visible-seam threshold. The two "faint" readings (69) are `lake_washington`, which is the
+  floating-bridge spans where roadside ground is barely on screen.
+- Verified in-engine: mi 1.61 / 6 / 12 / 18 all on `ground_seattle` with GL_REPEAT active, handing
+  over to `ground_pnw_roadside` at 22 and `ground_north_bend` at 30.
+
+> **⚠ It is NOT seamless, and that is a Ch.9 rule-2 violation.** Measured wrap error (avg per-channel
+> difference between opposite edges):
+>
+> | Tile | L/R | T/B |
+> |---|---|---|
+> | the 7 Archive tiles | **0.0** | **0.0** |
+> | pnw_roadside | 15.3 | 16.3 |
+> | **seattle** | **21.3** | **22.4** |
+>
+> The seven tiles restored from `Archive/` wrap perfectly. `seattle` is the worst of the set, so at
+> `TILE_FT = 48` (~2030 px of screen per tile) expect a repeating grid line roughly every 2000 px.
+> Re-exporting it seamless is an art fix, not a code one — nothing else needs to change.
+
+
 ### 2026-08-11 (pt 3) — Procedural city silhouettes switched off
 Uncommitted. Tests: 550 green, `vite build` clean.
 

@@ -21,6 +21,8 @@ export const ASSET_MANIFEST = {
   groundTextures: [
     { key: 'ground_pnw_roadside',
       path: 'assets/scenery/ground_textures/final/pnw_roadside_ground_1024.png' },
+    { key: 'ground_seattle',
+      path: 'assets/scenery/ground_textures/final/seattle_ground_1024.png' },
     { key: 'ground_north_bend',
       path: 'assets/scenery/ground_textures/final/north_bend_ground_1024.png' },
     { key: 'ground_pass_alpine',

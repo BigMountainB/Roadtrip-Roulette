@@ -87,6 +87,12 @@ export const GROUND_TILES = {
   // Keyed by BIOME key from src/road/Biomes.js.  `westside_forest_2` resolves
   // to `westside_forest` before it gets here (biomeAt returns texOf), so it
   // needs no entry of its own.
+  // seattle_hills spans mi 0-20, crossing five region palettes (seattle_urban,
+  // downtown_seattle, mercer_island, eastside_urban, eastside).  This tile
+  // averages rgb(53,55,29), within delta 42 of every one of their grass2
+  // values, so the GroundPlane->flat-fill handoff stays invisible across all
+  // of them.  Before it existed the urban miles fell back to the PNW tile.
+  seattle_hills:      'ground_seattle',
   westside_forest:    'ground_pnw_roadside',
   north_bend:         'ground_north_bend',
   pass_alpine:        'ground_pass_alpine',
