@@ -7702,6 +7702,13 @@ Naming: `<name>_ground_1024.png`, registered as texture key `ground_<name>`.
 
 - **No snow variants.** Snow is applied by the engine — the tile fades out
   under the blanket and the road/roadside go pure white at mile 55.
+  **Re-confirmed by the owner 2026-08-11 ("leave it"), with the cost now
+  measured:** `groundTexFade = (1 - snowI)^0.6` reaches zero at full cover, so
+  roughly **miles 55-86 — ~31 mi, ~11% of the route — render completely
+  untextured flat white.** That is accepted, not an oversight. Note also that a
+  snow tile could NOT simply be another `GROUND_TILES` row: that map is keyed by
+  biome, while snow is weather-driven by mile, so it would need `setTile` to
+  switch on snow intensity instead.
 - **No road surface.** The tarmac, lane lines and rumble strip are drawn
   procedurally. These tiles are the ground *beside* the road only.
 
