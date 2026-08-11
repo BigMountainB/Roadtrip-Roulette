@@ -13,9 +13,28 @@ export const ASSET_MANIFEST = {
   // Seamless top-down ground tile.  NOT a perspective plate — the renderer
   // applies perspective per road segment, so this must stay flat/overhead or
   // the projection gets applied twice.
+  // One tile per biome (Ch.9 spec).  All eight were authored back in July but
+  // only the PNW one was ever registered — the other seven sat unshipped in
+  // the gitignored Archive/, so every region east of the Cascades rendered a
+  // wet Pacific-Northwest roadside.  Keys must stay `ground_<name>` to match
+  // GROUND_TILES in src/road/GroundPlane.js.
   groundTextures: [
     { key: 'ground_pnw_roadside',
       path: 'assets/scenery/ground_textures/final/pnw_roadside_ground_1024.png' },
+    { key: 'ground_north_bend',
+      path: 'assets/scenery/ground_textures/final/north_bend_ground_1024.png' },
+    { key: 'ground_pass_alpine',
+      path: 'assets/scenery/ground_textures/final/pass_alpine_ground_1024.png' },
+    { key: 'ground_easton',
+      path: 'assets/scenery/ground_textures/final/easton_ground_1024.png' },
+    { key: 'ground_kittitas',
+      path: 'assets/scenery/ground_textures/final/kittitas_ground_1024.png' },
+    { key: 'ground_vantage_basalt',
+      path: 'assets/scenery/ground_textures/final/vantage_basalt_ground_1024.png' },
+    { key: 'ground_columbia',
+      path: 'assets/scenery/ground_textures/final/columbia_ground_1024.png' },
+    { key: 'ground_palouse',
+      path: 'assets/scenery/ground_textures/final/palouse_ground_1024.png' },
   ],
 
   // Seamless overhead asphalt tiles, one per road material along the route.

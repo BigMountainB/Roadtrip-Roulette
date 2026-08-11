@@ -161,6 +161,48 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-11 — The ground was ONE tile for all 9 biomes (the "water" band, finally)
+Uncommitted. Tests: 550 green, `vite build` clean.
+
+**Owner:** *"Why can't we use the ground tiles we have?"* — then, on being shown the history,
+*"You're right, it looks like it was just using one for the whole thing."* Correct on both counts.
+
+**The band the owner had been reporting for three rounds was a ground-texture mismatch.**
+`GROUND_TILES` held exactly one entry, `_default: 'ground_pnw_roadside'`, and `GroundPlane.setTile()`
+— which already existed, complete with GL_REPEAT re-binding and a missing-texture guard — was
+**never called from anywhere**. So all 293 miles laid a wet Pacific-Northwest roadside over every
+palette. `GroundPlane` fades out from Z 52,000 to 70,000 and hands off to the flat per-segment fill;
+where the PNW tile's `rgb(69,64,38)` dark olive met Royal City's `grass2` of `rgb(156,134,54)` bright
+tan, that handoff was a hard horizontal seam. It appeared to track the sky because the flat fill is
+blended toward `skyFogMix` — brown at dusk, blue-grey in snow at Easton, blue-green at Thorp.
+
+**Why three earlier fixes missed it.** `GroundPlane` is at depth **1.3**; the parallax bands are at
+1.15. Every previous attempt (moving the plate, staggering the bands, raising them above the terrain
+haze) worked below 1.3 and so could never cover it. Two of my diagnoses were wrong before this one:
+the sky's 14 px `skyFogMix` strip is real but small, and the pitch-divergence gap I predicted turned
+out to affect **1 of 55 sampled miles** (max 9.3 px) — not the persistent band.
+
+**The art already existed and had been archived for being unused.** All seven non-PNW tiles were
+authored to the Ch.9 spec, shipped to `public/` in `12291f6`, then swept into the gitignored
+`Archive/` by `422fc2d "Archive 99 unused asset files (~153MB)"`. That cleanup was right by its own
+metric — nothing referenced them — but the missing `setTile` call is *why* nothing referenced them,
+so the sweep made the condition permanent.
+
+**Fix (all engine wiring; zero new art):**
+- Copied the 7 tiles back into `public/assets/scenery/ground_textures/final/`. Validated each:
+  1024x1024 power-of-two, fully opaque, and average colours that sit on their regions' `grass2`
+  (kittitas tile `rgb(144,128,106)` vs flat fill `rgb(140,126,64)`) — which is what kills the seam.
+- Registered all 8 in `AssetManifest.groundTextures`.
+- Filled `GROUND_TILES` with a biome-keyed entry each, plus `groundTileFor()` resolving unknown or
+  urban miles to the PNW default.
+- `_renderBiomeBackdrop` now calls `groundPlane.setTile()` on the **dominant** biome, before the
+  urban early-return so miles 0-16 still resolve a tile. Hard cut, per `setTile`'s own contract.
+
+**Verified in-engine** at 9 miles: mi 10/22 pnw · 30 north_bend · 50 pass_alpine · 65 easton ·
+96 kittitas · 130 vantage_basalt · 158.96 columbia · 250 palouse — every one with GL_REPEAT active.
+Still not verified by screenshot (7 capture approaches have failed; see the 08-10 entry).
+
+
 ### 2026-08-10 (pt 2) — Backdrop: bands lifted above the terrain haze · depth stagger · near-layer zoom
 **Shipped in `add53be` and DEPLOYED LIVE** (2026-08-11, deployment `f6ea91ca`). Tests: 550 green,
 `vite build` clean.
@@ -7379,21 +7421,25 @@ visible texture at all. **Err on the side of larger, bolder features.**
 
 ## The tiles
 
-One per biome. All 8 currently fall back to the single PNW tile, so any
-subset is useful — they can be added one at a time.
+One per biome. **All 8 exist and are wired as of 2026-08-11** (see the changelog entry
+that day). Historical note, because it cost real debugging time: the seven non-PNW tiles
+were authored and shipped in `12291f6`, but nothing ever called `GroundPlane.setTile`, so
+`422fc2d "Archive 99 unused asset files"` swept them into the gitignored `Archive/` for
+being unreferenced — which made them permanently unreferenced. The whole route rendered a
+wet Pacific-Northwest roadside over desert palettes for two weeks.
 
 Naming: `<name>_ground_1024.png`, registered as texture key `ground_<name>`.
 
 | File | Biome / miles | What it should be |
 |---|---|---|
-| `pnw_roadside_ground_1024.png` ✅ *exists* | West Side forest, mi 20–45 | Wet PNW roadside: mossy dirt, patchy grass, pine needles, small dark stones |
-| `north_bend_ground_1024.png` | North Bend, mi 26–40 | Same wet greenery but coarser — fir needle litter, moss, damp gravel shoulder |
-| `pass_alpine_ground_1024.png` | Snoqualmie Pass, mi 45–58 | Coarse alpine gravel, sparse tough grass, granite chips, bare wet rock. **No snow — the engine adds that.** |
-| `easton_ground_1024.png` | Easton transition, mi 58–78 | Drying out: pine needles over dusty soil, sparse bunchgrass, more bare dirt |
-| `kittitas_ground_1024.png` | Kittitas foothills, mi 78–122 | Dry tan bunchgrass, cracked pale soil, sage twigs, scattered pebbles |
-| `vantage_basalt_ground_1024.png` | Vantage, mi 122–142 | Dark basalt scree and angular broken rock, sparse dry grass between |
-| `columbia_ground_1024.png` | Columbia Basin, mi 142–210 | Irrigated-farm shoulder: silty pale soil, sparse green weeds, tyre-flattened grass |
-| `palouse_ground_1024.png` | Palouse, mi 210–293 | Golden wheat stubble and dry straw over dark loess soil |
+| `pnw_roadside_ground_1024.png` ✅ | West Side forest, mi 20–45 | Wet PNW roadside: mossy dirt, patchy grass, pine needles, small dark stones |
+| `north_bend_ground_1024.png` ✅ | North Bend, mi 26–40 | Same wet greenery but coarser — fir needle litter, moss, damp gravel shoulder |
+| `pass_alpine_ground_1024.png` ✅ | Snoqualmie Pass, mi 45–58 | Coarse alpine gravel, sparse tough grass, granite chips, bare wet rock. **No snow — the engine adds that.** |
+| `easton_ground_1024.png` ✅ | Easton transition, mi 58–78 | Drying out: pine needles over dusty soil, sparse bunchgrass, more bare dirt |
+| `kittitas_ground_1024.png` ✅ | Kittitas foothills, mi 78–122 | Dry tan bunchgrass, cracked pale soil, sage twigs, scattered pebbles |
+| `vantage_basalt_ground_1024.png` ✅ | Vantage, mi 122–142 | Dark basalt scree and angular broken rock, sparse dry grass between |
+| `columbia_ground_1024.png` ✅ | Columbia Basin, mi 142–210 | Irrigated-farm shoulder: silty pale soil, sparse green weeds, tyre-flattened grass |
+| `palouse_ground_1024.png` ✅ | Palouse, mi 210–293 | Golden wheat stubble and dry straw over dark loess soil |
 
 ### Not needed
 

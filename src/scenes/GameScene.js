@@ -37,7 +37,7 @@ const UNITS_PER_MILE_HUD = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
 // level.  No cap — traffic has never needed one.
 const COP_VISUAL_SCALE = 1;
 import { Road, snowBlanketAt, SNOW_WHITE, SNOW_MARKINGS_GONE } from '../road/Road.js';
-import { GroundPlane }   from '../road/GroundPlane.js';
+import { GroundPlane, groundTileFor } from '../road/GroundPlane.js';
 import { RoadPlane }     from '../road/RoadPlane.js';
 import { BAND, BIOMES, biomeAt, bandKey, bandHeight, bandRate } from '../road/Biomes.js';
 import { LANDMARKS, projectLandmark, activeLandmarks } from '../road/Landmarks.js';
@@ -14211,10 +14211,30 @@ export class GameScene extends Phaser.Scene {
    */
   _renderBiomeBackdrop() {
     const layers = this._biomeLayers;
-    if (!layers) return;
 
     const mile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
     const sel  = biomeAt(mile);
+
+    // ── Roadside ground tile follows the biome ────────────────────────
+    // All eight tiles were authored in July (Ch.9 spec) and shipped in
+    // 12291f6, but nothing ever called setTile — so `422fc2d Archive 99
+    // unused asset files` swept the seven non-PNW ones into the gitignored
+    // Archive/ for being unreferenced, which made them permanently
+    // unreferenced.  Every mile east of the Cascades was therefore laying a
+    // WET PACIFIC NORTHWEST roadside over desert palettes: the tile averages
+    // rgb(69,64,38) against a Royal City flat fill of rgb(156,134,54), and
+    // that mismatch is the band the owner kept seeing where GroundPlane
+    // fades out (Z 52k-70k) and hands off to the flat fill.  It tracked the
+    // sky because the flat fill is blended toward skyFogMix.
+    //
+    // Runs BEFORE the urban early-return below so miles 0-16 still get a
+    // resolved tile (groundTileFor falls back to the PNW default on null).
+    // Hard cut on the DOMINANT biome — no cross-fade, per setTile's contract
+    // — so a boundary can't flap between two tiles mid-blend.
+    this.groundPlane?.setTile(
+      groundTileFor(sel ? (sel.b && sel.t > 0.5 ? sel.b : sel.a) : null));
+
+    if (!layers) return;
     if (!sel) {                       // urban miles — skyline owns the horizon
       for (const set of ['a', 'b']) {
         for (const l of BAND.layers) layers[set][l].setVisible(false);

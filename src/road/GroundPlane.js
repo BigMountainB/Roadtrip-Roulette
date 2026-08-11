@@ -83,7 +83,31 @@ const SUB_H = 12;
  */
 export const GROUND_TILES = {
   _default: 'ground_pnw_roadside',
+
+  // Keyed by BIOME key from src/road/Biomes.js.  `westside_forest_2` resolves
+  // to `westside_forest` before it gets here (biomeAt returns texOf), so it
+  // needs no entry of its own.
+  westside_forest:    'ground_pnw_roadside',
+  north_bend:         'ground_north_bend',
+  pass_alpine:        'ground_pass_alpine',
+  easton_transition:  'ground_easton',
+  kittitas_foothills: 'ground_kittitas',
+  vantage_basalt:     'ground_vantage_basalt',
+  columbia_irrigated: 'ground_columbia',
+  palouse_hills:      'ground_palouse',
 };
+
+/**
+ * Texture key for a biome, falling back to the PNW tile.
+ *
+ * The fallback is load-bearing, not defensive politeness: `setTile` ignores a
+ * key with no loaded texture, so a biome whose art hasn't shipped keeps
+ * whatever tile was already up rather than going untextured.  Resolving to
+ * `_default` here instead makes that case an explicit, visible choice.
+ */
+export function groundTileFor(biomeKey) {
+  return GROUND_TILES[biomeKey] ?? GROUND_TILES._default;
+}
 
 export class GroundPlane extends Phaser.GameObjects.Image {
   constructor(scene, textureKey = GROUND_TILES._default) {
