@@ -27,6 +27,27 @@ import {
 // height), NOT the horizon position.
 const H = () => CAM.horizonY;
 
+/**
+ * Procedural city silhouettes — TURNED OFF 2026-08-11.
+ *
+ * Owner: "I think we need to get rid of the building silhouettes. The biomes
+ * look so much better."  Kept rather than deleted, at the owner's request, so
+ * it is one line to bring back if the urban miles read empty without it.
+ *
+ * What this switch controls: the pseudo-random rectangle layer drawn into
+ * `cityBackdropGfx` — a stepped far-hill ridgeline, blocky building shapes and
+ * their sparse warm window dots.  It does NOT touch the real building sprites
+ * (`codex_*`: Columbia Center, Space Needle, the Bellevue towers), which are
+ * scenery placed from RouteData and are a completely separate system.
+ *
+ * It became redundant when `seattle_hills` landed: miles 0-20 now carry real
+ * three-layer biome bands, so the horizon has actual terrain behind the city
+ * instead of generated blocks.  Everything the layer needs is still here and
+ * still correct — `cityGap`, `_citySilFade`, `_clipBottom`, the block loop —
+ * so flipping this back to `true` restores it exactly as it was.
+ */
+const DRAW_CITY_SILHOUETTES = false;
+
 // ── Snow blanket (owner spec, 2026-07-27) ───────────────────────────────
 // Ground snow starts at the weather zone edge (mile 40) and reaches TOTAL
 // coverage at mile 55 — road, rumble strip and both shoulders all one
@@ -1164,7 +1185,7 @@ export class Road {
       const CITY_SKIRT = 30;
       const _clipBottom = () => horizonY + CITY_SKIRT;
 
-      if (cityGap < 1 && _citySilFade > 0.01) {
+      if (DRAW_CITY_SILHOUETTES && cityGap < 1 && _citySilFade > 0.01) {
         const farStep = 24;
         city.fillStyle(farHillCol, 0.95);
         for (let x = -MARGIN; x < SCREEN_W + MARGIN; x += farStep) {

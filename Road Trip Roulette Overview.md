@@ -161,6 +161,28 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-11 (pt 3) — Procedural city silhouettes switched off
+Uncommitted. Tests: 550 green, `vite build` clean.
+
+**Owner:** *"I think we need to get rid of the building silhouettes. The biomes look so much
+better."* Turned OFF rather than deleted, at the owner's request — one line to bring back.
+
+`DRAW_CITY_SILHOUETTES = false` at the top of `Road.js` gates the pseudo-random rectangle layer
+drawn into `cityBackdropGfx`: the stepped far-hill ridgeline, the blocky building shapes and their
+warm window dots. Everything it needs is still present and still correct (`cityGap`, `_citySilFade`,
+`_clipBottom`, the block loop), so flipping the flag restores it exactly.
+
+It went redundant the moment `seattle_hills` landed — miles 0-20 now carry real three-layer biome
+bands, so the urban horizon has actual terrain instead of generated blocks.
+
+**This does NOT touch the real building sprites.** `codex_*` art (Columbia Center, Space Needle, the
+Bellevue glass towers) is scenery placed from `RouteData`, a completely separate system. Verified
+still drawing: 14 sprites at mile 1.61, 11 through Bellevue at mile 12.
+
+**Verified in-engine:** silhouette layer emits **0 draw commands** at miles 1.61 / 5 / 9 / 12 / 18 /
+30, while bands stay 3/3 at every one.
+
+
 ### 2026-08-11 (pt 2) — Skyline re-depthed; horizon clamp gone; Seattle biome closes the last gap
 Shipped. Tests: 550 green, `vite build` clean.
 
