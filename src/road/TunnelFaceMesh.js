@@ -221,23 +221,19 @@ export class TunnelFaceMesh {
     const lean = Math.max(-0.35, Math.min(0.35, curve * 0.0016));
 
     // ── Write vertices ─────────────────────────────────────────────────────
+    // Driven off each vertex's OWN uv, never off a grid index. addVertices()
+    // DE-INDEXES: it creates one Vertex per index entry — 3 per face, 144 for a
+    // 6×4 grid — not the 35 shared corners the grid implies. Walking the array
+    // as if it were the grid wrote 35 vertices and left 109 at the origin,
+    // which drew the whole facade as slivers smeared to the top-left corner.
+    // Reading u/v back makes this order- and topology-independent.
     // Reuses the existing Vertex objects — no per-frame allocation.
-    const verts = mesh.vertices;
-    let i = 0;
-    for (let r = 0; r <= ROWS; r++) {
-      const v = r / ROWS;                 // 0 at plate top, 1 at ground line
-      const y = plateTop + plateH * v;
-      // Height above the road, normalised — drives the lean.
-      const hAbove = 1 - v;
-      for (let c = 0; c <= COLS; c++, i++) {
-        const u = c / COLS;
-        const x = plateLeft + plateW * u + lean * plateW * hAbove;
-        const vert = verts[i];
-        if (!vert) continue;
-        vert.x = x;
-        vert.y = -y;                      // Mesh flips Y (vy = -(ty/tw)*height)
-        vert.alpha = alpha;
-      }
+    for (const vert of mesh.vertices) {
+      const u = vert.u;
+      const v = vert.v;                   // 0 at plate top, 1 at ground line
+      vert.x = plateLeft + plateW * u + lean * plateW * (1 - v);
+      vert.y = -(plateTop + plateH * v);  // Mesh flips Y (vy = -(ty/tw)*height)
+      vert.alpha = alpha;
     }
 
     mesh.setDepth(depth);
