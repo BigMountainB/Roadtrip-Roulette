@@ -36,6 +36,12 @@
 // setOrtho(1, 1) pins the transform to identity so a vertex's x/y ARE screen
 // pixels, immune to canvas resizing.
 
+// Phaser is a module import throughout this codebase, never a global — leaving
+// it out here threw a ReferenceError from the constructor, BEFORE the feature
+// flag was consulted, which killed the whole Mt Baker facade (artwork AND
+// procedural) for every player. Shipped 2026-08-11, caught same day.
+import Phaser from 'phaser';
+
 /** Opening geometry of each 1600×900 master, normalised 0..1.
  *  `openL`/`openR` bracket the transparent road opening; the plate is fitted so
  *  that span lands exactly on the projected tunnel mouth. Keep in step with the
@@ -148,6 +154,14 @@ export class TunnelFaceMesh {
       mesh.hideCCW = false;          // both windings visible; we never rotate away
       mesh.ignoreDirtyCache = true;  // vertices change every frame
       mesh.setVisible(false);
+
+      // GameScene runs two cameras: main draws the world, _uiCam draws the HUD
+      // scrolled by -HUD_OFFSET_X, and each ignores the other's list. An object
+      // in NEITHER list is drawn by BOTH — the facade would render correctly on
+      // main and again, offset, as a ghost over the HUD. Same registration the
+      // scene does for every other world graphic it creates at runtime.
+      this.scene._worldObjects?.push(mesh);
+      this.scene._uiCam?.ignore?.(mesh);
 
       this.meshes.set(plateKey, mesh);
       return mesh;

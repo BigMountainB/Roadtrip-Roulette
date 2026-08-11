@@ -2253,24 +2253,38 @@ export class Road {
       // PROVING RUN (2026-08-11): Mt Baker only, so one facade can be validated
       // across every approach before the other two are switched over. Mercer
       // and wildlife keep their procedural faces until then.
-      if (plateKey === 'mt_baker') {
-        if (!this._tunnelFaces && g.scene) {
-          this._tunnelFaces = new TunnelFaceMesh(g.scene);
-          // Road has no destroy() of its own and is owned by the scene, so
-          // teardown hangs off the scene's own shutdown.
-          g.scene.events?.once?.('shutdown', () => {
-            this._tunnelFaces?.destroy();
-            this._tunnelFaces = null;
+      // The whole artwork path is wrapped: this is a cosmetic overlay on a
+      // tunnel that ships today, so ANY fault in it must degrade to the
+      // procedural facade rather than take the facade down with it. The first
+      // version of this code threw a ReferenceError out of the constructor and
+      // erased the Mt Baker face entirely — the try/catch is the lesson, and
+      // `_tunnelFacesDead` latches so a broken build costs one log line, not
+      // one per frame.
+      if (plateKey === 'mt_baker' && !this._tunnelFacesDead) {
+        try {
+          if (!this._tunnelFaces && g.scene) {
+            this._tunnelFaces = new TunnelFaceMesh(g.scene);
+            // Road has no destroy() of its own and is owned by the scene, so
+            // teardown hangs off the scene's own shutdown.
+            g.scene.events?.once?.('shutdown', () => {
+              this._tunnelFaces?.destroy();
+              this._tunnelFaces = null;
+            });
+          }
+          const drew = this._tunnelFaces?.update(plateKey, {
+            outerL, outerR, groundY,
+            sW, sH,
+            curve: e.seg?.curve ?? 0,
+            alpha: rimAlpha,
+            depth: 9.82,
           });
+          if (drew) return;
+        } catch (err) {
+          this._tunnelFacesDead = true;
+          this._tunnelFaces = null;
+          console.warn('[Road] tunnel facade artwork disabled for this run — ' +
+                       'falling back to the procedural face.', err);
         }
-        const drew = this._tunnelFaces?.update(plateKey, {
-          outerL, outerR, groundY,
-          sW, sH,
-          curve: e.seg?.curve ?? 0,
-          alpha: rimAlpha,
-          depth: 9.82,
-        });
-        if (drew) return;
       }
     }
     this._tunnelFaces?.hideAll();
