@@ -102,32 +102,43 @@ const SCENERY_IMAGE_PROFILES = {
   // the fog line) as a safety net so a bug can never place a building
   // INSIDE the road, but real positioning is now spawn-time.
   codex_seattle_skyline:        { heightMult: 3.90, maxW: 500, maxH: PLAYER_CAR_VISUAL_H * 5.4, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_office_cluster: { heightMult: 3.80, maxW: 500, maxH: PLAYER_CAR_VISUAL_H * 5.3, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_tower_pair:     { heightMult: 4.60, maxW: 220, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_bellevue_skyline:       { heightMult: 6.0, maxW: 560, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_bellevue_wavy_residential: { heightMult: 6.0, maxW: 220, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_bellevue_city_center_dark: { heightMult: 6.0, maxW: 230, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_bellevue_braced_glass_tower: { heightMult: 6.0, maxW: 210, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_bellevue_residential_cluster: { heightMult: 6.0, maxW: 520, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_columbia_center: { heightMult: 5.90, maxW: 170, maxH: PLAYER_CAR_VISUAL_H * 6.7, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_rainier_square:  { heightMult: 5.45, maxW: 230, maxH: PLAYER_CAR_VISUAL_H * 6.1, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_two_union_square: { heightMult: 5.35, maxW: 220, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_1201_third:      { heightMult: 5.15, maxW: 210, maxH: PLAYER_CAR_VISUAL_H * 5.8, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_municipal_tower: { heightMult: 5.05, maxW: 230, maxH: PLAYER_CAR_VISUAL_H * 5.7, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_f5_tower:        { heightMult: 5.25, maxW: 180, maxH: PLAYER_CAR_VISUAL_H * 5.9, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_safeco_plaza:    { heightMult: 4.70, maxW: 220, maxH: PLAYER_CAR_VISUAL_H * 5.3, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_city_centre:     { heightMult: 4.55, maxW: 220, maxH: PLAYER_CAR_VISUAL_H * 5.1, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_russell_investments: { heightMult: 4.55, maxW: 260, maxH: PLAYER_CAR_VISUAL_H * 5.1, minOffset: 1.05, groundDrop: 0.010 },
-  codex_seattle_lumen_field:     { widthMult: 5.75, maxW: 540, maxH: PLAYER_CAR_VISUAL_H * 3.8, minOffset: 5.25, groundDrop: 0.045 },
-  codex_seattle_tmobile_park:    { widthMult: 5.65, maxW: 540, maxH: PLAYER_CAR_VISUAL_H * 3.9, minOffset: 5.45, groundDrop: 0.045 },
+  // Seattle + Bellevue SKYSCRAPERS ×4 (owner 2026-08-11).  Near edge stays
+  // put: these all spawn with roadEdgeGapCars, so the painted-edge invariant
+  // pins the inner edge at the authored fog-line gap and the extra size
+  // extends AWAY from the road.  FOG_PROFILE_MULTS (RouteData.js) mirrors
+  // the ×4 so spawn-time centers push outboard to match.
+  codex_seattle_office_cluster: { heightMult: 15.2, maxW: 2000, maxH: PLAYER_CAR_VISUAL_H * 21.2, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_tower_pair:     { heightMult: 18.4, maxW: 880, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_bellevue_skyline:       { heightMult: 24.0, maxW: 2240, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_bellevue_wavy_residential: { heightMult: 24.0, maxW: 880, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_bellevue_city_center_dark: { heightMult: 24.0, maxW: 920, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_bellevue_braced_glass_tower: { heightMult: 24.0, maxW: 840, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_bellevue_residential_cluster: { heightMult: 24.0, maxW: 2080, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_columbia_center: { heightMult: 23.6, maxW: 680, maxH: PLAYER_CAR_VISUAL_H * 26.8, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_rainier_square:  { heightMult: 21.8, maxW: 920, maxH: PLAYER_CAR_VISUAL_H * 24.4, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_two_union_square: { heightMult: 21.4, maxW: 880, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_1201_third:      { heightMult: 20.6, maxW: 840, maxH: PLAYER_CAR_VISUAL_H * 23.2, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_municipal_tower: { heightMult: 20.2, maxW: 920, maxH: PLAYER_CAR_VISUAL_H * 22.8, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_f5_tower:        { heightMult: 21.0, maxW: 720, maxH: PLAYER_CAR_VISUAL_H * 23.6, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_safeco_plaza:    { heightMult: 18.8, maxW: 880, maxH: PLAYER_CAR_VISUAL_H * 21.2, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_city_centre:     { heightMult: 18.2, maxW: 880, maxH: PLAYER_CAR_VISUAL_H * 20.4, minOffset: 1.05, groundDrop: 0.010 },
+  codex_seattle_russell_investments: { heightMult: 18.2, maxW: 1040, maxH: PLAYER_CAR_VISUAL_H * 20.4, minOffset: 1.05, groundDrop: 0.010 },
+  // Stadiums ×6 total (owner 2026-08-11: first ×3, then "2x bigger" same
+  // day) — fixed-offset landmarks; their RouteData addStadium offsets are
+  // recomputed so the near edge sits at ~4.0 lane units ("slightly closer
+  // to the road" than the pre-scale 4.8/4.6) and all remaining growth
+  // extends away from it.  They also render at renderDepth 1.7 with the
+  // crane-style far-perspective fade-in — see _renderSceneSprites.
+  codex_seattle_lumen_field:     { widthMult: 34.5, maxW: 3240, maxH: PLAYER_CAR_VISUAL_H * 22.8, minOffset: 5.25, groundDrop: 0.045 },
+  codex_seattle_tmobile_park:    { widthMult: 33.9, maxW: 3240, maxH: PLAYER_CAR_VISUAL_H * 23.4, minOffset: 5.45, groundDrop: 0.045 },
   codex_bellevue_roadside_strip: { widthMult: 3.45, maxW: 480, maxH: PLAYER_CAR_VISUAL_H * 2.75, minOffset: 4.50, groundDrop: 0.010 },
   // Directional Bellevue variants — uniform 6× car height; minOffset
   // 1.05 (was 2.05) lets fog-line spawn math win, see top-of-table note.
-  codex_pse_bellevue_office_left:         { heightMult: 6.0, maxW: 300, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_pse_bellevue_office_right:        { heightMult: 6.0, maxW: 300, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_pse_bellevue_second_office_left:  { heightMult: 6.0, maxW: 320, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_pse_bellevue_second_office_right: { heightMult: 6.0, maxW: 320, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
-  codex_bellevue_twin_residential_left:   { heightMult: 6.0, maxW: 340, maxH: PLAYER_CAR_VISUAL_H * 6.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_pse_bellevue_office_left:         { heightMult: 24.0, maxW: 1200, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_pse_bellevue_office_right:        { heightMult: 24.0, maxW: 1200, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_pse_bellevue_second_office_left:  { heightMult: 24.0, maxW: 1280, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_pse_bellevue_second_office_right: { heightMult: 24.0, maxW: 1280, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
+  codex_bellevue_twin_residential_left:   { heightMult: 24.0, maxW: 1360, maxH: PLAYER_CAR_VISUAL_H * 24.0, minOffset: 1.05, groundDrop: 0.010 },
   // West Seattle homes retain proportional roadside scale.  Their fixed
   // spawn offset comes from WEST_SEATTLE_FRONTAGE_GAP_CARS (3.50 car-widths
   // past the fog line) — the near edge lands ~1.9 car-widths behind the
@@ -213,7 +224,10 @@ const SCENERY_IMAGE_PROFILES = {
   codex_west_seattle_warehouse_row:      { widthMult: 2.95, maxW: 360, maxH: PLAYER_CAR_VISUAL_H * 2.45, minOffset: 3.20, groundDrop: 0.010 },
   codex_west_seattle_hillside_condos:    { heightMult: 3.65, maxW: 280, maxH: PLAYER_CAR_VISUAL_H * 4.3, minOffset: 4.10, groundDrop: 0.010 },
   codex_west_seattle_overpass_ramp:      { widthMult: 2.85, maxW: 380, maxH: PLAYER_CAR_VISUAL_H * 2.2, minOffset: 2.95, groundDrop: 0.010 },
-  space_needle:                 { heightMult: 9.0, maxW: 165, maxH: PLAYER_CAR_VISUAL_H * 9.0, minOffset: 1.5, groundDrop: 0.010 },
+  // ×3 (owner 2026-08-11) — spawn offset moved −1.5 → −2.12 (RouteData) so
+  // the near edge stays at the pre-scale position and growth extends left,
+  // away from the road (it's a collidable landmark).
+  space_needle:                 { heightMult: 27.0, maxW: 495, maxH: PLAYER_CAR_VISUAL_H * 27.0, minOffset: 1.5, groundDrop: 0.010 },
   // ── Trees & shrubs ────────────────────────────────────────────────
   // Urban broadleaves — Bigleaf Maple + Vine Maple.  Crown is wider
   // than tall (heightMult lower than conifers, generous maxW).
@@ -15640,6 +15654,14 @@ export class GameScene extends Phaser.Scene {
         // looking ahead toward downtown.  Treated like the cranes
         // (extended draw distance + 1/n perspective falloff).
         const isSpaceNeedle = useTexKey === 'space_needle';
+        // SoDo stadiums (owner 2026-08-11): same far-perspective treatment
+        // as the cranes.  Without it they sat past DRAW_DIST at the
+        // horizon-clamped projection — full horizon size, parked in the
+        // sky — then snapped to their true position ("they just appear
+        // in the sky").  1/n falloff makes them start tiny at the horizon
+        // and grow on approach.
+        const isStadium = useTexKey === 'codex_seattle_tmobile_park'
+                       || useTexKey === 'codex_seattle_lumen_field';
         const isCitySkyline = (sp.visualMinOffset ?? 0) >= 4.5;
         // DIAGNOSTIC (per user): the far-perspective branch below
         // mutates proj.sx by `proj.roadHalfW * visualOffset * (1 -
@@ -15653,7 +15675,7 @@ export class GameScene extends Phaser.Scene {
         // (they're authored to depend on it).
         const _isStructureForPerspective = false;     // ← DIAGNOSTIC: was `sp.type === 'building' || 'house'`
         const usesFarPerspective = isCrane || isWestSeattleHome || isSpaceNeedle
-                                  || isIssaquahHome || _isStructureForPerspective;
+                                  || isIssaquahHome || isStadium || _isStructureForPerspective;
         const farDistScale = (usesFarPerspective && n > DRAW_DIST) ? DRAW_DIST / n : 1;
         // Space Needle gets a longer lookahead than cranes so it pops
         // in at the same player position the cranes do (game start
@@ -15661,7 +15683,7 @@ export class GameScene extends Phaser.Scene {
         // crane stretch) and needs ~2 mi of visibility to reach the
         // player from the bridge approach.
         const farLookahead = isSpaceNeedle ? DRAW_DIST * 9 : DRAW_DIST * 6;
-        if ((isCrane || isSpaceNeedle) && n > farLookahead) continue;
+        if ((isCrane || isSpaceNeedle || isStadium) && n > farLookahead) continue;
         const profile = SCENERY_IMAGE_PROFILES[useTexKey];
         const relZ = n * SEG_LENGTH + SEG_LENGTH / 2;
         let visualOffset = sp.offset;

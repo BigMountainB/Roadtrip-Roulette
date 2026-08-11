@@ -440,29 +440,35 @@ const FOG_PROFILE_MULTS = {
   west_seattle_5: 6.0 * (1536 / 1024),
   west_seattle_6: 6.0 * (1536 / 1024),
   // Bellevue skyline — wider cluster art (aspect ~1.6-2.4).
-  codex_bellevue_skyline:             6.0 * 2.40,
-  codex_bellevue_wavy_residential:    6.0 * 0.95,
-  codex_bellevue_city_center_dark:    6.0 * 1.00,
-  codex_bellevue_braced_glass_tower:  6.0 * 0.90,
-  codex_bellevue_residential_cluster: 6.0 * 2.20,
-  codex_pse_bellevue_office_left:         6.0 * 1.30,
-  codex_pse_bellevue_office_right:        6.0 * 1.30,
-  codex_pse_bellevue_second_office_left:  6.0 * 1.40,
-  codex_pse_bellevue_second_office_right: 6.0 * 1.40,
-  codex_bellevue_twin_residential_left:   6.0 * 1.50,
-  // Downtown Seattle skyline — tall + relatively narrow.
+  // Skyscrapers ×4 (owner 2026-08-11), mirroring the ×4 heightMults in
+  // SCENERY_IMAGE_PROFILES — centers spawn further outboard so the near
+  // edge keeps the same fog-line gap while the growth extends away from
+  // the road.
+  codex_bellevue_skyline:             24.0 * 2.40,
+  codex_bellevue_wavy_residential:    24.0 * 0.95,
+  codex_bellevue_city_center_dark:    24.0 * 1.00,
+  codex_bellevue_braced_glass_tower:  24.0 * 0.90,
+  codex_bellevue_residential_cluster: 24.0 * 2.20,
+  codex_pse_bellevue_office_left:         24.0 * 1.30,
+  codex_pse_bellevue_office_right:        24.0 * 1.30,
+  codex_pse_bellevue_second_office_left:  24.0 * 1.40,
+  codex_pse_bellevue_second_office_right: 24.0 * 1.40,
+  codex_bellevue_twin_residential_left:   24.0 * 1.50,
+  // Downtown Seattle skyline — tall + relatively narrow.  (Same ×4;
+  // codex_seattle_skyline panorama is NOT scaled — it isn't in the
+  // drive-by pool.)
   codex_seattle_skyline:              3.90 * 2.40,
-  codex_seattle_office_cluster:       3.80 * 2.40,
-  codex_seattle_tower_pair:           4.60 * 0.80,
-  codex_seattle_columbia_center:      5.90 * 0.55,
-  codex_seattle_rainier_square:       5.45 * 0.85,
-  codex_seattle_two_union_square:     5.35 * 0.85,
-  codex_seattle_1201_third:           5.15 * 0.80,
-  codex_seattle_municipal_tower:      5.05 * 0.95,
-  codex_seattle_f5_tower:             5.25 * 0.70,
-  codex_seattle_safeco_plaza:         4.70 * 0.95,
-  codex_seattle_city_centre:          4.55 * 0.95,
-  codex_seattle_russell_investments:  4.55 * 1.10,
+  codex_seattle_office_cluster:       15.2 * 2.40,
+  codex_seattle_tower_pair:           18.4 * 0.80,
+  codex_seattle_columbia_center:      23.6 * 0.55,
+  codex_seattle_rainier_square:       21.8 * 0.85,
+  codex_seattle_two_union_square:     21.4 * 0.85,
+  codex_seattle_1201_third:           20.6 * 0.80,
+  codex_seattle_municipal_tower:      20.2 * 0.95,
+  codex_seattle_f5_tower:             21.0 * 0.70,
+  codex_seattle_safeco_plaza:         18.8 * 0.95,
+  codex_seattle_city_centre:          18.2 * 0.95,
+  codex_seattle_russell_investments:  18.2 * 1.10,
   // Issaquah frontage — actual source ratios, matching runtime sizing.
   codex_issaquah_front_supply:        4.80 * (1533 / 926),
   codex_issaquah_highlands:           4.80 * (1514 / 894),
@@ -2268,20 +2274,48 @@ export function buildRoute(count = ROUTE_SEGS) {
         offset,
         visualMinOffset: Math.abs(offset),
         // Stadium landmarks are now collidable per user spec — they're
-        // physical structures at offset ±5.45, so the player would only
-        // hit them if they drift well off the road.
+        // physical structures far off the left shoulder, so the player
+        // would only hit them if they drift well off the road.
         collidable: undefined,
         baseW: 5600,
         baseH: 2600,
+        // Under the cranes (2.0), above the Space Needle (1.5) — at ×6
+        // scale the stadiums must never paint over the crane sprites or
+        // other roadside scenery (owner 2026-08-11).
+        renderDepth: 1.7,
         collected: false,
       });
+    };
+    // Clear the stadiums' sightline (owner 2026-08-11): strip LEFT-side
+    // trees/shrubs from the approach + the stadium block itself so
+    // nothing pokes in front of the bowls.  Only foliage goes — cranes,
+    // buildings, and collectibles in the window are untouched.
+    const clearStadiumTrees = (fromMile, toMile) => {
+      const s0 = Math.floor(fromMile * SEGS_PER_MILE) % count;
+      const s1 = Math.floor(toMile   * SEGS_PER_MILE) % count;
+      const FOLIAGE = new Set(['tree', 'shrub', 'cactus', 'palm']);
+      for (let si = s0; si !== s1; si = (si + 1) % count) {
+        const s = segments[si];
+        if (!s?.sprites?.length) continue;
+        s.sprites = s.sprites.filter(sp =>
+          sp.isCollectible || !FOLIAGE.has(sp.type) || (sp.offset ?? 0) >= 0);
+      }
     };
     // Stadium pair — placed right after the West Seattle Bridge exits
     // (bridge ends at mile 1.7) so they read as the SoDo arrival moment.
     // Both on the LEFT side (geographically east of I-90 SoDo stretch).
     // T-Mobile Park comes FIRST (mile 1.85), then Lumen Field (mile 2.00).
-    addStadium(1.85, 'codex_seattle_tmobile_park', -5.45);
-    addStadium(2.00, 'codex_seattle_lumen_field',  -5.25);
+    // ×6 scale (owner 2026-08-11: ×3, then "2x bigger" + "slightly closer"
+    // same day): near edge now sits at ~4.0 lane units (was 4.8/4.6
+    // pre-scale), with all remaining growth extending away from the road.
+    // offset = −(nearEdge 4.0 + halfW), halfW = widthMult/2 × 0.22917
+    // (tmobile 33.9 → 3.88; lumen 34.5 → 3.95).
+    addStadium(1.85, 'codex_seattle_tmobile_park', -7.89);
+    addStadium(2.00, 'codex_seattle_lumen_field',  -7.95);
+    // Approach window covers ~0.3 mi before T-Mobile through just past
+    // Lumen.  Overlaps the crane stretch's tail (1.05-1.75) but only
+    // foliage is stripped, never cranes.
+    clearStadiumTrees(1.55, 2.35);
   }
 
   // ── Lacey V. Murrow Floating Bridge (mile 5.7–7.2) ──────────────────
@@ -3049,7 +3083,12 @@ export function buildRoute(count = ROUTE_SEGS) {
   segments[needleSeg].sprites.push({
     type:      'landmark',
     texKey:    'space_needle',
-    offset:    -1.5,               // LEFT of the road — close, prominent landmark (profile minOffset must be ≤1.5 or it'd clamp back out)
+    // −2.12 (was −1.5): ×3 scale (owner 2026-08-11) triples the rendered
+    // half-width (0.31 → 0.92 lane units), so the center moves outboard to
+    // keep the near edge at its pre-scale spot (1.5 − 0.31 ≈ 2.12 − 0.92)
+    // — the growth extends left, away from the road.  (Profile minOffset
+    // must stay ≤ this or it'd clamp back out.)
+    offset:    -2.12,
     baseW:     2500, baseH: 2500,
     renderDepth: 1.5,              // behind cranes (2.0) and most scenery
     collected: false,
