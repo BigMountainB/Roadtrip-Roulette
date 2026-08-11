@@ -161,8 +161,13 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+> **Commit attribution:** `4a5e4eb` is titled *"Genre-car ending plates + OUT OF GAS
+> decision card"*, but it is a **sweep commit** — a parallel session committed the entire working
+> tree at once. It therefore also carries the **chase-realism pass** and the **whole rest-stop
+> dialogue rewrite**. Searching the git log by message for either of those finds nothing.
+
 ### 2026-08-10 — Backdrop: North Bend plate moved below the mountain bands · biome blend 4 mi → 320 ft
-Uncommitted. Tests: 550 green (`npm test`), `vite build` clean.
+**Shipped in `d0d814d`.** Tests: 550 green (`npm test`), `vite build` clean.
 
 **Owner report (screenshot, mile 25.18):** *"I like how North Bend is looking, but I don't like the
 horizon background on top of the mountain layer. And I don't think any layer should be transparent."*
@@ -704,7 +709,7 @@ this visit so two meals in one stop can't double-count.
   here) are pure flavor until something consumes them.
 
 ### 2026-08-04 — Garage rework: NOS re-buy exploit fixed · full tier ladders · two distinct garage lanes
-Uncommitted. Tests: chase 50, coal 25, missions 256, genreTraits 179, dose 37, upgrades 3 — all green. `vite build` clean.
+**Shipped in `2bb8520`.** Tests: chase 50, coal 25, missions 256, genreTraits 179, dose 37, upgrades 3 — all green. `vite build` clean.
 
 **The NOS re-buy bug (owner report).** The buy handler in `RestStopScene._makeButton` greyed a row
 out after purchase for `refuel` / `repair` / `upgradeInstall` / genre cars but had **no case for
@@ -748,7 +753,7 @@ to be re-cut to nine columns first. That constraint is why NOS went under ENGINE
 Finesse service.
 
 ### 2026-08-04 — Chase realism pass · near-field cop projection · skyline/tunnel layering · weapon-exit tuning · challenge-mission crash
-Uncommitted. Tests: chase **50** (13 new), coal 25, missions 256, genreTraits 179, vices 26, upgrades 3 — all green.
+**Shipped in `4a5e4eb`** (swept into `4a5e4eb` — see the attribution note at the top of the changelog). Tests: chase **50** (13 new), coal 25, missions 256, genreTraits 179, vices 26, upgrades 3 — all green.
 
 **Chase rebuilt around the owner's model of a real pursuit** (`CopSystem.js`). Aggression is now
 star-scaled instead of uniform:
@@ -873,7 +878,7 @@ now-dead `signKey` sprite field and the `STOPS_WITHOUT_BAKED_SIGN` gate (there i
 thing as a stop whose art hasn't been baked).
 
 ### 2026-08-04 (pt 2) — Ending plates: genre-car endings, and OUT OF GAS becomes a decision
-Uncommitted (`src/data/endingArt.js` new; `GameOverScene.js`, `GameScene.js`, `constants.js`).
+**Shipped in `4a5e4eb`** (swept into `4a5e4eb` — see the attribution note at the top of the changelog) — `src/data/endingArt.js` new, plus `GameOverScene.js`, `GameScene.js`, `constants.js`.
 Tests 550 green, build clean. BUSTED / CRASHED / PASSED OUT / DEMO / Pullman verified in-engine
 by screenshot; the OUT OF GAS card is build-verified only and still needs a playtest.
 
@@ -919,7 +924,7 @@ same mistake), the repo-to-Beater, and the free-tow-if-broke mercy case. `TOW_CO
 row. Both are anchor/layout numbers, not structure.
 
 ### 2026-08-03 (pt 2) — Rest-stop menus: one tap was firing on two screens
-Uncommitted (`RestStopScene.js`). Tests 550 green, build clean — no test covers scene input, so
+**Shipped in `e35f9bf`** (`RestStopScene.js`). Tests 550 green, build clean — no test covers scene input, so
 this is a playtest-verified fix, not a test-verified one.
 
 Owner: "if I click an option it often times also clicks the next screen behind that option."
