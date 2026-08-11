@@ -1037,8 +1037,13 @@ export class GameScene extends Phaser.Scene {
     // cannot, so the clamp goes away and the skyline's base is now decided by
     // where real, perspective-correct ground actually covers it — which
     // follows the terrain instead of a ruler-straight line at CAM.horizonY.
-    // Above skyGfx (0) so the sky never paints over it.
-    this.cityBackdropGfx = this.add.graphics().setDepth(0.9);
+    // 1.18 specifically, revised the same day: the biome bands are at 1.15, and
+    // with `seattle_hills` now covering mile 0-20 a lower silhouette would have
+    // put the hills IN FRONT of downtown.  At 1.18 the skyline is ahead of the
+    // hills but still behind GroundPlane (1.3) and the road (1.5) — and, better
+    // than 0.9, terrainGfx (1) is now BELOW it, so the flat below-horizon patch
+    // cannot cut the buildings at all.  Only perspective-correct ground can.
+    this.cityBackdropGfx = this.add.graphics().setDepth(1.18);
     this.roadGfx      = this.add.graphics().setDepth(1.5);
 
     // Textured ground, in the slot the terrain/road split opened.  Depth 1.3

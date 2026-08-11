@@ -161,8 +161,8 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
-### 2026-08-11 (pt 2) — Skyline drops below the ground; the horizon clamp is gone
-Uncommitted at time of writing. Tests: 550 green, `vite build` clean.
+### 2026-08-11 (pt 2) — Skyline re-depthed; horizon clamp gone; Seattle biome closes the last gap
+Shipped. Tests: 550 green, `vite build` clean.
 
 **Owner:** *"Don't clip them on the horizon!! Let them fall behind the roadway."* Correct, and the
 reasoning was too — *"they should not be over the road or ground. Why would they be?"* They were only
@@ -186,10 +186,27 @@ over it because `cityBackdropGfx` sat at depth **6.9**, above every road/fog/gro
 their own ground tile — westside 16-43, north_bend 28-37, pass_alpine 46-55, easton 58-76, kittitas
 79-121, vantage 124-139, columbia 142-208, palouse 211-292.
 
-> **Known gap: miles 0-16 have NO biome bands.** `biomeAt` returns null below `URBAN_UNTIL = 16` by
-> design (a forest ridge behind downtown would look absurd). That is exactly where the owner's West
-> Seattle screenshot was taken, so the biome bands do NOT cover the horizon patch there — the urban
-> stretch relies on the skyline + the softened patch alone. Left as-is pending an owner call.
+**Gap closed the same day — `seattle_hills`.** The urban stretch had no bands at all (`biomeAt`
+returned null below `URBAN_UNTIL = 16`) on the grounds that "a forest ridge behind downtown would
+look absurd" — a fair objection to the WRONG ART, not an argument for a bare horizon. Purpose-made
+`bio_seattle_hills_{far,ridge,near}` arrived, so:
+- New biome `seattle_hills`, miles **0-20**. `URBAN_UNTIL` 16 -> **0**; the route is now painted end
+  to end with no unpainted horizon anywhere.
+- `biomeAt`'s fade-up span is now zero-width, which would have divided by zero and NaN'd every
+  band's alpha. Guarded — verified 0 NaN alphas across the route.
+- **Silhouettes 0.9 -> 1.18**, revised within the hour. The bands are at 1.15, so at 0.9 the new
+  Seattle hills would have painted IN FRONT of downtown. 1.18 puts the skyline ahead of the hills
+  and still behind GroundPlane (1.3) and the road (1.5) — and it is strictly better than 0.9,
+  because terrainGfx (1, the flat below-horizon patch) now sits BELOW the buildings and cannot cut
+  them at all. Only perspective-correct ground can.
+
+**Coverage re-verified every 3rd mile, 1-292: NO mile is missing a band.** seattle_hills 1-19,
+westside 22-43, north_bend 28-37, pass_alpine 46-55, easton 58-76, kittitas 79-121, vantage 124-139,
+columbia 142-208, palouse 211-292.
+
+> **Residual:** `seattle_hills` has no ground tile of its own and falls back to `ground_pnw_roadside`
+> (olive) while downtown's `grass2` is pavement grey — the same class of mismatch that caused the
+> Royal City seam, just milder. A `seattle_ground_1024.png` to the Ch.9 spec would close it.
 
 
 ### 2026-08-11 — The ground was ONE tile for all 9 biomes (the "water" band, finally)

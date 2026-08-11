@@ -89,10 +89,16 @@ export const BAND = {
  *  the transparency is proportional to how long two biomes co-exist. */
 export const BLEND_MILES = 0.06;
 
-/** Mile at which the first biome starts fading up.  Below this the Seattle
- *  and Bellevue skyline systems own the horizon, and a forest ridge behind
- *  downtown would look absurd. */
-const URBAN_UNTIL = 16;
+/** Mile at which the first biome starts fading up.
+ *
+ *  Was 16: below that, `biomeAt` returned null and NOTHING painted the
+ *  horizon, because "a forest ridge behind downtown would look absurd."  That
+ *  reasoning was about the WRONG ART, not about the urban miles wanting a bare
+ *  horizon — it left the below-horizon patch fully exposed through all of
+ *  Seattle (owner's mile-1.61 screenshot).  With purpose-made `seattle_hills`
+ *  bands the objection is gone, so the route is now covered end to end and
+ *  there is no urban gap and no fade-up to perform. */
+const URBAN_UNTIL = 0;
 
 /** Per-biome overrides for band height and parallax rate.
  *
@@ -123,6 +129,12 @@ export const BIOMES = [
   // `tex` is the texture-set name and defaults to `key`.  It exists so a
   // biome can appear twice on the route without duplicating its art — the
   // forest resumes after North Bend using the same bands.
+  //
+  // Seattle covers mile 0 so the horizon is never unpainted.  These are HILLS
+  // behind the city, not a treeline: the downtown/Bellevue silhouettes draw at
+  // depth 1.18, IN FRONT of the bands at 1.15, so the skyline still reads as
+  // the near thing and the hills sit behind it where they belong.
+  { key: 'seattle_hills',      s:   0, e:  20, label: 'Seattle hills' },
   { key: 'westside_forest',    s:  20, e:  26, label: 'West Side forest' },
   // Deliberately exaggerated to 14 miles (real North Bend is a point on the
   // map at mile 32).  Owner's call: a long stretch means the route doesn't
@@ -161,8 +173,13 @@ export function bandKey(biomeKey, layer) {
 export function biomeAt(mile) {
   if (mile < URBAN_UNTIL) return null;
 
-  // Global fade-up out of the urban stretch.
-  const alpha = Math.max(0, Math.min(1, (mile - URBAN_UNTIL) / (BIOMES[0].s - URBAN_UNTIL)));
+  // Global fade-up out of the urban stretch.  The first biome now starts AT
+  // mile 0, so this span is empty and the fade is a no-op — guarded because a
+  // zero-width span would divide by zero and NaN every band's alpha.
+  const _fadeSpan = BIOMES[0].s - URBAN_UNTIL;
+  const alpha = _fadeSpan > 0
+    ? Math.max(0, Math.min(1, (mile - URBAN_UNTIL) / _fadeSpan))
+    : 1;
 
   // Past the last biome's end (shouldn't happen — it ends at the finish
   // line — but a clamped read beats a null deref if the route ever grows).
