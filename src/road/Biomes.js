@@ -36,6 +36,40 @@ export const BAND = {
   /** Horizontal parallax, as a multiple of accumulated road heading.  Far
    *  terrain barely moves; the near treeline sweeps past. */
   rate: { far: 0.06, ridge: 0.14, near: 0.30 },
+
+  /** Screen px each layer's BASE is seated BELOW the horizon (owner 2026-08-10).
+   *
+   *  Two jobs, one number.
+   *
+   *  1. DEPTH STAGGER.  Every band PNG is bottom-anchored to row 640, and the
+   *     renderer used to seat all three of those edges on the same horizon
+   *     line — three silhouettes rooted at one baseline, which is why the
+   *     backdrop read as a flat painted wall rather than receding terrain.
+   *     Each layer now sits progressively lower than the one behind it.
+   *
+   *  2. COVERING THE "WATER".  The sky gradient runs to `H() + 14` (Road.js,
+   *     `skyH`) and ends in `skyFogMix`, so a ~14 px flat fog-toned strip is
+   *     painted across the full width just under the horizon.  With every band
+   *     stopping exactly at the horizon, that strip was left exposed beneath
+   *     the whole range and read as a lake (owner, at Easton in snow).  EVERY
+   *     value here is >14 so the farthest layer already covers it.
+   *
+   *  Seating a band below the horizon is safe now in a way it wasn't when
+   *  yCrop was written: bands are at depth 0.5, under terrain (1) and road
+   *  (1.5), so anything hanging below the ground line is painted over by real
+   *  ground.  That also hides each band's hard cropped bottom edge. */
+  yOff: { far: 16, ridge: 22, near: 30 },
+
+  /** Per-layer texture zoom, on top of the fit-to-screen scale.
+   *
+   *  Owner 2026-08-10: "zoom in a little on the near biome to cover more
+   *  area."  Only the near treeline is magnified — enlarging the far ridges
+   *  would flatten the depth cue the stagger above is creating.
+   *
+   *  This does NOT change parallax speed: on-screen scroll is
+   *  tilePositionX * tileScale, and tilePositionX is divided by the same
+   *  scale when it's computed, so the two cancel. */
+  zoom: { far: 1, ridge: 1, near: 1.18 },
 };
 
 /** Miles over which adjacent biomes cross-fade.

@@ -161,6 +161,53 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-10 (pt 2) — Backdrop: bands lifted above the terrain haze · depth stagger · near-layer zoom
+Uncommitted. Tests: 550 green, `vite build` clean.
+
+**Owner, two screenshots (Easton mi 68.79 in snow, Thorp mi 96.14):** *"Are they all stacked on top
+of each other? I think they should be spread out more. Something to cover the water looking body in
+the middle."* Then, after the first attempt: *"It needs to be on top of the blue/green-brown layer."*
+
+**They WERE all on one baseline.** Every band PNG is bottom-anchored to row 640, and the renderer
+gave each a height of `(640 - yCrop) x s` with `setOrigin(0, 1)`, all positioned at `ts.y = horizon`.
+So all three cropped bottom edges landed on the same line. Content heights barely differ either
+(Easton: far 200 px, ridge 280, near 220) — three similar silhouettes rooted at one baseline, which
+is why the backdrop read as a flat painted wall instead of receding terrain. `yCrop` never staggered
+them; it only trims the taller layers so their bases don't bury the layer behind.
+
+**The "water" was TWO stacked culprits, and the second is the one that mattered.**
+1. The sky gradient runs to `H() + 14` (`skyH`, Road.js) and ends in `skyFogMix` — a ~14 px flat
+   fog-toned strip painted full-width just under the horizon.
+2. The real offender: the terrain **distance-haze ramp**, `lerpColor(palette.grass2, skyFogMix, mix)`
+   (Road.js ~1263), which fades the ground toward fog colour approaching the horizon. It is drawn
+   into **terrainGfx at depth 1**, and the bands sat at **0.5** — so it painted OVER them. Seating
+   the bands lower could never cover it; that was the failed first attempt.
+
+**Fixes (all whole-route, per owner):**
+- **Bands 0.5 -> 1.15.** Above `terrainGfx` (1) so they cover the haze ramp, below the landmark peaks
+  (1.2), `GroundPlane` (1.3) and `roadGfx` (1.5) — so the textured ground and road still paint over
+  each band's hard cropped bottom edge, and hero peaks are never occluded.
+- **`BAND.yOff = { far: 16, ridge: 22, near: 30 }`** — screen px each layer's base is seated below
+  the horizon. Does double duty: the depth stagger, and every value is >14 so the farthest layer
+  already covers the sky-fog strip.
+- **`BAND.zoom = { far: 1, ridge: 1, near: 1.18 }`** — owner: *"zoom in a little on the near biome to
+  cover more area."* Near only; magnifying the far ridges would flatten the depth cue the stagger
+  creates. Folded into `s` so band height and the `tilePositionX` divide stay consistent — parallax
+  speed is unchanged, because on-screen scroll is `tilePositionX * tileScale` and the two cancel.
+- **North Bend plate 0.45 -> 1.1.** It was moved to 0.45 earlier the same day (below the bands, per
+  the owner's rule). That put it under the haze ramp, which would have painted the same strip across
+  Mount Si. 1.1 keeps it the lowest backdrop image — plate 1.1 -> bands 1.15 -> peaks 1.2 — while
+  lifting it clear of the ramp.
+
+**Final depth order:** sky 0 -> nb plate 1.1 -> terrain 1 -> **bands 1.15** -> peaks 1.2 ->
+GroundPlane 1.3 -> road 1.5. Verified in-engine: bases staggered at every biome
+(Easton 223.8 / 232.5 / 245.8), near tileScale 0.461 vs 0.391 for far, all alphas 1.00.
+
+**Not verified visually.** Six attempts at an automated screenshot failed — the title-screen DOM
+overlays the canvas and `renderer.snapshot` hangs under software GL. Geometry and depth order are
+confirmed by runtime probe; the LOOK still needs a playtest.
+
+
 > **Commit attribution:** `4a5e4eb` is titled *"Genre-car ending plates + OUT OF GAS
 > decision card"*, but it is a **sweep commit** — a parallel session committed the entire working
 > tree at once. It therefore also carries the **chase-realism pass** and the **whole rest-stop

@@ -1076,9 +1076,23 @@ export class GameScene extends Phaser.Scene {
         const ts = this.add.tileSprite(0, 0, SCREEN_W, BAND.h - BAND.yCrop[layer],
                                        bandKey(BIOMES[0].key, layer))
           .setOrigin(0, 1)
-          // Between the sky (0) and the terrain (1): above the sky so it
-          // is visible, below the ground so the terrain hides its base.
-          .setDepth(0.5)
+          // DEPTH 1.15 — ABOVE terrainGfx (1), owner 2026-08-10.
+          //
+          // Was 0.5, between the sky and the terrain, so the ground would hide
+          // each band's base.  The problem: terrainGfx doesn't only paint
+          // ground, it paints the DISTANCE HAZE RAMP — grass2 lerped toward
+          // skyFogMix near the horizon (Road.js ~1263).  At 0.5 that ramp drew
+          // over the bands as a full-width blue/green-brown strip between the
+          // hills and the grass, which is what the owner kept seeing as water.
+          // No amount of seating the bands lower could cover it; the ramp was
+          // simply on top.
+          //
+          // 1.15 threads the needle: above terrainGfx (1) so the bands cover
+          // the haze ramp, but below the landmark peaks (1.2), GroundPlane
+          // (1.3) and roadGfx (1.5) — so the textured ground and the road
+          // still paint over each band's hard cropped bottom edge, and hero
+          // peaks are still never occluded.
+          .setDepth(1.15)
           .setScrollFactor(0)
           .setVisible(false);
         this._biomeLayers[set][layer] = ts;
@@ -1092,23 +1106,29 @@ export class GameScene extends Phaser.Scene {
     // either side without revealing a hole.
     // Base plate — ground, side hills, valley notch.
     //
-    // DEPTH 0.45 — BELOW the biome bands (0.5), owner's call 2026-08-10.  It
-    // used to sit at 1.25, above the bands, so its opaque region (which starts
-    // ~12 px above the horizon and runs the full width) cut the bottom off the
-    // mountain range behind it.  Worse, _renderNorthBend draws the plate at the
-    // biome cross-fade weight, so mid-blend that covering region was
-    // SEMI-TRANSPARENT and the range ghosted through it as a pale horizontal
-    // strip — the artifact the owner flagged.  Below the bands, the mountains
-    // draw in front of the plate's horizon instead of being sliced by it.
+    // BELOW the biome bands — owner's call 2026-08-10.  It used to sit at 1.25,
+    // ABOVE the bands, so its opaque region (which starts ~12 px above the
+    // horizon and runs the full width) cut the bottom off the mountain range
+    // behind it.  Worse, _renderNorthBend draws the plate at the biome
+    // cross-fade weight, so mid-blend that covering region was SEMI-TRANSPARENT
+    // and the range ghosted through it as a pale horizontal strip.  Below the
+    // bands, the mountains draw in front of the plate's horizon instead of
+    // being sliced by it.
     //
     // What this gives up: at 1.25 the plate's own ground outranked terrainGfx
     // (1) and replaced the flat grass fill.  It no longer does.  In practice
     // that ground was already hidden — GroundPlane paints the textured ground
-    // at 1.3, above where the plate used to be (its own comment still claims
-    // the 1.1 slot it was written for).  The plate now contributes its hills
-    // and valley notch; the ground comes from GroundPlane.
+    // at 1.3, above where the plate used to be.  The plate now contributes its
+    // hills and valley notch; the ground comes from GroundPlane.
+    //
+    // DEPTH 1.1 — still the LOWEST of the backdrop images (owner's rule), but
+    // lifted above terrainGfx (1) along with the bands.  It was 0.45 for a few
+    // hours; that put it under the terrain distance-haze ramp, which would have
+    // painted the same blue/green strip across Mount Si that the bands were
+    // just rescued from.  Order is now: plate 1.1 -> bands 1.15 -> peaks 1.2,
+    // so the mountains still draw in front of the plate's horizon.
     this._nbBasePlate = this.add.image(0, 0, 'nb_base_plate')
-      .setDepth(0.45)
+      .setDepth(1.1)
       .setScrollFactor(0)
       .setVisible(false);
 
@@ -14234,7 +14254,11 @@ export class GameScene extends Phaser.Scene {
         // left the treeline stopping short of the screen edge.
         const _M  = 150 + Math.ceil(C.HUD_OFFSET_X ?? 0);
         const _bw = SCREEN_W + _M * 2;
-        const s = SCREEN_W / BAND.w;
+        // Per-layer zoom rides on top of the fit-to-screen scale (BAND.zoom).
+        // Folding it into `s` rather than into setSize keeps every dependent
+        // number consistent — band height below, and the tilePositionX divide
+        // that stops the parallax scrolling at the wrong rate.
+        const s = (SCREEN_W / BAND.w) * (BAND.zoom?.[layer] ?? 1);
         if (ts.tileScaleX !== s) { ts.tileScaleX = s; ts.tileScaleY = s; }
         const bh = Math.round((bandHeight(biome) - BAND.yCrop[layer]) * s);
         if (ts.height !== bh || ts.width !== _bw) ts.setSize(_bw, bh);
@@ -14257,7 +14281,10 @@ export class GameScene extends Phaser.Scene {
         // backdrop rise and settle with the terrain instead of floating.
         // Deliberately a FRACTION — distant terrain should lag the road, not
         // move with it — and clamped so a crest can't fling it off screen.
-        ts.y = horizon + pitchOff * (0.55 - depthT * 0.35);
+        // BAND.yOff seats each layer's base progressively below the horizon —
+        // the depth stagger, and what covers the ~14 px skyFogMix strip the sky
+        // gradient paints past the horizon (the "water" the owner spotted).
+        ts.y = horizon + (BAND.yOff?.[layer] ?? 0) + pitchOff * (0.55 - depthT * 0.35);
         ts.setAlpha(weight * sel.alpha * fogFade);
         ts.setVisible(true);
       }
