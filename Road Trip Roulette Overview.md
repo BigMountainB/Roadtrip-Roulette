@@ -78,6 +78,34 @@ charges rather than selling to you on the spot).
 heat) · portable save/checkpoint codes removed (local LAST/SAVED kept) · sex worker → Hot Springs
 soak (PG-13) · party-clock HUD hidden (mechanics intact — arrival-status direction, see changelog).
 
+**Backdrop / ground open items (opened 2026-08-10 - 11, none blocking):**
+- **`seattle_ground_1024.png` is NOT seamless** — Ch.9 rule 2. Measured edge-wrap error (avg
+  per-channel difference between opposite edges) is **21.3 L/R, 22.4 T/B**, the worst of the set:
+  the seven tiles restored from `Archive/` all measure **0.0**, and `pnw_roadside` is 15.3/16.3. At
+  `TILE_FT = 48` (~2030 px of screen per tile) that repeats a grid line roughly every 2000 px
+  through the urban miles. **Art fix only** — a clean re-export drops in at the same path, no code
+  change.
+- **`east_cascades` palette spans two different grounds.** The Vantage basalt tile is dark grey
+  `rgb(59,57,52)` (correct — it is scree) but shares `east_cascades`, whose `grass2` is olive-tan
+  `rgb(122,116,43)`. Delta **87**, the only ground handoff still measuring "visible" — and slightly
+  WORSE than the 74 it had before per-biome tiles landed. Fix is a Colors.js split (a Vantage
+  sub-region with a basalt-toned `grass2`), not new art. May be moot now that the ground textures
+  run to the draw cap; re-check before spending time on it.
+- **Band texture guard is dead, so `setTexture` runs every frame on all six bands.**
+  `_renderBiomeBackdrop` tests `ts.texture.key !== key`, but on a TileSprite `ts.texture` is Phaser's
+  internally generated fill-pattern texture and its key is a UUID — never equal to `bio_*`. The
+  right field is `displayTexture`. Visually harmless (the correct art always shows, which is why it
+  went unnoticed), but it rebuilds the tile pattern 6x per frame. One-line fix:
+  `ts.displayTexture?.key !== key`.
+- **Watch for a black horizon strip.** The ground now textures to the full 76,000-unit draw cap with
+  only `FEATHER_Z = 6000` of fade. The original 18k fade existed because the last rows can sample
+  outside the useful mip footprint at grazing angles. If a black line ever shows at the horizon,
+  widen `FEATHER_Z` in `GroundPlane.js` — that is the knob.
+- **Not verified visually.** Everything in the 08-10/08-11 backdrop work is confirmed by runtime
+  probes (depths, geometry, alphas, tile keys), NOT by screenshot. Seven capture approaches failed:
+  the title-screen DOM overlays the canvas, `renderer.snapshot` hangs under software GL, and
+  `gl.readPixels` returns the title art. The LOOK still needs a human playtest.
+
 **Not yet built / pending:** economy balance w/ real playtest data (mission `recordEarn` tagging
 ready; pickups+distance income the suspected inflators) · Steam-demo cut + wishlist/tutorial (Ch3
 §13/§22) · real NPC portrait art · **bake owner's custom HUD layout as the shipped default** (waiting
