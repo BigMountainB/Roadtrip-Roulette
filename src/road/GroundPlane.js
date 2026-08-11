@@ -64,13 +64,28 @@ const TILE_Z  = TILE_FT * UNITS_PER_FT_Z;
 
 // Distance fade, in world Z units — full texture to FADE_Z0, gone by FADE_Z1.
 //
-// Fade before the 76,000-unit draw cap. At grazing-angle compression the last
-// one or two custom-pipeline rows can sample outside the useful mip footprint
-// and appear as a pure-black horizon strip. The flat terrain fill underneath
-// already carries the correct distance-haze colour, so handing off to it over
-// the final 18k units is both safer and visually continuous.
-const FADE_Z0 = 52000;
-const FADE_Z1 = 70000;
+// GROUND NOW RUNS TO THE DRAW CAP (owner 2026-08-11: "make it so the ground
+// tiles extend to the horizon").  It used to fade 52k -> 70k against a 76,000
+// unit cap, so the final 6,000 units of road that DID get drawn carried no
+// ground texture at all, and 18k units handed off to the flat terrain fill.
+// That handoff is the seam family chased all day: the flat fill is grass2
+// blended toward skyFogMix, so wherever the two disagreed it read as a
+// coloured bar tracking the sky.  Texturing to the cap removes the handoff
+// rather than trying to colour-match across it.
+//
+// Derived from DRAW_DIST rather than hardcoded, so raising the draw distance
+// automatically carries the ground with it instead of silently re-opening a
+// 6k gap.
+//
+// The feather is kept, just short.  The original 18k fade existed because at
+// grazing-angle compression the last one or two rows can sample outside the
+// useful mip footprint and flash a pure-black horizon strip; FEATHER_Z is the
+// insurance against that.  If a black line ever appears at the horizon, widen
+// it — that is the knob, and it is the ONLY reason not to go flat to the cap.
+const DRAW_CAP_Z = C.DRAW_DIST * C.SEG_LENGTH;   // 380 * 200 = 76,000
+const FEATHER_Z  = 6000;
+const FADE_Z0 = DRAW_CAP_Z - FEATHER_Z;          // 70,000 — full texture to here
+const FADE_Z1 = DRAW_CAP_Z;                      // 76,000 — the last drawn row
 
 /** Max height in px of one textured sub-row.  Smaller = more perspective-
  *  correct UVs in the near field, at ~1 extra quad per 12 px of screen. */

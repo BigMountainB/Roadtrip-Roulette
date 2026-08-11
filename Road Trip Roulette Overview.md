@@ -161,6 +161,34 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-11 (pt 5) — Ground tiles now run to the draw cap
+Uncommitted. Tests: 550 green, `vite build` clean.
+
+**Owner:** *"lets make it so the ground tiles extend to the horizon."*
+
+The ground texture faded 52k -> 70k against a **76,000-unit draw cap**, so the last **6,000 units of
+road that were actually being drawn carried no ground texture at all**, and 18k units before that
+handed off to the flat terrain fill. That handoff is the entire seam family chased through 2026-08-10
+and -11: the flat fill is `grass2` blended toward `skyFogMix`, so wherever it disagreed with the tile
+it read as a coloured bar that tracked the sky. Texturing to the cap removes the handoff instead of
+trying to colour-match across it.
+
+- `FADE_Z0` 52,000 -> **70,000**, `FADE_Z1` 70,000 -> **76,000**, both now DERIVED from
+  `DRAW_DIST * SEG_LENGTH` rather than hardcoded — so raising the draw distance carries the ground
+  with it instead of silently re-opening a gap.
+- `FEATHER_Z = 6000` keeps a short fade at the very end. The original 18k fade existed because at
+  grazing-angle compression the last rows can sample outside the useful mip footprint and flash a
+  pure-black horizon strip. **If a black line ever appears at the horizon, widen this** — it is the
+  only reason not to run flat to the cap.
+
+**Verified in-engine:** farthest textured row now at Z ~75,800 (was capped at 70,000), landing at or
+above the horizon line at mi 5 / 30 / 96 / 158 / 250 — mile 158 puts it 0.7 px off the horizon.
+
+> **Not a bug:** miles ~58-78 report ZERO ground rows. `groundTexFade = (1 - snowI)^0.6` and full snow
+> coverage lands at mile 55, so the tile is deliberately faded out under the snow blanket — exactly
+> what the Ch.9 spec means by "no snow variants, the engine applies it." Unrelated to this change.
+
+
 ### 2026-08-11 (pt 4) — Seattle ground tile wired
 Uncommitted. Tests: 550 green, `vite build` clean.
 
