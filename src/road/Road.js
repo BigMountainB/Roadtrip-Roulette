@@ -10,6 +10,7 @@ import * as C from '../constants.js';
 import { project, fillTrap, rumbleW, laneW, toInt, SeededRNG, clamp } from '../utils/Helpers.js';
 import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '../utils/Colors.js';
 import { buildRoute } from './RouteData.js';
+import { TunnelFaceMesh } from './TunnelFaceMesh.js';
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
 import {
@@ -2232,6 +2233,47 @@ export class Road {
     } else {
       this._tunnelMouthRect = null;
     }
+
+    // ── Facade ARTWORK (projected mesh) ──────────────────────────────
+    // Painted plates replace the procedural concrete when they can be drawn.
+    // The mouth rect above is published FIRST and unconditionally, so interior
+    // masking and sprite culling behave identically either way — the artwork
+    // changes what the face looks like, never how the tunnel works.
+    //
+    // Returning here SKIPS the procedural facade below, so the two are never
+    // drawn on top of each other. Anything that makes the mesh unavailable
+    // (canvas renderer, texture still loading, mesh construction failure) falls
+    // straight through to the procedural path with no visual gap.
+    //
+    // Tunnel identity needs no new tagging: wildlife sets seg.wildlife (handled
+    // and returned above), the Mercer lid sets seg.curvedTunnelClosure, and
+    // Mt Baker is the tunnel that sets neither. See RouteData.js.
+    if (cutMouth) {
+      const plateKey = e.seg?.curvedTunnelClosure ? 'mercer_lid' : 'mt_baker';
+      // PROVING RUN (2026-08-11): Mt Baker only, so one facade can be validated
+      // across every approach before the other two are switched over. Mercer
+      // and wildlife keep their procedural faces until then.
+      if (plateKey === 'mt_baker') {
+        if (!this._tunnelFaces && g.scene) {
+          this._tunnelFaces = new TunnelFaceMesh(g.scene);
+          // Road has no destroy() of its own and is owned by the scene, so
+          // teardown hangs off the scene's own shutdown.
+          g.scene.events?.once?.('shutdown', () => {
+            this._tunnelFaces?.destroy();
+            this._tunnelFaces = null;
+          });
+        }
+        const drew = this._tunnelFaces?.update(plateKey, {
+          outerL, outerR, groundY,
+          sW, sH,
+          curve: e.seg?.curve ?? 0,
+          alpha: rimAlpha,
+          depth: 9.82,
+        });
+        if (drew) return;
+      }
+    }
+    this._tunnelFaces?.hideAll();
 
     // ── Arched mouth ─────────────────────────────────────────────────
     // Replace the rectangular lintel + jambs with a semicircular arch.

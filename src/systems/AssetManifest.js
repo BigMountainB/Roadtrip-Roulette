@@ -39,6 +39,35 @@ export const ASSET_MANIFEST = {
       path: 'assets/scenery/ground_textures/final/palouse_ground_1024.png' },
   ],
 
+  // ── Tunnel facade plates (Ch.2 TUNNEL_FACE_ART_SPEC.md) ─────────────────
+  // 1600×900 RGBA. The road openings are TRANSPARENT — the procedural tunnel
+  // shell, road, lane lines and vehicles show through them. These are drawn as
+  // projected UV-mapped meshes (src/road/TunnelFaceMesh.js), never as flat
+  // Images: a sprite with one x/y/scale reads as a cardboard cutout the moment
+  // the road curves or the player moves laterally.
+  // NOTE: opening geometry per plate is declared in TunnelFaceMesh.PLATES —
+  // keep the two in step if the art is ever re-exported.
+  // GATED ON ?tunnelart=1 — these three plates are 4.0 MB together, and the
+  // renderer that uses them is still default-OFF pending visual validation.
+  // Loading them unconditionally would put 4 MB on every player's boot for
+  // pixels nobody can currently see. The gate must match TunnelFaceMesh's own
+  // flag: if the art can't draw, it must not download either.
+  // Delete this wrapper (keep the array) when the facades ship on by default.
+  tunnelFaces: (() => {
+    let on = false;
+    try {
+      on = new URLSearchParams(globalThis.location?.search ?? '').get('tunnelart') === '1';
+    } catch (_) { /* non-browser (tests, build) — stay off */ }
+    return on ? [
+      { key: 'tunnel_face_mt_baker',
+        path: 'assets/scenery/tunnels/tunnel_mt_baker_face.png' },
+      { key: 'tunnel_face_mercer_lid',
+        path: 'assets/scenery/tunnels/tunnel_mercer_lid_face.png' },
+      { key: 'tunnel_face_wildlife',
+        path: 'assets/scenery/tunnels/tunnel_wildlife_crossing_face.png' },
+    ] : [];
+  })(),
+
   // Seamless overhead asphalt tiles, one per road material along the route.
   // Same rules as the ground tile: flat/overhead art only (RoadPlane applies
   // the perspective per road segment, so a pre-perspective source would get
