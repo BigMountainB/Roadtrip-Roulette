@@ -70,11 +70,15 @@ export const ASSET_MANIFEST = {
   // Drop the ternary (keep the array) when the facades ship on by default.
   tunnelFaces: tunnelArtEnabled() ? [
     { key: 'tunnel_face_mt_baker',
-      path: 'assets/scenery/tunnels/tunnel_mt_baker_face.png' },
+      path: 'assets/scenery/tunnels/tunnel_mt_baker_full.png' },
     { key: 'tunnel_face_mercer_lid',
-      path: 'assets/scenery/tunnels/tunnel_mercer_lid_face.png' },
+      path: 'assets/scenery/tunnels/tunnel_mercer_full.png' },
     { key: 'tunnel_face_wildlife',
       path: 'assets/scenery/tunnels/tunnel_wildlife_crossing_face.png' },
+    // Wing walls and foreground berms are no longer loaded: Mt Baker and Mercer
+    // now ship as full composites that already contain them (2026-08-12). Two
+    // of those plates were also deleted from disk, so keeping the keys would
+    // have 404'd on every boot.
   ] : [],
 
   // Seamless overhead asphalt tiles, one per road material along the route.

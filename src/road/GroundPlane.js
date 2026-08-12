@@ -146,19 +146,23 @@ export function groundTileFor(biomeKey) {
 //
 // MILES are chosen against what already exists: Weather puts snow on the road
 // from mile 40, the `pass_alpine` biome runs 45-58, and the summit rest stop is
-// at 53. The roadside therefore starts at 38 — deliberately ~2 mi BEFORE the
-// road turns snowy, so the first patches appear in the verge while the asphalt
-// is still wet, which is how a real climb reads. It's fully accumulated across
-// the pass_alpine core and has melted back by 68, handing over to the
-// easton_transition tile rather than dragging snow down the east slope.
+// at 53. The roadside therefore starts at 36 — deliberately BEFORE the road
+// turns snowy, so the first patches appear in the verge while the asphalt is
+// still wet, which is how a real climb reads.
+//
+// HOLD/END mirror the ROAD's blanket (Road.snowBlanketAt: full to 86, eased
+// out 86-88).  An earlier version melted the roadside out at 68 to hand the
+// east slope back to the easton tile — but the road stays an unbroken white
+// sheet until 86, and bare dirt beside a fully snowed-over road read as a bug.
+// The two systems stay decoupled in code, but they must agree on WHEN.
 //
 // A PURE FUNCTION OF MILE, deliberately: accumulation rises on the way up and
 // falls on the way down with no stored state, so previewing, warping, or
 // running the route backwards all behave correctly.
 const SNOW_MI_START = 36;   // first patches (road snow starts at 40)
 const SNOW_MI_FULL  = 50;   // fully accumulated by here
-const SNOW_MI_HOLD  = 58;   // …held to the end of pass_alpine
-const SNOW_MI_END   = 68;   // melted back out
+const SNOW_MI_HOLD  = 86;   // …held while the road blanket holds
+const SNOW_MI_END   = 88;   // melted out with the road (snowBlanketAt 86→88)
 
 const smooth = (t) => t * t * (3 - 2 * t);
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -187,12 +191,13 @@ const SNOW_STAGES = [
  * the biome tile that would otherwise be showing.
  *
  * THE BASE IS NEVER OVERRIDDEN OUTSIDE pass_alpine, and that constraint drives
- * the whole shape of this function. The accumulation window (36-68) is wider
+ * the whole shape of this function. The accumulation window (36-88) is wider
  * than the pass_alpine biome (45-58) on purpose — snow should appear before the
- * climb and linger after it — but the lead-in crosses north_bend and
- * westside_forest, and the melt-out crosses easton_transition. Swapping the
- * base to the alpine tile at mile 36 would change the entire roadside in one
- * frame, which is precisely the pop this feature exists to remove.
+ * climb and hold as long as the road blanket does — but the lead-in crosses
+ * north_bend and westside_forest, and the hold and melt-out cross
+ * easton_transition and kittitas_foothills. Swapping the base to the alpine
+ * tile at mile 36 would change the entire roadside in one frame, which is
+ * precisely the pop this feature exists to remove.
  *
  * So there are two regimes:
  *   • ON the alpine tile — the full four-stage progression, cross-fading a pair
@@ -207,13 +212,13 @@ const SNOW_STAGES = [
 // it the snow tiles own the base and run the four-stage progression.
 //
 // The threshold is what keeps the handoff AWAY from a biome boundary. The
-// accumulation window (36-68) is deliberately wider than pass_alpine (45-58),
+// accumulation window (36-88) is deliberately wider than pass_alpine (45-58),
 // so an earlier design that switched regime at the biome edge swapped the whole
 // roadside at mile 45 (forest -> partial snow) and again at 58 (full snow ->
 // bare easton) — the second one worse than the pop this feature exists to
 // remove. Handing over on ACCUMULATION instead puts both swaps around a = 0.35,
-// at roughly mi 42.6 and 63.6, where each side is light-snow-dominant and the
-// change is small.
+// at roughly mi 41.5 on the climb and mi 87.2 in the melt-out, where each side
+// is light-snow-dominant and the change is small.
 const DUST_HANDOFF = 0.35;
 // 1.0, not a partial value, and that is what makes the handoff INVISIBLE:
 // just below the threshold the light tile is already at full coverage over the

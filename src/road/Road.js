@@ -2010,6 +2010,10 @@ export class Road {
     // 6.8 miles along the bridge"). Visibility is asserted once per frame at
     // the single entry point; a successful draw turns it back on.
     this._tunnelFaces?.hideAll();
+    // Re-asserted every frame next to the other per-frame resets: a latched
+    // "artwork owns the mouth" flag that outlived the artwork would leave the
+    // shell's ceiling floating above a procedural portal.
+    this._artMouthActive = false;
     if (!g) return;
     g.clear();
     const segLen = this.segments.length;
@@ -2370,7 +2374,13 @@ export class Road {
               this._tunnelFaces = null;
             });
           }
+          // Bound once, not per frame — the wings' update loop is called every
+          // frame and a fresh closure each time is exactly the allocation the
+          // art spec asks to avoid.
+          this._sampleRoadBound ??= (nn) => this._sampleRoadEdges(nn);
           const drew = this._tunnelFaces?.update(plateKey, {
+            sampleRoad: this._sampleRoadBound,
+            tunnelN: e.n,
             outerL, outerR, groundY,
             // The lintel — same value the mouth rect above publishes. Gives the
             // plate a real ceiling to register its opening against.
@@ -2389,6 +2399,8 @@ export class Road {
             depth: g.depth ?? 9.82,
           });
           if (drew) {
+            // Tells _drawTunnelShell to raise its ceiling to the art's opening.
+            this._artMouthActive = true;
             // The painted arch, not the procedural lintel, is now the mouth:
             // republish it so the interior mask fills the opening exactly
             // rather than stopping short and showing sky in the top of the arch.
@@ -2776,7 +2788,18 @@ export class Road {
     // 1.087 × 3600 × 800/450 ≈ 6950. At 4500 the shell's ceiling cut a
     // horizontal line across the arch well below its crown; the 0.85 shade hid
     // it, but at the crossing's lighter dim it would read as a false soffit.
-    const H_CEIL       = seg.wildlife ? 6950 : 4500;
+    // The bored tunnels' ceiling has to agree with whatever defines their
+    // mouth. With the composites in play the ARTWORK defines it (naturalFit),
+    // and the art's opening is taller than the procedural 4500 — leaving the
+    // shell's ceiling below the painted opening, so a sliver of sky showed
+    // through the top of the portal. 7490 is derived from the plates, not
+    // guessed: openingScreenH = (1-openT)·aspect/(openR-openL)·mouthW, set
+    // equal to ceilDrop = scale·H_CEIL·SCREEN_H/2. Mt Baker solves to 7495 and
+    // Mercer to 7485 — close enough to share one constant.
+    // Falls back to 4500 whenever the artwork is not drawing, because then the
+    // PROCEDURAL facade owns the mouth and its lintel is built on 4500.
+    const H_CEIL       = seg.wildlife ? 6950
+                       : (this._artMouthActive ? 7490 : 4500);
     const ceilDropFar  = curr.scale * H_CEIL * SCREEN_H / 2;
     const ceilDropNear = next.scale * H_CEIL * SCREEN_H / 2;
     const ceilFy       = Math.max(0, fy - ceilDropFar);
@@ -2850,6 +2873,53 @@ export class Road {
     // which is what turned 100 ft of daylight into a black screen.
     // Now painted once per frame in renderTunnelOverlay(), clipped to the
     // opening polygons. See _shadeWildlifeOpenings().
+  }
+
+  /**
+   * Projected road-shoulder edges at an arbitrary draw depth `n`.
+   *
+   * Exists so the Mercer roadside strips can be laid in the ROAD plane —
+   * a strip running toward the player has to know where the road boundary is
+   * at every depth it spans, not just at the portal. Road owns rumbleW and the
+   * per-segment lane count, so it answers the question rather than exporting
+   * the pieces and letting the mesh re-derive it (same contract as the facade:
+   * geometry is passed in, never recomputed downstream).
+   *
+   * `n` may fall between segments; the two neighbours are interpolated so a
+   * strip's rows do not snap from one segment to the next as the player moves.
+   * Returns null when the depth isn't currently drawn.
+   */
+  _sampleRoadEdges(n) {
+    const drawn = this._drawn;
+    if (!drawn?.length) return null;
+    if (n <= drawn[0].n) return this._edgesAt(drawn[0]);
+    const last = drawn[drawn.length - 1];
+    if (n >= last.n) return this._edgesAt(last);
+    // drawn[] is built near → far, so n increases with the index.
+    for (let i = 1; i < drawn.length; i++) {
+      if (drawn[i].n < n) continue;
+      const a = drawn[i - 1], b = drawn[i];
+      const span = (b.n - a.n) || 1;
+      const t = (n - a.n) / span;
+      const ea = this._edgesAt(a), eb = this._edgesAt(b);
+      if (!ea || !eb) return ea ?? eb;
+      return {
+        leftX:  ea.leftX  + (eb.leftX  - ea.leftX)  * t,
+        rightX: ea.rightX + (eb.rightX - ea.rightX) * t,
+        y:      ea.y      + (eb.y      - ea.y)      * t,
+        scale:  ea.scale  + (eb.scale  - ea.scale)  * t,
+      };
+    }
+    return this._edgesAt(last);
+  }
+
+  /** Outer shoulder edges of one drawn segment — road half-width plus its
+   *  rumble strip, which is where the drivable surface actually ends. */
+  _edgesAt(d) {
+    if (!d) return null;
+    const w = d.screenW;
+    const rw = rumbleW(w, d.seg?.lanes ?? LANES);
+    return { leftX: d.screenX - w - rw, rightX: d.screenX + w + rw, y: d.screenY, scale: d.scale };
   }
 
   /** Shade the wildlife crossing's arch openings so they read as the recess
@@ -3324,9 +3394,6 @@ export class Road {
     // weather in itself (see RoadMaterial.surfaceColor) rather than being
     // built and then overwritten, so snow has to be known first.
     const segMile = (seg.index / this.segments.length) * TOTAL_ROUTE_MILES;
-    // Ground-texture opacity.  Full outside the snow zone; inside it the tile
-    // survives the accumulation and disappears under total cover (see below).
-    let groundTexFade = 1;
     // Snow blanket strength, 0..1, hoisted so the paint markings further down
     // (double-yellow centre line) can be buried by it too.
     let snowBlanket = 0;
@@ -3344,10 +3411,16 @@ export class Road {
       const snowI = snowBlanketAt(segMile);
       snowBlanket = snowI;
       if (snowI > 0.001) {
-        // Ground texture lingers through the ACCUMULATION (scrub still shows
-        // through a partial blanket) then reaches zero at full cover, so the
-        // whiteout is genuinely white rather than moss seen through gauze.
-        groundTexFade = Math.pow(1 - snowI, 0.6);
+        // The roadside TEXTURE is deliberately NOT faded under the blanket
+        // any more.  It used to be — groundTexFade = (1-snowI)^0.6, zero at
+        // full cover — from the era when the only ground art was bare biome
+        // tiles and this flat SNOW_WHITE fill was the whiteout.  GroundPlane
+        // now runs its own four-stage snow accumulation (snowGroundAt) on the
+        // SAME gate (Weather.state is 'clear' whenever Difficulty.weather()
+        // is off), so by full blanket the tiles themselves ARE the snow art;
+        // fading them erased the roadside texture for the whole mile 55-86
+        // whiteout (owner 2026-08-12: bring the ground plates back).
+        //
         // Everything converges on ONE snow white — road, shoulder and roadside
         // alike.  Blending only 80-85% of the way (the old values) left the
         // pavement a readable grey ribbon, which is exactly the "you can still
@@ -3473,7 +3546,7 @@ export class Road {
       // Water / bridge segments are skipped — g overpaints them with river and
       // port-yard fills anyway, so a ground tile there is invisible work.
       if (this._groundP && !seg.water && !seg.bridge) {
-        this._groundP.pushRow(fy, ny, x2, x1, w2, w1, curr.relZ, next.relZ, groundTexFade);
+        this._groundP.pushRow(fy, ny, x2, x1, w2, w1, curr.relZ, next.relZ);
       }
     }
 

@@ -354,7 +354,10 @@ const _boot = () => {
                               '  legs ' + cur('legs', 1).toFixed(2) +
                               '  span ' + cur('span', 1).toFixed(2) +
                               '  dim ' + (window.__wildDim ?? 0.12).toFixed(2) +
-                              '  shade ' + (window.__wildShade ?? 0.85).toFixed(2);
+                              '  shade ' + (window.__wildShade ?? 0.85).toFixed(2) +
+                              '  wall ' + (window.__wingTune?.wall ?? 1).toFixed(2) +
+                              '  berm ' + (window.__wingTune?.fg ?? 1).toFixed(2) +
+                              (window.__wingTune?.off ? ' (wings OFF)' : '');
       };
       mk('top −', () => { window.__facadeTune.above = Math.max(0.1, cur('above', 1) - 0.05); showTune(); });
       mk('top +', () => { window.__facadeTune.above = Math.min(2.0, cur('above', 1) + 0.05); showTune(); });
@@ -373,6 +376,14 @@ const _boot = () => {
       window.__wildShade = window.__wildShade ?? 0.85;
       mk('shade −', () => { window.__wildShade = Math.max(0, window.__wildShade - 0.05); showTune(); });
       mk('shade +', () => { window.__wildShade = Math.min(1, window.__wildShade + 0.05); showTune(); });
+      // Wing walls / foreground berms beside the Mt Baker + Mercer faces.
+      // 1.00 = sized so the wall's inner edge matches the face's shoulder.
+      window.__wingTune = window.__wingTune || { wall: 1, fg: 1, off: false };
+      mk('wall −', () => { window.__wingTune.wall = Math.max(0.2, window.__wingTune.wall - 0.05); showTune(); });
+      mk('wall +', () => { window.__wingTune.wall = Math.min(2.5, window.__wingTune.wall + 0.05); showTune(); });
+      mk('berm −', () => { window.__wingTune.fg   = Math.max(0.2, window.__wingTune.fg   - 0.05); showTune(); });
+      mk('berm +', () => { window.__wingTune.fg   = Math.min(2.5, window.__wingTune.fg   + 0.05); showTune(); });
+      mk('wings',  () => { window.__wingTune.off  = !window.__wingTune.off; showTune(); });
       bar.appendChild(tuneTag);
       showTune();
       const mileTag = document.createElement('span');

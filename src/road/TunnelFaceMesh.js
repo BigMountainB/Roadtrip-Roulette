@@ -53,19 +53,34 @@ import { tunnelArtEnabled } from '../constants.js';
 // width alone and aspect ratio decided where the arch landed vertically, so
 // the concrete beam floated above the tunnel mouth instead of framing it.
 export const PLATES = {
+  // FULL COMPOSITES (owner, 2026-08-12). Portal, wing walls and roadside berms
+  // are authored into one plate, so none of the runtime assembly runs for these
+  // two: no seam anchoring, no pilaster matching, no height caps, no mirroring.
+  // What the owner composes is what draws.
+  //
+  // legs / span / above are all 1.00 deliberately. Those knobs squash the band
+  // below the opening ceiling to force it onto the projected mouth — on a
+  // composite that band contains the composed walls and berms too, so anything
+  // but 1.00 would compress the whole assembly, not just the jambs.
+  //
+  // openL/openR/openT are TRACED from each PNG's alpha: the transparent hole
+  // that reaches the bottom edge and is bounded by opaque pixels on both sides
+  // (the outer sky margin is excluded). Note the opening is NOT plate-centred
+  // in either — u≈0.480 on both — which is why the fit registers on openL/openR
+  // rather than assuming a centred hole.
   mt_baker: {
     texture: 'tunnel_face_mt_baker',
-    openL: 0.2687, openR: 0.7319,
-    openT: 0.6011,          // opening is the bottom 39.9% of the plate
-    // Dialled in on the live approach, owner 2026-08-11.
-    aboveScale: 1.00,       // deck/hillside at true scale — squashing it read as broken trees
-    legsScale:  0.55,       // shorter columns; the portal was too tall
-    spanScale:  0.85,       // legs pulled in to meet the interior walls
+    openL: 0.3726, openR: 0.5889,
+    openT: 0.5707,
+    aspect: 841 / 5644,     // 5644x841 composite — NOT the 1600x900 face aspect
+    naturalFit: true,       // art defines the mouth height, not the projection
   },
   mercer_lid: {
     texture: 'tunnel_face_mercer_lid',
-    openL: 0.2087, openR: 0.7887,
-    openT: 0.7411,          // bottom 25.9% — a much lower, wider profile
+    openL: 0.3453, openR: 0.6150,
+    openT: 0.5973,
+    aspect: 807 / 4080,     // 4080x807 composite
+    naturalFit: true,
   },
   // Twin openings with a solid pier between them. The fit uses the COMBINED
   // span so the pier lands on the road median; the two procedural arch masks
@@ -125,6 +140,51 @@ export const PLATES = {
 
 const PLATE_ASPECT = 900 / 1600;   // all three masters share it
 
+/** Piecewise-linear lookup along a [v, u] silhouette, clamped at both ends.
+ *  Contours are short (4-9 points) and sorted by v, so a straight scan is
+ *  cheaper than anything cleverer and allocates nothing. */
+function lerpContour(pts, v) {
+  if (v <= pts[0][0]) return pts[0][1];
+  const last = pts[pts.length - 1];
+  if (v >= last[0]) return last[1];
+  for (let i = 1; i < pts.length; i++) {
+    const b = pts[i];
+    if (b[0] < v) continue;
+    const a = pts[i - 1];
+    const span = (b[0] - a[0]) || 1;
+    return a[1] + (b[1] - a[1]) * ((v - a[0]) / span);
+  }
+  return last[1];
+}
+
+/** Wing walls and foreground berms flanking the two BORED portals.
+ *
+ *  The wildlife crossing has no entry: it is a free-standing twin-arch
+ *  overpass with earth mounded either side, so there is no retaining wall to
+ *  flank it — and the owner scoped this to Mt Baker and Mercer.
+ *
+ *  ALL NUMBERS BELOW ARE TRACED FROM EACH PNG'S ALPHA, because the eight
+ *  plates were not authored to a shared spec: canvases are 1254², 1536×1024
+ *  and 1024×1536, padding differs per plate, and the ground line lands
+ *  anywhere from v=0.73 to v=0.98 while the faces bottom out at v=0.999.
+ *  Nothing here can be a shared constant.
+ *
+ *  Columns are sampled inward from each plate's inner edge until one is
+ *  "substantial" (opaque over >20% of the canvas height) — the outermost
+ *  columns are foliage wisps, not the concrete, and anchoring on them put the
+ *  attach point up to 3% of the plate away from the wall body.
+ *
+ *  `face*` is where on the FACE plate a wing attaches: `u` the outer edge of
+ *  its concrete, `topV` the shoulder height there. A wing is sized so its own
+ *  inner edge is exactly that tall, which is what makes the tops meet.
+ *  `aspect` is H/W of the master, so the plate is never stretched.
+ */
+// Wing walls / berms are SUPERSEDED for Mt Baker and Mercer — both now ship as
+// full composites (see PLATES above), which carry their own walls and berms.
+// The renderer below is left in place, unused, until the composites are
+// confirmed good on the road; strip it and the eight wing asset keys then.
+export const WINGS = {};
+
 // Subdivision. Vertices sit at a single depth per column, so affine
 // interpolation across a cell is very nearly correct; the grid exists so the
 // plate can BEND with the projected geometry, and to keep any residual affine
@@ -132,6 +192,11 @@ const PLATE_ASPECT = 900 / 1600;   // all three masters share it
 // per facade — trivial next to the road itself).
 const COLS = 6;
 const ROWS = 4;
+
+// Roadside strips. 2 across is all their width needs; the depth rows are what
+// carry the curve, so they get 8 (the art spec's floor is 6).
+const STRIP_COLS = 2;
+const STRIP_ROWS = 8;
 
 /** Gate lives in constants.tunnelArtEnabled(): ON by default on a local dev
  *  host, OFF in production, overridable with ?tunnelart=1 / ?tunnelart=0.
@@ -187,7 +252,7 @@ export class TunnelFaceMesh {
       // draw on _uiCam, which renders after the main camera — so no depth on
       // the main camera can put this in front of them (owner screenshot showed
       // it half-hidden behind the pause button).
-      this._hudText = this.scene.add.text(6, 250, '', {
+      this._hudText = this.scene.add.text(120, 210, '', {
         fontSize: '10px', fontFamily: 'monospace',
         color: '#00ff88', backgroundColor: '#000000cc', padding: { x: 4, y: 2 },
         wordWrap: { width: 300 },
@@ -202,31 +267,40 @@ export class TunnelFaceMesh {
   /** Build once, reuse forever. Returns null if the mesh can't be made, which
    *  latches the plate to the procedural fallback for the rest of the run. */
   _ensure(plateKey, depth) {
-    let mesh = this.meshes.get(plateKey);
+    return this._ensureMesh(plateKey, PLATES[plateKey]?.texture, COLS, ROWS, depth);
+  }
+
+  /** Build a subdivided, UV-mapped quad once and reuse it forever.
+   *  Shared by the face plates (6×4, so they can bend with the projection) and
+   *  the wings (1×1 — they are flat quads in the facade plane, so subdividing
+   *  them would only cost vertices). Returns null if construction throws,
+   *  which latches that mesh off for the rest of the run. */
+  _ensureMesh(id, textureKey, cols, rows, depth) {
+    let mesh = this.meshes.get(id);
     if (mesh) return mesh;
+    if (!textureKey) return null;
 
     try {
-      const plate = PLATES[plateKey];
       const verts = [];   // x, y pairs — filled per frame, values here are dummy
       const uvs   = [];
       const idx   = [];
 
-      for (let r = 0; r <= ROWS; r++) {
-        for (let c = 0; c <= COLS; c++) {
+      for (let r = 0; r <= rows; r++) {
+        for (let c = 0; c <= cols; c++) {
           verts.push(0, 0);
-          uvs.push(c / COLS, r / ROWS);
+          uvs.push(c / cols, r / rows);
         }
       }
-      const at = (c, r) => r * (COLS + 1) + c;
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
+      const at = (c, r) => r * (cols + 1) + c;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
           // Two triangles per cell, counter-clockwise.
           idx.push(at(c, r), at(c + 1, r), at(c + 1, r + 1));
           idx.push(at(c, r), at(c + 1, r + 1), at(c, r + 1));
         }
       }
 
-      mesh = this.scene.add.mesh(0, 0, plate.texture);
+      mesh = this.scene.add.mesh(0, 0, textureKey);
       mesh.addVertices(verts, uvs, idx);
       // Identity transform so vertex x/y are raw screen pixels (see header).
       mesh.setSize(1, 1);
@@ -253,14 +327,263 @@ export class TunnelFaceMesh {
       this.scene._worldObjects?.push(mesh);
       this.scene._uiCam?.ignore?.(mesh);
 
-      this.meshes.set(plateKey, mesh);
+      this.meshes.set(id, mesh);
       return mesh;
     } catch (err) {
-      console.warn(`[TunnelFaceMesh] ${plateKey} mesh construction failed — ` +
+      console.warn(`[TunnelFaceMesh] ${id} mesh construction failed — ` +
                    `falling back to the procedural facade.`, err);
-      this._failed.add(plateKey);
+      this._failed.add(id);
       return null;
     }
+  }
+
+  /**
+   * Wing walls + foreground berms, flanking a face plate that has just drawn.
+   *
+   * Called from update() with that frame's own projX/projY, so a wing cannot
+   * drift from the face it is attached to — the same reason the interior
+   * stencil is projected there rather than recomputed.
+   *
+   * THE FIT, for each part:
+   *   • its inner edge lands on the face's outer concrete edge  (side)
+   *   • its own base line lands on the tunnel ground line       (base)
+   *   • it is scaled so its height AT that inner edge equals the face's
+   *     shoulder height there, so the two tops meet
+   *   • aspect is preserved throughout — the masters are never stretched
+   * Walls take that height as-is; berms take `scale` × it, since a berm has no
+   * feature that must meet the face.
+   */
+  _drawWings(plateKey, { projX, projY, groundY, plateTop, alpha, depth, sampleRoad, tunnelN }) {
+    const wing = WINGS[plateKey];
+    if (!wing) return;                    // wildlife has no wings by design
+    const tune = globalThis.__wingTune ?? {};
+    if (tune.off) { this._hideWings(plateKey); return; }
+
+    // One line of truth per wing, same reason the facade has one: chasing
+    // "I don't see them at all" by eye across an approach is not a plan.
+    const status = [];
+    this._wingStatus = status;
+    // Outer screen edge of each wall, filled as the walls draw. Walls are
+    // listed before berms, so an outboard berm always finds its wall.
+    const outerEdge = { L: null, R: null };
+
+    for (const part of wing.parts) {
+      const id = `${plateKey}:${part.id}`;
+      if (!this.scene.textures?.exists(part.texture)) { status.push(`${part.id}=NOTEX`); continue; }
+      // Berms sit in FRONT of the walls, walls just behind the face — all
+      // still under the scenery depth the caller handed down, so the occlusion
+      // contract that keeps buildings in front of the portal is untouched.
+      const d = depth + (part.fg ? 0.02 : 0.01);
+
+      if (part.plane === 'road') {
+        this._drawRoadStrip(id, part, { sampleRoad, tunnelN, alpha, depth: d });
+        continue;
+      }
+
+      // Walls bend with the projection, so they carry real subdivision (the
+      // art spec's 4×3); the flat berms stay single quads.
+      const mesh = this._ensureMesh(id, part.texture, part.fg ? 1 : 4, part.fg ? 1 : 3, d);
+      if (!mesh) continue;
+
+      // TWO-POINT FIT against the face's edge PILASTER.
+      //
+      // The first version anchored on each plate's outermost opaque column and
+      // sized the wall off the face's natural height. Both were wrong: the
+      // outermost opaque column is foliage, not structure — the face's real
+      // concrete edge is at u=0.2219, not 0.0350, so the walls attached ~12%
+      // of the plate width (~150 px on screen) outboard of anything solid and
+      // visibly floated free of the portal.
+      //
+      // Anchors are now the tallest CONTIGUOUS run of concrete-coloured pixels
+      // in each plate's inner band — low saturation, no green cast, mid
+      // brightness. That finds the pilaster on both plates, and the numbers
+      // come out symmetric left-to-right (Mt Baker: 0.2219/0.7875, spans
+      // 0.554/0.547), which the alpha-based ones never did.
+      //
+      // Pinning the wall's pilaster TOP and BASE onto the face's fixes scale
+      // and position together, with no free parameter to guess — and because
+      // both ends ride projY, the seam holds through the piecewise squash that
+      // `legs` applies, which is what defeated the previous single-point fit.
+      const anchor  = part.side === 'L' ? wing.faceL : wing.faceR;
+      const attachX = projX(anchor.u);
+      const aTop    = projY(anchor.topV);
+      const aBase   = projY(anchor.baseV);
+      const k       = (part.scale ?? 1) * (tune[part.fg ? 'fg' : 'wall'] ?? 1);
+      const want    = (aBase - aTop) * k;
+      const bodyV   = part.baseV - part.topV;
+      if (!(bodyV > 0.001) || !(want > 1)) { mesh.setVisible(false); continue; }
+
+      // CAPPED AT THE FACADE'S OWN TOP.
+      //
+      // Matching the wall's concrete to the face's pilaster is right in
+      // principle, but that pilaster is squashed by `legs` while the wall art
+      // is not, so the scale it implies pushed the wall plate ABOVE the portal
+      // it flanks (36 vs 52 on the owner's frame — a wing standing taller than
+      // the tunnel). A wing wall is subordinate to its portal: it may reach the
+      // facade's top edge and no further. The base stays planted, so the cap
+      // takes the excess off the head, which is where it belongs.
+      let plateH = want / bodyV;            // full master height, in screen px
+      if (!part.fg && plateTop != null && part.baseV > 0.01) {
+        // Cap at the FACADE PLATE TOP — owner's pick against their reference
+        // composite, where the wings' tree line sits level with the portal's
+        // and nothing rises above it.
+        //
+        // Not the concrete parapet: capping there shrank the wings to 87 px
+        // and threw away their canopy entirely, which is not what the
+        // reference shows. Not uncapped either: that put their tops 15 px
+        // over the portal.
+        //
+        // Only plateH is clamped, and plateW is derived from it through
+        // part.aspect, so a capped wing is the same artwork at a smaller size
+        // — never a squashed one. The base stays planted on the road line, so
+        // the reduction comes off the head.
+        plateH = Math.min(plateH, (groundY - plateTop) / part.baseV);
+      }
+      const plateW = plateH / part.aspect;  // aspect = H/W, so this never stretches
+      // EVERY wing stands on the road line, walls included.
+      //
+      // Hanging a wall from the face's pilaster top left it floating ~5 px
+      // clear of the ground, because the face's concrete stops at v=0.9556
+      // while the road line is v=0.9989. Structures share a ground plane; they
+      // do not share a ceiling. Planting the base also means the `wall` knob
+      // scales about the foot rather than the head, so dialling the height no
+      // longer lifts the wall off the terrain.
+      const topY = groundY - part.baseV * plateH;
+      // Outboard berms hang off the wall's far edge; everything else registers
+      // against the face. Falls back to the face anchor if the wall on that
+      // side did not draw, so a missing wall can never strand a berm offscreen.
+      let leftX;
+      if (part.outboard && outerEdge[part.side] != null) {
+        leftX = part.side === 'L' ? outerEdge.L - plateW : outerEdge.R;
+      } else {
+        leftX = attachX - part.u * plateW;
+      }
+      if (!part.fg) outerEdge[part.side] = part.side === 'L' ? leftX : leftX + plateW;
+
+      // SEAM TIED PER ROW, not at one column.
+      //
+      // Every row's inner-edge vertex is placed ON the face's outer concrete
+      // silhouette at the matching height, and the rest of the row is offset
+      // from it by the wall's own local width. Where the wall's inner edge
+      // is, x reduces exactly to projX(face edge) — so the seam closes at
+      // every height instead of only at whatever column was anchored.
+      // Size still comes from the pilaster fit above; only x follows the edge.
+      // The tie is WEIGHTED toward the seam so it does not skew the whole
+      // plate. Applied flat, it slid the rows 229 px across a 526 px height —
+      // a 44% lean through artwork that is meant to read as a flat concrete
+      // face, with its vertical casting joints visibly tilted. The face's
+      // silhouette wanders that much because it includes the sloping hillside
+      // above the pilaster, not because the wall should lean with it.
+      //
+      // So: full deviation at the inner edge (seam still exact), falling off
+      // as a cube toward the outer edge, which confines the distortion to a
+      // narrow band at the join and leaves the bulk of the wall rigid.
+      const canTie = !!tune.tie && part.inner?.length && anchor.edge?.length;
+      const power  = tune.tie || 3;
+      // Reference the mid-band so the deviation is centred rather than
+      // measured from one end.
+      const uRef = canTie
+        ? lerpContour(anchor.edge, anchor.topV + 0.5 * (anchor.baseV - anchor.topV))
+        : 0;
+      // Mirror in UV space, once. The artwork on disk is untouched.
+      if (part.mirror && !mesh._mirrored) {
+        for (const vert of mesh.vertices) vert.u = 1 - vert.u;
+        mesh._mirrored = true;
+      }
+      for (const vert of mesh.vertices) {
+        if (canTie) {
+          const t    = (vert.v - part.topV) / bodyV;              // 0 at pilaster top → 1 at its base
+          const vF   = anchor.topV + t * (anchor.baseV - anchor.topV);
+          const uF   = lerpContour(anchor.edge, vF);              // face silhouette here
+          const wIn  = lerpContour(part.inner, vert.v);           // wall's own inner edge here
+          // 1 at the wall's inner edge → 0 at its outer edge.
+          const span = part.side === 'L' ? wIn : (1 - wIn);
+          const near = part.side === 'L' ? vert.u : (1 - vert.u);
+          const w    = span > 0.001 ? Math.pow(Math.min(1, Math.max(0, near / span)), power) : 0;
+          vert.x = projX(uRef) + (vert.u - wIn) * plateW + (projX(uF) - projX(uRef)) * w;
+        } else {
+          vert.x = leftX + plateW * vert.u;
+        }
+        vert.y = -(topY + plateH * vert.v);   // Mesh flips Y, same as the face
+        vert.alpha = alpha;
+      }
+      mesh.setDepth(d);
+      mesh.setAlpha(alpha);
+      mesh.setVisible(true);
+      // Real drawn size, straight into the readout. "Did my change land?" has
+      // cost several round-trips of the owner reloading and reporting "looks
+      // the same"; a number on screen answers it from the same screenshot.
+      status.push(`${part.id}=${plateW.toFixed(0)}x${plateH.toFixed(0)}`);
+    }
+  }
+
+  /**
+   * A roadside verge strip, laid in the ROAD plane and running from the portal
+   * toward the player.
+   *
+   * Every depth row asks Road for the projected shoulder edge at that depth
+   * and places the strip just outside it, so the strip inherits the road's
+   * curve and the camera's lateral offset for free — the two can never drift.
+   * The far row lands on the wall's base at the portal; the near row runs off
+   * the bottom of the view.
+   *
+   * UVs: the plate's LONG (y) axis is road depth, its short (x) axis is the
+   * strip's width, and `roadEdge` says which end of that width is the concrete
+   * curb. That flag differs between the left and right plates, so neither is a
+   * mirror of the other and the curb faces the roadway on both sides.
+   */
+  _drawRoadStrip(id, part, { sampleRoad, tunnelN, alpha, depth }) {
+    const mesh = this._ensureMesh(id, part.texture, STRIP_COLS, STRIP_ROWS, depth);
+    if (!mesh) return;
+    if (typeof sampleRoad !== 'function' || !(tunnelN > 0)) { mesh.setVisible(false); return; }
+
+    const tune = globalThis.__wingTune ?? {};
+    // Strip width as a fraction of the road half-width at the same depth, so it
+    // stays a fixed WORLD width instead of a fixed pixel one.
+    const widthFrac = (tune.strip ?? 1) * 0.55;
+    const [aLo, aHi] = part.across;
+    const left = part.side === 'L';
+
+    // The grid parameters have to be cached BEFORE the UVs are remapped: u/v
+    // start out as the grid position, but once they carry texture coordinates
+    // they can no longer say where on the grid a vertex sits, and driving the
+    // projection off them would place frame 2 using frame 1's texture coords.
+    // (addVertices de-indexes, so vertex order can't stand in for the grid
+    // either — the same trap that smeared the first facade into the corner.)
+    if (!mesh._uvMapped) {
+      for (const vert of mesh.vertices) {
+        const gu = vert.u, gv = vert.v;
+        vert._gu = gu; vert._gv = gv;
+        // u=0 is the strip's ROAD edge; which plate column that is differs
+        // per side, which is why these two are not mirrors.
+        vert.u = part.roadEdge === 'hi' ? (aHi - (aHi - aLo) * gu)
+                                        : (aLo + (aHi - aLo) * gu);
+        vert.v = gv;          // plate y = road depth, portal → player
+      }
+      mesh._uvMapped = true;
+    }
+
+    for (const vert of mesh.vertices) {
+      // _gv runs 0 at the portal → 1 at the player; _gu runs across the strip.
+      const n = tunnelN * (1 - vert._gv);
+      const e = sampleRoad(n);
+      if (!e) { vert.alpha = 0; continue; }
+      const half   = (e.rightX - e.leftX) / 2;
+      const innerX = left ? e.leftX : e.rightX;
+      const outerX = innerX + (left ? -1 : 1) * half * widthFrac;
+      vert.x = innerX + (outerX - innerX) * vert._gu;   // _gu=0 at the road edge
+      vert.y = -e.y;
+      vert.alpha = alpha;
+    }
+    mesh.setDepth(depth);
+    mesh.setAlpha(alpha);
+    mesh.setVisible(true);
+  }
+
+  _hideWings(plateKey) {
+    const wing = WINGS[plateKey];
+    if (!wing) return;
+    for (const part of wing.parts) this.meshes.get(`${plateKey}:${part.id}`)?.setVisible(false);
   }
 
   /**
@@ -330,7 +653,7 @@ export class TunnelFaceMesh {
     // interior then fills the opening exactly, instead of stopping at the old
     // lintel and leaving sky in the top of the arch.
     // The plate's TRUE height at this width — what preserving aspect would give.
-    const natH = plateW * PLATE_ASPECT;
+    const natH = plateW * (plate.aspect ?? PLATE_ASPECT);
 
     // PIECEWISE VERTICAL FIT (owner's idea: tie many points, don't scale a
     // rigid rectangle).
@@ -358,8 +681,17 @@ export class TunnelFaceMesh {
     // _tunnelMouthRect), so the painted arch and the tunnel behind it stay
     // locked together at any setting.
     const legsTune = (globalThis.__facadeTune?.legs ?? null) ?? plate.legsScale ?? 1;
-    const baseTopY = (mouthTopY != null && mouthTopY < groundY) ? mouthTopY
-                                                                : groundY - natH * (1 - plate.openT);
+    // naturalFit: the PNG's own opening height wins, and the tunnel registers
+    // to IT rather than the reverse. Binding to the projected lintel squeezed
+    // the plate (0.89 on Mt Baker, 0.35 before the composites), and on a
+    // composite that squeeze lands on the composed walls and berms too. The
+    // fitted opening is returned to Road, which republishes it as
+    // _tunnelMouthRect — so the interior mask, the shell and sprite culling all
+    // follow the artwork instead of fighting it.
+    const baseTopY = plate.naturalFit
+      ? groundY - natH * (1 - plate.openT)
+      : ((mouthTopY != null && mouthTopY < groundY) ? mouthTopY
+                                                    : groundY - natH * (1 - plate.openT));
     const openingTopY = groundY - (groundY - baseTopY) * legsTune;
     // Hillside above the opening, at the art's TRUE scale — times a live tuning
     // factor. The owner's read is that the concrete sits too tall/high above
@@ -425,6 +757,13 @@ export class TunnelFaceMesh {
     const shapes = plate.openings?.map(
       poly => poly.map(([u, v]) => ({ x: projX(u), y: projY(v) })));
 
+    // Wings ride the SAME projX/projY this frame resolved, so dialling the
+    // face (top / legs / span) carries them with it automatically.
+    this._drawWings(plateKey, {
+      projX, projY, groundY, plateTop, alpha, depth,
+      sampleRoad: geom.sampleRoad, tunnelN: geom.tunnelN,
+    });
+
     globalThis.__facadeLast = { plate: plateKey, above: aboveTune, legs: legsTune, span: spanTune };
     mesh.setDepth(depth);
     mesh.setVisible(true);
@@ -438,7 +777,10 @@ export class TunnelFaceMesh {
               `plate=${plateLeft.toFixed(0)},${plateTop.toFixed(0)} ${plateW.toFixed(0)}x${plateH.toFixed(0)}` +
               ` openTop=${openingTopY.toFixed(0)} top=${aboveTune.toFixed(2)} legs=${legsTune.toFixed(2)}` +
               ` span=${spanTune.toFixed(2)}` +
-              ` openingStretch=${stretch.toFixed(2)}`);
+              ` openingStretch=${stretch.toFixed(2)}\n` +
+              `wings[fitB]: ${WINGS[plateKey]
+                ? (this._wingStatus?.join(' ') || '(none drew)')
+                : '(none declared for this plate)'}`);
     return { x: spanL, y: openingTopY, w: spanW, h: groundY - openingTopY, shapes };
   }
 

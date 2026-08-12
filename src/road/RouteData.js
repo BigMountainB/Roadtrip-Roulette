@@ -635,6 +635,12 @@ export function buildRoute(count = ROUTE_SEGS) {
   const MT_BAKER_TUNNEL_RANGE     = [4.9, 5.6];   // west portal → east portal
   const MURROW_BRIDGE_RANGE       = [5.7, 7.2];   // Lacey V. Murrow floating bridge
   const MERCER_LID_TUNNEL_RANGE   = [7.4, 7.9];   // covered lid across Mercer Island
+  // Second half of the Murrow-bridge → lid approach (bridge ends 7.2, lid
+  // starts 7.4). Homes and trees are stripped here so the lid's wing walls are
+  // actually visible — they sit at the portal's distance and nearer scenery was
+  // drawing straight over them. First half stays planted. See the filter where
+  // segment sprites are finalised.
+  const MERCER_LID_APPROACH_CLEAR = [7.3, 7.4];
   const EAST_CHANNEL_BRIDGE_RANGE = [9.8, 10.2];  // Mercer → Bellevue
   // Suspension bridge across the Columbia just past Vantage.  Real
   // life has a steel girder span here, but we want a proper
@@ -2126,6 +2132,30 @@ export function buildRoute(count = ROUTE_SEGS) {
     // along the constantly-left-pulling shoulder.  They now ONLY appear
     // at on/off-ramps near each rest stop — see the rest-stop loop
     // below where they're seeded into the ramp window.
+
+    // ── Mercer lid approach: clear the sightline to the portal ─────────
+    // The lid's wing walls are real structures at the tunnel's distance, so
+    // Mercer Island's frontage homes and mature firs — which sit NEARER and
+    // therefore draw over them — hid the walls almost completely (owner,
+    // 2026-08-12: the wings reported as drawing but nothing was visible).
+    //
+    // The Murrow bridge ends at 7.2 and the lid starts at 7.4, so the whole
+    // approach is 0.2 mi. Owner's call: keep the first half planted, clear the
+    // second, which gives the island its character coming off the bridge and
+    // then opens up as the portal comes into view.
+    //
+    // Filtered here, at the single point where a segment's sprites are
+    // finalised, rather than at each of the four places that plant them (city
+    // cycle clusters, frontage buildings, the curbside tree row, and the
+    // Mercer forest lots) — one gate cannot fall out of step with itself.
+    // Signs, vices and pickups are deliberately untouched.
+    if (mileNow >= MERCER_LID_APPROACH_CLEAR[0] && mileNow < MERCER_LID_APPROACH_CLEAR[1]
+        && sprites.length) {
+      for (let s = sprites.length - 1; s >= 0; s--) {
+        const t = sprites[s]?.type;
+        if (t === 'tree' || t === 'shrub' || t === 'building') sprites.splice(s, 1);
+      }
+    }
 
     segments.push({
       index:     i,
