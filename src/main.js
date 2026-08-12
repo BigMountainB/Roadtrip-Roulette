@@ -332,6 +332,26 @@ const _boot = () => {
       mk('.25 ▶', () => window.__rtrWarp?.fwd());
       mk('Mt Baker', () => window.__rtrWarp?.goto(4.35));
       mk('Mercer',   () => window.__rtrWarp?.goto(6.9));
+      // Live facade tuning — dial the concrete band above the tunnel mouth
+      // without a rebuild. Read every frame by TunnelFaceMesh.
+      window.__facadeTune = window.__facadeTune || { above: 1, legs: 1, span: 1 };
+      const tuneTag = document.createElement('span');
+      tuneTag.style.color = '#fd6';
+      const showTune = () => {
+        tuneTag.textContent = 'top ' + window.__facadeTune.above.toFixed(2) +
+                              '  legs ' + (window.__facadeTune.legs ?? 1).toFixed(2) +
+                              '  span ' + (window.__facadeTune.span ?? 1).toFixed(2);
+      };
+      mk('top −', () => { window.__facadeTune.above = Math.max(0.1, window.__facadeTune.above - 0.05); showTune(); });
+      mk('top +', () => { window.__facadeTune.above = Math.min(2.0, window.__facadeTune.above + 0.05); showTune(); });
+      mk('legs −', () => { window.__facadeTune.legs = Math.max(0.1, (window.__facadeTune.legs ?? 1) - 0.05); showTune(); });
+      mk('legs +', () => { window.__facadeTune.legs = Math.min(2.0, (window.__facadeTune.legs ?? 1) + 0.05); showTune(); });
+      mk('span −', () => { window.__facadeTune.span = Math.max(0.3, (window.__facadeTune.span ?? 1) - 0.03); showTune(); });
+      mk('span +', () => { window.__facadeTune.span = Math.min(1.6, (window.__facadeTune.span ?? 1) + 0.03); showTune(); });
+      mk('reset',  () => { window.__facadeTune.above = 1; window.__facadeTune.legs = 1; window.__facadeTune.span = 1; showTune(); });
+      mk('outline', () => { window.__facadeTune.outline = !window.__facadeTune.outline; });
+      bar.appendChild(tuneTag);
+      showTune();
       const mileTag = document.createElement('span');
       mileTag.style.cssText = 'margin-left:auto;color:#8cf';
       bar.appendChild(mileTag);
@@ -356,8 +376,43 @@ const _boot = () => {
       }
       window.addEventListener('error', e => add('error', ['[uncaught]', e.message, e.filename + ':' + e.lineno]));
       window.addEventListener('unhandledrejection', e => add('error', ['[promise]', String(e.reason)]));
-      const mount = () => document.body ? document.body.appendChild(box)
-                                        : setTimeout(mount, 50);
+      // ── Warp pedals ────────────────────────────────────────────────────
+      // B and N are keyboard warps, which don't exist on a phone. These are the
+      // same two jumps as fat, thumb-sized pads sitting just above the game's
+      // own BRAKE and GAS pedals — back on the left where the brake is, forward
+      // on the right where the accelerator is, so the muscle memory matches.
+      // They sit above the console box, which is why bottom is offset.
+      const pedal = (side, label, sub, fn) => {
+        const b = document.createElement('button');
+        b.innerHTML = `<div style="font-size:22px;line-height:1">${label}</div>` +
+                      `<div style="font-size:10px;opacity:.75">${sub}</div>`;
+        b.style.cssText =
+          'position:fixed;bottom:42vh;' + side + ':10px;z-index:2147483646;' +
+          'width:92px;height:72px;border-radius:14px;border:2px solid #7bdcff;' +
+          'background:rgba(4,16,28,.82);color:#7bdcff;font-family:monospace;' +
+          'font-weight:bold;display:flex;flex-direction:column;align-items:center;' +
+          'justify-content:center;gap:2px;touch-action:manipulation;' +
+          '-webkit-tap-highlight-color:transparent';
+        const fire = (e) => {
+          e.preventDefault(); e.stopPropagation();
+          fn();
+          b.style.background = 'rgba(30,90,130,.95)';
+          setTimeout(() => { b.style.background = 'rgba(4,16,28,.82)'; }, 110);
+        };
+        b.addEventListener('pointerdown', fire);
+        return b;
+      };
+      const padBack = pedal('left',  '◀', 'WARP 0.25', () => window.__rtrWarp?.back());
+      const padFwd  = pedal('right', '▶', 'WARP 0.25', () => window.__rtrWarp?.fwd());
+      mk('pedals', () => {
+        const on = padBack.style.display !== 'none';
+        padBack.style.display = padFwd.style.display = on ? 'none' : 'flex';
+      });
+
+      const mount = () => {
+        if (!document.body) return setTimeout(mount, 50);
+        document.body.append(box, padBack, padFwd);
+      };
       mount();
     }
   } catch (_) { /* never let the debug overlay break boot */ }

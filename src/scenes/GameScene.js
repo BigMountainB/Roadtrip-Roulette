@@ -1349,6 +1349,14 @@ export class GameScene extends Phaser.Scene {
       try { return new URLSearchParams(window.location.search).get('dev') === '1'; }
       catch (_) { return false; }
     })();
+    // Warps answer to ?devtools=1 as well as ?dev=1. They are pure position
+    // changes with no state side-effects, and ?devtools=1 already means "I am
+    // debugging" — making someone stack a second flag to move along the route
+    // is friction for no safety gain. Everything else stays on _devEnabled.
+    this._warpEnabled = this._devEnabled || (() => {
+      try { return new URLSearchParams(window.location.search).get('devtools') === '1'; }
+      catch (_) { return false; }
+    })();
     this._debugGfx = this.add.graphics().setDepth(19).setVisible(false);
     // F2 painted-edge overlay — independent of F3.  Lives on its own
     // graphics layer so the user can see ONLY the yellow / magenta /
@@ -1677,7 +1685,7 @@ export class GameScene extends Phaser.Scene {
     // through without restarting the run.  Pure position rewind — no
     // gas drain, no cop reset (matches DEV WARP convention).
     this._backWarpHandler = (ev) => {
-      if (!this._devEnabled) return;
+      if (!this._warpEnabled) return;
       if (ev.key !== 'b' && ev.key !== 'B') return;
       if (!this.player) return;
       const dPos = (0.25 / TOTAL_ROUTE_MILES) * ROUTE_SEGS * SEG_LENGTH;
@@ -1693,7 +1701,7 @@ export class GameScene extends Phaser.Scene {
     // cop/state reset.  Capped at the final mile so we don't overshoot
     // the Pullman finish.
     this._fwdWarpHandler = (ev) => {
-      if (!this._devEnabled) return;
+      if (!this._warpEnabled) return;
       if (ev.key !== 'n' && ev.key !== 'N') return;
       if (!this.player) return;
       const dPos = (0.25 / TOTAL_ROUTE_MILES) * ROUTE_SEGS * SEG_LENGTH;
@@ -1713,7 +1721,7 @@ export class GameScene extends Phaser.Scene {
     // no gas drain, no cop reset.
     try {
       const devtools = new URLSearchParams(window.location.search).get('devtools') === '1';
-      if (devtools || this._devEnabled) {
+      if (this._warpEnabled) {
         const step = (0.25 / TOTAL_ROUTE_MILES) * ROUTE_SEGS * SEG_LENGTH;
         const maxPos = ROUTE_SEGS * SEG_LENGTH - SEG_LENGTH;
         window.__rtrWarp = {
@@ -14311,6 +14319,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Sampled once here rather than per layer — six identical calls a frame.
+    this._skyDarkness = TimeOfDay.darkness?.(mile) ?? 0;
+
     const segIdx  = Math.floor(this.player.position / SEG_LENGTH) % this.road.segments.length;
     const heading = this.road.segments[segIdx]?.heading ?? 0;
     const horizon = CAM.horizonY;
@@ -14366,11 +14377,25 @@ export class GameScene extends Phaser.Scene {
         // texture and cached, so nothing has to be baked into a table — which
         // matters, because the band art was re-exported three times in one day
         // and any table would have gone stale immediately.
+        // NIGHT (owner 2026-08-11).  Two problems, both from the bands being
+        // day-lit sprites at depth 1.15 while the star field paints into skyGfx
+        // at depth 0:
+        //
+        //   1. They were never darkened, so full-brightness daylight mountains
+        //      sat against a night sky. There IS no dark overlay to inherit —
+        //      the sky simply lerps its own colours toward NIGHT_TOP/NIGHT_FOG
+        //      — so the bands need their own tint. That is the "dark layer
+        //      over the biome images to help it blend".
+        //   2. They COVER the stars. Reaching y 32-70 left almost no sky for a
+        //      star field that already exists (Milky Way, named stars, planets,
+        //      moon). Shrinking the target height at night hands that sky back.
+        const _dark = Math.min(1, Math.max(0, this._skyDarkness ?? 0));
+        const _nightH = 1 - 0.32 * _dark;   // bands stand ~1/3 shorter at full night
         const _texH  = this.textures.get(key)?.source?.[0]?.height ?? BAND.h;
         const _cTop  = this._bandContentTop(key);
         const _rows  = _cTop == null ? 0 : _texH - _cTop;
         const s = _rows > 4
-          ? (BAND.target?.[layer] ?? 100) / _rows
+          ? ((BAND.target?.[layer] ?? 100) * _nightH) / _rows
           : (SCREEN_W / BAND.w) * (BAND.zoom?.[layer] ?? 1);   // fallback: fixed zoom
         if (ts.tileScaleX !== s) { ts.tileScaleX = s; ts.tileScaleY = s; }
         // Height comes from the TEXTURE, not BIOME_OVERRIDES.h.  north_bend
@@ -14403,8 +14428,24 @@ export class GameScene extends Phaser.Scene {
         // BAND.yOff seats each layer's base progressively below the horizon —
         // the depth stagger, and what covers the ~14 px skyFogMix strip the sky
         // gradient paints past the horizon (the "water" the owner spotted).
-        ts.y = horizon + (BAND.yOff?.[layer] ?? 0) + pitchOff * (0.55 - depthT * 0.35);
+        // PITCH LAG.  The per-layer factor used to span 0.55 (near) down to
+        // 0.27 (far) — a 0.28 differential.  Against the ±70 pitchOff clamp
+        // that is 19.6 px of relative movement, which on a long descent very
+        // nearly cancelled the 26 px yOff spread and stacked all three bands on
+        // one line (owner 2026-08-11: "they slowly lower until they are all
+        // overlapping and lined up at the bottom border" — measured at mi 120,
+        // pitchOff -70, spread collapsed 26 -> 6.4 px).
+        //
+        // Near terrain genuinely does shift more than distant terrain, so the
+        // differential is kept — just bounded to 0.10, i.e. at most 7 px of
+        // squeeze at the clamp. The spread can no longer close.
+        ts.y = horizon + (BAND.yOff?.[layer] ?? 0) + pitchOff * (0.55 - depthT * 0.10);
         ts.setAlpha(weight * sel.alpha * fogFade);
+        // Tint toward the night sky rather than dimming to black — a pure
+        // brightness cut reads as fog, a blue shift reads as moonlight.
+        ts.setTint(_dark > 0.02
+          ? lerpColor(0xFFFFFF, 0x39496B, _dark)
+          : 0xFFFFFF);
         ts.setVisible(true);
       }
     };

@@ -190,6 +190,37 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-11 (pt 9) — Bands stop collapsing on descents; night tint + sky for the stars
+Tests: 550 green, `vite build` clean.
+
+**Owner:** *"as you travel through the biome, the 3 images in the back slowly lower until they are
+all overlapping and lined up at the bottom border"* — and *"when the sun goes down we need more sky
+involved so we can see the stars ... if night is a dark layer, add it over the biome images."*
+
+**It was not distance through the biome — it was PITCH.** `ts.y` adds
+`pitchOff * (0.55 - depthT * 0.35)`, giving 0.27 for far, 0.363 for ridge, 0.55 for near. Against the
+±70 `pitchOff` clamp that 0.28 differential is **19.6 px of relative movement**, which very nearly
+cancels the 26 px `yOff` spread — near rises almost twice as fast as far, and it starts lowest.
+Measured through kittitas: spread 35.7 px at pitchOff +9.5, 21.5 at -41, and **6.4 px at the -70
+clamp**, all three effectively on one line. Long descents are common, so it reads as a slow drift.
+- **Differential bounded 0.35 -> 0.10.** Near terrain does genuinely shift more than distant terrain,
+  so the lag is kept — just capped at ~7 px of squeeze instead of 19.6. **Verified: spread now holds
+  20.4 px at the -70 clamp** (was 6.4) and 23.9 at -50.7 (was 18.8).
+
+**Night, two separate problems, both from the bands being day-lit sprites at depth 1.15 while the
+star field paints into `skyGfx` at depth 0:**
+1. **They were never darkened.** There is no dark overlay to inherit — the sky lerps its own colours
+   toward `NIGHT_TOP`/`NIGHT_FOG` — so full-brightness daylight mountains sat against a night sky.
+   Bands now tint toward `0x39496B` by `TimeOfDay.darkness`. A blue shift, not a brightness cut:
+   dimming toward black reads as fog, a blue shift reads as moonlight.
+2. **They covered the stars.** A full star field already exists (Milky Way, named stars, planets,
+   moon) but the bands reaching y 32-70 left almost no sky for it. Target height now scales by
+   `1 - 0.32 * darkness`, standing the bands ~1/3 shorter at full night.
+
+**Verified:** tint `0xffffff` day -> `0xbdc2ce` dusk -> `0x39496b` full dark; sky above the bands goes
+from **61 px in daylight to 99-107 px at night**.
+
+
 ### 2026-08-11 (pt 8) — Bands scale from MEASURED content height; north_bend vertical tiling fixed
 Tests: 550 green, `vite build` clean.
 

@@ -1973,6 +1973,14 @@ export class Road {
     // the facade is actually drawn (camera outside tunnel + valid
     // embankment projection + mouth resolvable at this distance).
     this._tunnelMouthRect = null;
+    // Hide the artwork HERE, not in _drawTunnelFacade — this function returns
+    // early when the camera is inside a tunnel or there is no projection at
+    // all, so a hide placed further down never runs on the frames that matter.
+    // That left the plate frozen at its last vertices and riding along with the
+    // player for over a mile past the portal (owner: "the facade stays until
+    // 6.8 miles along the bridge"). Visibility is asserted once per frame at
+    // the single entry point; a successful draw turns it back on.
+    this._tunnelFaces?.hideAll();
     if (!g) return;
     g.clear();
     const segLen = this.segments.length;

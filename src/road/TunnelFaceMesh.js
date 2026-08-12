@@ -148,6 +148,7 @@ export class TunnelFaceMesh {
       this.scene._worldObjects?.push(this._hudText);
       this.scene._uiCam?.ignore?.(this._hudText);
     }
+    this._lastHud = text;
     this._hudText.setText(text);
   }
 
@@ -252,9 +253,18 @@ export class TunnelFaceMesh {
     // The opening occupies openL..openR of the plate, so the full plate is
     // wider than the mouth by exactly that ratio. Aspect is preserved and the
     // plate is bottom-anchored to the tunnel ground line, per the art spec.
+    // Horizontal span of the painted opening. Defaults to the full projected
+    // mouth (outerL..outerR), but that span includes the procedural WALL band
+    // on each side, so the painted jambs can land wide of where the tunnel's
+    // interior walls actually are. Scaling about the mouth centre lets the legs
+    // be brought in to meet them.
+    const spanTune  = (globalThis.__facadeTune?.span ?? plate.spanScale ?? 1);
+    const mouthCx   = (outerL + outerR) / 2;
+    const spanW     = mouthW * spanTune;
+    const spanL     = mouthCx - spanW / 2;
     const openSpan  = plate.openR - plate.openL;
-    const plateW    = mouthW / openSpan;
-    const plateLeft = outerL - plate.openL * plateW;
+    const plateW    = spanW / openSpan;
+    const plateLeft = spanL - plate.openL * plateW;
 
     // VERTICAL: preserve the art's true aspect, and let the ARTWORK define the
     // mouth — the reverse of what this did first.
@@ -290,9 +300,27 @@ export class TunnelFaceMesh {
     //   • everything ABOVE keeps the art's true scale, so the concrete,
     //     hillside and trees are never distorted.
     // The seam is continuous because both halves share the lintel line.
-    const openingTopY = (mouthTopY != null && mouthTopY < groundY) ? mouthTopY
-                                                                  : groundY - natH * (1 - plate.openT);
-    const aboveH   = plate.openT * natH;        // hillside above, at TRUE scale
+    // The LEG band — opening ceiling down to the road, i.e. the columns either
+    // side of the opening. Pinned to the procedural mouth by default, but
+    // scalable: the owner would rather the legs carry any height reduction than
+    // the hillside, because squashed concrete is invisible and squashed trees
+    // are not. Shortening the legs lowers the opening's ceiling, and the
+    // interior mask follows it (this function's return value becomes
+    // _tunnelMouthRect), so the painted arch and the tunnel behind it stay
+    // locked together at any setting.
+    const legsTune = (globalThis.__facadeTune?.legs ?? plate.legsScale ?? 1);
+    const baseTopY = (mouthTopY != null && mouthTopY < groundY) ? mouthTopY
+                                                                : groundY - natH * (1 - plate.openT);
+    const openingTopY = groundY - (groundY - baseTopY) * legsTune;
+    // Hillside above the opening, at the art's TRUE scale — times a live tuning
+    // factor. The owner's read is that the concrete sits too tall/high above
+    // the mouth, which is the art-vs-geometry proportion difference showing up
+    // in the one band that is allowed to carry it. `__facadeTune.above` is
+    // adjustable from the ?devtools=1 bar so the value can be dialled in on a
+    // single drive instead of a rebuild per guess; bake the chosen number into
+    // PLATES[key].aboveScale once it looks right.
+    const aboveTune = (globalThis.__facadeTune?.above ?? plate.aboveScale ?? 1);
+    const aboveH   = plate.openT * natH * aboveTune;
     const plateTop = openingTopY - aboveH;
     const plateH   = groundY - plateTop;
     // Reported so the readout still shows how hard the opening band is working.
@@ -340,12 +368,35 @@ export class TunnelFaceMesh {
     mesh.setDepth(depth);
     mesh.setVisible(true);
     mesh.setAlpha(alpha);
+    // Optional bounds overlay (?devtools=1 → "outline"). Tells plate apart from
+    // scenery at a glance: there is a real concrete overpass near Mt Baker, and
+    // guessing which structure belongs to the artwork has cost several passes.
+    this._outline(plateLeft, plateTop, plateW, plateH, outerL, openingTopY, mouthW, groundY);
     this._hud(`facade: DRAWING ${plateKey} mouth=${outerL.toFixed(0)}..${outerR.toFixed(0)}` +
               ` x ${mouthTopY != null ? mouthTopY.toFixed(0) : '?'}..${groundY.toFixed(0)}\n` +
               `plate=${plateLeft.toFixed(0)},${plateTop.toFixed(0)} ${plateW.toFixed(0)}x${plateH.toFixed(0)}` +
-              ` openTop=${openingTopY.toFixed(0)} camScrollX=${(this.scene.cameras?.main?.scrollX ?? 0).toFixed(0)}` +
-              ` openingStretch=${stretch.toFixed(2)} (concrete 1.00)`);
-    return { x: outerL, y: openingTopY, w: mouthW, h: groundY - openingTopY };  // == the procedural mouth
+              ` openTop=${openingTopY.toFixed(0)} top=${aboveTune.toFixed(2)} legs=${legsTune.toFixed(2)}` +
+              ` span=${spanTune.toFixed(2)}` +
+              ` openingStretch=${stretch.toFixed(2)}`);
+    return { x: spanL, y: openingTopY, w: spanW, h: groundY - openingTopY };
+  }
+
+  /** MAGENTA = the whole plate, GREEN = its transparent opening (which should
+   *  sit exactly on the tunnel mouth). Drawn in world space, same as the mesh,
+   *  so it takes the camera scroll too. */
+  _outline(px, py, pw, ph, ox, oy, ow, groundY) {
+    const on = !!globalThis.__facadeTune?.outline;
+    if (!this._dbg) {
+      if (!on) return;
+      this._dbg = this.scene.add.graphics().setDepth(99999);
+      this.scene._worldObjects?.push(this._dbg);
+      this.scene._uiCam?.ignore?.(this._dbg);
+    }
+    this._dbg.clear();
+    this._dbg.setVisible(on);
+    if (!on) return;
+    this._dbg.lineStyle(2, 0xff00ff, 0.9).strokeRect(px, py, pw, ph);
+    this._dbg.lineStyle(2, 0x00ff66, 0.9).strokeRect(ox, oy, ow, groundY - oy);
   }
 
   /** Hide a plate without destroying it (out of range, or fell back). */
@@ -356,9 +407,18 @@ export class TunnelFaceMesh {
 
   hideAll() {
     for (const mesh of this.meshes.values()) mesh.setVisible(false);
+    this._dbg?.clear();
+    // The readout is frozen text, not a live query — leaving the last DRAWING
+    // line up made a hidden facade look like it was still rendering, which is
+    // exactly what made the "stays until 6.8 mi" bug hard to read.
+    if (this._hudText && this._lastHud !== '(no tunnel in range)') {
+      this._lastHud = '(no tunnel in range)';
+      this._hudText.setText('facade: (no tunnel in range)');
+    }
   }
 
   destroy() {
+    this._dbg?.destroy(); this._dbg = null;
     for (const mesh of this.meshes.values()) mesh.destroy();
     this.meshes.clear();
     this._failed.clear();
