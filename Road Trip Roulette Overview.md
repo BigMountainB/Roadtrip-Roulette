@@ -224,7 +224,7 @@ function's early-return, which otherwise always fires now that the bg URL is con
 and the music-app genre star in one chokepoint. The img carries no `src` attribute until the first
 sync (`:not([src]) { display:none }`), so there's no broken-image flash on load.
 
-### 2026-08-12 — Snow ground plates visible: whiteout fade removed, roadside hold matched to the road blanket
+### 2026-08-12 (pt 1) — Snow ground plates visible: whiteout fade removed, roadside hold matched to the road blanket
 
 Owner: the pass "and beyond" was the one region with no ground plates. Diagnosis: the four-stage
 roadside snow accumulation (GroundPlane `snowAmountAt`/`snowGroundAt`, landed in `cba522b`) was
@@ -246,6 +246,31 @@ accumulate. Two changes:
 Build 36→50 unchanged (patches in the verge from 36, ~2 mi before the road turns snowy). Not
 screenshot-verified (harness still doesn't exist — see 08-10 entry); verified by code path + syntax
 check; owner to playtest with `__warpTo(45/55/70/87)`.
+
+### 2026-08-12 (pt 0, 00:19) — Wildlife crossing: real roof, arch-shaped shade, snow accumulation
+Committed & pushed `cba522b`. (Entry backfilled — the commit carried Ch. 15 notes but no changelog
+entry of its own.)
+
+The crossing read as a **black hole on approach and a roofless gap up close** — four separate
+causes, none of them the dim value:
+1. **Interior shade** was a per-segment trapezoid from the flat ceiling plane at 0.62 alpha: the
+   arch tops got no shade, snow washed through, the pier was ignored, and from INSIDE (stencil
+   full-screen) it stacked on the tunnel dim → the blackout. Now ONE mask-clipped fill per frame in
+   `renderTunnelOverlay`, approach only.
+2. **Stencil vs plate arch mismatch** — stencil was Road's procedural sine arches while the plate
+   fitted with tunable `legs`; both leaked light (87% vs 84% width at half height, pier 13.3% vs
+   10%). Openings are now **traced from the PNG's alpha channel** and projected through the SAME
+   transform as the mesh vertices, so they can't drift again.
+3. **`EMB_MIN_DIST` cut the facade off 30 segments out** (a gate meant for mountain embankments) —
+   open sky where the bridge should be on final approach. Exempted; mask checks published arches
+   BEFORE the close-approach full-screen case so the shell can't paint over the deck.
+4. **Shell ceiling used the bore's `H_CEIL`** (4500), cutting a false soffit — the crossing's crown
+   sits 1.087·w2 above the road (~6950).
+
+Dim 0.12 → 0.30 (owner: 70% transparent). Plate baked `top 0.80 / legs 0.75 / span 1.00`. Also in
+this commit: progressive Snoqualmie roadside snow (4 stages, world-anchored repeating UVs,
+noise-masked dissolve, accumulation-keyed handoff — the fade bug the pt-1 snow entry above then
+fixed) and the three `snoqualmie_ground_*_1024.png` plates.
 
 ### 2026-08-11 (pt 11) — Radio-scan hold music; city landmarks scaled up; cross-shop buy-once fix
 All committed & pushed (`165f3c9`, `fd579f6`; shop fix rode an earlier commit this session).
