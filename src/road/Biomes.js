@@ -207,6 +207,14 @@ export function bandKey(biomeKey, layer) {
   return `bio_${biomeKey}_${layer}`;
 }
 
+/** Evening-specific Eastern Washington texture key. Day textures keep their
+ * original names so a future return trip can explicitly select them. */
+export function nightBandKey(biomeKey, layer) {
+  return `bio_${biomeKey}_${layer}_night`;
+}
+
+export const NIGHT_BIOMES = new Set(['columbia_irrigated', 'palouse_hills']);
+
 /**
  * Resolve the backdrop for a route mile.
  *
@@ -256,4 +264,13 @@ export function allBandKeys() {
   const keys = new Set();
   for (const b of BIOMES) for (const l of BAND.layers) keys.add(bandKey(texOf(b), l));
   return [...keys];
+}
+
+/** Night variants are additive assets; they never replace the daytime set. */
+export function allNightBandKeys() {
+  const keys = [];
+  for (const biome of NIGHT_BIOMES) {
+    for (const layer of BAND.layers) keys.push(nightBandKey(biome, layer));
+  }
+  return keys;
 }
