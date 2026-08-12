@@ -367,6 +367,20 @@
     /* Party-time clock — sits at the bottom of the dark Calendar widget,
        overlaying the black area in WHITE so it reads cleanly on the
        black background. */
+    /* Garage tile car — the default-genre starter (tilted rear-3/4 art)
+       parked on the GARAGE tile's empty waterfront.  Positioned by
+       data-px like every other menu widget; never intercepts taps (the
+       garage hit zone sits above it in the DOM). */
+    #phone-garage-car {
+      position: absolute;
+      object-fit: contain;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+      filter: drop-shadow(0 calc(6 * var(--pxs, 0.116vmin)) calc(10 * var(--pxs, 0.116vmin)) rgba(0,0,0,0.65));
+    }
+    #phone-garage-car:not([src]) { display: none; }
+
     /* Game clock — positioned via data-px (top-right corner of the weather
        widget).  Shares the top bar with the location name (left) + the
        temperature / weather symbol (just below, upper-right). */
@@ -1772,6 +1786,14 @@
          data-px = "x y w h" in PNG pixels.  Coords below are best-fit to the
          new 3-column grid — fine-tune any that are off by loading the page
          with ?calibrate and tapping the icon (logs exact PNG x,y). -->
+    <!-- Garage tile car — the DEFAULT-genre starter in its tilted
+         (rear-three-quarter) pose, parked on the tile's empty waterfront
+         between the GARAGE label and the trip clock.  Same art the game
+         uses for the steering pose (assets/culture/<genre>/vehicles/
+         starter_back_turn.png, RGBA).  src is synced by
+         syncGarageTileCar(); sits BEFORE the hit zones in the DOM so the
+         garage button still takes the tap. -->
+    <img id="phone-garage-car" data-px="324 775 210 130" alt="" />
     <!-- Row 1 -->
     <button class="phone-hit" data-action="tutorial"    data-px="41 599 233 360"></button>
     <button class="phone-hit" data-action="garage"      data-px="299 594 259 366"></button>
@@ -2409,7 +2431,29 @@
       // Vehicle art is now composited live in the Garage card; every culture
       // uses the shared empty stage instead of baking a car into a menu skin.
       const phoneBgUrl = () => PHONE_BG_DEFAULT;
+      // Garage tile car — show the ACTIVE (default) genre's starter in its
+      // tilted rear-3/4 pose on the GARAGE tile (owner 2026-08-12).  Genre
+      // resolution mirrors the game's: __genre.get() falls back to
+      // DEFAULT_GENRE ('hiphop_phonk', constants.js) internally, but guard
+      // here too for the pre-registry boot window.  On a missing asset
+      // (shouldn't happen — the active genre's pack always ships) fall back
+      // to the hip-hop starter rather than showing a broken-image icon.
+      const garageCarImg = document.getElementById('phone-garage-car');
+      const GARAGE_CAR_FALLBACK = 'assets/culture/hiphop_phonk/vehicles/starter_back_turn.png';
+      const syncGarageTileCar = () => {
+        if (!garageCarImg) return;
+        let g = null;
+        try { g = window.__genre?.get?.(); } catch (_) {}
+        const url = `assets/culture/${g || 'hiphop_phonk'}/vehicles/starter_back_turn.png`;
+        if (garageCarImg.getAttribute('src') === url) return;
+        garageCarImg.onerror = () => {
+          garageCarImg.onerror = null;
+          if (garageCarImg.getAttribute('src') !== GARAGE_CAR_FALLBACK) garageCarImg.src = GARAGE_CAR_FALLBACK;
+        };
+        garageCarImg.src = url;
+      };
       const setPhoneMenuBg = (id) => {
+        syncGarageTileCar();   // every menu re-skin path funnels through here
         if (!bgImg) return;
         const url = phoneBgUrl(id);
         if (bgImg.getAttribute('src') === url) return;   // already showing it
@@ -2430,6 +2474,9 @@
       // custom-mode run picked (which aren't in the OWNED list); fall back to
       // the owned-list "current" flag if that accessor isn't present yet.
       const syncMenuBg = () => {
+        // Tile car syncs even when the car id can't be resolved yet — the
+        // genre accessor comes up before __garage on a fresh boot.
+        syncGarageTileCar();
         try {
           let cur = window.__garage?.current?.();
           if (!cur) {
