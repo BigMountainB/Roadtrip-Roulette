@@ -190,6 +190,45 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-11 (pt 11) — Radio-scan hold music; city landmarks scaled up; cross-shop buy-once fix
+All committed & pushed (`165f3c9`, `fd579f6`; shop fix rode an earlier commit this session).
+
+**Radio-scan hold music (`fd579f6`).** After the intro voicemail, the menu no longer starts the
+default station — it plays `assets/music/rtr_radio_scan.mp3`, a **3:04 seamless loop** of the radio
+surfing the dial: 17 ten-second slices (every genre at least once, all 17 tracks unique, no genre
+twice in a row) with crackly band-limited static between stations. The file **ends on a static burst
+and opens on a station** and carries no master fade in/out, so the `loop` wrap reads as one more
+station change — the loop seam sits at the same near-silent handoff as every internal transition,
+which also swallows the MP3 decoder gap. Generated with ffmpeg from the shipped music folders
+(slices from the 20–70% band of each song, loudnorm to −14 LUFS; static = hiss + bit-crushed
+13 Hz-tremolo crackle layer). Wiring: `AudioSystem.playRadioScan()/stopRadioScan()`; the scan rides
+the normal `_trackEl` machinery so mute/volume/music-pause/visibility/watchdog all apply. It ends at
+exactly two chokepoints — any real `_startTrack` that isn't the scan URL (covers station pick /
+genre star / track pick / playlist / shuffle) and `_refreshStationPlayback` (covers trackless
+stations); `GameScene._kickRadio` stops it on run start, with a new branch that starts the default
+station when the scan was the only thing sounding (ctx already running → no other branch would).
+`_persistPlaybackState` skips while scanning so the loop is never resumed as a "song".
+
+**Seattle/Bellevue skyscraper sprites ×4, stadiums ×6 + closer, Space Needle ×3 (`165f3c9`).**
+All 11 downtown Seattle + 9 Bellevue tower profiles quadrupled (`heightMult` + caps), with
+`FOG_PROFILE_MULTS` mirrored ×4 so spawn centers push outboard. **Near edges stay pinned by the
+painted-edge invariant** (`roadEdgeGapCars`), so growth extends away from the road — owner's explicit
+constraint. Stadiums went ×3 then "2x bigger": now `widthMult` 33.9/34.5 with offsets recomputed for
+a ~4.0-lane near edge, `renderDepth: 1.7` (under cranes 2.0, over needle 1.5), joined the crane-style
+far-perspective set so they grow from horizon specks instead of popping in at the horizon clamp
+("appearing in the sky"), and `clearStadiumTrees(1.55, 2.35)` strips left-side foliage (never cranes)
+from the approach. Space Needle heightMult 9 → 27 with offset −1.5 → −2.12 so its near edge — and
+road clearance; it's a collidable landmark — is unchanged.
+
+**Buy-once parts now sync across storefronts.** The reinforced bumper is shelved as separate row
+objects at Finesse AND Sam's (windshield/headlights/wipers L1 likewise at Sam's); buying at one left
+the sibling row live, so a second $4k tap bought nothing. The purchase commit now sweeps
+schwasted/fap/sam_acc and flips **every row with the same item id** to ✓ OWNED. Same-visit hole
+only — next-visit rebuild already filtered owned parts. Also same session: steering pose re-keyed
+from instant intent to a **wheel-load accumulator** (pose at 35% load ≈ 0.14 s of real hold,
+release below 20%, all modes incl. flappy — quick taps no longer flash the turn art), documented in
+the Ch.6 steering-pose section.
+
 ### 2026-08-11 (pt 10) — Tunnel facades are painted artwork, drawn as projected meshes
 Tests 737 green, `vite build` clean. **Local-host only so far** — see the gate below.
 
