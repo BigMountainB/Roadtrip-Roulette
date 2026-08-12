@@ -23392,6 +23392,12 @@ export class GameScene extends Phaser.Scene {
   _kickRadio() {
     const a = this.audio;
     if (!a) return;
+    // A run is starting — the post-voicemail radio-scan hold loop ends here
+    // and the default station takes over (owner 2026-08-11).  Remember
+    // whether it was sounding: with the scan stopped and the context already
+    // running, no branch below would otherwise start any music.
+    const _scanWasOn = !!a._radioScanActive;
+    a.stopRadioScan?.();
     // DEFAULT GENRE = the Music app's starred station (owner 2026-07-22: a
     // station IS a genre).  settings.radio is a station index; any in-range
     // integer is a real choice (index 0 = HIP-HOP counts — no `> 0` gate).
@@ -23408,6 +23414,12 @@ export class GameScene extends Phaser.Scene {
       // back up exactly where it left off (owner 2026-07-23).
       if (this._awaitingStart && !pend) a.restorePersistedPlayback?.();
     } else if (a._ctx?.state !== 'running') { a._enablePlayback?.(); a.play?.(); }  // resume after an autoplay block
+    else if (_scanWasOn) {
+      // Scan was the only thing sounding — start the default (or current)
+      // station now that it's stopped.
+      a._enablePlayback?.();
+      a.setStation?.(station >= 0 ? station : a.currentStation);
+    }
 
     // Resuming a SAVE → default genre, one song PAST the saved one.  A genre
     // switch (saved in a different genre than the current default) just starts

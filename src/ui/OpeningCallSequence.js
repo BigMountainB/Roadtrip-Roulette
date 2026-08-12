@@ -136,6 +136,10 @@ export function initOpeningCall() {
     if (!a) return;
     try {
       if (a.musicPaused) return;          // player's own pause — respect it
+      // Radio-scan hold music (owner 2026-08-11): after the voicemail the
+      // radio surfs the dial on a seamless loop until the player picks a
+      // genre (station action) or starts a run (default genre takes over).
+      if (a.playRadioScan) { a.playRadioScan(); return; }
       if (a._ctx?.state !== 'running') {
         a._enablePlayback?.();
         a.play?.();

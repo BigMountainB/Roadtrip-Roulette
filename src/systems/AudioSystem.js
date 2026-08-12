@@ -468,6 +468,14 @@ for (const st of STATIONS) {
   st.tracks = STATION_TRACKS[st.trackKey ?? st.name] ?? [];
 }
 
+// Radio-scan hold music (owner 2026-08-11): a ~3 min seamless loop of the
+// radio surfing across every genre, played after the intro voicemail until
+// the player picks a genre (any station action cancels it) or a run starts
+// (GameScene._kickRadio stops it and the default station takes over).  The
+// clip ends on a static burst and opens on a station, so `loop` wraps read
+// as one more station change.
+const RADIO_SCAN_URL = 'assets/music/rtr_radio_scan.mp3';
+
 export class AudioSystem {
   constructor() {
     this._ctx          = null;
@@ -690,11 +698,44 @@ export class AudioSystem {
     // Don't resume the context while muted — that would re-grab the audio
     // session and silence the player's own background music.
     if (!this.muted && this._ctx.state === 'suspended') this._ctx.resume();
+    // Radio-scan hold music owns playback until a station action or run
+    // start cancels it — a plain play() (init, resume paths) keeps the scan
+    // going instead of starting station music over it.
+    if (this._radioScanActive) { this._startRadioScan(); return; }
     this._currentStep  = 0;
     this._nextStepTime = this._ctx.currentTime + 0.08;
     this._startScheduler();
     // Auto-start the right path for the current station.
     this._refreshStationPlayback();
+  }
+
+  /** Start the post-voicemail radio-scan hold loop (see RADIO_SCAN_URL).
+   *  Idempotent; inits the system on first call.  The scan rides the normal
+   *  _trackEl machinery, so volume / mute / music-pause / visibility and the
+   *  stall watchdog all apply to it like any real track. */
+  playRadioScan() {
+    this._radioScanActive = true;
+    if (!this.ready) { this.init(); return; }     // init() ends in play() → scan guard above
+    try { if (!this.muted && this._ctx.state === 'suspended') this._ctx.resume(); } catch (_) {}
+    this._startRadioScan();
+  }
+
+  _startRadioScan() {
+    const el = this._trackEl;
+    if (el && (el.src ?? '').includes('rtr_radio_scan') && !el.ended) {
+      try { el.play().catch(() => {}); } catch (_) {}   // already scanning — nudge
+      return;
+    }
+    this._startTrack(RADIO_SCAN_URL, true);
+  }
+
+  /** End the scan.  Does NOT start station playback itself — callers either
+   *  follow a station action that refreshes playback anyway, or explicitly
+   *  start the station they want (GameScene._kickRadio). */
+  stopRadioScan() {
+    if (!this._radioScanActive) return;
+    this._radioScanActive = false;
+    if ((this._trackEl?.src ?? '').includes('rtr_radio_scan')) this._stopTrack();
   }
 
   nextStation() {
@@ -825,6 +866,10 @@ export class AudioSystem {
    *  any playing MP3 and let the procedural scheduler take over. */
   _refreshStationPlayback() {
     if (!this.ready) return;
+    // An intentional station refresh (station pick, next-station, playlist)
+    // always ends the radio-scan hold loop — the trackless-station branch
+    // below wouldn't go through _startTrack, so clear it here too.
+    this.stopRadioScan();
     const st = STATIONS[this.currentStation];
     const hasTracks = st?.tracks && st.tracks.length > 0;
     if (hasTracks) {
@@ -838,7 +883,10 @@ export class AudioSystem {
     }
   }
 
-  _startTrack(url) {
+  _startTrack(url, loop = false) {
+    // Any real-track start that isn't the scan clip cancels scan mode —
+    // covers every station/track/playlist path in one place.
+    if (url !== RADIO_SCAN_URL) this._radioScanActive = false;
     this._stopTrack();
     // Generation token — only the LATEST _startTrack call is allowed
     // to actually wire up audio.  Two taps in quick succession (or a
@@ -862,7 +910,7 @@ export class AudioSystem {
       try {
         const el = new Audio(url);
         el.crossOrigin = 'anonymous';
-        el.loop        = false;
+        el.loop        = loop;      // true only for the radio-scan hold loop
         el.volume      = 1;
         // Default is 'metadata' — only fetches the MP3 header, then
         // waits for play() to fetch the rest, which is a big chunk
@@ -1018,6 +1066,7 @@ export class AudioSystem {
   /** Persist {culture, trackIdx, time} so a plain app/browser reopen resumes
    *  exactly where the music left off.  Called ~1×/s from the skip watchdog. */
   _persistPlaybackState() {
+    if (this._radioScanActive) return;   // the scan loop is not a resumable song
     try {
       const s = this.getPlaybackState();
       if (!s || !s.culture) return;
