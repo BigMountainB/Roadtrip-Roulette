@@ -58,18 +58,54 @@ export const BAND = {
    *  yCrop was written: bands are at depth 0.5, under terrain (1) and road
    *  (1.5), so anything hanging below the ground line is painted over by real
    *  ground.  That also hides each band's hard cropped bottom edge. */
-  yOff: { far: 16, ridge: 22, near: 30 },
+  //  SPREAD WIDENED 2026-08-11 (owner: "closer to 20px or maybe 30, as long as
+  //  there's no uncovered pixels").  Was 16/22/30 — a 14 px spread — now a
+  //  26 px spread across the three bases.
+  //
+  //  The "no uncovered pixels" constraint is the FAR value specifically: it is
+  //  the highest-seated of the three, so it alone decides whether the ~14 px
+  //  skyFogMix strip under the horizon stays hidden.  far stays at 16 for that
+  //  reason and must never drop to 14 or below.  ridge and near are free to go
+  //  lower — bands sit at depth 1.15, under GroundPlane (1.3) and the road
+  //  (1.5), so anything hanging below the ground line is painted over by real
+  //  perspective-correct ground rather than left showing.
+  yOff: { far: 16, ridge: 28, near: 42 },
 
   /** Per-layer texture zoom, on top of the fit-to-screen scale.
    *
-   *  Owner 2026-08-10: "zoom in a little on the near biome to cover more
-   *  area."  Only the near treeline is magnified — enlarging the far ridges
-   *  would flatten the depth cue the stagger above is creating.
+   *  FAR-DOMINANT (owner 2026-08-11: "they need to be spaced out ... through
+   *  most of the sky", far highest).  The painted silhouette inside each band
+   *  is bottom-anchored and occupies only the lower part of the 640 px canvas
+   *  — at Easton the far layer's content is rows 440-640, just 200 of 640.  At
+   *  zoom 1 that rendered ~78 px tall, so all three layers topped out between
+   *  y 138 and y 163 on a 450 px screen and the entire upper third was empty
+   *  sky.  Zooming FAR hardest is what pushes real mass up there.
+   *
+   *  far is capped at 1.35 by the WORST case, not the best: each biome's art
+   *  fills a different amount of its 640 px canvas (Easton's far layer is 200
+   *  rows, Seattle's ~397), so one global multiplier cannot suit both.  At 2.2
+   *  the tall-art biomes (seattle_hills, kittitas, palouse) pushed their peaks
+   *  to y -102/-108/-123 — clipped off the top of the screen.  1.35 is the
+   *  most that keeps every biome's crown on screen.
+   *
+   *  CONSEQUENCE: biomes with short far art (Easton, columbia) still sit lower
+   *  than ideal.  Genuinely fixing that needs per-layer scale derived from each
+   *  band's MEASURED content height rather than one shared number — see the
+   *  2026-08-11 (pt 7) changelog entry.
+   *
+   *  Size now carries the depth cue as well as position: the big mass is
+   *  distant, the near layer stays a low treeline on the horizon, which is how
+   *  a real range reads.  near keeps the 1.18 from 2026-08-10 (owner asked for
+   *  it to cover more area) — far and ridge simply overtake it.
+   *
+   *  Exact on-screen height varies by biome, because each band's art fills a
+   *  different amount of its canvas.  These are art-tuning knobs; nothing
+   *  depends on them being any particular value.
    *
    *  This does NOT change parallax speed: on-screen scroll is
    *  tilePositionX * tileScale, and tilePositionX is divided by the same
    *  scale when it's computed, so the two cancel. */
-  zoom: { far: 1, ridge: 1, near: 1.18 },
+  zoom: { far: 1.35, ridge: 1.2, near: 1.18 },
 };
 
 /** Miles over which adjacent biomes cross-fade.

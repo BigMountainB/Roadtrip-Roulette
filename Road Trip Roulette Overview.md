@@ -189,6 +189,46 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-11 (pt 7) — Bands spread into the sky: far-dominant zoom, wider base spread
+Tests: 550 green, `vite build` clean.
+
+**Owner:** *"they need to be spaced out; near, far, ridge, through most of the sky"* — far highest —
+then *"the spread should be closer to 20px or maybe 30, as long as there's no uncovered pixels."*
+
+The painted silhouette inside each band is bottom-anchored and fills only the lower part of its
+640 px canvas (Easton's far layer is rows 440-640 — 200 of 640). At zoom 1 that rendered ~78 px
+tall, so all three layers topped out between y 138 and y 163 on a 450 px screen: a 25 px huddle with
+the entire upper third empty sky.
+
+- **`zoom` far 1 -> 1.35, ridge 1 -> 1.2**, near unchanged at 1.18. Far dominant, so size now carries
+  the depth cue as well as position — big mass distant, low treeline near.
+- **`yOff` 16/22/30 -> 16/28/42**, widening the base spread from 14 px to **26 px**. `far` deliberately
+  stays at 16: it is the highest-seated layer, so it alone decides whether the ~14 px `skyFogMix`
+  strip under the horizon stays hidden. **It must never drop to 14 or below** — that is the
+  "no uncovered pixels" constraint. ridge and near are free to sit lower, since bands are at depth
+  1.15 and real ground (GroundPlane 1.3, road 1.5) paints over anything below the ground line.
+
+**Verified in-engine:** base spread 28.4 px at mi 5, 25.7 at mi 30, 24.8 at mi 250 — inside the
+requested 20-30 window, all three layers up at every mile sampled. It is NOT constant: mi 96 reads
+45.6 px and mi 50 only 6.4 px, because `ts.y` also carries `pitchOff * (0.55 - depthT * 0.35)` and
+that pitch lag differs per layer, so slopes stretch or compress the spread. Flat ground is where the
+tuned value lands.
+
+#### Known limit: one zoom cannot serve every biome
+
+`far` is capped at 1.35 by the WORST case, not the best. Each biome's art fills a different amount of
+its canvas — Easton's far layer is 200 rows, Seattle's ~397 — so a single multiplier cannot suit
+both. At 2.2 the tall-art biomes clipped off the top of the screen (`seattle_hills` y -102,
+`kittitas` -108, `palouse` -123); 1.35 is the most that keeps every crown on screen, which leaves the
+short-art biomes (Easton, columbia) sitting lower than ideal.
+
+**The real fix** is per-layer scale derived from each band's MEASURED content height rather than one
+shared number, targeting a desired on-screen height. That needs a content-top figure per band —
+either baked into a table (which will DRIFT: the band art was re-exported three times on 2026-08-11
+alone) or measured at load. Not attempted; flagged here so the cap is understood as a workaround
+rather than a tuned value.
+
+
 ### 2026-08-11 (pt 6) — Seamless biome band art; and the seam test that was wrong
 Tests: 550 green, `vite build` clean.
 
