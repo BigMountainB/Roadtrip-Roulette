@@ -1,3 +1,4 @@
+import { tunnelArtEnabled } from '../constants.js';
 import { allBandKeys } from '../road/Biomes.js';
 
 export const ASSET_MANIFEST = {
@@ -47,26 +48,20 @@ export const ASSET_MANIFEST = {
   // the road curves or the player moves laterally.
   // NOTE: opening geometry per plate is declared in TunnelFaceMesh.PLATES —
   // keep the two in step if the art is ever re-exported.
-  // GATED ON ?tunnelart=1 — these three plates are 4.0 MB together, and the
-  // renderer that uses them is still default-OFF pending visual validation.
-  // Loading them unconditionally would put 4 MB on every player's boot for
-  // pixels nobody can currently see. The gate must match TunnelFaceMesh's own
-  // flag: if the art can't draw, it must not download either.
-  // Delete this wrapper (keep the array) when the facades ship on by default.
-  tunnelFaces: (() => {
-    let on = false;
-    try {
-      on = new URLSearchParams(globalThis.location?.search ?? '').get('tunnelart') === '1';
-    } catch (_) { /* non-browser (tests, build) — stay off */ }
-    return on ? [
-      { key: 'tunnel_face_mt_baker',
-        path: 'assets/scenery/tunnels/tunnel_mt_baker_face.png' },
-      { key: 'tunnel_face_mercer_lid',
-        path: 'assets/scenery/tunnels/tunnel_mercer_lid_face.png' },
-      { key: 'tunnel_face_wildlife',
-        path: 'assets/scenery/tunnels/tunnel_wildlife_crossing_face.png' },
-    ] : [];
-  })(),
+  // GATED on constants.tunnelArtEnabled() — ON for a local dev host, OFF in
+  // production, overridable with ?tunnelart=1 / ?tunnelart=0. These three
+  // plates are 4.0 MB together, so downloading them where the facade can't
+  // draw would cost every player 4 MB for pixels they can't see. Both this and
+  // TunnelFaceMesh read the SAME function so the two can never disagree.
+  // Drop the ternary (keep the array) when the facades ship on by default.
+  tunnelFaces: tunnelArtEnabled() ? [
+    { key: 'tunnel_face_mt_baker',
+      path: 'assets/scenery/tunnels/tunnel_mt_baker_face.png' },
+    { key: 'tunnel_face_mercer_lid',
+      path: 'assets/scenery/tunnels/tunnel_mercer_lid_face.png' },
+    { key: 'tunnel_face_wildlife',
+      path: 'assets/scenery/tunnels/tunnel_wildlife_crossing_face.png' },
+  ] : [],
 
   // Seamless overhead asphalt tiles, one per road material along the route.
   // Same rules as the ground tile: flat/overhead art only (RoadPlane applies

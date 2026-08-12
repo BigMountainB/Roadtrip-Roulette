@@ -91,7 +91,8 @@ soak (PG-13) · party-clock HUD hidden (mechanics intact — arrival-status dire
   WORSE than the 74 it had before per-biome tiles landed. Fix is a Colors.js split (a Vantage
   sub-region with a basalt-toned `grass2`), not new art. May be moot now that the ground textures
   run to the draw cap; re-check before spending time on it.
-- **Band texture guard is dead, so `setTexture` runs every frame on all six bands.**
+- ~~Band texture guard is dead~~ — **FIXED 2026-08-11 (pt 8)**, now tests `displayTexture.key`.
+  Original finding kept for context:
   `_renderBiomeBackdrop` tests `ts.texture.key !== key`, but on a TileSprite `ts.texture` is Phaser's
   internally generated fill-pattern texture and its key is a UUID — never equal to `bio_*`. The
   right field is `displayTexture`. Visually harmless (the correct art always shows, which is why it
@@ -188,6 +189,36 @@ genre pick, and a "Rotate Phone to Enter Game Play" prompt follows. Remaining: e
 genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
+
+### 2026-08-11 (pt 8) — Bands scale from MEASURED content height; north_bend vertical tiling fixed
+Tests: 550 green, `vite build` clean.
+
+Replaces the shared `BAND.zoom` multiplier, which could never work: each biome's silhouette fills a
+different share of its 640 px canvas (Easton's far layer 200 rows, Seattle's ~397), so any value tall
+enough for the short-art biomes clipped the tall-art ones off the top of the screen. `far` was pinned
+at 1.35 by the worst case, leaving the short-art biomes low.
+
+- **`BAND.target = { far: 165, ridge: 100, near: 85 }`** — the desired on-screen HEIGHT of each
+  layer's painted content. The renderer divides by that band's own measured content height, so every
+  biome lands on target regardless of how its art is packed. `zoom` survives only as the fallback.
+- **`_bandContentTop(key)`** measures the topmost non-transparent row off the texture, sampling every
+  8th pixel, cached per key and computed lazily the first time a biome paints. **Deliberately not a
+  baked table** — the band art was re-exported three times on 2026-08-11 alone and any table would
+  have gone stale the same day. Re-exported art now self-corrects.
+- **Band height now comes from the TEXTURE, not `BIOME_OVERRIDES.h`.** north_bend declares `h: 1280`
+  while its art is 640, so the sprite was sized to double the texture — which made the band **tile
+  vertically**, stacking a second copy of Mount Si above the first with its hard bottom edge reading
+  as a bar across the range. That was the very first bug found in this whole backdrop thread and it
+  had survived every fix since. Under content-height scaling it also threw north_bend's layers to
+  y -140, off the top of the screen. The override was written for 1280-tall art that was never made.
+- **Dead texture guard fixed** (the one-liner logged in the pending list): `ts.texture` on a
+  TileSprite is Phaser's internal fill-pattern texture with a UUID key, so `ts.texture.key !== key`
+  was always true and `setTexture` ran every frame on all six bands. Now tests `displayTexture.key`.
+
+**Verified in-engine, all 9 biomes:** no clipping, **no vertical tiling anywhere**, content tops
+far 32-70 / ridge 109-164 / near 134-216, spread 102-146 px through the sky. north_bend went from
+far y -140 to y 53, in line with every other biome.
+
 
 ### 2026-08-11 (pt 7) — Bands spread into the sky: far-dominant zoom, wider base spread
 Tests: 550 green, `vite build` clean.

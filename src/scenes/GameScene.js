@@ -14242,6 +14242,42 @@ export class GameScene extends Phaser.Scene {
    * folded in because leaning across the lane genuinely does shift a near
    * treeline slightly.
    */
+  /**
+   * Topmost row of a band that actually has paint in it, or null.
+   *
+   * Band art is bottom-anchored in a 640 px canvas but fills wildly different
+   * amounts of it, so "how tall is this range" cannot be assumed — it has to be
+   * measured.  Sampling every 8th pixel across a row is plenty to find the
+   * first non-transparent one and keeps the scan cheap.
+   *
+   * Cached per texture key and computed lazily, the first time a biome is
+   * actually painted, so a run only pays for the bands it drives past.
+   */
+  _bandContentTop(key) {
+    this._bandTopCache ??= new Map();
+    if (this._bandTopCache.has(key)) return this._bandTopCache.get(key);
+    let top = null;
+    try {
+      const src = this.textures.get(key)?.getSourceImage?.();
+      if (src && src.width && src.height) {
+        const w = src.width, h = src.height;
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(src, 0, 0);
+        const d = ctx.getImageData(0, 0, w, h).data;
+        outer:
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x += 8) {
+            if (d[(y * w + x) * 4 + 3] > 8) { top = y; break outer; }
+          }
+        }
+      }
+    } catch (_) { top = null; }   // tainted canvas / not yet uploaded — use the zoom fallback
+    this._bandTopCache.set(key, top);
+    return top;
+  }
+
   _renderBiomeBackdrop() {
     const layers = this._biomeLayers;
 
@@ -14307,18 +14343,48 @@ export class GameScene extends Phaser.Scene {
         // left the treeline stopping short of the screen edge.
         const _M  = 150 + Math.ceil(C.HUD_OFFSET_X ?? 0);
         const _bw = SCREEN_W + _M * 2;
-        // Per-layer zoom rides on top of the fit-to-screen scale (BAND.zoom).
-        // Folding it into `s` rather than into setSize keeps every dependent
-        // number consistent — band height below, and the tilePositionX divide
-        // that stops the parallax scrolling at the wrong rate.
-        const s = (SCREEN_W / BAND.w) * (BAND.zoom?.[layer] ?? 1);
-        if (ts.tileScaleX !== s) { ts.tileScaleX = s; ts.tileScaleY = s; }
-        const bh = Math.round((bandHeight(biome) - BAND.yCrop[layer]) * s);
-        if (ts.height !== bh || ts.width !== _bw) ts.setSize(_bw, bh);
-        if (ts.x !== -_M) ts.x = -_M;
 
         const key = bandKey(biome, layer);
-        if (this.textures.exists(key) && ts.texture.key !== key) ts.setTexture(key);
+        // `ts.texture` on a TileSprite is Phaser's INTERNALLY generated
+        // fill-pattern texture — its key is a UUID, so the old
+        // `ts.texture.key !== key` guard was always true and setTexture ran
+        // every frame on all six bands, rebuilding the pattern each time.
+        // `displayTexture` is the one that actually holds the source key.
+        if (this.textures.exists(key) && ts.displayTexture?.key !== key) ts.setTexture(key);
+
+        // SCALE FROM MEASURED CONTENT HEIGHT (owner 2026-08-11).
+        //
+        // A single BAND.zoom multiplier could not serve every biome: the
+        // painted silhouette fills a different share of each 640 px canvas
+        // (Easton's far layer is 200 rows, Seattle's ~397), so any value tall
+        // enough for the short-art biomes clipped the tall-art ones off the top
+        // of the screen.  far was therefore pinned at 1.35 by the worst case.
+        //
+        // Scaling by each band's OWN content height fixes that at the root:
+        // ask for a target on-screen height per layer and every biome lands
+        // there regardless of how its art is packed.  Measured lazily from the
+        // texture and cached, so nothing has to be baked into a table — which
+        // matters, because the band art was re-exported three times in one day
+        // and any table would have gone stale immediately.
+        const _texH  = this.textures.get(key)?.source?.[0]?.height ?? BAND.h;
+        const _cTop  = this._bandContentTop(key);
+        const _rows  = _cTop == null ? 0 : _texH - _cTop;
+        const s = _rows > 4
+          ? (BAND.target?.[layer] ?? 100) / _rows
+          : (SCREEN_W / BAND.w) * (BAND.zoom?.[layer] ?? 1);   // fallback: fixed zoom
+        if (ts.tileScaleX !== s) { ts.tileScaleX = s; ts.tileScaleY = s; }
+        // Height comes from the TEXTURE, not BIOME_OVERRIDES.h.  north_bend
+        // declares h:1280 while its art is 640, so the old expression sized the
+        // sprite to double the texture — which made the band TILE VERTICALLY
+        // (a second copy of Mount Si stacked above the first, its hard bottom
+        // edge reading as a bar across the range) and, once scaling came from
+        // measured content, threw its layers off the top of the screen at
+        // y -140.  The override was written for 1280-tall art that was never
+        // made.  Using the real height fixes both at once; bandHeight() is kept
+        // only as the fallback for a texture that hasn't uploaded yet.
+        const bh = Math.round(((_texH || bandHeight(biome)) - BAND.yCrop[layer]) * s);
+        if (ts.height !== bh || ts.width !== _bw) ts.setSize(_bw, bh);
+        if (ts.x !== -_M) ts.x = -_M;
 
         // Distance-weighted fog: far layers (low rate) fade first.
         const depthT  = 1 - (bandRate(biome, layer) / BAND.rate.near);   // 0 near .. ~0.8 far

@@ -106,6 +106,19 @@ export const BAND = {
    *  tilePositionX * tileScale, and tilePositionX is divided by the same
    *  scale when it's computed, so the two cancel. */
   zoom: { far: 1.35, ridge: 1.2, near: 1.18 },
+
+  /** Target on-screen HEIGHT in px for each layer's painted content.
+   *
+   *  This supersedes `zoom` as the primary control (zoom is now only the
+   *  fallback for a band whose content height cannot be measured).  Because
+   *  the renderer divides by each band's OWN measured content height, every
+   *  biome lands at these heights no matter how its art is packed — which is
+   *  what the single shared zoom multiplier could never do.
+   *
+   *  With yOff at 16/28/42 and the horizon at 225 these put the content tops
+   *  at roughly far y76, ridge y153, near y182 — far highest, spread through
+   *  the sky, near still a low treeline on the horizon. */
+  target: { far: 165, ridge: 100, near: 85 },
 };
 
 /** Miles over which adjacent biomes cross-fade.

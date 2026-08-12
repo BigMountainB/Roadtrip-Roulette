@@ -41,6 +41,7 @@
 // flag was consulted, which killed the whole Mt Baker facade (artwork AND
 // procedural) for every player. Shipped 2026-08-11, caught same day.
 import Phaser from 'phaser';
+import { tunnelArtEnabled } from '../constants.js';
 
 /** Opening geometry of each 1600×900 master, normalised 0..1.
  *  `openL`/`openR` bracket the transparent road opening; the plate is fitted so
@@ -85,34 +86,21 @@ const PLATE_ASPECT = 900 / 1600;   // all three masters share it
 const COLS = 6;
 const ROWS = 4;
 
-/** OPT-IN while the projection is being proved out (2026-08-11).
- *
- *  Load with `?tunnelart=1` to see the painted facades; without it the game
- *  renders exactly as it did before. This is deliberately default-OFF: the
- *  vertex→pixel mapping below (setSize(1,1) + setOrtho(1,1), vertex.y negated)
- *  is derived from Phaser's Mesh source but has NOT yet been confirmed against
- *  a running frame, and a wrong mapping paints a full-screen garbage quad over
- *  a tunnel that ships today. Flip the default to `true` once Mt Baker has been
- *  eyeballed across the approach, curve and lateral cases. */
-function artEnabled() {
-  try {
-    return new URLSearchParams(globalThis.location?.search ?? '').get('tunnelart') === '1';
-  } catch (_) {
-    return false;
-  }
-}
-
+/** Gate lives in constants.tunnelArtEnabled(): ON by default on a local dev
+ *  host, OFF in production, overridable with ?tunnelart=1 / ?tunnelart=0.
+ *  AssetManifest reads the SAME function to decide whether to download the
+ *  plates, so "can it draw" and "is the texture here" can never disagree. */
 export class TunnelFaceMesh {
   constructor(scene) {
     this.scene = scene;
     this.meshes = new Map();       // plate key → Phaser Mesh
     this._failed = new Set();      // plate keys whose mesh construction threw
     this._webgl = scene.sys?.renderer?.type === Phaser.WEBGL;
-    this._enabled = artEnabled();
+    this._enabled = tunnelArtEnabled();
     // One line, always — so "is this build even live?" is answerable from the
     // console without driving to mile 4.6 first. This only runs the first time
     // a tunnel facade comes into range, so it costs one log per run.
-    console.info(`[TunnelFaceMesh] ready — flag=${this._enabled ? 'ON' : 'OFF (add ?tunnelart=1)'} ` +
+    console.info(`[TunnelFaceMesh] ready — art=${this._enabled ? 'ON' : 'OFF (add ?tunnelart=1)'} ` +
                  `renderer=${this._webgl ? 'WEBGL' : 'CANVAS (mesh unsupported)'}`);
   }
 
@@ -120,7 +108,7 @@ export class TunnelFaceMesh {
    *  facade. Checked every frame: a texture can finish loading late, and the
    *  renderer type can differ per device. */
   usable(plateKey) {
-    if (!this._enabled) return this._why('flag off (?tunnelart=1)');
+    if (!this._enabled) return this._why('artwork off for this host (add ?tunnelart=1)');
     if (!this._webgl)   return this._why('renderer is CANVAS — Mesh cannot draw');
     if (this._failed.has(plateKey)) return this._why('mesh construction failed earlier');
     const plate = PLATES[plateKey];
