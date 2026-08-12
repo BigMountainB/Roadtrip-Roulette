@@ -1705,6 +1705,27 @@ export class GameScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.input.keyboard?.off('keydown', this._fwdWarpHandler));
     this.events.once('destroy',  () => this.input.keyboard?.off('keydown', this._fwdWarpHandler));
 
+    // ── Touch-reachable warp (?devtools=1) ──────────────────────────────
+    // B and N are keyboard-only, which makes them useless on the phone this
+    // game is actually played on — there is no key to press. Expose the same
+    // two jumps plus an absolute goto so the ?devtools=1 overlay can offer
+    // them as buttons. Same "pure position change" contract as the hotkeys:
+    // no gas drain, no cop reset.
+    try {
+      const devtools = new URLSearchParams(window.location.search).get('devtools') === '1';
+      if (devtools || this._devEnabled) {
+        const step = (0.25 / TOTAL_ROUTE_MILES) * ROUTE_SEGS * SEG_LENGTH;
+        const maxPos = ROUTE_SEGS * SEG_LENGTH - SEG_LENGTH;
+        window.__rtrWarp = {
+          back: () => { if (this.player) this.player.position = Math.max(0, this.player.position - step); },
+          fwd:  () => { if (this.player) this.player.position = Math.min(maxPos, this.player.position + step); },
+          goto: (mi) => this._warpToMile(mi),
+          mile: () => (this.player ? (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES : 0),
+        };
+        this.events.once('shutdown', () => { try { delete window.__rtrWarp; } catch (_) {} });
+      }
+    } catch (_) { /* never let a dev affordance break the scene */ }
+
     // F3 toggles the debug overlay.  Matches the dev-warp pattern so
     // it auto-detaches on scene shutdown / destroy.
     // F4 toggles camera lateral tracking — the camera-follows-player

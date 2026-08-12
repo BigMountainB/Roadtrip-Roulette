@@ -79,12 +79,12 @@ heat) · portable save/checkpoint codes removed (local LAST/SAVED kept) · sex w
 soak (PG-13) · party-clock HUD hidden (mechanics intact — arrival-status direction, see changelog).
 
 **Backdrop / ground open items (opened 2026-08-10 - 11, none blocking):**
-- **`seattle_ground_1024.png` is NOT seamless** — Ch.9 rule 2. Measured edge-wrap error (avg
-  per-channel difference between opposite edges) is **21.3 L/R, 22.4 T/B**, the worst of the set:
-  the seven tiles restored from `Archive/` all measure **0.0**, and `pnw_roadside` is 15.3/16.3. At
-  `TILE_FT = 48` (~2030 px of screen per tile) that repeats a grid line roughly every 2000 px
-  through the urban miles. **Art fix only** — a clean re-export drops in at the same path, no code
-  change.
+- ~~`seattle_ground_1024.png` is NOT seamless~~ — **WRONG, retracted 2026-08-11. Every ground tile
+  loops correctly, including Seattle.** The original claim came from a broken test: it compared the
+  two opposite edge columns for IDENTITY. In a seamless tile those columns are *neighbours*, so they
+  should differ by about as much as any two adjacent columns — not be identical. Judged that way,
+  Seattle scores **1.28 L/R / 1.26 T/B** against a 2.0 threshold and `pnw_roadside` 0.96/0.97; both
+  loop fine. **See "How to actually test a tile for seams" below before re-running this check.**
 - **`east_cascades` palette spans two different grounds.** The Vantage basalt tile is dark grey
   `rgb(59,57,52)` (correct — it is scree) but shares `east_cascades`, whose `grass2` is olive-tan
   `rgb(122,116,43)`. Delta **87**, the only ground handoff still measuring "visible" — and slightly
@@ -188,6 +188,32 @@ genre pick, and a "Rotate Phone to Enter Game Play" prompt follows. Remaining: e
 genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
+
+### 2026-08-11 (pt 6) — Seamless biome band art; and the seam test that was wrong
+Tests: 550 green, `vite build` clean.
+
+Third band-art pass of the day, and this one **tiles infinitely** — owner: *"a new wave of biome
+images landed that can be an infinite loop!"* Confirmed: **all 27 bands loop**, worst ratio 1.77
+against a 2.0 threshold, with `kittitas_far` and all three `seattle_hills` at a literal 0.00.
+Structurally clean too — 2048x640, none blank, none near-empty.
+
+#### How to actually test a tile for seams
+
+The obvious test is wrong, and it produced a wrong entry in the pending list that stood for hours.
+
+**Wrong:** compare column 0 against column W-1 and expect them to be identical. They never are.
+In a correctly seamless tile those two columns sit *next to each other* when it repeats, so they
+should differ by exactly as much as any other adjacent pair. Natural art always has some
+column-to-column variation, so this test flags every organic texture as broken.
+
+**Right:** measure the wrap difference as a RATIO against the tile's own typical adjacent-column
+difference, sampled across the interior. Ratio near 1.0 means the seam is indistinguishable from
+ordinary internal variation. Above ~2.0 is a real seam.
+
+Under the wrong test, 19 of 27 bands "failed" and `seattle_ground_1024.png` was logged as needing an
+art re-export. Under the right one, **everything passes and no re-export was ever needed.** If a
+seam check is ever re-run, use the ratio method.
+
 
 ### 2026-08-11 (pt 5) — Ground tiles now run to the draw cap
 Uncommitted. Tests: 550 green, `vite build` clean.

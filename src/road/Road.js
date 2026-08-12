@@ -2018,6 +2018,15 @@ export class Road {
    * opening empty.
    */
   _drawTunnelFacade(g) {
+    // Hide FIRST, every frame, then let a successful update() re-show it.
+    // This function early-returns in several places — no projection, wildfire
+    // mound too small, mouth too narrow — and every one of those paths used to
+    // leave the mesh on screen at its last vertices. Past the portal the
+    // projection goes null, we returned immediately, and the facade rode along
+    // with the player out onto the floating bridge (owner screenshots, mi 4.99
+    // and 6.29). Hiding up front makes visibility a per-frame assertion instead
+    // of something every exit path has to remember.
+    this._tunnelFaces?.hideAll();
     const e = this._embTunnelProj;
     if (!e) return;
     // Wildlife twin-arch publishes TWO arch openings here (the interior shows
@@ -2273,12 +2282,29 @@ export class Road {
           }
           const drew = this._tunnelFaces?.update(plateKey, {
             outerL, outerR, groundY,
+            // The lintel — same value the mouth rect above publishes. Gives the
+            // plate a real ceiling to register its opening against.
+            mouthTopY: lintelY,
             sW, sH,
             curve: e.seg?.curve ?? 0,
             alpha: rimAlpha,
-            depth: 9.82,
+            // Inherit the graphics layer's depth rather than picking one.
+            // renderTunnelFacade() recomputes it every frame from the tunnel's
+            // distance (9.5 - min(1, relZ/76000) * 2.5, minus 0.05) so that
+            // buildings NEARER than the tunnel draw over the face and buildings
+            // at or past it draw under — that formula IS the occlusion
+            // contract. A hardcoded 9.82 sat above the 9.5 scenery ceiling, so
+            // the artwork drew in front of every building on the route
+            // (owner: "you can actually see the facade through the buildings").
+            depth: g.depth ?? 9.82,
           });
-          if (drew) return;
+          if (drew) {
+            // The painted arch, not the procedural lintel, is now the mouth:
+            // republish it so the interior mask fills the opening exactly
+            // rather than stopping short and showing sky in the top of the arch.
+            this._tunnelMouthRect = drew;
+            return;
+          }
         } catch (err) {
           this._tunnelFacesDead = true;
           this._tunnelFaces = null;

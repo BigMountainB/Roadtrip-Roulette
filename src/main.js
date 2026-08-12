@@ -299,6 +299,68 @@ const _boot = () => {
   // read here and by the inline Calendar script in index.html.
   try { window.__DEV = new URLSearchParams(window.location.search).get('dev') === '1'; }
   catch (_) { window.__DEV = false; }
+
+  // ── ?devtools=1 — an on-screen console ─────────────────────────────────
+  // The game is played on a phone over the LAN, where there is no inspector,
+  // so console output was effectively invisible while debugging the tunnel
+  // facade. This mirrors console.* and uncaught errors into a tappable overlay.
+  // Deliberately dependency-free (no CDN) so it works offline and can't become
+  // a supply-chain surprise. Off unless explicitly asked for.
+  try {
+    if (new URLSearchParams(window.location.search).get('devtools') === '1') {
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:38vh;overflow:auto;' +
+        'z-index:2147483647;background:rgba(0,0,0,.86);color:#0f8;font:11px/1.35 monospace;' +
+        'padding:4px 6px;white-space:pre-wrap;-webkit-overflow-scrolling:touch';
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:sticky;top:0;background:#000;color:#ff0;padding:2px 0;' +
+        'display:flex;gap:10px;font-weight:bold';
+      bar.innerHTML = '<span>console</span>';
+      const mk = (label, fn) => {
+        const b = document.createElement('span');
+        b.textContent = label;
+        b.style.cssText = 'cursor:pointer;text-decoration:underline';
+        b.onclick = fn;
+        bar.appendChild(b);
+      };
+      const log = document.createElement('div');
+      mk('clear', () => { log.textContent = ''; });
+      mk('hide',  () => { box.style.display = 'none'; });
+      // Warp buttons — B/N are keyboard-only and this is played on a phone.
+      // GameScene publishes window.__rtrWarp under the same ?devtools=1 flag.
+      mk('◀ .25', () => window.__rtrWarp?.back());
+      mk('.25 ▶', () => window.__rtrWarp?.fwd());
+      mk('Mt Baker', () => window.__rtrWarp?.goto(4.35));
+      mk('Mercer',   () => window.__rtrWarp?.goto(6.9));
+      const mileTag = document.createElement('span');
+      mileTag.style.cssText = 'margin-left:auto;color:#8cf';
+      bar.appendChild(mileTag);
+      setInterval(() => {
+        const mi = window.__rtrWarp?.mile?.();
+        mileTag.textContent = (typeof mi === 'number') ? mi.toFixed(2) + ' mi' : '';
+      }, 250);
+      box.append(bar, log);
+      const add = (kind, args) => {
+        const line = document.createElement('div');
+        line.style.color = kind === 'error' ? '#f66' : kind === 'warn' ? '#fd6' : '#0f8';
+        line.textContent = args.map(a => {
+          if (typeof a === 'string') return a;
+          try { return JSON.stringify(a); } catch (_) { return String(a); }
+        }).join(' ');
+        log.appendChild(line);
+        box.scrollTop = box.scrollHeight;
+      };
+      for (const kind of ['log', 'info', 'warn', 'error']) {
+        const orig = console[kind].bind(console);
+        console[kind] = (...args) => { try { add(kind, args); } catch (_) {} orig(...args); };
+      }
+      window.addEventListener('error', e => add('error', ['[uncaught]', e.message, e.filename + ':' + e.lineno]));
+      window.addEventListener('unhandledrejection', e => add('error', ['[promise]', String(e.reason)]));
+      const mount = () => document.body ? document.body.appendChild(box)
+                                        : setTimeout(mount, 50);
+      mount();
+    }
+  } catch (_) { /* never let the debug overlay break boot */ }
   window.__daily = {
     today() {
       const c = challengeForDate();
