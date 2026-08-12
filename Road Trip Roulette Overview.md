@@ -51,6 +51,18 @@ forked from DUI on **2026-07-04** into its own repo and Cloudflare Pages site. R
 into an App-Store-safe survival road trip and adds the commercial glue (encounters, part
 upgrades, survival + heat/fuel pressure).
 
+## ⚠️ FILE RULES (owner, 2026-08-12 — every session, read first)
+
+1. **NO duplicate files without explicit owner approval.** Never create copies of source files
+   as backups or scratch space — no `GameScene 2.js`, `main 2.js`, `*_old.js`, `*_backup.js`,
+   `*.bak`. Git history IS the backup. Stray `<name> 2.<ext>` duplicates have appeared in
+   `src/` twice (2026-08-11) and had to be diff-verified and deleted; if you find one, verify it
+   holds nothing unique, then delete it.
+2. **ONE Markdown file.** All notes, specs, art briefs, and plans go in THIS file
+   ("Road Trip Roulette Overview.md") as a chapter or changelog entry — never a new standalone
+   .md. (Existing violations `CLAUDE_GARAGE_STORE_UI_PROMPT.md`, `ENDING_ART_SPEC.md`,
+   `TUNNEL_FACE_ART_SPEC.md` predate this note; fold them in here before adding to them.)
+
 ## Current snapshot (as of 2026-07-19 — rest-stop / dialogue lines refreshed 2026-08-10)
 
 **Built & deployed:** rest-stop encounter system (dialogue trees + npcMemory) · **MISSION SYSTEM
