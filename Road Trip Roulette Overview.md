@@ -203,6 +203,50 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-12 (pt 2) — Garage tile shows the default genre's car (tilted pose)
+Committed `05b9b59`, not pushed.
+
+The phone menu's GARAGE tile — whose background art is literally
+`iphone_menu_bg_empty_garage.png`, an empty waterfront bay — now shows the **active/default
+genre's starter in its rear-three-quarter "turn" pose**
+(`assets/culture/<genre>/vehicles/starter_back_turn.png`, the same RGBA art the in-game steering
+pose uses). Implementation: a `data-px`-positioned
+`<img id="phone-garage-car" data-px="324 775 210 130">` overlay (PNG-pixel coords track the
+artwork at any scale; that string is the position/size knob, `?calibrate` logs tap coords) parked
+between the GARAGE label and the trip clock, `pointer-events: none` and declared before the hit
+zones so the garage tap passes through, with a scale-tracking drop shadow.
+
+Sync: `syncGarageTileCar()` (index.html) reads `window.__genre.get()` (default station IS the
+genre; hard fallback `'hiphop_phonk'` = `DEFAULT_GENRE` for the pre-registry boot window, plus an
+onerror fallback to the hip-hop art). It runs at the top of `setPhoneMenuBg` — **before** that
+function's early-return, which otherwise always fires now that the bg URL is constant — and in
+`syncMenuBg`, covering boot retries, GameScene's car reskin (`__syncMenuBg`), the garage picker,
+and the music-app genre star in one chokepoint. The img carries no `src` attribute until the first
+sync (`:not([src]) { display:none }`), so there's no broken-image flash on load.
+
+### 2026-08-12 — Snow ground plates visible: whiteout fade removed, roadside hold matched to the road blanket
+
+Owner: the pass "and beyond" was the one region with no ground plates. Diagnosis: the four-stage
+roadside snow accumulation (GroundPlane `snowAmountAt`/`snowGroundAt`, landed in `cba522b`) was
+already correct, but Road.js still carried the pre-snow-tile whiteout rule
+`groundTexFade = (1 − snowI)^0.6`, which faded the ENTIRE GroundPlane layer out as the road blanket
+built (40→55) and held it at zero through mile 86 — erasing the snow tiles exactly where they
+accumulate. Two changes:
+
+- **Road.js — `groundTexFade` deleted** (`pushRow` back to default alpha 1). Safe on the weather
+  gate: `Weather.state()` returns `'clear'` whenever `Difficulty.weather()` is off, so blanket and
+  roadside tiles share one gate — whenever the blanket is up, the tiles themselves are the snow art.
+  The flat `SNOW_WHITE` grass lerp stays (it's the beyond-fade/failsafe base under the texture).
+- **GroundPlane.js — roadside window now mirrors the road blanket:** `SNOW_MI_HOLD` 58 → **86**,
+  `SNOW_MI_END` 68 → **88** (matching `snowBlanketAt`'s full-to-86, ease-out 86–88). The old 68
+  melt-out left bare Easton dirt beside a still-solid-white road for 18 miles (the owner's own
+  08-11 screenshot at mi 68.79 shows it). Regime handoffs (dust ↔ snow-owned base at a = 0.35) land
+  at ~mi 41.5 climbing and ~mi 87.2 melting, both away from biome boundaries.
+
+Build 36→50 unchanged (patches in the verge from 36, ~2 mi before the road turns snowy). Not
+screenshot-verified (harness still doesn't exist — see 08-10 entry); verified by code path + syntax
+check; owner to playtest with `__warpTo(45/55/70/87)`.
+
 ### 2026-08-11 (pt 11) — Radio-scan hold music; city landmarks scaled up; cross-shop buy-once fix
 All committed & pushed (`165f3c9`, `fd579f6`; shop fix rode an earlier commit this session).
 
@@ -7987,15 +8031,15 @@ Naming: `<name>_ground_1024.png`, registered as texture key `ground_<name>`.
 
 ### Not needed
 
-- **No snow variants.** Snow is applied by the engine — the tile fades out
-  under the blanket and the road/roadside go pure white at mile 55.
-  **Re-confirmed by the owner 2026-08-11 ("leave it"), with the cost now
-  measured:** `groundTexFade = (1 - snowI)^0.6` reaches zero at full cover, so
-  roughly **miles 55-86 — ~31 mi, ~11% of the route — render completely
-  untextured flat white.** That is accepted, not an oversight. Note also that a
-  snow tile could NOT simply be another `GROUND_TILES` row: that map is keyed by
-  biome, while snow is weather-driven by mile, so it would need `setTile` to
-  switch on snow intensity instead.
+- **Snow variants — DECISION REVERSED 2026-08-12.** The 08-11 "leave it"
+  (accept ~31 flat-white miles) was superseded by the owner the next day:
+  three snow-stage tiles now exist (`snoqualmie_ground_light/partial/_1024`,
+  keys `ground_snoq_light/partial/full`) and `GroundPlane.snowGroundAt()`
+  cross-fades alpine → light → partial → full by weather-driven mile — exactly
+  the "switch on snow intensity, not biome" shape this entry predicted. The
+  `groundTexFade = (1 - snowI)^0.6` fade-out in Road.js was REMOVED (it erased
+  the new tiles under the blanket); the roadside now stays textured through
+  the whole 36–88 snow window. See the 2026-08-12 changelog entry.
 - **No road surface.** The tarmac, lane lines and rumble strip are drawn
   procedurally. These tiles are the ground *beside* the road only.
 
