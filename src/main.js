@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { initOpeningCall } from './ui/OpeningCallSequence.js';
 import { BootScene }    from './scenes/BootScene.js';
 import { GameScene }    from './scenes/GameScene.js';
 import { RestStopScene } from './scenes/RestStopScene.js';
@@ -287,6 +288,11 @@ const _boot = () => {
       if (gs && gs._paused) gs._togglePause();         // resume gameplay
     },
   };
+  // One-time opening call.  Mounted AFTER __phoneMenu above, because the
+  // sequence finishes by opening that menu rather than rebuilding it.  It
+  // no-ops immediately when the intro has already been seen.
+  try { initOpeningCall(); } catch (e) { console.warn('[OpeningCall] init failed', e); }
+
   window.__phaserGame = game;          // for the menu's map renderer
   window.__restStops  = REST_STOPS;    // for the phone-map "Next Rest Stop" panel
   // Daily Challenges ("Run of the Day") bridge — read by the phone Calendar
@@ -332,6 +338,7 @@ const _boot = () => {
       mk('.25 ▶', () => window.__rtrWarp?.fwd());
       mk('Mt Baker', () => window.__rtrWarp?.goto(4.35));
       mk('Mercer',   () => window.__rtrWarp?.goto(6.9));
+      mk('Pass',     () => window.__rtrWarp?.goto(35));
       // Live facade tuning — dial the concrete band above the tunnel mouth
       // without a rebuild. Read every frame by TunnelFaceMesh.
             // null = "use this plate's baked default". The buttons seed from whatever
@@ -345,7 +352,8 @@ const _boot = () => {
         tuneTag.textContent = (window.__facadeLast?.plate ?? '—') +
                               '  top ' + cur('above', 1).toFixed(2) +
                               '  legs ' + cur('legs', 1).toFixed(2) +
-                              '  span ' + cur('span', 1).toFixed(2);
+                              '  span ' + cur('span', 1).toFixed(2) +
+                              '  dim ' + (window.__wildDim ?? 0.12).toFixed(2);
       };
       mk('top −', () => { window.__facadeTune.above = Math.max(0.1, cur('above', 1) - 0.05); showTune(); });
       mk('top +', () => { window.__facadeTune.above = Math.min(2.0, cur('above', 1) + 0.05); showTune(); });
@@ -355,6 +363,10 @@ const _boot = () => {
       mk('span +', () => { window.__facadeTune.span = Math.min(1.6, cur('span', 1) + 0.03); showTune(); });
       mk('reset',  () => { window.__facadeTune.above = null; window.__facadeTune.legs = null; window.__facadeTune.span = null; showTune(); });
       mk('outline', () => { window.__facadeTune.outline = !window.__facadeTune.outline; });
+      // Wildlife-crossing shadow depth. 0.40 is the full bore dim; 0 is none.
+      window.__wildDim = window.__wildDim ?? 0.12;
+      mk('dim −', () => { window.__wildDim = Math.max(0, window.__wildDim - 0.04); showTune(); });
+      mk('dim +', () => { window.__wildDim = Math.min(0.40, window.__wildDim + 0.04); showTune(); });
       bar.appendChild(tuneTag);
       showTune();
       const mileTag = document.createElement('span');

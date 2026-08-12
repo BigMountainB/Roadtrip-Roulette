@@ -1568,6 +1568,140 @@
       z-index: 3;
       box-shadow: 0 2px 8px rgba(0,0,0,0.4);
     }
+
+    /* ── Opening call overlay ────────────────────────────────────────────
+       The one-time incoming call that opens a new game.  Sits ABOVE the phone
+       menu (9999) so the call can never be operated through to the menu
+       underneath; `touch-action: none` + pointer-events on the root stop every
+       tap, drag and scroll from reaching Phaser or the menu.
+
+       The stage is locked to the ARTWORK'S OWN 853:1844 ratio and sized from
+       the large viewport, so the supplied art is never stretched and never
+       recropped.  On the target portrait phones (390x844 = 0.462,
+       430x932 = 0.461, art = 0.4626) that fills the glass; anything wider
+       letterboxes against black rather than distorting. */
+    #opening-call {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000000;              /* over #phone-menu (9999) and all modals */
+      background: #000;
+      touch-action: none;
+      overscroll-behavior: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    body.opening-call-active { overflow: hidden; }
+
+    #opening-call .oc-stage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      height: 100lvh;
+      width: calc(100lvh * 853 / 1844);
+      max-width: 100vw;
+      /* Fall back to width-fit if the viewport is narrower than the ratio,
+         so the art still fills rather than overflowing. */
+      max-height: 100lvh;
+      container-type: inline-size;
+    }
+    #opening-call .oc-art {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;             /* exact-ratio box: crops nothing */
+      object-position: center;
+      display: block;
+    }
+    #opening-call .oc-art-title { opacity: 0; }
+
+    /* Call UI — laid out in cqw so it scales with the phone frame, matching
+       how the rest of the menu chrome is sized. */
+    #opening-call .oc-ui {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding: calc(env(safe-area-inset-top, 0px) + 6cqw) 6cqw
+               calc(env(safe-area-inset-bottom, 0px) + 9cqw);
+      pointer-events: none;          /* only the slider takes input */
+    }
+    #opening-call .oc-caller {
+      position: absolute;
+      top: calc(env(safe-area-inset-top, 0px) + 9cqw);
+      left: 0; right: 0;
+      text-align: center;
+      color: #fff;
+      text-shadow: 0 0.4cqw 2.2cqw rgba(0, 0, 0, .75);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    #opening-call .oc-name { font-size: 8.6cqw; font-weight: 600; letter-spacing: .02em; }
+    #opening-call .oc-sub  { font-size: 4.2cqw; opacity: .82; margin-top: 1.2cqw; }
+
+    #opening-call .oc-track {
+      position: relative;
+      width: 84cqw;
+      height: 17cqw;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .16);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      box-shadow: inset 0 0 0 0.3cqw rgba(255, 255, 255, .16);
+      pointer-events: auto;
+      overflow: hidden;
+    }
+    #opening-call .oc-slide-hint {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding-left: 6cqw;
+      color: rgba(255, 255, 255, .92);
+      font-size: 4.3cqw;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      pointer-events: none;
+      animation: oc-shimmer 2.1s ease-in-out infinite;
+    }
+    #opening-call .oc-knob {
+      position: absolute;
+      top: 0.7cqw;
+      left: 0.7cqw;
+      width: 15.6cqw;
+      height: 15.6cqw;
+      border-radius: 50%;
+      background: #34C759;           /* iOS answer green */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 7.4cqw;
+      color: #fff;
+      cursor: grab;
+      touch-action: none;
+      will-change: transform;
+      animation: oc-pulse 1.9s ease-in-out infinite;
+    }
+    #opening-call.oc-dragging .oc-knob { animation: none; cursor: grabbing; }
+    #opening-call .oc-knob:focus-visible {
+      outline: 0.6cqw solid #7FD8FF;
+      outline-offset: 0.5cqw;
+    }
+    @keyframes oc-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(52, 199, 89, .55); }
+      50%      { box-shadow: 0 0 0 2.6cqw rgba(52, 199, 89, 0); }
+    }
+    @keyframes oc-shimmer { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
+    /* Reduced motion: no pulsing, no shimmer.  Fade durations are shortened
+       in JS (fadeMs) to match. */
+    @media (prefers-reduced-motion: reduce) {
+      #opening-call .oc-knob,
+      #opening-call .oc-slide-hint { animation: none; }
+    }
   </style>
 </head>
 <body>
@@ -1577,7 +1711,7 @@
        rounded corners, and the nav/gesture bar.  See the #game-root CSS. -->
   <div id="game-root"></div>
   <div id="phone-menu" aria-hidden="true">
-    <img class="bg" src="assets/ui/iphone_menu_bg_beater.png" alt="Phone menu" />
+    <img class="bg" src="assets/ui/iphone_menu_bg_empty_garage.png" alt="Phone menu" />
 
     <!-- Legacy top-widget chips (trophy / lock / hand).  The 2026-06 menu
          redesign moved Trophies to its own grid tile and dropped the lock +
@@ -1659,14 +1793,14 @@
          lost the run — confusing/dangerous.  Players rotate to landscape to
          resume; desktop uses its own "enter gameplay" button. -->
     <!-- …except on DESKTOP, where "rotate phone" describes an impossible
-         action.  That instruction is painted into iphone_menu_bg.png AND all
-         eight car-skin variants, so it can't be reworded per-platform — this
+         action.  That instruction is painted into the shared phone-menu art,
+         so it can't be reworded per-platform — this
          opaque panel covers the baked bar (art bbox x42-811 y1564-1711, padded)
          and offers the click that stands in for the rotation.  Unlike the 2026
          hit zone above it does NOT return to the title: __phoneMenu.close()
          resumes the run in place, so nothing is lost.  data-px keeps it glued
          to the artwork at any scale; hidden entirely unless body.is-desktop. -->
-    <button id="phone-desk-play" type="button" data-px="36 1558 782 160">
+    <button id="phone-desk-play" type="button" data-px="36 1558 782 155">
       <span>CLICK TO</span><b>ENTER GAME PLAY</b>
     </button>
 
@@ -2267,23 +2401,19 @@
       });
       window.visualViewport?.addEventListener?.('resize', settleLayout);
 
-      // ── Per-car phone-menu background ─────────────────────────────────
-      // Each owned vehicle has its own 853×1844 menu skin (same icon/dock
-      // layout, different art) at assets/ui/iphone_menu_bg_<carId>.png.
-      // Swapping the <img class="bg"> src re-skins the whole menu; the
-      // hit-zone math reads the image's naturalWidth on load, so the
-      // buttons stay aligned (all skins share the 853×1844 layout).  A car
-      // with no custom skin falls back to the shared default art.
-      // Default skin = the BEATER (starter car), not the generic art (which
-      // depicts a truck) — so a fresh/unchosen profile shows the sedan, never
-      // a truck the player doesn't own yet.
-      const PHONE_BG_DEFAULT = 'assets/ui/iphone_menu_bg_beater.png';
-      const phoneBgUrl = (id) => id ? `assets/ui/iphone_menu_bg_${id}.png` : PHONE_BG_DEFAULT;
+      // ── Shared phone-menu background ──────────────────────────────────
+      // The Garage card is intentionally empty in this 853×1844 base art.
+      // Culture-specific vehicle art is composited over it at runtime, so a
+      // baked-in starter car can never show behind the selected vehicle.
+      const PHONE_BG_DEFAULT = 'assets/ui/iphone_menu_bg_empty_garage.png';
+      // Vehicle art is now composited live in the Garage card; every culture
+      // uses the shared empty stage instead of baking a car into a menu skin.
+      const phoneBgUrl = () => PHONE_BG_DEFAULT;
       const setPhoneMenuBg = (id) => {
         if (!bgImg) return;
         const url = phoneBgUrl(id);
         if (bgImg.getAttribute('src') === url) return;   // already showing it
-        // Missing per-car skin → fall back to the shared default art.
+        // Preserve the shared default if a future caller supplies another id.
         bgImg.onerror = () => {
           bgImg.onerror = null;
           if (bgImg.getAttribute('src') !== PHONE_BG_DEFAULT) {
@@ -4499,6 +4629,29 @@
       }, 100);
     })();
   </script>
+
+  <!-- Opening call overlay.  Structure only — all behaviour lives in
+       src/ui/OpeningCallSequence.js.  The two <img> layers are the supplied
+       artwork, used as-is; the title starts at opacity 0 and crossfades in. -->
+  <div id="opening-call" aria-hidden="true">
+    <div class="oc-stage">
+      <img class="oc-art oc-art-call"  src="assets/ui/incoming_call_club_manager.png" alt="" />
+      <img class="oc-art oc-art-title" src="assets/ui/title_screen_vertical.png" alt="" />
+      <div class="oc-ui" role="dialog" aria-label="Incoming call from Club Manager">
+        <div class="oc-caller">
+          <div class="oc-name">Club Manager</div>
+          <div class="oc-sub">Incoming call</div>
+        </div>
+        <div class="oc-track">
+          <div class="oc-slide-hint">slide to answer</div>
+          <div class="oc-knob" role="slider" tabindex="0"
+               aria-label="Slide to answer the call from Club Manager. Press Enter or Space to answer."
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">&#9654;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
