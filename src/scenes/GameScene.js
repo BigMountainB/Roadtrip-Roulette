@@ -39,7 +39,10 @@ const COP_VISUAL_SCALE = 1;
 import { Road, snowBlanketAt, SNOW_WHITE, SNOW_MARKINGS_GONE } from '../road/Road.js';
 import { GroundPlane, groundTileFor } from '../road/GroundPlane.js';
 import { RoadPlane }     from '../road/RoadPlane.js';
-import { BAND, BIOMES, biomeAt, bandKey, bandHeight, bandRate } from '../road/Biomes.js';
+import {
+  BAND, BIOMES, NIGHT_BIOMES, biomeAt, bandKey, nightBandKey,
+  bandHeight, bandRate,
+} from '../road/Biomes.js';
 import { LANDMARKS, projectLandmark, activeLandmarks } from '../road/Landmarks.js';
 import geoData           from '../road/routeGeo.json';
 import { ViceSystem }    from '../systems/ViceSystem.js';
@@ -1098,6 +1101,7 @@ export class GameScene extends Phaser.Scene {
     // horizon and can never paint over the road, which shares roadGfx's
     // depth and would otherwise be overdrawn.
     this._biomeLayers = { a: {}, b: {} };
+    this._biomeNightLayers = { a: {}, b: {} };
     for (const set of ['a', 'b']) {
       for (const layer of BAND.layers) {
         const ts = this.add.tileSprite(0, 0, SCREEN_W, BAND.h - BAND.yCrop[layer],
@@ -1123,6 +1127,17 @@ export class GameScene extends Phaser.Scene {
           .setScrollFactor(0)
           .setVisible(false);
         this._biomeLayers[set][layer] = ts;
+
+        // Separate overlay lets the outbound trip dissolve from the retained
+        // daytime art into purpose-lit Eastern Washington dusk/night art.
+        // It is intentionally independent of the a/b biome crossfade.
+        const nts = this.add.tileSprite(0, 0, SCREEN_W, BAND.h - BAND.yCrop[layer],
+                                        bandKey(BIOMES[0].key, layer))
+          .setOrigin(0, 1)
+          .setDepth(1.151)
+          .setScrollFactor(0)
+          .setVisible(false);
+        this._biomeNightLayers[set][layer] = nts;
       }
     }
 
@@ -2706,6 +2721,8 @@ export class GameScene extends Phaser.Scene {
         // Biome parallax bands — world objects, so the UI camera must
         // ignore them or it re-paints the horizon on top of the HUD.
         ...Object.values(this._biomeLayers.a), ...Object.values(this._biomeLayers.b),
+        ...Object.values(this._biomeNightLayers?.a ?? {}),
+        ...Object.values(this._biomeNightLayers?.b ?? {}),
         this._nbBasePlate, ...this._landmarkImgs,
         this._fogGlowGfx,
         this.weatherFxGfx, this.wipersGfx, ...this.chaseWipers,
@@ -14288,6 +14305,7 @@ export class GameScene extends Phaser.Scene {
 
   _renderBiomeBackdrop() {
     const layers = this._biomeLayers;
+    const nightLayers = this._biomeNightLayers;
 
     const mile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
     const sel  = biomeAt(mile);
@@ -14315,6 +14333,7 @@ export class GameScene extends Phaser.Scene {
     if (!sel) {                       // urban miles — skyline owns the horizon
       for (const set of ['a', 'b']) {
         for (const l of BAND.layers) layers[set][l].setVisible(false);
+        for (const l of BAND.layers) nightLayers?.[set]?.[l]?.setVisible(false);
       }
       return;
     }
@@ -14338,9 +14357,10 @@ export class GameScene extends Phaser.Scene {
       ? Math.max(-70, Math.min(70, _far.sy - horizon))
       : 0;
 
-    const paint = (set, biome, weight) => {
+    const paint = (targetLayers, set, biome, weight, keyFor = bandKey) => {
       for (const layer of BAND.layers) {
-        const ts = layers[set][layer];
+        const ts = targetLayers?.[set]?.[layer];
+        if (!ts) continue;
         if (!biome || weight <= 0.002) { ts.setVisible(false); continue; }
         // Bands are AUTHORED at BAND.w (2048) but the screen is 800 wide.
         // A TileSprite does not scale its texture — it shows a native-size
@@ -14355,7 +14375,7 @@ export class GameScene extends Phaser.Scene {
         const _M  = 150 + Math.ceil(C.HUD_OFFSET_X ?? 0);
         const _bw = SCREEN_W + _M * 2;
 
-        const key = bandKey(biome, layer);
+        const key = keyFor(biome, layer);
         // `ts.texture` on a TileSprite is Phaser's INTERNALLY generated
         // fill-pattern texture — its key is a UUID, so the old
         // `ts.texture.key !== key` guard was always true and setTexture ran
@@ -14450,8 +14470,19 @@ export class GameScene extends Phaser.Scene {
       }
     };
 
-    paint('a', sel.a, 1);
-    paint('b', sel.b, sel.t);
+    // Royal City (mile 158) is the visual sunset handoff. The dissolve begins
+    // just before town so its basin is warm at arrival, reaches the authored
+    // deep-dusk Columbia art by mile 180, and remains full night in Palouse.
+    // Day files remain resident and selectable for the future return trip.
+    const eveningMix = clamp((mile - 150) / 30, 0, 1);
+    const nightWeight = biome => NIGHT_BIOMES.has(biome) ? eveningMix : 0;
+    const aNight = nightWeight(sel.a);
+    const bNight = nightWeight(sel.b);
+
+    paint(layers, 'a', sel.a, 1 - aNight);
+    paint(layers, 'b', sel.b, sel.t * (1 - bNight));
+    paint(nightLayers, 'a', sel.a, aNight, nightBandKey);
+    paint(nightLayers, 'b', sel.b, sel.t * bNight, nightBandKey);
   }
 
   /**

@@ -2153,6 +2153,55 @@ export class Road {
       const leftArch  = archCurve(outerL, pierL, riseL);   // outerL → pierL springers
       const rightArch = archCurve(pierR, outerR, riseR);   // pierR → outerR springers
 
+      // Publish the two arch OPENINGS (interior shows ONLY through these) +
+      // a bounding rect for sprite culling. Done BEFORE anything is painted so
+      // the artwork can take over without the procedural concrete having
+      // already gone down underneath it.
+      const opening = (arch) => ([
+        ...arch,
+        { x: arch[arch.length - 1].x, y: groundY },
+        { x: arch[0].x,               y: groundY },
+      ]);
+      this._tunnelMouthShapes = [opening(leftArch), opening(rightArch)];
+      const mTop = Math.min(crownYL, crownYR);
+      this._tunnelMouthRect = { x: outerL, y: mTop, w: mouthW, h: groundY - mTop };
+
+      // ── Wildlife facade ARTWORK ────────────────────────────────────────
+      // Same path as the other two, with two differences that matter:
+      //   • mouthTopY is the ARCH CROWN, not a flat lintel, so the plate's
+      //     twin openings bind to the real arches rather than a rectangle.
+      //   • _tunnelMouthShapes above stays authoritative for interior
+      //     clipping (per the art spec) — the plate does NOT republish a
+      //     rect over it, because two arches and a solid pier cannot be
+      //     expressed as one box, and the pier has to keep occluding.
+      // The plate's pier is centred, and the fit is symmetric about the mouth
+      // centre, so the painted pier lands on the median without extra work.
+      if (!this._tunnelFacesDead) {
+        try {
+          if (!this._tunnelFaces && g.scene) {
+            this._tunnelFaces = new TunnelFaceMesh(g.scene);
+            g.scene.events?.once?.('shutdown', () => {
+              this._tunnelFaces?.destroy();
+              this._tunnelFaces = null;
+            });
+          }
+          const drewW = this._tunnelFaces?.update('wildlife', {
+            outerL, outerR, groundY,
+            mouthTopY: mTop,
+            sW, sH,
+            curve: e.seg?.curve ?? 0,
+            alpha: rimAlpha,
+            depth: g.depth ?? 9.82,
+          });
+          if (drewW) return;
+        } catch (err) {
+          this._tunnelFacesDead = true;
+          this._tunnelFaces = null;
+          console.warn('[Road] tunnel facade artwork disabled for this run — ' +
+                       'falling back to the procedural face.', err);
+        }
+      }
+
       // SOLID cement — two pieces split at the centerline, each carving one
       // arch on its outer half and meeting at the solid pier in the middle.
       const leftPiece = [
@@ -2215,16 +2264,6 @@ export class Road {
         ring(rightArch, riseR);
       }
 
-      // Publish the two arch OPENINGS (interior shows ONLY through these) +
-      // a bounding rect for sprite culling.
-      const opening = (arch) => ([
-        ...arch,
-        { x: arch[arch.length - 1].x, y: groundY },
-        { x: arch[0].x,               y: groundY },
-      ]);
-      this._tunnelMouthShapes = [opening(leftArch), opening(rightArch)];
-      const mTop = Math.min(crownYL, crownYR);
-      this._tunnelMouthRect = { x: outerL, y: mTop, w: mouthW, h: groundY - mTop };
       return;
     }
 
@@ -2277,7 +2316,11 @@ export class Road {
       // erased the Mt Baker face entirely — the try/catch is the lesson, and
       // `_tunnelFacesDead` latches so a broken build costs one log line, not
       // one per frame.
-      if (plateKey === 'mt_baker' && !this._tunnelFacesDead) {
+      // Both rectangular-mouth tunnels run this path now: Mt Baker proved the
+      // projection out, and the Mercer lid differs only in its plate (a lower,
+      // wider profile — openT 0.7411 vs 0.6011). The wildlife crossing has its
+      // own hook further up, because its twin-arch branch returns before here.
+      if (!this._tunnelFacesDead) {
         try {
           if (!this._tunnelFaces && g.scene) {
             this._tunnelFaces = new TunnelFaceMesh(g.scene);

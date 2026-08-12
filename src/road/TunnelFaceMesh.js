@@ -57,6 +57,10 @@ export const PLATES = {
     texture: 'tunnel_face_mt_baker',
     openL: 0.2687, openR: 0.7319,
     openT: 0.6011,          // opening is the bottom 39.9% of the plate
+    // Dialled in on the live approach, owner 2026-08-11.
+    aboveScale: 1.00,       // deck/hillside at true scale — squashing it read as broken trees
+    legsScale:  0.55,       // shorter columns; the portal was too tall
+    spanScale:  0.85,       // legs pulled in to meet the interior walls
   },
   mercer_lid: {
     texture: 'tunnel_face_mercer_lid',
@@ -68,6 +72,10 @@ export const PLATES = {
   // in Road._tunnelMouthShapes stay authoritative for interior clipping.
   // (The plate also carries ~5% transparent padding on each outer edge, which
   // is margin, not an opening — the measurement picked those up separately.)
+  // The plate's pier is centred (0.4662..0.5337 → midpoint 0.4999), and the
+  // fit is symmetric about the mouth centre, so the painted pier lands on the
+  // procedural median automatically — no separate pier term needed.
+  // Road passes mouthTopY = the arch crown, so openT binds to the real arches.
   wildlife: {
     texture: 'tunnel_face_wildlife',
     openL: 0.2469, openR: 0.7531,
@@ -258,7 +266,7 @@ export class TunnelFaceMesh {
     // on each side, so the painted jambs can land wide of where the tunnel's
     // interior walls actually are. Scaling about the mouth centre lets the legs
     // be brought in to meet them.
-    const spanTune  = (globalThis.__facadeTune?.span ?? plate.spanScale ?? 1);
+    const spanTune  = (globalThis.__facadeTune?.span ?? null) ?? plate.spanScale ?? 1;
     const mouthCx   = (outerL + outerR) / 2;
     const spanW     = mouthW * spanTune;
     const spanL     = mouthCx - spanW / 2;
@@ -308,7 +316,7 @@ export class TunnelFaceMesh {
     // interior mask follows it (this function's return value becomes
     // _tunnelMouthRect), so the painted arch and the tunnel behind it stay
     // locked together at any setting.
-    const legsTune = (globalThis.__facadeTune?.legs ?? plate.legsScale ?? 1);
+    const legsTune = (globalThis.__facadeTune?.legs ?? null) ?? plate.legsScale ?? 1;
     const baseTopY = (mouthTopY != null && mouthTopY < groundY) ? mouthTopY
                                                                 : groundY - natH * (1 - plate.openT);
     const openingTopY = groundY - (groundY - baseTopY) * legsTune;
@@ -319,7 +327,7 @@ export class TunnelFaceMesh {
     // adjustable from the ?devtools=1 bar so the value can be dialled in on a
     // single drive instead of a rebuild per guess; bake the chosen number into
     // PLATES[key].aboveScale once it looks right.
-    const aboveTune = (globalThis.__facadeTune?.above ?? plate.aboveScale ?? 1);
+    const aboveTune = (globalThis.__facadeTune?.above ?? null) ?? plate.aboveScale ?? 1;
     const aboveH   = plate.openT * natH * aboveTune;
     const plateTop = openingTopY - aboveH;
     const plateH   = groundY - plateTop;
@@ -365,6 +373,7 @@ export class TunnelFaceMesh {
       vert.alpha = alpha;
     }
 
+    globalThis.__facadeLast = { plate: plateKey, above: aboveTune, legs: legsTune, span: spanTune };
     mesh.setDepth(depth);
     mesh.setVisible(true);
     mesh.setAlpha(alpha);

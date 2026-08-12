@@ -334,28 +334,33 @@ const _boot = () => {
       mk('Mercer',   () => window.__rtrWarp?.goto(6.9));
       // Live facade tuning — dial the concrete band above the tunnel mouth
       // without a rebuild. Read every frame by TunnelFaceMesh.
-      window.__facadeTune = window.__facadeTune || { above: 1, legs: 1, span: 1 };
+            // null = "use this plate's baked default". The buttons seed from whatever
+      // is actually in force (published by TunnelFaceMesh as __facadeLast) so
+      // dialling one tunnel doesn't yank the other two to a shared value.
+      window.__facadeTune = window.__facadeTune || { above: null, legs: null, span: null };
+      const cur = (k, d) => window.__facadeTune[k] ?? window.__facadeLast?.[k] ?? d;
       const tuneTag = document.createElement('span');
       tuneTag.style.color = '#fd6';
       const showTune = () => {
-        tuneTag.textContent = 'top ' + window.__facadeTune.above.toFixed(2) +
-                              '  legs ' + (window.__facadeTune.legs ?? 1).toFixed(2) +
-                              '  span ' + (window.__facadeTune.span ?? 1).toFixed(2);
+        tuneTag.textContent = (window.__facadeLast?.plate ?? '—') +
+                              '  top ' + cur('above', 1).toFixed(2) +
+                              '  legs ' + cur('legs', 1).toFixed(2) +
+                              '  span ' + cur('span', 1).toFixed(2);
       };
-      mk('top −', () => { window.__facadeTune.above = Math.max(0.1, window.__facadeTune.above - 0.05); showTune(); });
-      mk('top +', () => { window.__facadeTune.above = Math.min(2.0, window.__facadeTune.above + 0.05); showTune(); });
-      mk('legs −', () => { window.__facadeTune.legs = Math.max(0.1, (window.__facadeTune.legs ?? 1) - 0.05); showTune(); });
-      mk('legs +', () => { window.__facadeTune.legs = Math.min(2.0, (window.__facadeTune.legs ?? 1) + 0.05); showTune(); });
-      mk('span −', () => { window.__facadeTune.span = Math.max(0.3, (window.__facadeTune.span ?? 1) - 0.03); showTune(); });
-      mk('span +', () => { window.__facadeTune.span = Math.min(1.6, (window.__facadeTune.span ?? 1) + 0.03); showTune(); });
-      mk('reset',  () => { window.__facadeTune.above = 1; window.__facadeTune.legs = 1; window.__facadeTune.span = 1; showTune(); });
+      mk('top −', () => { window.__facadeTune.above = Math.max(0.1, cur('above', 1) - 0.05); showTune(); });
+      mk('top +', () => { window.__facadeTune.above = Math.min(2.0, cur('above', 1) + 0.05); showTune(); });
+      mk('legs −', () => { window.__facadeTune.legs = Math.max(0.1, cur('legs', 1) - 0.05); showTune(); });
+      mk('legs +', () => { window.__facadeTune.legs = Math.min(2.0, cur('legs', 1) + 0.05); showTune(); });
+      mk('span −', () => { window.__facadeTune.span = Math.max(0.3, cur('span', 1) - 0.03); showTune(); });
+      mk('span +', () => { window.__facadeTune.span = Math.min(1.6, cur('span', 1) + 0.03); showTune(); });
+      mk('reset',  () => { window.__facadeTune.above = null; window.__facadeTune.legs = null; window.__facadeTune.span = null; showTune(); });
       mk('outline', () => { window.__facadeTune.outline = !window.__facadeTune.outline; });
       bar.appendChild(tuneTag);
       showTune();
       const mileTag = document.createElement('span');
       mileTag.style.cssText = 'margin-left:auto;color:#8cf';
       bar.appendChild(mileTag);
-      setInterval(() => {
+      setInterval(() => { showTune();
         const mi = window.__rtrWarp?.mile?.();
         mileTag.textContent = (typeof mi === 'number') ? mi.toFixed(2) + ' mi' : '';
       }, 250);

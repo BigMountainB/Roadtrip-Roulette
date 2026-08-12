@@ -190,6 +190,85 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-11 (pt 10) — Tunnel facades are painted artwork, drawn as projected meshes
+Tests 737 green, `vite build` clean. **Local-host only so far** — see the gate below.
+
+**What shipped.** The three 1600×900 facade plates (Mt Baker, Mercer lid, wildlife crossing) render
+as UV-mapped `Phaser.GameObjects.Mesh` grids, 6×4 = 48 triangles, built once and mutated in place.
+New `src/road/TunnelFaceMesh.js`; hooks in `Road._drawTunnelFacade()` (rectangular mouths) and in the
+wildlife twin-arch branch. Road **passes the live projected geometry in** rather than the mesh
+re-deriving it — two copies of the facade maths would drift, and the day they drifted the painted
+opening would silently stop matching the mouth.
+
+Why a mesh and not an Image: an Image has one x/y/scale, so it scales about a single point while the
+road beneath it shears. The painted opening slides off the real mouth the moment the road curves.
+
+**Plate geometry is MEASURED, not from the spec.** A throwaway canvas probe read each PNG's alpha
+channel. The spec's approximations were close horizontally and **silent on the vertical**, which was
+the value that mattered most:
+
+| plate | opening (u) | opening ceiling (v) | column profile |
+|---|---|---|---|
+| mt_baker | 0.2687–0.7319 | 0.6011 | flat |
+| mercer_lid | 0.2087–0.7887 | 0.7411 | flat |
+| wildlife | 0.2469–0.7531, pier 0.4662–0.5337 | 0.7867 | genuinely curved |
+
+**The core problem: the art and the geometry disagree by a fixed 1.85×.** The painted opening is
+h/w 0.484 (a tall arch); the procedural mouth is h/w ≈ 0.262 (a wide letterbox). `stretch=0.54`
+appeared *identically at every distance* in the owner's readouts — constant, so not a projection
+error. Fitting width only left the arch floating; fitting both squashed the concrete to 54%.
+
+Resolved with the owner's own suggestion — tie many points, don't scale a rigid rectangle — applied
+as a **piecewise vertical fit**. The plate is cut at the opening's ceiling and the halves map
+independently: the opening band is pinned to the mouth (mostly transparent, so stretching it moves
+almost no visible pixels), and everything above keeps the art's true scale. Three live knobs
+(`?devtools=1` → `top` / `legs` / `span`) let the remaining slack be dialled on the real approach
+instead of guessed. **Mt Baker is dialled in and baked: `top 1.00 / legs 0.55 / span 0.85`.**
+
+**Six real bugs found on the way — all of them only visible in-game.** Worth recording because four
+are general traps in this codebase:
+1. **Bare `Phaser.WEBGL` with no import.** Phaser is a module import everywhere here, never a global.
+   Threw a ReferenceError *from the constructor, before the feature flag was read*, erasing the whole
+   Mt Baker face — artwork and procedural. Default-off protected the pixels, not the code path.
+2. **`addVertices()` de-indexes.** A 6×4 grid does not keep 35 shared corners; it makes one Vertex per
+   index entry — 144. Writing 35 of them left 109 at the origin and drew the facade as slivers to the
+   top-left corner. Vertices are now driven off each vertex's own `u`/`v`, which is immune to
+   ordering and topology.
+3. **`setScrollFactor(0)`.** `GameScene` scrolls the main camera by `-HUD_OFFSET_X`, so every world
+   object takes that transform. Pinning the mesh to the screen made it the one thing that didn't move
+   with the road — offset ~95px, which ALSO made the bridge face look missing (the concrete was
+   displaced off the opening).
+4. **Hardcoded depth.** `renderTunnelFacade()` recomputes depth per frame as
+   `9.5 - min(1, relZ/76000) * 2.5 - 0.05`; that formula IS the occlusion contract. A fixed `9.82` sat
+   above the 9.5 scenery ceiling, so the facade drew in front of every building on the route.
+5. **State left behind on early-exit paths — twice.** `renderTunnelFacade()` returns early when the
+   camera is inside a tunnel or there's no projection, so a hide placed further down never runs on the
+   frames that matter. The plate froze at its last vertices and rode along for a mile past the portal.
+   Fixed by asserting visibility once per frame at the single entry point rather than remembering to
+   clean up on each of five exits. The status readout had the same disease and now clears itself.
+6. **Mesh has NO canvas renderer** in Phaser 3.90 (`MeshCanvasRenderer.js` is an empty stub) and the
+   game boots `Phaser.AUTO`. Canvas devices permanently get the procedural face — the fallback is
+   load-bearing, not politeness.
+
+**Gate: `constants.tunnelArtEnabled()`.** ON for a local dev host, OFF in production, overridable
+with `?tunnelart=1` / `?tunnelart=0`. **Both** the renderer and `AssetManifest.tunnelFaces` read the
+same function, so "can it draw" and "is the texture downloaded" can never disagree — and production
+doesn't pay 4.0 MB of boot for pixels it won't show. Flip by deleting the host check and the
+manifest ternary.
+
+**Also added `?devtools=1`** (`src/main.js`): an on-screen console mirroring `console.*` and uncaught
+errors, warp pedals sized like the brake/gas for touch, `Mt Baker` / `Mercer` jump buttons, a live
+mile readout, the facade tuning knobs, and an `outline` overlay (magenta = plate, green = its
+opening) for telling artwork apart from the real scenery overpass at Mt Baker. Dependency-free, no
+CDN. Warps now answer to `?devtools=1` as well as `?dev=1` — they're pure position changes, and
+stacking a second flag was friction for no safety gain.
+
+**Still open.** Mercer and the wildlife crossing are wired and drawing but **not yet dialled** —
+Mercer's profile is much lower and wider (openT 0.7411) so it will want its own numbers. The
+`?mile=` warp + headless screenshot harness was never built, which is why this took a dozen
+screenshot round-trips; worth building before the next visual feature. The Seattle→forest ground
+cross-fade (custom pipeline, owner's pick) is not started.
+
 ### 2026-08-11 (pt 9) — Bands stop collapsing on descents; night tint + sky for the stars
 Tests: 550 green, `vite build` clean.
 
