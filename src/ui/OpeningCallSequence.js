@@ -97,6 +97,7 @@ export function initOpeningCall() {
   // talks. Restoring is guarded by `musicWasPaused` so we never un-pause music
   // that the player themselves had paused in the Music app.
   let musicWasPaused = null;
+  let musicStarted = false;
   const suppressMusic = (on) => {
     const a = window.__audio;
     if (!a?.setMusicPaused) return;
@@ -109,6 +110,35 @@ export function initOpeningCall() {
         musicWasPaused = null;
       } else {
         musicWasPaused = null;            // player had it paused; leave alone
+      }
+    } catch (_) {}
+  };
+
+  /**
+   * Bring the menu music up once the manager has finished talking.
+   *
+   * Releasing the hold is not enough on a fresh boot: if the browser blocked
+   * autoplay there was never any playback to resume, so the menu would sit
+   * silent. Answering the call IS the user gesture that makes playback legal,
+   * so this kicks it the same way the game does after an autoplay block
+   * (GameScene ~23398: `_enablePlayback()` then `play()`).
+   *
+   * Guarded twice against double-playing: `musicStarted` makes it once-only,
+   * and it only calls play() when the audio context is not already running —
+   * i.e. only when nothing is sounding. If the player had music paused in the
+   * Music app, suppressMusic(false) leaves it paused and this stays silent.
+   */
+  const startMusicAfterCall = () => {
+    if (musicStarted) return;
+    musicStarted = true;
+    suppressMusic(false);
+    const a = window.__audio;
+    if (!a) return;
+    try {
+      if (a.musicPaused) return;          // player's own pause — respect it
+      if (a._ctx?.state !== 'running') {
+        a._enablePlayback?.();
+        a.play?.();
       }
     } catch (_) {}
   };
@@ -256,6 +286,10 @@ export function initOpeningCall() {
     // sure the sequence never ends on the call artwork.
     showTitle();
 
+    // Music comes up as the voicemail ends (owner), so it is already playing
+    // under the crossfade into the phone menu rather than arriving after it.
+    startMusicAfterCall();
+
     // Open the REAL phone menu underneath, then fade this overlay off it, so
     // the menu is revealed rather than reconstructed.
     try { window.__phoneMenu?.open?.(); } catch (_) {}
@@ -273,7 +307,7 @@ export function initOpeningCall() {
     root.style.display = 'none';
     root.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('opening-call-active');
-    suppressMusic(false);
+    startMusicAfterCall();               // no-op if finish() already did it
     markIntroDone(true);
     try { audio?.pause?.(); } catch (_) {}
     audio = null;
@@ -324,6 +358,7 @@ export function initOpeningCall() {
   window.__replayOpeningCall = () => {
     markIntroDone(false);
     try { window.__phoneMenu?.close?.(); } catch (_) {}
+    musicStarted = false;                // a replay gets its music cue back
     state = 'idle';
     start();
     return 'replaying opening call';
