@@ -81,6 +81,45 @@ export const PLATES = {
     openL: 0.2469, openR: 0.7531,
     openT: 0.7867,          // bottom 21.3%
     pierL: 0.4662, pierR: 0.5337,
+    // Dialled in on the live approach, owner 2026-08-11.
+    aboveScale: 0.80,
+    legsScale:  0.75,
+    spanScale:  1.00,
+    // TRACED FROM THE PNG'S ALPHA CHANNEL, not approximated from the
+    // procedural arch. The interior shade is stencilled to these, so any
+    // disagreement between this outline and the artwork's real holes shows up
+    // as a bright sliver of road inside the opening — which is exactly what it
+    // did while the stencil was cut from Road's sine arches instead. Both are
+    // arches, but not the SAME arch: at half height the painted opening is 87%
+    // of its full width where the sine curve is 84%, and the painted pier is
+    // 13.3% of the mouth against the procedural 10%.
+    //
+    // Rows are sampled every ~15 px from the crown (v = openT, which the trace
+    // confirms independently) down to the base, walked down the left jamb,
+    // across the ground line and back up the right. Dilated outward by 3 px of
+    // master: over-covering puts a hair of shadow on the arch ring, which reads
+    // as the recess it is, while under-covering puts a hair of lit road inside
+    // the opening, which reads as a hole in the bridge.
+    openings: [
+      // left arch
+      [ [0.3431, 0.7867], [0.3075, 0.8029], [0.2919, 0.8191], [0.2794, 0.8354],
+        [0.2706, 0.8516], [0.2631, 0.8679], [0.2575, 0.8841], [0.2531, 0.9003],
+        [0.2494, 0.9166], [0.2469, 0.9328], [0.2456, 0.9491], [0.2450, 0.9653],
+        [0.2450, 0.9815], [0.2444, 0.9978], [0.2444, 1.0000], [0.4681, 1.0000],
+        [0.4681, 0.9978], [0.4688, 0.9815], [0.4681, 0.9653], [0.4675, 0.9491],
+        [0.4662, 0.9328], [0.4637, 0.9166], [0.4606, 0.9003], [0.4562, 0.8841],
+        [0.4506, 0.8679], [0.4437, 0.8516], [0.4356, 0.8354], [0.4238, 0.8191],
+        [0.4081, 0.8029], [0.3713, 0.7867] ],
+      // right arch
+      [ [0.6288, 0.7867], [0.5931, 0.8029], [0.5769, 0.8191], [0.5650, 0.8354],
+        [0.5563, 0.8516], [0.5494, 0.8679], [0.5437, 0.8841], [0.5394, 0.9003],
+        [0.5356, 0.9166], [0.5331, 0.9328], [0.5319, 0.9491], [0.5312, 0.9653],
+        [0.5312, 0.9815], [0.5312, 0.9978], [0.5312, 1.0000], [0.7594, 1.0000],
+        [0.7594, 0.9978], [0.7550, 0.9815], [0.7550, 0.9653], [0.7550, 0.9491],
+        [0.7531, 0.9328], [0.7506, 0.9166], [0.7469, 0.9003], [0.7431, 0.8841],
+        [0.7369, 0.8679], [0.7294, 0.8516], [0.7206, 0.8354], [0.7087, 0.8191],
+        [0.6925, 0.8029], [0.6575, 0.7867] ],
+    ],
   },
 };
 
@@ -236,10 +275,12 @@ export class TunnelFaceMesh {
    *   curve           accumulated curve at the tunnel, for the skew term
    *   alpha           fade with distance
    *   depth           render depth
-   * @returns {?{x:number,y:number,w:number,h:number}} the painted opening's
-   *   screen rect when the artwork drew (the caller republishes it as
-   *   _tunnelMouthRect so the interior mask matches the arch), or null when it
-   *   didn't draw — caller then paints the procedural facade instead.
+   * @returns {?{x:number,y:number,w:number,h:number,shapes:?Array}} the painted
+   *   opening's screen rect when the artwork drew (the caller republishes it as
+   *   _tunnelMouthRect so the interior mask matches the arch), plus `shapes` —
+   *   the projected opening polygons for plates that declare `openings`, which
+   *   the caller republishes as _tunnelMouthShapes. Null when it didn't draw —
+   *   caller then paints the procedural facade instead.
    */
   update(plateKey, geom) {
     if (!this.usable(plateKey)) { this._hud('facade: ' + this._status); return null; }
@@ -359,19 +400,30 @@ export class TunnelFaceMesh {
     // Reading u/v back makes this order- and topology-independent.
     // Reuses the existing Vertex objects — no per-frame allocation.
     const oT = plate.openT;
+    // The ONE copy of plate-uv → screen. The vertices and the interior stencil
+    // must agree exactly; two transcriptions of this drifted the moment `legs`
+    // became tunable, which is how the shade ended up cut to a different arch
+    // than the one the artwork paints.
+    const projX = (u) => plateLeft + plateW * u;
+    const projY = (v) => (v <= oT)
+      ? plateTop    + (v / oT) * aboveH                                  // hillside, true scale
+      : openingTopY + ((v - oT) / (1 - oT)) * (groundY - openingTopY);   // opening, pinned
+
     for (const vert of mesh.vertices) {
       const u = vert.u;
       const v = vert.v;                   // 0 at plate top, 1 at ground line
       // Horizontal stays linear — that alone pins openL/openR onto the mouth
       // edges, because plateW was derived from the opening's own span.
-      vert.x = plateLeft + plateW * u + lean * plateW * (1 - v);
-      // Vertical is piecewise about the opening ceiling (see the fit above).
-      const y = (v <= oT)
-        ? plateTop    + (v / oT) * aboveH                                  // hillside, true scale
-        : openingTopY + ((v - oT) / (1 - oT)) * (groundY - openingTopY);   // opening, pinned
-      vert.y = -y;                        // Mesh flips Y (vy = -(ty/tw)*height)
+      vert.x = projX(u) + lean * plateW * (1 - v);
+      vert.y = -projY(v);                 // Mesh flips Y (vy = -(ty/tw)*height)
       vert.alpha = alpha;
     }
+
+    // Painted openings, projected into screen space. Road republishes these as
+    // _tunnelMouthShapes so the interior stencil is the artwork's own hole
+    // rather than a procedural approximation of it (see PLATES.wildlife).
+    const shapes = plate.openings?.map(
+      poly => poly.map(([u, v]) => ({ x: projX(u), y: projY(v) })));
 
     globalThis.__facadeLast = { plate: plateKey, above: aboveTune, legs: legsTune, span: spanTune };
     mesh.setDepth(depth);
@@ -387,7 +439,7 @@ export class TunnelFaceMesh {
               ` openTop=${openingTopY.toFixed(0)} top=${aboveTune.toFixed(2)} legs=${legsTune.toFixed(2)}` +
               ` span=${spanTune.toFixed(2)}` +
               ` openingStretch=${stretch.toFixed(2)}`);
-    return { x: spanL, y: openingTopY, w: spanW, h: groundY - openingTopY };
+    return { x: spanL, y: openingTopY, w: spanW, h: groundY - openingTopY, shapes };
   }
 
   /** MAGENTA = the whole plate, GREEN = its transparent opening (which should

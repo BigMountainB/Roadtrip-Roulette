@@ -37,12 +37,9 @@ const UNITS_PER_MILE_HUD = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
 // level.  No cap — traffic has never needed one.
 const COP_VISUAL_SCALE = 1;
 import { Road, snowBlanketAt, SNOW_WHITE, SNOW_MARKINGS_GONE } from '../road/Road.js';
-import { GroundPlane, groundTileFor } from '../road/GroundPlane.js';
+import { GroundPlane, groundTileFor, snowAmountAt, snowGroundAt } from '../road/GroundPlane.js';
 import { RoadPlane }     from '../road/RoadPlane.js';
-import {
-  BAND, BIOMES, NIGHT_BIOMES, biomeAt, bandKey, nightBandKey,
-  bandHeight, bandRate,
-} from '../road/Biomes.js';
+import { BAND, BIOMES, biomeAt, bandKey, bandHeight, bandRate } from '../road/Biomes.js';
 import { LANDMARKS, projectLandmark, activeLandmarks } from '../road/Landmarks.js';
 import geoData           from '../road/routeGeo.json';
 import { ViceSystem }    from '../systems/ViceSystem.js';
@@ -1101,7 +1098,6 @@ export class GameScene extends Phaser.Scene {
     // horizon and can never paint over the road, which shares roadGfx's
     // depth and would otherwise be overdrawn.
     this._biomeLayers = { a: {}, b: {} };
-    this._biomeNightLayers = { a: {}, b: {} };
     for (const set of ['a', 'b']) {
       for (const layer of BAND.layers) {
         const ts = this.add.tileSprite(0, 0, SCREEN_W, BAND.h - BAND.yCrop[layer],
@@ -1128,16 +1124,6 @@ export class GameScene extends Phaser.Scene {
           .setVisible(false);
         this._biomeLayers[set][layer] = ts;
 
-        // Separate overlay lets the outbound trip dissolve from the retained
-        // daytime art into purpose-lit Eastern Washington dusk/night art.
-        // It is intentionally independent of the a/b biome crossfade.
-        const nts = this.add.tileSprite(0, 0, SCREEN_W, BAND.h - BAND.yCrop[layer],
-                                        bandKey(BIOMES[0].key, layer))
-          .setOrigin(0, 1)
-          .setDepth(1.151)
-          .setScrollFactor(0)
-          .setVisible(false);
-        this._biomeNightLayers[set][layer] = nts;
       }
     }
 
@@ -2721,8 +2707,6 @@ export class GameScene extends Phaser.Scene {
         // Biome parallax bands — world objects, so the UI camera must
         // ignore them or it re-paints the horizon on top of the HUD.
         ...Object.values(this._biomeLayers.a), ...Object.values(this._biomeLayers.b),
-        ...Object.values(this._biomeNightLayers?.a ?? {}),
-        ...Object.values(this._biomeNightLayers?.b ?? {}),
         this._nbBasePlate, ...this._landmarkImgs,
         this._fogGlowGfx,
         this.weatherFxGfx, this.wipersGfx, ...this.chaseWipers,
@@ -12410,7 +12394,7 @@ export class GameScene extends Phaser.Scene {
     //     full-screen here lets the per-segment walls draw normally
     //     and overlay the road as intended.
     const closeApproach = firstTunnelN >= 0 && firstTunnelN < 30;
-    if (inTunnel || closeApproach) {
+    if (inTunnel) {
       mg.fillStyle(0xffffff, 1);
       mg.fillRect(-200, -200, SCREEN_W + 400, SCREEN_H + 400);
       return;
@@ -12418,10 +12402,22 @@ export class GameScene extends Phaser.Scene {
     // Wildlife twin-arch: stencil the interior to the TWO arch openings
     // only, so the solid center pier between them stays opaque (the interior
     // can't paint over it).
+    //
+    // Checked BEFORE closeApproach, not after. The crossing now keeps its deck
+    // all the way in (Road.embMinDist), and the shell draws at 9.82 — above the
+    // facade — so an unclipped close-approach mask let the shell's grey walls
+    // paint straight over the deck that was just fixed. Whenever the crossing
+    // has published arches, those arches are the only place its interior may
+    // render, at any distance.
     const shapes = this.road?._tunnelMouthShapes;
     if (shapes && shapes.length) {
       mg.fillStyle(0xffffff, 1);
       for (const poly of shapes) mg.fillPoints(poly, true);
+      return;
+    }
+    if (closeApproach) {
+      mg.fillStyle(0xffffff, 1);
+      mg.fillRect(-200, -200, SCREEN_W + 400, SCREEN_H + 400);
       return;
     }
     const r = this.road?._tunnelMouthRect;
@@ -12496,13 +12492,23 @@ export class GameScene extends Phaser.Scene {
     // entering / exiting a tunnel is a quick fade (~0.3 s) instead of an
     // instant lighting flip.  road._cameraInTunnel was set in road.render().
     {
-      const TUNNEL_DIM_MAX = 0.40;     // 40% darker at full dim
+      const TUNNEL_DIM_MAX = 0.40;     // 40% darker at full dim — a real bore
+      // The wildlife crossing is 100 ft of unlit concrete flagged as a tunnel.
+      // At the bore's 40% it read as a blackout rather than driving under a
+      // bridge, so it gets a shadow instead: 0.30 — owner's "70% transparent",
+      // a little darker inside, easing back to full light on the way out via
+      // the same FADE_SEC ramp the bores use. Tunable live via
+      // ?devtools=1 -> window.__wildDim while the value is being judged.
+      const WILDLIFE_DIM   = (globalThis.__wildDim ?? 0.30);
       const FADE_SEC       = 0.30;     // time to fade fully in / out
-      const target = this.road?._cameraInTunnel ? TUNNEL_DIM_MAX : 0;
+      const dimTarget = this.road?._cameraInWildlife ? WILDLIFE_DIM : TUNNEL_DIM_MAX;
+      const target = this.road?._cameraInTunnel ? dimTarget : 0;
       const dt   = Math.min(0.05, (this.game?.loop?.delta ?? 16.7) / 1000);
       const step = (TUNNEL_DIM_MAX / FADE_SEC) * dt;
       if (this._tunnelDim < target)      this._tunnelDim = Math.min(target, this._tunnelDim + step);
       else if (this._tunnelDim > target) this._tunnelDim = Math.max(target, this._tunnelDim - step);
+      // Never hold a bore-strength dim once the crossing has downgraded it.
+      if (this._tunnelDim > target) this._tunnelDim = target;
       // New Headlights upgrade lightens the tunnel bore ~25%.
       const _tunA = this._tunnelDim * (this._hasNewHeadlights ? 0.75 : 1);
       this.tunnelDimGfx?.setAlpha(_tunA).setVisible(_tunA > 0.002);
@@ -14305,7 +14311,6 @@ export class GameScene extends Phaser.Scene {
 
   _renderBiomeBackdrop() {
     const layers = this._biomeLayers;
-    const nightLayers = this._biomeNightLayers;
 
     const mile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
     const sel  = biomeAt(mile);
@@ -14326,14 +14331,23 @@ export class GameScene extends Phaser.Scene {
     // resolved tile (groundTileFor falls back to the PNW default on null).
     // Hard cut on the DOMINANT biome — no cross-fade, per setTile's contract
     // — so a boundary can't flap between two tiles mid-blend.
-    this.groundPlane?.setTile(
-      groundTileFor(sel ? (sel.b && sel.t > 0.5 ? sel.b : sel.a) : null));
+    // ── Snoqualmie roadside snow accumulation ──────────────────────────
+    // Across the climb the roadside runs its own four-stage progression
+    // (alpine -> light -> partial -> full) instead of the biome's single tile,
+    // cross-faded a pair at a time so snow builds up rather than switching on.
+    // Gated on Difficulty.weather() for the same reason the road is: with
+    // weather off the asphalt stays dry, and a white verge beside a dry road
+    // would read as a bug. Outside the window this is the original hard cut.
+    const biomeTile = groundTileFor(sel ? (sel.b && sel.t > 0.5 ? sel.b : sel.a) : null);
+    const snowAmt = Difficulty.weather() ? snowAmountAt(mile) : 0;
+    const g = snowGroundAt(snowAmt, biomeTile);
+    this.groundPlane?.setTile(g.base);
+    this.groundPlane?.setBlend(g.overlay, g.t);
 
     if (!layers) return;
     if (!sel) {                       // urban miles — skyline owns the horizon
       for (const set of ['a', 'b']) {
         for (const l of BAND.layers) layers[set][l].setVisible(false);
-        for (const l of BAND.layers) nightLayers?.[set]?.[l]?.setVisible(false);
       }
       return;
     }
@@ -14357,10 +14371,9 @@ export class GameScene extends Phaser.Scene {
       ? Math.max(-70, Math.min(70, _far.sy - horizon))
       : 0;
 
-    const paint = (targetLayers, set, biome, weight, keyFor = bandKey) => {
+    const paint = (set, biome, weight) => {
       for (const layer of BAND.layers) {
-        const ts = targetLayers?.[set]?.[layer];
-        if (!ts) continue;
+        const ts = layers[set][layer];
         if (!biome || weight <= 0.002) { ts.setVisible(false); continue; }
         // Bands are AUTHORED at BAND.w (2048) but the screen is 800 wide.
         // A TileSprite does not scale its texture — it shows a native-size
@@ -14375,7 +14388,7 @@ export class GameScene extends Phaser.Scene {
         const _M  = 150 + Math.ceil(C.HUD_OFFSET_X ?? 0);
         const _bw = SCREEN_W + _M * 2;
 
-        const key = keyFor(biome, layer);
+        const key = bandKey(biome, layer);
         // `ts.texture` on a TileSprite is Phaser's INTERNALLY generated
         // fill-pattern texture — its key is a UUID, so the old
         // `ts.texture.key !== key` guard was always true and setTexture ran
@@ -14470,19 +14483,8 @@ export class GameScene extends Phaser.Scene {
       }
     };
 
-    // Royal City (mile 158) is the visual sunset handoff. The dissolve begins
-    // just before town so its basin is warm at arrival, reaches the authored
-    // deep-dusk Columbia art by mile 180, and remains full night in Palouse.
-    // Day files remain resident and selectable for the future return trip.
-    const eveningMix = clamp((mile - 150) / 30, 0, 1);
-    const nightWeight = biome => NIGHT_BIOMES.has(biome) ? eveningMix : 0;
-    const aNight = nightWeight(sel.a);
-    const bNight = nightWeight(sel.b);
-
-    paint(layers, 'a', sel.a, 1 - aNight);
-    paint(layers, 'b', sel.b, sel.t * (1 - bNight));
-    paint(nightLayers, 'a', sel.a, aNight, nightBandKey);
-    paint(nightLayers, 'b', sel.b, sel.t * bNight, nightBandKey);
+    paint('a', sel.a, 1);
+    paint('b', sel.b, sel.t);
   }
 
   /**

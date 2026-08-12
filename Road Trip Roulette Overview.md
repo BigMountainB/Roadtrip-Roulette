@@ -41,6 +41,7 @@ to jump straight to the chapter you need to read or change.
 - **[Chapter 12 — Dead Code Inventory](#chapter-12--dead-code-inventory)** — audited 2026-08-03: orphaned files (`src/cops/`, `CarPhysics.js`, the stale `Road 2.js`), the vice-bar layer stranded by the survival migration, dead methods/constants/asset keys, and a suggested order of work
 - **[Chapter 13 — Ending Plate Art Spec](#chapter-13--ending-plate-art-spec)** — the 6 photographic 800×450 ending plates + 3 car views × 10 genres, file naming, the trimmed-bbox placement rule, per-plate anchors, and how to add a genre or re-export art
 - **[Chapter 14 — Player Car Steering & Pose](#chapter-14--player-car-steering--pose)** — the rules the player sprite obeys: no body roll, ground-anchored on the tire contacts, turn art keyed to steering INTENT, per-mode timings, and the G diagnostic
+- **[Chapter 15 — Storefront Confirm Modal Restyle](#chapter-15--storefront-confirm-modal-restyle)** — ENDGAME ONLY: gritty neon metal panel + INSTALL/CANCEL buttons for `_confirmBuyPopup`; flags that it is Phaser today (not HTML/CSS) and serves every shop item, not just parts
 
 ---
 
@@ -8997,3 +8998,65 @@ On a curve the car may travel laterally along the lane ray, but **the baseline m
 horizontal** — if it tilts, something is rotating the body again.
 
 **Strip this with the rest of the dev aids before release** (see the pending list in Ch. 1).
+
+---
+
+# Chapter 15 — Storefront Confirm Modal Restyle
+
+**Status: NOT BUILT — endgame / pre-release polish only** (owner, 2026-08-12: "These are
+notes for endgame"). Do not start this during feature work; it is presentation-only and
+touches a path that every purchase in the game runs through.
+
+Sibling brief: `CLAUDE_GARAGE_STORE_UI_PROMPT.md` (garage store *layout* redesign — a
+different job in the same screen; still an un-folded orphan .md, see Ch. 1 file rules).
+
+## Where it lives today
+
+`RestStopScene._confirmBuyPopup()` — `src/scenes/RestStopScene.js`. Tapping a storefront row
+opens it; YES runs the exact buy path the tap used to run directly, NO closes and charges
+nothing. Affordability / disabled / customers-only guards run BEFORE it, so an unbuyable row
+keeps its red-flash and never opens a popup.
+
+Current look: a 400×158 `0x102038` rectangle with a `0x66AAFF` 2 px stroke, `IMPACT`
+(`'Impact, "Arial Black", Arial, sans-serif'`), and two 150×44 rectangles — `0x2E7D32` YES,
+`0x8B2635` NO.
+
+## Owner's target
+
+Gritty neon automotive-shop, matching the storefront artwork.
+
+- Near-black charcoal **metal panel** in place of the flat blue.
+- Subtle brushed-metal / noise texture, an inset shadow, and a faint **magenta-and-cyan edge
+  glow**.
+- **Clipped or chamfered corners** — not rounded.
+- Buttons **dark metallic by default**, not solid green and red.
+- Restrained accent colors only: muted green/cyan for the affirmative, muted crimson for the
+  cancel.
+- Hover = brighter edge, slight glow, 1–2 px **upward** movement. Click = depress.
+- The same condensed industrial typeface already used elsewhere in the interface.
+- **Shorter modal.** Heading rewritten as `INSTALL NEW WINDSHIELD?` with the **price beneath
+  it**.
+- Match the interface's thin cyan outlines, deep shadows, magenta highlights.
+- Strong contrast and a clearly visible **keyboard focus state**.
+- Built from layered CSS gradients, borders, pseudo-elements, shadows and a small reusable
+  noise texture. No generic Bootstrap-style buttons, no baked button images.
+
+**Button labels: `INSTALL` / `CANCEL`, not YES / NO** (owner, 2026-08-12).
+
+## Two things that make this bigger than a restyle — settle them before starting
+
+1. **It is not HTML/CSS today.** The brief says "keep the controls as HTML/CSS", but
+   `_confirmBuyPopup` is drawn with Phaser GameObjects (`this.add.rectangle`,
+   `this.add.text`) on the scene's display list at depth 900. Every effect in the list above
+   (gradients, pseudo-elements, inset shadow, noise, hover lift, focus ring) is a DOM/CSS
+   feature that Phaser Graphics has no equivalent for. So this is a **port to DOM**, not a
+   repaint — which brings in: z-order against the Phaser canvas, the widened-canvas
+   `HUD_OFFSET_X` margins the current full-screen dim deliberately covers, the `_eatTap`
+   drift-gate discipline that stops taps falling through to the shop behind, and iOS
+   WKWebView behaviour (see `GameScene.js` ~2006 — `window.confirm` freezes it, which is why
+   this popup exists at all). Decide DOM-port vs. Phaser-approximation first.
+2. **One modal serves every shop item.** The heading is generated —
+   `` `You'd like ${art} ${name}?` `` from the row label. `INSTALL NEW WINDSHIELD?` only fits
+   parts; food, drink, fuel, hitchhikers and vehicles all come through here. Needs a
+   per-item verb (INSTALL / BUY / FILL / HIRE …) driven off the item, with a fallback, and
+   the button label should track it. Price is available on the item and is not shown today.

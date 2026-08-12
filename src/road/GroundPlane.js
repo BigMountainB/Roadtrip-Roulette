@@ -91,6 +91,11 @@ const FADE_Z1 = DRAW_CAP_Z;                      // 76,000 — the last drawn ro
  *  correct UVs in the near field, at ~1 extra quad per 12 px of screen. */
 const SUB_H = 12;
 
+/** Columns per sub-row on the CROSS-FADE pass only. The base pass stays one
+ *  full-width quad. 8 is enough for the noise to read as patches rather than
+ *  a stepped edge, and only costs anything while a transition is on screen. */
+const X_STEPS = 8;
+
 /**
  * Per-biome ground tiles.  Every biome falls back to the PNW tile until real
  * art exists for it — drop a new tile in assets/scenery/ground_textures/final/,
@@ -128,6 +133,113 @@ export const GROUND_TILES = {
  */
 export function groundTileFor(biomeKey) {
   return GROUND_TILES[biomeKey] ?? GROUND_TILES._default;
+}
+
+// ── Snoqualmie roadside snow accumulation ────────────────────────────────
+//
+// Snow builds up on the terrain BESIDE the road across the climb, rather than
+// the roadside flipping from bare to white at one mile. Four stages of the same
+// ground, cross-faded a pair at a time.
+//
+// This is roadside ONLY. The roadway's own snow (Weather.state/intensity, the
+// windshield build-up, traction) is untouched and keeps its own timing.
+//
+// MILES are chosen against what already exists: Weather puts snow on the road
+// from mile 40, the `pass_alpine` biome runs 45-58, and the summit rest stop is
+// at 53. The roadside therefore starts at 38 — deliberately ~2 mi BEFORE the
+// road turns snowy, so the first patches appear in the verge while the asphalt
+// is still wet, which is how a real climb reads. It's fully accumulated across
+// the pass_alpine core and has melted back by 68, handing over to the
+// easton_transition tile rather than dragging snow down the east slope.
+//
+// A PURE FUNCTION OF MILE, deliberately: accumulation rises on the way up and
+// falls on the way down with no stored state, so previewing, warping, or
+// running the route backwards all behave correctly.
+const SNOW_MI_START = 36;   // first patches (road snow starts at 40)
+const SNOW_MI_FULL  = 50;   // fully accumulated by here
+const SNOW_MI_HOLD  = 58;   // …held to the end of pass_alpine
+const SNOW_MI_END   = 68;   // melted back out
+
+const smooth = (t) => t * t * (3 - 2 * t);
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/** Normalised roadside accumulation, 0..1, from route mile. */
+export function snowAmountAt(mile) {
+  if (!(mile > SNOW_MI_START) || mile >= SNOW_MI_END) return 0;
+  if (mile < SNOW_MI_FULL) {
+    return smooth(clamp01((mile - SNOW_MI_START) / (SNOW_MI_FULL - SNOW_MI_START)));
+  }
+  if (mile <= SNOW_MI_HOLD) return 1;
+  return smooth(clamp01((SNOW_MI_END - mile) / (SNOW_MI_END - SNOW_MI_HOLD)));
+}
+
+// Stage boundaries on the 0..1 accumulation. Between two stops the pair is
+// cross-faded; at a stop a single texture is drawn on its own (no second pass).
+const SNOW_STAGES = [
+  { at: 0.00, key: 'ground_pass_alpine' },   // exposed alpine grass / gravel
+  { at: 0.35, key: 'ground_snoq_light'   },  // scattered early accumulation
+  { at: 0.60, key: 'ground_snoq_partial' },  // ~55-65% covered
+  { at: 0.85, key: 'ground_snoq_full'    },  // continuous, twigs showing through
+];
+
+/**
+ * Which two tiles to draw, and how far between them, for an accumulation and
+ * the biome tile that would otherwise be showing.
+ *
+ * THE BASE IS NEVER OVERRIDDEN OUTSIDE pass_alpine, and that constraint drives
+ * the whole shape of this function. The accumulation window (36-68) is wider
+ * than the pass_alpine biome (45-58) on purpose — snow should appear before the
+ * climb and linger after it — but the lead-in crosses north_bend and
+ * westside_forest, and the melt-out crosses easton_transition. Swapping the
+ * base to the alpine tile at mile 36 would change the entire roadside in one
+ * frame, which is precisely the pop this feature exists to remove.
+ *
+ * So there are two regimes:
+ *   • ON the alpine tile — the full four-stage progression, cross-fading a pair
+ *     at a time. Stage 1 IS the alpine tile, so the base already matches what
+ *     the biome was drawing and nothing swaps.
+ *   • ANYWHERE ELSE — the biome keeps its own tile and early/late snow is laid
+ *     over it as a dusting of the LIGHT stage only, capped below full coverage.
+ *     Patches of snow on forest ground on the way up, and lingering patches on
+ *     the east slope, without either biome losing its identity.
+ */
+// Below this the biome keeps its own tile and snow is a dusting on top; above
+// it the snow tiles own the base and run the four-stage progression.
+//
+// The threshold is what keeps the handoff AWAY from a biome boundary. The
+// accumulation window (36-68) is deliberately wider than pass_alpine (45-58),
+// so an earlier design that switched regime at the biome edge swapped the whole
+// roadside at mile 45 (forest -> partial snow) and again at 58 (full snow ->
+// bare easton) — the second one worse than the pop this feature exists to
+// remove. Handing over on ACCUMULATION instead puts both swaps around a = 0.35,
+// at roughly mi 42.6 and 63.6, where each side is light-snow-dominant and the
+// change is small.
+const DUST_HANDOFF = 0.35;
+// 1.0, not a partial value, and that is what makes the handoff INVISIBLE:
+// just below the threshold the light tile is already at full coverage over the
+// biome, so promoting it to the base with the next overlay at t=0 renders the
+// identical image. Capping it lower (0.55 was tried) left a visible 45% step at
+// the one place the regime changes.
+const DUST_MAX     = 1.0;
+
+export function snowGroundAt(amount, biomeTileKey = 'ground_pass_alpine') {
+  const a = clamp01(amount);
+  if (a <= 0) return { base: biomeTileKey, overlay: null, t: 0 };
+
+  // Lead-in and melt-out: the biome keeps its identity, snow sits on top.
+  if (a < DUST_HANDOFF) {
+    return { base: biomeTileKey, overlay: 'ground_snoq_light',
+             t: (a / DUST_HANDOFF) * DUST_MAX };
+  }
+
+  // Accumulated: the snow tiles own the base, cross-fading a pair at a time.
+  for (let i = 1; i < SNOW_STAGES.length - 1; i++) {
+    const lo = SNOW_STAGES[i], hi = SNOW_STAGES[i + 1];
+    if (a < hi.at) {
+      return { base: lo.key, overlay: hi.key, t: clamp01((a - lo.at) / (hi.at - lo.at)) };
+    }
+  }
+  return { base: SNOW_STAGES[SNOW_STAGES.length - 1].key, overlay: null, t: 0 };
 }
 
 export class GroundPlane extends Phaser.GameObjects.Image {
@@ -249,30 +361,61 @@ export class GroundPlane extends Phaser.GameObjects.Image {
     this._rowCount++;
   }
 
+  /** Swap in the SECOND tile of a cross-fade. `t` is 0..1 coverage of it.
+   *  Passing a null key (or t<=0) puts the layer back to a single-texture draw,
+   *  which costs exactly what it did before this feature existed. */
+  setBlend(overlayKey, t) {
+    if (!overlayKey || !(t > 0) || !this.scene.textures.exists(overlayKey)) {
+      this._overlayKey = null;
+      this._blendT = 0;
+      return;
+    }
+    if (overlayKey !== this._overlayKey) {
+      this._overlayKey = overlayKey;
+      // Same GL_REPEAT + anisotropy the base tile gets — a cross-fade against
+      // a clamped texture would show one stretched edge pixel smeared out.
+      this._overlayOk = GroundPlane.enableRepeatWrap(this.scene, overlayKey);
+    }
+    if (!this._overlayOk) this._overlayOk = GroundPlane.enableRepeatWrap(this.scene, this._overlayKey);
+    this._blendT = t > 1 ? 1 : t;
+  }
+
   renderWebGL(renderer, src, camera) {
     if (!this._ok || this._rowCount === 0) return;
-
     const glTexture = this.frame.glTexture;
     if (!glTexture) return;
 
     const pipeline = renderer.pipelines.set(this.pipeline, this);
     renderer.pipelines.preBatch(this);
+
+    // Base tile, exactly as before: one full-width quad per sub-row.
+    this._batchLayer(pipeline, camera, glTexture, 0);
+
+    // Second tile of a cross-fade, masked by world-space noise. Skipped
+    // entirely outside a transition, so the common case is unchanged.
+    if (this._overlayKey && this._overlayOk && this._blendT > 0.002) {
+      const ovFrame = this.scene.textures.getFrame(this._overlayKey);
+      if (ovFrame?.glTexture) {
+        this._batchLayer(pipeline, camera, ovFrame.glTexture, this._blendT);
+      }
+    }
+
+    renderer.pipelines.postBatch(this);
+  }
+
+  /**
+   * Emit every queued row for one texture.
+   *
+   * `dissolve` 0 = the opaque base pass (one quad per sub-row, full width).
+   * `dissolve` > 0 = the overlay pass, which additionally splits each sub-row
+   * into X_STEPS columns so the mask can vary ACROSS the road as well as along
+   * it. Without that split the alpha could only change with depth and every
+   * transition would be a straight line running across the screen — exactly
+   * the artefact this feature has to avoid.
+   */
+  _batchLayer(pipeline, camera, glTexture, dissolve) {
     let unit = pipeline.setTexture2D(glTexture);
 
-    // Screen-space coords go through the camera matrix by hand — the shake /
-    // tilt the camera applies has to move this layer with everything else.
-    //
-    // CAMERA SCROLL, TOO.  The world camera is scrolled by -HUD_OFFSET_X to
-    // centre the world on a widened canvas, and every scrollFactor-1 object
-    // (roadGfx, terrainGfx — all the Graphics) is shifted by that scroll when
-    // it renders.  This custom pipeline applies only camera.matrix, which does
-    // NOT carry scroll — scroll is a per-object factor — so without the terms
-    // below the texture layer sat HUD_OFFSET_X px to the left of the road it
-    // belongs to.  On the road tile that painted an untextured band down the
-    // right side of every carriageway ("texture missing on half the road"),
-    // sized by the device aspect: ~70 px on a 940 px canvas, wider on phones.
-    // The ground tile had the same shift all along, invisible only because a
-    // seamless roadside field has no reference edges.
     const cm = camera.matrix;
     const ma = cm.a, mb = cm.b, mc = cm.c, md = cm.d, me = cm.e, mf = cm.f;
     const sX = camera.scrollX, sY = camera.scrollY;
@@ -280,12 +423,14 @@ export class GroundPlane extends Phaser.GameObjects.Image {
     const alphaMul = this.alpha * camera.alpha;
     const xL = -this._margin;
     const xR = SCREEN_W + this._margin;
-    // Screen px -> world X: a segment's half-width `w` on screen spans
-    // ROAD_WIDTH world units, measured out from the road centreline.  Anchoring
-    // U to the centreline (not to the screen) is what makes the ground sweep
-    // through curves with the road and slide sideways as the player steers.
     const kx = ROAD_WIDTH / TILE_X;
     const pz = this._playerZ - this._vBase;
+    // Absolute tile-space Z of the camera, for the noise only. The drawn V is
+    // still rebased per quad (mediump), but the MASK has to be keyed to
+    // absolute world position or the patches would slide as _vBase steps.
+    const vAbsBase = this._vBase / TILE_Z;
+
+    const cols = dissolve > 0 ? X_STEPS : 1;
 
     for (let i = 0; i < this._rowCount; i++) {
       const r = this._rows[i];
@@ -299,11 +444,6 @@ export class GroundPlane extends Phaser.GameObjects.Image {
       const dw   = r.wN - r.wF;
       const steps = h > SUB_H ? Math.ceil(h / SUB_H) : 1;
 
-      // Screen Y is linear in 1/z for ground-plane points, and the road's own
-      // trapezoid edges are straight lines between far and near corners — so
-      // interpolating invZ, centre X and half-width linearly in the sub-row
-      // fraction reproduces the road's geometry exactly.
-      let tPrev = 0;
       let yPrev = r.yF, xPrev = r.xF, wPrev = r.wF, zPrev = r.zF;
 
       for (let s = 1; s <= steps; s++) {
@@ -317,54 +457,109 @@ export class GroundPlane extends Phaser.GameObjects.Image {
         const aBot = alphaMul * r.a * fadeAt(z);
 
         if (aTop > 0.002 || aBot > 0.002) {
-          // V from absolute world Z, then rebased per quad so both edges land
-          // in [0, 2).  A quad only ever spans a fraction of a tile, so this
-          // is lossless — and it keeps mediump shaders from banding.
           let vTop = (pz + zPrev) / TILE_Z;
           let vBot = (pz + z) / TILE_Z;
           const vWrap = Math.floor(vBot);
           vTop -= vWrap;
           vBot -= vWrap;
-
-          const uLT = (xL - xPrev) * kx / wPrev;
-          const uRT = (xR - xPrev) * kx / wPrev;
-          const uLB = (xL - x) * kx / w;
-          const uRB = (xR - x) * kx / w;
-
-          const tintTop = Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(0xffffff, aTop);
-          const tintBot = Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(0xffffff, aBot);
-
-          // Mirrors WebGLPipeline.batchQuad's flush handling — a flush drops
-          // the current batch, so the texture unit has to be re-pushed.
-          if (pipeline.shouldFlush(6)) {
-            pipeline.flush();
-            unit = pipeline.setTexture2D(glTexture);
-          }
+          // Absolute equivalents, for the mask.
+          const vAbsT = vAbsBase + (pz + zPrev) / TILE_Z;
+          const vAbsB = vAbsBase + (pz + z) / TILE_Z;
 
           const yT = yPrev - sY, yB = y - sY;
-          const xLs = xL - sX, xRs = xR - sX;
-          const tlx = xLs * ma + yT * mc + me, tly = xLs * mb + yT * md + mf;
-          const blx = xLs * ma + yB * mc + me, bly = xLs * mb + yB * md + mf;
-          const brx = xRs * ma + yB * mc + me, bry = xRs * mb + yB * md + mf;
-          const trx = xRs * ma + yT * mc + me, try_ = xRs * mb + yT * md + mf;
 
-          pipeline.batchVert(tlx, tly, uLT, vTop, unit, 0, tintTop);
-          pipeline.batchVert(blx, bly, uLB, vBot, unit, 0, tintBot);
-          pipeline.batchVert(brx, bry, uRB, vBot, unit, 0, tintBot);
-          pipeline.batchVert(tlx, tly, uLT, vTop, unit, 0, tintTop);
-          pipeline.batchVert(brx, bry, uRB, vBot, unit, 0, tintBot);
-          pipeline.batchVert(trx, try_, uRT, vTop, unit, 0, tintTop);
+          for (let c = 0; c < cols; c++) {
+            const f0 = c / cols, f1 = (c + 1) / cols;
+            const x0 = xL + (xR - xL) * f0;
+            const x1 = xL + (xR - xL) * f1;
+
+            const u0T = (x0 - xPrev) * kx / wPrev, u1T = (x1 - xPrev) * kx / wPrev;
+            const u0B = (x0 - x)     * kx / w,     u1B = (x1 - x)     * kx / w;
+
+            let a0T = aTop, a1T = aTop, a0B = aBot, a1B = aBot;
+            if (dissolve > 0) {
+              a0T *= dissolveAt(u0T, vAbsT, dissolve);
+              a1T *= dissolveAt(u1T, vAbsT, dissolve);
+              a0B *= dissolveAt(u0B, vAbsB, dissolve);
+              a1B *= dissolveAt(u1B, vAbsB, dissolve);
+              if (a0T < 0.002 && a1T < 0.002 && a0B < 0.002 && a1B < 0.002) continue;
+            }
+
+            const tintTL = Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(0xffffff, a0T);
+            const tintTR = Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(0xffffff, a1T);
+            const tintBL = Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(0xffffff, a0B);
+            const tintBR = Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(0xffffff, a1B);
+
+            if (pipeline.shouldFlush(6)) {
+              pipeline.flush();
+              unit = pipeline.setTexture2D(glTexture);
+            }
+
+            const xLs = x0 - sX, xRs = x1 - sX;
+            const tlx = xLs * ma + yT * mc + me, tly = xLs * mb + yT * md + mf;
+            const blx = xLs * ma + yB * mc + me, bly = xLs * mb + yB * md + mf;
+            const brx = xRs * ma + yB * mc + me, bry = xRs * mb + yB * md + mf;
+            const trx = xRs * ma + yT * mc + me, try_ = xRs * mb + yT * md + mf;
+
+            pipeline.batchVert(tlx, tly, u0T, vTop, unit, 0, tintTL);
+            pipeline.batchVert(blx, bly, u0B, vBot, unit, 0, tintBL);
+            pipeline.batchVert(brx, bry, u1B, vBot, unit, 0, tintBR);
+            pipeline.batchVert(tlx, tly, u0T, vTop, unit, 0, tintTL);
+            pipeline.batchVert(brx, bry, u1B, vBot, unit, 0, tintBR);
+            pipeline.batchVert(trx, try_, u1T, vTop, unit, 0, tintTR);
+          }
         }
 
-        tPrev = t; yPrev = y; xPrev = x; wPrev = w; zPrev = z;
+        yPrev = y; xPrev = x; wPrev = w; zPrev = z;
       }
     }
-
-    renderer.pipelines.postBatch(this);
   }
 
   /** Canvas fallback paints nothing — the flat grass fill is the whole look. */
   renderCanvas() {}
+}
+
+// ── World-space dissolve mask for the snow cross-fade ────────────────────
+// Two neighbouring ground tiles are drawn on IDENTICAL UVs and mixed with this
+// mask, so snow arrives as organic patches instead of a straight line sweeping
+// down the road.
+//
+// Keyed on the SAME (u, v) the texture uses — u from the road centreline, v
+// from absolute world Z — so the patches are pinned to the ground exactly like
+// the texture is. That is what stops them crawling or swimming when the camera
+// moves; nothing here reads screen space or frame count, so a paused frame and
+// a moving one produce the same mask.
+const NOISE_TILES = 2.5;    // cell size in ground tiles (~120 ft) — low frequency
+const DISSOLVE_W  = 0.30;   // edge softness; 0 would be a hard crumbling edge
+
+function hash2(ix, iz) {
+  let h = Math.imul(ix, 374761393) + Math.imul(iz, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Smooth value noise in [0,1), deterministic in world space. */
+function groundNoise(u, v) {
+  const x = u / NOISE_TILES, z = v / NOISE_TILES;
+  const ix = Math.floor(x), iz = Math.floor(z);
+  const sx = smooth(x - ix), sz = smooth(z - iz);
+  const n00 = hash2(ix, iz),     n10 = hash2(ix + 1, iz);
+  const n01 = hash2(ix, iz + 1), n11 = hash2(ix + 1, iz + 1);
+  const a = n00 + (n10 - n00) * sx;
+  const b = n01 + (n11 - n01) * sx;
+  return a + (b - a) * sz;
+}
+
+/** Coverage 0..1 of the OVERLAY tile at this point, for accumulation `t`.
+ *  Saturates at both ends: t=0 shows none of it anywhere, t=1 shows all of it
+ *  everywhere, so a completed transition leaves no residual patchiness. */
+function dissolveAt(u, v, t) {
+  const n  = groundNoise(u, v);
+  const tt = t * (1 + 2 * DISSOLVE_W) - DISSOLVE_W;
+  const lo = n - DISSOLVE_W, hi = n + DISSOLVE_W;
+  if (tt <= lo) return 0;
+  if (tt >= hi) return 1;
+  return smooth((tt - lo) / (hi - lo));
 }
 
 function fadeAt(z) {

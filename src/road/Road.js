@@ -1575,7 +1575,18 @@ export class Road {
     // distance of ~30 segs the hill silhouette sits cleanly above the
     // horizon and frames the approach.
     const EMB_MIN_DIST = 30;
-    if (_firstTunnelDrawn && _firstTunnelIdx >= EMB_MIN_DIST) {
+    // …but the wildlife crossing is not a hill with a notch in it. It is 100 ft
+    // of deck spanning the road, and that deck IS the whole structure: the two
+    // segments of shell behind it fill almost nothing. Cutting its facade 30
+    // segments out left the final stretch of the approach with open sky where
+    // the bridge should be — no roof, no deck, just the shell's side walls as
+    // two grey wedges (owner screenshot, mi 64.99). A bore can afford the cut
+    // because its walls swallow the frame by then; a 100 ft crossing cannot.
+    // The concern that motivated the gate does not apply either: the crossing
+    // paints only ABOVE its projected ground line, with the arch openings cut
+    // out, so it cannot paint over the road in front of the player.
+    const embMinDist = _firstTunnelDrawn?.seg?.wildlife ? 2 : EMB_MIN_DIST;
+    if (_firstTunnelDrawn && _firstTunnelIdx >= embMinDist) {
       _embTunnelProj = _firstTunnelDrawn;
     } else if (!_firstTunnelDrawn) {
       // Continue the curve accumulator past the draw loop so the
@@ -1640,6 +1651,13 @@ export class Road {
       if (_lastTunnelN < 0) _lastTunnelN = drawn[drawn.length - 1]?.n ?? -1;
     }
     this._cameraInTunnel = drawn.length > 0 && !!drawn[0]?.seg?.tunnel;
+    // A 100 ft wildlife crossing is flagged as a tunnel so it gets the arched
+    // facade and shell, but it is NOT a bore: it carries no ceiling lights (see
+    // _drawTunnelShell, which skips the light strip for seg.wildlife because a
+    // real animal crossing has none), so at night the full tunnel dim turned
+    // 100 ft of daylight gap into a black screen. Published separately so the
+    // dim can treat it as the shadow it actually is.
+    this._cameraInWildlife = drawn.length > 0 && !!drawn[0]?.seg?.wildlife;
     this._tunnelExitN    = _lastTunnelN;
 
     // Render sprites FAR → NEAR so close-up buildings paint over distant ones
@@ -1954,6 +1972,10 @@ export class Road {
       const next = i > 0 ? drawn[i - 1] : curr;
       this._drawTunnelShell(g, curr, next);
     }
+    // After the shell, so the shade sits over the walls and floor it darkens.
+    // Only meaningful for the wildlife crossing — it is the one facade that
+    // publishes _tunnelMouthShapes.
+    if (!inTunnel) this._shadeWildlifeOpenings(g);
   }
 
   /**
@@ -1973,6 +1995,13 @@ export class Road {
     // the facade is actually drawn (camera outside tunnel + valid
     // embankment projection + mouth resolvable at this distance).
     this._tunnelMouthRect = null;
+    // Cleared alongside the rect, and for the same reason: this function
+    // returns early on the exact frames that matter (camera inside the tunnel,
+    // no projection), and _drawTunnelFacade's own reset never runs on those.
+    // Left stale, the shapes keep stencilling the interior — and now also keep
+    // painting the crossing's shade — against arches that are no longer on
+    // screen. Same failure mode as the facade that rode along for 6.8 miles.
+    this._tunnelMouthShapes = null;
     // Hide the artwork HERE, not in _drawTunnelFacade — this function returns
     // early when the camera is inside a tunnel or there is no projection at
     // all, so a hide placed further down never runs on the frames that matter.
@@ -2193,7 +2222,17 @@ export class Road {
             alpha: rimAlpha,
             depth: g.depth ?? 9.82,
           });
-          if (drewW) return;
+          if (drewW) {
+            // The painted arches, traced from the plate's own alpha, replace
+            // the procedural sine arches as the interior stencil. They are not
+            // the same curve, and they stopped being the same SIZE the moment
+            // `legs` became tunable — leaving the shade cut to a shape the
+            // artwork no longer had, which showed as lit road inside the
+            // opening. `openings` is declared per plate, so a plate without one
+            // simply keeps the procedural shapes already published above.
+            if (drewW.shapes?.length) this._tunnelMouthShapes = drewW.shapes;
+            return;
+          }
         } catch (err) {
           this._tunnelFacesDead = true;
           this._tunnelFaces = null;
@@ -2730,7 +2769,14 @@ export class Road {
     const outNear_L = inNear_L - wallW1;
     const outNear_R = inNear_R + wallW1;
 
-    const H_CEIL       = 4500;
+    // 4500 is a highway bore's ceiling. The wildlife crossing's arch crown is
+    // taller than that — derived from its own geometry, the crown sits
+    // 1.087 × w2 above the road, and w2 = scale·ROAD_WIDTH·SCREEN_W/2 against
+    // ceilDrop = scale·H_CEIL·SCREEN_H/2, so matching them gives
+    // 1.087 × 3600 × 800/450 ≈ 6950. At 4500 the shell's ceiling cut a
+    // horizontal line across the arch well below its crown; the 0.85 shade hid
+    // it, but at the crossing's lighter dim it would read as a false soffit.
+    const H_CEIL       = seg.wildlife ? 6950 : 4500;
     const ceilDropFar  = curr.scale * H_CEIL * SCREEN_H / 2;
     const ceilDropNear = next.scale * H_CEIL * SCREEN_H / 2;
     const ceilFy       = Math.max(0, fy - ceilDropFar);
@@ -2791,15 +2837,38 @@ export class Road {
         inNear_R,                ceilNy + lightThk);
     }
 
-    // Wildlife crossing — a short, LOW overpass sitting in its OWN shadow,
-    // not a long lit highway tunnel.  Shade the interior dark so the arch
-    // openings read as a shaded recess you drive UNDER rather than a bright
-    // see-through hole (and the sodium ceiling lights are skipped above).
-    if (seg.wildlife) {
-      fillTrap(g, 0x0E1118,
-        outFar_L,  ceilFy, outFar_R,  ceilFy,
-        outNear_R, ny,     outNear_L, ny, 0.62);
-    }
+    // The wildlife crossing's interior shade used to be painted here, as a
+    // per-segment trapezoid from ceilFy down to the road at 0.62 alpha. Three
+    // things were wrong with that and all three were visible at once:
+    //   • ceilFy is the flat CEILING plane, but the arches rise well above it,
+    //     so the top of each opening got no shade at all;
+    //   • 0.62 over a 100 ft bore let the snow beyond wash straight through;
+    //   • one box spanning outFar_L..outFar_R ignored the twin-arch shape and
+    //     the pier between them.
+    // It also ran while the camera was INSIDE the crossing, where the stencil
+    // goes full-screen — 0.62 across the whole view, stacked on the tunnel dim,
+    // which is what turned 100 ft of daylight into a black screen.
+    // Now painted once per frame in renderTunnelOverlay(), clipped to the
+    // opening polygons. See _shadeWildlifeOpenings().
+  }
+
+  /** Shade the wildlife crossing's arch openings so they read as the recess
+   *  you drive under rather than a lit hole through the embankment.
+   *
+   *  Filled from _tunnelMouthShapes — the plate's own traced openings when the
+   *  artwork is drawing, the procedural sine arches when it isn't — so the dark
+   *  is the same shape as the hole in either path. Approach only: once the
+   *  camera is inside, the stencil is full-screen and GameScene's WILDLIFE_DIM
+   *  owns the interior instead. */
+  _shadeWildlifeOpenings(g) {
+    const shapes = this._tunnelMouthShapes;
+    if (!shapes?.length) return;
+    // Tunable live from the ?devtools=1 bar; 0.85 is the owner's pick — deep
+    // enough to hold against snow, translucent enough to keep a depth cue.
+    const alpha = globalThis.__wildShade ?? 0.85;
+    if (alpha <= 0) return;
+    g.fillStyle(0x0E1118, alpha);
+    for (const poly of shapes) g.fillPoints(poly, true);
   }
 
   /**

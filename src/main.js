@@ -353,7 +353,8 @@ const _boot = () => {
                               '  top ' + cur('above', 1).toFixed(2) +
                               '  legs ' + cur('legs', 1).toFixed(2) +
                               '  span ' + cur('span', 1).toFixed(2) +
-                              '  dim ' + (window.__wildDim ?? 0.12).toFixed(2);
+                              '  dim ' + (window.__wildDim ?? 0.12).toFixed(2) +
+                              '  shade ' + (window.__wildShade ?? 0.85).toFixed(2);
       };
       mk('top −', () => { window.__facadeTune.above = Math.max(0.1, cur('above', 1) - 0.05); showTune(); });
       mk('top +', () => { window.__facadeTune.above = Math.min(2.0, cur('above', 1) + 0.05); showTune(); });
@@ -367,6 +368,11 @@ const _boot = () => {
       window.__wildDim = window.__wildDim ?? 0.12;
       mk('dim −', () => { window.__wildDim = Math.max(0, window.__wildDim - 0.04); showTune(); });
       mk('dim +', () => { window.__wildDim = Math.min(0.40, window.__wildDim + 0.04); showTune(); });
+      // How dark the arch openings read on APPROACH (dim above is what you see
+      // once you're under it). 1 = solid, 0 = see straight through.
+      window.__wildShade = window.__wildShade ?? 0.85;
+      mk('shade −', () => { window.__wildShade = Math.max(0, window.__wildShade - 0.05); showTune(); });
+      mk('shade +', () => { window.__wildShade = Math.min(1, window.__wildShade + 0.05); showTune(); });
       bar.appendChild(tuneTag);
       showTune();
       const mileTag = document.createElement('span');
