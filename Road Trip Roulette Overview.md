@@ -203,13 +203,17 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
-### 2026-08-12 (pt 2) — Garage tile shows the default genre's car (tilted pose)
-Committed `05b9b59`, not pushed.
+### 2026-08-12 (pt 2) — Garage tile shows the default genre's car (front pose)
+Committed `05b9b59` (tilted pose), not pushed. **Same-day owner revision (uncommitted): pose
+swapped from the rear-three-quarter turn to the FRONT view** — `starter_back_turn.png` →
+`starter_front.png` in both `syncGarageTileCar()` URLs (template + fallback). All 10 genre packs
+carry a `starter_front.png` (verified); aspect ratios vary 1.1–1.65 but the img is
+`object-fit: contain`, so no distortion. Everything below otherwise still applies.
 
 The phone menu's GARAGE tile — whose background art is literally
 `iphone_menu_bg_empty_garage.png`, an empty waterfront bay — now shows the **active/default
-genre's starter in its rear-three-quarter "turn" pose**
-(`assets/culture/<genre>/vehicles/starter_back_turn.png`, the same RGBA art the in-game steering
+genre's starter** (originally the rear-three-quarter "turn" pose,
+`assets/culture/<genre>/vehicles/starter_back_turn.png`, the same RGBA art the in-game steering
 pose uses). Implementation: a `data-px`-positioned
 `<img id="phone-garage-car" data-px="324 775 210 130">` overlay (PNG-pixel coords track the
 artwork at any scale; that string is the position/size knob, `?calibrate` logs tap coords) parked

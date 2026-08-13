@@ -1786,11 +1786,11 @@
          data-px = "x y w h" in PNG pixels.  Coords below are best-fit to the
          new 3-column grid — fine-tune any that are off by loading the page
          with ?calibrate and tapping the icon (logs exact PNG x,y). -->
-    <!-- Garage tile car — the DEFAULT-genre starter in its tilted
-         (rear-three-quarter) pose, parked on the tile's empty waterfront
-         between the GARAGE label and the trip clock.  Same art the game
-         uses for the steering pose (assets/culture/<genre>/vehicles/
-         starter_back_turn.png, RGBA).  src is synced by
+    <!-- Garage tile car — the DEFAULT-genre starter in its
+         front pose, parked on the tile's empty waterfront
+         between the GARAGE label and the trip clock
+         (assets/culture/<genre>/vehicles/starter_front.png, RGBA).
+         src is synced by
          syncGarageTileCar(); sits BEFORE the hit zones in the DOM so the
          garage button still takes the tap. -->
     <img id="phone-garage-car" data-px="324 775 210 130" alt="" />
@@ -2432,19 +2432,20 @@
       // uses the shared empty stage instead of baking a car into a menu skin.
       const phoneBgUrl = () => PHONE_BG_DEFAULT;
       // Garage tile car — show the ACTIVE (default) genre's starter in its
-      // tilted rear-3/4 pose on the GARAGE tile (owner 2026-08-12).  Genre
+      // front pose on the GARAGE tile (owner 2026-08-12; switched from the
+      // tilted rear-3/4 pose same day — "front of the car aspect").  Genre
       // resolution mirrors the game's: __genre.get() falls back to
       // DEFAULT_GENRE ('hiphop_phonk', constants.js) internally, but guard
       // here too for the pre-registry boot window.  On a missing asset
       // (shouldn't happen — the active genre's pack always ships) fall back
       // to the hip-hop starter rather than showing a broken-image icon.
       const garageCarImg = document.getElementById('phone-garage-car');
-      const GARAGE_CAR_FALLBACK = 'assets/culture/hiphop_phonk/vehicles/starter_back_turn.png';
+      const GARAGE_CAR_FALLBACK = 'assets/culture/hiphop_phonk/vehicles/starter_front.png';
       const syncGarageTileCar = () => {
         if (!garageCarImg) return;
         let g = null;
         try { g = window.__genre?.get?.(); } catch (_) {}
-        const url = `assets/culture/${g || 'hiphop_phonk'}/vehicles/starter_back_turn.png`;
+        const url = `assets/culture/${g || 'hiphop_phonk'}/vehicles/starter_front.png`;
         if (garageCarImg.getAttribute('src') === url) return;
         garageCarImg.onerror = () => {
           garageCarImg.onerror = null;
