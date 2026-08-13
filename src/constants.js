@@ -669,27 +669,20 @@ export const ENGINE_LIMP_MULT   = 0.60; // top-speed multiplier while limping
 export const ENGINE_HP_DPS      = 3.0;  // HP/sec lost while redlining (Normal/Hard)
 
 // ── Tunnel facade artwork gate (2026-08-11) ──────────────────────────────
-// ON by default on a LOCAL dev host, OFF everywhere else. Two things ride on
-// this and they must agree: whether the mesh draws (TunnelFaceMesh) and whether
-// the 4 MB of plates is downloaded at all (AssetManifest.tunnelFaces). If they
+// ON by default EVERYWHERE (owner validated the facades on the live site via
+// ?tunnelart=1 and flipped the gate 2026-08-13). Two things ride on this and
+// they must agree: whether the mesh draws (TunnelFaceMesh) and whether the
+// 4 MB of plates is downloaded at all (AssetManifest.tunnelFaces). If they
 // ever disagreed, the artwork would either be missing its texture or players
 // would pay 4 MB for pixels they can't see — so both import THIS.
-//
-// Local-only because the facade is still being proved out: the owner wants a
-// plain URL while testing on the LAN, but the next production deploy must not
-// carry an unvalidated facade (or its payload) to players.
-//   ?tunnelart=1  force ON  anywhere (works on the live site)
 //   ?tunnelart=0  force OFF anywhere (A/B against the procedural face)
+//   ?tunnelart=1  force ON (redundant now; kept so old test links keep working)
 export function tunnelArtEnabled() {
   try {
     const q = new URLSearchParams(globalThis.location?.search ?? '').get('tunnelart');
-    if (q === '1') return true;
     if (q === '0') return false;
-    const h = globalThis.location?.hostname ?? '';
-    return h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local') ||
-           /^192\.168\./.test(h) || /^10\./.test(h) ||
-           /^172\.(1[6-9]|2\d|3[01])\./.test(h);
+    return true;
   } catch (_) {
-    return false;
+    return true;
   }
 }
