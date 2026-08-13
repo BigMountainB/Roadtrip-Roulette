@@ -203,6 +203,16 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-13 — Tunnel facades ON for everyone; full-tree deploy
+Committed & pushed (`f9be9e0` batch + `1cacd9b` gate), deployed to Cloudflare (`f19fa180`).
+
+`tunnelArtEnabled()` (constants.js) now returns **true everywhere** — owner validated the plates
+on the live site via `?tunnelart=1` and flipped the gate. `?tunnelart=0` stays as the A/B kill
+switch; `?tunnelart=1` kept inert so old test links work. The flip turns on both the facade mesh
+AND the ~4 MB plate download (one shared gate, by design). `f9be9e0` batch-committed the parallel
+session's in-flight tree per the owner's new standing rule: **"push" = commit ALL working-tree
+changes + git push + Cloudflare deploy** — no committed-vs-uncommitted scope questions.
+
 ### 2026-08-12 (pt 2) — Garage tile shows the default genre's car (front pose)
 Committed `05b9b59` (tilted pose), not pushed. **Same-day owner revision (uncommitted): pose
 swapped from the rear-three-quarter turn to the FRONT view** — `starter_back_turn.png` →
