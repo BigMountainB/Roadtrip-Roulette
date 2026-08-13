@@ -1,4 +1,3 @@
-import { tunnelArtEnabled } from '../constants.js';
 import { allBandKeys } from '../road/Biomes.js';
 
 export const ASSET_MANIFEST = {
@@ -62,13 +61,10 @@ export const ASSET_MANIFEST = {
   // the road curves or the player moves laterally.
   // NOTE: opening geometry per plate is declared in TunnelFaceMesh.PLATES —
   // keep the two in step if the art is ever re-exported.
-  // GATED on constants.tunnelArtEnabled() — ON for a local dev host, OFF in
-  // production, overridable with ?tunnelart=1 / ?tunnelart=0. These three
-  // plates are 4.0 MB together, so downloading them where the facade can't
-  // draw would cost every player 4 MB for pixels they can't see. Both this and
-  // TunnelFaceMesh read the SAME function so the two can never disagree.
-  // Drop the ternary (keep the array) when the facades ship on by default.
-  tunnelFaces: tunnelArtEnabled() ? [
+  // Unconditional since 2026-08-13 — the facades shipped on-by-default and the
+  // dev-host gate (constants.tunnelArtEnabled + ?tunnelart overrides) was
+  // retired, per this block's own instruction to drop the ternary that day.
+  tunnelFaces: [
     { key: 'tunnel_face_mt_baker',
       path: 'assets/scenery/tunnels/tunnel_mt_baker_full.png' },
     { key: 'tunnel_face_mercer_lid',
@@ -79,7 +75,7 @@ export const ASSET_MANIFEST = {
     // now ship as full composites that already contain them (2026-08-12). Two
     // of those plates were also deleted from disk, so keeping the keys would
     // have 404'd on every boot.
-  ] : [],
+  ],
 
   // Seamless overhead asphalt tiles, one per road material along the route.
   // Same rules as the ground tile: flat/overhead art only (RoadPlane applies

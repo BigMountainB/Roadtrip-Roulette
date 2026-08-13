@@ -668,21 +668,3 @@ export const ENGINE_LIMP_CLEAR  = 90;   // must cool below this to exit limp (~1
 export const ENGINE_LIMP_MULT   = 0.60; // top-speed multiplier while limping
 export const ENGINE_HP_DPS      = 3.0;  // HP/sec lost while redlining (Normal/Hard)
 
-// ── Tunnel facade artwork gate (2026-08-11) ──────────────────────────────
-// ON by default EVERYWHERE (owner validated the facades on the live site via
-// ?tunnelart=1 and flipped the gate 2026-08-13). Two things ride on this and
-// they must agree: whether the mesh draws (TunnelFaceMesh) and whether the
-// 4 MB of plates is downloaded at all (AssetManifest.tunnelFaces). If they
-// ever disagreed, the artwork would either be missing its texture or players
-// would pay 4 MB for pixels they can't see — so both import THIS.
-//   ?tunnelart=0  force OFF anywhere (A/B against the procedural face)
-//   ?tunnelart=1  force ON (redundant now; kept so old test links keep working)
-export function tunnelArtEnabled() {
-  try {
-    const q = new URLSearchParams(globalThis.location?.search ?? '').get('tunnelart');
-    if (q === '0') return false;
-    return true;
-  } catch (_) {
-    return true;
-  }
-}
