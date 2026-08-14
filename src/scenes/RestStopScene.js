@@ -2825,8 +2825,9 @@ export class RestStopScene extends Phaser.Scene {
       // Affordability now reads through the metal tone rather than a flat
       // fill on the hit rectangle — setting a fill there would paint a solid
       // plate straight over the skin.
-      skin?.set(ok ? 'idle' : 'disabled');
-      if (skin) skin.tone = ok ? 'gold' : 'off';
+      // Tone passed THROUGH set(): assigning skin.tone did nothing, because
+      // set() paints from the opts captured when the button was dressed.
+      skin?.set(ok ? 'idle' : 'disabled', ok ? 'gold' : 'off');
       label.setAlpha(ok ? 1 : 0.45);
       desc.setAlpha(ok ? 1 : 0.45);
       cost.setColor(item.disabled ? '#886622'
@@ -2953,7 +2954,13 @@ export class RestStopScene extends Phaser.Scene {
       labels: this._pendingMetal?.labels ?? [],
     });
     this._pendingMetal = null;
-    created.push(skin.gfx);
+    // INSERTED AFTER bg, NOT APPENDED. These objects are handed to a section
+    // Container, and Phaser only re-sorts a container's children when a depth
+    // changes AFTER the child is added. dress() sets depths before that, so no
+    // sort is ever queued and the container draws in INSERTION order — an
+    // appended skin painted straight over the row's own label, price and
+    // description. Position in the array is the thing that actually decides.
+    created.splice(1, 0, skin.gfx);
 
     return created;
   }
@@ -3030,7 +3037,7 @@ export class RestStopScene extends Phaser.Scene {
         stroke: '#000', strokeThickness: 3,
       }).setOrigin(0.5).setDepth(D + 0.1);
       const skin = Metal.dress(this, b, { tone, chamfer: 6, labels: [t] });
-      objs.push(b, t, skin.gfx);
+      objs.push(b, skin.gfx, t);   // skin BEFORE the label — see the note in _makeButton
       b.on('pointerup', (ptr, _x, _y, ev) => {
         this._eatTap(ptr, ev);
         if (ptr.getDistance() > TAP_MAX_DRIFT) return;

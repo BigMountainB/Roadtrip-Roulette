@@ -168,34 +168,44 @@ export function dress(scene, rect, opts = {}) {
   const y = rect.originY === 0 ? rect.y : rect.y - rect.height / 2;
   const w = rect.width, h = rect.height;
 
-  // DEPTH, EXPLICITLY ON ALL THREE.
+  // LAYERING — two mechanisms, because two different things order the UI.
   //
-  // A -0.1 offset was not enough: the shop rows, their labels and the hit
-  // rectangle all sit at depth 0, and the skin is created last, so it painted
-  // over its own text. Fractional offsets also do not survive being reparented
-  // into a section Container. Each layer is pinned relative to the button's own
-  // depth instead, which keeps the button's stacking against the rest of the UI
-  // exactly where the call site put it.
-  // The plate sits AT the button's depth and the labels are raised above it —
-  // rather than sinking the plate below. A negative depth would have dropped a
-  // shop row's skin under the storefront background (itself depth 0) and made
-  // the button disappear entirely. Raising only the text cannot do that.
-  // gfx is created after rect, so at equal depth it draws over the (now
-  // transparent) hit rectangle, and under the labels.
+  // Depth handles the SCENE display list (HIT THE ROAD, BACK): the plate sits
+  // at the button's own depth and the labels are raised to +1. Deliberately not
+  // sunk below — a negative depth drops a shop row's skin under the storefront
+  // background (also depth 0) and the button vanishes entirely.
+  //
+  // Depth alone is NOT enough inside a Container. Phaser only re-sorts a
+  // container's children when a depth changes AFTER the child is added, and
+  // these depths are set here, before the objects reach the section container —
+  // so it draws in INSERTION order and an appended skin covers its own text.
+  // Call sites that build container children must therefore also insert
+  // skin.gfx before the labels (see the splice in _makeButton).
   const base = rect.depth ?? 0;
   const gfx = scene.add.graphics().setDepth(base);
   const labels = opts.labels ?? [];
   labels.forEach(l => l.setDepth?.(base + 1));
-  const baseY = labels.map(l => l.y);
   let state = opts.state ?? 'idle';
 
-  const set = (s) => {
+  // The lift is applied as a DELTA, never as an absolute setY.
+  //
+  // The garage restacks rows after a purchase by assigning each object's y
+  // (RestStopScene ~2583). An absolute `gfx.setY(dy)` threw that away: the
+  // purchase fired refresh() -> set(), which snapped every skin back to its
+  // ORIGINAL row position and left the restacked rows looking blank. Adding a
+  // delta leaves any external repositioning intact.
+  let curLift = 0;
+  const set = (s, toneOverride) => {
     state = s;
+    if (toneOverride) opts = { ...opts, tone: toneOverride };
     paint(gfx, x, y, w, h, { ...opts, state });
-    // Hover lifts 2 px, press settles 1 px below rest.
-    const dy = s === 'hover' ? -2 : s === 'down' ? 1 : 0;
-    gfx.setY(dy);
-    labels.forEach((l, i) => l.setY(baseY[i] + dy));
+    const want = s === 'hover' ? -2 : s === 'down' ? 1 : 0;
+    const delta = want - curLift;
+    if (delta) {
+      gfx.y += delta;
+      labels.forEach(l => { l.y += delta; });
+    }
+    curLift = want;
   };
   set(state);
 
