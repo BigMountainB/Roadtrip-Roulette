@@ -374,6 +374,15 @@
     #phone-garage-car {
       position: absolute;
       object-fit: contain;
+      /* Bottom-anchored: the data-px box is sized so every genre's front PNG
+         is WIDTH-limited under `contain` (box h ≥ box w × tallest aspect,
+         376/397 ≈ 0.947 → 210 × 0.947 ≈ 199 < 200).  Every car therefore
+         renders at the SAME width — real cars are all ~the same width, so a
+         van reads bigger than a coupe by standing TALLER from a shared
+         ground line, instead of the old equal-height fit that shrank narrow
+         cars.  If art squarer than ~1.05 w/h ever ships, bump the box height
+         (data-px, keeping bottom edge fixed) or that one goes height-limited. */
+      object-position: center bottom;
       pointer-events: none;
       user-select: none;
       -webkit-user-select: none;
@@ -1793,7 +1802,10 @@
          src is synced by
          syncGarageTileCar(); sits BEFORE the hit zones in the DOM so the
          garage button still takes the tap. -->
-    <img id="phone-garage-car" data-px="324 775 210 130" alt="" />
+    <!-- Box grew upward 130 → 200 tall (bottom edge unchanged at y 905) so
+         tall/narrow fronts stay width-limited — see #phone-garage-car CSS.
+         Headroom is open skyline/water; the GARAGE label ends ~y 650. -->
+    <img id="phone-garage-car" data-px="324 705 210 200" alt="" />
     <!-- Row 1 -->
     <button class="phone-hit" data-action="tutorial"    data-px="41 599 233 360"></button>
     <button class="phone-hit" data-action="garage"      data-px="299 594 259 366"></button>

@@ -28,6 +28,7 @@ import { GENRE_VEHICLE_TRAITS } from '../data/genreVehicleTraits.js';
 
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
+import * as Metal from '../ui/MetalUI.js';
 
 // ── Menu tap gate (owner 2026-08-03) ─────────────────────────────────────
 // One physical tap must never fire on two screens.  These menus mix event
@@ -1387,8 +1388,14 @@ export class RestStopScene extends Phaser.Scene {
       this._backBtnLbl = this.add.text(bx + 56, by + 16, '← BACK', {
         fontSize: '16px', fontFamily: IMPACT, color: '#1E5BB8',
       }).setOrigin(0.5).setDepth(61).setVisible(false);
-      this._backBtnBg.on('pointerover', () => this._backBtnBg.setFillStyle(0xF0E8C0));
-      this._backBtnBg.on('pointerout',  () => this._backBtnBg.setFillStyle(0xFFFFFF));
+      Metal.ensureNoise(this);
+      this._backMetal = Metal.dress(this, this._backBtnBg,
+        { tone: 'neutral', chamfer: 5, labels: [this._backBtnLbl] });
+      this._backBtnLbl.setColor(Metal.TONE.neutral.text);
+      // dress() paints immediately, but BACK starts hidden and is toggled by
+      // _popScreen — the skin has to follow it or it lingers over the landing
+      // screen as a floating plate.
+      this._backMetal.gfx.setVisible(false);
       this._backBtnBg.on('pointerdown', (ptr, _x, _y, ev) => {
         this._eatTap(ptr, ev);
         if (this._tapBlocked(ptr)) return;
@@ -1436,8 +1443,11 @@ export class RestStopScene extends Phaser.Scene {
       fontSize: '17px', fontFamily: IMPACT,
       color: '#FFFFFF', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5);
-    this._continueBtnBg.on('pointerover', () => this._continueBtnBg.setFillStyle(0x66CC66));
-    this._continueBtnBg.on('pointerout',  () => this._continueBtnBg.setFillStyle(0x44AA44));
+    // Metal skin. The rectangle above stays the hit area — only its fill is
+    // dropped — so the _eatTap / _tapBlocked path below is untouched.
+    Metal.ensureNoise(this);
+    Metal.dress(this, this._continueBtnBg, { tone: 'go', labels: [this._continueBtnLbl] });
+    this._continueBtnLbl.setColor(Metal.TONE.go.text);
     this._continueBtnBg.on('pointerdown', (ptr, _x, _y, ev) => {
       this._eatTap(ptr, ev);
       if (this._tapBlocked(ptr)) return;
@@ -2303,6 +2313,7 @@ export class RestStopScene extends Phaser.Scene {
     this._hideAllScreens();
     for (const obj of (this._landingObjs ?? [])) obj.setVisible?.(true);
     this._backBtnBg?.setVisible(false);
+    this._backMetal?.gfx.setVisible(false);
     this._backBtnLbl?.setVisible(false);
     this._sectionHeader?.setVisible(false);
     this._continueBtnBg?.setVisible(true);
@@ -2321,6 +2332,7 @@ export class RestStopScene extends Phaser.Scene {
     this._dealerCarsSubLbl?.setText?.(this._activeDealerBrand ?? this._brands?.dealer?.name ?? '');
     for (const obj of (this._dealerChooserObjs ?? [])) obj.setVisible?.(true);
     this._backBtnBg?.setVisible(true);
+    this._backMetal?.gfx.setVisible(true);
     this._backBtnLbl?.setVisible(true);
     this._continueBtnBg?.setVisible(false);
     this._continueBtnLbl?.setVisible(false);
@@ -2441,6 +2453,7 @@ export class RestStopScene extends Phaser.Scene {
       this._sectionContainers[key].setVisible(true);
     }
     this._backBtnBg?.setVisible(true);
+    this._backMetal?.gfx.setVisible(true);
     this._backBtnLbl?.setVisible(true);
     this._continueBtnBg?.setVisible(false);
     this._continueBtnLbl?.setVisible(false);
@@ -2715,10 +2728,12 @@ export class RestStopScene extends Phaser.Scene {
   _makeButton(x, y, w, h, item, bizKey) {
     const bg = this.add.rectangle(x, y, w, h, 0x2A1808)
       .setOrigin(0, 0)
-      .setStrokeStyle(2, 0xFFCC66)
       .setInteractive({ useHandCursor: true });
 
     const created = [bg];
+    // Metal skin, dressed AFTER the labels exist so they can ride the lift —
+    // see the Metal.dress call at the end of this method.
+    this._pendingMetal = { bg, labels: [] };
     let textX = x + 12;
 
     // Icon image (vice or weapon texture).  Falls back to the emoji prefix
@@ -2751,6 +2766,9 @@ export class RestStopScene extends Phaser.Scene {
     const desc = this.add.text(textX, y + (compact ? h / 2 + 7 : 28), item.desc, {
       fontSize: compact ? '9px' : '10px', fontFamily: 'Arial', color: '#CCBB88',
     }).setOrigin(0, 0);
+    // Ride the 2 px hover lift with the plate; without this the plate moves and
+    // the text stays put, which reads as the label peeling off the button.
+    this._pendingMetal?.labels.push(label, desc);
     // Custom used to zero every shop price (`freeMode`).  Removed 2026-07-28
     // (owner): items COST MONEY in Custom, at their real price, and that price is
     // what's displayed.  The wallet just never depletes — see `_infiniteMoney` at
@@ -2775,6 +2793,10 @@ export class RestStopScene extends Phaser.Scene {
     // (`showCost`) so you can see what you're saving toward, and an OWNED tier
     // says so outright (`disabledCostText: 'OWNED'`).
     const priceStr = effectiveCost > 0 ? `$${effectiveCost}` : 'FREE';
+    // Stashed so the confirm modal shows the SAME number the row does — the
+    // genre repair discount is applied here, and reading item.cost in the
+    // modal would quote the undiscounted price.
+    item._shownCost = effectiveCost;
     const cost = this.add.text(x + w - 8, y + h / 2 - 5,
       !disabled || item.showCost ? priceStr : (item.disabledCostText ?? 'N/A'), {
         fontSize: compact ? '11px' : '13px', fontFamily: IMPACT,
@@ -2789,6 +2811,9 @@ export class RestStopScene extends Phaser.Scene {
 
     // item.disabled is read LIVE (not the build-time `disabled` const) so a
     // purchase can flip it — e.g. REFUEL greys itself out after one buy.
+    // Forward-declared: refresh() runs on every wallet change and needs to
+    // restyle the plate, but the skin can only be built once the labels exist.
+    let skin = null;
     const refresh = () => {
       // Row may have been DESTROYED (screen rebuild) while this callback stays
       // registered in _buttonRefresh — touching a destroyed Text crashes
@@ -2796,8 +2821,11 @@ export class RestStopScene extends Phaser.Scene {
       // have no scene; bail for the whole row.
       if (!bg.scene || !label.scene || !cost.scene) return;
       const ok = !item.disabled && this._score >= effectiveCost;
-      bg.setFillStyle(ok ? 0x2A1808 : 0x1A0E04);
-      bg.setStrokeStyle(2, ok ? 0xFFCC66 : 0x664422);
+      // Affordability now reads through the metal tone rather than a flat
+      // fill on the hit rectangle — setting a fill there would paint a solid
+      // plate straight over the skin.
+      skin?.set(ok ? 'idle' : 'disabled');
+      if (skin) skin.tone = ok ? 'gold' : 'off';
       label.setAlpha(ok ? 1 : 0.45);
       desc.setAlpha(ok ? 1 : 0.45);
       cost.setColor(item.disabled ? '#886622'
@@ -2807,7 +2835,10 @@ export class RestStopScene extends Phaser.Scene {
     refresh();
     this._buttonRefresh.push(refresh);
 
-    bg.on('pointerover', () => { if (!item.disabled && this._score >= effectiveCost) bg.setFillStyle(0x44280C); });
+    // Hover/press visuals are the metal skin's job now (Metal.dress wires
+    // them). The old handlers set a solid fill on the hit rectangle, which
+    // would paint straight over the plate. refresh() is still called on out so
+    // affordability/label state stays live.
     bg.on('pointerout',  () => refresh());
     // Buy fires on pointerUP, not pointerdown (owner 2026-07-29: scrolling the
     // item list was instantly purchasing whatever sat under the finger at the
@@ -2910,6 +2941,19 @@ export class RestStopScene extends Phaser.Scene {
       this._confirmBuyPopup(item, doBuy);
     });
 
+    // Gold tone for a buyable rung, flat 'off' for a disabled/owned one, so
+    // affordability still reads at a glance the way the old blue/red did.
+    Metal.ensureNoise(this);
+    const affordNow = !item.disabled && this._score >= effectiveCost;
+    skin = Metal.dress(this, bg, {
+      tone: affordNow ? 'gold' : 'off',
+      state: affordNow ? 'idle' : 'disabled',
+      chamfer: 5,
+      labels: this._pendingMetal?.labels ?? [],
+    });
+    this._pendingMetal = null;
+    created.push(skin.gfx);
+
     return created;
   }
 
@@ -2933,12 +2977,41 @@ export class RestStopScene extends Phaser.Scene {
     // Oversized so the widened-canvas margins (HUD_OFFSET_X) are covered too.
     objs.push(this.add.rectangle(CX, CY, SCREEN_W * 3, SCREEN_H * 3, 0x000000, 0.55)
       .setDepth(D).setInteractive());
-    objs.push(this.add.rectangle(CX, CY, 400, 158, 0x102038)
-      .setDepth(D).setStrokeStyle(2, 0x66AAFF));
-    objs.push(this.add.text(CX, CY - 36, `You'd like ${art} ${name}?`, {
-      fontSize: '18px', fontFamily: IMPACT, color: '#FFFFFF',
+    // ── Charcoal metal panel (Overview Ch.15) ───────────────────────────
+    // Shorter than the old 400×158 flat blue box: the heading is one line and
+    // the price sits under it, so the panel does not need the height.
+    const PW = 400, PH = 124;
+    Metal.ensureNoise(this);
+    const panel = this.add.graphics().setDepth(D - 0.1);
+    Metal.paint(panel, CX - PW / 2, CY - PH / 2, PW, PH,
+                { tone: 'neutral', panel: true, chamfer: 10 });
+    // Brushed grain, low alpha, clipped to the panel so it cannot bleed past
+    // the chamfer. One shared 64×64 tile — see MetalUI.ensureNoise.
+    const grain = this.add.tileSprite(CX, CY, PW - 4, PH - 4, '__metal_noise')
+      .setAlpha(0.05).setDepth(D - 0.05);
+    objs.push(panel, grain);
+
+    // Per-item verb. The old copy was `You'd like a(n) X?` for everything —
+    // this modal serves parts, food, fuel, hires and whole vehicles, so
+    // "INSTALL NEW WINDSHIELD?" only fits some of them.
+    const p = item.payload ?? {};
+    const verb = (p.upgradeInstall || p.vehicleAccessory) ? 'INSTALL'
+               : p.refuel   ? 'FILL'
+               : p.repair   ? 'REPAIR'
+               : (p.buyGenre || p.driveGenre) ? 'TAKE'
+               : p.hitchhike ? 'PICK UP'
+               : 'BUY';
+    const heading = `${verb} ${name.toUpperCase()}?`;
+    objs.push(this.add.text(CX, CY - 34, heading, {
+      fontSize: '19px', fontFamily: IMPACT, color: '#E6F2FA',
+      stroke: '#000', strokeThickness: 4,
+      wordWrap: { width: 356 }, align: 'center',
+    }).setOrigin(0.5).setDepth(D));
+    // Price beneath the heading, per the brief.
+    const shown = item._shownCost ?? item.cost ?? 0;
+    objs.push(this.add.text(CX, CY - 10, shown > 0 ? `$${shown.toLocaleString()}` : 'FREE', {
+      fontSize: '15px', fontFamily: IMPACT, color: '#C9A24A',
       stroke: '#000', strokeThickness: 3,
-      wordWrap: { width: 368 }, align: 'center',
     }).setOrigin(0.5).setDepth(D));
 
     const close = () => {
@@ -2948,23 +3021,26 @@ export class RestStopScene extends Phaser.Scene {
     // Same tap discipline as the shop rows: buy on pointerUP with a drift
     // gate, and eat the tap so it can't fall through to whatever is behind.
     const TAP_MAX_DRIFT = 12;
-    const mkBtn = (x, txt, fill, cb) => {
-      const b = this.add.rectangle(x, CY + 34, 150, 44, fill)
-        .setDepth(D).setStrokeStyle(2, 0xFFFFFF, 0.85)
-        .setInteractive({ useHandCursor: true });
-      const t = this.add.text(x, CY + 34, txt, {
-        fontSize: '20px', fontFamily: IMPACT, color: '#FFFFFF',
+    const mkBtn = (x, txt, tone, cb) => {
+      const b = this.add.rectangle(x, CY + 26, 150, 40)
+        .setDepth(D).setInteractive({ useHandCursor: true });
+      const t = this.add.text(x, CY + 26, txt, {
+        fontSize: '18px', fontFamily: IMPACT, color: Metal.TONE[tone].text,
         stroke: '#000', strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(D);
-      objs.push(b, t);
+      }).setOrigin(0.5).setDepth(D + 0.1);
+      const skin = Metal.dress(this, b, { tone, chamfer: 6, labels: [t] });
+      skin.gfx.setDepth(D - 0.05);
+      objs.push(b, t, skin.gfx);
       b.on('pointerup', (ptr, _x, _y, ev) => {
         this._eatTap(ptr, ev);
         if (ptr.getDistance() > TAP_MAX_DRIFT) return;
         cb();
       });
     };
-    mkBtn(CX - 88, 'YES', 0x2E7D32, () => { close(); onYes(); });
-    mkBtn(CX + 88, 'NO',  0x8B2635, close);
+    // INSTALL / CANCEL, not YES / NO (owner, 2026-08-12). The affirmative
+    // tracks the per-item verb so a burrito never says INSTALL.
+    mkBtn(CX - 88, verb, 'go', () => { close(); onYes(); });
+    mkBtn(CX + 88, 'CANCEL', 'stop', close);
   }
 
   _purchaseConfirmation(item) {
