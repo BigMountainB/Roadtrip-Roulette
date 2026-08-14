@@ -36,3 +36,17 @@ website/assets/genre_art/
 website/assets/ui/
 website/demo/
 website/fully/
+
+# ── Moved OUT of the iCloud sync path (2026-08-13) ────────────────────────
+# These four are symlinks into ~/Library/Application Support/
+# RoadTripRoulette-nosync. They hold ~1.2 GB of regenerable build output and
+# dependencies, and iCloud kept forking conflict copies (`index 2.html`,
+# `phaser-… 2.js`) when a deploy rewrote them mid-upload.
+#
+# The rules above end in `/`, which matches DIRECTORIES only — a symlink is not
+# a directory, so git started reporting all four as untracked. These entries
+# match them as links too. Nothing here is tracked either way.
+node_modules
+dist
+website/demo
+website/fully
