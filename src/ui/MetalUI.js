@@ -168,8 +168,24 @@ export function dress(scene, rect, opts = {}) {
   const y = rect.originY === 0 ? rect.y : rect.y - rect.height / 2;
   const w = rect.width, h = rect.height;
 
-  const gfx = scene.add.graphics().setDepth((rect.depth ?? 0) - 0.1);
+  // DEPTH, EXPLICITLY ON ALL THREE.
+  //
+  // A -0.1 offset was not enough: the shop rows, their labels and the hit
+  // rectangle all sit at depth 0, and the skin is created last, so it painted
+  // over its own text. Fractional offsets also do not survive being reparented
+  // into a section Container. Each layer is pinned relative to the button's own
+  // depth instead, which keeps the button's stacking against the rest of the UI
+  // exactly where the call site put it.
+  // The plate sits AT the button's depth and the labels are raised above it —
+  // rather than sinking the plate below. A negative depth would have dropped a
+  // shop row's skin under the storefront background (itself depth 0) and made
+  // the button disappear entirely. Raising only the text cannot do that.
+  // gfx is created after rect, so at equal depth it draws over the (now
+  // transparent) hit rectangle, and under the labels.
+  const base = rect.depth ?? 0;
+  const gfx = scene.add.graphics().setDepth(base);
   const labels = opts.labels ?? [];
+  labels.forEach(l => l.setDepth?.(base + 1));
   const baseY = labels.map(l => l.y);
   let state = opts.state ?? 'idle';
 

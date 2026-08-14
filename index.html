@@ -3118,7 +3118,13 @@
                   const t = window.__vehTraits?.forGenre?.(g);
                   return `<div class="g-ride" data-genre="${g}" style="cursor:pointer;padding:1.8vmin;border-radius:1.6vmin;`
                     + `background:${curR ? '#123049' : '#0a1626'};border:2px solid ${curR ? '#39A8FF' : '#16283a'};text-align:center;">`
-                    + `<img src="assets/culture/${g}/vehicles/starter_back.png" alt="" style="max-width:70%;max-height:14vmin;object-fit:contain;" onerror="this.style.display='none'"/>`
+                    // Width-normalised like the home-screen garage tile: a
+                    // SQUARE contain-box keeps every genre's back PNG
+                    // width-limited (all aspects ≥ 1.04), so each car renders
+                    // at the same width from a shared bottom ground line and
+                    // tall rides (van, mud truck) read bigger by standing
+                    // taller — the old max-height:14vmin cap shrank them.
+                    + `<img src="assets/culture/${g}/vehicles/starter_back.png" alt="" style="width:70%;aspect-ratio:1/1;object-fit:contain;object-position:center bottom;" onerror="this.style.display='none'"/>`
                     + `<div style="color:#F4F7FF;font-size:4.6vmin;font-weight:bold;">${t?.vehicleName ?? g}${curR ? ' ★' : ''}</div>`
                     + `<div style="color:#9fb7d6;font-size:3.6vmin;">${_nameFor(g)}</div></div>`;
                 }).join('')

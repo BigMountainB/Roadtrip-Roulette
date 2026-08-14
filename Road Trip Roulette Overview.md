@@ -203,6 +203,83 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-13 (pt 2) — Police pursuit AI rewritten; storefront metal buttons; tunnel composites
+
+**Police — independent pursuit.** Cops no longer derive their speed from the player's.
+The old rear path assigned `reactSpd + closing`, `playerSpeed * 0.80` and
+`reactSpd * SETTLE_SPEED_MULT`, and a positional clamp pinned each cruiser at
+`TAILGATE_GAP`. Lagging the input made the copying *late, not absent* — every unit
+converged on one speed and one distance, which is what read as a hive mind.
+
+Three Phaser-free modules (plain state in, commands out, testable with no scene):
+
+| file | does |
+|---|---|
+| `src/cops/CopProfiles.js` | 6 bounded archetypes (PATIENT / AGGRESSIVE / INTERCEPTOR / CAUTIOUS / ERRATIC / HEAVY), seedable `makeProfile()`, `integrateSpeed()`. accel & brake are fractions of each cop's OWN cap. |
+| `src/cops/CopDriver.js` | observation refreshed at each cop's `reactionTime`, persistent 1–4 s intentions, gap-control target speed, smooth steering, SETUP → TELEGRAPH → COMMIT → RECOVER. |
+| `src/cops/PursuitDirector.js` | one striker token with rotation, star-gated wing/pass permissions, cop-to-cop spacing bias. |
+
+Removed from CopSystem's rear path: the closing formula, `SPEED_CAP_BY_STAR`,
+`SETTLE_SPEED_MULT`, and the `cop.position = _limit` clamp. Only a narrow anti-overlap
+nudge remains. Scripted exits (coal, donut, divert, parked, oncoming, barricade) are
+untouched — they carry no profile and take none of it.
+
+`_pitArmed` is now **commit-gated**. It used to arm from sustained lateral proximity during
+ordinary following, which is why PITs read as ambient unavoidable damage.
+
+**ONE PURSUER PER STAR** (owner): 2★=2, 3★=3, 4★=4, 5★=5. Old cap was
+`ceil(stars * 1.35 * difficulty * night)` — five cars at 3★, so the star rating told you
+little. Difficulty and night now scale spawn **rate**, not the ceiling. The cap counts
+pursuers only; barricades and oncoming are hazards, and counting them starved the 5★ roster.
+
+**SWAT moved 4★ → 5★** (owner). The helicopter was already 5★-gated (`stars >= 4.75`) and
+wired to GameScene — nothing was added. `src/cops/Helicopter.js` and `SWATVan.js` are
+*separate unused* implementations, not the live ones.
+
+⚠️ **`stars` is a decaying float that sits just UNDER its integer** — a 5★ chase reads
+`4.9997`. `Math.floor()` gave a cap one below the displayed star, and an `s < 5` gate
+swallowed the whole 5★ tier so SWAT never spawned. Both now key off `_starLevel` / the
+`4.75` threshold. **Any new star gate must use `_starLevel`, not `stars`.**
+
+*Still open:* the legacy `_lungeT` scheduler runs alongside the new ram phases — both
+produce strikes, so it works, but it is two mechanisms doing one job. And `addStar()` leaves
+`_starLevel` a frame behind `stars`, so a star gain applies one frame late (flagged, not
+fixed — it is a wanted-level rule).
+
+**Tests.** 8 superseded chase cases rewritten — they encoded the clamp, the proximity-PIT
+and the never-ahead guard this removes; each carries a comment saying what changed and why.
+One (`a strike lands`) was ~40% flaky because a striker must now win the token, close to a
+readable distance, *and* roll ram-or-PIT. New `tests/pursuit.test.mjs` covers the brief's 16
+requirements in 29 deterministic cases (seeded mulberry32). Wired into `npm test`.
+
+**Storefront metal buttons.** New `src/ui/MetalUI.js` — charcoal chamfered plates, banded
+gradients, one deterministic 64×64 noise tile, magenta/cyan edge glow, 2 px hover lift and
+click depress. Applied to the buy-confirm panel (now **INSTALL / CANCEL** with a per-item verb
+and the price beneath), shop rows, and HIT THE ROAD / BACK. Category tabs deliberately left.
+The interactive Rectangles are kept as hit areas and only made transparent, so every
+`_eatTap` / `_tapBlocked` / `_gateTaps` drift-gate path is untouched.
+
+⚠️ **Depth rule for dressed buttons:** the plate sits AT the button's depth and the *labels*
+are raised to `+1`. Do not sink the plate below — a negative depth drops a shop row's skin
+under the storefront background (also depth 0) and the button vanishes.
+
+**Tunnel composites.** Mt Baker and Mercer now ship as single authored plates
+(`tunnel_mt_baker_full.png` 5644×841, `tunnel_mercer_full.png` 4080×807) with walls and berms
+composed in, replacing the runtime assembly of face + 2 wing walls + 2 berms. `openL/openR/openT`
+traced from each PNG's alpha; neither opening is plate-centred (u ≈ 0.480), so the fit registers
+on `openL/openR` rather than assuming centre. Per-plate `aspect` — the shared `900/1600` would
+have drawn them ~3.8× too tall. `naturalFit` makes the ART define the mouth height and the
+tunnel register to it; `legs/span/above` are gone. Shell `H_CEIL` follows 4500 → 7490 while a
+composite draws, or sky shows through the top of the portal. `WINGS = {}`; the 8 wing asset keys
+are unloaded.
+
+*Note:* the wing/berm renderer in `TunnelFaceMesh.js` is now dead code, left in place until the
+composites are confirmed on the road.
+
+**Mercer lid approach (7.3–7.4 mi)** cleared of trees/shrubs/buildings — the lid's structures sit
+at the portal's distance and nearer island scenery drew straight over them. Filtered at the single
+point where a segment's sprites are finalised, not at the four places that plant them.
+
 ### 2026-08-13 — Tunnel facades ON for everyone; full-tree deploy
 Committed & pushed (`f9be9e0` batch + `1cacd9b` gate), deployed to Cloudflare (`f19fa180`).
 

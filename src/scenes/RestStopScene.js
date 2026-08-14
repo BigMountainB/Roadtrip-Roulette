@@ -2802,6 +2802,7 @@ export class RestStopScene extends Phaser.Scene {
         fontSize: compact ? '11px' : '13px', fontFamily: IMPACT,
         color: '#FFEE00', stroke: '#000', strokeThickness: 2,
       }).setOrigin(1, 0.5);
+    this._pendingMetal?.labels.push(cost);
     created.push(label, desc, cost);
     // Handles for cross-row updates — installing a tier has to retitle the row
     // BELOW it (see _unlockTier), which can't reach these through its own
@@ -3029,7 +3030,6 @@ export class RestStopScene extends Phaser.Scene {
         stroke: '#000', strokeThickness: 3,
       }).setOrigin(0.5).setDepth(D + 0.1);
       const skin = Metal.dress(this, b, { tone, chamfer: 6, labels: [t] });
-      skin.gfx.setDepth(D - 0.05);
       objs.push(b, t, skin.gfx);
       b.on('pointerup', (ptr, _x, _y, ev) => {
         this._eatTap(ptr, ev);
