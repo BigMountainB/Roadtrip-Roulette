@@ -44,7 +44,7 @@ import { clamp } from '../utils/Helpers.js';
 import { Difficulty } from './Difficulty.js';
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
-import { makeProfile, integrateSpeed } from '../cops/CopProfiles.js';
+import { makeProfile, integrateSpeed, dispatchSpeed, stoppingDistance } from '../cops/CopProfiles.js';
 import { driveCop, pitCommitting } from '../cops/CopDriver.js';
 import { PursuitDirector, spacingBias } from '../cops/PursuitDirector.js';
 import { DeployableField, DONUT_DIVERT_BY_STAR, DONUT_IMMUNE_SEC, PUFF_LIFE, CL } from './Deployables.js';
@@ -332,6 +332,8 @@ export class CopSystem {
    *  with stars ≥ 1.  Spawns a rear-pursuit cop closing in from behind so
    *  the encounter has consequence. */
   _spawnRearFromEncounter(playerPos) {
+    const _p1 = this._newPursuitProfile(false);
+    const _p1Speed = dispatchSpeed(_p1);
     // Rolling-coal lull — route encounters don't manifest pursuers either.
     // Returns the spawned cop (or null when the lull gated it) so callers
     // can tell whether anything actually hit the road — _spawnTrapPursuit
@@ -349,14 +351,19 @@ export class CopSystem {
       // pursuers on the oncoming side.  0.2-0.8 keeps them in the two
       // right-hand lanes, where a car chasing you actually drives.
       laneOffset:  0.2 + Math.random() * 0.6,
-      speed:       MAX_SPEED * (COP_TOP_MPH / 120),
-      baseSpeed:   MAX_SPEED * (COP_TOP_MPH / 120),
+      // Profile first, then speed from it — a roadside unit pulling out is
+      // doing road speed, not top speed (see dispatchSpeed).
+      speed:       _p1Speed,
+      baseSpeed:   _p1Speed,
+      profile:     _p1,
       side:        'rear',
       kind:        'rear',
       colorSet:    'police',
       color:       0xFFFFFF,
       alive:       true,
       painted:     false,
+      _recoverT:   0,
+      _attackCd:   0,
       _closeFactor: 0.10 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
     };
@@ -445,6 +452,9 @@ export class CopSystem {
    * anti-pass guards must not drag it back.
    */
   _tickOnrampReinforcements(dt, playerPos, cap) {
+    const _p2 = this._newPursuitProfile(false);
+    // Merging traffic speed, capped by what this unit can sustain.
+    const _p2Speed = Math.min(COP_TOP_UNITS * 0.55, _p2.cruiseSpeed);
     const tier = Math.max(0, Math.min(5, this._syncStarLevel()));
     if (tier < ONRAMP_MIN_STARS) { this._onrampTimer = 0; return; }
     if ((this._coalLull ?? 0) > 0) return;          // smokescreen holds them off
@@ -463,8 +473,14 @@ export class CopSystem {
       // pursuers on the oncoming side.  0.2-0.8 keeps them in the two
       // right-hand lanes, where a car chasing you actually drives.
       laneOffset:  0.2 + Math.random() * 0.6,
-      speed:       COP_TOP_UNITS * 0.55,   // merging up to speed
-      baseSpeed:   COP_TOP_UNITS,
+      // Merge speed, but never above what this unit can sustain — an on-ramp
+      // car is joining traffic, not launching. Clamped to profile.cruiseSpeed
+      // per the dispatch rule.
+      speed:       _p2Speed,
+      // baseSpeed was COP_TOP_UNITS — above this unit's own ceiling, so an
+      // on-ramp car was still dispatched faster than it can drive. It mirrors
+      // the merge speed now, same rule as every other pursuit entry point.
+      baseSpeed:   _p2Speed,
       side:        'rear',
       kind:        'rear',
       colorSet:    'police',
@@ -472,6 +488,9 @@ export class CopSystem {
       color:       0xFFFFFF,
       alive:       true,
       painted:     false,
+      profile:      _p2,
+      _recoverT:    0,
+      _attackCd:    0,
       _closeFactor: 0.06 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
       // Arrives in front legitimately — hand it a token so the guards leave
@@ -726,6 +745,12 @@ export class CopSystem {
     return 'oncoming-any';
   }
 
+  /** Profile FIRST, then speed from it. Every rear-pursuit entry point goes
+   *  through here so none can reintroduce a full-top-speed dispatch. */
+  _newPursuitProfile(isSwat = false) {
+    return makeProfile({ star: this._starLevel || 1, swat: isSwat });
+  }
+
   _spawnCop(playerPos) {
     const kindRaw = this._pickKind();
     if (!kindRaw) return;                            // no proactive spawn below 1★
@@ -749,7 +774,9 @@ export class CopSystem {
       // pursuers on the oncoming side.  0.2-0.8 keeps them in the two
       // right-hand lanes, where a car chasing you actually drives.
       laneOffset = 0.2 + Math.random() * 0.6;
-      speed      = COP_TOP_UNITS;
+      // Speed comes from the profile below, not COP_TOP_UNITS — see
+      // _newPursuitProfile / dispatchSpeed.
+      speed      = null;
     } else {
       // Oncoming — far ahead, will rocket toward the player.
       position   = playerPos + (16000 + Math.random() * 14000);
@@ -761,6 +788,8 @@ export class CopSystem {
       speed = -ONCOMING_UNITS;
     }
 
+    const _prof = kind === 'rear' ? this._newPursuitProfile(isSwat) : null;
+    if (_prof && speed === null) speed = dispatchSpeed(_prof);
     this.cops.push({
       id:          Math.random(),
       position,
@@ -779,9 +808,7 @@ export class CopSystem {
       // Persistent driving profile — rolled ONCE here, never per frame. Only
       // rear pursuers drive themselves; oncoming units and barricades keep
       // their existing scripted movement.
-      profile:      kind === 'rear'
-                      ? makeProfile({ star: this._starLevel || 1, swat: isSwat })
-                      : null,
+      profile:      _prof,
       _slot:        0,
       _recoverT:    0,
       _attackCd:    0,

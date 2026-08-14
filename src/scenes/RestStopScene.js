@@ -1446,7 +1446,12 @@ export class RestStopScene extends Phaser.Scene {
     // Metal skin. The rectangle above stays the hit area — only its fill is
     // dropped — so the _eatTap / _tapBlocked path below is untouched.
     Metal.ensureNoise(this);
-    Metal.dress(this, this._continueBtnBg, { tone: 'go', labels: [this._continueBtnLbl] });
+    // Handle kept: the skin is a SEPARATE GameObject, so every setVisible on
+    // the button has to move it too. Shop sub-screens hide HIT THE ROAD to free
+    // the bottom edge for the category toolbar, and without this the plate sat
+    // there over the shop looking like a stray button.
+    this._continueMetal =
+      Metal.dress(this, this._continueBtnBg, { tone: 'go', labels: [this._continueBtnLbl] });
     this._continueBtnLbl.setColor(Metal.TONE.go.text);
     this._continueBtnBg.on('pointerdown', (ptr, _x, _y, ev) => {
       this._eatTap(ptr, ev);
@@ -2318,6 +2323,7 @@ export class RestStopScene extends Phaser.Scene {
     this._sectionHeader?.setVisible(false);
     this._continueBtnBg?.setVisible(true);
     this._continueBtnLbl?.setVisible(true);
+    this._continueMetal?.gfx.setVisible(true);
     // Landing shows the LOCATION; sub-screens swap in the shop name.
     this._titleText?.setText(this._stop.name.toUpperCase());
   }
@@ -2336,6 +2342,7 @@ export class RestStopScene extends Phaser.Scene {
     this._backBtnLbl?.setVisible(true);
     this._continueBtnBg?.setVisible(false);
     this._continueBtnLbl?.setVisible(false);
+    this._continueMetal?.gfx.setVisible(false);
     const shopName = this._shopNameFor('dealer');
     if (this._sectionHeader) {
       this._sectionHeader.setText(shopName ?? '🏬  DEALER').setVisible(true);
@@ -2457,6 +2464,7 @@ export class RestStopScene extends Phaser.Scene {
     this._backBtnLbl?.setVisible(true);
     this._continueBtnBg?.setVisible(false);
     this._continueBtnLbl?.setVisible(false);
+    this._continueMetal?.gfx.setVisible(false);
     // Sub-screens brand themselves as the shop the player is IN — the
     // big title and section header both show the store's name (falling
     // back to the section label where no brand exists, e.g. ACCESSORIES).

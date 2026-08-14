@@ -217,11 +217,16 @@ export function initOpeningCall() {
     suppressMusic(true);
 
     // START AUDIO SYNCHRONOUSLY. This runs inside the pointerup/keydown that
-    // accepted the call, which is the only reason iOS will allow it.
+    // accepted the call, which is the only reason iOS will allow it.  The
+    // element itself was created (and its download kicked off) back in
+    // start(), so play() finds a warm buffer; the fresh-construction branch
+    // is only the belt-and-suspenders for a start() whose construction threw.
     try {
-      audio = new Audio(AUDIO_SRC);
-      audio.preload = 'auto';
+      if (!audio) { audio = new Audio(AUDIO_SRC); audio.preload = 'auto'; }
       audio.addEventListener('ended', finish, { once: true });
+      // A 404/decode failure during the ring phase has already fired 'error'
+      // (this late listener would miss it) — but that also makes play()
+      // reject, so the promise catch below still routes to the fallback.
       audio.addEventListener('error', onAudioMissing, { once: true });
       const p = audio.play();
       if (p?.catch) p.catch(onAudioMissing);
@@ -353,6 +358,20 @@ export function initOpeningCall() {
     ui.removeAttribute('aria-hidden');
     setKnob(0, false);
     suppressMusic(true);
+    // PRELOAD the recording while the phone rings.  It used to be fetched
+    // inside accept(), so on the deployed site the ~300 KB download raced the
+    // player's slide-to-answer and the manager opened with dead air (owner
+    // report 2026-08-14).  Only the download starts here — play() stays inside
+    // the accept gesture, which is what iOS autoplay policy requires.  No
+    // wasted fetch on normal boots: start() only runs when the intro will
+    // actually show.
+    if (!audio) {
+      try {
+        audio = new Audio(AUDIO_SRC);
+        audio.preload = 'auto';
+        audio.load();
+      } catch (_) { audio = null; }
+    }
     // Focus the control so a keyboard-only player can answer immediately.
     try { knob.focus({ preventScroll: true }); } catch (_) {}
   }

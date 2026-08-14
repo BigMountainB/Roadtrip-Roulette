@@ -17,7 +17,7 @@
 // steering noise, no per-frame lane choice. Variation comes from the profile
 // and from intention transitions, then gets smoothed by the physics.
 
-import { integrateSpeed } from './CopProfiles.js';
+import { integrateSpeed, stoppingDistance } from './CopProfiles.js';
 
 /** Intention → how long it holds, in seconds [min, max]. */
 const HOLD = {
@@ -40,6 +40,27 @@ const COMMIT_SEC    = 1.10;   // bounded — an attack can miss and must end
 // Gap-error gain, 1/sec. Higher closes harder and overshoots more; this value
 // gives a visible but recoverable overshoot when the player brakes hard.
 const GAP_K = 0.55;
+
+// ── APPROACH ──────────────────────────────────────────────────────────────
+// A freshly dispatched cruiser must run a bounded approach before it is
+// allowed to do anything aggressive. Without it a cop could spawn, pick a
+// closing intention and reach the player's bumper inside a second — which the
+// collision path then scored as a deliberate ram at 1★.
+//
+// During approach the cop is NOT `established`: PursuitDirector will not give
+// it striker/passer/blocker, and the collision classifier will not count its
+// contact as an intentional attack.
+const APPROACH_SEC = 4.0;
+
+// Safety margin on top of the physical stopping distance, in world units. The
+// cop starts easing this far before it would actually need to, which is what
+// makes it read as a driver judging a gap rather than a projectile.
+const BRAKE_MARGIN = 700;
+
+// How much faster than the observed player a CLOSING cop is willing to run
+// while it still has room. Bounded, and still subject to the braking clamp and
+// the cop's own maxSpeed — a slow cruiser cannot conjure pace it does not have.
+const CLOSE_OVERSPEED = 2600;
 
 /**
  * Refresh a cop's belief about the player, no more often than its reactionTime.
@@ -83,6 +104,8 @@ export function chooseIntention(cop, world, role, rng) {
   if (gap < 0 && role !== 'blocker' && role !== 'passer') return armHold(cop, 'overshoot', rng);
   if (cop._recoverT > 0) return armHold(cop, 'recover', rng);
 
+  // Not yet established (still approaching) — tail only, whatever role says.
+  if (!cop._established) return armHold(cop, gap > p.preferredGap * 1.6 ? 'close' : 'follow', rng);
   if (role === 'passer')  return armHold(cop, 'pass', rng);
   if (role === 'blocker') return armHold(cop, 'block', rng);
   if (role === 'striker') {
@@ -127,7 +150,6 @@ function targetSpeed(cop, world) {
       // Commit phase runs flat out; setup/telegraph close at a readable rate.
       return cop._phase === PHASE.COMMIT ? p.maxSpeed : Math.min(p.maxSpeed, p.cruiseSpeed * 1.10);
     case 'close':
-      return p.maxSpeed;
     case 'hold':
     case 'pressure':
     case 'follow':
@@ -146,8 +168,32 @@ function targetSpeed(cop, world) {
       // Without the pace term the cop targeted its own cruise speed and blew
       // past a slow player at 60+ mph, which is how the first cut of this
       // failed the "no cop gets in front" tests.
+      // `close` used to return p.maxSpeed flat, skipping every gap and braking
+      // term — so a cruiser closed at its ceiling regardless of how little room
+      // was left, blew past the player, turned around and did it again. It now
+      // shares this controller and simply presses harder: a bigger gain and a
+      // guaranteed overspeed while genuinely far back, still bounded by the
+      // braking clamp below and by the cop's own ceiling.
+      const closingIntent = cop._intent === 'close';
       const err = gap - want;
-      const desired = o.speed + err * GAP_K;
+      let desired = o.speed + err * (closingIntent ? GAP_K * 1.8 : GAP_K);
+      if (closingIntent && gap > want * 1.5) {
+        desired = Math.max(desired, o.speed + CLOSE_OVERSPEED);
+      }
+
+      // BRAKING DISTANCE. Closing fast on a short gap has to produce braking
+      // BEFORE the collision box, not a late correction inside it. If the room
+      // left is no more than what this cop needs to shed its closing speed
+      // (plus a margin), it stops trying to close and gives up speed instead.
+      const closing = cop.speed - o.speed;
+      const need = stoppingDistance(closing, p, world.grip ?? 1) + BRAKE_MARGIN;
+      if (closing > 0 && gap < need) {
+        // Scale from "just reached the braking point" (hold pace) to "well
+        // inside it" (shed hard). Never a teleport, never a speed assignment —
+        // the physics layer still has to get there through this cop's brakes.
+        const over = Math.min(1, (need - gap) / Math.max(1, need));
+        desired = Math.min(desired, o.speed * (1 - 0.55 * over));
+      }
       return Math.max(0, Math.min(p.maxSpeed, desired));
     }
   }
@@ -188,6 +234,11 @@ const clampLane = (v) => Math.max(-0.95, Math.min(0.95, v));
  */
 export function driveCop(cop, world, role, dt, rng = Math.random) {
   observe(cop, world, dt);
+
+  // Approach clock. Runs once per cop, from dispatch. `_established` gates
+  // every aggressive behaviour downstream.
+  cop._approachT = (cop._approachT ?? APPROACH_SEC) - dt;
+  cop._established = cop._approachT <= 0;
 
   cop._recoverT = Math.max(0, (cop._recoverT ?? 0) - dt);
   cop._intentT  = (cop._intentT ?? 0) - dt;

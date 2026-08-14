@@ -147,6 +147,36 @@ export function makeProfile({ star = 1, swat = false, rng = Math.random, archety
   };
 }
 
+// Dispatch speed for a newly assigned cruiser. A patrol car joining a pursuit
+// is doing highway speed, not qualifying-lap speed — it has to CATCH you, which
+// is the whole tension. Spawning at COP_TOP_UNITS meant a cop materialised
+// hundreds of feet back at 100+ mph with no room to brake, so its first act was
+// a collision the game then scored as a deliberate ram at 1★.
+const DISPATCH_MPH = [60, 80];
+
+/**
+ * Initial road speed for a rear pursuer, from its OWN profile.
+ *
+ * Never derived from the player's speed — a fast player is supposed to pull
+ * away from a freshly dispatched cruiser at first. Clamped to the profile so a
+ * slow archetype can never be dispatched above what it can sustain.
+ */
+export function dispatchSpeed(profile, rng = Math.random) {
+  const raw = mph(DISPATCH_MPH[0] + rng() * (DISPATCH_MPH[1] - DISPATCH_MPH[0]));
+  return Math.min(raw, profile.cruiseSpeed, profile.maxSpeed);
+}
+
+/**
+ * Distance a cop needs to shed its closing speed, using its OWN braking.
+ * `closing` is cop.speed - observedPlayerSpeed; zero or negative means the cop
+ * is not gaining and needs no braking room.
+ */
+export function stoppingDistance(closing, profile, grip = 1) {
+  if (closing <= 0) return 0;
+  const decel = Math.max(1, profile.brake * profile.maxSpeed * grip);
+  return (closing * closing) / (2 * decel);
+}
+
 /**
  * Integrate one cop's speed toward a tactical target using ITS OWN
  * acceleration and braking. This is the whole point of the refactor: the

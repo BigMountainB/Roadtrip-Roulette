@@ -10207,6 +10207,39 @@ export class GameScene extends Phaser.Scene {
     }
 
     // ── Rear cop ramming player — counts toward 5-strikes BUSTED ──────
+    // ── INTENT, NOT PROXIMITY ────────────────────────────────────────────
+    // A rear contact only counts as a deliberate COP RAM when the cruiser is
+    // actually attacking: established (its dispatch approach finished), intent
+    // `ram`, and inside the bounded COMMIT window. Everything else — a cop that
+    // misjudged a gap, one that overshot because the player braked, a freshly
+    // dispatched unit still closing — is ACCIDENTAL CONTACT. It still hurts,
+    // proportionately, but it does not advance the 5-strike arrest counter and
+    // it is not labelled a ram.
+    //
+    // This is the fix for "cop spawns and immediately rams you at 1★": that
+    // cop was never attacking, it just arrived too fast with nowhere to brake.
+    const _deliberateRam = kind === 'rear'
+      && cop._established === true
+      && cop._intent === 'ram'
+      && cop._phase === 'commit';
+    if (kind === 'rear' && type !== 'side-swipe' && !_deliberateRam && cop.profile) {
+      // Accidental contact: light damage, no arrest strike, and the cop breaks
+      // off into recovery so it cannot grind against the bumper.
+      const impact = this._impactModel(cop.speed ?? p.speed, hit, { headOn: false });
+      p.xImpulse = sideDir * (0.6 + impact.severity * 0.6);
+      p.speed    = Math.max(400, p.speed * clamp(0.88 - impact.severity * 0.12, 0.70, 0.86));
+      this.effects.triggerShake(110 + impact.severity * 120, 0.004 + impact.severity * 0.005);
+      this._applyDamage((0.5 + impact.severity * 0.8) * damageMul, 'cop_contact');
+      cop._recoverT = Math.max(cop._recoverT ?? 0, cop.profile.recoveryTime);
+      cop._attackCd = Math.max(cop._attackCd ?? 0, cop.profile.attackCooldown);
+      cop._intent   = 'recover';
+      cop._intentT  = cop.profile.recoveryTime;
+      cop._phase    = null;
+      this.cops.endLunge?.(cop);
+      this._showPopup('CONTACT', '#FFAA33');
+      this._tickPlayerCopCrash();
+      return;
+    }
     if (kind === 'rear' && type !== 'side-swipe') {
       const impact = this._impactModel(cop.speed ?? p.speed, hit, { headOn: false });
       p.xImpulse = sideDir * (1.0 + impact.severity * 1.0);
@@ -10242,7 +10275,12 @@ export class GameScene extends Phaser.Scene {
     //    armed (sustained lateral lock at close range).  A side-swipe
     //    before that = the player smashing into the cop, which CRASHES
     //    the cop instead of busting the player. ────────────────────────
-    if (type === 'side-swipe' && cop._pitArmed) {
+    // _pitArmed is now set ONLY inside a valid PIT commit window (CopSystem's
+    // rear case gates it on CopDriver.pitCommitting), so this no longer fires
+    // from a follower that merely drifted alongside. The `_established` check
+    // is belt-and-braces for a cop that has no profile at all.
+    if (type === 'side-swipe' && cop._pitArmed
+        && (!cop.profile || cop._established === true)) {
       const impact = this._impactModel(cop.speed ?? p.speed, hit);
       p.xImpulse = sideDir * (1.0 + impact.severity * 1.1);
       p.speed    = Math.max(600, p.speed * clamp(0.86 - impact.severity * 0.18, 0.68, 0.82));

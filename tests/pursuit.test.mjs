@@ -10,6 +10,9 @@
 import { makeProfile, makeRng, integrateSpeed, mph } from '../src/cops/CopProfiles.js';
 import { driveCop, pitCommitting, PHASE } from '../src/cops/CopDriver.js';
 import { PursuitDirector, ROLE } from '../src/cops/PursuitDirector.js';
+import { dispatchSpeed, stoppingDistance } from '../src/cops/CopProfiles.js';
+import { CopSystem } from '../src/systems/CopSystem.js';
+import { MAX_SPEED } from '../src/constants.js';
 
 let pass = 0, fail = 0;
 const check = (name, ok) => {
@@ -192,11 +195,15 @@ function run(cops, { playerSpeed, secs, star = 3, rng = makeRng(7), roles = null
 
 // ── 12. ACCIDENTAL OVERSHOOT ──────────────────────────────────────────────
 {
-  const cop = mkCop('l', -900, { archetype: 'HEAVY', star: 2 });  // starts AHEAD
+  // star 1, not 2: at 2★ this cop wins the striker token and a ram commit
+  // carries it past the player again mid-window, which is correct behaviour but
+  // not what this case is about. 1★ permits no attacks at all, so the only
+  // thing under test is the overshoot recovery itself.
+  const cop = mkCop('l', -900, { archetype: 'HEAVY', star: 1 });  // starts AHEAD
   const dir = new PursuitDirector();
   let pursuitZ = 0, maxJump = 0, prev = cop.position;
   for (let t = 0; t < 8; t += DT) {
-    const world = { playerSpeed: mph(85), pursuitZ, playerX: 0, grip: 1, star: 2 };
+    const world = { playerSpeed: mph(85), pursuitZ, playerX: 0, grip: 1, star: 1 };
     driveCop(cop, world, dir.assign([cop], world, DT).get('l'), DT, makeRng(8));
     maxJump = Math.max(maxJump, Math.abs(cop.position - prev));
     prev = cop.position;
@@ -258,6 +265,91 @@ function run(cops, { playerSpeed, secs, star = 3, rng = makeRng(7), roles = null
         integrateSpeed(prof.maxSpeed, prof.maxSpeed * 5, prof, 10) <= prof.maxSpeed);
   check('speed never goes negative',
         integrateSpeed(10, -9999, prof, 10) >= 0);
+}
+
+
+// ═══ DISPATCH LIFECYCLE (regression: cops spawned at COP_TOP_UNITS) ═══════
+
+// ── 18. EVERY SPAWN PATH BUILDS THE PROFILE BEFORE THE SPEED ──────────────
+{
+  const paths = [];
+  for (const star of [1, 3, 5]) {
+    const cs = new CopSystem();
+    cs.stars = star; cs._starLevel = star;
+    let pp = 100000;
+    for (let t = 0; t < 60; t += DT) { cs.update(DT, pp, MAX_SPEED * 0.6, 0); pp += MAX_SPEED * 0.6 * DT; }
+    for (const c of cs.cops) if (c.kind === 'rear' && !c.parked) paths.push(c);
+  }
+  check('18. every rear pursuer has a profile', paths.length > 0 && paths.every(c => !!c.profile));
+  check('1. no rear pursuer starts above its own maxSpeed',
+        paths.every(c => (c.baseSpeed ?? 0) <= c.profile.maxSpeed + 1e-6));
+  // ── 2. DISPATCH SPEED, NOT TOP SPEED ────────────────────────────────────
+  const top = MAX_SPEED * (110 / 120);
+  check('2. rear dispatch is road speed, not COP_TOP_UNITS',
+        paths.every(c => (c.baseSpeed ?? 0) < top));
+  check('2b. dispatch sits at or below cruise',
+        paths.every(c => (c.baseSpeed ?? 0) <= c.profile.cruiseSpeed + 1e-6));
+}
+
+// ── dispatchSpeed invariants, directly ────────────────────────────────────
+{
+  for (const a of ['PATIENT', 'AGGRESSIVE', 'INTERCEPTOR', 'CAUTIOUS', 'ERRATIC', 'HEAVY']) {
+    const prof = makeProfile({ star: 3, rng: makeRng(77), archetype: a });
+    const sp = dispatchSpeed(prof, makeRng(5));
+    check(`dispatch never exceeds ${a}'s own ceiling`,
+          sp <= prof.maxSpeed && sp <= prof.cruiseSpeed && sp > 0);
+  }
+}
+
+// ── 3 & 5. ONE STAR TAILS, NEVER ATTACKS ──────────────────────────────────
+{
+  const cop = mkCop('t1', 6000, { archetype: 'PATIENT', star: 1, speed: mph(70) });
+  const dir = new PursuitDirector();
+  let pursuitZ = 0, minGap = Infinity;
+  const seen = new Set();
+  for (let t = 0; t < 25; t += DT) {
+    const world = { playerSpeed: mph(85), pursuitZ, playerX: 0, grip: 1, star: 1 };
+    driveCop(cop, world, dir.assign([cop], world, DT).get('t1'), DT, makeRng(8));
+    pursuitZ += mph(85) * DT;
+    minGap = Math.min(minGap, pursuitZ - cop.position);
+    seen.add(cop._intent);
+  }
+  check('3. a 1★ cruiser never enters ram / pit / pass / block',
+        !seen.has('ram') && !seen.has('pit') && !seen.has('pass') && !seen.has('block'));
+  check('4. a 1★ cruiser never reaches the player (no immediate strike)', minGap > 400);
+  check('5. a 1★ cruiser establishes a tail near its preferred gap',
+        minGap >= cop.profile.preferredGap * 0.85);
+}
+
+// ── APPROACH GATE ─────────────────────────────────────────────────────────
+{
+  const cop = mkCop('ap', 3000, { archetype: 'AGGRESSIVE', star: 5, speed: mph(75) });
+  const dir = new PursuitDirector();
+  let pursuitZ = 0, attackedEarly = false;
+  for (let t = 0; t < 3; t += DT) {           // inside the approach window
+    const world = { playerSpeed: mph(85), pursuitZ, playerX: 0, grip: 1, star: 5 };
+    driveCop(cop, world, dir.assign([cop], world, DT).get('ap'), DT, makeRng(2));
+    pursuitZ += mph(85) * DT;
+    if (cop._intent === 'ram' || cop._intent === 'pit') attackedEarly = true;
+  }
+  check('a cop cannot attack during its approach window', !attackedEarly);
+  check('and is not yet established', cop._established === false);
+}
+
+// ── 9 & 10. STOPPING DISTANCE IS RESPECTED ────────────────────────────────
+{
+  const prof = makeProfile({ star: 3, rng: makeRng(31), archetype: 'HEAVY' });
+  check('9. stoppingDistance grows with closing speed',
+        stoppingDistance(4000, prof) > stoppingDistance(1000, prof));
+  check('9b. no braking room needed when not closing', stoppingDistance(-500, prof) === 0);
+  // A heavy cop closing hard on a short gap must shed speed, not hold it.
+  const cop = mkCop('sd', 1200, { archetype: 'HEAVY', star: 3, speed: mph(115) });
+  cop._established = true; cop._approachT = -1;
+  cop._intent = 'close'; cop._intentT = 99;
+  const before = cop.speed;
+  const world = { playerSpeed: mph(45), pursuitZ: 0, playerX: 0, grip: 1, star: 3 };
+  for (let t = 0; t < 1; t += DT) driveCop(cop, world, 'follower', DT, makeRng(4));
+  check('10. a cop closing too fast on a short gap brakes', cop.speed < before);
 }
 
 console.log(`\npursuit.test: ${pass} passed, ${fail} failed`);

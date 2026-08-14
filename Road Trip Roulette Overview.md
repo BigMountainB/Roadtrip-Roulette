@@ -203,6 +203,34 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-14 (pt 2) — WSB concrete piers removed (uncommitted)
+
+Owner: "get rid of the 'pillars' showing through the roadway… maybe they can just be removed."
+Confirmed via option pick these were the GRAY VERTICAL POSTS (not the white starburst objects,
+which are untouched and still unidentified). They were the West Seattle span's decorative
+concrete support piers — Road.js `_drawSegment`, every 10th `seg.bridge` segment, two flared
+trapezoids flanking the deck + a foot shadow. Being tall verticals painted inside the
+per-segment loop, their extent crossed rows owned by other segments, so they stroked over the
+roadway — the artifact prior sessions fought repeatedly. Deleted outright (no collision or
+gameplay reads them); tombstone comment at the site says any future bridge supports need their
+own depth-sorted pass, not the segment loop.
+
+### 2026-08-14 — Opening-call voicemail preloads during the ring (uncommitted)
+
+Owner: "don't hear the voicemail… on desktop it took a while to load." Root causes found were
+three separate things; only the preload was approved for fixing:
+1. **Phone silence is the once-per-device flag working as designed** (`rtr_intro_call_done` /
+   `settings.introCallDone` — the call never replays after the first completion; use
+   `__replayOpeningCall()` to hear it again).
+2. **The 08-11 re-encode truncated the recording 27.3 s → 12.4 s** (rode batch commit `f9be9e0`;
+   original recoverable from `b8ff6f4`). Owner declined a restore for now — flagged here so the
+   short file isn't rediscovered as a mystery.
+3. **Fixed: no preload** — the MP3 only started downloading inside `accept()`, so the ~300 KB
+   fetch raced the slide-to-answer on the deployed site. `OpeningCallSequence.start()` now
+   constructs the Audio element and calls `load()` when the RINGING screen appears; `accept()`
+   reuses it, keeping `play()` synchronous inside the gesture (iOS requirement). No wasted fetch:
+   `start()` only runs when the intro will actually show.
+
 ### 2026-08-13 (pt 2) — Police pursuit AI rewritten; storefront metal buttons; tunnel composites
 
 **Police — independent pursuit.** Cops no longer derive their speed from the player's.

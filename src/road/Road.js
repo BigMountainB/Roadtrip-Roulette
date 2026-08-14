@@ -3733,33 +3733,15 @@ export class Road {
           g.fillRect(rightFlankX, fy + segH * 0.55, rightFlankW, Math.max(1, segH * 0.08));
         }
       }
-      // Concrete piers at intervals across the span. On channel segments
-      // the dark foot shadow reads as a reflection in the water.
-      if ((seg.index % 10) === 0) {
-        const pylonH = Math.max(16, segH * 4.8);
-        const pylonW = Math.max(5, w2 * 0.15);
-        const topY = fy + segH * 0.12;
-        const botY = Math.min(SCREEN_H + 40, topY + pylonH);
-        const leftX = x2 - w2 - rw2 - pylonW * 1.45;
-        const rightX = x2 + w2 + rw2 + pylonW * 0.45;
-        const flare = Math.max(2, pylonW * 0.28);
-        fillTrap(g, 0x9A968C,
-          leftX, topY, leftX + pylonW, topY,
-          leftX + pylonW + flare, botY, leftX - flare, botY);
-        fillTrap(g, 0x9A968C,
-          rightX, topY, rightX + pylonW, topY,
-          rightX + pylonW + flare, botY, rightX - flare, botY);
-        fillTrap(g, 0x5A554C,
-          leftX + pylonW * 0.72, topY, leftX + pylonW, topY,
-          leftX + pylonW + flare, botY, leftX + pylonW * 0.72, botY);
-        fillTrap(g, 0x5A554C,
-          rightX + pylonW * 0.72, topY, rightX + pylonW, topY,
-          rightX + pylonW + flare, botY, rightX + pylonW * 0.72, botY);
-        // Dark foot/reflection directly below each pier.
-        g.fillStyle(seg.bridgeWaterChannel ? 0x0A1E30 : 0x383630, 0.35);
-        g.fillRect(leftX - flare, botY - Math.max(1, segH * 0.2), pylonW + flare * 2, Math.max(1, segH * 0.35));
-        g.fillRect(rightX - flare, botY - Math.max(1, segH * 0.2), pylonW + flare * 2, Math.max(1, segH * 0.35));
-      }
+      // Concrete support piers REMOVED (owner 2026-08-14: "get rid of the
+      // pillars showing through the roadway... they can just be removed").
+      // They were tall per-segment verticals (every 10th bridge segment,
+      // flanking the deck) whose painted extent crossed rows owned by OTHER
+      // segments, so they kept stroking over the roadway no matter how the
+      // draw order was juggled — this was the repeat-offender artifact on
+      // the West Seattle span. Purely decorative; no collision or gameplay
+      // read them. If bridge supports ever come back, they need their own
+      // depth-sorted pass (like bridgeFrontGfx), not the segment loop.
     }
 
     // Left-side-only water (Elliott Bay along the West Seattle approach).
