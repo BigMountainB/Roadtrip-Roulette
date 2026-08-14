@@ -6291,15 +6291,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     // ── Bridge guardrail clamp ──────────────────────────────────────
-    // Plain `water` segments (bridge aprons, lake banks without a
-    // physical railing) — no clamp.  The car is free to drift into the
-    // water; the dunk safety net below catches it just past the shoulder
-    // line, costs 10 HP, and warps the car back to road center.
-
-    // waterLeft / waterRight banks have no physical rail — drifting
-    // past the shoulder line into the water triggers the dunk
-    // (handled by the safety net below).  The opposite-side shoulder
-    // stays normal off-road grass.
+    // (Stale fork-era note removed 2026-08-13: it claimed water banks have
+    // no physical rail.  They DO — the block below rails EVERY
+    // water-adjacent segment, and since 2026-08-13 Road.js paints the
+    // matching barrier on waterLeft/waterRight shore lakes too, so the
+    // wall is visible at Keechelus/Easton instead of invisible.)
 
     // ── Tunnel wall clamp ──────────────────────────────────────────
     // Inside the tunnel, concrete walls flank the road — the player

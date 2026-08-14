@@ -3890,7 +3890,14 @@ export class Road {
     // toward the horizon — looks like a real barrier, not a flat band.
     // The West Seattle Bridge gets a TALLER railing (1.8× width) since
     // you're 200 ft up over the Duwamish.
-    if (seg.water || seg.bridge) {
+    // One-sided shore lakes (waterLeft / waterRight — Keechelus, Easton,
+    // the Elliott Bay approach) draw the SAME barrier on the water side
+    // only (owner 2026-08-13: the car pressed an invisible wall at
+    // Keechelus while visually hanging over the lake — the physics rail
+    // has been there since the fork, the paint hadn't).
+    if (seg.water || seg.bridge || seg.waterLeft || seg.waterRight) {
+      const drawL = !!(seg.water || seg.bridge || seg.waterLeft);
+      const drawR = !!(seg.water || seg.bridge || seg.waterRight);
       const railMul = seg.bridge ? 1.8 : 1.0;
       const railW1 = Math.max(2, w1 * 0.06 * railMul);
       const railW2 = Math.max(2, w2 * 0.06 * railMul);
@@ -3900,28 +3907,32 @@ export class Road {
       // Route bridge guardrails to the front-overlay layer so their edges
       // stay crisp.
       const rg = (seg.bridge && this._frontG && this._camOnBridge) ? this._frontG : (structG ?? g);
-      // Left guardrail face
-      fillTrap(rg, RAIL_BASE,
-        x2 - w2 - rw2 - railW2, fy, x2 - w2 - rw2, fy,
-        x1 - w1 - rw1,         ny, x1 - w1 - rw1 - railW1, ny);
-      // Top edge highlight (thin)
-      fillTrap(rg, RAIL_TOP,
-        x2 - w2 - rw2 - railW2, fy, x2 - w2 - rw2 - railW2 + Math.max(1, railW2 * 0.30), fy,
-        x1 - w1 - rw1 - railW1 + Math.max(1, railW1 * 0.30), ny, x1 - w1 - rw1 - railW1, ny);
-      // Bottom shadow (thin)
-      fillTrap(rg, RAIL_DARK,
-        x2 - w2 - rw2 - Math.max(1, railW2 * 0.30), fy, x2 - w2 - rw2, fy,
-        x1 - w1 - rw1, ny, x1 - w1 - rw1 - Math.max(1, railW1 * 0.30), ny);
-      // Right guardrail face
-      fillTrap(rg, RAIL_BASE,
-        x2 + w2 + rw2,         fy, x2 + w2 + rw2 + railW2, fy,
-        x1 + w1 + rw1 + railW1, ny, x1 + w1 + rw1,         ny);
-      fillTrap(rg, RAIL_TOP,
-        x2 + w2 + rw2 + railW2 - Math.max(1, railW2 * 0.30), fy, x2 + w2 + rw2 + railW2, fy,
-        x1 + w1 + rw1 + railW1, ny, x1 + w1 + rw1 + railW1 - Math.max(1, railW1 * 0.30), ny);
-      fillTrap(rg, RAIL_DARK,
-        x2 + w2 + rw2,         fy, x2 + w2 + rw2 + Math.max(1, railW2 * 0.30), fy,
-        x1 + w1 + rw1 + Math.max(1, railW1 * 0.30), ny, x1 + w1 + rw1, ny);
+      if (drawL) {
+        // Left guardrail face
+        fillTrap(rg, RAIL_BASE,
+          x2 - w2 - rw2 - railW2, fy, x2 - w2 - rw2, fy,
+          x1 - w1 - rw1,         ny, x1 - w1 - rw1 - railW1, ny);
+        // Top edge highlight (thin)
+        fillTrap(rg, RAIL_TOP,
+          x2 - w2 - rw2 - railW2, fy, x2 - w2 - rw2 - railW2 + Math.max(1, railW2 * 0.30), fy,
+          x1 - w1 - rw1 - railW1 + Math.max(1, railW1 * 0.30), ny, x1 - w1 - rw1 - railW1, ny);
+        // Bottom shadow (thin)
+        fillTrap(rg, RAIL_DARK,
+          x2 - w2 - rw2 - Math.max(1, railW2 * 0.30), fy, x2 - w2 - rw2, fy,
+          x1 - w1 - rw1, ny, x1 - w1 - rw1 - Math.max(1, railW1 * 0.30), ny);
+      }
+      if (drawR) {
+        // Right guardrail face
+        fillTrap(rg, RAIL_BASE,
+          x2 + w2 + rw2,         fy, x2 + w2 + rw2 + railW2, fy,
+          x1 + w1 + rw1 + railW1, ny, x1 + w1 + rw1,         ny);
+        fillTrap(rg, RAIL_TOP,
+          x2 + w2 + rw2 + railW2 - Math.max(1, railW2 * 0.30), fy, x2 + w2 + rw2 + railW2, fy,
+          x1 + w1 + rw1 + railW1, ny, x1 + w1 + rw1 + railW1 - Math.max(1, railW1 * 0.30), ny);
+        fillTrap(rg, RAIL_DARK,
+          x2 + w2 + rw2,         fy, x2 + w2 + rw2 + Math.max(1, railW2 * 0.30), fy,
+          x1 + w1 + rw1 + Math.max(1, railW1 * 0.30), ny, x1 + w1 + rw1, ny);
+      }
       // Reflector posts — every ~9 segments with a per-cell jittered offset,
       // so the chain reads as posts a crew actually planted rather than as a
       // perfectly uniform dotted line.  World-anchored, so they never crawl.
@@ -3929,8 +3940,8 @@ export class Road {
       if (seg.index === _rCell * 9 + Math.floor(hash1(_rCell, 61) * 4)) {
         const postH = Math.max(2, segH * 0.45);
         rg.fillStyle(0xFF8800, 1);
-        rg.fillRect(x2 - w2 - rw2 - railW2 - 1, fy - postH * 0.4, 2, postH * 0.4);
-        rg.fillRect(x2 + w2 + rw2 + railW2 - 1, fy - postH * 0.4, 2, postH * 0.4);
+        if (drawL) rg.fillRect(x2 - w2 - rw2 - railW2 - 1, fy - postH * 0.4, 2, postH * 0.4);
+        if (drawR) rg.fillRect(x2 + w2 + rw2 + railW2 - 1, fy - postH * 0.4, 2, postH * 0.4);
       }
     }
 
