@@ -2537,60 +2537,12 @@ export function buildRoute(count = ROUTE_SEGS) {
   // opens a 30s "pull over" civil-stop window; at ≥1★ (an active warrant) the
   // trap cop just joins the pursuit.
   const SEGS_PER_MILE = count / TOTAL_ROUTE_MILES;
-  {
-    // Eligible cities: named towns with a real roadside.  Exclude the dense
-    // start block, the mountain pass, and the finish strip.
-    const TRAP_EXCLUDE = new Set(['West Seattle', 'Seattle', 'Snoqualmie Pass', 'Pullman, WA']);
-    const PERMANENT    = new Set(['Issaquah', 'Colfax']);
-    const cityPool  = CHECKPOINTS.filter(cp => !TRAP_EXCLUDE.has(cp.name));
-    const permanent = cityPool.filter(cp =>  PERMANENT.has(cp.name));
-    const optional  = cityPool.filter(cp => !PERMANENT.has(cp.name));
-    // Fisher–Yates shuffle the optional pool (Math.random → per-play variety).
-    for (let i = optional.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [optional[i], optional[j]] = [optional[j], optional[i]];
-    }
-    const extras     = 3 + Math.floor(Math.random() * 3);          // 3–5 extras → 5–7 total
-    const trapCities = permanent.concat(optional.slice(0, extras));
-
-    // Trap mile markers, exposed on the segments array so GameScene can fire a
-    // friend's advance "speed trap in <city> ~mile N" text 15-20 mi ahead.
-    const _trapMiles = [];
-
-    for (const cp of trapCities) {
-      // Park at a random spot inside the city window (a little off each edge).
-      const lo   = cp.mileage;
-      const hi   = cp.end ?? (cp.mileage + 1);
-      const span = Math.max(0.5, hi - lo);
-      const mile = lo + (0.20 + Math.random() * 0.60) * span;
-      const seg  = segments[Math.floor(mile * SEGS_PER_MILE) % count];
-      if (!seg) continue;
-      seg.sprites = seg.sprites || [];
-      const sideRight = Math.random() < 0.5;
-      const shoulder  = 1.20 + Math.random() * 0.25;               // 1.20–1.45 off-center
-      seg.sprites.push({
-        type:         'cop_random_parked',
-        offset:       sideRight ? shoulder : -shoulder,
-        side:         sideRight ? 'right' : 'left',
-        baseW:        1100,                          // larger so the roadside trap reads clearly
-        baseH:        1400,
-        collected:    false,
-        copEncounter: true,                          // GameScene flag
-        triggered:    false,
-        trapMile:     mile,                          // self-report for the final trapMiles rebuild
-      });
-      _trapMiles.push(mile);
-    }
-
-    // Expose the trap mile markers for GameScene's advance friend-warning.
-    // NOTE: this is a PRELIMINARY list — later scenery-culling passes (e.g.
-    // clearRightSceneryAround, which strips the exit-lane corridor near rest
-    // stops) can delete a parked cop whose right-shoulder offset lands in the
-    // cull band, which would leave a warned "trap" with no police at it.  The
-    // list is rebuilt from the SURVIVING cop sprites at the end of buildRoute.
-    _trapMiles.sort((a, b) => a - b);
-    segments.trapMiles = _trapMiles;
-  }
+  // (City speed-trap troopers used to park HERE, before the rest-stop /
+  //  exit-sign corridor culls, and any right-shoulder cop landing in a cull
+  //  band was silently deleted, costing that city its trap for the run.  The
+  //  block moved AFTER every clearRightSceneryAround caller and now places
+  //  corridor-aware; see "City speed-trap troopers" further down.  Owner
+  //  2026-08-14.)
 
   // ── Ambient driving cops — cruise same-direction lanes every ~15-30 mi ──
   //
@@ -2600,7 +2552,8 @@ export function buildRoute(count = ROUTE_SEGS) {
   // scan keys off `type`: a driving cop opens NO 0★ civil stop — it only
   // JOINS an active pursuit when the player is already wanted (≥1★).  ~50%
   // hit rate per step mirrors the old loop's parked/driving split (parked
-  // troopers now live in the city-trap pass above).
+  // troopers now live in the corridor-aware city-trap pass BELOW, moved
+  // after the cull passes 2026-08-14).
   {
     let mile = 18 + rng.range(0, 12);                 // first at mile 18-30
     while (mile < TOTAL_ROUTE_MILES - 1) {
@@ -2690,7 +2643,13 @@ export function buildRoute(count = ROUTE_SEGS) {
     for (let k = -before; k <= after; k++) {
       const idx = ((centerSeg + k) % count + count) % count;
       const seg = segments[idx];
-      if (!seg?.sprites) continue;
+      if (!seg) continue;
+      // Flag the segment so LATER placement passes can avoid parking
+      // anything on this right shoulder (owner 2026-08-14: the city
+      // speed-trap troopers now place corridor-aware — see that block —
+      // instead of parking first and being silently deleted here).
+      seg._exitCorridorRight = true;
+      if (!seg.sprites) continue;
       seg.sprites = seg.sprites.filter(sp => {
         if (sp.type === 'rest_sign') return true;
         if (sp.type === 'exit_sign_green') return true;
@@ -3189,6 +3148,73 @@ export function buildRoute(count = ROUTE_SEGS) {
       baseH:          4380,           // matches 1388:779 source aspect at baseW 7800
       collected:      false,
     });
+  }
+
+  // ── City speed-trap troopers (placed AFTER the corridor culls) ──────
+  {
+    // Eligible cities: named towns with a real roadside.  Exclude the dense
+    // start block, the mountain pass, and the finish strip.
+    const TRAP_EXCLUDE = new Set(['West Seattle', 'Seattle', 'Snoqualmie Pass', 'Pullman, WA']);
+    const PERMANENT    = new Set(['Issaquah', 'Colfax']);
+    const cityPool  = CHECKPOINTS.filter(cp => !TRAP_EXCLUDE.has(cp.name));
+    const permanent = cityPool.filter(cp =>  PERMANENT.has(cp.name));
+    const optional  = cityPool.filter(cp => !PERMANENT.has(cp.name));
+    // Fisher–Yates shuffle the optional pool (Math.random → per-play variety).
+    for (let i = optional.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [optional[i], optional[j]] = [optional[j], optional[i]];
+    }
+    const extras     = 3 + Math.floor(Math.random() * 3);          // 3–5 extras → 5–7 total
+    const trapCities = permanent.concat(optional.slice(0, extras));
+
+    // Trap mile markers, exposed on the segments array so GameScene can fire a
+    // friend's advance "speed trap in <city> ~mile N" text 15-20 mi ahead.
+    const _trapMiles = [];
+
+    for (const cp of trapCities) {
+      // Park at a random spot inside the city window (a little off each edge).
+      // CORRIDOR-AWARE (owner 2026-08-14): this block now runs AFTER every
+      // clearRightSceneryAround caller, so the culled exit-lane corridors are
+      // known (seg._exitCorridorRight).  A right-shoulder cop re-rolls its
+      // spot up to 12 times to stay out of them; if the window is that
+      // congested, it parks on the LEFT shoulder, which no corridor ever
+      // strips.  Either way the city KEEPS its trap — placement can no
+      // longer be silently undone, and the trapMiles rebuild below is a
+      // pure safety net rather than a load-bearing repair.
+      const lo   = cp.mileage;
+      const hi   = cp.end ?? (cp.mileage + 1);
+      const span = Math.max(0.5, hi - lo);
+      let mile = lo + (0.20 + Math.random() * 0.60) * span;
+      let seg  = segments[Math.floor(mile * SEGS_PER_MILE) % count];
+      let sideRight = Math.random() < 0.5;
+      for (let tries = 0; tries < 12 && sideRight && seg?._exitCorridorRight; tries++) {
+        mile = lo + (0.20 + Math.random() * 0.60) * span;
+        seg  = segments[Math.floor(mile * SEGS_PER_MILE) % count];
+      }
+      if (sideRight && seg?._exitCorridorRight) sideRight = false;
+      if (!seg) continue;
+      seg.sprites = seg.sprites || [];
+      const shoulder  = 1.20 + Math.random() * 0.25;               // 1.20–1.45 off-center
+      seg.sprites.push({
+        type:         'cop_random_parked',
+        offset:       sideRight ? shoulder : -shoulder,
+        side:         sideRight ? 'right' : 'left',
+        baseW:        1100,                          // larger so the roadside trap reads clearly
+        baseH:        1400,
+        collected:    false,
+        copEncounter: true,                          // GameScene flag
+        triggered:    false,
+        trapMile:     mile,                          // self-report for the final trapMiles rebuild
+      });
+      _trapMiles.push(mile);
+    }
+
+    // Expose the trap mile markers for GameScene's advance friend-warning.
+    // Placement is corridor-aware (above), so this list should already be
+    // final; the SURVIVING-cops rebuild at the end of buildRoute stays as a
+    // belt-and-suspenders guard in case a future culling pass forgets it.
+    _trapMiles.sort((a, b) => a - b);
+    segments.trapMiles = _trapMiles;
   }
 
   // ── Rebuild trapMiles from the SURVIVING parked cops ──────────────────
