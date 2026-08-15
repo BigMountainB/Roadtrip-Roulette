@@ -745,19 +745,27 @@ export class EffectsSystem {
         const _noseY = _ps
           ? (_ps.y - _ps.displayHeight * _ps.originY) + _ps.displayHeight / 3
           : 0;
-        // The fan's FAR END is LOCKED TO THE HORIZON (owner 2026-08-14,
-        // superseding the 08-03 road-surface throw): the road sample at
-        // 55000 units projected well below the horizon on descents — the
-        // owner's Issaquah screenshot showed the whole fan pitched down at
-        // the pavement instead of reaching the vanishing point.  Pinned
-        // just under the horizon line, the beam always reads as thrown
-        // into the distance; the graduated long fade below still dissolves
-        // it on the way, so there's no hard far edge.  The nose guard is
-        // the crest protection now — on a crest where the horizon would
-        // land above the car's nose, the top clamps to nose−24 instead
-        // (the 08-03 "facing straight up" complaint case).  Centreline
-        // stays the car's own x — symmetry about the car is untouched.
-        const _yTop = Math.min(_noseY - 24, horizon + 4);
+        // The fan's FAR END locks to the ROAD'S LIVE VANISHING POINT
+        // (owner 2026-08-14, third pass).  Neither previous anchor was it:
+        //   • the 08-03 sample at 55000 units (~0.17 mi) pitched the fan
+        //     down at nearby pavement on descents;
+        //   • the fixed CAM.horizonY stopped short on descents too — the
+        //     Issaquah downgrade shows MORE road, so the lanes converge
+        //     well ABOVE the static horizon line and the beam visibly
+        //     died below them.
+        // Sampling the road at the FULL draw distance (DRAW_DIST 380 segs
+        // × 200 = 76000) gives the actual on-screen convergence for every
+        // grade: high on a descent, at the crest edge over a crest (which
+        // retires the 08-03 "facing straight up" complaint properly), and
+        // ≈ the static horizon on the flat.  Lightly smoothed so per-frame
+        // grade changes can't make the wedge tip jitter.  Nose−24 remains
+        // the hard guard; centreline stays the car's own x.
+        const _farSy = this.scene?.road?.sampleSurface?.(76000, 0, { allowClipped: true })?.sy;
+        const _tipTarget = Math.max(10, Math.min(_noseY - 24, _farSy ?? (horizon + 4)));
+        this._fogBeamTipY = (this._fogBeamTipY == null)
+          ? _tipTarget
+          : this._fogBeamTipY + (_tipTarget - this._fogBeamTipY) * 0.15;
+        const _yTop = this._fogBeamTipY;
         const beam = (this.scene?._hasFogLights && _ps) ? {
           x0: _ps.x,                 // centreline of the fan = centre of the car
           y0: _noseY,                // apex: the car's nose (top third)
