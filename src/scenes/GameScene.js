@@ -6586,7 +6586,34 @@ export class GameScene extends Phaser.Scene {
       // bleed HP while pressed against the wall.
       const TUNNEL_RAIL = 1.18;
       const hitting = Math.abs(p.x) > TUNNEL_RAIL;
-      if (hitting) {
+      if (hitting && seg.wildlife) {
+        // ── Wildlife-crossing wall = a real CRASH (owner 2026-08-14:
+        // "it should stop the car with a crash and reload them in the
+        // middle of the lane").  The crossing's concrete face is a hard
+        // wall, not a scrapeable rail — this also catches entering the
+        // structure on the shoulder, since the first wildlife segment
+        // fires it at the facade plane.  Same recovery handshake as
+        // tree / pole / head-on.  Mt Baker / Mercer keep their scrape
+        // (the branch below) — this is wildlife-only.
+        const _nowW = this.time?.now ?? 0;
+        if (_nowW >= (this._invincibleUntil ?? 0)) {
+          this._applyDamage(10, 'wildlife_wall');
+          this._showPopup?.('🧱 WALL CRASH', '#FF8800');
+          this._invincibleUntil    = _nowW + 2000;
+          this._crashRecoveryUntil = this._invincibleUntil;
+          this._crashRollStartAt   = _nowW + 1000;
+          p.speed         = 0;
+          p.steerVelocity = 0;
+          p.xImpulse      = 0;
+          p.x             = this._postCrashLaneX();
+        } else {
+          // I-framed (just crashed elsewhere): the wall still BLOCKS —
+          // hard clamp, no pass-through — it just doesn't re-crash you.
+          p.x = (p.x > 0 ? 1 : -1) * TUNNEL_RAIL;
+          p.steerVelocity = 0;
+          p.xImpulse      = 0;
+        }
+      } else if (hitting) {
         this._applyDamage(3 * dt, 'tunnel_wall');
         // Throttle the popup so it doesn't flicker every frame.
         const _nowTun = this.time?.now ?? 0;
@@ -9564,7 +9591,8 @@ export class GameScene extends Phaser.Scene {
       if (source.startsWith('offroad')) this._dailyTracker.offroad = true;
       if (source === 'tree_wall' || source === 'utility_pole'
           || source === 'wind_sign_pole' || source === 'shrub_glance'
-          || source === 'scenery_crash' || source.includes('rail')) {
+          || source === 'scenery_crash' || source === 'wildlife_wall'
+          || source.includes('rail')) {
         this._dailyTracker.barrierScrape = true;
       }
     }
@@ -14701,13 +14729,28 @@ export class GameScene extends Phaser.Scene {
     // owner 2026-07-22 — so the screen haze, distance fog, and every sprite
     // fade thin together instead of only this vehicle pass.)
     const _fogP = Weather.fogParams((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
+    // FOG LIGHTS reveal the vehicles the beam reaches (owner 2026-08-14:
+    // "are the sprites transparent themselves?" — they were).  The beam
+    // wedge clears the HAZE overlay, but vehicles are alpha-faded
+    // per-sprite by fogFade, so cars inside the cleared cone still read
+    // as ghosts.  With the upgrade installed, VEHICLES fade on a
+    // longer-reach curve (stay-clear distance ×2, full-dissolve ×1.6) —
+    // the wedge spans the whole roadway by mid-distance, so no per-lane
+    // test is needed.  Roadside scenery keeps the stock fade: it sits
+    // outside the beam, and un-fogging it would flatten the contrast
+    // that makes the beam read at all.
+    const _fogPVeh = (this._hasFogLights && _fogP.density > 0)
+      ? { ..._fogP,
+          nearClearDistance:  _fogP.nearClearDistance * 2.0,
+          visibilityDistance: _fogP.visibilityDistance * 1.6 }
+      : _fogP;
     const nearCull = cockpit ? 100 : 300;
     const place = (relZ, laneOffset, color, scaleHint, rotation, texKey, noGhost, maxW, lightsKind = 'tail', vehicleKind = '', alphaMul = 1, exitT = 0, spikeFrame = null, nearSynthRel = null) => {
       if (relZ < nearCull || relZ > 76000 || alphaMul <= 0.01) return;
       // alphaMul folds a per-vehicle fade (e.g. a smoked cop's fleeFade)
       // into the same factor as the fog dissolve, so sprite + shadow +
       // outline + ghost + fog glow all fade out together.
-      const _fa = Weather.fogFade(relZ, _fogP) * (1 - _fogP.density * 0.26) * alphaMul;   // distance dissolve + near-haze (bumped so NPC traffic sits deeper in fog)
+      const _fa = Weather.fogFade(relZ, _fogPVeh) * (1 - _fogP.density * 0.26) * alphaMul;   // distance dissolve (beam-boosted w/ fog lights) + near-haze
       const _shadowFa = _fa * (1 - _fogP.density * 0.4);                       // shadows soften further in fog
       const segIdx = Math.floor((camPos + relZ) / SEG_LENGTH) % this.road.segments.length;
       const inTunnel = !!this.road.segments[segIdx]?.tunnel;
@@ -14798,7 +14841,7 @@ export class GameScene extends Phaser.Scene {
         //       dark car body does, so the glow is the last thing you lose.
         const appearF = Math.max(0, Math.min(1, (55000 - relZ) / 10000));
         const nearF   = Math.max(0, Math.min(1, relZ / 4000));
-        const fade    = Math.sqrt(Weather.fogFade(relZ, _fogP));
+        const fade    = Math.sqrt(Weather.fogFade(relZ, _fogPVeh));
         const baseR = Math.max(2.5, proj.sw * 0.10);               // ~60% of the old size
         const vehicleLightKey = `${useTex} ${vehicleKind}`;
         const isSuv4x4FogNpc = /suv4x4/i.test(vehicleLightKey);
@@ -21775,6 +21818,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (inLane5 && ex.grow > 0.35) {
+      // Lock-in (owner 2026-08-15): 500 ft of lane-5 driving inside the
+      // parallel section = commitment — the capture starts here instead of
+      // waiting for the gore.  Everything before plan.zLock stays
+      // cancellable by steering back out.
+      if (carZ >= plan.zLock) {
+        const rs = REST_STOPS.find(r => r.id === plan.stopId);
+        if (rs) { this._beginExitCommit(plan, rs); return true; }
+      }
       this._exitState = 'GUIDED';
       // Soft centring assist toward the lane-5 centreline of the shared
       // path.  Bounded (1.7 lane-units/s < TURN_SPEED 2.8) so the player
