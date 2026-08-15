@@ -789,12 +789,18 @@ export class EffectsSystem {
           // source instead of being chopped off at a hard horizontal line.
           const bfT = Math.min(1, (beam.y0 - y) / 28);
           const bf  = bfT * bfT * (3 - 2 * bfT);
-          // Graduated long fade: full clearing through the first ~35% of the
-          // reach, then a smooth dissolve across the remaining span, hitting
-          // zero just below the horizon — the beam extends the whole way but
-          // never ends on a shelf.
-          const ffT = Math.min(1, Math.max(0, (1 - bt) / 0.48));
-          const ff  = ffT * ffT * (3 - 2 * ffT);
+          // Graduated long fade, rebalanced (owner 2026-08-14: "still
+          // stopping very short") — the old curve dissolved to ZERO
+          // clearing near the horizon, so the visible beam died ~2/3 of
+          // the way up and never reached the vanishing point.  Full
+          // clearing now holds through the first ~65% of the reach, and
+          // the dissolve bottoms out at a 0.40 RESIDUAL instead of zero —
+          // the beam visibly arrives at the horizon, just softer there
+          // than at the nose, and the fog wall above the horizon line
+          // still closes over it (no clearing ever paints in sky-fog).
+          const ffT = Math.min(1, Math.max(0, (1 - bt) / 0.35));
+          const ffS = ffT * ffT * (3 - 2 * ffT);
+          const ff  = 0.40 + 0.60 * ffS;
           const mix = (m) => a * (1 - (1 - m) * bf * ff);
           this.overlay.fillStyle(rgb, a);
           this.overlay.fillRect(-150, y, L - F * 2 + 150, h);
