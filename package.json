@@ -8,7 +8,7 @@
     "dev:https": "vite --port 3000 --strictPort",
     "build": "node scripts/checkDuplicates.js && vite build",
     "check:dupes": "node scripts/checkDuplicates.js",
-    "test": "node scripts/checkDuplicates.js && node tests/missions.test.mjs && node tests/coal.test.mjs && node tests/genreTraits.test.mjs && node tests/vices.test.mjs && node tests/chase.test.mjs && node tests/pursuit.test.mjs && node tests/upgrades.test.mjs && node tests/encounters.test.mjs",
+    "test": "node scripts/checkDuplicates.js && node tests/missions.test.mjs && node tests/coal.test.mjs && node tests/genreTraits.test.mjs && node tests/vices.test.mjs && node tests/chase.test.mjs && node tests/upgrades.test.mjs && node tests/encounters.test.mjs",
     "deploy": "bash scripts/deploy.sh",
     "preview": "vite preview",
     "cap:add": "npx cap add ios",

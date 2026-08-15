@@ -6,6 +6,7 @@
  * Falls back to procedural generation when real data is absent.
  */
 import { ROUTE_SEGS, SEG_LENGTH, TOTAL_ROUTE_MILES, REST_STOPS, CHECKPOINTS, PASS_THROUGH_CITIES } from '../constants.js';
+import { buildExitPlan } from './ExitPath.js';
 import { REGION_ORDER }           from '../utils/Colors.js';
 import { SeededRNG, clamp }       from '../utils/Helpers.js';
 import geoData                    from './routeGeo.json';
@@ -2593,11 +2594,10 @@ export function buildRoute(count = ROUTE_SEGS) {
   // — no dead zones where the rest-stop window is open but the asphalt
   // hasn't been painted yet.
   const RAMP_WINDOW_SEG = Math.floor(1.0 / TOTAL_ROUTE_MILES * count); // ≈1442 segs ≈ 1 mi
-  // The off-ramp PAVEMENT only opens over the last RAMP_TAIL_SEG (~0.5 mi)
-  // of that window, so the ramp Ys off CLOSE to the exit instead of right
-  // behind the mile-out green sign.  The full window is still used for the
-  // exit trigger, scenery clearance, and hitchhiker seeding.
-  const RAMP_TAIL_SEG   = Math.floor(0.5 / TOTAL_ROUTE_MILES * count); // ≈721 segs ≈ 0.5 mi
+  // (The off-ramp PAVEMENT itself is now laid out by buildExitPlan/ExitPath —
+  // taper/parallel/divergence/curve at real-world lengths.  RAMP_WINDOW_SEG
+  // remains the wider window used for scenery clearance and hitchhiker
+  // seeding on the approach.)
   // ── Real mileage signs at every checkpoint ──────────────────────────
   // For each location in CHECKPOINTS (every named town/landmark in the
   // route), drop a green I-90-style location sign 1 mile before the
@@ -2817,58 +2817,45 @@ export function buildRoute(count = ROUTE_SEGS) {
       collected:  false,
     });
 
-    // Paint the actual exit ramp.  rampStrength ramps 0 → 1 over the last
-    // RAMP_WINDOW segments; Road.js reads it to widen the right shoulder
-    // and draw a tapered "off-ramp" trapezoid.
-    //
-    // GUARD: skip any segment flagged bridge / tunnel / water so the ramp
-    // is never painted out over a lake or through tunnel walls.  When the
-    // window crosses a bridge (e.g. Mercer Island after the LV Murrow,
-    // Bellevue after the East Channel) we re-base `t` so the ramp grows
-    // from 0 at the first DRY segment up to 1 at the exit point — that
-    // way the off-ramp opens cleanly off the bridge without an abrupt
-    // mid-window pop-in.
+    // Build the shared exit path (owner spec 2026-08-15): a complete
+    // taper → parallel-lane → divergence → curve → departure sequence,
+    // positioned on dry road (never over bridge/tunnel/water — the plan
+    // slides the whole approach earlier when a wet span intrudes) and
+    // tagged onto each segment as `seg.exitInfo`.  Road.js paints from it;
+    // GameScene drives from it.  buildExitPlan also keeps setting
+    // rampStrength across the window for the legacy scenery-clearance and
+    // lateral-clamp consumers.  The old after-exit merge taper is gone —
+    // the ramp now DEPARTS at the gore instead of folding back into the
+    // mainline.
     const exitSeg = segAt(rs.mileage);
     const isWet = (s) => !!(s?.bridge || s?.tunnel || s?.water);
-    let dryStart = 0;
-    for (let k = 0; k < RAMP_WINDOW_SEG; k++) {
-      const segIdx = (exitSeg - RAMP_WINDOW_SEG + 1 + k + count) % count;
-      if (!isWet(segments[segIdx])) { dryStart = k; break; }
-    }
-    const dryRange = Math.max(1, RAMP_WINDOW_SEG - dryStart);
-    for (let k = dryStart; k < RAMP_WINDOW_SEG; k++) {
-      const segIdx = (exitSeg - RAMP_WINDOW_SEG + 1 + k + count) % count;
-      const seg = segments[segIdx];
-      if (!seg) continue;
-      if (isWet(seg)) continue;                  // never paint over water/bridge/tunnel
-      seg.rampStopId   = rs.id;                   // associate the whole window with the stop
-      // Ramp strength (= how far the gore has diverged) opens 0 → 1 only
-      // across the last RAMP_TAIL_SEG before the exit, so the asphalt peels
-      // off near the exit rather than a full mile back at the green sign.
-      const distToExit = (RAMP_WINDOW_SEG - 1) - k;        // segs left to the exit point
-      const t = Math.max(0, Math.min(1, 1 - distToExit / RAMP_TAIL_SEG));
-      if (t > 0) seg.rampStrength = Math.max(seg.rampStrength ?? 0, t);
-    }
-    // After-exit window — extend to 0.3 mi to match the trigger window's
-    // winAfter so the ramp is paved for the player's whole pull-over zone.
     const AFTER_SEGS = Math.floor(0.3 / TOTAL_ROUTE_MILES * count);
-    // STEEPEN the merge angle when a bridge/water is close: taper the ramp
-    // back to the road over the DRY distance to the first wet segment rather
-    // than its full length, so the on-ramp connects to the road BEFORE the
-    // water instead of running its tail out over the lake (Mercer's rest
-    // stop runs straight at the East Channel causeway).  Away from bridges
-    // the full 0.3 mi taper is unchanged.
-    let dryAfter = AFTER_SEGS;
-    for (let k = 1; k < AFTER_SEGS; k++) {
-      if (isWet(segments[(exitSeg + k) % count])) { dryAfter = k; break; }
-    }
-    const taperLen = Math.max(1, dryAfter - 1);
-    for (let k = 1; k < dryAfter; k++) {
-      const segIdx = (exitSeg + k) % count;
-      const seg = segments[segIdx];
-      if (!seg) continue;
-      seg.rampStrength = Math.max(seg.rampStrength ?? 0, 1 - k / taperLen);
-      seg.rampStopId   = rs.id;
+    const plan = buildExitPlan(segments, rs);
+    if (plan) {
+      (segments.exitPlans ??= {})[rs.id] = plan;
+      if (plan.repositionedSegs !== 0) {
+        // Not an error — bridge-adjacent stops (Mercer, Bellevue) slide
+        // their approach to the nearest fully dry span by design.
+        console.info(`[route] exit ${rs.id} repositioned ${plan.repositionedSegs} segs for dry approach`);
+      }
+      // The curve + departure sweep the ENTIRE right roadside (the ramp
+      // centre runs out past x=10), so scenery there can't hide behind the
+      // usual 1.0–4.9 corridor strip — clear every right-side sprite that
+      // isn't signage or a collectible from the gore to the paint end.
+      const sweepStart = Math.floor(plan.zDiverge / SEG_LENGTH);
+      const sweepEnd = Math.ceil(plan.zCurveEnd / SEG_LENGTH)
+        + Math.ceil((plan.departPaintMaxX / plan.departSlope) / SEG_LENGTH);
+      for (let i = sweepStart; i <= sweepEnd; i++) {
+        const seg = segments[((i % count) + count) % count];
+        if (!seg?.sprites) continue;
+        seg.sprites = seg.sprites.filter(sp => {
+          if (sp.isCollectible) return true;
+          if (typeof sp.type === 'string' && sp.type.endsWith('_sign')) return true;
+          return (sp.offset ?? 0) <= 1.0;
+        });
+      }
+    } else {
+      console.warn(`[route] exit ${rs.id}: no dry approach found — exit not painted`);
     }
     // ── Hitchhikers at the on/off-ramp ───────────────────────────────
     // Seed 1-2 hitchhiker sprites along the ramp window so they ONLY

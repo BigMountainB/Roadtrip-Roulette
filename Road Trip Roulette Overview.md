@@ -203,6 +203,61 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-15 — Rest-stop exits rebuilt as real off-ramp sequences (uncommitted)
+
+Owner spec (final): every exit is now a complete taper → parallel exit lane → gore divergence
+→ ~90° right curve → offscreen departure, replacing the old rampStrength trapezoid + "swerve
+right past x>1.5" instant scene-swap.
+
+- **ONE shared path** — new `src/road/ExitPath.js`. `buildExitPlan()` places each stop's
+  sequence on fully dry road (slides earlier/later around bridges; Mercer/Bellevue place clean
+  with 0-seg offset) and tags `seg.exitInfo`; `sampleExitPlan(plan, absZ)` returns phase /
+  lane-5 center / edges / gore gap / heading for ANY consumer. Road.js paints from it,
+  GameScene guides + drives from it — the painted lane and the driven path cannot disagree.
+  World units: derived 60.76 u/ft; phases 150 ft taper, 500 ft parallel, 100 ft divergence,
+  100 ft curve ARC (≈56 ft of Z — heading is integrated to 82° in a build-time table because
+  x(z) can't express a true 90° in this projection).
+- **Marking topology** — right-edge band (fog line, shoulder tone, rumble, grit) shifts
+  outboard with the taper (`extRF/extRN` in `_drawSegment`); the old fog-line alignment
+  becomes the dashed lane-4/5 divider; at the gore the mainline edge returns to x=1.0 and the
+  ramp carries its own two edge lines from the nose. Lane count comes from `seg.lanes + 1`
+  (nothing hard-codes 5). Worn-paint right-turn arrows (34 ft, world-anchored, projected
+  through the boundary surface cache, snow-buried raggedly) — `Road._drawExitArrows`.
+- **Sidewalk root-cause fix** — the urban walkway/curb band painted at fixed `x±(w+rumble)` on
+  roadGfx (1.5) while ramp asphalt sat on roadBaseGfx (1.35), so the band always won. The
+  right band (fill, tone, curb, slab joints) now shifts by `swExt*` — it terminates at the
+  taper and wraps the OUTSIDE of lane 5 / the departing ramp, never between freeway and ramp.
+  Rural: same shift for the shoulder bands; right-side pasture fences break around the window
+  (`seg._exitFenceRightOff`).
+- **State machine** (GameScene) — NONE→AVAILABLE→GUIDED→COMMITTED→CURVING→DEPARTING→
+  TRANSITIONING | MISSED. No button (owner): driving lane 5 IS taking the exit; a bounded 1.7
+  lane-u/s centring assist never fights a left steer, so steering out cancels. Commitment at
+  the exact gore start (car-visual Z, not physics Z): controls end, `_exitAuto` owns the car —
+  eases to ~35 mph, follows the spline centre (Z advance scales with cos-heading, floored 12%
+  so scenery keeps rolling), art via `_exitArtFor()` ladder (`_turn_r`/`_turn_hard_r`/
+  `_profile_r` per-genre keys when the new art lands; today falls back to the mirrored
+  `_turn` — dedicated right-facing art always beats the mirror so plates never flip).
+  Camera lateral view FROZEN at commit (`_exitCamX`) — the car curves away through the right
+  edge of the existing view. Departure completes when `playerSprite.getBounds().left >
+  SCREEN_W + HUD_OFFSET_X + 24 px` — live viewport, any aspect. MISSED = silent mark, freeway
+  unchanged (also covers resume-past-gore).
+- **Protection after commit** — `_applyDamage` no-ops, collision/fuel/survival/arrest passes
+  don't run, `cops.arrestPending` cleared each frame, pursuers aimed at the mainline; traffic
+  keeps flowing. HP/gas/stars/score verified preserved bit-exact into RestStopScene (no heal,
+  no drain, exactly ONE launch — `_takingExit` guard + snapshot/grading unchanged in
+  `_takeRestStopExit`, which is now purely the final hand-off).
+- Old exit affordances removed: rampStrength painting block, 2.8→6.5 ramp clamp opening (right
+  clamp is a flat 2.8; lane 5 is inside it), dead `_touchExitArmed`, dead `code` var in
+  `_saveRestStop`'s CloudSave call. `seg.rampStrength` still set (0→1 across taper) for the
+  scenery-clearance consumers. Dev: `window.__rtrScene` handle (dev-gated, alongside
+  `__rtrWarp`) for scripted QA.
+- **Validated headless** (Playwright + `?dev=1`, screenshots in session scratchpad):
+  SQ take/miss/cancel/pause-mid-curve, urban S, rain N, snow SP (blanket buries arrows &
+  divider correctly), wide-viewport 1290 px + 2★ pursuit carry-through. Tests all green
+  (missions 256, coal 25, genreTraits 179, vices 37, chase 50, pursuit, upgrades 3,
+  encounters 187); `vite build` clean. NOT play-tested by hand yet; night-time exit lighting
+  unverified (uses the same nightMul path as the existing fog line).
+
 ### 2026-08-14 (pt 2) — WSB concrete piers removed (uncommitted)
 
 Owner: "get rid of the 'pillars' showing through the roadway… maybe they can just be removed."

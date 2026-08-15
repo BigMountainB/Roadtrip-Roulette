@@ -37,6 +37,7 @@ const UNITS_PER_MILE_HUD = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
 // level.  No cap — traffic has never needed one.
 const COP_VISUAL_SCALE = 1;
 import { Road, snowBlanketAt, SNOW_WHITE, SNOW_MARKINGS_GONE } from '../road/Road.js';
+import { sampleExitPlan } from '../road/ExitPath.js';
 import { GroundPlane, groundTileFor, snowAmountAt, snowGroundAt } from '../road/GroundPlane.js';
 import { RoadPlane }     from '../road/RoadPlane.js';
 import { BAND, BIOMES, biomeAt, bandKey, bandHeight, bandRate } from '../road/Biomes.js';
@@ -541,7 +542,14 @@ export class GameScene extends Phaser.Scene {
     // — it stayed `true` from the prior Bellevue exit, blocking subsequent
     // _takeRestStopExit calls until the page was reloaded.
     this._takingExit          = false;
-    this._touchExitArmed      = false;
+    // ── Exit state machine (owner spec 2026-08-15) ──────────────────────
+    // NONE → AVAILABLE (taper open) → GUIDED (player in lane 5, soft assist)
+    // → COMMITTED (gore crossed, controls off) → CURVING → DEPARTING →
+    // TRANSITIONING (fade + RestStopScene) | MISSED (stayed on mainline).
+    this._exitState           = 'NONE';
+    this._exitAuto            = null;   // { plan, rs, state, startX, blend… } post-commit
+    this._exitCamX            = null;   // frozen camera lane-x during the cinematic
+    this._exitAnnounced       = new Set();
     // Music resume-intent (set only by the live-resume branch, consumed by
     // _kickRadio).  Cleared here so an un-consumed intent from a previous run
     // can't leak into a later fresh START.
@@ -1731,7 +1739,13 @@ export class GameScene extends Phaser.Scene {
           goto: (mi) => this._warpToMile(mi),
           mile: () => (this.player ? (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES : 0),
         };
-        this.events.once('shutdown', () => { try { delete window.__rtrWarp; } catch (_) {} });
+        // Raw scene handle for scripted QA (exit-sequence validation runs
+        // poll _exitState / set player.x through this).  Same dev gate and
+        // lifecycle as __rtrWarp.
+        window.__rtrScene = this;
+        this.events.once('shutdown', () => {
+          try { delete window.__rtrWarp; delete window.__rtrScene; } catch (_) {}
+        });
       }
     } catch (_) { /* never let a dev affordance break the scene */ }
 
@@ -4230,6 +4244,17 @@ export class GameScene extends Phaser.Scene {
     }
     if (this._paused) return;
 
+    // ── Committed exit cinematic ──────────────────────────────────────
+    // From the gore onward the exit is 100% automated: the car follows the
+    // shared ExitPath spline, ordinary controls and hazards are suspended,
+    // and the camera keeps looking down the freeway.  Placed AFTER the
+    // pause toggle so pausing freezes the cinematic exactly where it is
+    // and resume continues from the same spline progress.
+    if (this._exitAuto) {
+      this._updateExitCinematic(rawDt);
+      return;
+    }
+
     const phys  = this.effects.getPhysics(this.vices);
     // The survival model reuses the legacy EffectsSystem for VISUALS only (via
     // the synthetic-vice bridge below).  Its drug PHYSICS must NOT leak into
@@ -5340,49 +5365,15 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // ── Rest stop window detection ────────────────────────────────────
-    // Player is "in the rest-stop approach window" from −0.5 mi to +0.3 mi
-    // around each stop — i.e. they can only take the exit once they're at
-    // least HALFWAY down the 1-mile off-ramp (which tapers from −1 mi to
-    // the exit point).  Earlier than that the ramp is barely a shoulder
-    // and the take-exit prompt is misleading.  While in the window, we
-    // show a tappable EXIT prompt; if the player swerves onto the right
-    // shoulder (player.x > 1.5) OR taps the prompt, we take the exit and
-    // switch to RestStopScene.
+    // ── Rest-stop exit approach (shared ExitPath state machine) ───────
+    // AVAILABLE while the taper/parallel lane is open; GUIDED once the
+    // player drives into lane 5 (soft, overpowerable centring assist —
+    // steering back out cancels); at the gore the run either COMMITS to
+    // the fully automated exit cinematic or the exit is MISSED and normal
+    // freeway driving continues.  There is no button — lane choice IS the
+    // choice (owner 2026-08-15).
     if (!this._passedRestStops) this._passedRestStops = new Set();
-    const winBefore = 0.5 / TOTAL_ROUTE_MILES;
-    const winAfter  = 0.3 / TOTAL_ROUTE_MILES;
-    let activeStop = null;
-    for (const rs of REST_STOPS) {
-      if (this._passedRestStops.has(rs.id)) continue;
-      if (progress > rs.t + winAfter) {
-        // Drove past without stopping — mark missed so we don't re-prompt.
-        this._passedRestStops.add(rs.id);
-        continue;
-      }
-      if (progress >= rs.t - winBefore && progress <= rs.t + winAfter) {
-        activeStop = rs;
-        break;
-      }
-    }
-    this._activeRestStop = activeStop;
-    if (activeStop) {
-      // Pull-over fires when the player makes a clear right swerve onto
-      // the off-ramp (x > 1.5) OR taps the on-screen TAKE EXIT chip.
-      // Restored from the wide-open 1.0 threshold which was letting the
-      // player "exit" mid-bridge into Lake Washington before Bellevue.
-      // Water/bridge segments suppress the trigger entirely so guardrails
-      // can do their job.
-      const seg = this.road.getSegment(this.player.position);
-      if (!seg?.water) {
-        const wantExit = this._touchExitArmed || this.player.x > 1.5;
-        if (wantExit) {
-          this._touchExitArmed = false;
-          this._takeRestStopExit(activeStop);
-          return;
-        }
-      }
-    }
+    if (this._updateExitApproach(rawDt)) return;
 
     // ── Town-line crossing (owner 2026-07-23) ─────────────────────────
     // The −1★ cooldown keys off the TOWN list (CHECKPOINTS — the same list
@@ -6615,11 +6606,19 @@ export class GameScene extends Phaser.Scene {
       }
     }
     // Off-road: gradually cap speed rather than multiplying each frame.
-    // EXCEPT — if the player is on the painted exit ramp asphalt, it
-    // counts as paved road and the slowdown is suppressed.  Range goes
-    // out to x=4.9 so the widened, farther-diverging ramp stays drivable
-    // still qualify and don't grind the car to a halt.
-    const onRamp = (seg?.rampStrength ?? 0) > 0 && p.x > 1 && p.x < 4.9;
+    // EXCEPT — the exit lane's pavement (from the shared ExitPath) counts
+    // as paved road, so driving lane 5 through the taper/parallel section
+    // carries no off-road slowdown or HP bleed.  Only the actual painted
+    // extent qualifies: during the taper a half-grown lane is paved only
+    // out to its current outer edge — beyond that is still grass.  After
+    // the gore opens, the separated ramp is unreachable manually (the
+    // commitment hand-off owns it), so no exemption applies there.
+    let onRamp = false;
+    if (seg?.exitInfo) {
+      const exHere = sampleExitPlan(seg.exitInfo, p.position + PLAYER_VIRTUAL_Z);
+      onRamp = !!exHere && exHere.gapX <= 0.0001
+        && p.x > 0.98 && p.x < exHere.outerX + 0.10;
+    }
     if (Math.abs(p.x) > 1 && !onRamp) {
       const depth     = clamp((Math.abs(p.x) - 1) / 1.5, 0, 1);
       const maxSpeed  = MAX_SPEED * lerp(OFFROAD_SLOW, 0.15, depth);
@@ -6662,26 +6661,18 @@ export class GameScene extends Phaser.Scene {
 
     // Lateral clamp — ASYMMETRIC.
     //
-    // RIGHT side: ±2.8 normally, extended on exit ramps so the player can
-    // reach all the way past the ramp's outer edge (4.30) and into the city
-    // skyline buildings sitting at CITY_BUILDING_SETBACK (5.9).  Building
-    // collision band starts just beyond the ramp, so the player needs to
-    // reach at least p.x = 4.5 to start triggering crashes.  Lerps with
-    // rampStrength: 2.8 normal → 6.5 at full ramp.
+    // RIGHT side: ±2.8 everywhere.  The old exit behaviour (clamp opening
+    // to 6.5 across the ramp window so the player could chase the detached
+    // ramp strip manually) is gone: with the ExitPath rebuild the exit is
+    // taken by DRIVING LANE 5 (x 1.0–1.5, well inside 2.8) and committing
+    // at the gore; the separated ramp past the gore belongs to the
+    // automated cinematic, which bypasses this clamp entirely.
     //
-    // LEFT side: pinned at 2.8 ALWAYS — it never opens on ramps.  All
+    // LEFT side: pinned at 2.3 ALWAYS — it never opens on ramps.  All
     // off-ramps in the route are right-side only, so there is nothing to
-    // reach for out past the left shoulder; opening the left clamp on ramp
-    // segments just exposed an empty off-road dead-zone the player could
-    // drift into (the old "±5.5 tree wall in a space nobody should drive"
-    // problem).  Keeping it at 2.8 turns the left edge into a soft invisible
-    // guardrail — the car simply can't steer further out, no crash penalty.
-    const _segsForClamp  = this.road?.segments;
-    const _segIdxClamp   = _segsForClamp
-      ? Math.floor(p.position / SEG_LENGTH) % _segsForClamp.length
-      : 0;
-    const _rampStrength  = _segsForClamp?.[_segIdxClamp]?.rampStrength ?? 0;
-    const _maxXRight = 2.8 + _rampStrength * 3.7;   // 2.8 → 6.5 across full ramp
+    // reach for out past the left shoulder; the left edge is a soft
+    // invisible guardrail — the car simply can't steer further out.
+    const _maxXRight = 2.8;
     const _maxXLeft  = 2.3;                          // never opens — no left exits
 
     // Left-side off-road deterrent.  The painted fog line (pavement edge)
@@ -9541,6 +9532,11 @@ export class GameScene extends Phaser.Scene {
 
   _applyDamage(amount, source) {
     if (!this.damage) return 0;
+    // Committed exit cinematic — the player is protected from every damage
+    // source (collision, off-road, hazards, weapons) from the gore until
+    // RestStopScene starts.  HP itself is preserved as-is: no healing, no
+    // loss, no new failure state can interrupt the automated hand-off.
+    if (this._exitProtected?.()) return 0;
     // Crash i-frames — silently absorb any incoming damage (collision or
     // offroad bleed alike) until the invincibility window expires.
     if ((this.time?.now ?? 0) < this._invincibleUntil) return 0;
@@ -10207,39 +10203,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     // ── Rear cop ramming player — counts toward 5-strikes BUSTED ──────
-    // ── INTENT, NOT PROXIMITY ────────────────────────────────────────────
-    // A rear contact only counts as a deliberate COP RAM when the cruiser is
-    // actually attacking: established (its dispatch approach finished), intent
-    // `ram`, and inside the bounded COMMIT window. Everything else — a cop that
-    // misjudged a gap, one that overshot because the player braked, a freshly
-    // dispatched unit still closing — is ACCIDENTAL CONTACT. It still hurts,
-    // proportionately, but it does not advance the 5-strike arrest counter and
-    // it is not labelled a ram.
-    //
-    // This is the fix for "cop spawns and immediately rams you at 1★": that
-    // cop was never attacking, it just arrived too fast with nowhere to brake.
-    const _deliberateRam = kind === 'rear'
-      && cop._established === true
-      && cop._intent === 'ram'
-      && cop._phase === 'commit';
-    if (kind === 'rear' && type !== 'side-swipe' && !_deliberateRam && cop.profile) {
-      // Accidental contact: light damage, no arrest strike, and the cop breaks
-      // off into recovery so it cannot grind against the bumper.
-      const impact = this._impactModel(cop.speed ?? p.speed, hit, { headOn: false });
-      p.xImpulse = sideDir * (0.6 + impact.severity * 0.6);
-      p.speed    = Math.max(400, p.speed * clamp(0.88 - impact.severity * 0.12, 0.70, 0.86));
-      this.effects.triggerShake(110 + impact.severity * 120, 0.004 + impact.severity * 0.005);
-      this._applyDamage((0.5 + impact.severity * 0.8) * damageMul, 'cop_contact');
-      cop._recoverT = Math.max(cop._recoverT ?? 0, cop.profile.recoveryTime);
-      cop._attackCd = Math.max(cop._attackCd ?? 0, cop.profile.attackCooldown);
-      cop._intent   = 'recover';
-      cop._intentT  = cop.profile.recoveryTime;
-      cop._phase    = null;
-      this.cops.endLunge?.(cop);
-      this._showPopup('CONTACT', '#FFAA33');
-      this._tickPlayerCopCrash();
-      return;
-    }
     if (kind === 'rear' && type !== 'side-swipe') {
       const impact = this._impactModel(cop.speed ?? p.speed, hit, { headOn: false });
       p.xImpulse = sideDir * (1.0 + impact.severity * 1.0);
@@ -10275,12 +10238,7 @@ export class GameScene extends Phaser.Scene {
     //    armed (sustained lateral lock at close range).  A side-swipe
     //    before that = the player smashing into the cop, which CRASHES
     //    the cop instead of busting the player. ────────────────────────
-    // _pitArmed is now set ONLY inside a valid PIT commit window (CopSystem's
-    // rear case gates it on CopDriver.pitCommitting), so this no longer fires
-    // from a follower that merely drifted alongside. The `_established` check
-    // is belt-and-braces for a cop that has no profile at all.
-    if (type === 'side-swipe' && cop._pitArmed
-        && (!cop.profile || cop._established === true)) {
+    if (type === 'side-swipe' && cop._pitArmed) {
       const impact = this._impactModel(cop.speed ?? p.speed, hit);
       p.xImpulse = sideDir * (1.0 + impact.severity * 1.1);
       p.speed    = Math.max(600, p.speed * clamp(0.86 - impact.severity * 0.18, 0.68, 0.82));
@@ -12488,7 +12446,12 @@ export class GameScene extends Phaser.Scene {
     const _dbgClean = !!this._debugOn;
     this.road.render(
       this.roadGfx, this.ghostGfx,
-      _renderPos, this.player.x,
+      // During the committed exit cinematic the camera's lateral view is
+      // FROZEN at the commitment-time lane position — it keeps looking
+      // down the freeway (no pan, no recentre, no vanishing-point chase)
+      // while the car visibly curves away and leaves through the right
+      // edge of the existing view.
+      _renderPos, this._exitCamX ?? this.player.x,
       palette, {
         doubleVision: _dbgClean ? 0 : this.effects.doubleVision,
         currentStars: this.cops.starDisplay,
@@ -14699,13 +14662,20 @@ export class GameScene extends Phaser.Scene {
     // set here so we never read from a stale projection.  No lerp —
     // current-frame data doesn't need smoothing.
     if (this.playerSprite?.visible !== false) {
-      const surf = this.road?.sampleSurface?.(PLAYER_VIRTUAL_Z, 0, { allowClipped: true });
+      // During the committed exit cinematic the car is placed like any
+      // world object: projected through sampleSurface at its ExitPath
+      // lane offset (p.x), against the FROZEN camera — x and y both come
+      // from the same current-frame projection the painted ramp uses, so
+      // the car visibly rides the painted path off the screen.
+      const laneU = this._exitAuto ? this.player.x : 0;
+      const surf = this.road?.sampleSurface?.(PLAYER_VIRTUAL_Z, laneU, { allowClipped: true });
       if (surf && Number.isFinite(surf.sy)) {
         // +17 px nudges the player car down so its tires read as
         // touching the asphalt instead of hovering above it.  The
         // bottom-of-screen sample point hits the road plane a couple
         // pixels above where the car art's contact line sits.
         this.playerSprite.y = surf.sy + 17;
+        if (this._exitAuto && Number.isFinite(surf.sx)) this.playerSprite.x = surf.sx;
       }
     }
     // Glue the rear license plate to the (now-positioned) player car.
@@ -15483,7 +15453,10 @@ export class GameScene extends Phaser.Scene {
       for (let absoluteSeg = lastPostSeg; absoluteSeg >= firstPostSeg; absoluteSeg -= spacing) {
         const wrappedSeg = ((absoluteSeg % segs.length) + segs.length) % segs.length;
         const seg = segs[wrappedSeg];
-        if (!seg?.ruralFence) {
+        // Right-side fences never cross an exit opening — the exit window
+        // flags its segments and the fence chain breaks around them (the
+        // rural version of "clip or redirect guardrails around the ramp").
+        if (!seg?.ruralFence || (side === 1 && seg._exitFenceRightOff)) {
           previous = null;
           secondPrev = null;
           continue;
@@ -21741,6 +21714,210 @@ export class GameScene extends Phaser.Scene {
     } catch (e) { console.error('[applyResumeSnapshot]', e); }
   }
 
+  /**
+   * Exit approach state machine — runs every frame of normal driving
+   * (owner spec 2026-08-15).  Reads the SAME ExitPath plan the renderer
+   * paints from.  Returns true when the run just committed to the exit
+   * (update() stops for this frame; the cinematic branch takes over next
+   * frame).
+   *
+   * States handled here: NONE / AVAILABLE / GUIDED / MISSED.  COMMITTED
+   * and beyond live in _updateExitCinematic.
+   */
+  _updateExitApproach(rawDt) {
+    const p = this.player;
+    // All decisions key off the CAR's visual position (PLAYER_VIRTUAL_Z
+    // ahead of the physics origin) so control switches exactly when the
+    // visible car reaches the gore nose, not 3000 units early.
+    const carZ = p.position + PLAYER_VIRTUAL_Z;
+    const seg = this.road.getSegment(carZ);
+    const plan = seg?.exitInfo ?? null;
+    if (!plan || this._passedRestStops.has(plan.stopId)) {
+      this._exitState = 'NONE';
+      return false;
+    }
+    const ex = sampleExitPlan(plan, carZ);
+    if (!ex) { this._exitState = 'NONE'; return false; }   // ahead of the taper
+    const inLane5 = p.x >= 0.98;
+
+    // Commitment point = the exact start of the divergence.  In lane 5 →
+    // committed (irreversible, automated).  Still on the mainline → the
+    // exit is missed: no pull toward the ramp, no prompt, freeway continues.
+    if (carZ >= plan.zDiverge) {
+      if (inLane5 && carZ < plan.zDiverge + 3000) {
+        const rs = REST_STOPS.find(r => r.id === plan.stopId);
+        if (rs) { this._beginExitCommit(plan, rs); return true; }
+      }
+      this._passedRestStops.add(plan.stopId);
+      this._exitState = 'MISSED';
+      return false;
+    }
+
+    // One-shot heads-up when the taper opens (there is no button — moving
+    // into the right lane IS taking the exit).
+    if (!this._exitAnnounced.has(plan.stopId)) {
+      this._exitAnnounced.add(plan.stopId);
+      const town = plan.stopName?.split(',')[0] ?? 'REST STOP';
+      this._showPopup?.(`➡️ EXIT — ${town}\nUSE RIGHT LANE`, '#9AD8FF', 3);
+    }
+
+    if (inLane5 && ex.grow > 0.35) {
+      this._exitState = 'GUIDED';
+      // Soft centring assist toward the lane-5 centreline of the shared
+      // path.  Bounded (1.7 lane-units/s < TURN_SPEED 2.8) so the player
+      // keeps full authority, and it never fights an explicit steer back
+      // toward the mainline — steering out simply cancels the exit.
+      const steeringLeft = (this._isLeft?.() && !this._isRight?.());
+      if (!steeringLeft) {
+        p.x += clamp(ex.centerX - p.x, -1, 1) * 1.7 * rawDt;
+      }
+    } else {
+      this._exitState = 'AVAILABLE';
+    }
+    return false;
+  }
+
+  /** Cross the gore in lane 5 → the exit becomes irreversible.  Ordinary
+   *  steering/gas/brake end here; hazard protection begins; the camera's
+   *  lateral view is frozen so it keeps looking down the freeway while the
+   *  car departs. */
+  _beginExitCommit(plan, rs) {
+    if (this._exitAuto || this._takingExit) return;
+    const p = this.player;
+    this._exitAuto = { plan, rs, state: 'COMMITTED', startX: p.x, blend: 0, t: 0 };
+    this._exitState = 'COMMITTED';
+    this._exitCamX = p.x;
+    p.steerVelocity = 0;
+    p.xImpulse = 0;
+    this._showPopup?.('➡️ TAKING EXIT', '#FFD23D', 2);
+  }
+
+  /** True while the committed exit cinematic owns the car — every damage /
+   *  failure path checks this so nothing can interrupt the hand-off. */
+  _exitProtected() { return !!this._exitAuto; }
+
+  /**
+   * Vehicle-art resolver for the exit cinematic (owner spec 2026-08-15).
+   *
+   * New angled/profile art will be supplied separately, per genre; this
+   * ladder resolves it by naming convention off the current rear-view key
+   * (`<base>_turn_r`, `<base>_turn_hard_r`, `<base>_profile_r`) and falls
+   * back gracefully to the art that exists today.  Dedicated right-facing
+   * assets always beat the mirrored generic `_turn` — mirroring is what
+   * would flip license plates and other asymmetric details, so it is only
+   * ever the fallback.  Sprites are never stretched to a common canvas:
+   * _applyPlayerSpriteDisplaySize / _applyPlayerGroundAnchor normalize on
+   * measured visible bounds and tire-contact points per texture.
+   */
+  _exitArtFor(headingDeg) {
+    const base = this._playerArtKey;
+    if (!base) return null;
+    const t = this.textures;
+    const ladder =
+      headingDeg >= 62 ? [`${base}_profile_r`, `${base}_turn_hard_r`, `${base}_turn_r`, `${base}_turn`]
+      : headingDeg >= 28 ? [`${base}_turn_hard_r`, `${base}_turn_r`, `${base}_turn`]
+      : headingDeg >= 8 ? [`${base}_turn_r`, `${base}_turn`]
+      : [base];
+    for (const key of ladder) {
+      if (t.exists(key)) {
+        return { key, flip: key !== base && !key.endsWith('_r') };
+      }
+    }
+    return { key: base, flip: false };
+  }
+
+  _applyExitPose(headingDeg) {
+    const ps = this.playerSprite;
+    const art = this._exitArtFor(headingDeg);
+    if (!ps || !art) return;
+    if (ps.texture.key !== art.key) {
+      ps.setTexture(art.key);
+      this._applyPlayerSpriteDisplaySize();
+    }
+    if (ps.flipX !== art.flip) ps.setFlipX(art.flip);
+    this._applyPlayerGroundAnchor();
+  }
+
+  /**
+   * Fully automated exit cinematic — COMMITTED → CURVING → DEPARTING →
+   * TRANSITIONING.  The car follows the shared ExitPath centreline at a
+   * controlled ~35 mph; manual steering/gas/brake are ignored; the world
+   * keeps moving (traffic flows, pursuit lights keep flashing) but no
+   * hazard can touch the player; the camera keeps its freeway view.
+   */
+  _updateExitCinematic(rawDt) {
+    const p = this.player;
+    const auto = this._exitAuto;
+    const plan = auto.plan;
+    auto.t += rawDt;
+
+    // Controlled cinematic speed — ease from highway speed toward 35 mph.
+    const targetSpeed = MAX_SPEED * 35 / 120;
+    p.speed += (targetSpeed - p.speed) * Math.min(1, 2.0 * rawDt);
+
+    // Advance along the spline.  Forward (Z) progress scales with
+    // cos(heading): the path speed stays constant while its freeway
+    // component shrinks as the car turns away — the scenery keeps rolling
+    // (floored at 12%) instead of freezing unnaturally.
+    const exPre = sampleExitPlan(plan, p.position + PLAYER_VIRTUAL_Z);
+    const cosH = Math.max(0.12, Math.cos((exPre?.headingDeg ?? 0) * Math.PI / 180));
+    p.position += p.speed * cosH * rawDt;
+    // Mileage counted ONCE, through the same odometer derivation as normal
+    // driving (no separate accumulator to double-count against).  Fuel and
+    // survival are deliberately NOT ticked during the hand-off.
+    this._odometer = (p.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+
+    // Smooth capture onto the spline centre — no snap: the lane position
+    // held at commitment blends onto the path over the first half-second,
+    // then the car IS the path.
+    const carZ = p.position + PLAYER_VIRTUAL_Z;
+    const ex = sampleExitPlan(plan, carZ);
+    if (ex) {
+      auto.blend = Math.min(1, auto.blend + rawDt / 0.5);
+      const b = auto.blend * auto.blend * (3 - 2 * auto.blend);
+      p.x = auto.startX + (ex.centerX - auto.startX) * b;
+    }
+    p.steerVelocity = 0;
+
+    // Path tangent → heading → vehicle art.
+    this._applyExitPose(ex?.headingDeg ?? 0);
+
+    // Phase transitions on the same path geometry.
+    if (auto.state === 'COMMITTED' && carZ >= plan.zCurve)    auto.state = 'CURVING';
+    if (auto.state === 'CURVING'   && carZ >= plan.zCurveEnd) auto.state = 'DEPARTING';
+    if (auto.state !== 'TRANSITIONING') this._exitState = auto.state;
+
+    // Background world.  Traffic keeps flowing in the mainline lanes and
+    // pursuers keep driving (wanted state is preserved for the rest stop),
+    // but none of the collision / damage / arrest passes run — the player
+    // is protected until RestStopScene starts.  Pursuers are aimed at the
+    // mainline (x ≤ 0.6) so nothing steers into the cinematic path.
+    this._updateTraffic(rawDt);
+    if (!this._customFlags?.noPolice) {
+      this.cops.update(rawDt, p.position, p.speed, Math.min(p.x, 0.6));
+      this.cops.arrestPending = false;
+    }
+
+    // Completion — DEPARTING runs until the COMPLETE projected sprite
+    // bounds (plus margin) are past the right edge of the LIVE viewport.
+    // The world camera scrolls −HUD_OFFSET_X, so the world-space right
+    // edge is SCREEN_W + HUD_OFFSET_X — correct at every aspect ratio,
+    // never a fixed 800×450 coordinate.  A generous time failsafe keeps a
+    // bounds quirk from ever hanging the run.
+    if (auto.state === 'DEPARTING') {
+      const b = this.playerSprite?.getBounds?.();
+      const viewRight = SCREEN_W + C.HUD_OFFSET_X;
+      if ((b && b.left > viewRight + 24) || auto.t > 14) {
+        auto.state = 'TRANSITIONING';
+        this._exitState = 'TRANSITIONING';
+        this._takeRestStopExit(auto.rs);   // final hand-off: grade + save + fade + launch (once)
+      }
+    }
+
+    this._renderFrame();
+    this._renderHUD();
+  }
+
   /** Take the exit ramp into a rest stop. Records the stop as visited,
    *  generates the portable save code, persists state, and fades into the
    *  RestStopScene with the player's current snapshot. */
@@ -21912,7 +22089,6 @@ export class GameScene extends Phaser.Scene {
         CloudSave.put({
           playerId: save.activePlayerId,
           plate:    save.activePlate,
-          code,
           snapshot,
           score:    snapshot.score ?? 0,
           position: snapshot.position ?? 0,

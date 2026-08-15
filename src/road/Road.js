@@ -10,6 +10,7 @@ import * as C from '../constants.js';
 import { project, fillTrap, rumbleW, laneW, toInt, SeededRNG, clamp } from '../utils/Helpers.js';
 import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '../utils/Colors.js';
 import { buildRoute } from './RouteData.js';
+import { sampleExitPlan } from './ExitPath.js';
 import { TunnelFaceMesh } from './TunnelFaceMesh.js';
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
@@ -1820,6 +1821,12 @@ export class Road {
       }
     }
 
+    // ── Exit-lane right-turn pavement arrows ──────────────────────────
+    // Painted after the surface cache is built so each vertex projects
+    // through the SAME boundary samples entities use — the arrows follow
+    // road curvature and grade exactly like the pavement they sit on.
+    this._drawExitArrows(g, playerPos);
+
     // ── Horizon haze fade (terrain layer) ─────────────────────────────
     // The strip just under the horizon line belongs to the flat terrain
     // fill: the farthest projected segments stop a few px short of H(), so
@@ -3504,6 +3511,44 @@ export class Road {
     const lw1 = laneW(w1, segLanes);
     const lw2 = laneW(w2, segLanes);
 
+    // ── Shared exit path samples (owner spec 2026-08-15) ───────────────
+    // One sample per trapezoid boundary from the SAME ExitPath the player
+    // guidance / automated motion reads, so the painted lane and the driven
+    // path can never disagree.  The drawn quad spans this segment's own
+    // projection (far) and the next-nearer segment's (near) — boundary Zs
+    // are the matching segment-centre world positions.
+    //
+    // `exitPre` — taper/parallel phases, where lane 5 is glued to the
+    // mainline: the whole right-edge band (fog line, shoulder tone, rumble,
+    // grit) shifts OUTBOARD to the new outside edge and the old fog-line
+    // position carries a dashed divider instead.  From the divergence
+    // onward the mainline edge returns to x=1.0 and the ramp paints its own
+    // pair of edge lines (they meet at the gore nose by construction).
+    let exF = null, exN = null;
+    if (seg.exitInfo && !isGhost) {
+      const zF = seg.index * SEG_LENGTH + SEG_LENGTH / 2;
+      exF = sampleExitPlan(seg.exitInfo, zF);
+      exN = sampleExitPlan(seg.exitInfo, zF - SEG_LENGTH);
+      if (exF && !exN) {
+        // Window's first boundary — near side is still plain freeway.
+        exN = { ...exF, grow: 0, gapX: 0, innerX: 1, outerX: 1, centerX: 1, halfLaneX: 0 };
+      }
+    }
+    const exitOn  = !!exF;
+    const exitPre = (ex) => !!ex && ex.gapX <= 0.0001;   // before the gore opens
+    // Right-band outboard shift, far/near, in px (0 once the gore has opened).
+    const extRF = exitOn && exitPre(exF) ? w2 * (exF.outerX - 1) : 0;
+    const extRN = exitOn && exitPre(exN) ? w1 * (exN.outerX - 1) : 0;
+    // Sidewalk/curb shift: ALWAYS outboard of the exit lane / ramp outer
+    // edge while the window is active — a sidewalk may never sit between
+    // the freeway and the separated ramp, or cross its pavement.
+    const swExtF = exitOn ? w2 * (exF.outerX - 1) : 0;
+    const swExtN = exitOn ? w1 * ((exN?.outerX ?? 1) - 1) : 0;
+    // Painted-coordinate safety clamp: during the curve/departure the ramp
+    // runs far outside the viewport; huge floats can corrupt the WebGL
+    // batch, so every exit-related x is clamped to a generous margin.
+    const exClampX = (v) => Math.max(-9000, Math.min(C.WORLD_W + 9000, v));
+
     // Grass — full-width regular grass for all segments, including
     // tunnel.  The tunnel structure (walls + ceiling) paints on top of
     // this, bounded to the road's screen-area, so the sky and grass
@@ -3943,10 +3988,16 @@ export class Road {
       fillTrap(g, SIDEWALK_DK,
         x2 - w2 - rw2 - sidewalkW2, fy, x2 - w2 - rw2, fy,
         x1 - w1 - rw1,             ny, x1 - w1 - rw1 - sidewalkW1, ny);
-      // Right sidewalk
+      // Right sidewalk.  Through an exit window the band is shifted OUTBOARD
+      // of the exit lane / departing ramp (swExt*): the sidewalk terminates
+      // at the taper and wraps around the outside of the new pavement — it
+      // never crosses the entrance or sits between freeway and ramp.  This
+      // is the geometric fix for the old "sidewalk paints over the ramp"
+      // bug (the band used a fixed offset while the ramp asphalt was routed
+      // to a LOWER layer, so the walkway always won).
       fillTrap(g, SIDEWALK_DK,
-        x2 + w2 + rw2,             fy, x2 + w2 + rw2 + sidewalkW2, fy,
-        x1 + w1 + rw1 + sidewalkW1, ny, x1 + w1 + rw1,             ny);
+        exClampX(x2 + w2 + rw2 + swExtF),              fy, exClampX(x2 + w2 + rw2 + swExtF + sidewalkW2), fy,
+        exClampX(x1 + w1 + rw1 + swExtN + sidewalkW1), ny, exClampX(x1 + w1 + rw1 + swExtN),              ny);
       // Restrained tonal variation instead of a bright centre stripe.  The
       // old highlight was a hard, uniformly-bright band down the middle of
       // every sidewalk, and combined with a seam on every 3rd segment it read
@@ -3957,21 +4008,24 @@ export class Road {
       const swCol  = lerpColor(SIDEWALK_DK, swTone > 0 ? SIDEWALK_LT : 0x6E6A62,
                                Math.abs(swTone) * 2);
       for (const sd of EDGE_SIDES) {
-        const oIn2 = x2 + sd * (w2 + rw2),            oIn1 = x1 + sd * (w1 + rw1);
-        const oOut2 = oIn2 + sd * sidewalkW2,         oOut1 = oIn1 + sd * sidewalkW1;
+        const eR2 = sd > 0 ? swExtF : 0, eR1 = sd > 0 ? swExtN : 0;
+        const oIn2 = exClampX(x2 + sd * (w2 + rw2) + eR2),  oIn1 = exClampX(x1 + sd * (w1 + rw1) + eR1);
+        const oOut2 = exClampX(oIn2 + sd * sidewalkW2),     oOut1 = exClampX(oIn1 + sd * sidewalkW1);
         fillTrap(g, swCol, oIn2, fyA, oOut2, fyA, oOut1, nyA, oIn1, nyA, 0.55);
       }
 
       // Curb — thick dark line ALONGSIDE THE ROAD (between rumble and
       // sidewalk) — this is what reads as "step up to the sidewalk".
+      // Right side follows the sidewalk's exit-window shift so the curb
+      // terminates/redirects with it instead of crossing the new pavement.
       const curbW1 = Math.max(1, sidewalkW1 * 0.16);
       const curbW2 = Math.max(1, sidewalkW2 * 0.16);
       fillTrap(g, CURB_SHADOW,
         x2 - w2 - rw2 - curbW2, fy, x2 - w2 - rw2, fy,
         x1 - w1 - rw1,         ny, x1 - w1 - rw1 - curbW1, ny);
       fillTrap(g, CURB_SHADOW,
-        x2 + w2 + rw2,         fy, x2 + w2 + rw2 + curbW2, fy,
-        x1 + w1 + rw1 + curbW1, ny, x1 + w1 + rw1,         ny);
+        exClampX(x2 + w2 + rw2 + swExtF),          fy, exClampX(x2 + w2 + rw2 + swExtF + curbW2), fy,
+        exClampX(x1 + w1 + rw1 + swExtN + curbW1), ny, exClampX(x1 + w1 + rw1 + swExtN),          ny);
       // Slab joints, anchored to ABSOLUTE world Z at a real ~5 ft pitch and
       // only drawn where that pitch actually resolves on screen — the same
       // rule the shoulder rumble grooves use.  A joint on every 3rd SEGMENT
@@ -3995,9 +4049,10 @@ export class Road {
             const wf = w2 + (w1 - w2) * t, rf = rw2 + (rw1 - rw2) * t;
             const sf = sidewalkW2 + (sidewalkW1 - sidewalkW2) * t;
             const cx = x2 + (x1 - x2) * t;
+            const swExtT = swExtF + (swExtN - swExtF) * t;   // exit-window shift
             g.fillStyle(CURB_SHADOW, jA);
             for (const sd of EDGE_SIDES) {
-              const inX = cx + sd * (wf + rf);
+              const inX = exClampX(cx + sd * (wf + rf) + (sd > 0 ? swExtT : 0));
               g.fillRect(Math.min(inX, inX + sd * sf), jy, sf, 1);
             }
           }
@@ -4205,118 +4260,77 @@ export class Road {
       }
     }
 
-    // ── Exit ramp diverging right ─────────────────────────────────────
-    // RouteData.js tags segments leading into a rest stop with
-    // `rampStrength` ∈ (0,1].  We paint a paved trapezoid that grows
-    // outward from the right edge of the road as the strength climbs,
-    // giving the unmistakable visual of an off-ramp peeling away.
-    if (seg.rampStrength > 0) {
-      const rs = seg.rampStrength;
-      // ── TRUE DIVERGING LANE — gore + width grow TOGETHER ──────────
-      // The previous two-phase shape kept the ramp glued to the road
-      // for the first half (gore=0 while width grew), which looked
-      // like the road getting wider — exactly the "pullout" feel the
-      // player kept calling out.  Real I-90/FHWA diverging exit ramps
-      // open the grass GORE wedge from a single apex point WHILE the
-      // ramp width grows.  Both 0 at apex, both reach max at the exit.
-      //
-      //  rs = 0:    width=0, gore=0      (single-point apex)
-      //  rs = 0.5:  width=0.5w, gore=0.5w (half-divergence, clear fork)
-      //  rs = 1.0:  width=w, gore=0.95w   (fully separate ramp)
-      //
-      // The grass between the road's right edge and the ramp's inner
-      // edge IS the visible gore — no special draw, the underlying
-      // grass shows through because we leave that band unpainted.
-      // Per 2026-05-30 user direction the ramp WIDTH stays the SAME the
-      // whole window — big enough to drive on, never tapering to a point.
-      // But freezing the GORE GAP at full too (the t = 1 version) painted
-      // the ramp as a detached parallel strip sitting in the grass the
-      // entire window — it never touched the road, so it read as a
-      // "dead-end behind the exit sign" instead of an off-ramp.
-      //
-      // Fix: keep width full, but grow the GORE GAP with rampStrength so
-      // the ramp's inner edge starts AT the road's outer edge (thin gore)
-      // and diverges outward as you near the exit — a true Y.  Because
-      // rampStrength climbs 0→1 across the approach window, the gore opens
-      // toward the exit; on the after-exit taper it runs 1→0, closing the
-      // gore back into a clean merge.  Width is unchanged (t = 1).
-      // Ramp width grows IN STEP with the gore — narrow throat (0.35w) at the
-      // apex up to a full 1.25w drivable lane at the exit.  This is what makes
-      // it read as a true diverging Y: a thin slip-lane peels off the road edge
-      // and fans out.  Freezing width at full (the old `t=1`, rampW = 1.25w
-      // everywhere) made the apex a blunt full-width strip flush to the road,
-      // so it looked like the road simply WIDENING (the "pullout" the player
-      // kept flagging) rather than forking.  The 0.35w floor honors the
-      // 2026-05-30 "never taper to a point" call — the throat stays drivable,
-      // and the lane is full width by the exit where you actually peel off.
-      const rampW1 = w1 * (0.35 + 0.90 * rs);
-      const rampW2 = w2 * (0.35 + 0.90 * rs);
-      // Gore opens with rampStrength: 0 at the apex (ramp flush against
-      // the road edge) → full ~2 road half-widths at the exit point.
-      const goreFrac = rs;
-      const gap1   = w1 * 2.05 * goreFrac;
-      const gap2   = w2 * 2.05 * goreFrac;
-      // Asphalt fill — same colour as the mainline so the ramp doesn't read
-      // as a different road type, just a continuation.  Routed to the base
-      // layer (and given its own texture row below) for the same reason: a
-      // flat-shaded ramp peeling off a textured highway is an obvious seam,
-      // and the ramp is the one place the player looks hardest.
-      fillTrap(baseG, road,
-        x2 + w2 + gap2,         fy, x2 + w2 + gap2 + rampW2, fy,
-        x1 + w1 + gap1 + rampW1, ny, x1 + w1 + gap1,         ny);
-      if (texSeg && this._roadP) {
-        // Reuse the road's own U mapping at the ramp's narrower width.
-        // pushRow lays the quad at centre ± (w + e) and maps U to
-        // U_EDGE * (w + e) / w, so passing the mainline half-width as `w` and
-        // the DIFFERENCE as `e` (negative here) puts the ramp edges in the
-        // right place AND keeps the texel scale identical to the highway —
-        // the aggregate matches across the gore instead of being squeezed
-        // into the narrower lane.
-        const rh2 = rampW2 * 0.5, rh1 = rampW1 * 0.5;
-        this._roadP.pushRow(
-          fyA, nyA,
-          x2 + w2 + gap2 + rh2, x1 + w1 + gap1 + rh1,
-          w2, w1, rh2 - w2, rh1 - w1,
-          curr.relZ, next.relZ,
-          rd.mix.a, rd.mix.b, rd.mix.t,
-          road, road, 1 - snowBlanket * 0.93);
+    // ── Exit lane + departing ramp (shared ExitPath geometry) ──────────
+    // Painted straight from the SAME sampleExitPlan() the player guidance
+    // and automated exit motion read, so the asphalt, the lines, and the
+    // driven path are one geometry.  Phases:
+    //   taper     right edge slides out, lane 5 grows 0→full width
+    //   parallel  five lanes; dashed divider on the old fog-line alignment
+    //   diverge   gore opens from a single nose; mainline edge returns to 1.0
+    //   curve     ramp hooks toward screen right (~82° final heading)
+    //   depart    straight run at the final heading until off-viewport
+    if (exitOn && (exF.outerX > 1.005 || (exN?.outerX ?? 1) > 1.005)) {
+      const pre = exitPre(exF) && exitPre(exN);
+      // Asphalt spans inner→outer edge plus a paved shoulder outboard, so
+      // the outside fog line never rides the last pixel of pavement.  Pre-
+      // gore the inner edge tucks slightly UNDER the mainline so no
+      // hairline gap can open between the two surfaces.
+      const inF  = exClampX(x2 + w2 * (exF.gapX > 0.0001 ? exF.innerX : 0.97));
+      const inN  = exClampX(x1 + w1 * ((exN?.gapX ?? 0) > 0.0001 ? exN.innerX : 0.97));
+      const outF = exClampX(x2 + w2 * exF.outerX + rw2);
+      const outN = exClampX(x1 + w1 * (exN?.outerX ?? 1) + rw1);
+      if (outF > inF || outN > inN) {
+        fillTrap(baseG, road, inF, fy, outF, fy, outN, ny, inN, ny);
+        if (texSeg && this._roadP) {
+          // Reuse the road's own U mapping so the texel scale matches the
+          // mainline exactly: pass the mainline half-width as `w` and the
+          // difference to the exit quad's half-width as `e` (see pushRow).
+          const rcF = (inF + outF) / 2, rcN = (inN + outN) / 2;
+          const rhF = (outF - inF) / 2, rhN = (outN - inN) / 2;
+          this._roadP.pushRow(
+            fyA, nyA, rcF, rcN, w2, w1, rhF - w2, rhN - w1,
+            curr.relZ, next.relZ,
+            rd.mix.a, rd.mix.b, rd.mix.t,
+            road, road, 1 - snowBlanket * 0.93);
+        }
       }
-      // Edge stripe along the OUTSIDE of the ramp — the unmistakable
-      // "ramp shoulder" line.  Weathered, not pure white: the ramp edge is the
-      // same worn
-      // thermoplastic as the fog line on the mainline, so a 0xFFFFFF stripe
-      // here made the exit glow next to a road whose paint no longer does.
-      const rampEdgeCol = lerpColor(
-        lerpColor(0xC8C5B8, mat.gritCol, 0.22),
-        road, paintFade);
-      const edgeW1 = Math.max(2, w1 * 0.025);
-      const edgeW2 = Math.max(2, w2 * 0.025);
-      fillTrap(g, rampEdgeCol,
-        x2 + w2 + gap2 + rampW2 - edgeW2, fyA, x2 + w2 + gap2 + rampW2, fyA,
-        x1 + w1 + gap1 + rampW1,         nyA, x1 + w1 + gap1 + rampW1 - edgeW1, nyA, nightMul);
-      // (Gore chevrons removed — at the game's perspective scale the
-      // tiny V-arrows read as glitchy white triangles in the ramp wedge
-      // rather than as a readable "do-not-cross" zone.  The white edge
-      // stripe + yellow RPM dots are enough to communicate the split.)
-      // (Yellow RPM dots in the gore removed — they read as "lane
-      // markings painted on grass" without the underlying pavement.)
-      // (Right-shoulder delineator posts removed 2026-05-30 — at the
-      // game's perspective they stack into hash-mark-looking artifacts
-      // across consecutive segments rather than reading as discrete
-      // posts.)
-      // ── Edge stripe along the INSIDE of the ramp (next to the gore).
-      // Pairs with the OUTSIDE edge stripe drawn earlier so the ramp has
-      // a real lane boundary on both sides.
-      const innerW1 = Math.max(2, w1 * 0.020);
-      const innerW2 = Math.max(2, w2 * 0.020);
-      fillTrap(g, rampEdgeCol,
-        x2 + w2 + gap2,         fyA, x2 + w2 + gap2 + innerW2, fyA,
-        x1 + w1 + gap1 + innerW1, nyA, x1 + w1 + gap1,         nyA, nightMul);
-      // (EXIT chevron triangle removed 2026-05-30 — across consecutive
-      // segments the per-segment triangles stacked into a row of white
-      // hash marks on the ramp surface that didn't read as a chevron.)
+      // ── Markings — worn thermoplastic, same weathering as the mainline ──
+      if (snowBlanket < SNOW_MARKINGS_GONE) {
+        const wearE = hash1(Math.floor(seg.index / 26), 43);
+        let exEdgeCol = lerpColor(0xC8C5B8, mat.gritCol, 0.18 + wearE * 0.30);
+        exEdgeCol = lerpColor(exEdgeCol, road, paintFade);
+        if (reflectAmt > 0.01)    exEdgeCol = lerpColor(exEdgeCol, 0xFFF4D2, reflectAmt * 0.45);
+        else if (wetPaint > 0.01) exEdgeCol = lerpColor(exEdgeCol, 0xE8E6DC, wetPaint);
+        const swE1 = Math.max(1.2, w1 * 0.016), swE2 = Math.max(1.2, w2 * 0.016);
+        // Outside fog line — rides the exit lane's outer edge through every
+        // phase.  This is the line that "opens" at the taper: the right-band
+        // shift (extR*) carries the ORIGINAL fog line outboard through
+        // taper/parallel, and from the gore onward this stripe takes over
+        // as the ramp's own outer edge.
+        if (!pre && (exF.grow > 0.05 || (exN?.grow ?? 0) > 0.05)) {
+          fillTrap(g, exEdgeCol,
+            exClampX(x2 + w2 * exF.outerX - swE2), fyA, exClampX(x2 + w2 * exF.outerX), fyA,
+            exClampX(x1 + w1 * (exN?.outerX ?? 1)), nyA, exClampX(x1 + w1 * (exN?.outerX ?? 1) - swE1), nyA,
+            nightMul);
+          // Ramp inner edge line — starts AT the gore nose (where it
+          // coincides with the mainline fog line) and follows the ramp out;
+          // together with the mainline's own edge line it forms the clean
+          // V of the gore with no paint on the grass between.
+          fillTrap(g, exEdgeCol,
+            exClampX(x2 + w2 * exF.innerX), fyA, exClampX(x2 + w2 * exF.innerX + swE2), fyA,
+            exClampX(x1 + w1 * (exN?.innerX ?? 1) + swE1), nyA, exClampX(x1 + w1 * (exN?.innerX ?? 1)), nyA,
+            nightMul);
+        } else if (pre && exF.grow > 0.30 && dashOn) {
+          // Dashed lane-4/5 divider on the OLD fog-line alignment — white
+          // and crossable through the parallel section, terminated cleanly
+          // by the gore branch above.
+          const dvw2 = Math.max(0.8, lw2 * 0.8), dvw1 = Math.max(0.8, lw1 * 0.8);
+          fillTrap(surfaceG, exEdgeCol,
+            x2 + w2 - dvw2, fyA, x2 + w2 + dvw2, fyA,
+            x1 + w1 + dvw1, nyA, x1 + w1 - dvw1, nyA, nightMul);
+        }
+      }
     }
-
     // ── Road edge ──────────────────────────────────────────────────────
     // What used to be here was a PURE WHITE trapezoid spanning the whole
     // rumble width on both sides, plus a second solid-white ribbon painted
@@ -4341,8 +4355,16 @@ export class Road {
       const GRT_0 = 0.70;                  // gravel / dirt / vegetation
 
       // Band edge at fraction f of the shoulder, on side `sd` (-1 left / +1 right).
-      const eF = (f, sd) => x2 + sd * (w2 + rw2 * f);
-      const eN = (f, sd) => x1 + sd * (w1 + rw1 * f);
+      // Through an exit taper/parallel section the whole RIGHT band —
+      // fog line, shoulder tone, rumble grooves, grit fringe — moves
+      // outboard with the new outside edge (extR*).  This is what "opens"
+      // the old right fog line: the paint follows the pavement edge, and
+      // the position it used to occupy becomes the lane-4/5 dashed divider
+      // (painted in the exit block below).  Once the gore opens the shift
+      // returns to zero — the mainline edge line snaps back to x=1.0 and
+      // the ramp carries its own pair of edge lines from the nose outward.
+      const eF = (f, sd) => x2 + sd * (w2 + rw2 * f) + (sd > 0 ? extRF : 0);
+      const eN = (f, sd) => x1 + sd * (w1 + rw1 * f) + (sd > 0 ? extRN : 0);
 
       // Shoulder tone.  Translucent over the shared asphalt texture, so the
       // shoulder reads as the same material as the carriageway — just dirtier
@@ -4432,12 +4454,14 @@ export class Road {
             const wf = w2 + (w1 - w2) * t;
             const rf = rw2 + (rw1 - rw2) * t;
             const cx = x2 + (x1 - x2) * t;
+            const gxT = extRF + (extRN - extRF) * t;   // exit-window band shift
             for (const sd of EDGE_SIDES) {
+              const gxE = sd > 0 ? gxT : 0;
               fillTrap(surfaceG, 0x000000,
-                cx + sd * (wf + rf * RMB_0), gy,
-                cx + sd * (wf + rf * RMB_1), gy,
-                cx + sd * (wf + rf * RMB_1), gy + gh,
-                cx + sd * (wf + rf * RMB_0), gy + gh, gA);
+                cx + sd * (wf + rf * RMB_0) + gxE, gy,
+                cx + sd * (wf + rf * RMB_1) + gxE, gy,
+                cx + sd * (wf + rf * RMB_1) + gxE, gy + gh,
+                cx + sd * (wf + rf * RMB_0) + gxE, gy + gh, gA);
             }
           }
         }
@@ -4456,10 +4480,11 @@ export class Road {
           eF(GRT_0, sd), fyA, eF(1.00, sd), fyA,
           eN(1.00, sd), nyA, eN(GRT_0, sd), nyA, 0.72 * nightMul);
         // Soft outer feather past the paved edge, so there is no hard line
-        // where the shoulder ends and the roadside begins.
+        // where the shoulder ends and the roadside begins.  (Follows the
+        // exit-window band shift on the right like every other band.)
         fillTrap(surfaceG, gritCol,
-          eF(1.00, sd), fyA, x2 + sd * (w2 + rw2 * 1.35), fyA,
-          x1 + sd * (w1 + rw1 * 1.35), nyA, eN(1.00, sd), nyA, 0.30 * nightMul);
+          eF(1.00, sd), fyA, x2 + sd * (w2 + rw2 * 1.35) + (sd > 0 ? extRF : 0), fyA,
+          x1 + sd * (w1 + rw1 * 1.35) + (sd > 0 ? extRN : 0), nyA, eN(1.00, sd), nyA, 0.30 * nightMul);
       }
     }
 
@@ -5410,6 +5435,81 @@ export class Road {
    *  Returns { sx, sy, sw, scale, visible } or null.  Float coords —
    *  no integer rounding, so road geometry stays sub-pixel for clean AA.
    */
+  /**
+   * Right-turn pavement arrows in the exit lane (owner spec 2026-08-15).
+   *
+   * World-anchored to fixed route positions inside the 500 ft parallel
+   * section (plan.arrowZs — two early, one just before the gore), sized to
+   * real highway lane-arrow proportions (~26 ft long, elongated naturally
+   * by the perspective projection), and drawn as ONE polygon whose vertices
+   * each sample the shared ExitPath centreline — so the arrows sit inside
+   * lane 5 and bend with it.  Uses the worn, non-glowing paint treatment:
+   * distance fade, night falloff and ragged snow burial, same as every
+   * other marking.  Never a screen-space icon, never per-segment stamps.
+   */
+  _drawExitArrows(g, playerPos) {
+    const plans = this.segments.exitPlans;
+    if (!plans) return;
+    const FT = (ROUTE_SEGS * SEG_LENGTH) / (TOTAL_ROUTE_MILES * 5280); // units/ft
+    const maxZ = PAINT_FAR * 0.9;
+    for (const id in plans) {
+      const plan = plans[id];
+      // Cheap window reject before any per-arrow work.
+      if (plan.zTaper - playerPos > maxZ) continue;
+      if (plan.zCurveEnd - playerPos < 0) continue;
+      for (const az of plan.arrowZs) {
+        const relZ = az - playerPos;
+        if (relZ < 2200 || relZ > maxZ) continue;
+        const mile = (az / (this.segments.length * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+        const snow = snowBlanketAt(mile);
+        // Ragged burial, same threshold family as the lane dashes.
+        if (snow > SNOW_MARKINGS_GONE * (0.7 + hash1(Math.round(az / 100), 87) * 0.5)) continue;
+        const nm = nightFalloff(relZ, mile);
+        const paintFade = Math.min(1,
+          PAINT_BASE_MAX * smoothstep((relZ - 8000) / (PAINT_FAR * 0.62)) +
+          (1 - PAINT_BASE_MAX) * smoothstep((relZ - PAINT_FAR * PAINT_KNEE)
+                                            / (PAINT_FAR * (1 - PAINT_KNEE))));
+        const wear = hash1(Math.round(az / 250), 53);
+        const col = lerpColor(0xD2CFC2, 0x9A957F, 0.15 + wear * 0.35);
+        const alpha = 0.9 * nm * (1 - paintFade)
+          * (1 - Math.min(1, snow / SNOW_MARKINGS_GONE) * 0.85);
+        if (alpha < 0.03) continue;
+        // Arrow footprint along the lane: 34 ft total, head from 20 ft —
+        // real exit-only arrows are already elongated for exactly this
+        // foreshortening, and the pseudo-3D projection compresses depth
+        // hard, so the long footprint is what keeps the mark legible as it
+        // approaches through the near field.
+        const z0 = az, zm = az + 20 * FT, z1 = az + 34 * FT;
+        const us = 0.075, uh = 0.16, tipShift = 0.12;   // x-unit widths
+        const c0 = sampleExitPlan(plan, z0)?.centerX;
+        const cm = sampleExitPlan(plan, zm)?.centerX;
+        const ct = sampleExitPlan(plan, z1)?.centerX;
+        if (c0 == null || cm == null || ct == null) continue;
+        // Vertex list (z, laneOffset) — shaft quad + forward/right head.
+        const verts = [
+          [z0, c0 - us], [z0, c0 + us],           // tail
+          [zm, cm + us], [zm, cm + uh],           // shaft → head base right
+          [z1, ct + tipShift],                    // tip, leaning right
+          [zm, cm - uh], [zm, cm - us],           // head base left → shaft
+        ];
+        const pts = [];
+        let ok = true;
+        for (const [vz, vu] of verts) {
+          const p = this.sampleSurface(vz - playerPos, vu);
+          if (!p) { ok = false; break; }
+          pts.push({ x: p.sx, y: p.sy });
+        }
+        if (!ok) continue;
+        // Below ~3 px of projected length the arrow is an aliasing speck,
+        // not a marking — the same "only draw what resolves" rule the
+        // rumble grooves and slab joints follow.
+        if (Math.abs(pts[0].y - pts[4].y) < 3) continue;
+        g.fillStyle(col, alpha);
+        g.fillPoints(pts, true);
+      }
+    }
+  }
+
   sampleSurface(relativeZ, laneOffset, opts) {
     const allowClipped = opts && opts.allowClipped === true;
     const samples = this._surfaceSamples;

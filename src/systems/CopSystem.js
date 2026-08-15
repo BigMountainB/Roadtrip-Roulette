@@ -44,9 +44,6 @@ import { clamp } from '../utils/Helpers.js';
 import { Difficulty } from './Difficulty.js';
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
-import { makeProfile, integrateSpeed, dispatchSpeed, stoppingDistance } from '../cops/CopProfiles.js';
-import { driveCop, pitCommitting } from '../cops/CopDriver.js';
-import { PursuitDirector, spacingBias } from '../cops/PursuitDirector.js';
 import { DeployableField, DONUT_DIVERT_BY_STAR, DONUT_IMMUNE_SEC, PUFF_LIFE, CL } from './Deployables.js';
 
 // Cop top speed in internal world units.  MAX_SPEED is the player's 120 mph
@@ -171,9 +168,6 @@ const PUSH_HP_PER_SPEED  = 6.0;        // HP at full speed; scales linearly
 // Still clear of the +/-CAR_LEN_Z (500) ram window, which is what this gap was
 // for originally: a parked cop must not register a ram every frame.
 const TAILGATE_GAP  = 900;
-// Minimum legal separation for a PROFILED pursuer. Not a following distance —
-// purely the anti-overlap floor. Preferred gaps live in the cop profiles.
-const OVERLAP_MIN   = 240;
 // How far back a pursuer still steers into the player's lane.  Must exceed
 // TAILGATE_GAP or a cop at station never lines up behind you.
 const LANE_TRACK_Z  = 2200;
@@ -270,7 +264,6 @@ const TOKEN_MAP = {
 
 export class CopSystem {
   constructor() {
-    this._director = new PursuitDirector();
     this.stars         = 0;
     this.starTimer     = 0;
     this.cops          = [];
@@ -332,8 +325,6 @@ export class CopSystem {
    *  with stars ≥ 1.  Spawns a rear-pursuit cop closing in from behind so
    *  the encounter has consequence. */
   _spawnRearFromEncounter(playerPos) {
-    const _p1 = this._newPursuitProfile(false);
-    const _p1Speed = dispatchSpeed(_p1);
     // Rolling-coal lull — route encounters don't manifest pursuers either.
     // Returns the spawned cop (or null when the lull gated it) so callers
     // can tell whether anything actually hit the road — _spawnTrapPursuit
@@ -351,19 +342,14 @@ export class CopSystem {
       // pursuers on the oncoming side.  0.2-0.8 keeps them in the two
       // right-hand lanes, where a car chasing you actually drives.
       laneOffset:  0.2 + Math.random() * 0.6,
-      // Profile first, then speed from it — a roadside unit pulling out is
-      // doing road speed, not top speed (see dispatchSpeed).
-      speed:       _p1Speed,
-      baseSpeed:   _p1Speed,
-      profile:     _p1,
+      speed:       MAX_SPEED * (COP_TOP_MPH / 120),
+      baseSpeed:   MAX_SPEED * (COP_TOP_MPH / 120),
       side:        'rear',
       kind:        'rear',
       colorSet:    'police',
       color:       0xFFFFFF,
       alive:       true,
       painted:     false,
-      _recoverT:   0,
-      _attackCd:   0,
       _closeFactor: 0.10 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
     };
@@ -452,9 +438,6 @@ export class CopSystem {
    * anti-pass guards must not drag it back.
    */
   _tickOnrampReinforcements(dt, playerPos, cap) {
-    const _p2 = this._newPursuitProfile(false);
-    // Merging traffic speed, capped by what this unit can sustain.
-    const _p2Speed = Math.min(COP_TOP_UNITS * 0.55, _p2.cruiseSpeed);
     const tier = Math.max(0, Math.min(5, this._syncStarLevel()));
     if (tier < ONRAMP_MIN_STARS) { this._onrampTimer = 0; return; }
     if ((this._coalLull ?? 0) > 0) return;          // smokescreen holds them off
@@ -473,14 +456,8 @@ export class CopSystem {
       // pursuers on the oncoming side.  0.2-0.8 keeps them in the two
       // right-hand lanes, where a car chasing you actually drives.
       laneOffset:  0.2 + Math.random() * 0.6,
-      // Merge speed, but never above what this unit can sustain — an on-ramp
-      // car is joining traffic, not launching. Clamped to profile.cruiseSpeed
-      // per the dispatch rule.
-      speed:       _p2Speed,
-      // baseSpeed was COP_TOP_UNITS — above this unit's own ceiling, so an
-      // on-ramp car was still dispatched faster than it can drive. It mirrors
-      // the merge speed now, same rule as every other pursuit entry point.
-      baseSpeed:   _p2Speed,
+      speed:       COP_TOP_UNITS * 0.55,   // merging up to speed
+      baseSpeed:   COP_TOP_UNITS,
       side:        'rear',
       kind:        'rear',
       colorSet:    'police',
@@ -488,9 +465,6 @@ export class CopSystem {
       color:       0xFFFFFF,
       alive:       true,
       painted:     false,
-      profile:      _p2,
-      _recoverT:    0,
-      _attackCd:    0,
       _closeFactor: 0.06 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
       // Arrives in front legitimately — hand it a token so the guards leave
@@ -729,26 +703,15 @@ export class CopSystem {
     if (s < 4) {
       return r < 0.55 ? 'rear' : 'oncoming-left';
     }
-    // 4★: rear pursuit + oncoming. SWAT no longer appears here — the owner's
-    // call (2026-08-13) is that vans are a 5★ escalation, so 4★ stays a
-    // conventional-cruiser tier and the van's arrival reads as the moment the
-    // chase gets serious.
-    // 4.75, not 5 — same reason as the cap above: a 5★ chase reads 4.9997, so
-    // `s < 5` swallowed the whole 5★ tier and SWAT never spawned. This mirrors
-    // the helicopter's existing `stars >= 4.75` threshold.
+    // 4★: conventional cruisers only. SWAT is a 5★ escalation (owner,
+    // 2026-08-13) so the van's arrival reads as the chase getting serious.
+    // 4.75 rather than 5 because `stars` decays to just under its integer —
+    // `s < 5` swallowed the entire 5★ tier and SWAT never spawned at all.
     if (s < 4.75) return r < 0.60 ? 'rear' : 'oncoming-any';
-    // 5★: SWAT vans join (~30 % of spawns) — heavier sprite, ×2 damage, and
-    // the HEAVY driving profile (slow to build speed, hard to shake once it
-    // has). Rest splits between rear pursuit and oncoming.
+    // 5★: SWAT vans join (~30 % of spawns), heavier sprite and ×2 damage.
     if (r < 0.30) return 'swat';
     if (r < 0.65) return 'rear';
     return 'oncoming-any';
-  }
-
-  /** Profile FIRST, then speed from it. Every rear-pursuit entry point goes
-   *  through here so none can reintroduce a full-top-speed dispatch. */
-  _newPursuitProfile(isSwat = false) {
-    return makeProfile({ star: this._starLevel || 1, swat: isSwat });
   }
 
   _spawnCop(playerPos) {
@@ -774,9 +737,7 @@ export class CopSystem {
       // pursuers on the oncoming side.  0.2-0.8 keeps them in the two
       // right-hand lanes, where a car chasing you actually drives.
       laneOffset = 0.2 + Math.random() * 0.6;
-      // Speed comes from the profile below, not COP_TOP_UNITS — see
-      // _newPursuitProfile / dispatchSpeed.
-      speed      = null;
+      speed      = COP_TOP_UNITS;
     } else {
       // Oncoming — far ahead, will rocket toward the player.
       position   = playerPos + (16000 + Math.random() * 14000);
@@ -788,8 +749,6 @@ export class CopSystem {
       speed = -ONCOMING_UNITS;
     }
 
-    const _prof = kind === 'rear' ? this._newPursuitProfile(isSwat) : null;
-    if (_prof && speed === null) speed = dispatchSpeed(_prof);
     this.cops.push({
       id:          Math.random(),
       position,
@@ -805,13 +764,6 @@ export class CopSystem {
       painted:     false,
       _closeFactor: 0.06 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
-      // Persistent driving profile — rolled ONCE here, never per frame. Only
-      // rear pursuers drive themselves; oncoming units and barricades keep
-      // their existing scripted movement.
-      profile:      _prof,
-      _slot:        0,
-      _recoverT:    0,
-      _attackCd:    0,
     });
   }
 
@@ -1300,15 +1252,6 @@ export class CopSystem {
   }
 
   update(dt, playerPos, playerSpeed, playerX = 0) {
-    // Role assignment runs ONCE per frame over the rear pursuers, before the
-    // per-cop loop. Roles gate what a unit may do (strike, wing, pass); they
-    // never set a position or a speed. See PursuitDirector.
-    this._rearPursuers = this.cops.filter(
-      c => c.kind === 'rear' && c.alive && !c.parked && !c.fleeing && c.profile);
-    this._roles = this._director.assign(
-      this._rearPursuers,
-      { pursuitZ: playerPos + PLAYER_VIRTUAL_Z, playerX, star: this._starLevel },
-      dt);
     this._flashTimer += dt;
 
     // ── Player-speed history (pursuit reaction lag, owner 2026-08-04) ──
@@ -1425,25 +1368,22 @@ export class CopSystem {
     const escMul = Difficulty.copEscalationMul();
     const _mileForCops = (playerPos / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
     const nightMul = 1 + TimeOfDay.darkness(_mileForCops) * 0.30;
-    // ONE PURSUER PER STAR (owner, 2026-08-13): 2★ = 2 cops, 3★ = 3, and so
-    // on. The old formula was `ceil(stars * 1.35 * difficulty * night)`, which
-    // put FIVE cars on you at 3★ and made the star rating a poor signal of what
-    // you were actually facing.
+    // 1★ is a SINGLE chase car; 2★+ scales the active-cop cap with stars,
+    // difficulty, and night density.
+    // ONE PURSUER PER STAR (owner, 2026-08-13): 2★ = 2 cops, 3★ = 3, and so on.
+    // The old formula was ceil(stars * 1.35 * difficulty * night), which put
+    // FIVE cars on you at 3★ and made the star rating a poor signal of what you
+    // were facing. Difficulty and night still scale the spawn RATE below, they
+    // just cannot push the roster past what the stars advertise.
     //
-    // Difficulty and night density have not been dropped — they now scale the
-    // spawn RATE below rather than the ceiling, so a hard night still fills the
-    // roster faster, it just cannot exceed what the stars advertise.
-    //
-    // The cap counts PURSUERS, not every police object. Barricades, oncoming
-    // units and the helicopter are hazards rather than chasers, and counting
-    // them here would have let a single barricade starve the 5★ roster of the
-    // cars it needs.
-    const _pursuerCount = this.cops.reduce(
-      (n, c) => n + ((c.kind === 'rear' && !c.parked) ? 1 : 0), 0);
     // _starLevel, not floor(this.stars): `stars` is a decaying float that sits
     // just UNDER its integer (a 5★ chase reads 4.9997), so flooring it gave a
-    // cap one below the number on screen — 4 cars at 5★. _starLevel is the
-    // integer the HUD and every other gate already use.
+    // cap one below the number on screen.
+    //
+    // Counts PURSUERS only — barricades and oncoming units are hazards, not
+    // chasers, and counting them starved the 5★ roster of the cars it needs.
+    const _pursuerCount = this.cops.reduce(
+      (n, c) => n + ((c.kind === 'rear' && !c.parked) ? 1 : 0), 0);
     const cap = Math.max(1, this._starLevel);
     // Cop-killer head start — after a weapon kill, fresh pursuit holds off
     // until the player has driven the 3-5 mi grace distance (set in
@@ -1661,43 +1601,80 @@ export class CopSystem {
       } else {
         switch (cop.kind) {
           case 'rear': {
-            // ── INDEPENDENT PURSUIT ────────────────────────────────────────
-            // Speed is integrated from THIS cop's acceleration, braking and
-            // ceiling (CopProfiles.integrateSpeed). The player's speed is an
-            // observation that shapes the target, never a value assigned to
-            // cop.speed — that coupling is what made every cruiser converge on
-            // one pace and read as a hive mind.
+            // ALWAYS closing while behind — but once alongside or ahead,
+            // throttle back to the player's pace so we stick to them
+            // instead of zooming off into the distance.  The previous
+            // "always playerSpeed + closing" formula made cops sail past
+            // the player and despawn off-screen, leaving the chase blank.
             //
-            // Roles come from the PursuitDirector (assigned once per frame,
-            // above) and gate what a unit MAY do; they never set its position.
-            cop.profile ??= makeProfile({ star: this._starLevel || 1,
-                                          swat: cop.colorSet === 'swat' });
-            const _copMile = (cop.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
-            const _grip    = Weather.gripMul?.(_copMile) ?? 1;
-            const _role    = this._roles?.get(cop.id) ?? 'follower';
-            const _world   = { playerSpeed, pursuitZ, playerX, grip: _grip,
-                               star: this._starLevel };
-            driveCop(cop, _world, _role, dt);
-            // Gentle police-to-police spacing so units do not stack on one
-            // point. A bias, not a formation — see PursuitDirector.spacingBias.
-            const _bias = spacingBias(cop, this._rearPursuers ?? []);
-            if (_bias) {
-              cop.speed = integrateSpeed(cop.speed, Math.max(0, cop.speed + _bias),
-                                         cop.profile, dt, _grip);
-            }
-            cop._selfIntegrated = true;   // position already advanced by driveCop
-
-            // PIT arming is now PHASE-GATED. It used to arm whenever ordinary
-            // following happened to produce lateral proximity for 0.65s, which
-            // is why PITs felt like unavoidable ambient damage. It can only be
-            // true during a genuine commit window.
-            const _aDist = Math.abs(cop.position - pursuitZ);
-            if (this._starLevel >= MIN_STARS_PIT && pitCommitting(cop)
-                && _aDist < PIT_ARM_Z && Math.abs(playerX - cop.laneOffset) < 0.18) {
-              cop._pitArmed = true;
+            // Distances here are measured to the CAR (see the pursuit frame
+            // note at the top), NOT to the camera — that is what lets a rear
+            // cop actually reach the bumper, register a ram, and fill the
+            // mirror instead of parking 3000 units short of all three.
+            const dist  = cop.position - pursuitZ;
+            const aDist = Math.abs(dist);
+            const closing = Math.max(reactSpd * 0.10, 600);
+            if (dist > 0) {
+              // Cop is AHEAD of player — slow down so the player either
+              // catches up or the cop drifts back into PIT range.
+              cop.speed = Math.max(0, reactSpd * 0.92);
             } else {
-              cop._pitArmed = false;
+              // A CRUISER RUNS AT CRUISER PACE (owner 2026-07-31: "cops should
+              // not slow when player slows").  Its speed is its own — at least
+              // its cruise, faster if it needs to run down a quick player —
+              // and it is NOT tied to the player's throttle.  Braking no longer
+              // makes the car chasing you brake in sympathy a thousand feet
+              // back; it makes it arrive.  The anti-pass guards below only bite
+              // in the last stretch (see APPROACH_BAND).
+              cop.speed = Math.min(COP_TOP_UNITS,
+                                   Math.max(cop.baseSpeed ?? COP_TOP_UNITS, reactSpd + closing));
+            }
+            // Once alongside the player, hold the lateral position so PIT
+            // detection in GameScene can fire on side-swipe contact.
+            // Pass-3: cops feel weather grip too — on snow/rain they
+            // close the lateral gap slower (and thus PIT slower), giving
+            // the player a real evasion window in bad weather.
+            // LANE TRACKING runs out to LANE_TRACK_Z — it must cover the
+            // whole standoff, or a cop holding station keeps whatever lane it
+            // spawned in and never lines up behind you (owner 2026-07-31: "if
+            // they are chasing the player, why aren't they behind the
+            // player?").  TAILGATE_GAP is 900, so the old 800 window meant a
+            // parked pursuer NEVER tracked.  PIT arming stays on the tight
+            // window below — that is a genuinely alongside manoeuvre.
+            if (aDist < LANE_TRACK_Z) {
+              const _copMile = (cop.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+              const _copGrip = Weather.gripMul?.(_copMile) ?? 1;
+              // FORMATION target: primary tracks the player's lane, wingmen
+              // their flanking slot (see the slot assignment above).  A
+              // lunging unit always strikes at the bumper.  Clamped to the
+              // pavement so a flank slot can't push a unit off the road.
+              const _formTarget = Math.max(-0.85, Math.min(0.9,
+                playerX + ((cop._lungeT > 0) ? 0 : (cop._formOffset ?? 0))));
+              const dx = _formTarget - cop.laneOffset;
+              cop.laneOffset += Math.sign(dx) * Math.min(0.6, Math.abs(dx)) * dt * _copGrip;
+              // PIT-arming — sustained alongside lock at close range arms
+              // the cop so the next side contact registers as a successful
+              // PIT strike.  Was previously only on pursuit-front; now
+              // belongs on rear cops since pursuit-front is gone.
+              // STAR GATE (owner 2026-08-01): PIT attempts begin at 2★ — an
+              // alongside rear-quarter tap is a pursuit manoeuvre, exempt
+              // from the no-lead rule (blocking/overtaking still needs
+              // MIN_STARS_AHEAD).  Reachable only mid-lunge: GUARD 2 lifts
+              // the standoff to the player's depth during a strike, which is
+              // the only time aDist can drop under PIT_ARM_Z.  At 1★ the
+              // tail never lunges, so it can never arm one — its lateral
+              // lock is just lane-matching to sit behind you.
+              const lateralLock = Math.abs(playerX - cop.laneOffset) < 0.18;
+              if (lateralLock && aDist < PIT_ARM_Z && this._starLevel >= MIN_STARS_PIT) {
+                cop._pitProgress = (cop._pitProgress ?? 0) + dt;
+                if (cop._pitProgress > 0.65) cop._pitArmed = true;
+              } else {
+                cop._pitProgress = Math.max(0, (cop._pitProgress ?? 0) - dt * 1.4);
+                if (cop._pitProgress <= 0) cop._pitArmed = false;
+              }
+            } else {
               cop._pitProgress = 0;
+              cop._pitArmed    = false;
             }
             break;
           }
@@ -1798,13 +1775,7 @@ export class CopSystem {
           // so it settles in behind instead of slamming into the clamp.
           const _gap  = -_copCarDist;                      // >0 = behind the car
           const _into = (TAILGATE_GAP + APPROACH_BAND) - _gap;
-          // REAR PURSUERS OPT OUT. This ceiling is `reactSpd * SPEED_CAP_BY_STAR`
-          // — the player's own speed, lagged. It was the last place a cruiser's
-          // pace was derived from the player's, and with independent physics it
-          // would undo the profile the cop just drove to. Star escalation is
-          // now expressed through faster, more aggressive PROFILES instead.
-          // Non-rear kinds (which have no profile) keep it unchanged.
-          if (_into > 0 && !cop.profile) {
+          if (_into > 0) {
             const _starIdx = Math.max(1, Math.min(5, _starTier));
             // Ceiling reads the LAGGED speed (owner 2026-08-04): keyed to the
             // live one it answered the throttle the same frame, so the gap
@@ -1820,14 +1791,12 @@ export class CopSystem {
         cop._demoting = false;
       }
 
-      // Rear pursuers integrate inside driveCop; everything else here.
-      if (!cop._selfIntegrated) cop.position += cop.speed * dt;
-      cop._selfIntegrated = false;
+      cop.position += cop.speed * dt;
 
       // GUARD 2 — hard positional clamp, applied AFTER integration because
       // that is the only place an overrun can be observed.  Skipped while
       // demoting so the fall-back stays smooth rather than snapping.
-      if (_guarded && !cop._demoting && !cop.profile) {
+      if (_guarded && !cop._demoting) {
         // A cop mid-LUNGE may close to contact; it still may not pass.
         const _limit = pursuitZ - (_lunging ? 0 : TAILGATE_GAP);
         if (cop.position > _limit) {
@@ -1842,19 +1811,6 @@ export class CopSystem {
         } else if (_copCarDist < -(TAILGATE_GAP + STATION_TOL)) {
           cop._onStation = false;      // genuinely fell back off station
         }
-      } else if (cop.profile && _guarded) {
-        // SOFT FOLLOWING. No positional clamp — a profiled pursuer is allowed
-        // to sit too close, fall back, brake late or overshoot, because that
-        // variation IS the behaviour. The only correction left prevents
-        // geometrically impossible overlap (a cop occupying the player's own
-        // depth), and it nudges rather than snaps: no teleporting, and the
-        // cop's speed is never reset to a player-derived value.
-        const _overlap = cop.position - (pursuitZ - OVERLAP_MIN);
-        if (_overlap > 0) {
-          cop.position -= Math.min(_overlap, OVERLAP_MIN * dt * 4);
-          cop.speed = Math.max(0, cop.speed - cop.profile.brake * cop.profile.maxSpeed * dt);
-        }
-        cop._onStation = Math.abs(_copCarDist) < cop.profile.preferredGap * 1.4;
       }
 
       // Despawn rules — different per kind.
