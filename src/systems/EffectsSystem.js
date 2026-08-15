@@ -745,25 +745,19 @@ export class EffectsSystem {
         const _noseY = _ps
           ? (_ps.y - _ps.displayHeight * _ps.originY) + _ps.displayHeight / 3
           : 0;
-        // The fan's FAR END anchors to the ROAD SURFACE at a fixed forward
-        // throw, not to the fixed screen horizon (owner 2026-08-03, two
-        // reference screenshots): pinned to the horizon, the same wedge read
-        // as "facing straight up" over a crest — road falling away under it —
-        // and as a shallow pancake on a climb.  Following the road's own
-        // projected height keeps one apparent pitch on every grade.  ONLY the
-        // sample's vertical is used — the centreline stays the car's own x,
-        // so the fan remains symmetrical about the car (the earlier off-axis
-        // lean came from borrowing the sample's x; that stays gone).  The
-        // clamp holds the top inside a middle band between the nose and the
-        // horizon, so neither extreme is reachable even on a wild crest.
-        // Reach (owner 2026-08-03, superseding the mid-band clamp): the
-        // clearing EXTENDS to just below the horizon — or to where the road
-        // itself appears, via the long road-surface sample — while the
-        // graduated fade below dissolves it progressively along the way, so
-        // the far end trails off instead of arriving as a hard-edged wall.
-        const _thrown = this.scene?.road?.sampleSurface?.(55000, 0, { allowClipped: true })?.sy;
-        const _yTopRaw = _thrown ?? (horizon + 4);
-        const _yTop = Math.max(horizon + 4, Math.min(_noseY - 24, _yTopRaw));
+        // The fan's FAR END is LOCKED TO THE HORIZON (owner 2026-08-14,
+        // superseding the 08-03 road-surface throw): the road sample at
+        // 55000 units projected well below the horizon on descents — the
+        // owner's Issaquah screenshot showed the whole fan pitched down at
+        // the pavement instead of reaching the vanishing point.  Pinned
+        // just under the horizon line, the beam always reads as thrown
+        // into the distance; the graduated long fade below still dissolves
+        // it on the way, so there's no hard far edge.  The nose guard is
+        // the crest protection now — on a crest where the horizon would
+        // land above the car's nose, the top clamps to nose−24 instead
+        // (the 08-03 "facing straight up" complaint case).  Centreline
+        // stays the car's own x — symmetry about the car is untouched.
+        const _yTop = Math.min(_noseY - 24, horizon + 4);
         const beam = (this.scene?._hasFogLights && _ps) ? {
           x0: _ps.x,                 // centreline of the fan = centre of the car
           y0: _noseY,                // apex: the car's nose (top third)
