@@ -203,7 +203,17 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
-### 2026-08-15 — Rest-stop exits rebuilt as real off-ramp sequences (uncommitted)
+### 2026-08-15 (pt 2) — Exit commitment is a window, not a frame
+
+First live playtest (owner, North Bend): swerved right AT the gore — one frame past the old
+single-frame commit test — got marked missed, sailed into the grass wedge, crashed. Fix in
+`_updateExitApproach`: commitment now stays open through the WHOLE 100 ft divergence (the
+wedge is under a lane wide, physically reachable), and "in lane 5" is x ≥ 0.90 (straddling
+the divider with intent counts; the car is ~0.22 u wide). Only when the curve begins does
+staying left become the silent MISS. Late-swerve capture + miss regression re-validated
+headless.
+
+### 2026-08-15 — Rest-stop exits rebuilt as real off-ramp sequences (committed aa8d7d4)
 
 Owner spec (final): every exit is now a complete taper → parallel exit lane → gore divergence
 → ~90° right curve → offscreen departure, replacing the old rampStrength trapezoid + "swerve

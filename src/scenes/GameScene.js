@@ -21738,15 +21738,28 @@ export class GameScene extends Phaser.Scene {
     }
     const ex = sampleExitPlan(plan, carZ);
     if (!ex) { this._exitState = 'NONE'; return false; }   // ahead of the taper
-    const inLane5 = p.x >= 0.98;
+    // "In lane 5" = mostly across the divider.  0.90 (not the divider's
+    // exact 1.0): the car is ~0.22 units wide, so straddling the dash with
+    // intent counts — requiring a fully-crossed 0.98 let a player sitting
+    // ON the divider at the gore sail into the grass wedge un-captured
+    // (owner report 2026-08-15: "car didn't get locked into the exit lane").
+    const inLane5 = p.x >= 0.90;
 
-    // Commitment point = the exact start of the divergence.  In lane 5 →
-    // committed (irreversible, automated).  Still on the mainline → the
-    // exit is missed: no pull toward the ramp, no prompt, freeway continues.
+    // Commitment — at the divergence, but as a WINDOW, not a single frame:
+    // through the whole 100 ft gore the ramp is still physically reachable
+    // (the wedge is under a lane wide), so a late right swerve anywhere in
+    // it commits too — the capture blend carries the car smoothly onto the
+    // spline from wherever it is.  Only once the curve begins (gore fully
+    // open) does staying left become a MISS: no pull toward the ramp, no
+    // prompt, four-lane freeway continues.
     if (carZ >= plan.zDiverge) {
-      if (inLane5 && carZ < plan.zDiverge + 3000) {
-        const rs = REST_STOPS.find(r => r.id === plan.stopId);
-        if (rs) { this._beginExitCommit(plan, rs); return true; }
+      if (carZ < plan.zCurve) {
+        if (inLane5) {
+          const rs = REST_STOPS.find(r => r.id === plan.stopId);
+          if (rs) { this._beginExitCommit(plan, rs); return true; }
+        }
+        this._exitState = 'AVAILABLE';   // last-chance band, still catchable
+        return false;
       }
       this._passedRestStops.add(plan.stopId);
       this._exitState = 'MISSED';
