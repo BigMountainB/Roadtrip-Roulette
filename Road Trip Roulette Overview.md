@@ -268,6 +268,41 @@ right past x>1.5" instant scene-swap.
   encounters 187); `vite build` clean. NOT play-tested by hand yet; night-time exit lighting
   unverified (uses the same nightMul path as the existing fog line).
 
+### 2026-08-14 (pt 4) — Bridge rails no longer drawn off-span (uncommitted)
+
+Owner (screenshot mi 9.52 Mercer Island): pale "pillars" — the East Channel bridge's guardrail
+faces/posts (mi 9.8-10.2) — visible through the road/grass on the descending approach. Third
+strike for this artifact family (08-04 `_camOnBridge` gate, 08-05 structG→roadBase drop). The
+structural hole: bridge geometry draws on roadBase (1.35) while roadside grass lives at 1.0-1.3
+(terrainGfx/GroundPlane), so terrain can NEVER occlude a distant span's rails; on a curved or
+descending approach they paint over crest-culled rows.
+
+Fix per owner ("remove them"): the guardrail block in Road.js `_drawSegment` now skips ALL
+rail/post painting when `(seg.bridge || seg.water) && !this._camOnSpan` — no off-span rails, so
+nothing to show through, on every span (WSB, Murrow, East Channel, Vantage). Rails appear when
+the player rolls onto the span, where the 08-13 Keechelus invisible-wall rule needs the paint;
+one-sided shore rails (waterLeft/Right land segs, e.g. Keechelus/Easton/Elliott) keep drawing —
+they are near-player and were never part of the artifact. Watch-item: the far DECK still draws
+off-span at 1.35 and can in principle float over grass the same way; if a floating gray wedge
+gets reported on an approach, that is the remaining half of this family.
+
+### 2026-08-14 (pt 3) — Wildlife-crossing walls are now a hard crash (uncommitted)
+
+Owner (screenshot at mi 65.00, van inside the facade art): "the player can drive through the
+wildlife crossing bridge without damage. if the player hits the wall, it should stop the car with
+a crash and reload them in the middle of the lane." Root cause: wildlife segs are `seg.tunnel`,
+so the crossing's concrete only got the tunnel treatment — a 3 HP/s scrape + soft clamp at
+±1.18 — and entering on the shoulder just snapped the car inside through the drawn flank wall.
+
+GameScene tunnel-clamp block now branches on `seg.wildlife`: past ±1.18 → full crash handshake
+(`_applyDamage(10, 'wildlife_wall')`, "🧱 WALL CRASH" popup, 2 s i-frame, 1 s hold, rolling
+restart, `p.x = _postCrashLaneX()` = the owner's "reload in the middle of the lane"). The same
+check fires on the FIRST wildlife segment, which is the facade plane — so driving into the wall
+face on the shoulder crashes at the entrance instead of passing through. While i-framed from a
+prior crash the wall still blocks (hard clamp, no pass-through), it just doesn't re-crash.
+Mt Baker / Mercer tunnels keep the scrape untouched; the median/pier soft barrier stays soft by
+design (2026-08-12 decision). `wildlife_wall` added to the daily-objective barrier classification.
+
 ### 2026-08-14 (pt 2) — WSB concrete piers removed (uncommitted)
 
 Owner: "get rid of the 'pillars' showing through the roadway… maybe they can just be removed."

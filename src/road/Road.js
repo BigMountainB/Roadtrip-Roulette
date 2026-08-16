@@ -3923,8 +3923,21 @@ export class Road {
     // Keechelus while visually hanging over the lake — the physics rail
     // has been there since the fork, the paint hadn't).
     if (seg.water || seg.bridge || seg.waterLeft || seg.waterRight) {
-      const drawL = !!(seg.water || seg.bridge || seg.waterLeft);
-      const drawR = !!(seg.water || seg.bridge || seg.waterRight);
+      // OFF-SPAN bridge/causeway rails are NOT drawn at all (owner
+      // 2026-08-14, East Channel screenshot at mi 9.52: "remove them").
+      // Third strike for this artifact family (08-04 camera gate, 08-05
+      // structG layer drop): bridge structure lives on roadBase (1.35)
+      // while roadside grass lives at 1.0-1.3, so terrain can NEVER
+      // occlude a distant span's rails — on a curved/descending approach
+      // they paint over crest-culled rows and read as pillars through
+      // the road.  Skipping them off-span kills the whole family; the
+      // rails pop in as the player rolls onto the span, where the
+      // physics wall needs its paint (Keechelus invisible-wall fix,
+      // 2026-08-13, is untouched: one-sided shore rails are near-player
+      // land segments and keep drawing).
+      const offSpan = (seg.bridge || seg.water) && !this._camOnSpan;
+      const drawL = !offSpan && !!(seg.water || seg.bridge || seg.waterLeft);
+      const drawR = !offSpan && !!(seg.water || seg.bridge || seg.waterRight);
       const railMul = seg.bridge ? 1.8 : 1.0;
       const railW1 = Math.max(2, w1 * 0.06 * railMul);
       const railW2 = Math.max(2, w2 * 0.06 * railMul);

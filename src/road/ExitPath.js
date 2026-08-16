@@ -46,10 +46,17 @@ export const UNITS_PER_FOOT =
 // Owner-confirmed phase lengths, in feet.
 export const EXIT_FEET = Object.freeze({
   TAPER:    150,   // lane 5 grows from zero width
-  PARALLEL: 500,   // full-width exit-only lane beside the freeway
+  PARALLEL: 1000,  // full-width exit-only lane beside the freeway
+                   // (owner 2026-08-15: 500 was ~3.4s at full speed — too
+                   //  short to merge + hold at fast valley-floor exits)
   DIVERGE:  100,   // gore opens; commitment point is the START of this phase
   CURVE:    100,   // strong right turn, measured along the path arc
 });
+
+// Lock-in distance (owner 2026-08-15): after this many feet of lane-5
+// driving inside the parallel section, the exit is committed — the capture
+// no longer waits for the gore.  The first LOCK_FEET remain cancellable.
+const LOCK_FEET = 500;
 
 // How far the gore has opened by the END of the divergence, in x-units —
 // the lateral gap between the mainline fog line (1.0) and the ramp's inner
@@ -132,7 +139,7 @@ export function buildExitPlan(segments, rs) {
   const BACK_MAX = Math.round(1.2 / TOTAL_ROUTE_MILES * count);
   const FWD_MAX  = Math.round(0.3 / TOTAL_ROUTE_MILES * count);
   let placed = null;
-  const PARALLEL_TRIES = [EXIT_FEET.PARALLEL, 350, 250, 150];
+  const PARALLEL_TRIES = [EXIT_FEET.PARALLEL, 500, 350, 250, 150];
   outer:
   for (const parallelFeet of PARALLEL_TRIES) {
     placed = tryPlace(homeSeg, parallelFeet);
@@ -170,10 +177,14 @@ export function buildExitPlan(segments, rs) {
     zParallel + P * 0.88,
   ];
 
+  // Lock-in Z: 500 ft into the parallel lane, clamped to the gore for the
+  // rare wet-span fallback where the lane shrank below LOCK_FEET.
+  const zLock = Math.min(zParallel + LOCK_FEET * UNITS_PER_FOOT, zDiverge);
+
   const plan = {
     stopId: rs.id,
     stopName: rs.name,
-    zTaper, zParallel, zDiverge, zCurve, zCurveEnd,
+    zTaper, zParallel, zLock, zDiverge, zCurve, zCurveEnd,
     lanes, laneX, halfRoadW,
     goreGapX: GORE_GAP_X,
     headingMaxDeg: HEADING_MAX_DEG,
