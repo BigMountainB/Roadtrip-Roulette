@@ -386,6 +386,15 @@ export const ASSET_MANIFEST = {
     { key: 'east_wa_herd_3_cows', path: 'assets/rural/eastern_washington/east_wa_herd_3_cows.webp' },
     { key: 'east_wa_herd_5_cows', path: 'assets/rural/eastern_washington/east_wa_herd_5_cows.webp' },
     { key: 'east_wa_herd_6_cows', path: 'assets/rural/eastern_washington/east_wa_herd_6_cows.webp' },
+    // Roadside wildlife (owner 2026-08-16) — elk on the Snoqualmie stretch,
+    // deer through Cle Elum → Ellensburg.  Spawned via WILDLIFE_BANDS in
+    // RouteData as 'livestock' scenery.  The deer_crossing /
+    // elk_herd_crossing action plates are deliberately NOT loaded — animals
+    // on the pavement are a future hazard feature, not scenery.
+    { key: 'elk_bull_roadside',     path: 'assets/wildlife/elk_bull_roadside.png' },
+    { key: 'elk_cow_static_facing', path: 'assets/wildlife/elk_cow_static_facing.png' },
+    { key: 'deer_roadside',         path: 'assets/wildlife/deer_roadside.png' },
+    { key: 'deer_static_facing',    path: 'assets/wildlife/deer_static_facing.png' },
     // Tumbleweeds — roll across the road through the Vantage crosswind zone.
     { key: 'tumbleweed_1', path: 'assets/rural/eastern_washington/tumbleweed_1.png' },
     { key: 'tumbleweed_2', path: 'assets/rural/eastern_washington/tumbleweed_2.png' },

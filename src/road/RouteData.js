@@ -183,6 +183,21 @@ const EASTERN_HERD_TEXTURES = [
   'east_wa_herd_5_cows',
   'east_wa_herd_6_cows',
 ];
+// ── Roadside wildlife (owner 2026-08-16) ─────────────────────────────
+// The wildlife art shipped 2026-08-13 but nothing ever spawned it.  Two
+// bands, same 'livestock' scenery model as the cattle herds (collidable,
+// far off the shoulder):
+//   • ELK on the Snoqualmie forest stretch — matches the mile-65 wildlife
+//     crossing and the Cle Elum ranger's "elk cross at dusk" lore.  The
+//     Keechelus lake pass auto-strips the water flank, so elk only stand
+//     on the forest side through 54.5-58 (by design, not special-cased).
+//   • DEER through the Cle Elum → Ellensburg corridor.
+// The deer_crossing / elk_herd_crossing action plates stay unwired —
+// animals ON the road are a hazard feature, not scenery.
+const WILDLIFE_BANDS = [
+  { start: 48, end: 72,  pool: ['elk_bull_roadside', 'elk_cow_static_facing'] },
+  { start: 78, end: 115, pool: ['deer_roadside', 'deer_static_facing'] },
+];
 const EASTERN_HOME_TEXTURES = [
   'codex_east_wa_weathered_house',
   'codex_east_wa_abandoned_bungalow',
@@ -1601,6 +1616,34 @@ export function buildRoute(count = ROUTE_SEGS) {
           baseH: 1300,
           collected: false,
         });
+      }
+    }
+
+    // ── Roadside wildlife — elk on the pass, deer in the valley ───────
+    // See WILDLIFE_BANDS at the top of the file.  Same livestock model
+    // and cadence math as the cattle herds, but much sparser (~one
+    // sighting every 4 mi) so an animal at the tree line stays a moment,
+    // not a zoo.  Ramp guard keeps them off rest-stop exit lanes; the
+    // route-seeded rng keeps placements identical run to run.
+    {
+      const _wBand = WILDLIFE_BANDS.find(b => mileNow >= b.start && mileNow < b.end);
+      if (_wBand && !_nearRuralRamp) {
+        const wildSlotsPerMile = 0.45;
+        const wildStep = (ROUTE_SEGS / TOTAL_ROUTE_MILES) / wildSlotsPerMile;
+        const wildSlot = Math.floor(i / wildStep);
+        const wildSlotPrev = i > 0 ? Math.floor((i - 1) / wildStep) : -1;
+        if (wildSlot > wildSlotPrev && rng.bool(0.55)) {
+          const side = rng.bool(0.5) ? -1 : 1;
+          sprites.push({
+            type: 'livestock',
+            texKey: _wBand.pool[wildSlot % _wBand.pool.length],
+            offset: side * (3.70 + rng.next() * 2.40),
+            baseW: 600,
+            baseH: 280,
+            collected: false,
+            flipX: rng.bool(0.5),
+          });
+        }
       }
     }
 

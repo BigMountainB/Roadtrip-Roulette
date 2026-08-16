@@ -218,6 +218,14 @@ const SCENERY_IMAGE_PROFILES = {
   east_wa_herd_3_cows:                { widthMult: 1.35, maxW: 145, maxH: PLAYER_CAR_VISUAL_H * 0.48, minOffset: 3.40, groundDrop: 0.002 },
   east_wa_herd_5_cows:                { widthMult: 1.80, maxW: 190, maxH: PLAYER_CAR_VISUAL_H * 0.76, minOffset: 3.60, groundDrop: 0.002 },
   east_wa_herd_6_cows:                { widthMult: 1.90, maxW: 205, maxH: PLAYER_CAR_VISUAL_H * 0.82, minOffset: 3.80, groundDrop: 0.002 },
+  // Roadside wildlife (owner 2026-08-16) — single animals, so smaller than
+  // the herd plates.  Width-led like the herds; caps sized so an elk tops
+  // out at ~0.85 car heights (700-lb bull, per the ranger) and deer under
+  // ~0.7.  Same far-shoulder minOffset band and near-zero groundDrop.
+  elk_bull_roadside:                  { widthMult: 0.85, maxW: 44, maxH: PLAYER_CAR_VISUAL_H * 0.85, minOffset: 3.40, groundDrop: 0.002 },
+  elk_cow_static_facing:              { widthMult: 0.58, maxW: 30, maxH: PLAYER_CAR_VISUAL_H * 0.83, minOffset: 3.40, groundDrop: 0.002 },
+  deer_roadside:                      { widthMult: 0.60, maxW: 31, maxH: PLAYER_CAR_VISUAL_H * 0.68, minOffset: 3.40, groundDrop: 0.002 },
+  deer_static_facing:                 { widthMult: 0.46, maxW: 24, maxH: PLAYER_CAR_VISUAL_H * 0.66, minOffset: 3.40, groundDrop: 0.002 },
   codex_west_seattle_horizon_left:  { widthMult: 4.15, maxW: 560, maxH: PLAYER_CAR_VISUAL_H * 2.4, minOffset: 5.35, groundDrop: 0.010 },
   codex_west_seattle_horizon_right: { widthMult: 4.15, maxW: 560, maxH: PLAYER_CAR_VISUAL_H * 2.4, minOffset: 5.35, groundDrop: 0.010 },
   codex_west_seattle_lowrise_apartments: { heightMult: 3.35, maxW: 280, maxH: PLAYER_CAR_VISUAL_H * 4.0, minOffset: 3.85, groundDrop: 0.010 },
