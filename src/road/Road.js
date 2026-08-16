@@ -3985,6 +3985,24 @@ export class Road {
       }
     }
 
+    // ── Roadkill blood decal (owner 2026-08-16) ───────────────────────
+    // Set by GameScene when a wildlife animal is hit (`seg.gore = {off}`).
+    // A cluster of dark-red splats at the impact offset, world-anchored by
+    // seg.index so it never crawls, painted over the lane markings for the
+    // rest of the run.  Perspective-scaled like everything else here.
+    if (seg.gore) {
+      const gx = x2 + w2 * seg.gore.off;
+      const gw = Math.max(2, w2 * 0.085);
+      g.fillStyle(0x6E0B08, 0.85);
+      g.fillEllipse(gx, fy + segH * 0.5, gw * 2.0, Math.max(1.5, segH * 0.9));
+      g.fillStyle(0x8F1210, 0.8);
+      g.fillEllipse(gx - gw * 0.9, fy + segH * 0.35, gw * 0.9, Math.max(1, segH * 0.5));
+      g.fillEllipse(gx + gw * 1.1, fy + segH * 0.62, gw * 0.7, Math.max(1, segH * 0.45));
+      // Streak trailing back toward the player (the smear direction).
+      g.fillStyle(0x5A0A06, 0.65);
+      g.fillEllipse(gx + gw * 0.2, fy + segH * 0.85, gw * 1.2, Math.max(1, segH * 0.35));
+    }
+
     // Urban sidewalk — wide concrete band immediately outboard of each
     // rumble strip. Drawn AFTER the grass and BEFORE the road so the road
     // paints over the inner edge cleanly. Only in urban segments.

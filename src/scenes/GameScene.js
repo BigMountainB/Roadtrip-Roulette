@@ -218,14 +218,15 @@ const SCENERY_IMAGE_PROFILES = {
   east_wa_herd_3_cows:                { widthMult: 1.35, maxW: 145, maxH: PLAYER_CAR_VISUAL_H * 0.48, minOffset: 3.40, groundDrop: 0.002 },
   east_wa_herd_5_cows:                { widthMult: 1.80, maxW: 190, maxH: PLAYER_CAR_VISUAL_H * 0.76, minOffset: 3.60, groundDrop: 0.002 },
   east_wa_herd_6_cows:                { widthMult: 1.90, maxW: 205, maxH: PLAYER_CAR_VISUAL_H * 0.82, minOffset: 3.80, groundDrop: 0.002 },
-  // Roadside wildlife (owner 2026-08-16) — single animals, so smaller than
-  // the herd plates.  Width-led like the herds; caps sized so an elk tops
-  // out at ~0.85 car heights (700-lb bull, per the ranger) and deer under
-  // ~0.7.  Same far-shoulder minOffset band and near-zero groundDrop.
-  elk_bull_roadside:                  { widthMult: 0.85, maxW: 44, maxH: PLAYER_CAR_VISUAL_H * 0.85, minOffset: 3.40, groundDrop: 0.002 },
-  elk_cow_static_facing:              { widthMult: 0.58, maxW: 30, maxH: PLAYER_CAR_VISUAL_H * 0.83, minOffset: 3.40, groundDrop: 0.002 },
-  deer_roadside:                      { widthMult: 0.60, maxW: 31, maxH: PLAYER_CAR_VISUAL_H * 0.68, minOffset: 3.40, groundDrop: 0.002 },
-  deer_static_facing:                 { widthMult: 0.46, maxW: 24, maxH: PLAYER_CAR_VISUAL_H * 0.66, minOffset: 3.40, groundDrop: 0.002 },
+  // Wildlife road hazards (owner 2026-08-16) — single animals standing IN
+  // THE ROADWAY at the five encounter sites (RouteData WILDLIFE_SITES), so
+  // minOffset 0: never clamp them back to the shoulder.  Width-led like the
+  // cattle herds; caps sized so an elk tops out at ~0.85 car heights
+  // (700-lb bull, per the ranger) and deer under ~0.7.
+  elk_bull_roadside:                  { widthMult: 0.85, maxW: 44, maxH: PLAYER_CAR_VISUAL_H * 0.85, minOffset: 0, groundDrop: 0.002 },
+  elk_cow_static_facing:              { widthMult: 0.58, maxW: 30, maxH: PLAYER_CAR_VISUAL_H * 0.83, minOffset: 0, groundDrop: 0.002 },
+  deer_roadside:                      { widthMult: 0.60, maxW: 31, maxH: PLAYER_CAR_VISUAL_H * 0.68, minOffset: 0, groundDrop: 0.002 },
+  deer_static_facing:                 { widthMult: 0.46, maxW: 24, maxH: PLAYER_CAR_VISUAL_H * 0.66, minOffset: 0, groundDrop: 0.002 },
   codex_west_seattle_horizon_left:  { widthMult: 4.15, maxW: 560, maxH: PLAYER_CAR_VISUAL_H * 2.4, minOffset: 5.35, groundDrop: 0.010 },
   codex_west_seattle_horizon_right: { widthMult: 4.15, maxW: 560, maxH: PLAYER_CAR_VISUAL_H * 2.4, minOffset: 5.35, groundDrop: 0.010 },
   codex_west_seattle_lowrise_apartments: { heightMult: 3.35, maxW: 280, maxH: PLAYER_CAR_VISUAL_H * 4.0, minOffset: 3.85, groundDrop: 0.010 },
@@ -7005,7 +7006,12 @@ export class GameScene extends Phaser.Scene {
       // (snow zone −30%).  Both stack — Hard in snow ≈ −23% vs base.
       const _mileForSpawn = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
       const tMul = Difficulty.trafficMul() * Weather.trafficMul(_mileForSpawn);
-      const cap  = Math.round((urban ? 22 : 18) * tMul);
+      // Light-traffic bubble around wildlife sites (owner 2026-08-16): the
+      // animals are placed "in an area with very light traffic" — enforce
+      // it by dropping the traffic cap to ~a third within 0.6 mi of a site.
+      const _nearWildlife = (this.road?.segments?.wildlifeSites ?? []).some(ws =>
+        Math.abs(ws.segIdx * SEG_LENGTH - this.player.position) < 0.6 * (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES);
+      const cap  = Math.round((urban ? 22 : 18) * tMul * (_nearWildlife ? 0.35 : 1));
       if (this.traffic.length < cap) {
         this._trafficTimer = urban ? (0.4 + Math.random() * 0.6) : (0.6 + Math.random() * 1.0);
         this._spawnTraffic();
@@ -7101,6 +7107,21 @@ export class GameScene extends Phaser.Scene {
       // (×1.4) so speed-matching begins before the floor, not after crowding
       // in.  Lane match 0.18 catches a car mid-glide into this lane.
       let effSpeed = t.speed;
+      // ── Wildlife ahead: slow and drive around (owner 2026-08-16) ────
+      // Same-direction cars approaching a wildlife site ease off (down to
+      // ~40% at the animals) and glide to the site's clear lane via the
+      // existing targetLaneOffset machinery.  Oncoming traffic ignores
+      // sites — the animals never stand left of the centerline.
+      if (t.speed > 0 && this.road?.segments?.wildlifeSites?.length) {
+        for (const ws of this.road.segments.wildlifeSites) {
+          const gap = ws.segIdx * SEG_LENGTH - t.position;
+          if (gap > 0 && gap < 14000) {
+            effSpeed = Math.min(effSpeed, t.speed * (0.40 + 0.60 * (gap / 14000)));
+            if (gap < 9000 && t.vClass !== 'tractor') t.targetLaneOffset = ws.clearLane;
+            break;
+          }
+        }
+      }
       const followDist = t.followDist ?? FOLLOW_DIST;
       const detectDist = followDist * 1.4;
       let leadGap = Infinity, leadSpeed = null;
@@ -7254,6 +7275,37 @@ export class GameScene extends Phaser.Scene {
       maxTimer: 0.85,
       smoke:    true,
     });
+  }
+
+  /** Roadkill gore burst (owner 2026-08-16: the animal "explodes into a
+   *  bloody mess") — a fan of red/dark-red chunks flung up and outward,
+   *  accelerating back down (Quad.easeIn ≈ gravity) while tumbling and
+   *  fading.  Self-contained tweens, no per-frame bookkeeping; ~22 rects
+   *  for well under a millisecond of work.  The lasting stain is separate:
+   *  the hit segment gets `seg.gore`, painted by Road.js as a blood decal
+   *  for the rest of the run. */
+  _spawnGoreBurst(x, y, size) {
+    for (let i = 0; i < 22; i++) {
+      const w = 2 + Math.random() * Math.max(3, size * 0.16);
+      const chunk = this.add.rectangle(
+        x, y, w, w * (0.6 + Math.random() * 0.8),
+        Math.random() < 0.35 ? 0x6E0B08 : 0xB01212,
+      ).setDepth(9.9);
+      this._uiCam?.ignore?.(chunk);
+      const dx   = (Math.random() - 0.5) * size * 3.4;
+      const rise = size * (0.6 + Math.random() * 1.2);
+      this.tweens.add({
+        targets:  chunk,
+        x:        x + dx,
+        y:        y - rise + size * (1.8 + Math.random() * 1.4),
+        angle:    (Math.random() - 0.5) * 540,
+        alpha:    0,
+        duration: 550 + Math.random() * 450,
+        ease:     'Quad.easeIn',
+        onComplete: () => chunk.destroy(),
+      });
+    }
+    try { this.cameras.main.shake(120, 0.004); } catch (_) {}
   }
 
   _spawnTraffic() {
@@ -7639,6 +7691,7 @@ export class GameScene extends Phaser.Scene {
       const SCENERY_TYPES = new Set([
         'tree', 'building', 'house', 'shrub', 'landmark',
         'livestock',           // cattle herds — collidable per spec
+        'wildlife',            // road-hazard elk/deer — 15 HP + gore on impact
         'cop_random_parked',   // parked roadside cops count as structures
       ]);
       let _scenicHit = false;
@@ -7920,6 +7973,15 @@ export class GameScene extends Phaser.Scene {
           // crash → respawn-to-recovery-lane behavior.
           if (sp.type === 'shrub') {
             this._sceneryGlance(proj, sp.damage ?? 1, sp);
+          } else if (sp.type === 'wildlife') {
+            // Roadkill (owner 2026-08-16): the animal EXPLODES — gore burst
+            // + a persistent blood decal on this segment — and is gone for
+            // the rest of the run.  15 HP + the standard crash recovery.
+            sp.collected = true;
+            seg.gore = { off: sp.offset };
+            this._spawnGoreBurst(proj.sx, proj.sy - 6, Math.max(18, proj.sw * 0.4));
+            this._showPopup?.('\u{1F98C}\u{1F4A5} ROADKILL', '#FF3322');
+            this._triggerSceneryRespawn(proj, sp.damage ?? 15);
           } else {
             this._triggerSceneryRespawn(proj, sp.damage ?? 10);
           }
@@ -13564,7 +13626,7 @@ export class GameScene extends Phaser.Scene {
     if (segs?.length) {
       const startSeg = Math.floor(this.player.position / SEG_LENGTH);
       const SCENERY_TYPES = new Set([
-        'tree', 'building', 'house', 'shrub', 'landmark', 'cop_random_parked',
+        'tree', 'building', 'house', 'shrub', 'landmark', 'wildlife', 'cop_random_parked',
       ]);
       const firstTunnelN = this.road?._firstTunnelN ?? -1;
       const tunnelMouthRect = this.road?._tunnelMouthRect ?? null;

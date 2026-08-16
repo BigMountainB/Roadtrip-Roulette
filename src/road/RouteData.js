@@ -183,20 +183,32 @@ const EASTERN_HERD_TEXTURES = [
   'east_wa_herd_5_cows',
   'east_wa_herd_6_cows',
 ];
-// ── Roadside wildlife (owner 2026-08-16) ─────────────────────────────
-// The wildlife art shipped 2026-08-13 but nothing ever spawned it.  Two
-// bands, same 'livestock' scenery model as the cattle herds (collidable,
-// far off the shoulder):
-//   • ELK on the Snoqualmie forest stretch — matches the mile-65 wildlife
-//     crossing and the Cle Elum ranger's "elk cross at dusk" lore.  The
-//     Keechelus lake pass auto-strips the water flank, so elk only stand
-//     on the forest side through 54.5-58 (by design, not special-cased).
-//   • DEER through the Cle Elum → Ellensburg corridor.
-// The deer_crossing / elk_herd_crossing action plates stay unwired —
-// animals ON the road are a hazard feature, not scenery.
-const WILDLIFE_BANDS = [
-  { start: 48, end: 72,  pool: ['elk_bull_roadside', 'elk_cow_static_facing'] },
-  { start: 78, end: 115, pool: ['deer_roadside', 'deer_static_facing'] },
+// ── Wildlife encounters (owner 2026-08-16, superseding the same-day
+//    roadside-band pass) ───────────────────────────────────────────────
+// FIVE fixed encounter sites for the whole run, 2-3 animals each
+// (≤15 total), mostly IN THE ROADWAY: elk on the pass, deer at the four
+// eastern towns the owner named (plus Washtucna as the fifth pick — mule
+// deer in the channeled scablands).  Animals are a real hazard: 15 HP +
+// crash recovery on impact, gore burst + a persistent blood decal
+// (GameScene/Road).  NPC traffic slows and steers around a site's
+// cluster (clearLane), and GameScene thins spawns near sites so the
+// areas read as light-traffic.  Site miles avoid rest-stop ramps, the
+// wildlife overpass (65), lake windows, and bridges.  Per-run jitter
+// comes from Math.random like the city speed traps — placements vary
+// play to play, never mid-run.
+// The deer_crossing / elk_herd_crossing composite plates remain unwired
+// (single-animal art composes the 1-3 groups instead).
+const WILDLIFE_SITES = [
+  { mile: 60.5,  pool: ['elk_bull_roadside', 'elk_cow_static_facing'],
+    label: 'Snoqualmie elk' },
+  { mile: 81.0,  pool: ['deer_roadside', 'deer_static_facing'],
+    label: 'Cle Elum deer' },
+  { mile: 112.0, pool: ['deer_roadside', 'deer_static_facing'],
+    label: 'Ellensburg deer' },
+  { mile: 231.0, pool: ['deer_roadside', 'deer_static_facing'],
+    label: 'Washtucna deer' },
+  { mile: 270.5, pool: ['deer_roadside', 'deer_static_facing'],
+    label: 'Colfax deer' },
 ];
 const EASTERN_HOME_TEXTURES = [
   'codex_east_wa_weathered_house',
@@ -1616,34 +1628,6 @@ export function buildRoute(count = ROUTE_SEGS) {
           baseH: 1300,
           collected: false,
         });
-      }
-    }
-
-    // ── Roadside wildlife — elk on the pass, deer in the valley ───────
-    // See WILDLIFE_BANDS at the top of the file.  Same livestock model
-    // and cadence math as the cattle herds, but much sparser (~one
-    // sighting every 4 mi) so an animal at the tree line stays a moment,
-    // not a zoo.  Ramp guard keeps them off rest-stop exit lanes; the
-    // route-seeded rng keeps placements identical run to run.
-    {
-      const _wBand = WILDLIFE_BANDS.find(b => mileNow >= b.start && mileNow < b.end);
-      if (_wBand && !_nearRuralRamp) {
-        const wildSlotsPerMile = 0.45;
-        const wildStep = (ROUTE_SEGS / TOTAL_ROUTE_MILES) / wildSlotsPerMile;
-        const wildSlot = Math.floor(i / wildStep);
-        const wildSlotPrev = i > 0 ? Math.floor((i - 1) / wildStep) : -1;
-        if (wildSlot > wildSlotPrev && rng.bool(0.55)) {
-          const side = rng.bool(0.5) ? -1 : 1;
-          sprites.push({
-            type: 'livestock',
-            texKey: _wBand.pool[wildSlot % _wBand.pool.length],
-            offset: side * (3.70 + rng.next() * 2.40),
-            baseW: 600,
-            baseH: 280,
-            collected: false,
-            flipX: rng.bool(0.5),
-          });
-        }
       }
     }
 
@@ -3245,6 +3229,49 @@ export function buildRoute(count = ROUTE_SEGS) {
     // belt-and-suspenders guard in case a future culling pass forgets it.
     _trapMiles.sort((a, b) => a - b);
     segments.trapMiles = _trapMiles;
+  }
+
+  // ── Wildlife encounter sites (see WILDLIFE_SITES up top) ──────────────
+  // Placed HERE — after every culling pass, like the trap cops — so an
+  // animal can never be silently deleted.  Each site drops 2-3 animals in a
+  // shallow z-cluster: one in the travel lanes, one near the centerline /
+  // fog line, and sometimes a third watching from the shoulder.  Offsets
+  // stay ≥ +0.05 (the player's side of the yellow line) so oncoming lanes
+  // are never blocked.  clearLane is the same-direction lane farthest from
+  // the cluster — GameScene steers NPC traffic there.
+  {
+    const wildlifeSites = [];
+    for (const site of WILDLIFE_SITES) {
+      const mile = site.mile + (Math.random() - 0.5) * 0.8;   // ±0.4 mi per-run jitter
+      const baseIdx = Math.floor(mile * SEGS_PER_MILE) % count;
+      const baseSeg = segments[baseIdx];
+      if (!baseSeg || baseSeg.bridge || baseSeg.tunnel || baseSeg.water) continue;
+      const n = 2 + (Math.random() < 0.5 ? 1 : 0);            // 2-3 animals
+      // Lane spots: one mid-lane, one inside edge, optional shoulder watcher.
+      const spots = [
+        0.45 + Math.random() * 0.25,     // in the travel lanes
+        0.05 + Math.random() * 0.20,     // near the centerline
+        1.05 + Math.random() * 0.20,     // shoulder watcher (3rd animal)
+      ];
+      for (let a = 0; a < n; a++) {
+        const segA = segments[(baseIdx + a * 4) % count];     // ~800-unit z-spread
+        if (!segA || segA.bridge || segA.tunnel || segA.water) continue;
+        segA.sprites = segA.sprites || [];
+        segA.sprites.push({
+          type:      'wildlife',
+          texKey:    site.pool[a % site.pool.length],
+          offset:    spots[a],
+          damage:    15,
+          collected: false,
+          flipX:     Math.random() < 0.5,
+        });
+      }
+      // Cluster center ≈ 0.35 → route NPCs along the far right lane; a
+      // shoulder-heavy cluster would flip this, but spots[] keeps the
+      // on-road animals left of 0.70, so 0.90 is always the clear side.
+      wildlifeSites.push({ segIdx: baseIdx, clearLane: 0.90, label: site.label });
+    }
+    segments.wildlifeSites = wildlifeSites;
   }
 
   // ── Rebuild trapMiles from the SURVIVING parked cops ──────────────────
