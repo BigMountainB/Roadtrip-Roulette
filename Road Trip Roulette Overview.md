@@ -203,6 +203,52 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-16 — Wildlife hazards; tilt/snow steering rescue; fog-light saga; rails + traps
+One session's multi-day thread, all committed (latest `5893813`); deployed through `c4ad3f2`
+(deployment `b037301e`) — everything after that awaits the next push.
+
+**Wildlife road hazards (`6245c52`, superseding the same-day roadside pass `1d9ca26`).** The
+2026-08-13 wildlife art is finally live: FIVE encounter sites per run, 2-3 animals each (≤15
+total), mostly IN the roadway on the player's side — elk at Snoqualmie ~60.5, deer at Cle Elum
+~81, Ellensburg ~112, Washtucna ~231, Colfax ~270.5, each ±0.4 mi per-run jitter, placed after
+all cull passes (trap-cop rule), sites avoid ramps/lakes/tunnels/the mile-65 overpass. Hit one:
+**15 HP** + crash recovery, a ~22-chunk tweened gore burst ("explodes into a bloody mess" —
+owner), and a permanent world-anchored blood decal painted by Road.js. Traffic: same-direction
+NPCs ease to ~40% and glide to the site's clear lane (`targetLaneOffset`); spawn cap drops to
+35% within 0.6 mi so sites sit in light traffic. `*_crossing` plates still unwired. Verified by
+headless `buildRoute()` smoke run. Sizing knobs live in SCENERY_IMAGE_PROFILES.
+
+**Tilt/snow steering rescue (`5893813` + settings row `bdd53b3`).** Root cause of the owner's
+"no permission prompt at start, then snow is impossible to turn": the remembered-grant fast path
+attached `deviceorientation` WITHOUT re-calling `requestPermission()` — which iOS requires EVERY
+page load (it resolves silently when already granted) — so `_tiltAttached` was true with a
+silent sensor, and snow's force-tilt rule stranded the player. Three layers: the fast path now
+silently re-requests per load and attaches on resolve; `_tiltEventSeen` distinguishes "attached"
+from "delivering data"; `_activeSteeringMode` only forces snow-tilt (or honors a tilt pick) when
+data actually flows — dead sensor = buttons keep working, always. Plus Settings → Accessibility
+"📐 Tilt steering access" (iOS only): RE-ENABLE fires `requestPermission` from the tap's gesture
+via `window.__tiltRetry` (clears the session denied-flag, skips the explainer); hard OS denials
+get the real recovery steps instead of a dead button.
+
+**Fog-light saga (4 passes, owner screenshots each round).** (1) `89f51e7` far end pinned to the
+fixed horizon (old 55000-unit road sample pitched the fan down on descents); (2) `bc00e39` the
+graduated fade now bottoms out at a **0.40 residual** instead of zero so clearing visibly ARRIVES;
+(3) `4d00bcd` the anchor became the road's LIVE vanishing point — sampled at full draw distance
+(76000), smoothed — because descents show MORE road and converge ABOVE the fixed horizon line;
+(4) `93554ae` fog lights also reveal VEHICLES: sprites are alpha-faded per-sprite by
+`Weather.fogFade` (they really are transparent), so with the upgrade vehicles fade on a
+longer-reach curve (near-clear ×2, dissolve ×1.6); roadside scenery keeps the stock fade — that
+contrast is what makes the beam read.
+
+**Also this thread:** shore-lake guardrails painted (`24f9bf0` — Keechelus/Easton/Elliott Bay had
+a hard physics rail since the fork but NO visible barrier; the bridge Jersey-barrier renderer now
+draws the water side of one-sided shore segments); trap cops park corridor-aware (`7ed0215` —
+placement moved after the culls, `_exitCorridorRight` flags + 12 re-rolls then left-shoulder
+fallback, so no city silently loses its speed trap and the Friend's warnings are final at
+placement); wildlife art wired (`1d9ca26`); full-tree deploy `c4ad3f2` → `b037301e`. Mystery
+solved en route: the recurring `"X 2.js"` duplicates are **iCloud Drive conflict copies** — the
+new `checkDuplicates` gate in `npm test` catches them (two more removed from `website/fully/`).
+
 ### 2026-08-15 (pt 2) — Exit commitment is a window, not a frame
 
 First live playtest (owner, North Bend): swerved right AT the gore — one frame past the old
