@@ -3098,7 +3098,9 @@ export class GameScene extends Phaser.Scene {
     this._tiltCalSamples  = [];
     this._tiltThrottle    = 0;      // 0..1 — forward tilt fraction
     this._tiltBrake       = 0;      // 0..1 — back tilt fraction
+    this._tiltEventSeen = false;   // set true by the FIRST real sensor event
     this._tiltOnOrient = (e) => {
+      this._tiltEventSeen = true;
       const angle = (screen.orientation?.angle ?? window.orientation ?? 0);
       const landscape = (angle === 90 || angle === -90 || angle === 270);
       let tilt, pitchRaw;
@@ -3210,8 +3212,30 @@ export class GameScene extends Phaser.Scene {
       // once more to re-trigger the prefetch gesture path.
       const permGranted = this._tiltGranted();
       if (permGranted) {
-        this._tiltAttached = true;
-        window.addEventListener('deviceorientation', this._tiltOnOrient, true);
+        // A remembered grant is NOT enough on iOS: every page load must
+        // still call requestPermission() (it resolves 'granted' silently,
+        // no prompt) before orientation events flow.  The old direct
+        // attach here left _tiltAttached=true with a SILENT sensor — snow
+        // then forced tilt mode with no data and the car couldn't turn
+        // (owner 2026-08-16).  Silent re-request first; attach on resolve.
+        // If iOS refuses outside a gesture, the prefetch tap path (armed
+        // above) completes it on the first touch instead.
+        const P = (typeof window.DeviceOrientationEvent?.requestPermission === 'function')
+          ? window.DeviceOrientationEvent
+          : ((typeof window.DeviceMotionEvent?.requestPermission === 'function')
+            ? window.DeviceMotionEvent : null);
+        if (!P) {
+          // No permission gate on this platform — direct attach is safe.
+          this._tiltAttached = true;
+          window.addEventListener('deviceorientation', this._tiltOnOrient, true);
+        } else {
+          P.requestPermission().then((res) => {
+            if (res === 'granted' && !this._tiltAttached) {
+              this._tiltAttached = true;
+              window.addEventListener('deviceorientation', this._tiltOnOrient, true);
+            }
+          }).catch(() => { /* needs a gesture — the prefetch tap covers it */ });
+        }
       } else if (!this.registry?.get?.('tiltPermissionDenied')) {
         this._enableTiltSteer?.();
       }
@@ -3619,11 +3643,17 @@ export class GameScene extends Phaser.Scene {
     // 2026-07-16: "tilt to steer will be forced on the player"). Snow is a
     // tilt-to-steer section regardless of the player's normal pick; if tilt
     // can't attach (desktop / permission denied) it falls through to classic.
-    if (this._tiltAttached && (this._snowSteerRamp?.() ?? 0) > 0) return 'tilt';
+    // "Attached" alone is not enough — an iOS listener added without a
+    // per-load requestPermission() sits silent (no events).  Only force
+    // tilt when data is actually FLOWING (_tiltEventSeen), so snow can
+    // never trap a player in a steering mode with a dead sensor
+    // (owner 2026-08-16: "when there is snow, it's impossible to turn").
+    const tiltLive = this._tiltAttached && this._tiltEventSeen;
+    if (tiltLive && (this._snowSteerRamp?.() ?? 0) > 0) return 'tilt';
     // Explicit picks LOCK their scheme — no weather switching.
     if (picked === 'classic') return 'classic';
     if (picked === 'flappy')  return 'flappy';
-    if (picked === 'tilt')    return this._tiltAttached ? 'tilt' : 'classic';
+    if (picked === 'tilt')    return tiltLive ? 'tilt' : 'classic';
     // 'default' (and any unknown value) → adaptive, switches with the WEATHER:
     //   • Vantage WIND  → TAP (flappy): the gust is the constant left pull, so
     //     you hold-to-fight it (the original tap-driving rules) — this is the
@@ -3632,7 +3662,7 @@ export class GameScene extends Phaser.Scene {
     //   • otherwise     → classic L/R.
     // (Wind mile ~131-183 and snow mile ~40-88 never overlap, so order is moot.)
     if ((this._windStrength?.() ?? 0) > 0) return 'flappy';
-    if (this._tiltAttached && this._snowSteerRamp() > 0) return 'tilt';
+    if (tiltLive && this._snowSteerRamp() > 0) return 'tilt';
     return 'classic';
   }
 
