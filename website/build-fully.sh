@@ -18,12 +18,19 @@ set -e
 cd "$(dirname "$0")/.."   # repo root
 
 echo "Building full-game bundle..."
-rm -rf dist
+# Clear CONTENTS only — `rm -rf dist` deleted the dir itself, which nuked the
+# iCloud-nosync SYMLINK (see commit 9114a5d) and let the 676M build output
+# rematerialize as a real, iCloud-synced folder on the very next deploy —
+# resurrecting the `name 2.ext` conflict-copy problem the symlink existed to
+# kill.  find-delete keeps the dir/symlink node itself intact.
+if [ -d dist ]; then find dist/ -mindepth 1 -delete; fi
 npx vite build
 
 echo "Refreshing website/fully/..."
-rm -rf website/fully
+# Same rule as dist: never delete the dir node, only its contents
+# (build-demo.sh always did it this way, which is why demo's symlink survived).
 mkdir -p website/fully
+find website/fully/ -mindepth 1 -delete
 cp -R dist/. website/fully/
 
 # Patch 1: inject <base href="/fully/"> right after <head>.
@@ -51,5 +58,6 @@ cat > website/fully/manifest.webmanifest << 'EOF'
 }
 EOF
 
-rm -rf dist
+# Post-copy space free: contents only, keep the dir/symlink node (see above).
+find dist/ -mindepth 1 -delete
 echo "website/fully/ refreshed. Size: $(du -sh website/fully | cut -f1)"
