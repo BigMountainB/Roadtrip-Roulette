@@ -3283,6 +3283,22 @@ export class GameScene extends Phaser.Scene {
         });
     };
 
+    // Settings → Accessibility "re-enable tilt" hook (owner 2026-08-16).
+    // If the player declined the motion prompt (or dismissed the explainer),
+    // the session-level denied flag blocks every further auto-prompt — this
+    // is the deliberate way BACK IN.  Runs from the settings button's own
+    // tap, so it's a valid gesture frame for requestPermission(); clears the
+    // denied flag, skips the explainer (the player explicitly asked), and
+    // reports 'granted'/'denied' to the caller.  On a hard iOS denial the
+    // OS resolves 'denied' without re-prompting — the settings UI explains
+    // the Safari/site-settings recovery in that case.
+    window.__tiltRetry = (cb) => {
+      this.registry?.set?.('tiltPermissionDenied', false);
+      if (this._tiltAttached) { cb?.('granted'); return; }
+      (this._tiltPendingCbs ??= []).push(cb);
+      this._doTiltRequest();
+    };
+
     const onGesture = (e) => {
       if (this._tiltAttached || this._tiltRequestInFlight || this._tiltExplainerActive) return;
       const confirm = e?.target?.closest?.('#phone-confirm');

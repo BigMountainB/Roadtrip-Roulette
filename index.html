@@ -4176,6 +4176,14 @@
           `<div class="pa-row"><span class="k">🎮 Customize controls</span><button id="set-customize" class="pa-toggle on">EDIT</button></div>` +
           sSec('Accessibility') +
           `<div class="pa-row"><span class="k">📳 Haptics</span><button id="set-hap" class="pa-toggle ${g.haptics ? 'on' : ''}">${g.haptics ? 'ON' : 'OFF'}</button></div>` +
+          // Tilt/accelerometer re-enable (owner 2026-08-16) — only where the
+          // OS actually gates motion behind a permission prompt (iOS).  The
+          // way back in after declining the prompt at first launch.
+          ((typeof window.DeviceOrientationEvent?.requestPermission === 'function'
+            || typeof window.DeviceMotionEvent?.requestPermission === 'function')
+            ? `<div class="pa-row"><span class="k">📐 Tilt steering access</span><button id="set-tilt" class="pa-toggle ${localStorage.getItem('rtr.tiltGranted') === '1' ? 'on' : ''}">${localStorage.getItem('rtr.tiltGranted') === '1' ? 'GRANTED' : 'RE-ENABLE'}</button></div>` +
+              `<p class="pa-note">Declined the motion prompt? Tap RE-ENABLE to ask iOS again so TILT steering can work.</p>`
+            : '') +
           (isIOS
             ? sSec('Appearance') +
               `<div class="pa-row"><span class="k">🎨 App icon</span><button id="set-icon" class="pa-toggle ${altIconOn ? 'on' : ''}">${altIconOn ? 'ALT' : 'DEFAULT'}</button></div>` +
@@ -4210,6 +4218,31 @@
           const on = !hap.classList.contains('on');
           window.__settings?.setHaptics?.(on);
           hap.classList.toggle('on', on); hap.textContent = on ? 'ON' : 'OFF';
+        });
+        // Tilt/accelerometer re-enable — the tap itself is the user gesture
+        // iOS requires for requestPermission().  GameScene's __tiltRetry
+        // clears the session denied-flag and fires the real request; the raw
+        // fallback covers the (unlikely) case the hook isn't up yet.
+        const tiltBtn = document.getElementById('set-tilt');
+        if (tiltBtn) addTap(tiltBtn, () => {
+          if (tiltBtn.textContent === 'GRANTED') return;
+          const done = (res) => {
+            if (res === 'granted') {
+              try { localStorage.setItem('rtr.tiltGranted', '1'); } catch (_) {}
+              tiltBtn.classList.add('on'); tiltBtn.textContent = 'GRANTED';
+              showConfirm('✅ Motion access enabled — choose TILT steering and drive.');
+            } else {
+              // A hard OS denial can't be re-prompted from the page.  Give
+              // the real recovery path instead of a dead button.
+              showConfirm('🚫 iOS blocked the request. Close the game fully and reopen it, then tap RE-ENABLE again. In Safari you can also tap the "aA" address-bar menu → Website Settings and allow Motion & Orientation Access.');
+            }
+          };
+          if (window.__tiltRetry) { window.__tiltRetry(done); return; }
+          const P = (typeof window.DeviceOrientationEvent?.requestPermission === 'function')
+            ? window.DeviceOrientationEvent : window.DeviceMotionEvent;
+          P?.requestPermission?.()
+            .then(r => done(r === 'granted' ? 'granted' : 'denied'))
+            .catch(() => done('denied'));
         });
         const customize = document.getElementById('set-customize');
         addTap(customize, () => {
