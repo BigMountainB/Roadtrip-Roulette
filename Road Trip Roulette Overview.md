@@ -42,6 +42,7 @@ to jump straight to the chapter you need to read or change.
 - **[Chapter 13 — Ending Plate Art Spec](#chapter-13--ending-plate-art-spec)** — the 6 photographic 800×450 ending plates + 3 car views × 10 genres, file naming, the trimmed-bbox placement rule, per-plate anchors, and how to add a genre or re-export art
 - **[Chapter 14 — Player Car Steering & Pose](#chapter-14--player-car-steering--pose)** — the rules the player sprite obeys: no body roll, ground-anchored on the tire contacts, turn art keyed to steering INTENT, per-mode timings, and the G diagnostic
 - **[Chapter 15 — Storefront Confirm Modal Restyle](#chapter-15--storefront-confirm-modal-restyle)** — ENDGAME ONLY: gritty neon metal panel + INSTALL/CANCEL buttons for `_confirmBuyPopup`; flags that it is Phaser today (not HTML/CSS) and serves every shop item, not just parts
+- **[Chapter 16 — Rest-Stop Exit / Off-Ramp System](#chapter-16--rest-stop-exit--off-ramp-system)** — authoritative spec: shared `ExitPath.js` plan (150 ft taper / 1000 ft lane 5 / 100 ft gore / 82° curve), no-button lane-5 commitment (lock-in at 500 ft OR gore window), nose-only braking, painting topology, post-commit protection, `_exitArtFor` ladder, QA handles
 
 ---
 
@@ -203,6 +204,46 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-17 — Deploy script was re-syncing 1.3 GB to iCloud; nosync symlinks restored (`ad29087`)
+Owner asked whether the disposable build copies need saving (`dist/`, `website/demo|fully/`).
+Answer: NO — all gitignored, regenerated wholesale by `npm run deploy`; the only protected things
+are `src/`, `index.html`, `public/assets/`, and this file (tracked + pushed).  The question exposed
+a regression: `9114a5d` (08-14) had moved every regenerable dir (+ `node_modules`, `.git`) to
+`~/Library/Application Support/RoadTripRoulette-nosync` with symlinks, because the repo lives under
+iCloud-synced `~/Documents` and iCloud losing sync races mid-rebuild is the TRUE origin of every
+`name 2.ext` conflict copy.  But `build-fully.sh` ran `rm -rf website/fully` / `rm -rf dist` —
+deleting the SYMLINK nodes — so the next deploy rematerialized 1.3 GB as real synced folders and
+the conflict copies returned (two more appeared in `website/fully/` on 08-16).  `build-demo.sh`
+only ever cleared contents, which is why demo's symlink survived.  Fix: both delete steps are now
+`find <dir>/ -mindepth 1 -delete` (contents only; vite's own `emptyOutDir` is symlink-safe too);
+fresh builds moved into the vault, stale vault copies replaced, all three symlinks verified.  Net:
+~2.9 GB of regenerable material no longer uploads; `checkDuplicates.js` in `npm test` stays as the
+tripwire.  **Rule for future scripts: never `rm -rf` one of these dir nodes — empty it.**
+
+### 2026-08-16 (pt 2) — Exit tuning from live playtest: longer lane, lock-in, nose-only braking (uncommitted)
+
+*(Current-state spec for the whole exit system: **Chapter 16**.)*
+
+Three owner-driven adjustments to the 08-15 exit rebuild, from actually driving it:
+
+- **Parallel exit lane 500 → 1000 ft** (`ExitPath.js EXIT_FEET.PARALLEL`).  500 ft was ~3.4 s
+  at full valley-floor speed — fast exits (North Bend 32) were blowing past while slow climbs
+  (Pass 52/53) felt fine.  The dry-placement fallback ladder is now 1000→500→350→250→150;
+  headless check confirms **all 19 stops still place the full 1000 ft** with zero wet segments.
+- **Lock-in at 500 ft of lane-5 driving** (`plan.zLock`, GameScene `_updateExitApproach`).
+  Hold lane 5 for the first 500 ft of the parallel section and the exit COMMITS there — the
+  capture no longer waits for the gore.  The first 500 ft remain cancellable by steering out;
+  the late-swerve gore-window catch (08-15 pt 2) is retained for divider-hoppers.
+- **Speed slowdown starts AT the gore nose, not before** (owner: "speed slowdown should happen
+  just at the nose of the turnoff").  A lock-in commitment can start the cinematic hundreds of
+  feet back; through that stretch the car now HOLDS its highway speed and the ease toward
+  ~35 mph begins the moment the car crosses `plan.zDiverge` — braking on the ramp, not on the
+  freeway.  Headless-verified at SQ: locked in at 95 mph, still 95 at the last pre-nose frame,
+  82→60→47→41 through gore/curve/departure; hand-off state still bit-exact, single launch.
+
+All three uncommitted (riding with the working tree).  Everything else from the 08-15 rebuild
+entry below is unchanged.
+
 ### 2026-08-16 — Wildlife hazards; tilt/snow steering rescue; fog-light saga; rails + traps
 One session's multi-day thread, all committed (latest `5893813`); deployed through `c4ad3f2`
 (deployment `b037301e`) — everything after that awaits the next push.
@@ -261,6 +302,9 @@ headless.
 
 ### 2026-08-15 — Rest-stop exits rebuilt as real off-ramp sequences (committed aa8d7d4)
 
+*(Historical — phase lengths and commitment rules were retuned 08-16 pt 2 (parallel 500→1000 ft,
+`zLock` lock-in, nose-only braking). The authoritative current spec is **Chapter 16**.)*
+
 Owner spec (final): every exit is now a complete taper → parallel exit lane → gore divergence
 → ~90° right curve → offscreen departure, replacing the old rampStrength trapezoid + "swerve
 right past x>1.5" instant scene-swap.
@@ -313,6 +357,35 @@ right past x>1.5" instant scene-swap.
   (missions 256, coal 25, genreTraits 179, vices 37, chase 50, pursuit, upgrades 3,
   encounters 187); `vite build` clean. NOT play-tested by hand yet; night-time exit lighting
   unverified (uses the same nightMul path as the existing fog line).
+
+### 2026-08-16 — "Pillars/starbursts" root-caused: they're the STOCK WINDSHIELD CHIPS · screenshot harness WORKS now
+
+**The white spiky starbursts the owner kept reporting (snow mi 65, port, Mercer) are not world
+objects — they are the stock-windshield rock chips + hairline crack** (`_drawStockGlassChips` /
+`_drawRockChip`, GameScene ~17196, owner-specced 2026-07-21 "~5× bigger", always drawn until the
+New Windshield upgrade). Proven by layer elimination: hiding `_damageGlassGfx` removes them;
+every other layer leaves them. That's why they appear in every biome and sit "through" the road.
+Do NOT chase them as scenery bugs again.
+
+**Screenshot harness finally works** (the "7 failed approaches" blocker was the intro-call DOM
+overlay + the driver-plate modal, not the canvas): Playwright `channel:'chrome'` →
+`addInitScript` set `localStorage rtr_intro_call_done=1` → `Difficulty.set('custom')` +
+`_fireTitleCursor()` → `window.__plate.set(...)` + force `#plate-modal` classList remove 'open'
+→ `s._devEnabled=true; s._warpToMile(m)` → `canvas.screenshot()`. Working scripts in this
+session's scratchpad (`probe_pillars2.mjs`, `probe_layers.mjs` — layer-toggle differential).
+
+**Mercer "pillars" ROOT-CAUSED AND FIXED (same session):** they were the UNDER-BRIDGE pier
+columns/pontoons — the second, separate pier system in `_drawSegment` ("Under-bridge structure…
+repeating paired supports", pale 0x9C988E trapezoids every 8–10 bridge/water segs, up to
+4.8×segH tall) — which had NO camera gate, so the East Channel span painted its piers through
+the approach's crest rows on structG/roadBase (1.35), which no terrain layer can occlude.
+Ruled out first by harness elimination: Jersey rails (already off-span-gated), utility poles,
+fence posts, road paint, groundPlane, biome bands. Fix: the whole under-bridge structure block
+is now gated `&& this._camOnSpan` — on the span it still tucks under the deck as designed.
+Harness-verified before/after at mi 9.525: picket row gone, clean water edge. This closes the
+"pillars through the road" family: flank piers (removed pt 2, 08-14), off-span rails (pt 4,
+08-14), under-deck piers (this). Probe tip: warping near mi 9.53 triggers an instant speed-trap
+bust — set `s._customFlags = { noNpcDamage:true, noPolice:true }` before warping.
 
 ### 2026-08-14 (pt 4) — Bridge rails no longer drawn off-span (uncommitted)
 
@@ -9394,3 +9467,98 @@ Gritty neon automotive-shop, matching the storefront artwork.
    parts; food, drink, fuel, hitchhikers and vehicles all come through here. Needs a
    per-item verb (INSTALL / BUY / FILL / HIRE …) driven off the item, with a fallback, and
    the button label should track it. Price is available on the item and is not shown today.
+
+---
+
+# Chapter 16 — Rest-Stop Exit / Off-Ramp System
+
+**Authoritative current-state spec** (consolidated 2026-08-16 from the 08-15 / 08-15 pt 2 /
+08-16 pt 2 changelog entries — read those for the build/debug history; this chapter is what
+the system IS today). Status: geometry + tuning **uncommitted** in the working tree on top of
+`aa8d7d4`; headless-validated, **not hand-playtested**; night exit lighting unverified.
+
+## 16.1 Concept
+
+Every rest stop's exit is a complete freeway off-ramp driven from ONE shared geometry plan —
+there is **no exit button**: driving in lane 5 IS taking the exit. Road.js paints from the
+plan, GameScene guides and auto-drives from the same plan, so the painted lane and the driven
+path cannot disagree. Replaces the pre-08-15 `rampStrength` trapezoid + "swerve past x>1.5"
+instant scene-swap.
+
+## 16.2 Geometry & placement (`src/road/ExitPath.js`)
+
+| Phase | Length | Notes |
+|---|---|---|
+| Taper | 150 ft | lane 5 grows from zero width |
+| Parallel | **1000 ft** | full-width exit-only lane (was 500 — too short at valley-floor speed, owner 08-16) |
+| Divergence (gore) | 100 ft | wedge opens to `GORE_GAP_X` 1.10 x-units; commitment window |
+| Curve | 100 ft ARC | heading integrated to 82° in a build-time table (~56 ft of Z) |
+
+- Units: 60.76 world-u/ft (`UNITS_PER_FOOT`). Lane count from `seg.lanes + 1` — nothing hard-codes 5.
+- `buildExitPlan(segments, rs)` places the sequence on **fully dry road** (never bridge/tunnel/
+  water): slides the whole approach earlier in 0.02-mi steps to −1.2 mi, then later to +0.3 mi,
+  then shrinks the parallel lane down the ladder **1000→500→350→250→150 ft** as a last resort.
+  Null plan = no exit painted (warned in console). Headless check 2026-08-16: all 19 stops
+  place the full 1000 ft, worst repositioning −1 seg.
+- **`plan.zLock`** = `zParallel + 500 ft` (clamped to the gore if the lane shrank): the lock-in
+  point. Plan carries: `zTaper/zParallel/zLock/zDiverge/zCurve/zCurveEnd`, lane metrics,
+  `curveTable`, `departSlope`, `arrowZs` (3 worn right-turn arrows at 18/55/88% of the lane),
+  `parallelFeet`, `repositionedSegs`.
+- `sampleExitPlan(plan, absZ)` → phase / lane-5 centre / edges / gore gap / heading for ANY
+  consumer.
+
+## 16.3 Taking the exit (GameScene)
+
+State machine: `NONE → AVAILABLE → GUIDED → COMMITTED → CURVING → DEPARTING → TRANSITIONING`,
+or `MISSED`. Decisions key off the CAR's visual Z (`p.position + PLAYER_VIRTUAL_Z`).
+
+- **"In lane 5"** = `p.x ≥ 0.90` (car is ~0.22 u wide — straddling the divider with intent counts).
+- **Announce**: one-shot popup at the taper (`➡️ EXIT — <town> / USE RIGHT LANE`).
+- **GUIDED**: in lane 5 with the lane >35% grown — bounded 1.7 lane-u/s centring assist that
+  never fights a left steer; steering out cancels.
+- **Commitment — two ways** (both call `_beginExitCommit`, irreversible):
+  1. **Lock-in**: in lane 5 at `carZ ≥ plan.zLock` (500 ft into the lane). First 500 ft cancellable.
+  2. **Gore window**: in lane 5 anywhere in the 100-ft divergence (late-swerve catch — the
+     wedge is under a lane wide, physically reachable).
+- **MISS**: still left of the divider when the curve begins — silent mark
+  (`_passedRestStops`), freeway continues; also covers resume-past-gore.
+- **Speed — nose-only braking** (owner: "slowdown just at the nose"): after a lock-in commit
+  the cinematic HOLDS highway speed through the remaining lane; the ease toward ~35 mph starts
+  only when the car crosses `plan.zDiverge`. Braking happens on the ramp, never on the freeway.
+- **Cinematic**: `_exitAuto` owns the car — spline-centre capture (0.5-s smoothstep blend from
+  the held lane position), Z advance scales with cos(heading) floored at 12% so scenery keeps
+  rolling, camera lateral view FROZEN at commit (`_exitCamX`). Departure completes when the
+  sprite's left bound clears the LIVE viewport (`SCREEN_W + HUD_OFFSET_X + 24 px`, any aspect).
+- **Protection after commit**: `_applyDamage` no-ops; collision/fuel/survival/arrest passes
+  skipped; `cops.arrestPending` cleared each frame; pursuers aimed at the mainline; HP/gas/
+  stars/score preserved bit-exact into RestStopScene; exactly ONE launch (`_takingExit` guard —
+  `_takeRestStopExit` is purely the final hand-off).
+
+## 16.4 Painting (Road.js)
+
+- Right-edge band (fog line, shoulder tone, rumble, grit) shifts outboard with the taper
+  (`extRF/extRN`); the old fog-line x becomes the dashed lane-4/5 divider; at the gore the
+  mainline edge returns to x=1.0 and the ramp carries its own two edge lines from the nose.
+- Urban sidewalk band + rural shoulder band shift by `swExt*` — they terminate at the taper
+  and wrap the OUTSIDE of lane 5 / the ramp, never between freeway and ramp. Right-side
+  pasture fences break across the window (`seg._exitFenceRightOff`).
+- Worn right-turn arrows: `Road._drawExitArrows`, 34 ft, world-anchored, snow-buried raggedly.
+- `seg.rampStrength` (0→1 across taper) still set — scenery-clearance / lateral-clamp
+  consumers only; the paint no longer uses it. Right lateral clamp is a flat 2.8 (lane 5 is
+  inside it).
+
+## 16.5 Art hooks (pending per-genre exit art)
+
+`_exitArtFor(headingDeg)` resolves by naming ladder off the current rear-view key:
+`<base>_profile_r` (≥62°) → `<base>_turn_hard_r` (≥28°) → `<base>_turn_r` (≥8°) → base.
+Dedicated right-facing keys always beat the mirrored generic `_turn` (mirroring flips plates);
+until the art ships everything falls back to the mirror. Sprites normalize on measured visible
+bounds + tire contacts, never stretched.
+
+## 16.6 QA / dev
+
+- Dev handle: `window.__rtrScene` (dev-gated, with `__rtrWarp`) for scripted runs.
+- Headless validation (Playwright `?dev=1`): take/miss/cancel/pause-mid-curve, urban/rain/snow,
+  wide viewport + 2★ carry-through, bit-exact hand-off, single RestStop launch; speed profile
+  95 mph held to the nose then 82→60→47→41. Full suite green (737 tests).
+- Open items: hand playtest (esp. exit 32 at speed), night exit lighting, per-genre `_r` art.
