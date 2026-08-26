@@ -204,6 +204,47 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-26 (pt 2) — Fatal CRASH cinematic + shared ending-cinematic controller
+
+The zero-HP counterpart to the BUSTED cinematic, and a refactor that merges both into ONE
+controller (spec requirement: extend, don't build a competing system).  `this._bustedCine`
+became **`this._endingCine`** with a `kind` field; shared across both endings: start guards,
+gameplay lockout (the single `update()` early-return), HUD hide, overlay/blackout objects,
+skip input (`_ecTrySkip`, per-kind guard windows in `ec.T`, SFX handles in `ec.stopOnSkip`
+fade on skip), the aftershock train, dip-to-black, **`_finalizeEndingCinematic`** (one
+`_endGame(ec.cause, ec.extra)`, guarded by `ec.finalized`) and idempotent
+**`_endingCineCleanup`** (finalizer + scene-shutdown hook).  Per-kind: choreography
+(`_ecUpdateBusted` / `_ecUpdateCrash`), pose (`_bcApplyPlayerPose` / `_ccApplyPlayerPose`,
+sharing `_ecSpinFrameKey`), timing tables (BC / CC constants).
+
+**CRASH sequence (~2.25 s; CC constants + CC_VARIANTS table):** the damage `wreck` handler's
+non-cop branch now calls `_startCrashCinematic({}, {source})` instead of `_endGame('crash')`.
+Impact (0–0.15 s): `sfx_crash_fatal_impact`, the game's heaviest shake + directional kick from
+the shove side, haptic, 70 ms white flash, +5% car "punch toward camera", oversized
+explosion/smoke at the impact point, glass-and-debris burst (`_ccSpawnDebris`, tweened rects —
+no gore).  Violent motion (→0.85 s): `sfx_crash_glass` + `sfx_crash_scrape` (contact
+variants), variant-shaped yaw via the spin frames, lateral shove w/ barrier rebound, speed
+collapse, skid marks, struck NPC keeps its crash spin briefly.  Daze (0.45→): `sfx_crash_ring`,
+desaturating wash + 3-band edge vignette (never a white screen).  Aftermath (1.30→):
+`sfx_crash_aftermath`, ring fades, edges darken before the 1.95 s dip to black → the unchanged
+photographic CRASHED plate.  Variants (choreography-only, one system): headOn (recoil+yaw),
+vehicle (spin), scenery (abrupt stop + rebound + scrape), guardrail (long slide + scrape),
+**water** (structural exception: sink anim already played, so the car stays hidden underwater
+and it's a short muffled hold, `CC.WATER_FADE_AT`).
+
+**Crash context:** collision sites stash `this._lastImpactCtx = {at, side, sx, sy, sw, type}`
+(NPC handler + `_triggerSceneryRespawn`); `_classifyCrash` trusts it only if written the same
+frame (`at` freshness ≤ 0.25 s) and otherwise falls back to the wreck `source` tag + safe
+defaults, so older/attrition call sites still produce a valid crash.  Post-fatal guards
+(`if (this._endingCine) return`) stop the head-on/scenery/water recovery snaps from
+teleporting the wreck after the cinematic latched.  Cop-delivered killing blows still route
+to BUSTED; survivable collisions, busted_late, pass-out, finish, out-of-gas all untouched.
+
+Verified headless (playwright): BUSTED regression, fatal head-on after survivable hits,
+scenery crash + skip across consecutive runs, cop killing blow → BUSTED, blocked
+`crash_fatal_impact.wav`, `prefers-reduced-motion`, water dunk — `_endGame` exactly once in
+every path, zero SFX voices after scene exit.  `npm test` + `vite build` green.
+
 ### 2026-08-26 — BUSTED arrest cinematic (in-engine PIT → spinout → 5-cruiser containment → stamp)
 
 A run-ending arrest no longer cuts straight to the ending screen.  `_onArrested`'s non-Easy path
