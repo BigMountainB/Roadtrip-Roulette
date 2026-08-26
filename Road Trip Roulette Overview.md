@@ -204,6 +204,34 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-26 (pt 3) — Stranded-GameOver fix, "THIS DRIVE" earnings line, spin-frame sizing
+
+Three fixes from the owner's first live session with the ending cinematics:
+
+- **Stranded "CRASHED" screen (black + headline, no buttons).**  Repro: any SECOND same-cause
+  ending in one browser session.  The plate + genre car are then already in the texture cache,
+  so `loadEndingArt` calls back SYNCHRONOUSLY — while `GameOverScene.create()` is still running
+  and the scene status is CREATING — and `_createPlateEnding`'s `!this.scene.isActive()` guard
+  (meant for "player already moved on") false-positived, bailed before drawing the UI, and
+  consumed the loader watchdog with it.  Guard now bails only on status ≥ `Phaser.Scenes.SHUTDOWN`.
+  Pre-existing bug; the cinematics just made endings frequent enough to hit it.
+- **Ending screens show the run's net earnings** (owner request): `GameScene` latches
+  `_runStartWallet` on the first post-title frame (after every resume path has written its
+  starting score), `_endGame` passes `runEarned = finalScore − start`, and `_buildPlateUI`
+  renders "+$X THIS DRIVE" (green) / "−$X" (red) between CASH and DISTANCE on every plate
+  ending.  Net of fines/bail/crash penalty, so a losing run reads negative.
+- **Car shrank on the 90° spin frame** (owner report).  The spin-frame canvases share NO
+  convention (classic_rock: 861×863 at 30/60°, 391×793 at 90/120/150°, different again per
+  genre) and `_applyPlayerSpriteDisplaySize` pinned the CANVAS to 78 px — the same bug class
+  the turn-art special case documents.  New `_texContentBox` (runtime alpha scan, cached per
+  create, scan INSET ~1% from canvas edges because the 90°+ exports carry fully-opaque 2-3 px
+  matte bars top/bottom that defeat any trim) sizes every spin frame so the trimmed CAR matches
+  the straight art's content height, and moves the sprite origin to the content's bottom-centre
+  (flip-aware) so the ground anchor survives arbitrary padding.  Fixes the gameplay PIT spin
+  too.  The rear plate now hides during spin poses (its anchor fractions assume the straight
+  rear framing).  NOTE for the art pass: the 90/120/150 exports are also horizontally
+  edge-clipped (nose/tail touch the canvas) and carry those matte bars — worth re-exporting.
+
 ### 2026-08-26 (pt 2) — Fatal CRASH cinematic + shared ending-cinematic controller
 
 The zero-HP counterpart to the BUSTED cinematic, and a refactor that merges both into ONE

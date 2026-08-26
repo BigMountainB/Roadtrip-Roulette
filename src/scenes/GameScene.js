@@ -2007,6 +2007,12 @@ export class GameScene extends Phaser.Scene {
       const _bank = this.registry?.get?.('save')?.walletStore?.money ?? 0;
       if (Number.isFinite(_bank) && _bank > 0) this.score = Math.round(_bank);
     }
+    // Wallet level when THIS drive actually started — captured lazily on the
+    // first gameplay frame (see update()) rather than here, because every
+    // resume path (checkpoint restart, save resume, live resume, Custom's
+    // seed money) overwrites this.score after this line.  The ending screens
+    // read finalScore − this to show "what this drive added to the wallet".
+    this._runStartWallet = null;
     this.gameTime        = 0;
     // Party clock — counts down from Difficulty.partyClockSec() until
     // hitting 0.  Pullman finish before 0 → ON TIME (cash bonus).
@@ -2083,6 +2089,10 @@ export class GameScene extends Phaser.Scene {
     this._finishCause     = null;
     this._statsTripEnded = false;   // one-shot guard for the stats trip-end hook
     this._arrestHandled  = false;   // one-shot guard so a bust charges bail once
+    // Per-texture trimmed-content cache (spin-frame sizing) — rebuilt every
+    // create so a genre-art swap (same texture keys, new pixels) can't serve
+    // stale content boxes.
+    this._texTrimCache   = new Map();
     // Ending-cinematic state (BUSTED arrest / fatal CRASH) — Phaser reuses
     // this scene instance across restarts, so a stale object here would
     // freeze the next run's update loop in the cinematic branch on frame
@@ -4366,6 +4376,13 @@ export class GameScene extends Phaser.Scene {
       this._renderFrame();
       this._renderHUD();
       return;
+    }
+
+    // Latch the drive's starting wallet on the first post-title frame — by
+    // now every resume path has written its final starting score.  Ending
+    // screens show finalScore − this as the run's net earnings.
+    if (this._runStartWallet == null && !this._awaitingStart) {
+      this._runStartWallet = Math.round(this.score);
     }
 
     // ── Ending cinematic (BUSTED arrest / fatal CRASH) ─────────────────
@@ -14154,12 +14171,13 @@ export class GameScene extends Phaser.Scene {
                          Math.floor(eased * PIT_SPIN_FRAMES.length));
     const key = PIT_SPIN_FRAMES[idx];
     if (this.textures.exists(key)) {
+      // The art spins one way; mirror it when the hit came from the other
+      // side.  Flip BEFORE sizing — spin-frame origin math is flip-aware.
+      ps.setFlipX(sp.dir < 0);
       if (ps.texture?.key !== key) {
         ps.setTexture(key);
         this._applyPlayerSpriteDisplaySize();
       }
-      // The art spins one way; mirror it when the hit came from the other side.
-      ps.setFlipX(sp.dir < 0);
     }
     return true;
   }
@@ -14409,9 +14427,90 @@ export class GameScene extends Phaser.Scene {
     this._applyPlayerSpriteDisplaySize();
   }
 
+  /** Trimmed opaque-content box of a texture (alpha scan, cached).  Used to
+   *  size + ground-anchor the PIT/crash SPIN frames, whose canvases — unlike
+   *  the straight/turn pair, which share a generator contract — follow NO
+   *  common padding or pixels-per-car convention: per-frame AND per-genre
+   *  canvases differ wildly (classic_rock: 861×863 at 30°, 391×793 at 90°).
+   *  Canvas-pinning those to 78 px shrank the car hard on the 90° frame
+   *  (owner 2026-08-26).  Scan runs once per texture; the cache is rebuilt
+   *  each scene create so a genre-art swap (same keys, new pixels) can't
+   *  serve stale boxes. */
+  _texContentBox(texKey) {
+    const cache = (this._texTrimCache = this._texTrimCache ?? new Map());
+    if (cache.has(texKey)) return cache.get(texKey);
+    let box = null;
+    try {
+      const src = this.textures.get(texKey)?.getSourceImage?.();
+      if (src?.width) {
+        const cv = document.createElement('canvas');
+        cv.width = src.width; cv.height = src.height;
+        const cx2 = cv.getContext('2d', { willReadFrequently: true });
+        cx2.drawImage(src, 0, 0);
+        const d = cx2.getImageData(0, 0, cv.width, cv.height).data;
+        let x0 = cv.width, y0 = cv.height, x1 = -1, y1 = -1;
+        // Scan INSET from the canvas edges: the 90°/120°/150° exports carry
+        // fully-opaque 2-3 px matte bars along the top and bottom edges
+        // (export artifact), which would stretch the box to the full canvas
+        // and reproduce the exact shrink this scan exists to fix.  A ~1%
+        // inset ignores edge artifacts; real car content sits well inside
+        // (worst case, an edge-clipped side view loses 3 px of bumper).
+        const inX = Math.max(3, Math.round(cv.width  * 0.012));
+        const inY = Math.max(3, Math.round(cv.height * 0.012));
+        for (let y = inY; y < cv.height - inY; y++) {
+          for (let x = inX; x < cv.width - inX; x++) {
+            if (d[(y * cv.width + x) * 4 + 3] > 8) {
+              if (x < x0) x0 = x;
+              if (x > x1) x1 = x;
+              if (y < y0) y0 = y;
+              if (y > y1) y1 = y;
+            }
+          }
+        }
+        if (x1 >= x0) box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1,
+                              cw: cv.width, ch: cv.height };
+      }
+    } catch (_) { box = null; }
+    cache.set(texKey, box);
+    return box;
+  }
+
   _applyPlayerSpriteDisplaySize(targetW = 78, fallbackH = 49) {
     if (!this.playerSprite) return;
     const texKey = this.playerSprite.texture?.key;
+    // Any non-spin texture uses the standard bottom-centre ground anchor —
+    // restore it in case a spin frame moved the origin (below).
+    const isSpin = !!texKey?.startsWith?.('codex_beater_spin_');
+    if (!isSpin && (this.playerSprite.originX !== 0.5 || this.playerSprite.originY !== 1)) {
+      this.playerSprite.setOrigin(0.5, 1);
+    }
+    // SPIN frames: size by the CAR, not the canvas — scale so the trimmed
+    // content matches the straight art's content HEIGHT (a turntable yaw
+    // keeps roof height steady while width naturally grows toward the 90°
+    // side view), and move the origin to the content's bottom-centre so the
+    // ground anchor holds despite each frame's arbitrary padding.  Origin-X
+    // is flip-aware (flipX mirrors content within the frame), so pose code
+    // must set flip BEFORE calling this.  Falls through to canvas-pinning
+    // only if the alpha scan failed — worse framing, never a stall.
+    if (isSpin) {
+      const baseKey = 'codex_beater_back';
+      const bb   = this._texContentBox(baseKey);
+      const sb   = this._texContentBox(texKey);
+      const bSrc = this.textures.get(baseKey)?.getSourceImage?.();
+      if (bb && sb && bSrc?.width) {
+        const bRatio = bSrc.height / bSrc.width;
+        const bw = targetW + (bRatio >= 0.86 ? 2 : bRatio <= 0.72 ? -2 : 0);
+        const f0 = bw / bSrc.width;          // straight art's px factor at 78±2
+        const f  = (bb.h * f0) / sb.h;       // spin factor: same car height
+        const cxu = (sb.x + sb.w / 2) / sb.cw;
+        this.playerSprite.setOrigin(
+          this.playerSprite.flipX ? 1 - cxu : cxu,
+          (sb.y + sb.h) / sb.ch,
+        );
+        this.playerSprite.setDisplaySize(sb.cw * f, sb.ch * f);
+        return;
+      }
+    }
     // No real art (invisible 1×1 / missing) → just use the fixed fallback size.
     const procedural = !texKey || texKey === '__WHITE' || texKey === '__MISSING'
                        || texKey === 'car_player' || texKey === 'player_car';
@@ -14464,7 +14563,11 @@ export class GameScene extends Phaser.Scene {
     const save = this.registry.get('save');
     const str = String(save?.activePlate ?? '').trim();
     const img = this._rearPlateImg;
-    if (!str || this._cockpitActive || car.visible === false) {
+    // Spin frames (gameplay PIT spin + ending cinematics) hide the plate —
+    // its anchor fractions assume the straight rear view's framing, so on
+    // the rotated art it floats disembodied beside the car.
+    const spinPose = !!car.texture?.key?.startsWith?.('codex_beater_spin_');
+    if (!str || this._cockpitActive || car.visible === false || spinPose) {
       if (plate.visible) plate.setVisible(false);
       if (img && img.visible) img.setVisible(false);
       return;
@@ -25215,11 +25318,13 @@ export class GameScene extends Phaser.Scene {
     const ang = e * bc.spinDeg;
     const base = this._playerArtKey || 'codex_beater_back';
     const wantKey = this._ecSpinFrameKey(ang);
+    // Flip BEFORE sizing — the spin-frame origin math is flip-aware.
+    const wantFlip = wantKey !== base && bc.dir < 0;
+    if (ps.flipX !== wantFlip) ps.setFlipX(wantFlip);
     if (ps.texture?.key !== wantKey && this.textures.exists(wantKey)) {
       ps.setTexture(wantKey);
       this._applyPlayerSpriteDisplaySize();
     }
-    ps.setFlipX(wantKey !== base && bc.dir < 0);    // mirror the spin side
     // Lateral slide: shoved out toward the contact-opposite side, easing
     // back part-way as the car scrubs to a stop (reduced-motion: half).
     const slideMax = (bc.reduced ? 28 : 55);
@@ -25264,6 +25369,9 @@ export class GameScene extends Phaser.Scene {
     const ang = e * cr.spinDeg;
     const base = this._playerArtKey || 'codex_beater_back';
     const wantKey = this._ecSpinFrameKey(ang);
+    // Flip BEFORE sizing — the spin-frame origin math is flip-aware.
+    const wantFlip = wantKey !== base && cr.side < 0;
+    if (ps.flipX !== wantFlip) ps.setFlipX(wantFlip);
     if (ps.texture?.key !== wantKey && this.textures.exists(wantKey)) {
       ps.setTexture(wantKey);
     }
@@ -25274,7 +25382,6 @@ export class GameScene extends Phaser.Scene {
       const k = 1 + CC.PUNCH_SCALE * (1 - ec.t / CC.PUNCH_SEC);
       ps.setDisplaySize(ps.displayWidth * k, ps.displayHeight * k);
     }
-    ps.setFlipX(wantKey !== base && cr.side < 0);   // mirror toward the shove side
     // Lateral shove, with a partial rebound for barrier/scenery hits.
     const slide = su < 0.55
       ? cr.slideMax * (1 - Math.pow(1 - su / 0.55, 2))
@@ -25725,6 +25832,11 @@ export class GameScene extends Phaser.Scene {
 
     this.scene.start('GameOver', {
       score:           Math.round(this.score),
+      // Net wallet change for THIS drive (earnings minus fines/bail/penalty —
+      // can be negative).  Null when the start was never latched (defensive).
+      runEarned:       this._runStartWallet != null
+        ? Math.round(this.score) - this._runStartWallet
+        : null,
       // Pass distance in MILES directly — player.position is in
       // segment-world-units, not feet, so the previous /5280 conversion
       // was wildly wrong (read 640 mi after a 6 mi drive).

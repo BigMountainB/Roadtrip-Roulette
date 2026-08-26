@@ -92,6 +92,9 @@ export class GameOverScene extends Phaser.Scene {
     // GameScene now passes mileage already converted to miles.
     this.finalMiles     = data?.distanceMi ?? 0;
     this.cause          = data?.cause      ?? 'busted';
+    // Net wallet change for the drive that just ended (earnings minus
+    // fines/bail/penalties — may be negative).  Null on older call paths.
+    this.runEarned      = data?.runEarned  ?? null;
     // Why the run ended, recorded at the gameplay trigger site. Absent on old
     // saves / existing call sites -> selectTip falls back to a generic tip.
     this.failReason     = data?.reason     ?? null;
@@ -272,7 +275,16 @@ export class GameOverScene extends Phaser.Scene {
 
     const genre = activeEndingGenre(this);
     loadEndingArt(this, spec, genre, (plateReady, carKey) => {
-      if (!this.scene?.isActive?.()) return;      // player already moved on
+      // Bail only if the player already moved on — i.e. the scene is shutting
+      // down or destroyed.  NOT isActive(): when the plate + car are already
+      // in the texture cache (any SECOND same-cause ending in one browser
+      // session) loadEndingArt calls back SYNCHRONOUSLY, while create() is
+      // still running and the scene status is CREATING — isActive() is false
+      // there, and bailing consumed the loader watchdog too, stranding the
+      // player on the bare holding headline with no buttons (owner report
+      // 2026-08-26: black screen, pink "CRASHED", nowhere to go).
+      const _st = this.sys?.settings?.status;
+      if (_st != null && _st >= Phaser.Scenes.SHUTDOWN) return;
       if (!plateReady) {
         // No plate — fall back to whatever the old art path was for this cause.
         holding.destroy();
@@ -325,11 +337,23 @@ export class GameOverScene extends Phaser.Scene {
       wordWrap: { width: SCREEN_W * 0.86 },
     }).setOrigin(0.5, 0).setDepth(D);
 
-    this.add.text(CX, 330, `CASH  $${this.finalScore.toLocaleString()}`, {
+    this.add.text(CX, 326, `CASH  $${this.finalScore.toLocaleString()}`, {
       fontSize: '24px', fontFamily: IMPACT,
       color: '#FFCC44', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5, 0).setDepth(D);
-    this.add.text(CX, 362, `DISTANCE  ${this.finalMiles.toFixed(2)} mi`, {
+    // What THIS drive added to the wallet (owner 2026-08-26) — earnings net
+    // of fines/bail/crash penalty, so a run that lost money reads negative.
+    const hasEarned = this.runEarned != null;
+    if (hasEarned) {
+      const e = Math.round(this.runEarned);
+      this.add.text(CX, 357,
+        `${e >= 0 ? '+' : '−'}$${Math.abs(e).toLocaleString()}  THIS DRIVE`, {
+          fontSize: '14px', fontFamily: IMPACT,
+          color: e >= 0 ? '#66E28A' : '#FF6677',
+          stroke: '#000', strokeThickness: 3,
+        }).setOrigin(0.5, 0).setDepth(D);
+    }
+    this.add.text(CX, hasEarned ? 378 : 362, `DISTANCE  ${this.finalMiles.toFixed(2)} mi`, {
       fontSize: '14px', fontFamily: 'Arial', color: '#AACCFF',
       stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5, 0).setDepth(D);
