@@ -3856,7 +3856,15 @@ export class Road {
     // Under-bridge structure for both the high West Seattle bridge and
     // the Lake Washington floating bridge. Drawn before railings/road
     // edge details, so it tucks under the deck instead of sitting on top.
-    if (seg.water || seg.bridge) {
+    //
+    // ON-SPAN ONLY (owner 2026-08-16, third "pillars through the road"
+    // report — East Channel approach, mi 9.5). These pale pier columns
+    // were the LAST un-gated off-span painter: harness-verified by layer
+    // elimination (hiding roadBaseGfx removed them; rails/poles/paint all
+    // ruled out). Same structural hole as the rails — structG (1.35) sits
+    // above every terrain layer, so nothing can occlude a distant span's
+    // piers on an approach. On the span they still tuck under the deck.
+    if ((seg.water || seg.bridge) && this._camOnSpan) {
       const gS = structG ?? g;
       const deckDrop1 = Math.max(2, segH * (seg.bridge ? 0.38 : 0.26));
       const deckDrop2 = Math.max(2, segH * (seg.bridge ? 0.42 : 0.28));

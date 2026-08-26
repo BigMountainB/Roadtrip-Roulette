@@ -224,7 +224,22 @@ const LUNGE_CLOSE_MIN = 900;   // floor on the closing rate during a lunge
 // PIT attempts begin here (owner 2026-08-01): an alongside rear-quarter tap
 // is a PURSUIT manoeuvre, exempt from the no-lead rule — blocking/overtaking
 // still needs MIN_STARS_AHEAD.  At 1★ the tail never arms one.
-const MIN_STARS_PIT = 2;
+// PIT is a 3★ maneuver (owner, 2026-08-22). Two stars gets you leaned on —
+// light contact bumps only; three is where a cruiser actually tries to spin you.
+// Was 2, which made the game's most punishing move its first one.
+const MIN_STARS_PIT = 3;
+// Below MIN_STARS_PIT a rear cop may still make CONTACT, but only as a nudge.
+const MIN_STARS_BUMP = 2;
+
+// Seconds before a REINFORCEMENT joins an active pursuit, by star. The first
+// responder is not gated by this (see the dispatch-pacing note in update()).
+// Shorter at higher stars: heat should feel like it is arriving faster, not
+// just deeper.
+// Tuned against the DEFAULT difficulty multiplier (copEscalationMul 0.7), which
+// divides these and stretches them ~43%: 11 at 3★ lands near 16 s on the road.
+// A harder difficulty raises the multiplier and shortens the wait, which is the
+// intended direction.
+const REINFORCE_SEC_BY_STAR = [0, 14, 13, 11, 9, 7];
 
 // ── Backup calls + eyes-on (owner 2026-07-31 chase-realism pass) ────────
 // A pursuer within EYES_ON_FT of the car "has eyes on you":
@@ -1393,7 +1408,29 @@ export class CopSystem {
     const donutFreeze = this._donutPauseTimer > 0;
     if (this.stars >= 1 && this._spawnCooldown <= 0 && _pursuerCount < cap && !inGrace && !donutFreeze) {
       this._spawnCop(playerPos);
-      this._spawnCooldown = Math.max(0.8, (5.5 - this.stars * 0.9) / (escMul * nightMul));
+      // ── DISPATCH PACING ────────────────────────────────────────────────
+      // The old cooldown was max(0.8, (5.5 - stars*0.9) / mults): about 1 s at
+      // 5★ and 2.8 s at 3★. With one pursuer per star that dumped the whole
+      // roster onto you in a few seconds, arriving as a clump — which is what
+      // read as cops stacking on top of each other.
+      //
+      // Split in two, the way the genre does it (NFS Heat holds reinforcements
+      // 60 s after dispatch):
+      //   • FIRST RESPONDER — quick, so gaining a star has immediate weight.
+      //   • REINFORCEMENTS  — a real wait, so the roster fills as an escalating
+      //     situation rather than a spawn burst.
+      // Not the full 60 s: this is a forward corridor, so cops fall behind and
+      // despawn where a free-roam game's would circle back.
+      // Always the reinforcement interval: whoever comes NEXT is by definition
+      // a reinforcement. The first responder is quick for a different reason —
+      // _spawnCooldown has already expired when a star is freshly gained, so
+      // that car goes out immediately. Keying this off the PRE-spawn count
+      // instead put cop #2 on the road 2.1 s behind cop #1.
+      const _base = REINFORCE_SEC_BY_STAR[Math.max(1, Math.min(5, this._starLevel))];
+      // Difficulty and night still bite — they just scale the WAIT now instead
+      // of the ceiling, so a hard night fills the roster faster without ever
+      // exceeding what the stars advertise.
+      this._spawnCooldown = _base / (escMul * nightMul);
     }
 
     // ── 5★ extras: barricades + helicopter ─────────────────────────

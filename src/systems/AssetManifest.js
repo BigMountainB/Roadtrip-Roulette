@@ -154,6 +154,17 @@ export const ASSET_MANIFEST = {
     // straight, one direction only — the renderer mirrors it for the other).
     // Default path = the DEFAULT_GENRE art; genreArtPath overrides per plate.
     { key: 'codex_beater_back_turn',     path: 'assets/culture/hiphop_phonk/vehicles/starter_back_turn.png' },
+    // ── PIT SPIN FRAMES (2026-08-22) ─────────────────────────────────────
+    // The player's car rotating away from the camera at 30/60/90/120/150°.
+    // Played as a short sequence when a cop lands a PIT, so the maneuver reads
+    // as YOUR car being spun rather than a damage number appearing.
+    // Same convention as codex_beater_back_turn: default path is the
+    // DEFAULT_GENRE art and genreArtPath swaps in the plate's own genre.
+    { key: 'codex_beater_spin_030',      path: 'assets/culture/hiphop_phonk/vehicles/starter_spin_030.png' },
+    { key: 'codex_beater_spin_060',      path: 'assets/culture/hiphop_phonk/vehicles/starter_spin_060.png' },
+    { key: 'codex_beater_spin_090',      path: 'assets/culture/hiphop_phonk/vehicles/starter_spin_090.png' },
+    { key: 'codex_beater_spin_120',      path: 'assets/culture/hiphop_phonk/vehicles/starter_spin_120.png' },
+    { key: 'codex_beater_spin_150',      path: 'assets/culture/hiphop_phonk/vehicles/starter_spin_150.png' },
     { key: 'codex_beater_front',         path: 'assets/cars/codex/codex_beater_front.png' },
     { key: 'codex_suv4x4_back',          path: 'assets/cars/codex/codex_suv4x4_back.png' },
     { key: 'codex_suv4x4_front',         path: 'assets/cars/codex/codex_suv4x4_front.png' },
@@ -604,6 +615,11 @@ export const GENRE_ART = {
   codex_beater_front: 'vehicles/starter_front.png',
   codex_beater_back:  'vehicles/starter_back.png',
   codex_beater_back_turn: 'vehicles/starter_back_turn.png',
+  codex_beater_spin_030: 'vehicles/starter_spin_030.png',
+  codex_beater_spin_060: 'vehicles/starter_spin_060.png',
+  codex_beater_spin_090: 'vehicles/starter_spin_090.png',
+  codex_beater_spin_120: 'vehicles/starter_spin_120.png',
+  codex_beater_spin_150: 'vehicles/starter_spin_150.png',
 };
 
 /** Culture-art path for a manifest key under the given genre, or null if this

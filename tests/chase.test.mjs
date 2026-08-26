@@ -534,8 +534,11 @@ for (const s of [1, 2]) {
         lags.every(l => l >= 1.5 && l <= 4));
 }
 
-// PIT arming: reachable at 2★ (alongside, mid-lunge), never at 1★.
-for (const [s, expectArmed] of [[1, false], [2, true]]) {
+// PIT arming: reachable at 3★ (alongside, mid-lunge), never at 1-2★.
+// Moved 2★ -> 3★ on 2026-08-22 (owner): two stars now gets light contact bumps
+// only, three is where a cruiser actually tries to spin you. Tracks
+// CopSystem.MIN_STARS_PIT — update both together.
+for (const [s, expectArmed] of [[1, false], [2, false], [3, true]]) {
   const cs = new CopSystem();
   cs.stars = s;
   const pp = 100000;

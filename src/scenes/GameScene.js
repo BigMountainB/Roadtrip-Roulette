@@ -69,6 +69,53 @@ import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorb
 const CAM_DEPTH = 0.84;
 const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
 
+// ── PIT spin (2026-08-22) ────────────────────────────────────────────────
+// Frames the player's car cycles through when a cop lands a PIT. Registered
+// per genre in AssetManifest (GENRE_ART), so each plate spins its own car.
+const PIT_SPIN_FRAMES = [
+  'codex_beater_spin_030', 'codex_beater_spin_060', 'codex_beater_spin_090',
+  'codex_beater_spin_120', 'codex_beater_spin_150',
+];
+const PIT_SPIN_SEC = 1.10;   // out and back — long enough to read, short enough
+                             // that control never feels taken away for long
+
+// ── BUSTED arrest cinematic (2026-08-26) ─────────────────────────────────
+// A run-ending arrest no longer cuts straight to the ending screen: the
+// pursuit resolves on-camera — PIT hit → spinout → cruisers converge →
+// containment hold → BUSTED stamp → dip to black → the EXISTING ending
+// screen.  All timings are seconds from cinematic start; everything is
+// driven off one clock (this._bustedCine.t) so frame rate can't stretch or
+// reorder the beats, and skip is just a jump on that same clock.
+const BC = {
+  PIT_IMPACT_AT:  0.30,   // PIT cruiser reaches the rear quarter → contact
+  SPIN_END:       1.55,   // spinout fully settled
+  CONVERGE_START: 1.35,   // first converging cruiser starts moving
+  CONTAIN_START:  3.00,   // formation set — rumble/radio/light-wash hold
+  STAMP_AT:       4.05,   // BUSTED stamp slams in
+  STAMP_HOLD:     0.45,   // stamp on screen before the dip to black
+  FADE_SEC:       0.28,   // dip-to-black length (then _endGame fires)
+  SKIP_GUARD:     0.55,   // seconds AFTER impact before skip input arms —
+                          // the key/tap that caused the arrest can't skip
+  SKIP_TABLEAU:   0.60,   // a skip jumps to STAMP_AT minus this much, so the
+                          // surrounded tableau is still seen briefly
+};
+
+// Cinematic sound effects — WAVs under public/assets/audio/sound Effects/.
+// Loaded through AudioSystem.loadSfx (fetch + decodeAudioData onto a
+// dedicated SFX gain that bypasses the music master, so pausing the radio
+// can't mute them).  Every effect is optional: a missing file logs one
+// warning and the cinematic plays silent-but-complete.
+const BUSTED_SFX_DIR = 'assets/audio/sound Effects/';
+const BUSTED_SFX = {
+  sfx_busted_pit:     BUSTED_SFX_DIR + 'busted_pit_impact.wav',
+  sfx_busted_spinout: BUSTED_SFX_DIR + 'busted_tire_spinout.wav',
+  sfx_busted_sirens:  BUSTED_SFX_DIR + 'busted_police_sirens.wav',
+  sfx_busted_brake:   BUSTED_SFX_DIR + 'busted_cruiser_brake.wav',
+  sfx_busted_radio:   BUSTED_SFX_DIR + 'busted_radio_capture.wav',
+  sfx_busted_rumble:  BUSTED_SFX_DIR + 'busted_containment_rumble.wav',
+  sfx_busted_stamp:   BUSTED_SFX_DIR + 'busted_stamp_hit.wav',
+};
+
 // ── World clock (owner 2026-07-17) ───────────────────────────────────────
 // The in-world phone clock is driven by MILES DRIVEN, not real seconds: the
 // full 293-mi route spans 2:00 PM → 7:00 PM (5 in-world hours = 300 min).
@@ -870,6 +917,10 @@ export class GameScene extends Phaser.Scene {
     // Honor the phone-menu Settings → Haptics toggle (persisted in save).
     this.haptics.setEnabled(this.registry.get('save')?.get?.('settings.haptics', true) !== false);
     this.audio   = this.registry.get('audio'); // shared from BootScene — already playing
+    // Kick off the BUSTED-cinematic WAV fetches now so the buffers are ready
+    // long before any arrest.  Cached inside AudioSystem — a no-op after the
+    // first scene create of the session.
+    this.audio?.loadSfx?.(BUSTED_SFX);
     // Always unpause on scene-create.  _endGame() and _onArrested() pause
     // the audio when a run ends, but the audio object is a registry
     // singleton so the paused flag survives into the next scene.start.
@@ -1984,6 +2035,10 @@ export class GameScene extends Phaser.Scene {
     this._finishCause     = null;
     this._statsTripEnded = false;   // one-shot guard for the stats trip-end hook
     this._arrestHandled  = false;   // one-shot guard so a bust charges bail once
+    // BUSTED cinematic state — Phaser reuses this scene instance across
+    // restarts, so a stale object here would freeze the next run's update
+    // loop in the cinematic branch on frame one.  Null = not running.
+    this._bustedCine     = null;
 
     // ── Pause state ───────────────────────────────────────────────────
     this._paused = false;
@@ -4261,6 +4316,18 @@ export class GameScene extends Phaser.Scene {
     if (this._odEnding) {
       this._renderFrame();
       this._renderHUD();
+      return;
+    }
+
+    // ── BUSTED arrest cinematic ────────────────────────────────────────
+    // Owns the whole frame while active: player kinematics, cinematic
+    // cruisers, SFX cues, overlays and the final deferred _endGame all run
+    // from one clock inside _updateBustedCinematic.  Returning here is what
+    // LOCKS gameplay — steering/throttle/brakes/weapons/pause, collisions,
+    // damage, tickets, pickups, scoring, pursuit AI, missions and autosave
+    // all live below this line and simply never run during the sequence.
+    if (this._bustedCine) {
+      this._updateBustedCinematic(rawDt);
       return;
     }
 
@@ -10352,8 +10419,23 @@ export class GameScene extends Phaser.Scene {
       p.xImpulse = sideDir * (1.0 + impact.severity * 1.0);
       p.speed    = Math.max(400, p.speed * clamp(0.78 - impact.severity * 0.20, 0.50, 0.70));
       this.cops.addStar(0.2, 3);                  // player rear-ends a cop
-      this.effects.triggerShake(180 + impact.severity * 220, 0.007 + impact.severity * 0.009);
-      this._applyDamage((1 + impact.severity * 1.8) * damageMul, 'cop_ram_rear');
+      // ── BUMP vs RAM, by star (owner, 2026-08-22) ─────────────────────
+      // 2★ is a nudge: the cruiser leans on you, 1-2 HP, no real shove. 3★+ is
+      // the full ram it always was. Escalation is felt in the HIT, not only in
+      // how many cars are behind you.
+      const _stars   = this.cops?.stars ?? 0;
+      const _lightBump = _stars < 3;
+      const _dmg = _lightBump
+        ? (1 + impact.severity * 1.0)            // 1-2 HP
+        : (1 + impact.severity * 1.8);
+      if (_lightBump) {
+        p.xImpulse = sideDir * (0.5 + impact.severity * 0.5);
+        p.speed    = Math.max(400, p.speed * clamp(0.90 - impact.severity * 0.10, 0.74, 0.88));
+      }
+      this.effects.triggerShake(
+        _lightBump ? 90 + impact.severity * 110 : 180 + impact.severity * 220,
+        _lightBump ? 0.004 + impact.severity * 0.004 : 0.007 + impact.severity * 0.009);
+      this._applyDamage(_dmg * damageMul, _lightBump ? 'cop_bump' : 'cop_ram_rear');
       // The strike landed — break off so the cruiser falls back to its
       // standoff instead of sitting on the bumper re-ramming every frame.
       this.cops.endLunge?.(cop);
@@ -10387,7 +10469,12 @@ export class GameScene extends Phaser.Scene {
       p.xImpulse = sideDir * (1.0 + impact.severity * 1.1);
       p.speed    = Math.max(600, p.speed * clamp(0.86 - impact.severity * 0.18, 0.68, 0.82));
       this.effects.triggerShake(160 + impact.severity * 190, 0.007 + impact.severity * 0.008);
-      this._applyDamage((1 + impact.severity * 1.5) * damageMul, 'cop_pit');
+      // 3-5 HP: a PIT is the heaviest thing a cruiser does to you, and it only
+      // exists from 3★ (CopSystem.MIN_STARS_PIT).
+      this._applyDamage((3 + impact.severity * 2.0) * damageMul, 'cop_pit');
+      // Spin the player's car through the genre's own spin frames — the
+      // maneuver should read as YOUR car being put sideways, not as a number.
+      this._startPitSpin(sideDir);
       const pits     = this.cops.registerPit();
       const pitMax   = Difficulty.arrest().pit;
       const left     = pitMax - pits;
@@ -13953,9 +14040,63 @@ export class GameScene extends Phaser.Scene {
    * Direction mapping: the turn art depicts the car turning toward SCREEN-LEFT,
    * so dir < 0 renders it unflipped and dir > 0 mirrors it.
    */
+  /**
+   * PIT SPIN — the player's car swung sideways by a cop's PIT maneuver.
+   *
+   * Plays the genre's own spin frames (codex_beater_spin_030 … _150) as a short
+   * one-shot, then hands the sprite back to the steering pose. Purely cosmetic:
+   * damage, arrest counters and physics are all applied by the collision path
+   * that calls this, so a missing spin frame costs the look and nothing else.
+   *
+   * @param {number} dir  +1 / -1, the side the hit came from; mirrors the art.
+   */
+  _startPitSpin(dir = 1) {
+    if (this._cockpitActive) return;               // no exterior sprite to spin
+    this._pitSpin = { t: 0, dur: PIT_SPIN_SEC, dir: dir < 0 ? -1 : 1 };
+  }
+
+  /** Advance the PIT spin. Returns true while it owns the sprite, so the
+   *  steering pose knows to stand down rather than fight it for the texture. */
+  _updatePitSpin(dt) {
+    const sp = this._pitSpin;
+    if (!sp) return false;
+    const ps = this.playerSprite;
+    if (!ps) { this._pitSpin = null; return false; }
+    sp.t += dt;
+    if (sp.t >= sp.dur) {
+      this._pitSpin = null;
+      const base = this._playerArtKey || 'codex_beater_back';
+      if (this.textures.exists(base) && ps.texture?.key !== base) {
+        ps.setTexture(base);
+        this._applyPlayerSpriteDisplaySize();
+      }
+      ps.setFlipX(false);
+      return false;
+    }
+    // Ease out: the car snaps sideways and unwinds, rather than ticking through
+    // the frames at a constant rate.
+    const u = sp.t / sp.dur;
+    const eased = u < 0.5 ? (u * 2) : (1 - (u - 0.5) * 2);
+    const idx = Math.min(PIT_SPIN_FRAMES.length - 1,
+                         Math.floor(eased * PIT_SPIN_FRAMES.length));
+    const key = PIT_SPIN_FRAMES[idx];
+    if (this.textures.exists(key)) {
+      if (ps.texture?.key !== key) {
+        ps.setTexture(key);
+        this._applyPlayerSpriteDisplaySize();
+      }
+      // The art spins one way; mirror it when the hit came from the other side.
+      ps.setFlipX(sp.dir < 0);
+    }
+    return true;
+  }
+
   _updateSteerPose(dt, rawLean) {
     const ps = this.playerSprite;
     if (!ps || this._cockpitActive) return;
+    // A PIT spin owns the sprite while it runs — otherwise the steer pose
+    // would overwrite the spin frame on the very next line.
+    if (this._updatePitSpin(dt)) return;
     const base = 'codex_beater_back', turn = 'codex_beater_back_turn';
     if (this._playerArtKey !== base || !this.textures.exists(turn)) return;
     const P = (this._steerPose ??= { dir: 0, load: 0 });
@@ -22031,9 +22172,16 @@ export class GameScene extends Phaser.Scene {
     const plan = auto.plan;
     auto.t += rawDt;
 
-    // Controlled cinematic speed — ease from highway speed toward 35 mph.
-    const targetSpeed = MAX_SPEED * 35 / 120;
-    p.speed += (targetSpeed - p.speed) * Math.min(1, 2.0 * rawDt);
+    // Controlled cinematic speed — the slowdown begins AT THE GORE NOSE,
+    // not before (owner 2026-08-16).  A lock-in commitment can start the
+    // cinematic hundreds of feet back in the parallel lane; through that
+    // stretch the car HOLDS its highway speed, then eases toward ~35 mph
+    // from the moment the gore opens, like a real driver braking on the
+    // ramp rather than on the freeway.
+    if (p.position + PLAYER_VIRTUAL_Z >= plan.zDiverge) {
+      const targetSpeed = MAX_SPEED * 35 / 120;
+      p.speed += (targetSpeed - p.speed) * Math.min(1, 2.0 * rawDt);
+    }
 
     // Advance along the spline.  Forward (Z) progress scales with
     // cos(heading): the path speed stays constant while its freeway
@@ -24332,7 +24480,540 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this._endGame('busted', { charge: 'RECKLESS DRIVING', losses: lost });
+    // Run-ending arrest → play the takedown on-camera first.  The cinematic
+    // calls _endGame('busted', extra) exactly once when it finishes (or is
+    // skipped), so bail (docked above) and trip stats are never assessed
+    // twice.  busted_late (the TOO-LATE + 5★ technical loss) never comes
+    // through here — it keeps its checkpoint-slider flow in _endGame.
+    this._startBustedCinematic({ charge: 'RECKLESS DRIVING', losses: lost });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  BUSTED ARREST CINEMATIC
+  //  ---------------------------------------------------------------------
+  //  One explicit state object (this._bustedCine) + one clock (bc.t) drive
+  //  the whole sequence — no scattered delayedCalls.  Phases are TIME BANDS
+  //  on that clock (see the BC constants), with one-shot booleans for cues
+  //  that must fire exactly once (pitHit / containStarted / stampShown…).
+  //  Skip is a JUMP on the same clock, so skip and natural completion run
+  //  through the identical code path and the identical single finalizer.
+  //
+  //  Cleanup ownership: _bustedCineCleanup() is idempotent and owns every
+  //  external resource (looping SFX voices, input listeners, cinematic
+  //  cruisers injected into cops.cops).  It runs from BOTH the finalizer
+  //  and a scene-'shutdown' hook, so an interrupted cinematic (restart /
+  //  menu navigation mid-sequence) can never leak a siren or a fake cop
+  //  into the next run.  Display objects die with the scene as usual.
+  //
+  //  _endGame('busted', extra) is DEFERRED to the finalizer — and guarded
+  //  by bc.finalized — because the bail dock already happened in
+  //  _onArrested and _endGame settles the wallet + trip stats; calling it
+  //  at cinematic start (or twice) would bank the run before the player
+  //  saw the takedown, or double-count the trip.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /** Cinematic-only cruiser.  Lives in cops.cops purely so the EXISTING
+   *  render pipeline (bodies, light bars, near-field seat synthesis, fog
+   *  glow) draws it like any pursuit unit — but CopSystem.update, collision
+   *  passes and arrest bookkeeping never run while the cinematic owns the
+   *  frame, and cleanup splices every `_cine` entry back out. */
+  _bcSpawnCop(rel, lane, kind) {
+    const cop = {
+      id:         Math.random(),
+      position:   this.player.position + rel,
+      laneOffset: lane,
+      speed:      kind === 'barricade' ? -1 : 1,   // sign only drives facing art
+      baseSpeed:  0,
+      side:       'front',
+      kind,                       // 'rear' = chase (back art) | 'barricade' = nose-on
+      colorSet:   'police',
+      color:      0xFFFFFF,
+      alive:      true,
+      parked:     kind === 'barricade',
+      painted:    false,
+      _cine:      true,
+    };
+    this.cops.cops.push(cop);
+    return cop;
+  }
+
+  /** Entry point for every ordinary run-ending arrest (from _onArrested). */
+  _startBustedCinematic(extra = {}) {
+    // Trigger-once, and never after the run already ended some other way —
+    // in any weird edge, fall through to the plain ending so the BUSTED
+    // screen can never be lost behind a guard.
+    if (this._bustedCine) return;
+    if (this._gameFinished || this._statsTripEnded || this._restartModalOpen) {
+      this._endGame('busted', extra);
+      return;
+    }
+    const p = this.player;
+    // Kill any state that would fight the scripted motion.
+    this.cops.arrestPending = false;
+    this._pitSpin        = null;    // gameplay PIT-spin one-shot, if mid-flight
+    p.xImpulse           = 0;
+    p.steerVelocity      = 0;
+    this._leaveCockpitView();       // cinematic is exterior — needs the car sprite
+    this.playerSprite?.setAlpha(1); // clear a frozen mid-blink i-frame alpha
+    // Duck the radio exactly like _endGame does (its later call is a no-op);
+    // the cinematic SFX ride a separate gain, so they stay at full level.
+    this.audio?.setPaused?.(true);
+
+    const reduced = (() => {
+      try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+      catch (_) { return false; }
+    })();
+
+    // Spin direction from the PIT contact side: hit on one rear quarter,
+    // mirrored art the other way.  Contact side is chosen from road position
+    // so the slide never aims the car further into oncoming.
+    const dir = p.x >= 0 ? 1 : -1;
+    const clampLane = (v) => Math.max(-0.88, Math.min(0.88, v));
+
+    // ── PIT car: prefer a live pursuing cruiser (continuity — the cop that
+    // was on you is the one that takes you down); otherwise stage one just
+    // below the projection floor, where _rearCopForwardFade means it FADES
+    // into view as it climbs instead of popping.
+    let pitCop = null, bestD = Infinity;
+    for (const c of this.cops.cops) {
+      if (!c.alive || c.parked || c.fleeing || c.kind !== 'rear' || c._cine) continue;
+      const rel = c.position - p.position;
+      if (rel < 6000 && Math.abs(rel - 2500) < bestD) { bestD = Math.abs(rel - 2500); pitCop = c; }
+    }
+    const contactLane = clampLane(p.x - dir * 0.14);
+    if (pitCop) {
+      pitCop._cine = true;   // absorbed into the cinematic; removed on cleanup
+    } else {
+      pitCop = this._bcSpawnCop(900, contactLane, 'rear');
+    }
+
+    // ── Formation records.  rel/lane are PLAYER-relative so the convergence
+    // stays glued to the decelerating car; cars are created NOW at far/faded
+    // positions (distant light-dots ahead, fade-band behind) so nothing ever
+    // teleports on screen.  Arrival times are staggered per the spec.
+    const cars = [
+      { cop: this._bcSpawnCop(21000, clampLane(p.x * 0.5), 'barricade'),   // front blocker
+        fromRel: 21000, toRel: 5300, fromLane: clampLane(p.x * 0.5), toLane: clampLane(p.x),
+        startT: BC.CONVERGE_START, dur: 0.85, brake: true, arrived: false },
+      { cop: this._bcSpawnCop(850, clampLane(p.x - 0.70), 'rear'),          // driver side
+        fromRel: 850, toRel: 3260, fromLane: clampLane(p.x - 0.70), toLane: clampLane(p.x - 0.52),
+        startT: BC.CONVERGE_START + 0.10, dur: 0.90, brake: true, arrived: false },
+      { cop: this._bcSpawnCop(950, clampLane(p.x + 0.70), 'rear'),          // passenger side
+        fromRel: 950, toRel: 3140, fromLane: clampLane(p.x + 0.70), toLane: clampLane(p.x + 0.52),
+        startT: BC.CONVERGE_START + 0.35, dur: 0.85, brake: true, arrived: false },
+      { cop: this._bcSpawnCop(18000, clampLane(p.x - dir * 0.2), 'barricade'), // 5th, front diagonal
+        fromRel: 18000, toRel: 6600, fromLane: clampLane(p.x - dir * 0.2), toLane: clampLane(p.x - dir * 0.5),
+        startT: BC.CONVERGE_START + 0.60, dur: 0.95, brake: true, arrived: false },
+    ];
+    // Leftover live pursuit cops (beyond the reused PIT car) ease back out of
+    // frame through the existing fade band — no pop-out, no frozen strays.
+    for (const c of this.cops.cops) {
+      if (!c.alive || c.parked || c.fleeing || c._cine || c.kind !== 'rear') continue;
+      c._cine = true;
+      const rel = Math.max(600, Math.min(5000, c.position - p.position));
+      cars.push({ cop: c, fromRel: rel, toRel: 500, fromLane: c.laneOffset,
+                  toLane: c.laneOffset, startT: 0.45, dur: 1.2,
+                  brake: false, arrived: false, fadeOut: true });
+    }
+
+    // ── HUD off.  Objects are only HIDDEN — normal scene cleanup still owns
+    // them, and the next run's create() rebuilds visibility from scratch.
+    for (const o of (this._hudObjects ?? [])) o?.setVisible?.(false);
+    this.hudGfx?.clear?.();
+    // EffectsSystem.update is frozen with the rest of the loop, so its vice
+    // tint overlay would linger as a stale full-screen wash — clear it once
+    // (the sobering cut TO the arrest reads intentionally).
+    this.overlayGfx?.clear?.();
+
+    // ── Cinematic-owned overlays (world layer → uiCam must ignore them).
+    const skidGfx  = this.add.graphics().setDepth(6.5);    // under all cars
+    const flashGfx = this.add.graphics().setDepth(11.8);   // over the world
+    this._uiCam?.ignore?.([skidGfx, flashGfx]);
+    // Dip-to-black + stamp live on the UI camera (steady through shake).
+    const blackout = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2,
+      (C.WORLD_W ?? SCREEN_W) + 800, SCREEN_H + 300, 0x000000, 1)
+      .setDepth(200).setAlpha(0);
+    this.cameras.main.ignore(blackout);
+
+    const bc = this._bustedCine = {
+      t: 0,
+      extra,                    // ORIGINAL _endGame payload — passed through untouched
+      phase: 'pit',
+      reduced,
+      dir,
+      // Floor keeps a standstill bust (trap-stop warrant) from playing a
+      // zero-motion spin, without lurching the world forward noticeably.
+      speed0: Math.max(p.speed, MAX_SPEED * 0.12),
+      baseX: this.playerSprite?.x ?? SCREEN_W / 2,
+      spinDeg: 150 + Math.random() * 25,      // 150-175° — sideways-plus, still readable
+      pit: { cop: pitCop, contactLane,
+             fromRel:  Math.max(600, Math.min(5800, pitCop.position - p.position)),
+             fromLane: pitCop.laneOffset,
+             contactRel: 2500 },
+      cars,
+      skid: [],
+      skidGfx, flashGfx, blackout,
+      flash: 0,                 // white-flash seconds remaining
+      flashClock: 0,            // red/blue alternation (CopSystem.update is off)
+      kickX: 0, kickY: 0,       // directional camera kick (decays)
+      nextShake: -1,
+      smokeT: 0,
+      // one-shots
+      pitHit: false, sirens: null, spinSfx: null, containStarted: false, radioStarted: false,
+      stampShown: false, stampObjs: null,
+      skipped: false, finalized: false, cleaned: false,
+    };
+
+    // ── Skip input: fresh press only (ev.repeat rejected), and only after
+    // an input guard past the impact — the same key/tap that caused the
+    // arrest can't blow through the sequence.
+    bc.onKey = (ev) => { if (!ev?.repeat) this._bcTrySkip(); };
+    bc.onPtr = () => this._bcTrySkip();
+    this.input.keyboard?.on('keydown', bc.onKey);
+    this.input.on('pointerdown', bc.onPtr);
+
+    // Interrupted-cinematic safety: scene teardown always runs cleanup.
+    bc.shutdownFn = () => this._bustedCineCleanup();
+    this.events.once('shutdown', bc.shutdownFn);
+  }
+
+  /** Per-frame cinematic driver.  Owns player kinematics, cruiser motion,
+   *  SFX cues, overlays, and the deferred hand-off to _endGame. */
+  _updateBustedCinematic(rawDt) {
+    const bc = this._bustedCine;
+    const p  = this.player;
+    if (!bc || bc.finalized) { this._renderFrame(); return; }
+    const dt = Math.min(rawDt, 0.05);   // clamp hitch frames — beats stay on time
+    bc.t += dt;
+    const t  = bc.t;
+    const RM = bc.reduced;
+
+    // Emergency-light alternation (2 Hz — deliberately below unsafe flash
+    // rates).  getCopsForRender reads cops.lightFlash fresh every frame.
+    bc.flashClock += dt;
+    if (bc.flashClock >= 0.25) { bc.flashClock = 0; this.cops.lightFlash = !this.cops.lightFlash; }
+
+    bc.phase = t < BC.PIT_IMPACT_AT ? 'pit'
+      : t < BC.CONVERGE_START ? 'spin'
+      : t < BC.CONTAIN_START  ? 'converge'
+      : t < BC.STAMP_AT       ? 'contain' : 'stamp';
+
+    // ── Phase 1: PIT approach + contact ────────────────────────────────
+    if (!bc.pitHit) {
+      const u = Math.min(1, t / BC.PIT_IMPACT_AT);
+      const e = u * u;                              // accelerating lunge
+      const rel = bc.pit.fromRel + (bc.pit.contactRel - bc.pit.fromRel) * e;
+      bc.pit.cop.position   = p.position + rel;
+      bc.pit.cop.laneOffset = bc.pit.fromLane + (bc.pit.contactLane - bc.pit.fromLane) * e;
+      if (t >= BC.PIT_IMPACT_AT) {
+        bc.pitHit = true;
+        this.audio?.playSfx?.('sfx_busted_pit', { volume: 1.0 });
+        bc.sirens  = this.audio?.playSfx?.('sfx_busted_sirens', { volume: 0.72, loop: true });
+        bc.spinSfx = this.audio?.playSfx?.('sfx_busted_spinout', { volume: 0.85 });
+        this.effects?.triggerShake?.(RM ? 160 : 300, RM ? 0.006 : 0.015);
+        this.haptics?.crash?.();
+        bc.flash  = RM ? 0.045 : 0.07;              // white flash (50-80 ms)
+        bc.kickX  = bc.dir * (RM ? 5 : 13);         // sharp directional kick
+        bc.kickY  = RM ? 2 : 6;
+        bc.nextShake = t + 0.24;                    // aftershock train
+        // Contact sparks + smoke at the rear quarter.
+        const ps = this.playerSprite;
+        if (ps) {
+          const qx = ps.x + bc.dir * (ps.displayWidth || 78) * 0.34;
+          const qy = ps.y - 6;
+          this._spawnExplosion(qx, qy, 30);
+          this.explosions.push({ sx: qx, sy: qy - 8, sw: 26, timer: 0, maxTimer: 0.8, smoke: true });
+        }
+        // The PIT car has struck — from here it brakes back into the REAR
+        // BLOCKER slot of the formation (it becomes the 5th surrounding car).
+        bc.cars.push({ cop: bc.pit.cop, fromRel: bc.pit.contactRel, toRel: 2050,
+                       fromLane: bc.pit.contactLane,
+                       toLane: Math.max(-0.88, Math.min(0.88, p.x - bc.dir * 0.05)),
+                       startT: BC.CONVERGE_START + 0.20, dur: 0.75,
+                       brake: true, arrived: false });
+      }
+    }
+
+    // ── Player kinematics (time-based; NO gameplay damage/collision) ───
+    if (bc.pitHit) {
+      const su = Math.max(0, Math.min(1, (t - BC.PIT_IMPACT_AT) / (BC.SPIN_END - BC.PIT_IMPACT_AT)));
+      p.speed = bc.speed0 * Math.pow(1 - su, 1.6);  // rapid, front-loaded decel
+      if (su >= 1) p.speed = 0;
+    }
+    p.position += p.speed * dt;
+
+    // Decaying aftershocks behind the main impact shake.
+    if (bc.nextShake > 0 && t >= bc.nextShake && t < 1.7) {
+      const k = (1.7 - t) / 1.4;
+      this.effects?.triggerShake?.(110, (RM ? 0.0022 : 0.006) * Math.max(0.2, k));
+      bc.nextShake = t + 0.28;
+    }
+
+    // ── Phase 3: convergence ───────────────────────────────────────────
+    for (const rec of bc.cars) {
+      const cop = rec.cop;
+      const done = bc.skipped || t >= rec.startT + rec.dur;
+      if (done) {
+        if (!rec.arrived) {
+          rec.arrived = true;
+          if (rec.fadeOut) {
+            // Park it below the projection floor — _rearCopForwardFade reads
+            // 0 there, so it's invisible (getCopsForRender doesn't check
+            // `alive`, so killing it wouldn't remove it from the pass).
+            cop.position = p.position + 400;
+          } else if (rec.brake && !bc.skipped) {
+            // Brake bark, panned to where the cruiser sits on screen, with
+            // per-car pitch/level variation so five arrivals don't stack
+            // into one wall of sound.
+            const proj = this.road?.getVehicleProjection?.(rec.toRel, rec.toLane);
+            const pan  = proj ? Math.max(-0.8, Math.min(0.8, (proj.sx - SCREEN_W / 2) / (SCREEN_W / 2))) : 0;
+            this.audio?.playSfx?.('sfx_busted_brake', {
+              volume: 0.38 + Math.random() * 0.14,
+              rate:   0.92 + (bc.cars.indexOf(rec) % 5) * 0.045 + Math.random() * 0.03,
+              pan,
+            });
+            this.effects?.triggerShake?.(90, RM ? 0.0012 : 0.0025);   // settle tremor
+            if (proj) {
+              this.explosions.push({ sx: proj.sx, sy: proj.sy - 4, sw: Math.max(18, proj.sw * 0.4),
+                                     timer: 0, maxTimer: 0.7, smoke: true });
+            }
+          }
+        }
+        if (!rec.fadeOut) { cop.position = p.position + rec.toRel; cop.laneOffset = rec.toLane; }
+        else               cop.position = p.position + 400;
+      } else if (t >= rec.startT) {
+        const u = (t - rec.startT) / rec.dur;
+        const e = 1 - Math.pow(1 - u, 3);           // fast-in, braking settle
+        cop.position   = p.position + rec.fromRel + (rec.toRel - rec.fromRel) * e;
+        cop.laneOffset = rec.fromLane + (rec.toLane - rec.fromLane) * e;
+      } else {
+        cop.position = p.position + rec.fromRel;    // hold station until its cue
+      }
+    }
+
+    // ── Phase 4: containment one-shots ─────────────────────────────────
+    if (t >= BC.CONTAIN_START && !bc.containStarted) {
+      bc.containStarted = true;
+      this.audio?.playSfx?.('sfx_busted_rumble', { volume: 0.8 });
+      bc.sirens?.setVolume?.(0.40, 0.4);            // dynamic contrast for the hold
+    }
+    if (t >= BC.CONTAIN_START + 0.25 && !bc.radioStarted) {
+      bc.radioStarted = true;
+      this.audio?.playSfx?.('sfx_busted_radio', { volume: 0.65 });
+    }
+
+    // ── Phase 5: BUSTED stamp ──────────────────────────────────────────
+    if (t >= BC.STAMP_AT && !bc.stampShown) {
+      bc.stampShown = true;
+      bc.sirens?.setVolume?.(0.05, 0.06);           // sharp duck under the hit
+      this.audio?.playSfx?.('sfx_busted_stamp', { volume: 1.0 });
+      this.effects?.triggerShake?.(RM ? 80 : 140, RM ? 0.002 : 0.007);
+      this.haptics?.crash?.();
+      if (!RM) bc.flash = 0.05;
+      this._bcShowStamp();
+    }
+
+    // ── Dip to black → deferred _endGame (exactly once) ────────────────
+    const fadeU = (t - (BC.STAMP_AT + BC.STAMP_HOLD)) / BC.FADE_SEC;
+    if (fadeU > 0) bc.blackout.setAlpha(Math.min(1, fadeU));
+    if (fadeU >= 1.05) { this._finalizeBustedCinematic(); return; }
+
+    // ── Shared timers the frozen main loop normally advances ───────────
+    for (let i = this.explosions.length - 1; i >= 0; i--) {
+      const fx = this.explosions[i];
+      fx.timer += dt;
+      if (fx.kind === 'wreck') {
+        fx.sx      += (fx.lateralV ?? 0) * dt;
+        fx.rotation = (fx.rotation ?? 0) + (fx.spinV ?? 0) * dt;
+      }
+      if (fx.timer >= fx.maxTimer) {
+        if (fx.img?.destroy) fx.img.destroy();
+        this.explosions.splice(i, 1);
+      }
+    }
+
+    // ── Render the live world, then pose the player + overlays on top ──
+    this._renderFrame();
+    this._bcApplyPlayerPose(dt);
+    this._bcDrawOverlays(dt);
+
+    // Directional camera kick — applied AFTER _renderFrame so it overrides
+    // _applyDecoupledCameras' baseline scroll for this frame, then decays.
+    bc.kickX *= Math.exp(-dt * 9);
+    bc.kickY *= Math.exp(-dt * 9);
+    if (Math.abs(bc.kickX) > 0.1 || Math.abs(bc.kickY) > 0.1) {
+      try { this.cameras.main.setScroll(-(C.HUD_OFFSET_X ?? 0) + bc.kickX, bc.kickY); } catch (_) {}
+    }
+  }
+
+  /** Spinout pose — the genre's own spin frames (same set the gameplay PIT
+   *  spin uses), eased out to a final ~150-175° rest.  Runs AFTER
+   *  _renderFrame so the renderer's ground-anchor Y stands and we only own
+   *  texture / X / flip.  Missing frames degrade to the nearest available
+   *  one (or the plain rear view) — never to a stall. */
+  _bcApplyPlayerPose(dt) {
+    const bc = this._bustedCine;
+    const ps = this.playerSprite;
+    if (!bc || !ps || !bc.pitHit) return;
+    const su = Math.max(0, Math.min(1, (bc.t - BC.PIT_IMPACT_AT) / (BC.SPIN_END - BC.PIT_IMPACT_AT)));
+    const e  = 1 - Math.pow(1 - su, 3);             // snap around, then settle
+    const ang = e * bc.spinDeg;
+    // Angle → frame (30° buckets).  Filter to frames that actually loaded.
+    const base = this._playerArtKey || 'codex_beater_back';
+    let wantKey = base;
+    const bucket = Math.round(ang / 30) * 30;
+    if (bucket >= 30) {
+      for (let b = Math.min(150, bucket); b >= 30; b -= 30) {
+        const k = `codex_beater_spin_${String(b).padStart(3, '0')}`;
+        if (this.textures.exists(k)) { wantKey = k; break; }
+      }
+    }
+    if (ps.texture?.key !== wantKey && this.textures.exists(wantKey)) {
+      ps.setTexture(wantKey);
+      this._applyPlayerSpriteDisplaySize();
+    }
+    ps.setFlipX(wantKey !== base && bc.dir < 0);    // mirror the spin side
+    // Lateral slide: shoved out toward the contact-opposite side, easing
+    // back part-way as the car scrubs to a stop (reduced-motion: half).
+    const slideMax = (bc.reduced ? 28 : 55);
+    const slide = su < 0.6
+      ? slideMax * (1 - Math.pow(1 - su / 0.6, 2))
+      : slideMax * (1 - 0.35 * ((su - 0.6) / 0.4));
+    ps.x = bc.baseX + bc.dir * slide;
+    // Tire smoke + skid marks while the car is actually scrubbing.
+    if (su > 0.03 && su < 0.92) {
+      bc.smokeT -= dt;
+      if (bc.smokeT <= 0) {
+        bc.smokeT = 0.07;
+        const w = ps.displayWidth || 78;
+        this.explosions.push({
+          sx: ps.x + (Math.random() - 0.5) * w * 0.7,
+          sy: ps.y - 2 - Math.random() * 6,
+          sw: 20 + Math.random() * 14,
+          timer: 0, maxTimer: 0.75, smoke: true,
+        });
+      }
+      const w = ps.displayWidth || 78;
+      bc.skid.push(
+        { x: ps.x - w * 0.26, y: ps.y - 4, w: 7, age: 0 },
+        { x: ps.x + w * 0.26, y: ps.y - 4, w: 7, age: 0 },
+      );
+      if (bc.skid.length > 220) bc.skid.splice(0, bc.skid.length - 220);
+    }
+  }
+
+  /** Cinematic overlays: fading skid marks, the impact white flash, and the
+   *  restrained containment light wash (skipped under reduced motion). */
+  _bcDrawOverlays(dt) {
+    const bc = this._bustedCine;
+    if (!bc) return;
+    const wOff = (C.HUD_OFFSET_X ?? 0) + 60;
+    // Skid marks — screen-space streaks that scroll down with the (dying)
+    // road motion and fade out.  The renderer has no persistent road-decal
+    // system, so this is a cinematic-local approximation.
+    const sg = bc.skidGfx;
+    if (sg) {
+      sg.clear();
+      const scroll = (this.player.speed / MAX_SPEED) * 260 * dt;
+      for (let i = bc.skid.length - 1; i >= 0; i--) {
+        const m = bc.skid[i];
+        m.age += dt;
+        m.y   += scroll;
+        if (m.age > 2.2 || m.y > SCREEN_H + 30) { bc.skid.splice(i, 1); continue; }
+        sg.fillStyle(0x141414, 0.42 * (1 - m.age / 2.2));
+        sg.fillEllipse(m.x, m.y, m.w, m.w * 0.45);
+      }
+    }
+    const fg = bc.flashGfx;
+    if (fg) {
+      fg.clear();
+      // Containment light wash — a LOW-alpha full-scene red/blue alternation
+      // riding the same 2 Hz clock as the light bars.  Restrained by design;
+      // dropped entirely for reduced-motion users.
+      if (!bc.reduced && bc.t >= BC.CONTAIN_START && !bc.finalized) {
+        fg.fillStyle(this.cops.lightFlash ? 0x2244FF : 0xFF3333, 0.045);
+        fg.fillRect(-wOff, -60, SCREEN_W + wOff * 2, SCREEN_H + 120);
+      }
+      // Impact / stamp white flash (~50-80 ms).
+      if (bc.flash > 0) {
+        bc.flash -= dt;
+        fg.fillStyle(0xFFFFFF, Math.max(0, Math.min(0.75, (bc.flash / 0.07) * 0.75)));
+        fg.fillRect(-wOff, -60, SCREEN_W + wOff * 2, SCREEN_H + 120);
+      }
+    }
+  }
+
+  /** The BUSTED stamp — ending-screen blue (#35A7FF, GameOverScene CAUSE
+   *  table), slammed in on the steady UI camera so world shake can't smear
+   *  it.  Heavy-impact read: scale 1.35→1.0 easing IN, tiny rotation
+   *  correction, white edge-flash ghost behind it. */
+  _bcShowStamp() {
+    const bc = this._bustedCine;
+    if (!bc || bc.stampObjs) return;
+    const cx = SCREEN_W / 2, cy = SCREEN_H * 0.40;
+    const mk = (color, depth) => this.add.text(cx, cy, 'BUSTED', {
+      fontFamily: IMPACT, fontSize: '96px',
+      color, stroke: '#04121F', strokeThickness: 12, align: 'center',
+    }).setOrigin(0.5).setDepth(depth);
+    const ghost = mk('#FFFFFF', 119).setAlpha(0.9).setScale(1.5);
+    const stamp = mk('#35A7FF', 120).setScale(1.35).setAngle(bc.reduced ? 0 : -2.5);
+    stamp.setShadow(0, 5, '#001020', 16, true, true);
+    this.cameras.main.ignore([ghost, stamp]);   // UI-camera only
+    bc.stampObjs = [ghost, stamp];
+    this.tweens.add({ targets: stamp, scale: 1, angle: 0,
+                      duration: bc.reduced ? 90 : 120, ease: 'Cubic.easeIn' });
+    this.tweens.add({ targets: ghost, scale: 1.02, alpha: 0,
+                      duration: 180, ease: 'Quad.easeOut' });
+  }
+
+  /** Skip request (fresh key press / tap / click).  Jumps the shared clock
+   *  to a short surrounded tableau just before the stamp — the impact
+   *  always plays (guard), and both paths still end in the one finalizer. */
+  _bcTrySkip() {
+    const bc = this._bustedCine;
+    if (!bc || bc.finalized || bc.skipped) return;
+    if (bc.t < BC.PIT_IMPACT_AT + BC.SKIP_GUARD) return;   // input guard
+    if (bc.t >= BC.STAMP_AT - BC.SKIP_TABLEAU) return;     // already nearly there
+    bc.skipped = true;
+    bc.t = BC.STAMP_AT - BC.SKIP_TABLEAU;
+    // Snap motion to its finished state; the per-record `arrived` flags in
+    // the car loop place everyone silently (no five-brake pile-up).  The
+    // spinout screech would ring over the frozen tableau — fade it now.
+    bc.spinSfx?.stop?.(0.25);
+    bc.spinSfx = null;
+    this.player.speed = 0;
+    this.effects?.triggerShake?.(110, bc.reduced ? 0.002 : 0.004);
+  }
+
+  /** SINGLE finalization path — natural completion and skip both land here,
+   *  and bc.finalized makes the deferred _endGame impossible to run twice. */
+  _finalizeBustedCinematic() {
+    const bc = this._bustedCine;
+    if (!bc || bc.finalized) return;
+    bc.finalized = true;
+    this._bustedCineCleanup();
+    // The ORIGINAL extra (charge + bail already docked in _onArrested) rides
+    // through unchanged — the existing BUSTED plate/stats/buttons take over.
+    this._endGame('busted', bc.extra);
+  }
+
+  /** Idempotent teardown of everything the cinematic owns beyond plain
+   *  display objects: looping SFX voices, skip listeners, and the `_cine`
+   *  cruisers injected into cops.cops.  Runs from the finalizer AND from
+   *  the scene-'shutdown' hook, so retry / checkpoint / main-menu / an
+   *  interrupted cinematic all leave no sirens and no fake cops behind. */
+  _bustedCineCleanup() {
+    const bc = this._bustedCine;
+    if (!bc || bc.cleaned) return;
+    bc.cleaned = true;
+    try { this.audio?.stopAllSfx?.(0.12); } catch (_) {}
+    try { this.input?.off?.('pointerdown', bc.onPtr); } catch (_) {}
+    try { this.input?.keyboard?.off?.('keydown', bc.onKey); } catch (_) {}
+    try { this.events?.off?.('shutdown', bc.shutdownFn); } catch (_) {}
+    try {
+      const arr = this.cops?.cops;
+      if (arr) for (let i = arr.length - 1; i >= 0; i--) if (arr[i]?._cine) arr.splice(i, 1);
+    } catch (_) {}
   }
 
   /** Speed-trap traffic stop (Stage 3).  This is a road-trip speeding stop —

@@ -1286,6 +1286,136 @@ export class AudioSystem {
   }
   get musicPaused() { return !!this._musicPaused; }
 
+  // ── Cinematic SFX bus (BUSTED sequence, 2026-08-26) ────────────────────
+  // One-shot WAV effects decoded to AudioBuffers and played through a
+  // DEDICATED gain node wired straight to the destination — deliberately NOT
+  // through _master.  setPaused()/setMusicPaused() silence the radio by
+  // zeroing/ducking _master, and the arrest cinematic pauses the music while
+  // its own impacts/sirens keep playing, so these effects must not share that
+  // gain.  Full app mute still silences them (toggleMute suspends the whole
+  // AudioContext), which is the intended "mute everything" behavior.
+  //
+  // Loading is fail-soft by design: a fetch/decode error leaves a null entry
+  // and playSfx() returns null.  Callers treat sound as garnish — a missing
+  // file can never stall a cinematic or block the ending screen.
+
+  /** Lazily create the dedicated SFX gain (needs a live AudioContext). */
+  _sfxBus() {
+    if (!this._ctx) return null;
+    if (!this._sfxGain) {
+      this._sfxGain = this._ctx.createGain();
+      // Fixed level, independent of the music `volume` slider.
+      this._sfxGain.gain.value = AudioSystem.volumeToGain(this.sfxVolume ?? 0.9);
+      this._sfxGain.connect(this._ctx.destination);
+    }
+    return this._sfxGain;
+  }
+
+  /** Fetch a {key: url} map of one-shot effects.  Fetches start immediately
+   *  (no AudioContext needed); decode happens as soon as a ctx exists.  Keys
+   *  already fetched (even by a previous scene instance) are skipped, so
+   *  calling this on every GameScene create is free after the first run. */
+  loadSfx(map) {
+    this._sfxRaw     = this._sfxRaw     ?? new Map();   // key → ArrayBuffer
+    this._sfxBuffers = this._sfxBuffers ?? new Map();   // key → AudioBuffer|null
+    for (const [key, url] of Object.entries(map ?? {})) {
+      if (this._sfxRaw.has(key) || this._sfxBuffers.has(key)) continue;
+      this._sfxRaw.set(key, null);   // claimed — no duplicate fetch
+      // encodeURI: the shipped folder is "sound Effects" — the space must be
+      // %20 on the wire or some servers/CDNs 404 the request.
+      fetch(encodeURI(url))
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.arrayBuffer(); })
+        .then(buf => { this._sfxRaw.set(key, buf); this._decodeSfx(key); })
+        .catch(err => {
+          this._sfxBuffers.set(key, null);
+          console.warn(`[sfx] ${key} failed to load (${err?.message ?? err}) — continuing without it`);
+        });
+    }
+  }
+
+  /** Decode one fetched entry once a ctx exists.  Safe to call repeatedly. */
+  _decodeSfx(key) {
+    const raw = this._sfxRaw?.get(key);
+    if (!raw || !this._ctx || this._sfxBuffers?.has(key)) return;
+    this._sfxBuffers.set(key, null);   // claim (decode is async)
+    // slice(): decodeAudioData detaches the ArrayBuffer — keep the original
+    // intact so a retried decode isn't handed a corpse.
+    this._ctx.decodeAudioData(raw.slice(0))
+      .then(audio => { this._sfxBuffers.set(key, audio); })
+      .catch(() => console.warn(`[sfx] ${key} failed to decode — continuing without it`));
+  }
+
+  /** Play a loaded effect.  Returns a handle {setVolume(v, rampSec),
+   *  stop(fadeSec)} or null when the buffer is missing/undecoded — callers
+   *  must treat null as "no sound, carry on".
+   *  opts: volume (linear 0..1+), rate (playbackRate), pan (-1..1), loop. */
+  playSfx(key, { volume = 1, rate = 1, pan = 0, loop = false } = {}) {
+    try {
+      if (!this.ready) this.init?.();
+      const ctx = this._ctx;
+      const bus = this._sfxBus();
+      if (!ctx || !bus) return null;
+      if (!this._sfxBuffers?.get(key)) this._decodeSfx(key);
+      const buf = this._sfxBuffers?.get(key);
+      if (!buf) return null;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const src  = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop   = !!loop;
+      src.playbackRate.value = rate;
+      const g = ctx.createGain();
+      g.gain.value = Math.max(0, volume);
+      src.connect(g);
+      let panNode = null;
+      if (pan && typeof ctx.createStereoPanner === 'function') {
+        panNode = ctx.createStereoPanner();
+        panNode.pan.value = Math.max(-1, Math.min(1, pan));
+        g.connect(panNode); panNode.connect(bus);
+      } else {
+        g.connect(bus);
+      }
+      const active = (this._sfxActive = this._sfxActive ?? new Set());
+      const handle = {
+        key,
+        setVolume: (v, rampSec = 0) => {
+          try {
+            const t = ctx.currentTime;
+            g.gain.cancelScheduledValues(t);
+            if (rampSec > 0.01) {
+              g.gain.setValueAtTime(g.gain.value, t);
+              g.gain.linearRampToValueAtTime(Math.max(0.0001, v), t + rampSec);
+            } else g.gain.value = Math.max(0, v);
+          } catch (_) {}
+        },
+        stop: (fadeSec = 0) => {
+          try {
+            if (fadeSec > 0.01) {
+              const t = ctx.currentTime;
+              g.gain.cancelScheduledValues(t);
+              g.gain.setValueAtTime(g.gain.value, t);
+              g.gain.linearRampToValueAtTime(0.0001, t + fadeSec);
+              src.stop(t + fadeSec + 0.02);
+            } else src.stop();
+          } catch (_) {}
+          active.delete(handle);
+        },
+      };
+      src.onended = () => {
+        active.delete(handle);
+        try { src.disconnect(); g.disconnect(); panNode?.disconnect(); } catch (_) {}
+      };
+      active.add(handle);
+      src.start();
+      return handle;
+    } catch (_) { return null; }
+  }
+
+  /** Stop every live SFX voice (looping sirens included).  Called on scene
+   *  shutdown / cinematic teardown so nothing hums into the next scene. */
+  stopAllSfx(fadeSec = 0) {
+    for (const h of [...(this._sfxActive ?? [])]) h.stop(fadeSec);
+  }
+
   /** Short radar-detector "blip".  GameScene calls this at an escalating
    *  cadence as the player nears a speed trap; pitch + level rise with
    *  `intensity` (0 = far edge of the half-mile window, 1 = at the trap).

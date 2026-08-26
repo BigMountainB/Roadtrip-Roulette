@@ -65,6 +65,14 @@ export class HapticSystem {
     }
   }
 
+  /** Single strongest supported pulse — used by the BUSTED cinematic for the
+   *  PIT impact and the stamp hit.  Deliberately unthrottled (callers fire it
+   *  at most twice in ~5 s): HEAVY impact on native, a long vibrate on web. */
+  crash() {
+    if (!this.enabled) return;
+    this._fire(180, 2);
+  }
+
   _fire(ms, tier) {
     // Capacitor Haptics — preferred on iOS where navigator.vibrate is
     // ignored.  Lazily resolved; if the plugin isn't present we fall

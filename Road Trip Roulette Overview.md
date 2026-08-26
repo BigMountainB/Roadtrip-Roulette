@@ -204,6 +204,54 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-26 — BUSTED arrest cinematic (in-engine PIT → spinout → 5-cruiser containment → stamp)
+
+A run-ending arrest no longer cuts straight to the ending screen.  `_onArrested`'s non-Easy path
+now routes through **`_startBustedCinematic(extra)`** — a ~4.8 s in-world sequence on one clock
+(`this._bustedCine.t`, phase bands in the `BC` constants near the top of GameScene):
+
+1. **PIT (0–0.30 s)** — the nearest live pursuit cruiser (or one staged below the projection
+   floor, fading in via `_rearCopForwardFade`) lunges into the rear quarter: `sfx_busted_pit`,
+   looping `sfx_busted_sirens`, heavy shake + directional camera kick, `HapticSystem.crash()`
+   (new, strongest one-shot), 70 ms white flash, sparks/smoke.
+2. **Spinout (→1.55 s)** — the genre's own `codex_beater_spin_030…150` frames eased to a
+   150–175° rest, speed decays to 0, lateral sprite slide, tire smoke + fading screen-space skid
+   streaks (`sfx_busted_spinout`).
+3. **Convergence (1.35–3.15 s)** — the PIT car brakes back into the REAR blocker slot; front
+   blocker + fifth diagonal arrive nose-on from far ahead (kind `barricade`), driver/passenger
+   side cars climb from the fade band.  Staggered arrivals, per-car `sfx_busted_brake` with
+   pitch/volume variation + stereo pan from the projection, settle tremors.  Cinematic cruisers
+   are plain records in `cops.cops` tagged `_cine` so the EXISTING render pipeline (bodies, light
+   bars, near-field seat synth) draws them — CopSystem.update/collisions never run (the whole
+   gameplay loop is parked behind the `_bustedCine` early-return in `update()`).
+4. **Containment (3.0–4.05 s)** — `sfx_busted_rumble` + `sfx_busted_radio`, sirens ducked for
+   contrast, restrained 2 Hz red/blue full-scene wash riding the same light-bar clock.
+5. **Stamp (4.05 s)** — sirens cut, `sfx_busted_stamp`, UI-camera `BUSTED` in the ending-screen
+   blue (#35A7FF) slammed 1.35→1.0 with a white edge ghost, second haptic hit; ~0.45 s hold,
+   0.28 s dip to black, then **`_endGame('busted', originalExtra)` exactly once** (bail was
+   already docked in `_onArrested`; `bc.finalized` guards the deferral).
+
+**Skip**: any fresh key press / tap after a 0.55 s post-impact guard (`ev.repeat` rejected) jumps
+the same clock to a 0.6 s tableau before the stamp — skip and natural completion share the one
+finalizer.  **Cleanup**: `_bustedCineCleanup()` is idempotent, runs from the finalizer AND a
+scene-shutdown hook — stops every SFX voice, removes listeners, splices `_cine` cops.
+**Reduced motion** (`prefers-reduced-motion`): softer shakes/kick, no light wash, no stamp tilt.
+
+**Audio plumbing (AudioSystem)**: new fail-soft SFX bus — `loadSfx()` (fetch, `encodeURI` for the
+`sound Effects` folder space) → `decodeAudioData` → `playSfx(key, {volume, rate, pan, loop})` on a
+**dedicated gain wired straight to the destination**, so `setPaused`/`setMusicPaused` (which zero
+`_master`) duck the radio without muting the cinematic; full mute still silences everything via
+ctx suspend.  `stopAllSfx()` on teardown.  Missing/blocked WAVs log one warning and the sequence
+plays silently — the BUSTED screen can never be lost to audio.
+
+`busted_late` (TOO LATE + 5★ technical loss) untouched — still the checkpoint-slider modal.
+Easy-mode busts untouched (respawn, no cinematic).  Verified headless (playwright): full run,
+skip, two arrests across restarts, retry navigation, blocked-audio run — `_endGame` once each,
+no sirens or `_cine` cops surviving the scene.  Known compromises: skid marks are cinematic-local
+screen-space streaks (no persistent decal system exists); no spotlight/headlight aim at the
+player (renderer has no forward cop-beam support); rear blocker reads "under" the player per the
+pseudo-3D near-field convention rather than literally behind.
+
 ### 2026-08-17 — Deploy script was re-syncing 1.3 GB to iCloud; nosync symlinks restored (`ad29087`)
 Owner asked whether the disposable build copies need saving (`dist/`, `website/demo|fully/`).
 Answer: NO — all gitignored, regenerated wholesale by `npm run deploy`; the only protected things
