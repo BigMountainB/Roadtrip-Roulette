@@ -204,6 +204,37 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 4) — Mile-0 restarts, continue-regression fix, ITEMS COLLECTED, Easy-bust cinematic
+
+Four owner items in one pass:
+
+- **RESTART DRIVE always returns to mile 0** (owner directive).  The snapshot is now
+  RUN-level: latched once per fresh run, banked in the registry (`runStartSnap`), and REUSED by
+  every resumed drive — so any number of continues later, restart still rewinds to the run's
+  true start.  It now also snapshots the save's `upgrades`/`tempUpgrades`/`accessories` maps +
+  vehicleId and restores them on restart, so a mid-run part purchase can't survive while its
+  cost is refunded.  The accounting block ("CASH BEFORE DRIVE") reads from the same snapshot,
+  so it always equals the RESTART button.  Applies to the ending screens AND the out-of-gas
+  card's START OVER.
+- **BUG: continue could offer a checkpoint BEHIND the last resume point** (owner repro:
+  resumed at 4.00 mi, next crash's Continue said 2.00 mi at 13 HP for half the cash).  The
+  pt-3 checkpoint re-derivation snapped to the nominal town boundary; it now pins
+  `_lastCheckpoint.position` to the RESUME POSITION itself (banked ground), keeping the
+  nearest town's name for display.
+- **VICE LOG → ITEMS COLLECTED** (owner request): button renamed, modal retitled, and two new
+  count sections above the food grid — WEAPONS (💨/🎆/🍩 with ×N from a new per-drive
+  `_runItemCounts` tally in `_onCollect`) and SPECIAL (🤠 Redneck Rage / ☕ Quad Shot), '—'
+  when empty.  Food & Drink keeps the existing unlocked-vice grid (peaks, pickup counts,
+  unlock hints, discovery teaser).
+- **Easy-mode bust no longer teleports with no explanation** (owner report: cops beat you
+  below 0 HP → instant respawn, no cut screen).  Easy busts now play the same BUSTED takedown
+  cinematic; the finalizer then RESTARTS the scene at the checkpoint reproducing the old
+  release exactly (docked bail, full repair, stars cleared, vices/fuel/weapons preserved)
+  plus a "🚔 BUSTED — released at X · −$Y bail" arrival banner.  The run still never ends.
+- Harness (`scripts/validate_endings.mjs`) grew scenarios: mile-0 restart, upgrade-purchase
+  revert, continue-never-regresses, items-modal counts (container-aware text probe), and the
+  Easy-bust cinematic-respawn flow.  All green + full tests + build.
+
 ### 2026-08-27 (pt 3) — Ending screens: RESTART/CONTINUE outcome buttons + drive accounting
 
 The failure endings (CRASHED / BUSTED / PASSED OUT) now let the player compare both choices

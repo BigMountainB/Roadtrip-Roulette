@@ -593,6 +593,9 @@ export class GameScene extends Phaser.Scene {
     // (HP / fuel / stars / vices / weapons), applied on top of the
     // checkpoint-respawn defaults in create().  See endingOutcomes.js.
     this._restartSnapExtras  = data?.restartSnapExtras ?? null;
+    // One-shot popup shown after a cinematic-driven respawn (Easy bust)
+    // so the release is explained instead of silently teleporting.
+    this._arrivalBanner      = data?.arrivalBanner ?? null;
     // Arrest endings already assess their displayed bail loss before the
     // player reaches GameOver, so their checkpoint retry preserves that
     // post-bail total instead of applying the crash half-cash penalty too.
@@ -2077,6 +2080,10 @@ export class GameScene extends Phaser.Scene {
     // restore _driveStartSnap on RESTART DRIVE.
     this._runStartWallet = null;
     this._driveStartSnap = null;
+    // Per-drive pickup tally for the ending screen's ITEMS COLLECTED log —
+    // weapons (F12) and specials (rage / quad shot); food counts come from
+    // the ViceSystem's own pickupCounts.
+    this._runItemCounts  = { weapons: {}, special: {} };
     this.gameTime        = 0;
     // Party clock — counts down from Difficulty.partyClockSec() until
     // hitting 0.  Pullman finish before 0 → ON TIME (cash bonus).
@@ -2581,9 +2588,14 @@ export class GameScene extends Phaser.Scene {
         this._passedRestStops   = new Set(REST_STOPS.filter(r => r.t <= _tNow).map(r => r.id));
         this._passedCheckpoints = new Set(CHECKPOINTS.filter(c => c.t <= _tNow).map(c => c.name));
         const _cpNear = [...CHECKPOINTS].reverse().find(c => c.t <= _tNow);
+        // POSITION = the resume point itself, not the town boundary behind
+        // it: the spot you continued from is banked ground.  Snapping to the
+        // nominal boundary made a continue-then-crash offer a checkpoint
+        // BEHIND where the last continue resumed (owner report 2026-08-27:
+        // resumed at 4.00 mi, next continue said 2.00 mi).
         this._lastCheckpoint = {
           name:      _cpNear?.name ?? 'Seattle, WA',
-          position:  _cpNear ? _cpNear.t * _segWorld : 0,
+          position:  this.player.position,
           scoreAtCP: this.score,
         };
       }
@@ -2612,6 +2624,13 @@ export class GameScene extends Phaser.Scene {
         if (Array.isArray(rs.f12Tokens) && this.cops) this.cops.f12Tokens = [...rs.f12Tokens];
         if (rs.coalAmmo != null && this.cops) this.cops.coalAmmo = rs.coalAmmo;
         this._restartSnapExtras = null;
+      }
+      // Arrival banner (Easy-bust release) — after a short beat so the
+      // world is visibly running when it appears.
+      if (this._arrivalBanner) {
+        const _ab = this._arrivalBanner;
+        this._arrivalBanner = null;
+        this.time.delayedCall(500, () => this._showPopup?.(_ab, '#FF6666', 4.5));
       }
       // Skip the title overlay so the player drops straight back in.
       this._awaitingStart = false;
@@ -4496,18 +4515,43 @@ export class GameScene extends Phaser.Scene {
     // repeated restarts re-latch identical values, so a later failed state
     // can never overwrite what "the start of this drive" means.
     if (this._runStartWallet == null && !this._awaitingStart) {
-      this._runStartWallet = Math.round(this.score);
-      this._driveStartSnap = {
-        cash:       this._runStartWallet,
-        position:   Math.round(this.player.position),
-        locName:    this._lastCheckpoint?.name ?? 'Seattle, WA',
-        hp:         this.damage?.getDurability?.() ?? null,
-        fuelMi:     this.player?.gasMi ?? null,
-        stars:      this.cops?.stars ?? 0,
-        viceLevels: { ...(this.vices?.levels ?? {}) },
-        f12Tokens:  [...(this.cops?.f12Tokens ?? [])],
-        coalAmmo:   this.cops?.coalAmmo ?? 0,
-      };
+      // RUN-level snapshot (owner 2026-08-27: "restarting should always
+      // start at mile 0").  Latched ONCE per run — a FRESH start builds it
+      // and banks it in the registry; every resumed drive (checkpoint
+      // continue, restart, rest-stop return, live resume) REUSES the banked
+      // one, so RESTART DRIVE always rewinds to the run's true beginning no
+      // matter how many continues happened in between.  Includes the save's
+      // upgrade/accessory maps + vehicle so mid-run purchases can't survive
+      // a restart while their cost is refunded.
+      const _fresh = !this._resumeFromStop && this._resumeFromPosition == null
+                  && !this._resumeLive && !this._titleResumeSnap;
+      const _save = this.registry.get('save');
+      let _snap = !_fresh ? this.registry.get('runStartSnap') : null;
+      if (!_snap) {
+        _snap = {
+          cash:       Math.round(this.score),
+          // Fresh runs begin at mile 0 by definition; daily stages begin at
+          // their stage city.  (The car has rolled a few world units by the
+          // time this latches — display-irrelevant, so pin the real start.)
+          position:   this._dailyStage ? Math.round(this.player.position) : 0,
+          locName:    this._lastCheckpoint?.name ?? 'Seattle, WA',
+          hp:         this.damage?.getDurability?.() ?? null,
+          fuelMi:     this.player?.gasMi ?? null,
+          stars:      this.cops?.stars ?? 0,
+          viceLevels: { ...(this.vices?.levels ?? {}) },
+          f12Tokens:  [...(this.cops?.f12Tokens ?? [])],
+          coalAmmo:   this.cops?.coalAmmo ?? 0,
+          vehicleId:  this.player?.vehicleId ?? 'beater',
+          upgrades:     JSON.parse(JSON.stringify(_save?.get?.('upgrades')     ?? {})),
+          tempUpgrades: JSON.parse(JSON.stringify(_save?.get?.('tempUpgrades') ?? {})),
+          accessories:  JSON.parse(JSON.stringify(_save?.get?.('accessories')  ?? {})),
+        };
+        this.registry.set('runStartSnap', _snap);
+      }
+      this._driveStartSnap = _snap;
+      // Accounting is run-level too, so CASH BEFORE DRIVE always equals the
+      // RESTART DRIVE button's amount.
+      this._runStartWallet = _snap.cash;
     }
 
     // ── Ending cinematic (BUSTED arrest / fatal CRASH) ─────────────────
@@ -10869,6 +10913,12 @@ export class GameScene extends Phaser.Scene {
     this._showPopup?.('💥 CRASH — recover!', '#FF4444');
   }
 
+  /** Count a non-vice pickup for the ending screen's ITEMS COLLECTED log. */
+  _tallyItem(group, label) {
+    const g = (this._runItemCounts ??= { weapons: {}, special: {} })[group];
+    if (g) g[label] = (g[label] ?? 0) + 1;
+  }
+
   _onCollect(sprite) {
     const type = sprite.collectibleType;
 
@@ -10884,11 +10934,13 @@ export class GameScene extends Phaser.Scene {
 
     if (type === 'rage') {
       this._startRedneckRage();
+      this._tallyItem('special', '\u{1F920} Redneck Rage');
       return;
     }
 
     if (type === 'espresso') {
       // QUAD SHOT — instantly clears the Tiredness bar (the panic button).
+      this._tallyItem('special', '\u2615 Quad Shot');
       this.survival?.applyItem('quadshot', undefined, this._survivalItemMods());
       this._showPopup?.('☕ QUAD SHOT!\nWIDE AWAKE — tiredness cleared', '#42A5F5');
       this.cameras?.main?.flash?.(300, 120, 90, 40);
@@ -10929,6 +10981,10 @@ export class GameScene extends Phaser.Scene {
         this._showPopup?.('🎸 BONUS AMMO!', '#FFD24D');
       }
       this.stats?.recordWeaponCollected(invType ?? sprite.type);
+      this._tallyItem('weapons', {
+        f12_coal: '\u{1F4A8} Rolling Coal', f12_fireworks: '\u{1F386} Fireworks',
+        f12_paint: '\u{1F369} Donuts',
+      }[sprite.type] ?? 'Weapon');
       const labels = {
         f12_coal:      '💨 ROLLING COAL',
         f12_fireworks: '🎆 FIREWORKS',
@@ -19694,10 +19750,19 @@ export class GameScene extends Phaser.Scene {
       // doesn't immediately auto-resume the dead one (mirrors __startOver).
       try { this.registry.get('save')?.set?.('liveRun', null); } catch (_) {}
       this.audio?.setPaused?.(false);
-      // RESTART DRIVE semantics (owner 2026-08-27): restore the drive-start
-      // snapshot — cash, position, HP, fuel, stars, vices, weapons — instead
-      // of a plain restart that silently kept the dead run's wallet.
+      // RESTART DRIVE semantics (owner 2026-08-27): restore the run-start
+      // snapshot — cash, position, HP, fuel, stars, vices, weapons, and the
+      // save's upgrade maps — instead of a plain restart that silently kept
+      // the dead run's wallet and purchases.
       if (_snap) {
+        try {
+          const _sv = this.registry.get('save');
+          if (_snap.upgrades)     _sv?.set?.('upgrades',     JSON.parse(JSON.stringify(_snap.upgrades)));
+          if (_snap.tempUpgrades) _sv?.set?.('tempUpgrades', JSON.parse(JSON.stringify(_snap.tempUpgrades)));
+          if (_snap.accessories)  _sv?.set?.('accessories',  JSON.parse(JSON.stringify(_snap.accessories)));
+          if (_snap.vehicleId)    this.registry?.set?.('vehicleId', _snap.vehicleId);
+          _sv?.save?.();
+        } catch (_) {}
         this.scene.restart({
           resumeFromPosition:     _snap.position,
           checkpointRestartScore: _snap.cash,
@@ -24986,23 +25051,27 @@ export class GameScene extends Phaser.Scene {
     // Non-easy falls through to _endGame, whose failAllActive is then a no-op.
     this.missions?.failAllActive?.('busted');
 
-    // EASY mode — a bust doesn't end the run; you keep the cash dock but get
-    // sent back to the last checkpoint/rest stop (Seattle/start if none passed)
-    // and released, cops cleared and car repaired, to carry on the trip.
+    // EASY mode — a bust doesn't end the run; the player is released at the
+    // last checkpoint with the cash dock applied.  It used to teleport there
+    // IN-PLACE with only a popup — "the game just starts immediately with no
+    // explanation" (owner 2026-08-27) — so it now plays the same BUSTED
+    // takedown cinematic first, then respawns via a scene restart that
+    // reproduces the old release exactly: docked cash, full repair, stars
+    // cleared, vices/fuel/weapons preserved, plus an arrival banner.
     if (Difficulty.mode?.() === 'easy') {
-      const backTo = cp.position ?? 0;
-      this.player.position = backTo;
-      this.player.speed    = 0;
-      this.lastSegIdx      = Math.floor(backTo / SEG_LENGTH);
-      this.cops?.clearArrest?.();          // despawn cops, zero stars + counters
-      this.damage?.reset?.();              // full repair
-      // Re-baseline the checkpoint so the next bust only docks NEW earnings.
-      this._lastCheckpoint = { ...cp, scoreAtCP: this.score };
-      this._showPopup?.(
-        `🚔 BUSTED — back to ${cp.name ?? 'the start'}\n−$${lost}`,
-        '#FF4444',
-      );
-      this._arrestHandled = false;         // allow a later bust this run
+      this._startBustedCinematic({ charge: 'RECKLESS DRIVING', losses: lost }, {
+        position:               cp.position ?? 0,
+        checkpointRestartScore: Math.round(this.score),   // bail docked above
+        extras: {
+          hp:         this.damage?.getMax?.() ?? 100,     // full repair
+          fuelMi:     this.player?.gasMi ?? null,
+          stars:      0,
+          viceLevels: { ...(this.vices?.levels ?? {}) },
+          f12Tokens:  [...(this.cops?.f12Tokens ?? [])],
+          coalAmmo:   this.cops?.coalAmmo ?? 0,
+        },
+        banner: `🚔 BUSTED — released at ${cp.name ?? 'the start'}\n−$${lost.toLocaleString()} bail`,
+      });
       return;
     }
 
@@ -25073,9 +25142,13 @@ export class GameScene extends Phaser.Scene {
     return cop;
   }
 
-  /** Entry point for every ordinary run-ending arrest (from _onArrested). */
-  _startBustedCinematic(extra = {}) {
+  /** Entry point for every ordinary arrest (from _onArrested).  On Easy an
+   *  `easyRespawn` payload rides along: the finalizer then RESTARTS the
+   *  scene at the checkpoint with that state instead of ending the run —
+   *  the cinematic is identical either way. */
+  _startBustedCinematic(extra = {}, easyRespawn = null) {
     this._startEndingCinematic('busted', extra, null);
+    if (this._endingCine) this._endingCine.easyRespawn = easyRespawn;
   }
 
   /** Entry point for every fatal non-police crash (from the damage 'wreck'
@@ -25854,6 +25927,19 @@ export class GameScene extends Phaser.Scene {
     if (!ec || ec.finalized) return;
     ec.finalized = true;
     this._endingCineCleanup();
+    // Easy-mode bust: the run continues — respawn at the checkpoint through
+    // the normal resume path (docked cash + full repair + preserved
+    // vices/fuel/weapons in the payload) instead of ending the run.
+    if (ec.easyRespawn) {
+      const er = ec.easyRespawn;
+      this.scene.restart({
+        resumeFromPosition:     er.position,
+        checkpointRestartScore: er.checkpointRestartScore,
+        restartSnapExtras:      er.extras,
+        arrivalBanner:          er.banner,
+      });
+      return;
+    }
     this._endGame(ec.cause, ec.extra);
   }
 
@@ -26184,6 +26270,7 @@ export class GameScene extends Phaser.Scene {
       score:           Math.round(this.score),
       outcomes:        _outcomes,
       driveStartCash:  this._runStartWallet,
+      itemLog:         this._runItemCounts ?? null,
       // Net wallet change for THIS drive (earnings minus fines/bail/penalty —
       // can be negative).  Null when the start was never latched (defensive).
       runEarned:       this._runStartWallet != null

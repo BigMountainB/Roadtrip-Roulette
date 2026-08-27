@@ -115,6 +115,11 @@ console.log('A — earn + inventory change, crash, RESTART DRIVE restores snapsh
     gs._driveStartSnap.f12Tokens = ['donut'];         // drive began holding a donut
     gs.score += 500;                                   // mid-drive earnings
     gs.cops.f12Tokens = ['donut', 'fireworks'];        // mid-drive pickup
+    gs._runItemCounts.weapons = { 'Rolling Coal': 2 }; // items-collected tally
+    // Mid-run purchase that a restart must revert (cost is refunded by the
+    // cash restore, so the part cannot survive).
+    const sv = gs.registry.get('save');
+    sv?.set?.('upgrades', { beater: { engine: 'engine_1' } });
   });
   await sleep(300);
   const preSnap = await page.evaluate(() => ({ ...window.__phaserGame.scene.getScene('Game')._driveStartSnap }));
@@ -130,6 +135,26 @@ console.log('A — earn + inventory change, crash, RESTART DRIVE restores snapsh
   const delta = go.finalScore - go.startCash;
   check((delta >= 0) === /EARNED/.test(sumLine ?? 'LOST'), 'delta label matches sign', `delta=${delta} label=${sumLine}`);
   await page.screenshot({ path: OUTDIR + 'crashed_desktop.png' });
+  // ITEMS COLLECTED modal — weapons/special counts render.
+  await page.evaluate(() => window.__phaserGame.scene.getScene('GameOver')._openViceLog());
+  await sleep(300);
+  const modalTexts = await page.evaluate(() => {
+    const out = [];
+    const walk = (list) => list?.forEach?.(o => {
+      if (o.type === 'Text') out.push(o.text);
+      if (o.list) walk(o.list);           // containers (the modal layer)
+    });
+    walk(window.__phaserGame.scene.getScene('GameOver').children.list);
+    return out;
+  });
+  check(modalTexts.some(t => /ITEMS COLLECTED/.test(t ?? '')), 'items modal title renamed');
+  check(modalTexts.some(t => /Rolling Coal ×2/.test(t ?? '')), 'weapon pickup count listed');
+  await page.screenshot({ path: OUTDIR + 'items_collected.png' });
+  await page.evaluate(() => {
+    const go2m = window.__phaserGame.scene.getScene('GameOver');
+    go2m._closeViceLog?.();
+  });
+  await sleep(200);
   // Apply RESTART via the same method the button calls.
   await page.evaluate(() => window.__phaserGame.scene.getScene('GameOver')._applyRestartOutcome());
   await sleep(1500);
@@ -142,6 +167,10 @@ console.log('A — earn + inventory change, crash, RESTART DRIVE restores snapsh
   check(Math.round(st.hp) === Math.round(preSnap.hp), 'post-restart HP = snapshot', `${st.hp} vs ${preSnap.hp}`);
   check(Math.abs((st.fuel ?? 0) - (preSnap.fuelMi ?? 0)) < 0.6, 'post-restart fuel = snapshot', `${st.fuel} vs ${preSnap.fuelMi}`);
   check(JSON.stringify(st.f12) === JSON.stringify(['donut']), 'restart restores drive-start inventory (pickup removed)', JSON.stringify(st.f12));
+  check(go.outcomes.restart.mi === 0, 'restart always returns to mile 0', String(go.outcomes.restart.mi));
+  const upg = await page.evaluate(() => window.__phaserGame.scene.getScene('Game').registry.get('save')?.get?.('upgrades'));
+  check(JSON.stringify(upg?.beater ?? {}) === JSON.stringify(preSnap.upgrades?.beater ?? {}),
+        'restart reverts mid-run upgrade purchase', JSON.stringify(upg));
 
   // ═════ SCENARIO B: repeat restarts can't duplicate money ═════
   console.log('B — second crash + restart restores the SAME snapshot');
@@ -180,6 +209,8 @@ console.log('A — earn + inventory change, crash, RESTART DRIVE restores snapsh
   await waitGameOver(page);
   const go4 = await readGameOver(page);
   check(go4.outcomes.cont.cash === Math.floor(go4.finalScore / 2), 'second continue halves current remaining', `${go4.outcomes.cont.cash} vs ${go4.finalScore}`);
+  check(go4.outcomes.cont.mi >= c3.mi - 0.01,
+        'continue never offers a checkpoint behind the last resume point', `${go4.outcomes.cont.mi} vs ${c3.mi}`);
   await page.close();
 }
 
@@ -294,6 +325,38 @@ console.log('I — mobile aspect + large values: layout fits');
   check(go.texts.some(t => /\$99,999,999/.test(t ?? '')), 'large restart cash rendered with commas');
   check(go.texts.some(t => /…/.test(t ?? '')), 'long location truncated with ellipsis');
   await page.screenshot({ path: OUTDIR + 'crashed_mobile.png' });
+  await page.close();
+}
+
+// ═════ SCENARIO J: Easy bust — cinematic plays, then checkpoint respawn ═════
+console.log('J — easy bust: takedown cinematic, respawn with full HP + banner');
+{
+  const page = await newPage();
+  await startRun(page, 'easy');
+  await page.evaluate(() => {
+    const gs = window.__phaserGame.scene.getScene('Game');
+    gs.score = 3000;
+    gs.cops.stars = 3; gs.cops.arrestPending = true;
+  });
+  await sleep(1200);
+  const mid = await page.evaluate(() => {
+    const gs = window.__phaserGame.scene.getScene('Game');
+    return { cine: !!gs._endingCine, kind: gs._endingCine?.kind,
+             easy: !!gs._endingCine?.easyRespawn };
+  });
+  check(mid.cine && mid.kind === 'busted' && mid.easy, 'easy bust runs the BUSTED cinematic with respawn payload', JSON.stringify(mid));
+  await sleep(6500);   // cinematic (~4.8s) + respawn
+  const end = await page.evaluate(() => {
+    const g = window.__phaserGame;
+    const gs = g.scene.getScene('Game');
+    return { gameOver: g.scene.isActive('GameOver'), game: g.scene.isActive('Game'),
+             hp: gs.damage?.getDurability?.(), max: gs.damage?.getMax?.(),
+             cash: Math.round(gs.score), popup: gs._popupText?.text ?? gs.popupText?.text ?? null };
+  });
+  check(!end.gameOver && end.game, 'no GameOver screen — run continues', JSON.stringify(end));
+  check(end.hp === end.max, 'respawned fully repaired (old Easy rule kept)', `${end.hp}/${end.max}`);
+  check(end.cash <= 3000, 'bail stayed docked (no refund on respawn)', String(end.cash));
+  await page.screenshot({ path: OUTDIR + 'easy_bust_respawn.png' });
   await page.close();
 }
 

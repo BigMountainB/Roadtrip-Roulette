@@ -102,6 +102,8 @@ export class GameOverScene extends Phaser.Scene {
     // → the legacy single-line buttons render instead.
     this.outcomes       = data?.outcomes   ?? null;
     this.driveStartCash = data?.driveStartCash ?? null;
+    // Weapons/specials picked up this drive (food comes from viceSummary).
+    this.itemLog        = data?.itemLog    ?? null;
     // Why the run ended, recorded at the gameplay trigger site. Absent on old
     // saves / existing call sites -> selectTip falls back to a generic tip.
     this.failReason     = data?.reason     ?? null;
@@ -467,11 +469,11 @@ export class GameOverScene extends Phaser.Scene {
     }
 
     if (this.viceSummary) {
-      this._makeButton(SCREEN_W - 70, 24, 120, 28, '📋 VICE LOG', 0x222244, 0xFFFFFF,
+      this._makeButton(SCREEN_W - 96, 24, 172, 28, '🎒 ITEMS COLLECTED', 0x222244, 0xFFFFFF,
                        () => this._openViceLog());
     }
     if (this.tripSummary && isWin) {
-      this._makeButton(SCREEN_W - 70, 58, 120, 28, '📊 SUMMARY', 0x224422, 0xFFFFFF,
+      this._makeButton(SCREEN_W - 96, 58, 172, 28, '📊 SUMMARY', 0x224422, 0xFFFFFF,
                        () => this._openTripSummary());
     }
 
@@ -776,19 +778,48 @@ export class GameOverScene extends Phaser.Scene {
     layer.add(scrim);
 
     // Title
-    const title = this.add.text(CX, 22, 'VICE LOG — THIS RUN', {
+    const title = this.add.text(CX, 16, 'ITEMS COLLECTED — THIS RUN', {
       fontSize: '20px', fontFamily: IMPACT,
       color: '#FFCC44', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5, 0);
     layer.add(title);
+
+    // ── WEAPONS + SPECIAL — one compact count line each (owner 2026-08-27:
+    // "show the number of each sprite picked up: Weapons, Food, Special").
+    // Counts come from GameScene's per-drive tally; '—' when nothing.
+    const fmtCounts = (obj) => {
+      const entries = Object.entries(obj ?? {});
+      if (!entries.length) return '—';
+      return entries.map(([label, n]) => `${label} ×${n}`).join('   ·   ');
+    };
+    const sectionLine = (y, header, body) => {
+      const h = this.add.text(SCREEN_W * 0.04, y, header, {
+        fontSize: '13px', fontFamily: IMPACT, color: '#88CCFF',
+        stroke: '#000', strokeThickness: 2,
+      });
+      const b2 = this.add.text(SCREEN_W * 0.04 + 96, y + 1, body, {
+        fontSize: '12px', fontFamily: 'Arial', fontStyle: 'bold',
+        color: body === '—' ? '#777F8C' : '#F4F7FF',
+        wordWrap: { width: SCREEN_W * 0.84 },
+      });
+      layer.add([h, b2]);
+    };
+    sectionLine(46, 'WEAPONS', fmtCounts(this.itemLog?.weapons));
+    sectionLine(66, 'SPECIAL', fmtCounts(this.itemLog?.special));
+
+    const foodHdr = this.add.text(SCREEN_W * 0.04, 88, 'FOOD & DRINK', {
+      fontSize: '13px', fontFamily: IMPACT, color: '#88CCFF',
+      stroke: '#000', strokeThickness: 2,
+    });
+    layer.add(foodHdr);
 
     // Two-column rows — ONLY unlocked vices are listed.  Locked ones are
     // hidden entirely so which (and how many) remain is a surprise (per
     // user); their unlock method is revealed only AFTER they're unlocked.
     const COL_X    = [SCREEN_W * 0.04, SCREEN_W * 0.52];
     const COL_W    = SCREEN_W * 0.44;
-    const ROW_H    = 60;
-    const TOP_Y    = 60;
+    const ROW_H    = 56;
+    const TOP_Y    = 108;
 
     const unlockedVices = VICE_ORDER.filter(id => !!(this.viceSummary[id]?.unlocked));
 
@@ -1224,6 +1255,18 @@ export class GameOverScene extends Phaser.Scene {
     // finished" isn't a meaningful rewind there.
     if (!r?.snap || !isFailureCause(this.cause)) { this._retrySameSettings(); return; }
     const s = r.snap;
+    // Mid-run purchases must not survive while their cost is refunded:
+    // restore the save's upgrade/accessory maps and vehicle to their
+    // run-start copies (deep-copied at latch time and again here so a later
+    // run can't mutate the banked snapshot through shared references).
+    try {
+      const save = this.registry?.get?.('save');
+      if (s.upgrades)     save?.set?.('upgrades',     JSON.parse(JSON.stringify(s.upgrades)));
+      if (s.tempUpgrades) save?.set?.('tempUpgrades', JSON.parse(JSON.stringify(s.tempUpgrades)));
+      if (s.accessories)  save?.set?.('accessories',  JSON.parse(JSON.stringify(s.accessories)));
+      if (s.vehicleId)    this.registry?.set?.('vehicleId', s.vehicleId);
+      save?.save?.();
+    } catch (_) {}
     this.scene.start('Game', {
       resumeFromPosition:     s.position ?? 0,
       checkpointRestartScore: r.cash,
