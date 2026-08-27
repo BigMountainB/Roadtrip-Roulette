@@ -2646,6 +2646,13 @@ export class GameScene extends Phaser.Scene {
       if (rs) {
         this.player.position = rs.t * (ROUTE_SEGS * SEG_LENGTH);
         this.score           = this._resumeScore || 0;
+        // Merge protection (owner 2026-08-27: "my car is mid-accident the
+        // moment I return to the road") — 3 s of i-frames on freeway
+        // re-entry so whatever sits at the merge point can't total the car
+        // before the player has control.  The existing i-frame blink shows
+        // the window.  (The _invincibleUntil = 0 reset runs EARLIER in
+        // create, so setting it here sticks.)
+        this._invincibleUntil = (this.time?.now ?? 0) + 3000;
         // Forward warp burns gas equal to the trip skipped — same as
         // if the player had actually driven those miles.  Gas can go
         // straight to empty on long warps (intentional: refuel at the
@@ -5273,6 +5280,11 @@ export class GameScene extends Phaser.Scene {
         this._trapLightWasOn    = false;
         this.cops.endTrapPursuit?.();   // trooper pulls off
         this._issueTrafficTicket();     // Stage 3 — charge the fine / DUI / bust
+        // Complying wipes the slate (owner 2026-08-27): you stopped, you paid
+        // (or got a warning) — every star clears and the pursuit ends.  Runs
+        // AFTER the ticket so the warning-chance roll still reads the real
+        // wanted level.  clearArrest also despawns pursuers + zeroes counters.
+        this.cops.clearArrest?.();
       }
     } else if (this._trapLightWasOn) {
       // Stop ended some other way (warp/pass-out/reset) — kill the flash.
@@ -10763,6 +10775,16 @@ export class GameScene extends Phaser.Scene {
 
     // ── Barricade cop — instant slow-to-45-mph for 5 seconds ─────────
     if (kind === 'barricade') {
+      // REDNECK RAGE bulldozes roadblock cruisers (owner 2026-08-27) — the
+      // cruiser explodes, the player keeps full speed: no damage, no flat
+      // tire, no slow.  Mirrors the rage rule in the NPC collision path.
+      if (this._rageActive?.()) {
+        this._spawnExplosion(sx, sy, sw);
+        cop.alive = false;
+        this.cops.cops.splice(idx, 1);
+        this.effects?.triggerShake?.(70, 0.003);
+        return;
+      }
       const impact = this._impactModel(cop.speed ?? 0, hit, { headOn: false });
       this._spawnExplosion(sx, sy, sw);
       p.xImpulse = sideDir * (1.4 + impact.severity * 1.3);
@@ -10999,6 +11021,13 @@ export class GameScene extends Phaser.Scene {
       // Roadblocks only exist once you're at 3+ stars — under that threshold
       // skip the collision entirely (matches the visual gate in Road.js).
       if (this.cops.starDisplay < 3) return;
+      // REDNECK RAGE bulldozes roadblocks (owner 2026-08-27) — burst +
+      // straight through: no damage, no slow, no flat tire, no star.
+      if (this._rageActive?.()) {
+        this._spawnExplosion(SCREEN_W / 2, SCREEN_H * 0.55, 44);
+        this.effects?.triggerShake?.(70, 0.003);
+        return;
+      }
       // Treat as a vehicle collision
       const p   = this.player;
       const seg = this.road.getSegment(p.position);

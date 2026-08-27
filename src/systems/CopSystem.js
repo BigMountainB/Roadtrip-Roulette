@@ -168,6 +168,14 @@ const PUSH_HP_PER_SPEED  = 6.0;        // HP at full speed; scales linearly
 // Still clear of the +/-CAR_LEN_Z (500) ram window, which is what this gap was
 // for originally: a parked cop must not register a ram every frame.
 const TAILGATE_GAP  = 900;
+// Pursuit reaction pack (owner 2026-08-27): the whole pack answers the
+// player's throttle REACT_PACK_MIN..+SPAN seconds late; individual units
+// spread only ±REACT_UNIT_JITTER/2 around that, and each holds its own
+// station gap up to STATION_JITTER beyond TAILGATE_GAP.
+const REACT_PACK_MIN    = 1.4;   // s — pack base lag lower bound
+const REACT_PACK_SPAN   = 0.8;   // s — pack base lag upper spread
+const REACT_UNIT_JITTER = 0.5;   // s — total per-unit spread around the pack
+const STATION_JITTER    = 500;   // units — per-cruiser extra following gap
 // How far back a pursuer still steers into the player's lane.  Must exceed
 // TAILGATE_GAP or a cop at station never lines up behind you.
 const LANE_TRACK_Z  = 2200;
@@ -1487,11 +1495,23 @@ export class CopSystem {
       const aDist = Math.abs(dist);
       // Where a pursuer actually aims: the player's CAR, not the camera.
       const pursuitZ = playerPos + PLAYER_VIRTUAL_Z;
-      // Reaction lag (owner 2026-08-04): rear pursuit drives against the
-      // player's speed AS OF 1.5-4 s AGO — see the history at the top of
-      // update().  Position/distance math stays instantaneous (the cop can
-      // SEE where you are; it just takes human time to answer the throttle).
-      cop._reactSec ??= 1.5 + Math.random() * 2.5;
+      // Reaction lag (owner 2026-08-04, re-tuned 2026-08-27): rear pursuit
+      // drives against the player's speed AS OF ~1.2-2.5 s AGO — see the
+      // history at the top of update().  Position/distance math stays
+      // instantaneous (the cop can SEE where you are; it just takes human
+      // time to answer the throttle).  Structured as a per-PURSUIT pack
+      // base plus a small per-UNIT jitter (owner: "not a hive mind — but
+      // their spread should be much smaller than their lag to the player"):
+      // every cruiser clearly trails the player's inputs, while units
+      // differ from each other by only a fraction of a second.
+      this._packReactSec ??= REACT_PACK_MIN + Math.random() * REACT_PACK_SPAN;
+      cop._reactSec ??= Math.max(0.8,
+        this._packReactSec + (Math.random() - 0.5) * REACT_UNIT_JITTER);
+      // Per-unit station gap: each cruiser holds its own following distance
+      // (TAILGATE_GAP + up to STATION_JITTER), so a pack on station sits in
+      // a loose staggered line instead of one rigid rank glued to a single
+      // clamp plane that mirrors every player speed change in lockstep.
+      const _tg = TAILGATE_GAP + (cop._stationGap ??= Math.random() * STATION_JITTER);
       const reactSpd = (cop.kind === 'rear' && !cop.parked && !cop.fleeing)
         ? this._playerSpeedAgo(cop._reactSec)
         : playerSpeed;
@@ -1802,7 +1822,7 @@ export class CopSystem {
         if (_copCarDist > 0) cop._demoting = true;
         if (cop._demoting) {
           cop.speed = Math.max(0, playerSpeed * 0.80);   // drift back
-          if (_copCarDist <= -TAILGATE_GAP) cop._demoting = false;
+          if (_copCarDist <= -_tg) cop._demoting = false;
         } else if (!_lunging) {
           // GUARD 1 — the speed ceiling, but ONLY across the last APPROACH_BAND
           // before the standoff.  It used to apply at every distance, which is
@@ -1811,7 +1831,7 @@ export class CopSystem {
           // pace and simply ARRIVES; inside it, it eases to the player's speed
           // so it settles in behind instead of slamming into the clamp.
           const _gap  = -_copCarDist;                      // >0 = behind the car
-          const _into = (TAILGATE_GAP + APPROACH_BAND) - _gap;
+          const _into = (_tg + APPROACH_BAND) - _gap;
           if (_into > 0) {
             const _starIdx = Math.max(1, Math.min(5, _starTier));
             // Ceiling reads the LAGGED speed (owner 2026-08-04): keyed to the
@@ -1819,7 +1839,7 @@ export class CopSystem {
             // never moved no matter how the player drove.
             const _ceil    = reactSpd * SPEED_CAP_BY_STAR[_starIdx];
             // t: 1 at the band's outer edge (keep full speed) → 0 at station.
-            const t = Math.max(0, Math.min(1, (_gap - TAILGATE_GAP) / APPROACH_BAND));
+            const t = Math.max(0, Math.min(1, (_gap - _tg) / APPROACH_BAND));
             const eased = _ceil + (cop.speed - _ceil) * t;
             cop.speed = Math.min(cop.speed, Math.max(_ceil, eased));
           }
@@ -1835,7 +1855,7 @@ export class CopSystem {
       // demoting so the fall-back stays smooth rather than snapping.
       if (_guarded && !cop._demoting) {
         // A cop mid-LUNGE may close to contact; it still may not pass.
-        const _limit = pursuitZ - (_lunging ? 0 : TAILGATE_GAP);
+        const _limit = pursuitZ - (_lunging ? 0 : _tg);
         if (cop.position > _limit) {
           cop.position = _limit;
           // Settle on the LAGGED speed too, or the clamp re-synced the cop to
@@ -1845,7 +1865,7 @@ export class CopSystem {
           // Hitting the clamp IS arriving on station — the one frame-rate
           // independent signal we have.  The hold clock keys off this.
           if (!_lunging) cop._onStation = true;
-        } else if (_copCarDist < -(TAILGATE_GAP + STATION_TOL)) {
+        } else if (_copCarDist < -(_tg + STATION_TOL)) {
           cop._onStation = false;      // genuinely fell back off station
         }
       }

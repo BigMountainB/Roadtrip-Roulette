@@ -2147,7 +2147,10 @@ export function buildRoute(count = ROUTE_SEGS) {
     if (i > 300 && i % 240 === 133 && t > 0.05) {
       sprites.push({
         type:            'cop_roadblock',
-        offset:          (rng.bool() ? 0.12 : -0.12),
+        // Random LANE placement (owner 2026-08-27) — snapped to the four
+        // lane centres like the weapon pickups, instead of the old ±0.12
+        // "always basically the middle" band.
+        offset:          [-0.75, -0.25, 0.25, 0.75][(rng.next() * 4) | 0],
         baseW: 800, baseH: 420,  // big and unmissable
         collected:       false,
         isCollectible:   true,

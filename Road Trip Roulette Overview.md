@@ -204,6 +204,27 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 5) — Five pursuit/traffic-QoL fixes (owner batch)
+
+- **Complying at a traffic stop wipes the slate**: after the held stop resolves (ticket or
+  warning), `cops.clearArrest()` runs — all stars gone, pursuers despawned, counters zeroed.
+  Runs AFTER the ticket so the warning-chance roll still reads the real wanted level.
+- **Redneck Rage bulldozes police roadblocks**: both the route `cop_roadblock` hazard and 5★
+  `barricade` cruisers now explode-and-pass-through during rage — no damage, no flat tire, no
+  slow, no star (mirrors the existing rage rule for traffic/cop collisions).
+- **Roadblocks spawn in random lanes**: RouteData's `cop_roadblock` offset now snaps to the
+  four lane centres (was ±0.12 — effectively always mid-road).
+- **3 s of i-frames on freeway re-entry from a rest stop** (owner: "my car is mid-accident the
+  moment I return to the road") — set in the `_resumeFromStop` create branch, shown by the
+  existing i-frame blink.
+- **Pursuit reaction re-tuned to a "pack" model** (owner: cops read as a hive mind): per-
+  PURSUIT base lag 1.4-2.2 s + per-UNIT jitter ±0.25 s (floor 0.8) replaces the flat 1.5-4 s
+  roll — every cruiser clearly trails the player's inputs while units differ from each other
+  by fractions of a second.  Each cruiser also holds its OWN station gap (TAILGATE_GAP + up to
+  500 units, `STATION_JITTER`), so a pack on station sits in a loose staggered line instead of
+  one rigid clamp plane mirroring every player speed change in lockstep.  chase.test updated
+  (52 asserts) + headless probes for all five behaviors.
+
 ### 2026-08-27 (pt 4) — Mile-0 restarts, continue-regression fix, ITEMS COLLECTED, Easy-bust cinematic
 
 Four owner items in one pass:

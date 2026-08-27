@@ -530,8 +530,13 @@ for (const s of [1, 2]) {
              pursuitCop(pp + PLAYER_VIRTUAL_Z - 2400)];
   cs.update(1 / 60, pp, MAX_SPEED * 0.5, 0);
   const lags = cs.cops.map(c => c._reactSec);
-  check('reaction lag — every unit gets one, inside 1.5-4 s',
-        lags.every(l => l >= 1.5 && l <= 4));
+  // Pack model (2026-08-27): base 1.4-2.2 s per pursuit, per-unit spread
+  // ±0.25 s (floored at 0.8) — units always clearly behind the PLAYER,
+  // only slightly out of step with EACH OTHER.
+  check('reaction lag — every unit gets one, inside 1.0-2.6 s',
+        lags.every(l => l >= 1.0 && l <= 2.6));
+  check('reaction lag — units spread less than the unit jitter',
+        Math.abs(lags[0] - lags[1]) <= 0.5 + 1e-9);
 }
 
 // PIT arming: reachable at 3★ (alongside, mid-lunge), never at 1-2★.
