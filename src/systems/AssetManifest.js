@@ -154,6 +154,11 @@ export const ASSET_MANIFEST = {
     // straight, one direction only — the renderer mirrors it for the other).
     // Default path = the DEFAULT_GENRE art; genreArtPath overrides per plate.
     { key: 'codex_beater_back_turn',     path: 'assets/culture/hiphop_phonk/vehicles/starter_back_turn.png' },
+    // ── STEERING ANGLE FRAMES (2026-08-27) ───────────────────────────────
+    // True 7° / 12° steering poses — the legacy single back_turn above stays
+    // only as a fallback for art sets that lack these.
+    { key: 'codex_beater_back_turn_007', path: 'assets/culture/hiphop_phonk/vehicles/starter_back_turn_007.png' },
+    { key: 'codex_beater_back_turn_012', path: 'assets/culture/hiphop_phonk/vehicles/starter_back_turn_012.png' },
     // ── PIT SPIN FRAMES (2026-08-22) ─────────────────────────────────────
     // The player's car rotating away from the camera at 30/60/90/120/150°.
     // Played as a short sequence when a cop lands a PIT, so the maneuver reads
@@ -615,6 +620,8 @@ export const GENRE_ART = {
   codex_beater_front: 'vehicles/starter_front.png',
   codex_beater_back:  'vehicles/starter_back.png',
   codex_beater_back_turn: 'vehicles/starter_back_turn.png',
+  codex_beater_back_turn_007: 'vehicles/starter_back_turn_007.png',
+  codex_beater_back_turn_012: 'vehicles/starter_back_turn_012.png',
   codex_beater_spin_030: 'vehicles/starter_spin_030.png',
   codex_beater_spin_060: 'vehicles/starter_spin_060.png',
   codex_beater_spin_090: 'vehicles/starter_spin_090.png',
@@ -627,12 +634,9 @@ export const GENRE_ART = {
 export function genreArtPath(key, genre) {
   if (!genre || !GENRE_ART[key]) return null;
   // Vehicle art gets its own revision so an installed/PWA build cannot keep
-  // the former Metal/Reggae roof-speaker versions after refresh.
-  const vehicleRev = key === 'codex_beater_back_turn'
-    ? '&v=turnfit-1'
-    : (key === 'codex_beater_front' || key === 'codex_beater_back')
-      ? '&v=roof-clear-2'
-      : '';
+  // stale versions after refresh.  angleset-1 = the 2026-08-27 full angle-set
+  // re-export (back/turn/front/spins all replaced in place).
+  const vehicleRev = key.startsWith('codex_beater') ? '&v=angleset-1' : '';
   return `assets/culture/${genre}/${GENRE_ART[key]}?g=${genre}${vehicleRev}`;
 }
 

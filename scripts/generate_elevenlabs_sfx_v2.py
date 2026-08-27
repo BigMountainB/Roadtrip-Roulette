@@ -40,6 +40,10 @@ EFFECTS = [
      "Single large aerial firework shell detonation heard outdoors from roughly 80 meters away. At 0.12 seconds a bright sharp chemical report arrives, immediately followed by a deep rounded air-pressure boom; the shell opens into many small crisp sparkling pops and a natural one-second open-sky decay. Real pyrotechnic scale, not a bomb. No launch whistle, crowd, voices, music, glass, debris or trailer braam."),
     ("firework_boom_take2.mp3", 1.35, .60,
      "Isolated professional display firework burst in open night sky: one sudden dry crack, broad low-frequency thump, then a wide spherical shower of delicate secondary crackles fading naturally. Microphone at safe medium distance, realistic outdoor delay and restrained echo. No rocket launch, crowd, speech, music, battlefield explosion, building debris or artificial cinematic sub-drop."),
+    ("firework_mortar_break_close_take1.mp3", 1.8, .74,
+     "One isolated large consumer firework mortar shell breaking overhead, microphone close beneath the display. At 0.10s: brutally sharp pyrotechnic crack and immediate chest-hitting concussive pressure wave, followed by a huge deep air boom and dense hot crackling stars. Loud, aggressive, physical and full-bandwidth; near-field outdoor perspective. No launch tube, crowd, voices, music, bomb debris, gunshot or distant muffling."),
+    ("firework_mortar_break_close_take2.mp3", 1.8, .66,
+     "Close overhead 3-inch aerial firework mortar detonation. Instant violent chemical report, hard low-frequency pressure slap, massive rounded boom, then dozens of bright secondary star cracks across the sky with a short natural outdoor tail. The listener is near the launch field, not far away. Extremely powerful but clean. No launch, crowd, speech, music, gunfire, collapsing objects or cinematic trailer sound."),
 ]
 
 

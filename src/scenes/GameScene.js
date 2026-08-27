@@ -69,13 +69,51 @@ import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorb
 const CAM_DEPTH = 0.84;
 const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
 
-// ── PIT spin (2026-08-22) ────────────────────────────────────────────────
-// Frames the player's car cycles through when a cop lands a PIT. Registered
-// per genre in AssetManifest (GENRE_ART), so each plate spins its own car.
-const PIT_SPIN_FRAMES = [
-  'codex_beater_spin_030', 'codex_beater_spin_060', 'codex_beater_spin_090',
-  'codex_beater_spin_120', 'codex_beater_spin_150',
+// ── Vehicle visual-orientation ladder (2026-08-27) ───────────────────────
+// Every angle frame the per-genre vehicle sets ship (registered in GENRE_ART,
+// loaded per plate).  0° is the live vehicle key (this._playerArtKey).  The
+// art's NATIVE rotation shows the vehicle's RIGHT flank — the nose swinging
+// toward screen-LEFT; the opposite direction is the same art mirrored at
+// render time (never duplicate mirrored files).  Angles past 180° fold back
+// down the same ladder mirrored, so one set covers a full 360° spin:
+//   0→180 native, 180→360 = mirrored 150/120/…/7/0.
+// Frame choice is nearest-available; a genre missing a frame logs ONE dev
+// warning and uses its neighbour (see _poseFrameFor).
+//
+// `nat` is each frame's NATIVE nose direction, measured from the shipped
+// art (2026-08-27 full-size review): the 7°/12° steering exports rotate
+// nose-LEFT (right flank visible — the owner-era turn-art convention),
+// while the 30-150° spin exports rotate nose-RIGHT.  The controller mirrors
+// per-frame against `nat`, so one continuous spin never changes apparent
+// direction at the 12°→30° seam despite the mixed source conventions.
+// (0° and 180° are symmetric; nat is nominal there.)
+const POSE_LADDER = [
+  { deg: 0,   key: null,                          nat: -1 },  // base rear view
+  { deg: 7,   key: 'codex_beater_back_turn_007',  nat: -1 },  // subtle steering
+  { deg: 12,  key: 'codex_beater_back_turn_012',  nat: -1 },  // strong steering
+  { deg: 30,  key: 'codex_beater_spin_030',       nat:  1 },
+  { deg: 60,  key: 'codex_beater_spin_060',       nat:  1 },
+  { deg: 90,  key: 'codex_beater_spin_090',       nat:  1 },  // exact side profile
+  { deg: 120, key: 'codex_beater_spin_120',       nat:  1 },
+  { deg: 150, key: 'codex_beater_spin_150',       nat:  1 },
+  { deg: 180, key: 'codex_beater_front',          nat:  1 },  // exact front view
 ];
+// Frames sized by their trimmed CAR content (no shared canvas convention);
+// the base rear view and the LEGACY single turn frame keep their dedicated
+// sizing rules in _applyPlayerSpriteDisplaySize.
+const POSE_SIZED_RE = /^codex_beater_(spin_\d+|back_turn_0\d+|front)$/;
+// Normal-steering ladder tuning: |wheel load| thresholds (with hysteresis so
+// input jitter can't flicker frames) and the visual-angle slew rates that
+// make every transition PASS THROUGH the intermediate frames (12→7→0 on
+// release, never a snap to straight).
+const STEER_POSE = {
+  ENGAGE_7:   0.18,   // a quick tap (~0.15 s of load) reaches the 7° frame
+  RELEASE_7:  0.10,
+  ENGAGE_12:  0.78,   // holding toward the limit (~0.5 s) advances to 12°
+  RELEASE_12: 0.60,
+  RATE_ENGAGE:  70,   // deg/s toward a larger angle
+  RATE_RELEASE: 50,   // deg/s back toward straight
+};
 const PIT_SPIN_SEC = 1.10;   // out and back — long enough to read, short enough
                              // that control never feels taken away for long
 
@@ -2089,10 +2127,12 @@ export class GameScene extends Phaser.Scene {
     this._finishCause     = null;
     this._statsTripEnded = false;   // one-shot guard for the stats trip-end hook
     this._arrestHandled  = false;   // one-shot guard so a bust charges bail once
-    // Per-texture trimmed-content cache (spin-frame sizing) — rebuilt every
-    // create so a genre-art swap (same texture keys, new pixels) can't serve
-    // stale content boxes.
-    this._texTrimCache   = new Map();
+    // Per-texture caches (angle-frame sizing + tire-contact anchors) —
+    // rebuilt every create so a genre-art swap (same texture keys, new
+    // pixels) can't serve stale content boxes or anchors.
+    this._texTrimCache      = new Map();
+    this._groundAnchorCache = new Map();
+    this._poseWarned        = new Set();
     // Ending-cinematic state (BUSTED arrest / fatal CRASH) — Phaser reuses
     // this scene instance across restarts, so a stale object here would
     // freeze the next run's update loop in the cinematic branch on frame
@@ -10026,6 +10066,10 @@ export class GameScene extends Phaser.Scene {
             this.textures.remove(TMP(k));   // drop the temp (frees its own glTexture)
           } catch (_) {}
         }
+        // The swapped textures keep their KEYS but not their pixels — every
+        // per-texture measurement (content boxes, tire-contact anchors) is
+        // now stale for the swapped art.
+        try { this._texTrimCache?.clear?.(); this._groundAnchorCache?.clear?.(); } catch (_) {}
         // Re-apply the player's vehicle sizing — the new art may differ in aspect.
         try { this._applyVehicleSwap?.(this.player?.vehicleId ?? 'beater'); } catch (_) {}
       });
@@ -14140,9 +14184,99 @@ export class GameScene extends Phaser.Scene {
    *
    * @param {number} dir  +1 / -1, the side the hit came from; mirrors the art.
    */
+  // ═══════════════════════════════════════════════════════════════════════
+  //  VEHICLE VISUAL-ORIENTATION CONTROLLER
+  //  ---------------------------------------------------------------------
+  //  One place that turns "show the car at N degrees, rotating this way"
+  //  into a texture + mirror + display size + ground anchor.  Every system
+  //  that poses the player car — normal steering (_updateSteerPose), the
+  //  gameplay PIT spin (_updatePitSpin), the automated exit turn
+  //  (_applyExitPose), and the BUSTED/CRASH ending cinematics — requests a
+  //  target visual angle + direction through _applyPoseFrame instead of
+  //  selecting image filenames itself.  Purely visual: gameplay position,
+  //  lane, collision body and physics never read from any of this.
+  //
+  //  dir convention: -1 = nose swinging screen-LEFT (the art's native
+  //  rotation, unmirrored) · +1 = nose swinging screen-RIGHT (mirrored).
+  //  Angles beyond 180° fold back down the mirrored ladder (POSE_LADDER),
+  //  so a continuous 0→360 value plays a full revolution with no reversal.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /** Nearest-available ladder frame for a FOLDED angle (0..180°).  A genre
+   *  missing the ideal frame logs one dev warning and degrades to its
+   *  nearest loaded neighbour (never another genre's car, never invisible).
+   *  The legacy single back_turn stands in around 7-12° when the true
+   *  steering frames are absent. */
+  _poseFrameFor(fold) {
+    // One-time dev warning for the frame this angle IDEALLY wants.
+    let want = POSE_LADDER[0];
+    for (const e of POSE_LADDER) {
+      if (Math.abs(fold - e.deg) < Math.abs(fold - want.deg)) want = e;
+    }
+    if (want.key && !this.textures.exists(want.key)) {
+      const warned = (this._poseWarned ??= new Set());
+      if (!warned.has(want.key)) {
+        warned.add(want.key);
+        console.warn(`[pose] ${want.key} not loaded for this genre — using nearest available angle`);
+      }
+    }
+    // Candidates = loaded ladder frames (+ the legacy turn as a ~10° stand-in
+    // when the 7° frame is missing).
+    let best = POSE_LADDER[0], bestErr = fold;
+    for (const e of POSE_LADDER) {
+      if (e.key && !this.textures.exists(e.key)) continue;
+      const err = Math.abs(fold - e.deg);
+      if (err < bestErr) { best = e; bestErr = err; }
+    }
+    if (!this.textures.exists('codex_beater_back_turn_007')
+        && this.textures.exists('codex_beater_back_turn')
+        && Math.abs(fold - 10) < bestErr) {
+      best = { deg: 10, key: 'codex_beater_back_turn', nat: -1 };
+    }
+    return best;
+  }
+
+  /** Apply a visual orientation to the player sprite: fold the continuous
+   *  angle onto the ladder, mirror for direction (and for the back half of a
+   *  full revolution), size by trimmed car content, and re-pin the tire-
+   *  contact ground anchor.  Never touches player physics or collision. */
+  _applyPoseFrame(angleDeg, dir = -1) {
+    const ps = this.playerSprite;
+    if (!ps) return;
+    const a = ((angleDeg % 360) + 360) % 360;
+    const fold = a <= 180 ? a : 360 - a;      // 181..359 → mirrored 179..1
+    const mirrorHalf = a > 180;
+    const f = this._poseFrameFor(fold);
+    const key = f.key ?? (this._playerArtKey || 'codex_beater_back');
+    if (!this.textures.exists(key)) return;   // base art still loading — hold
+    // The straight rear view needs no mirror.  For angled frames, the
+    // rotation we're SHOWING is `dir`, inverted on the back half of a full
+    // revolution (the fold); mirror whenever that differs from the frame's
+    // own native direction (the source sets are mixed — see POSE_LADDER).
+    const shown = (dir > 0 ? 1 : -1) * (mirrorHalf ? -1 : 1);
+    const flip = f.deg === 0 ? false : shown !== (f.nat ?? -1);
+    if (ps.flipX !== flip) ps.setFlipX(flip);
+    if (ps.texture?.key !== key) {
+      ps.setTexture(key);
+      this._applyPlayerSpriteDisplaySize();
+    }
+    // Anchor AFTER flip/texture — origin math is flip-aware, and this is what
+    // keeps the tire-contact midpoint nailed to the same road point across
+    // every frame swap (no hop, no drift).
+    this._applyPlayerGroundAnchor();
+  }
+
+  /** Gameplay PIT spin (survivable hit) — the car is swung out to ~140-160°
+   *  and unwinds, all through the shared pose controller.  `dir` is the
+   *  push direction from the collision: shoved LEFT (dir<0) kicks the tail
+   *  left, so the nose swings RIGHT (poseDir +1), and vice versa. */
   _startPitSpin(dir = 1) {
     if (this._cockpitActive) return;               // no exterior sprite to spin
-    this._pitSpin = { t: 0, dur: PIT_SPIN_SEC, dir: dir < 0 ? -1 : 1 };
+    this._pitSpin = {
+      t: 0, dur: PIT_SPIN_SEC,
+      poseDir: dir < 0 ? 1 : -1,
+      peak: 140 + Math.random() * 20,
+    };
   }
 
   /** Advance the PIT spin. Returns true while it owns the sprite, so the
@@ -14155,42 +14289,33 @@ export class GameScene extends Phaser.Scene {
     sp.t += dt;
     if (sp.t >= sp.dur) {
       this._pitSpin = null;
-      const base = this._playerArtKey || 'codex_beater_back';
-      if (this.textures.exists(base) && ps.texture?.key !== base) {
-        ps.setTexture(base);
-        this._applyPlayerSpriteDisplaySize();
-      }
-      ps.setFlipX(false);
+      this._applyPoseFrame(0, sp.poseDir);         // settle on the rear view
       return false;
     }
-    // Ease out: the car snaps sideways and unwinds, rather than ticking through
-    // the frames at a constant rate.
+    // Continuous out-and-back rotation: snap sideways fast, unwind through
+    // the same frames in reverse (150→120→…→7→0) rather than cutting.
     const u = sp.t / sp.dur;
-    const eased = u < 0.5 ? (u * 2) : (1 - (u - 0.5) * 2);
-    const idx = Math.min(PIT_SPIN_FRAMES.length - 1,
-                         Math.floor(eased * PIT_SPIN_FRAMES.length));
-    const key = PIT_SPIN_FRAMES[idx];
-    if (this.textures.exists(key)) {
-      // The art spins one way; mirror it when the hit came from the other
-      // side.  Flip BEFORE sizing — spin-frame origin math is flip-aware.
-      ps.setFlipX(sp.dir < 0);
-      if (ps.texture?.key !== key) {
-        ps.setTexture(key);
-        this._applyPlayerSpriteDisplaySize();
-      }
-    }
+    const tri = u < 0.5 ? u * 2 : 1 - (u - 0.5) * 2;
+    const eased = tri * tri * (3 - 2 * tri);       // smoothstep both ways
+    this._applyPoseFrame(eased * sp.peak, sp.poseDir);
     return true;
   }
 
+  /** Normal-steering pose — the 0° / 7° / 12° ladder (STEER_POSE tuning),
+   *  driven by the same wheel-load accumulator as before but expressed as a
+   *  CONTINUOUS visual angle slewed toward the active tier, so engaging and
+   *  releasing always step through the intermediate frame (0→7→12 and
+   *  12→7→0) with hysteresis against input jitter.  A quick tap shows 7°;
+   *  holding toward the limit advances to 12°.  Left/right is the same art
+   *  mirrored by the pose controller. */
   _updateSteerPose(dt, rawLean) {
     const ps = this.playerSprite;
     if (!ps || this._cockpitActive) return;
     // A PIT spin owns the sprite while it runs — otherwise the steer pose
     // would overwrite the spin frame on the very next line.
     if (this._updatePitSpin(dt)) return;
-    const base = 'codex_beater_back', turn = 'codex_beater_back_turn';
-    if (this._playerArtKey !== base || !this.textures.exists(turn)) return;
-    const P = (this._steerPose ??= { dir: 0, load: 0 });
+    if (this._playerArtKey !== 'codex_beater_back') return;
+    const P = (this._steerPose ??= { dir: 0, load: 0, tier: 0, angle: 0 });
 
     const mode   = this._steerPoseMode ?? 'classic';
     const intent = this._steerIntent ?? 0;
@@ -14202,37 +14327,52 @@ export class GameScene extends Phaser.Scene {
     // tracks the real wheel in classic mode.
     const RAMP_ENGAGE  = 3.0;
     const RAMP_RELEASE = 5.0;
-    const ENGAGE_AT  = 0.35;   // wheel load needed to show the turn art
-    const RELEASE_AT = 0.20;   // load below which the pose lets go (hysteresis)
     // Lateral velocity still counts for HOLDING a pose: if the player lets go
     // mid-slide the car is visibly still going sideways, and snapping upright
-    // there looks worse than holding the three-quarter view a beat longer.
+    // there looks worse than holding the angled view a beat longer.
     const DRIFT_HOLD = 0.12;
 
     const target = Math.abs(intent) >= DEAD ? intent : 0;
     const rate   = target === 0 ? RAMP_RELEASE : RAMP_ENGAGE;
     P.load += (target - P.load) * Math.min(1, rate * dt);
 
-    if (P.dir === 0) {
-      if (Math.abs(P.load) >= ENGAGE_AT) P.dir = Math.sign(P.load);
-    } else {
-      const drifting = Math.abs(rawLean) >= DRIFT_HOLD && Math.sign(rawLean) === P.dir;
-      const holding  = Math.sign(P.load) === P.dir && Math.abs(P.load) > RELEASE_AT;
-      if (!holding && !drifting) P.dir = 0;
+    // ── Tier ladder 0° ↔ 7° ↔ 12° with hysteresis ────────────────────
+    // `mag` is the load IN THE LATCHED DIRECTION — |load| alone can't tell
+    // a reversal from a hold, which left the pose stuck showing the old
+    // side while the wheel was already loaded the other way.  Opposite-sign
+    // load reads as 0, so the ladder unwinds through centre and the
+    // direction latch below re-engages on the new side.
+    const mag = P.dir === 0 ? Math.abs(P.load) : Math.max(0, P.load * P.dir);
+    const drifting = P.dir !== 0
+      && Math.abs(rawLean) >= DRIFT_HOLD && Math.sign(rawLean) === P.dir;
+    if (P.tier === 0) {
+      if (mag >= STEER_POSE.ENGAGE_7) P.tier = 7;
+    } else if (P.tier === 7) {
+      if (mag >= STEER_POSE.ENGAGE_12) P.tier = 12;
+      else if (mag < STEER_POSE.RELEASE_7 && !drifting) P.tier = 0;
+    } else if (mag < STEER_POSE.RELEASE_12) {
+      P.tier = 7;
     }
 
-    const wantTex = P.dir === 0 ? base : turn;
-    if (ps.texture.key !== wantTex) {
-      ps.setTexture(wantTex);
-      // Same canvas dims by asset contract, but re-assert the +/-2 sizing so a
-      // future art revision can never cause a scale jump on pose swap.
-      this._applyPlayerSpriteDisplaySize();
+    // ── Direction latch — engage with the load's sign; a reversal passes
+    // cleanly through centre (angle unwinds to 0 before the mirror flips). ──
+    if (P.dir === 0) {
+      if (P.tier > 0) P.dir = Math.sign(P.load) || -1;
+    } else if (P.tier === 0 && P.angle < 1) {
+      P.dir = 0;
+    } else if (Math.sign(P.load) === -P.dir && P.angle < 1) {
+      P.dir = -P.dir;
     }
-    const wantFlip = P.dir > 0;
-    if (ps.flipX !== wantFlip) ps.setFlipX(wantFlip);
-    // Texture and/or mirror may have just changed — re-pin the ground anchor so
-    // the tire-contact midpoint stays on exactly the same road point.
-    this._applyPlayerGroundAnchor();
+
+    // ── Continuous visual angle, slewed so 0↔12° always PASSES the 7°
+    // frame instead of snapping (and release unwinds 12→7→0). ──
+    const slew = P.tier > P.angle ? STEER_POSE.RATE_ENGAGE : STEER_POSE.RATE_RELEASE;
+    P.angle = P.tier > P.angle
+      ? Math.min(P.tier, P.angle + slew * dt)
+      : Math.max(P.tier, P.angle - slew * dt);
+
+    // intent < 0 is a LEFT turn = the art's native nose-left rotation (-1).
+    this._applyPoseFrame(P.angle, P.dir || -1);
   }
 
   /**
@@ -14270,10 +14410,19 @@ export class GameScene extends Phaser.Scene {
         ctx.drawImage(src, 0, 0);
         const d = ctx.getImageData(0, 0, W, H).data;
         // Lowest opaque pixel per column, and the lowest of those overall.
+        // Constrained to the robust CONTENT BOX (largest connected mass,
+        // edge-inset — see _texContentBox) so edge matte bars and detached
+        // neighbouring-frame slivers in some angle-set exports can't put
+        // the "ground" at the canvas border or under the wrong car.
+        const cb = this._texContentBox(texKey);
+        const inX = Math.max(3, Math.round(W * 0.012));
+        const inY = Math.max(3, Math.round(H * 0.012));
+        const sx0 = cb ? cb.x : inX, sx1 = cb ? cb.x + cb.w : W - inX;
+        const syT = cb ? cb.y : inY, syB = cb ? cb.y + cb.h - 1 : H - 1 - inY;
         const low = new Int32Array(W).fill(-1);
         let maxY = -1;
-        for (let x = 0; x < W; x++) {
-          for (let y = H - 1; y >= 0; y--) {
+        for (let x = sx0; x < sx1; x++) {
+          for (let y = syB; y >= syT; y--) {
             if (d[(y * W + x) * 4 + 3] > 40) { low[x] = y; if (y > maxY) maxY = y; break; }
           }
         }
@@ -14308,6 +14457,13 @@ export class GameScene extends Phaser.Scene {
         }
       }
     } catch (_) { /* tainted canvas / no DOM — keep the fallback */ }
+    // Single contact blob (tires merged in a 3/4 view) — anchor at the
+    // trimmed CONTENT's bottom-centre rather than the raw canvas bottom, so
+    // padded angle frames still sit on the road instead of floating.
+    if (out === FALLBACK) {
+      const cb = this._texContentBox(texKey);
+      if (cb) out = { u: (cb.x + cb.w / 2) / cb.cw, v: (cb.y + cb.h) / cb.ch, contacts: null };
+    }
     cache.set(texKey, out);
     return out;
   }
@@ -14448,27 +14604,55 @@ export class GameScene extends Phaser.Scene {
         const cx2 = cv.getContext('2d', { willReadFrequently: true });
         cx2.drawImage(src, 0, 0);
         const d = cx2.getImageData(0, 0, cv.width, cv.height).data;
-        let x0 = cv.width, y0 = cv.height, x1 = -1, y1 = -1;
-        // Scan INSET from the canvas edges: the 90°/120°/150° exports carry
-        // fully-opaque 2-3 px matte bars along the top and bottom edges
-        // (export artifact), which would stretch the box to the full canvas
-        // and reproduce the exact shrink this scan exists to fix.  A ~1%
-        // inset ignores edge artifacts; real car content sits well inside
-        // (worst case, an edge-clipped side view loses 3 px of bumper).
+        // Two robustness layers, both born from real export artifacts:
+        //  1. INSET from the canvas edges — some exports carry fully-opaque
+        //     2-3 px matte bars along the edges, which would stretch the box
+        //     to the full canvas.
+        //  2. LARGEST CONNECTED MASS — some frames retain a detached sliver
+        //     of the NEIGHBOURING turntable frame near an edge (e.g. the
+        //     classic_rock 120° export); a naive min/max box spans the gap
+        //     and mis-scales the car.  Take the biggest contiguous run of
+        //     occupied columns (bridging gaps ≤4 px), then the biggest run
+        //     of occupied rows within those columns.
         const inX = Math.max(3, Math.round(cv.width  * 0.012));
         const inY = Math.max(3, Math.round(cv.height * 0.012));
+        const colMass = new Int32Array(cv.width);
         for (let y = inY; y < cv.height - inY; y++) {
           for (let x = inX; x < cv.width - inX; x++) {
-            if (d[(y * cv.width + x) * 4 + 3] > 8) {
-              if (x < x0) x0 = x;
-              if (x > x1) x1 = x;
-              if (y < y0) y0 = y;
-              if (y > y1) y1 = y;
-            }
+            if (d[(y * cv.width + x) * 4 + 3] > 8) colMass[x]++;
           }
         }
-        if (x1 >= x0) box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1,
-                              cw: cv.width, ch: cv.height };
+        // Largest contiguous run of non-empty entries (gaps ≤4 bridge).
+        const bestRun = (mass, from, to) => {
+          let best = null, s = -1, end = -1, gap = 0, total = 0;
+          for (let i = from; i <= to; i++) {
+            const on = i < to && mass[i] > 0;
+            if (on) {
+              if (s < 0) { s = i; total = 0; }
+              total += mass[i]; end = i; gap = 0;
+            } else if (s >= 0 && (++gap > 4 || i >= to)) {
+              if (!best || total > best.total) best = { s, e: end, total };
+              s = -1; gap = 0;
+            }
+          }
+          if (s >= 0 && (!best || total > best.total)) best = { s, e: end, total };
+          return best;
+        };
+        const cRun = bestRun(colMass, inX, cv.width - inX);
+        if (cRun) {
+          const rowMass = new Int32Array(cv.height);
+          for (let y = inY; y < cv.height - inY; y++) {
+            for (let x = cRun.s; x <= cRun.e; x++) {
+              if (d[(y * cv.width + x) * 4 + 3] > 8) rowMass[y]++;
+            }
+          }
+          const rRun = bestRun(rowMass, inY, cv.height - inY);
+          if (rRun) {
+            box = { x: cRun.s, y: rRun.s,
+                    w: cRun.e - cRun.s + 1, h: rRun.e - rRun.s + 1,
+                    cw: cv.width, ch: cv.height };
+          }
+        }
       }
     } catch (_) { box = null; }
     cache.set(texKey, box);
@@ -14478,21 +14662,17 @@ export class GameScene extends Phaser.Scene {
   _applyPlayerSpriteDisplaySize(targetW = 78, fallbackH = 49) {
     if (!this.playerSprite) return;
     const texKey = this.playerSprite.texture?.key;
-    // Any non-spin texture uses the standard bottom-centre ground anchor —
-    // restore it in case a spin frame moved the origin (below).
-    const isSpin = !!texKey?.startsWith?.('codex_beater_spin_');
-    if (!isSpin && (this.playerSprite.originX !== 0.5 || this.playerSprite.originY !== 1)) {
-      this.playerSprite.setOrigin(0.5, 1);
-    }
-    // SPIN frames: size by the CAR, not the canvas — scale so the trimmed
-    // content matches the straight art's content HEIGHT (a turntable yaw
-    // keeps roof height steady while width naturally grows toward the 90°
-    // side view), and move the origin to the content's bottom-centre so the
-    // ground anchor holds despite each frame's arbitrary padding.  Origin-X
-    // is flip-aware (flipX mirrors content within the frame), so pose code
-    // must set flip BEFORE calling this.  Falls through to canvas-pinning
-    // only if the alpha scan failed — worse framing, never a stall.
-    if (isSpin) {
+    // ANGLE-SET frames (7°/12° steering, 30-150° spins, 180° front): size by
+    // the trimmed CAR content, not the canvas — the per-genre exports share
+    // NO canvas or padding convention, so pinning the canvas to 78 px shrank
+    // or grew the car as frames changed.  Scale so the content matches the
+    // straight art's content HEIGHT: a turntable yaw keeps the roof height
+    // steady while visible width grows naturally toward the 90° side view
+    // (never stretched to the rear view's width).  Origin/ground anchoring
+    // is OWNED by _applyPlayerGroundAnchor (tire-contact midpoint) — this
+    // helper only sizes.  Falls through to canvas-pinning only if the alpha
+    // scan failed — worse framing, never a stall.
+    if (POSE_SIZED_RE.test(texKey ?? '')) {
       const baseKey = 'codex_beater_back';
       const bb   = this._texContentBox(baseKey);
       const sb   = this._texContentBox(texKey);
@@ -14501,12 +14681,7 @@ export class GameScene extends Phaser.Scene {
         const bRatio = bSrc.height / bSrc.width;
         const bw = targetW + (bRatio >= 0.86 ? 2 : bRatio <= 0.72 ? -2 : 0);
         const f0 = bw / bSrc.width;          // straight art's px factor at 78±2
-        const f  = (bb.h * f0) / sb.h;       // spin factor: same car height
-        const cxu = (sb.x + sb.w / 2) / sb.cw;
-        this.playerSprite.setOrigin(
-          this.playerSprite.flipX ? 1 - cxu : cxu,
-          (sb.y + sb.h) / sb.ch,
-        );
+        const f  = (bb.h * f0) / sb.h;       // frame factor: same car height
         this.playerSprite.setDisplaySize(sb.cw * f, sb.ch * f);
         return;
       }
@@ -14563,11 +14738,21 @@ export class GameScene extends Phaser.Scene {
     const save = this.registry.get('save');
     const str = String(save?.activePlate ?? '').trim();
     const img = this._rearPlateImg;
-    // Spin frames (gameplay PIT spin + ending cinematics) hide the plate —
-    // its anchor fractions assume the straight rear view's framing, so on
-    // the rotated art it floats disembodied beside the car.
-    const spinPose = !!car.texture?.key?.startsWith?.('codex_beater_spin_');
-    if (!str || this._cockpitActive || car.visible === false || spinPose) {
+    // ── Pose-aware plate (owner 2026-08-27: "can it change angles with the
+    // vehicle?").  The plate follows the FACE it's mounted on through the
+    // angle ladder: it slides toward the tail and foreshortens (cos θ) as
+    // the car yaws, disappears edge-on around 90°, and reappears on the
+    // NOSE for front-three-quarter/front frames (Washington issues front
+    // plates).  A true 3-D skew isn't available on plain Phaser Images, but
+    // at ~23 px on screen the slide + squash reads as attached.
+    const k = car.texture?.key ?? '';
+    const baseKey = this._playerArtKey || 'codex_beater_back';
+    const poseEntry =
+        k === baseKey ? { deg: 0, nat: -1 }
+      : k === 'codex_beater_back_turn' ? { deg: 10, nat: -1 }
+      : POSE_LADDER.find(e => e.key === k) ?? null;
+    if (!str || this._cockpitActive || car.visible === false
+        || !poseEntry || poseEntry.deg === 90) {   // unknown art or edge-on
       if (plate.visible) plate.setVisible(false);
       if (img && img.visible) img.setVisible(false);
       return;
@@ -14585,25 +14770,67 @@ export class GameScene extends Phaser.Scene {
     const dispW = car.displayWidth  || 78;
     const dispH = car.displayHeight || 49;
     // Where each car's BACK sprite paints its blank license plate.  yUp =
-    // plate-center as a fraction of sprite height ABOVE the bottom (origin
-    // 0.5,1); w = plate width as a fraction of display width.  Measured from
-    // the PNG art: the beater's plate sits dead-centre, ~51 % up — i.e.
-    // between the two taillights, not down on the bumper.  Unlisted vehicles
-    // use DEFAULT (the codex car art is framed consistently).
+    // plate-center as a fraction of CAR height above the tire line; w =
+    // plate width as a fraction of the rear-face width.  Measured from the
+    // PNG art: the beater's plate sits dead-centre, ~51 % up — between the
+    // taillights, not down on the bumper.  The front face carries its plate
+    // lower (bumper height).
     const ANCHOR = { beater: { yUp: 0.51, w: 0.30 } };
     const a = ANCHOR[this.player?.vehicleId] ?? { yUp: 0.51, w: 0.30 };
     const theta = car.rotation || 0;
-    const up    = dispH * a.yUp;
-    // yUp is measured from the sprite's BOTTOM EDGE, which is no longer the
-    // origin (that's the tire-contact midpoint now — see _groundAnchorFor), so
-    // resolve the bottom-centre of the frame explicitly. Without this the plate
-    // drifted sideways on the turn pose, where the contact midpoint sits ~14 px
-    // right of the PNG centre.
-    const base  = this._playerSpriteFramePoint(0.5, 1);
-    const cx    = base.x + up * Math.sin(theta);
-    const cy    = base.y - up * Math.cos(theta);
-    // Plate art fills the painted plate area (a.w of car width, aspect-correct).
-    const plateW = dispW * a.w;
+
+    // ── Pose geometry ────────────────────────────────────────────────
+    // deg   — the frame's ladder angle; >90 means the FRONT face is showing.
+    // shown — the rotation direction being DISPLAYED (frame's native nose
+    //         direction, inverted when the sprite is mirrored): tells us
+    //         which screen side the nose (and therefore the tail) is on.
+    // The face's centre sits ~(L/2)·sin θ from the car's centre toward its
+    // own end; SHIFT_FRAC bakes that (with L/W ≈ 1.9) as a fraction of the
+    // CURRENT frame's on-screen car width.  The face itself foreshortens by
+    // cos θ.  Content boxes give the true car extents (canvas padding and
+    // per-frame framing vary wildly — see _texContentBox).
+    const deg     = poseEntry.deg;
+    const isFront = deg > 90;
+    const faceTheta = (isFront ? 180 - deg : deg) * Math.PI / 180;
+    const squash  = Math.cos(faceTheta);
+    const cb = this._texContentBox(k);
+    const bb = this._texContentBox(baseKey);
+    let cx, cy, plateW;
+    if (cb && bb) {
+      const shown  = (poseEntry.nat ?? -1) * (car.flipX ? -1 : 1);
+      const noseX  = shown > 0 ? 1 : -1;               // screen side of the nose
+      const sideX  = isFront ? noseX : -noseX;         // side the mounted face is on
+      const SHIFT_FRAC = { 0: 0, 7: 0.06, 10: 0.08, 12: 0.10, 30: 0.26,
+                           60: 0.38, 120: 0.38, 150: 0.26, 180: 0 };
+      const scaleX = dispW / cb.cw, scaleY = dispH / cb.ch;
+      const carWpx = cb.w * scaleX;
+      const carHpx = cb.h * scaleY;
+      const basePt = this._playerSpriteFramePoint(
+        (cb.x + cb.w / 2) / cb.cw, (cb.y + cb.h) / cb.ch);   // car bottom-centre
+      cx = basePt.x + sideX * (SHIFT_FRAC[deg] ?? 0) * carWpx;
+      cy = basePt.y - carHpx * (isFront ? 0.30 : a.yUp);
+      // Face width scales off the stable CAR HEIGHT axis via the rear view's
+      // own aspect, then foreshortens with the yaw.
+      plateW = carHpx * (bb.w / bb.h) * a.w * squash;
+    } else {
+      // Alpha scan unavailable — legacy rear-only anchor; hide angled frames.
+      if (deg !== 0) {
+        if (plate.visible) plate.setVisible(false);
+        if (img && img.visible) img.setVisible(false);
+        return;
+      }
+      const up   = dispH * a.yUp;
+      const base = this._playerSpriteFramePoint(0.5, 1);
+      cx = base.x + up * Math.sin(theta);
+      cy = base.y - up * Math.cos(theta);
+      plateW = dispW * a.w;
+    }
+    // Too squashed to read = effectively edge-on.
+    if (plateW < 7) {
+      if (plate.visible) plate.setVisible(false);
+      if (img && img.visible) img.setVisible(false);
+      return;
+    }
     if (img) {
       img.setDisplaySize(plateW, plateW / PLATE_ASPECT);
       img.setPosition(cx, cy);
@@ -22306,33 +22533,13 @@ export class GameScene extends Phaser.Scene {
    * _applyPlayerSpriteDisplaySize / _applyPlayerGroundAnchor normalize on
    * measured visible bounds and tire-contact points per texture.
    */
-  _exitArtFor(headingDeg) {
-    const base = this._playerArtKey;
-    if (!base) return null;
-    const t = this.textures;
-    const ladder =
-      headingDeg >= 62 ? [`${base}_profile_r`, `${base}_turn_hard_r`, `${base}_turn_r`, `${base}_turn`]
-      : headingDeg >= 28 ? [`${base}_turn_hard_r`, `${base}_turn_r`, `${base}_turn`]
-      : headingDeg >= 8 ? [`${base}_turn_r`, `${base}_turn`]
-      : [base];
-    for (const key of ladder) {
-      if (t.exists(key)) {
-        return { key, flip: key !== base && !key.endsWith('_r') };
-      }
-    }
-    return { key: base, flip: false };
-  }
-
+  /** Automated exit-turn pose — the ExitPath heading maps straight onto the
+   *  shared angle ladder (7° → 12° → 30° → 60° → 90° as the car departs),
+   *  mirrored nose-RIGHT because every rest-stop exit leaves to the right.
+   *  The controller picks the nearest loaded frame, so a genre missing an
+   *  angle degrades instead of breaking the hand-off. */
   _applyExitPose(headingDeg) {
-    const ps = this.playerSprite;
-    const art = this._exitArtFor(headingDeg);
-    if (!ps || !art) return;
-    if (ps.texture.key !== art.key) {
-      ps.setTexture(art.key);
-      this._applyPlayerSpriteDisplaySize();
-    }
-    if (ps.flipX !== art.flip) ps.setFlipX(art.flip);
-    this._applyPlayerGroundAnchor();
+    this._applyPoseFrame(Math.max(0, headingDeg), 1);
   }
 
   /**
@@ -24916,6 +25123,13 @@ export class GameScene extends Phaser.Scene {
     const v = CC_VARIANTS[cr.variant] ?? CC_VARIANTS.vehicle;
     cr.decelPow = v.decelPow;
     cr.spinDeg  = (v.spinDeg + Math.random() * v.spinJitter) * (ec.reduced ? 0.5 : 1);
+    // Major crash at speed: a fatal vehicle hit above ~60% of top speed
+    // carries the car through a FULL extra revolution — the pose ladder
+    // folds angles past 180° onto the mirrored frames, so the whole 360°
+    // plays from the same nine images.  Skipped under reduced motion.
+    if (cr.variant === 'vehicle' && !ec.reduced && ec.speed0 >= MAX_SPEED * 0.6) {
+      cr.spinDeg += 360;
+    }
     cr.slideMax = v.slidePx * (ec.reduced ? 0.5 : 1);
     cr.rebound  = v.rebound;
     cr.scrape   = v.scrape;
@@ -25289,42 +25503,20 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Spinout pose — the genre's own spin frames (same set the gameplay PIT
-   *  spin uses), eased out to a final ~150-175° rest.  Runs AFTER
-   *  _renderFrame so the renderer's ground-anchor Y stands and we only own
-   *  texture / X / flip.  Missing frames degrade to the nearest available
-   *  one (or the plain rear view) — never to a stall. */
-  /** Yaw angle → the best available spin-frame texture key (30° buckets,
-   *  degrading to the nearest loaded frame, then the plain rear view).
-   *  Shared by the BUSTED spinout and the CRASH yaw. */
-  _ecSpinFrameKey(angleDeg) {
-    const base = this._playerArtKey || 'codex_beater_back';
-    const bucket = Math.round(angleDeg / 30) * 30;
-    if (bucket >= 30) {
-      for (let b = Math.min(150, bucket); b >= 30; b -= 30) {
-        const k = `codex_beater_spin_${String(b).padStart(3, '0')}`;
-        if (this.textures.exists(k)) return k;
-      }
-    }
-    return base;
-  }
-
+  /** BUSTED spinout pose — the full angle ladder via the shared pose
+   *  controller, eased out to a final ~150-175° rest.  Runs AFTER
+   *  _renderFrame so the renderer's ground-anchor Y stands; the controller
+   *  owns texture / mirror / size / anchor and missing frames degrade to
+   *  the nearest available — never a stall. */
   _bcApplyPlayerPose(dt) {
     const bc = this._endingCine;
     const ps = this.playerSprite;
     if (!bc || !ps || !bc.pitHit) return;
     const su = Math.max(0, Math.min(1, (bc.t - BC.PIT_IMPACT_AT) / (BC.SPIN_END - BC.PIT_IMPACT_AT)));
     const e  = 1 - Math.pow(1 - su, 3);             // snap around, then settle
-    const ang = e * bc.spinDeg;
-    const base = this._playerArtKey || 'codex_beater_back';
-    const wantKey = this._ecSpinFrameKey(ang);
-    // Flip BEFORE sizing — the spin-frame origin math is flip-aware.
-    const wantFlip = wantKey !== base && bc.dir < 0;
-    if (ps.flipX !== wantFlip) ps.setFlipX(wantFlip);
-    if (ps.texture?.key !== wantKey && this.textures.exists(wantKey)) {
-      ps.setTexture(wantKey);
-      this._applyPlayerSpriteDisplaySize();
-    }
+    // bc.dir is the SLIDE side; shoved toward bc.dir kicks the tail that
+    // way, so the nose swings opposite (poseDir −bc.dir; −1 = native art).
+    this._applyPoseFrame(e * bc.spinDeg, bc.dir >= 0 ? -1 : 1);
     // Lateral slide: shoved out toward the contact-opposite side, easing
     // back part-way as the car scrubs to a stop (reduced-motion: half).
     const slideMax = (bc.reduced ? 28 : 55);
@@ -25354,11 +25546,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** CRASH pose — variant-shaped yaw via the same spin frames, an impact
-   *  "punch toward the camera" (brief +5% display size), lateral shove with
-   *  a rebound for barrier hits, and skid marks during the slide.  Runs
-   *  AFTER _renderFrame so the ground-anchor Y stands; we own texture / X /
-   *  flip / display size only.  Water variant: sprite hidden — no pose. */
+  /** CRASH pose — variant-shaped yaw through the shared pose controller
+   *  (a fast fatal vehicle hit carries a full extra revolution, folded onto
+   *  the same ladder), an impact "punch toward the camera" (brief +5%
+   *  display size), lateral shove with a rebound for barrier hits, and skid
+   *  marks during the slide.  Runs AFTER _renderFrame so the ground-anchor
+   *  Y stands.  Water variant: sprite hidden — no pose. */
   _ccApplyPlayerPose(dt) {
     const ec = this._endingCine;
     const ps = this.playerSprite;
@@ -25366,21 +25559,19 @@ export class GameScene extends Phaser.Scene {
     if (!ec || !ps || !cr || cr.variant === 'water' || ps.visible === false) return;
     const su = Math.max(0, Math.min(1, ec.t / CC.MOTION_END));
     const e  = 1 - Math.pow(1 - su, 3);             // violent first, settling
-    const ang = e * cr.spinDeg;
-    const base = this._playerArtKey || 'codex_beater_back';
-    const wantKey = this._ecSpinFrameKey(ang);
-    // Flip BEFORE sizing — the spin-frame origin math is flip-aware.
-    const wantFlip = wantKey !== base && cr.side < 0;
-    if (ps.flipX !== wantFlip) ps.setFlipX(wantFlip);
-    if (ps.texture?.key !== wantKey && this.textures.exists(wantKey)) {
-      ps.setTexture(wantKey);
-    }
-    // Re-assert the base display size every frame, THEN apply the punch —
-    // scaling displayWidth in place would compound frame over frame.
-    this._applyPlayerSpriteDisplaySize();
-    if (!ec.reduced && ec.t < CC.PUNCH_SEC) {
-      const k = 1 + CC.PUNCH_SCALE * (1 - ec.t / CC.PUNCH_SEC);
-      ps.setDisplaySize(ps.displayWidth * k, ps.displayHeight * k);
+    // cr.side is the shove direction; the nose swings opposite the shove
+    // (poseDir −side; −1 = the art's native nose-left rotation).
+    this._applyPoseFrame(e * cr.spinDeg, cr.side >= 0 ? -1 : 1);
+    // Impact punch — re-assert the frame's base size EVERY punch frame
+    // before multiplying (the controller only re-sizes on texture change,
+    // so scaling the live displaySize would compound frame over frame).
+    // One extra re-assert just past the window clears the final punch.
+    if (!ec.reduced && ec.t < CC.PUNCH_SEC + 0.06) {
+      this._applyPlayerSpriteDisplaySize();
+      if (ec.t < CC.PUNCH_SEC) {
+        const k = 1 + CC.PUNCH_SCALE * (1 - ec.t / CC.PUNCH_SEC);
+        ps.setDisplaySize(ps.displayWidth * k, ps.displayHeight * k);
+      }
     }
     // Lateral shove, with a partial rebound for barrier/scenery hits.
     const slide = su < 0.55

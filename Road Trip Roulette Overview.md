@@ -204,6 +204,53 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 — Vehicle visual-orientation controller: full 9-frame angle sets everywhere
+
+The complete per-genre angle sets (0°/7°/12°/30°/60°/90°/120°/150°/180° —
+`starter_back`, `starter_back_turn_007/_012`, `starter_spin_030…150`, `starter_front`) now
+drive EVERY player-car pose through ONE controller in GameScene:
+
+- **`POSE_LADDER` + `_applyPoseFrame(angleDeg, dir)`** — gameplay systems request a visual
+  angle + direction; the controller picks the nearest LOADED frame (one dev warning per
+  missing frame, legacy `back_turn` stands in near 7-12°, never another genre's car), mirrors
+  at render time (no duplicate art), folds angles past 180° back down the mirrored ladder so a
+  continuous 0→360 value plays a full revolution, sizes by trimmed car content, and re-pins
+  the tire-contact ground anchor.  dir −1 = nose screen-left, +1 = nose screen-right.
+- **⚠️ MIXED SOURCE CONVENTIONS (measured from the shipped art, full-size review):** the
+  7°/12° steering exports rotate nose-LEFT natively, the 30-150° spin exports nose-RIGHT.
+  Per-frame `nat` metadata in POSE_LADDER lets the controller mirror per-frame so a spin never
+  visibly flips direction at the 12°→30° seam.  If art is re-exported to one convention,
+  update `nat`.
+- **Normal steering** (`_updateSteerPose`): 0↔7↔12° tier ladder (STEER_POSE constants) off the
+  wheel-load accumulator, with hysteresis and a slewed continuous angle so engage/release
+  always pass THROUGH the 7° frame (12→7→0, no snap).  Tap ≈ 7°, sustained hold ≈ 12°.  The
+  ladder reads load IN the latched direction, so a reversal unwinds through centre and
+  re-engages mirrored (|load| alone couldn't tell a reversal from a hold).
+- **Gameplay PIT spin** rewritten as a continuous out-and-back rotation (~140-160° peak);
+  **BUSTED/CRASH cinematic poses** route through the controller (busted can settle on the
+  front view; a fatal vehicle hit ≥60 % top speed carries a full extra 360°); **exit turns**
+  (`_applyExitPose`) map the ExitPath heading straight onto the ladder (7→90° as it departs) —
+  replacing the old wished-for `_turn_r`/`_profile_r` keys that never existed.
+- **Robust art measurement**: `_texContentBox` now takes the LARGEST CONNECTED mass (edge
+  matte bars + detached neighbouring-frame slivers in some exports would stretch the box —
+  e.g. classic_rock 120° carries a second partial car at its left edge);
+  `_groundAnchorFor` constrains its tire scan to that box and falls back to content-bottom
+  (not canvas-bottom) when only one contact blob is found.  Caches rebuilt per create AND
+  after a live genre-art swap.
+- **Pose-aware license plate** (owner: "can it change angles with the vehicle?"):
+  `_updateRearPlate` follows the mounted face through the ladder — slides toward the tail and
+  foreshortens (cos θ) as the car yaws, disappears edge-on at 90°, and reappears on the NOSE
+  (bumper height) for 120-180° — WA issues front plates.  True 3-D skew isn't possible on
+  Phaser Images; at ~23 px the slide+squash reads as attached.
+- New manifest/GENRE_ART keys `codex_beater_back_turn_007/_012`; ALL `codex_beater_*` art
+  URLs bumped to `v=angleset-1` (whole set re-exported in place).
+- **Validation harness kept**: `scripts/validate_pose.mjs` (dev server on :3000 → per-genre
+  angle sweeps w/ size/anchor/mirroring checks + live-input steering ladder + PIT directions;
+  screenshots to tmp/pose_validation/).  Headless-testing gotchas discovered: the first-run
+  HUD tour AND contextual tour tips PAUSE gameplay (stub `_startHudTour`/`_showTourTip`), and
+  a leftover live-run autosave turns START into the resume prompt (`_clearLiveRun()` first).
+  npm test + build green; norteno/classic_rock/metal validated visually.
+
 ### 2026-08-26 (pt 3) — Stranded-GameOver fix, "THIS DRIVE" earnings line, spin-frame sizing
 
 Three fixes from the owner's first live session with the ending cinematics:
