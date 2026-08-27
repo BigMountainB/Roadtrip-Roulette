@@ -204,6 +204,43 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 3) — Ending screens: RESTART/CONTINUE outcome buttons + drive accounting
+
+The failure endings (CRASHED / BUSTED / PASSED OUT) now let the player compare both choices
+without leaving the screen, and RESTART gained real rewind semantics:
+
+- **One source of truth** — `src/data/endingOutcomes.js` (pure, tested):
+  `computeEndingOutcomes()` builds `restart` / `cont` objects in `_endGame`; the buttons render
+  FROM them and the handlers apply THE SAME objects (`_applyRestartOutcome` /
+  `_applyContinueOutcome`), so the previewed cash/mileage/HP can never diverge from the applied
+  state.  `checkpointRestartScore` carries the already-computed post-choice cash verbatim, so
+  the engine's crash-halving can't double-apply.
+- **RESTART DRIVE = restore the drive-start snapshot.**  `_driveStartSnap` latches on the first
+  post-title frame (same spot as `_runStartWallet`): cash, position, checkpoint name, HP, fuel,
+  wanted stars, vice levels, weapon stash (f12Tokens + coalAmmo).  Applying it routes through
+  the existing checkpoint-respawn branch plus a new `restartSnapExtras` payload.  Repeated
+  restarts re-latch identical values — no duplication, no stacking losses.  (Previously RESTART
+  was a fresh run that silently KEPT the failed drive's losses.)
+- **CONTINUE = existing rules, now printed:** busted keeps post-bail cash; wreck/pass-out
+  checkpoint retries keep the shipped half-cash rule, now surfaced as
+  "Includes $X recovery · HP 13" instead of being silent.  Respawn HP (50% of base) shown.
+  No checkpoint → greyed "NO CHECKPOINT AVAILABLE", not clickable.
+- **Buttons** are three-line (title / prominent cash / place · mi, small note), pink/blue
+  identity kept, MENU stays secondary.  **Accounting block** replaces the single CASH line on
+  failures: CASH BEFORE DRIVE / LOST(red) or EARNED(green) THIS DRIVE / CASH REMAINING(yellow)
+  + DISTANCE.  Long names truncate with …; money always comma-formatted.
+- **Fix folded in:** the `resumeFromPosition` create-branch never re-derived checkpoint/rest-
+  stop progress, so after any mid-route continue the NEXT ending offered Seattle.  It now
+  mirrors the live-resume derivation (`_passedCheckpoints`/`_passedRestStops`/`_lastCheckpoint`
+  from the resume position, `scoreAtCP = score`).
+- **OUT OF GAS card**: TOW and START OVER buttons carry outcome sub-lines
+  ("→ $2,514 · the last stop"), and START OVER now restores the drive-start snapshot too.
+- Tests: `tests/outcomes.test.mjs` (36 asserts, wired into npm test).  Harness:
+  `scripts/validate_endings.mjs` — real runs through crash/busted/OOG at easy/normal/hard,
+  repeat-restart/continue integrity, no-checkpoint, applied-equals-previewed probes, and
+  desktop + mobile screenshots into tmp/ending_validation/ (all reviewed).  The ending-
+  cinematic flows run inside it, replacing the lost scratchpad regression harness.
+
 ### 2026-08-27 (pt 2) — Steering mirror fix: the angle set is uniformly NOSE-RIGHT
 
 Owner report: "pressing right shows the car image that should display when turning left."

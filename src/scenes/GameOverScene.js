@@ -4,6 +4,7 @@ import { getInstalled } from '../systems/UpgradeSystem.js';
 import { UPGRADE_SLOTS, getSlotTiers } from '../data/upgrades.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
 import { selectTip, tipContext, isFailureCause } from '../data/endingTips.js';
+import { fmtMoney, fmtMoneyDelta, summarizeDrive } from '../data/endingOutcomes.js';
 import { showNextRunPanel } from '../ui/NextRunPanel.js';
 
 // Per-vice unlock hints shown for any vice the player hasn't unlocked yet.
@@ -95,6 +96,12 @@ export class GameOverScene extends Phaser.Scene {
     // Net wallet change for the drive that just ended (earnings minus
     // fines/bail/penalties — may be negative).  Null on older call paths.
     this.runEarned      = data?.runEarned  ?? null;
+    // RESTART/CONTINUE outcome objects (endingOutcomes.js) — buttons render
+    // FROM these and the handlers apply THE SAME objects, so the previewed
+    // cash/mileage/HP always equals the applied state.  Null on old callers
+    // → the legacy single-line buttons render instead.
+    this.outcomes       = data?.outcomes   ?? null;
+    this.driveStartCash = data?.driveStartCash ?? null;
     // Why the run ended, recorded at the gameplay trigger site. Absent on old
     // saves / existing call sites -> selectTip falls back to a generic tip.
     this.failReason     = data?.reason     ?? null;
@@ -337,26 +344,61 @@ export class GameOverScene extends Phaser.Scene {
       wordWrap: { width: SCREEN_W * 0.86 },
     }).setOrigin(0.5, 0).setDepth(D);
 
-    this.add.text(CX, 326, `CASH  $${this.finalScore.toLocaleString()}`, {
-      fontSize: '24px', fontFamily: IMPACT,
-      color: '#FFCC44', stroke: '#000', strokeThickness: 3,
-    }).setOrigin(0.5, 0).setDepth(D);
-    // What THIS drive added to the wallet (owner 2026-08-26) — earnings net
-    // of fines/bail/crash penalty, so a run that lost money reads negative.
-    const hasEarned = this.runEarned != null;
-    if (hasEarned) {
-      const e = Math.round(this.runEarned);
-      this.add.text(CX, 357,
-        `${e >= 0 ? '+' : '−'}$${Math.abs(e).toLocaleString()}  THIS DRIVE`, {
-          fontSize: '14px', fontFamily: IMPACT,
-          color: e >= 0 ? '#66E28A' : '#FF6677',
-          stroke: '#000', strokeThickness: 3,
-        }).setOrigin(0.5, 0).setDepth(D);
+    const isWin  = this.cause === 'finish' || this.cause === 'finish_on_time'
+                || this.cause === 'finish_late' || this.cause === 'demo_complete';
+    // Failure endings with outcome data get the explicit accounting block +
+    // outcome buttons; wins (and legacy callers without outcomes) keep the
+    // classic single-line summary and buttons.
+    const oc = !isWin ? this.outcomes : null;
+
+    if (oc && this.driveStartCash != null) {
+      // ── Drive accounting (owner 2026-08-27): before / delta / remaining ──
+      const sum = summarizeDrive({ startCash: this.driveStartCash, finalCash: this.finalScore });
+      const rows = [
+        ['CASH BEFORE DRIVE', fmtMoney(sum.startCash), '#DDE6F2', '13px', false],
+        [sum.delta < 0 ? 'LOST THIS DRIVE' : 'EARNED THIS DRIVE',
+         fmtMoneyDelta(sum.delta),
+         sum.delta < 0 ? '#FF6677' : '#66E28A', '13px', false],
+        ['CASH REMAINING', fmtMoney(sum.finalCash), '#FFCC44', '17px', true],
+      ];
+      let ry = 305;
+      for (const [label, val, color, size, big] of rows) {
+        this.add.text(CX - 8, ry + (big ? 4 : 1), label, {
+          fontSize: '11px', fontFamily: 'Arial', fontStyle: 'bold',
+          color: '#9FB2C8', stroke: '#000', strokeThickness: 2, resolution: 2,
+        }).setOrigin(1, 0).setDepth(D);
+        this.add.text(CX + 8, ry, val, {
+          fontSize: size, fontFamily: IMPACT, color,
+          stroke: '#000', strokeThickness: 3, resolution: 2,
+        }).setOrigin(0, 0).setDepth(D);
+        ry += big ? 21 : 16;
+      }
+      this.add.text(CX, ry + 1, `DISTANCE  ${this.finalMiles.toFixed(2)} mi`, {
+        fontSize: '12px', fontFamily: 'Arial', color: '#AACCFF',
+        stroke: '#000', strokeThickness: 2,
+      }).setOrigin(0.5, 0).setDepth(D);
+    } else {
+      this.add.text(CX, 326, `CASH  $${this.finalScore.toLocaleString()}`, {
+        fontSize: '24px', fontFamily: IMPACT,
+        color: '#FFCC44', stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5, 0).setDepth(D);
+      // What THIS drive added to the wallet — earnings net of fines/bail/
+      // penalty, so a run that lost money reads negative.
+      const hasEarned = this.runEarned != null;
+      if (hasEarned) {
+        const e = Math.round(this.runEarned);
+        this.add.text(CX, 357,
+          `${e >= 0 ? '+' : '−'}$${Math.abs(e).toLocaleString()}  THIS DRIVE`, {
+            fontSize: '14px', fontFamily: IMPACT,
+            color: e >= 0 ? '#66E28A' : '#FF6677',
+            stroke: '#000', strokeThickness: 3,
+          }).setOrigin(0.5, 0).setDepth(D);
+      }
+      this.add.text(CX, hasEarned ? 378 : 362, `DISTANCE  ${this.finalMiles.toFixed(2)} mi`, {
+        fontSize: '14px', fontFamily: 'Arial', color: '#AACCFF',
+        stroke: '#000', strokeThickness: 2,
+      }).setOrigin(0.5, 0).setDepth(D);
     }
-    this.add.text(CX, hasEarned ? 378 : 362, `DISTANCE  ${this.finalMiles.toFixed(2)} mi`, {
-      fontSize: '14px', fontFamily: 'Arial', color: '#AACCFF',
-      stroke: '#000', strokeThickness: 2,
-    }).setOrigin(0.5, 0).setDepth(D);
 
     // The demo's whole job is selling the full game — keep the pitch.
     if (this.cause === 'demo_complete') {
@@ -368,8 +410,6 @@ export class GameOverScene extends Phaser.Scene {
     }
 
     const btnY   = SCREEN_H - 34;
-    const isWin  = this.cause === 'finish' || this.cause === 'finish_on_time'
-                || this.cause === 'finish_late' || this.cause === 'demo_complete';
     // _makeButton already lands at depth 50/51, clear of the scrim.
     const mk = (x, w, label, fill, txt, cb) =>
       this._makeButton(x, btnY, w, 40, label, fill, txt, cb);
@@ -380,8 +420,43 @@ export class GameOverScene extends Phaser.Scene {
       mk(CX + 150, 230, 'PLAY DEMO AGAIN', 0x2A4A6A, 0xFFFFFF, () => this._startOver());
     } else if (isWin) {
       mk(CX, 240, 'DRIVE IT AGAIN', 0x44AA55, 0xFFFFFF, () => this._startOver());
+    } else if (oc) {
+      // ── Outcome buttons — rendered FROM the outcome objects the handlers
+      // apply, so what's printed is exactly what the player gets. ──
+      const locLine = (loc, mi, prefix) => {
+        const m = `${(mi ?? 0).toFixed(2)} mi`;
+        if (!loc) return `${prefix} ${m}`;
+        const l = String(loc).length > 18 ? String(loc).slice(0, 17) + '…' : loc;
+        return `${l} · ${m}`;
+      };
+      const bY = SCREEN_H - 31, bH = 56;
+      const r = oc.restart, c = oc.cont;
+      this._makeOutcomeButton(150, bY, 250, bH, {
+        title: 'RESTART DRIVE', fill: 0xFF39AF, txt: 0xFFFFFF,
+        cash:  fmtMoney(r?.cash ?? this.finalScore),
+        sub:   r ? locLine(r.loc, r.mi, 'Return to') : 'Return to the start',
+        onClick: () => this._applyRestartOutcome(),
+      });
+      if (c?.valid) {
+        this._makeOutcomeButton(410, bY, 250, bH, {
+          title: 'CONTINUE', fill: 0x39A8FF, txt: 0xFFFFFF,
+          cash:  fmtMoney(c.cash),
+          sub:   locLine(c.loc, c.mi, 'Resume at'),
+          note:  c.note,
+          onClick: () => this._applyContinueOutcome(),
+        });
+      } else {
+        this._makeOutcomeButton(410, bY, 250, bH, {
+          title: 'CONTINUE', fill: 0x39424F, txt: 0x8A93A5,
+          cash:  '',
+          sub:   'NO CHECKPOINT AVAILABLE',
+          disabled: true,
+        });
+      }
+      // Menu stays visually secondary: smaller, no outcome lines.
+      this._makeButton(640, bY, 140, 40, 'MENU', 0xF4F7FF, 0x000000, () => this._returnToTitle());
     } else {
-      // Same three actions the baked plates offered, now with real faces.
+      // Legacy path (no outcome data passed) — the original three buttons.
       const cp = this.lastCheckpoint;
       mk(CX - 250, 210, 'RESTART', 0xFF39AF, 0xFFFFFF, () => this._retrySameSettings());
       mk(CX, 210, cp?.position != null ? 'CONTINUE' : 'RESTART RUN', 0x39A8FF, 0xFFFFFF, () => {
@@ -402,7 +477,9 @@ export class GameOverScene extends Phaser.Scene {
 
     this._buildNextRunPanel();
 
-    this.input.keyboard?.once('keydown-SPACE', () => this._retrySameSettings());
+    // SPACE mirrors the RESTART DRIVE button (snapshot restore when
+    // outcome data exists; the legacy fresh retry otherwise).
+    this.input.keyboard?.once('keydown-SPACE', () => this._applyRestartOutcome());
     this.input.keyboard?.once('keydown-ENTER', () => this._returnToTitle());
     this.input.keyboard?.on('keydown-L', () => this._openViceLog());
     this.input.keyboard?.on('keydown-T', () => { if (this.tripSummary) this._openTripSummary(); });
@@ -1090,6 +1167,83 @@ export class GameOverScene extends Phaser.Scene {
     bg.on('pointerup',   () => { if (armed) { armed = false; onClick?.(); } });
     bg.on('pointerout',  () => { armed = false; });
     return { bg, txt };
+  }
+
+  /** Three-line outcome button (owner 2026-08-27): action title, the
+   *  resulting cash (prominent), the resulting place/mileage, and an
+   *  optional fee/HP note.  Same fill/stroke treatment as _makeButton so
+   *  the pink/blue identity carries over. */
+  _makeOutcomeButton(cx, cy, w, h, { title, cash, sub, note, fill, txt, disabled, onClick }) {
+    const bg = this.add.rectangle(cx, cy, w, h, fill, 1)
+      .setOrigin(0.5).setStrokeStyle(2, 0x000000).setDepth(50);
+    const css = `#${(txt ?? 0xFFFFFF).toString(16).padStart(6, '0')}`;
+    const topY = cy - h / 2;
+    this.add.text(cx, topY + 11, title, {
+      fontSize: '14px', fontFamily: 'Arial Black, Arial, sans-serif',
+      color: css, align: 'center', resolution: 2,
+    }).setOrigin(0.5).setDepth(51);
+    if (cash) {
+      this.add.text(cx, topY + (note ? 26 : 28), cash, {
+        fontSize: '17px', fontFamily: IMPACT, color: css,
+        stroke: '#000', strokeThickness: 2, resolution: 2,
+      }).setOrigin(0.5).setDepth(51);
+    }
+    if (sub) {
+      this.add.text(cx, topY + (note ? 40 : 45), sub, {
+        fontSize: '10px', fontFamily: 'Arial', fontStyle: 'bold',
+        color: css, align: 'center', resolution: 2,
+      }).setOrigin(0.5).setDepth(51).setAlpha(0.92);
+    }
+    if (note) {
+      this.add.text(cx, topY + 50, note, {
+        fontSize: '9px', fontFamily: 'Arial', color: css,
+        align: 'center', resolution: 2,
+      }).setOrigin(0.5).setDepth(51).setAlpha(0.8);
+    }
+    if (!disabled && onClick) {
+      bg.setInteractive({ useHandCursor: true });
+      bg.on('pointerover', () => bg.setFillStyle(fill, 0.85));
+      bg.on('pointerout',  () => bg.setFillStyle(fill, 1));
+      let armed = false;
+      bg.on('pointerdown', () => { armed = true; });
+      bg.on('pointerup',   () => { if (armed) { armed = false; onClick(); } });
+      bg.on('pointerout',  () => { armed = false; });
+    } else if (disabled) {
+      bg.setAlpha(0.75);
+    }
+    return bg;
+  }
+
+  /** RESTART DRIVE — apply the drive-start snapshot carried inside the
+   *  rendered outcome object (never recomputed, so the button's numbers are
+   *  the applied numbers).  Falls back to the legacy fresh retry when no
+   *  snapshot was passed (older call paths). */
+  _applyRestartOutcome() {
+    const r = this.outcomes?.restart;
+    // Wins keep the classic fresh retry — "restart the drive you just
+    // finished" isn't a meaningful rewind there.
+    if (!r?.snap || !isFailureCause(this.cause)) { this._retrySameSettings(); return; }
+    const s = r.snap;
+    this.scene.start('Game', {
+      resumeFromPosition:     s.position ?? 0,
+      checkpointRestartScore: r.cash,
+      restartSnapExtras: {
+        hp: s.hp, fuelMi: s.fuelMi, stars: s.stars,
+        viceLevels: s.viceLevels, f12Tokens: s.f12Tokens, coalAmmo: s.coalAmmo,
+      },
+    });
+  }
+
+  /** CONTINUE — resume at the checkpoint with the outcome's post-recovery
+   *  cash.  checkpointRestartScore is applied VERBATIM by GameScene, so the
+   *  crash-recovery halving (already inside cont.cash) can't run twice. */
+  _applyContinueOutcome() {
+    const c = this.outcomes?.cont;
+    if (!c?.valid) return;
+    this.scene.start('Game', {
+      resumeFromPosition:     this.lastCheckpoint?.position ?? 0,
+      checkpointRestartScore: c.cash,
+    });
   }
 
   _restartAtCheckpoint(position) {

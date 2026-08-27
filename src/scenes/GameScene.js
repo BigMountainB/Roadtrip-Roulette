@@ -52,6 +52,7 @@ import { genreArtPath, genreDefaultPath, GENRE_ART } from '../systems/AssetManif
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
 import { ensureStopSign } from '../data/shoppingSign.js';
 import { FAIL_REASON, selectTip, tipContext } from '../data/endingTips.js';
+import { computeEndingOutcomes, fmtMoney } from '../data/endingOutcomes.js';
 import { showNextRunPanel } from '../ui/NextRunPanel.js';
 import { HapticSystem }  from '../systems/HapticSystem.js';
 import { Difficulty }    from '../systems/Difficulty.js';
@@ -588,6 +589,10 @@ export class GameScene extends Phaser.Scene {
     // "RESTART FROM CHECKPOINT" button passes both.
     this._resumeFromPosition = data?.resumeFromPosition ?? null;
     this._crashRestartScore  = data?.crashRestartScore  ?? 0;
+    // RESTART DRIVE payload — the drive-start snapshot's non-cash extras
+    // (HP / fuel / stars / vices / weapons), applied on top of the
+    // checkpoint-respawn defaults in create().  See endingOutcomes.js.
+    this._restartSnapExtras  = data?.restartSnapExtras ?? null;
     // Arrest endings already assess their displayed bail loss before the
     // player reaches GameOver, so their checkpoint retry preserves that
     // post-bail total instead of applying the crash half-cash penalty too.
@@ -2064,12 +2069,14 @@ export class GameScene extends Phaser.Scene {
       const _bank = this.registry?.get?.('save')?.walletStore?.money ?? 0;
       if (Number.isFinite(_bank) && _bank > 0) this.score = Math.round(_bank);
     }
-    // Wallet level when THIS drive actually started — captured lazily on the
-    // first gameplay frame (see update()) rather than here, because every
-    // resume path (checkpoint restart, save resume, live resume, Custom's
-    // seed money) overwrites this.score after this line.  The ending screens
-    // read finalScore − this to show "what this drive added to the wallet".
+    // Wallet level + full restart snapshot for THIS drive — captured lazily
+    // on the first gameplay frame (see update()) rather than here, because
+    // every resume path (checkpoint restart, save resume, live resume,
+    // Custom's seed money) overwrites this.score after this line.  The
+    // ending screens read finalScore − wallet for the accounting block and
+    // restore _driveStartSnap on RESTART DRIVE.
     this._runStartWallet = null;
+    this._driveStartSnap = null;
     this.gameTime        = 0;
     // Party clock — counts down from Difficulty.partyClockSec() until
     // hitting 0.  Pullman finish before 0 → ON TIME (cash bonus).
@@ -2562,6 +2569,50 @@ export class GameScene extends Phaser.Scene {
       this.damage?.reset?.();
       const _vehHpForResume = VEHICLES[this.player.vehicleId]?.hp ?? 100;
       this.damage?.setDurability?.(_vehHpForResume * 0.5);
+      // Re-derive checkpoint / rest-stop progress from the RESUME POSITION
+      // (same derivation the live-resume path uses).  This branch used to
+      // leave the Seattle/0 defaults standing, so after a mid-route
+      // continue the NEXT ending's checkpoint (and the drive-start
+      // snapshot's location) pointed at Seattle instead of where the
+      // player actually is.
+      {
+        const _segWorld = ROUTE_SEGS * SEG_LENGTH;
+        const _tNow = this.player.position / _segWorld;
+        this._passedRestStops   = new Set(REST_STOPS.filter(r => r.t <= _tNow).map(r => r.id));
+        this._passedCheckpoints = new Set(CHECKPOINTS.filter(c => c.t <= _tNow).map(c => c.name));
+        const _cpNear = [...CHECKPOINTS].reverse().find(c => c.t <= _tNow);
+        this._lastCheckpoint = {
+          name:      _cpNear?.name ?? 'Seattle, WA',
+          position:  _cpNear ? _cpNear.t * _segWorld : 0,
+          scoreAtCP: this.score,
+        };
+      }
+      // RESTART DRIVE — after the checkpoint-respawn defaults above (which
+      // model CONTINUE), reapply the drive-start snapshot's extras so HP,
+      // fuel, wanted level, vice levels and the weapon stash return to
+      // exactly the drive's starting state.  Cash/position already came in
+      // through checkpointRestartScore / resumeFromPosition.
+      if (this._restartSnapExtras) {
+        const rs = this._restartSnapExtras;
+        if (rs.hp != null) {
+          this.damage?.reset?.();
+          this.damage?.setDurability?.(rs.hp);
+        }
+        if (rs.fuelMi != null && this.player) this.player.gasMi = rs.fuelMi;
+        if (rs.stars != null && this.cops) {
+          this.cops.stars = rs.stars;
+          if (rs.stars > 0) this.cops.starTimer = 4;
+        }
+        if (rs.viceLevels && this.vices?.levels) {
+          for (const [id, lvl] of Object.entries(rs.viceLevels)) {
+            this.vices.levels[id] = lvl;
+            if (lvl > 0 && this.vices.unlocked) this.vices.unlocked[id] = true;
+          }
+        }
+        if (Array.isArray(rs.f12Tokens) && this.cops) this.cops.f12Tokens = [...rs.f12Tokens];
+        if (rs.coalAmmo != null && this.cops) this.cops.coalAmmo = rs.coalAmmo;
+        this._restartSnapExtras = null;
+      }
       // Skip the title overlay so the player drops straight back in.
       this._awaitingStart = false;
       this._introDone     = true;
@@ -4437,11 +4488,26 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Latch the drive's starting wallet on the first post-title frame — by
-    // now every resume path has written its final starting score.  Ending
-    // screens show finalScore − this as the run's net earnings.
+    // Latch the drive's starting state on the first post-title frame — by
+    // now every resume path has written its final starting score/position/
+    // fuel/HP.  `_runStartWallet` feeds the ending screen's accounting;
+    // `_driveStartSnap` is the COMPLETE restart snapshot RESTART DRIVE
+    // restores (see endingOutcomes.js).  Captured once per drive (segment):
+    // repeated restarts re-latch identical values, so a later failed state
+    // can never overwrite what "the start of this drive" means.
     if (this._runStartWallet == null && !this._awaitingStart) {
       this._runStartWallet = Math.round(this.score);
+      this._driveStartSnap = {
+        cash:       this._runStartWallet,
+        position:   Math.round(this.player.position),
+        locName:    this._lastCheckpoint?.name ?? 'Seattle, WA',
+        hp:         this.damage?.getDurability?.() ?? null,
+        fuelMi:     this.player?.gasMi ?? null,
+        stars:      this.cops?.stars ?? 0,
+        viceLevels: { ...(this.vices?.levels ?? {}) },
+        f12Tokens:  [...(this.cops?.f12Tokens ?? [])],
+        coalAmmo:   this.cops?.coalAmmo ?? 0,
+      };
     }
 
     // ── Ending cinematic (BUSTED arrest / fatal CRASH) ─────────────────
@@ -19555,7 +19621,9 @@ export class GameScene extends Phaser.Scene {
     };
 
     const btnY = SCREEN_H - 42, btnH = 44;
-    const mkBtn = (cx, w, label, neon, enabled, handler) => {
+    // `sub` (optional) = a small outcome line under the label — resulting
+    // cash + location, same single-source numbers the ending screens show.
+    const mkBtn = (cx, w, label, neon, enabled, handler, sub = null) => {
       const g = this.add.graphics().setDepth(D + 4);
       const draw = (hover = false) => {
         g.clear();
@@ -19574,11 +19642,17 @@ export class GameScene extends Phaser.Scene {
       } else {
         g.on('pointerdown', (p) => { p.event?.stopPropagation?.(); });
       }
-      const t = this.add.text(cx, btnY, label, {
+      const t = this.add.text(cx, sub ? btnY - 8 : btnY, label, {
         fontSize: '15px', fontFamily: IMPACT,
         color: enabled ? '#F4F7FF' : '#8A93A5', align: 'center',
       }).setOrigin(0.5).setDepth(D + 5);
       add(g, t);
+      if (sub) {
+        add(this.add.text(cx, btnY + 12, sub, {
+          fontSize: '9px', fontFamily: 'Arial', fontStyle: 'bold',
+          color: enabled ? '#AACCE8' : '#77808F', align: 'center',
+        }).setOrigin(0.5).setDepth(D + 5));
+      }
     };
 
     // NEXT RUN advice, same panel as the ending screens. Anchored per plate so
@@ -19593,6 +19667,19 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Outcome sub-lines — the exact post-choice cash + place, computed from
+    // the same state the handlers below apply (never a separate estimate).
+    const _towFee    = this._cashLoss(TOW_COST_USD);
+    const _towSub    = canTow
+      ? `→ ${fmtMoney(cash - _towFee)} · ${stopName}`
+      : null;
+    const _snap      = this._driveStartSnap;
+    const _snapMi    = _snap
+      ? ((_snap.position ?? 0) / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES
+      : 0;
+    const _startSub  = _snap
+      ? `→ ${fmtMoney(_snap.cash)} · ${_snap.locName ?? ''} ${_snapMi.toFixed(2)} mi`
+      : null;
     mkBtn(SCREEN_W / 2 - 250, 220,
           canTow ? `TOW — $${TOW_COST_USD.toLocaleString()}` : `NEED $${short.toLocaleString()} MORE`,
           0xFFCC44, canTow, () => {
@@ -19600,15 +19687,30 @@ export class GameScene extends Phaser.Scene {
             this._runTow();
             this._paused = false;
             this.audio?.setPaused?.(false);
-          });
+          }, _towSub);
     mkBtn(SCREEN_W / 2, 220, 'START OVER', 0xFF39AF, true, () => {
       close();
       // Deliberate restart — drop the live-run autosave so the fresh run
       // doesn't immediately auto-resume the dead one (mirrors __startOver).
       try { this.registry.get('save')?.set?.('liveRun', null); } catch (_) {}
       this.audio?.setPaused?.(false);
-      this.scene.restart();
-    });
+      // RESTART DRIVE semantics (owner 2026-08-27): restore the drive-start
+      // snapshot — cash, position, HP, fuel, stars, vices, weapons — instead
+      // of a plain restart that silently kept the dead run's wallet.
+      if (_snap) {
+        this.scene.restart({
+          resumeFromPosition:     _snap.position,
+          checkpointRestartScore: _snap.cash,
+          restartSnapExtras: {
+            hp: _snap.hp, fuelMi: _snap.fuelMi, stars: _snap.stars,
+            viceLevels: _snap.viceLevels, f12Tokens: _snap.f12Tokens,
+            coalAmmo: _snap.coalAmmo,
+          },
+        });
+      } else {
+        this.scene.restart();
+      }
+    }, _startSub);
     mkBtn(SCREEN_W / 2 + 250, 220, 'LOAD SAVE', 0x39A8FF, true, () => {
       close();
       this.audio?.setPaused?.(false);
@@ -26062,8 +26164,26 @@ export class GameScene extends Phaser.Scene {
       } catch (_) { /* best-effort */ }
     }
 
+    // RESTART / CONTINUE outcome objects — computed ONCE here, rendered on
+    // the ending screen's buttons, and applied verbatim when the player
+    // picks one, so the preview and the applied state cannot diverge
+    // (see endingOutcomes.js for the rules).
+    const _outcomes = computeEndingOutcomes({
+      cause,
+      finalCash:       Math.round(this.score),
+      snap:            this._driveStartSnap,
+      checkpoint:      this._lastCheckpoint
+        ? { name: this._lastCheckpoint.name, position: this._lastCheckpoint.position }
+        : null,
+      baseVehicleHp:   VEHICLES[this.player.vehicleId]?.hp ?? 100,
+      routeUnits:      ROUTE_SEGS * SEG_LENGTH,
+      totalRouteMiles: TOTAL_ROUTE_MILES,
+    });
+
     this.scene.start('GameOver', {
       score:           Math.round(this.score),
+      outcomes:        _outcomes,
+      driveStartCash:  this._runStartWallet,
       // Net wallet change for THIS drive (earnings minus fines/bail/penalty —
       // can be negative).  Null when the start was never latched (defensive).
       runEarned:       this._runStartWallet != null
