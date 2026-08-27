@@ -80,23 +80,25 @@ const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
 // Frame choice is nearest-available; a genre missing a frame logs ONE dev
 // warning and uses its neighbour (see _poseFrameFor).
 //
-// `nat` is each frame's NATIVE nose direction, measured from the shipped
-// art (2026-08-27 full-size review): the 7°/12° steering exports rotate
-// nose-LEFT (right flank visible — the owner-era turn-art convention),
-// while the 30-150° spin exports rotate nose-RIGHT.  The controller mirrors
-// per-frame against `nat`, so one continuous spin never changes apparent
-// direction at the 12°→30° seam despite the mixed source conventions.
+// `nat` is each frame's NATIVE nose direction — corrected 2026-08-27 after
+// an owner report ("pressing right shows the left-turn image"): the WHOLE
+// set is uniformly nose-RIGHT.  Every angled export shows the vehicle's
+// RIGHT flank, and a car yawing nose-right exposes its right flank (a car
+// veering LEFT ahead of you shows its LEFT side — the earlier "mixed
+// conventions" read got that geometry backwards).  The metadata stays
+// per-frame so any future re-export with a different direction is a
+// one-line fix here, not a code change.
 // (0° and 180° are symmetric; nat is nominal there.)
 const POSE_LADDER = [
-  { deg: 0,   key: null,                          nat: -1 },  // base rear view
-  { deg: 7,   key: 'codex_beater_back_turn_007',  nat: -1 },  // subtle steering
-  { deg: 12,  key: 'codex_beater_back_turn_012',  nat: -1 },  // strong steering
-  { deg: 30,  key: 'codex_beater_spin_030',       nat:  1 },
-  { deg: 60,  key: 'codex_beater_spin_060',       nat:  1 },
-  { deg: 90,  key: 'codex_beater_spin_090',       nat:  1 },  // exact side profile
-  { deg: 120, key: 'codex_beater_spin_120',       nat:  1 },
-  { deg: 150, key: 'codex_beater_spin_150',       nat:  1 },
-  { deg: 180, key: 'codex_beater_front',          nat:  1 },  // exact front view
+  { deg: 0,   key: null,                          nat: 1 },  // base rear view
+  { deg: 7,   key: 'codex_beater_back_turn_007',  nat: 1 },  // subtle steering
+  { deg: 12,  key: 'codex_beater_back_turn_012',  nat: 1 },  // strong steering
+  { deg: 30,  key: 'codex_beater_spin_030',       nat: 1 },
+  { deg: 60,  key: 'codex_beater_spin_060',       nat: 1 },
+  { deg: 90,  key: 'codex_beater_spin_090',       nat: 1 },  // exact side profile
+  { deg: 120, key: 'codex_beater_spin_120',       nat: 1 },
+  { deg: 150, key: 'codex_beater_spin_150',       nat: 1 },
+  { deg: 180, key: 'codex_beater_front',          nat: 1 },  // exact front view
 ];
 // Frames sized by their trimmed CAR content (no shared canvas convention);
 // the base rear view and the LEGACY single turn frame keep their dedicated
@@ -14231,7 +14233,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.textures.exists('codex_beater_back_turn_007')
         && this.textures.exists('codex_beater_back_turn')
         && Math.abs(fold - 10) < bestErr) {
-      best = { deg: 10, key: 'codex_beater_back_turn', nat: -1 };
+      best = { deg: 10, key: 'codex_beater_back_turn', nat: 1 };
     }
     return best;
   }
@@ -14254,7 +14256,7 @@ export class GameScene extends Phaser.Scene {
     // revolution (the fold); mirror whenever that differs from the frame's
     // own native direction (the source sets are mixed — see POSE_LADDER).
     const shown = (dir > 0 ? 1 : -1) * (mirrorHalf ? -1 : 1);
-    const flip = f.deg === 0 ? false : shown !== (f.nat ?? -1);
+    const flip = f.deg === 0 ? false : shown !== (f.nat ?? 1);
     if (ps.flipX !== flip) ps.setFlipX(flip);
     if (ps.texture?.key !== key) {
       ps.setTexture(key);
@@ -14371,7 +14373,8 @@ export class GameScene extends Phaser.Scene {
       ? Math.min(P.tier, P.angle + slew * dt)
       : Math.max(P.tier, P.angle - slew * dt);
 
-    // intent < 0 is a LEFT turn = the art's native nose-left rotation (-1).
+    // intent < 0 is a LEFT turn; P.dir IS the displayed nose direction
+    // (-1 left / +1 right) — the pose controller handles art mirroring.
     this._applyPoseFrame(P.angle, P.dir || -1);
   }
 
@@ -14748,8 +14751,8 @@ export class GameScene extends Phaser.Scene {
     const k = car.texture?.key ?? '';
     const baseKey = this._playerArtKey || 'codex_beater_back';
     const poseEntry =
-        k === baseKey ? { deg: 0, nat: -1 }
-      : k === 'codex_beater_back_turn' ? { deg: 10, nat: -1 }
+        k === baseKey ? { deg: 0, nat: 1 }
+      : k === 'codex_beater_back_turn' ? { deg: 10, nat: 1 }
       : POSE_LADDER.find(e => e.key === k) ?? null;
     if (!str || this._cockpitActive || car.visible === false
         || !poseEntry || poseEntry.deg === 90) {   // unknown art or edge-on
@@ -14797,7 +14800,7 @@ export class GameScene extends Phaser.Scene {
     const bb = this._texContentBox(baseKey);
     let cx, cy, plateW;
     if (cb && bb) {
-      const shown  = (poseEntry.nat ?? -1) * (car.flipX ? -1 : 1);
+      const shown  = (poseEntry.nat ?? 1) * (car.flipX ? -1 : 1);
       const noseX  = shown > 0 ? 1 : -1;               // screen side of the nose
       const sideX  = isFront ? noseX : -noseX;         // side the mounted face is on
       const SHIFT_FRAC = { 0: 0, 7: 0.06, 10: 0.08, 12: 0.10, 30: 0.26,
@@ -25560,7 +25563,7 @@ export class GameScene extends Phaser.Scene {
     const su = Math.max(0, Math.min(1, ec.t / CC.MOTION_END));
     const e  = 1 - Math.pow(1 - su, 3);             // violent first, settling
     // cr.side is the shove direction; the nose swings opposite the shove
-    // (poseDir −side; −1 = the art's native nose-left rotation).
+    // (poseDir −side; the pose controller handles art mirroring).
     this._applyPoseFrame(e * cr.spinDeg, cr.side >= 0 ? -1 : 1);
     // Impact punch — re-assert the frame's base size EVERY punch frame
     // before multiplying (the controller only re-sizes on texture change,

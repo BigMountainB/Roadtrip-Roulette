@@ -143,7 +143,7 @@ console.log('\n═════ STEERING LADDER (metal, live input) ════�
   await sleep(170);
   const tap = await tex();
   await page.keyboard.up('ArrowLeft');
-  check(tap.tex?.endsWith('_007') && tap.flip === false, 'light LEFT steering → 7° frame, unmirrored', JSON.stringify(tap));
+  check(tap.tex?.endsWith('_007') && tap.flip === true, 'light LEFT steering → 7° frame, MIRRORED (art is nose-right native)', JSON.stringify(tap));
   await sleep(600);
   // Long hold → 12° frame.
   await page.keyboard.down('ArrowRight');
@@ -161,7 +161,7 @@ console.log('\n═════ STEERING LADDER (metal, live input) ════�
              tut: !!gs._titleTut, gas: gs._gasTankMi ?? gs._fuelMi ?? null };
   });
   console.log('   diag:', JSON.stringify(diag));
-  check(hold.tex?.endsWith('_012') && hold.flip === true, 'held RIGHT steering → 12° frame, mirrored', JSON.stringify(hold));
+  check(hold.tex?.endsWith('_012') && hold.flip === false, 'held RIGHT steering → 12° frame, native (nose-right art)', JSON.stringify(hold));
   // Release → passes back through 7° to 0°.
   await page.keyboard.up('ArrowRight');
   const seq = [];

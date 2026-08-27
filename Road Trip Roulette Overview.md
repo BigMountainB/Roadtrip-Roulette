@@ -204,6 +204,23 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 2) — Steering mirror fix: the angle set is uniformly NOSE-RIGHT
+
+Owner report: "pressing right shows the car image that should display when turning left."
+Root cause was in yesterday's `nat` metadata, not the input code: the claim that the 7°/12°
+frames rotate nose-LEFT rested on backwards flank geometry — a car yawing away from you
+exposes the flank on the side it's turning TOWARD's opposite... concretely, a car veering
+LEFT ahead of you shows its LEFT side, so art showing the RIGHT flank is a NOSE-RIGHT pose.
+Verified empirically (ArrowRight → `_steerIntent +1`, `p.x` increases): the whole export set
+— 7°/12°, all spins, legacy `back_turn` — is uniformly nose-right.  All POSE_LADDER `nat`
+entries are now `1` (the per-frame mechanism stays for future re-exports), so RIGHT steering
+shows the native frames and LEFT the mirrors; this also un-mirrors the automated exit turn
+(it was rendering every frame flipped) and corrects the pose-aware plate's tail-side pick at
+7-12°.  NOTE: the old shipped `back_turn` comment ("art depicts turning toward SCREEN-LEFT")
+made the same geometry error — legacy steering art had been mirror-inverted all along, just
+too subtle to notice at the old single-frame 7-ish°.  `scripts/validate_pose.mjs`
+expectations updated (LEFT = mirrored, RIGHT = native); full suite green.
+
 ### 2026-08-27 — Vehicle visual-orientation controller: full 9-frame angle sets everywhere
 
 The complete per-genre angle sets (0°/7°/12°/30°/60°/90°/120°/150°/180° —
@@ -367,6 +384,85 @@ no sirens or `_cine` cops surviving the scene.  Known compromises: skid marks ar
 screen-space streaks (no persistent decal system exists); no spotlight/headlight aim at the
 player (renderer has no forward cop-beam support); rear blocker reads "under" the player per the
 pseudo-3D near-field convention rather than literally behind.
+
+### 2026-08-22 — Pursuit AI reverted; genre research; dispatch pacing; bump/PIT tiers
+
+**THE REVERT.** The independent-pursuit refactor (2026-08-13 pt 2) is gone. Owner's verdict after
+playtest: *"their behavior now is baaaaad. They stack on top of eachother, they die in what appears
+to be one hit, they can't keep up with the player car."*
+
+`CopSystem.js` and `tests/chase.test.mjs` restored to `24f9bf0`; `src/cops/CopProfiles.js`,
+`CopDriver.js`, `PursuitDirector.js` and `tests/pursuit.test.mjs` deleted; the collision-intent
+branch removed from `GameScene._onCopCollision`. Back in force: the `TAILGATE_GAP` clamp, the
+`FORM` formation offsets, `reactSpd + closing`, `SPEED_CAP_BY_STAR`.
+
+**KEPT on top of the old code** (owner-requested, independent of the driving AI):
+one pursuer per star (`cap = _starLevel`), and SWAT gated to 5★.
+
+**WHY IT FAILED — read this before ever attempting it again.** Research across the genre
+(NFS Most Wanted / Heat / Unbound, GTA V, Driver) found that these games **rubber-band cop speed to
+the player deliberately**. The documented failure mode is not rubber-banding itself — it is
+rubber-banding *as the only adaptive tool*: "opponents ought to have a variety of ways to adapt."
+The prescribed fix is **more tactics, not more simulation**. The refactor removed the speed coupling
+and added per-cop physics — the wrong axis, and precisely why cops could not keep up. If cop variety
+is ever wanted again, the lever is corridor tactics (spike strips, rolling roadblocks, boxing in),
+NOT per-cop acceleration curves.
+
+**Genre reference table** (escalation is expressed as CAPABILITY, not just count):
+
+| ★ | NFS | GTA V |
+|---|---|---|
+| 1 | patrol, chase only, out-runnable | patrol, arrest on sight |
+| 2 | roadblocks | backup, aggressive driving |
+| 3 | faster interceptors / light SUVs | roadblocks, spike strips, helicopter |
+| 4 | heavy SUVs, spike strips, helicopter | NOOSE, 2nd helicopter |
+| 5 | federal / SWAT, all tactics | all units ram relentlessly |
+
+NFS Heat draws the sharpest line: at heat 1-3 units are *"not authorised to use direct intervention
+or intentional force"* — deliberate contact is a 4★ capability. GTA V escape cooldowns scale
+30/45/60/75/90 s by star. NFS Heat holds reinforcements **60 s** after dispatch.
+
+**DISPATCH PACING (fixes the "stacking" complaint at its root).** The old cooldown was
+`max(0.8, (5.5 - stars*0.9) / mults)` — ~1 s at 5★, 2.8 s at 3★. With one pursuer per star that
+dumped the whole roster on you in seconds, arriving as a clump. Now `REINFORCE_SEC_BY_STAR =
+[0, 14, 13, 11, 9, 7]`, divided by the difficulty/night multiplier as before. Measured dispatch:
+
+    2★  0.0s, 18.6s
+    3★  0.0s, 15.7s, 31.4s
+    5★  0.0s, 10.0s, 20.0s, 30.0s, 40.0s
+
+The first responder is still immediate — not by a special case, but because `_spawnCooldown` has
+already expired when a star is freshly gained. ⚠️ My first cut DID special-case it, keyed off the
+pursuer count taken BEFORE the spawn, so cop #2 still arrived 2.1 s behind cop #1. Whoever comes
+next is by definition a reinforcement.
+
+⚠️ `copEscalationMul()` defaults to **0.7**, so it *stretches* these waits ~43% rather than
+shortening them. The table is tuned against that divisor.
+
+**BUMP vs PIT TIERS** (owner: *"who cares about pressure? I want another level of difficulty for
+each star"*):
+
+| | 2★ | 3★+ |
+|---|---|---|
+| rear contact | **1-2 HP** light bump, small shove, light shake | 1-2.8 HP full ram |
+| PIT | not available | **3-5 HP** |
+
+`MIN_STARS_PIT` 2 → 3. The chase test asserting PIT arms at 2★ was updated to check 1★/2★ never arm
+and 3★ does — keep it in step with the constant.
+
+**PIT SPIN.** A landed PIT plays the genre's own spin frames so the maneuver reads as YOUR car being
+put sideways rather than a damage number. `codex_beater_spin_030…_150` registered per genre; all 10
+genres have all 5 frames. Purely cosmetic — damage, arrest counters and physics come from the
+collision path that triggers it, so a missing frame costs the look and nothing else.
+
+> **Note (2026-08-27):** a later session folded `_updatePitSpin` into its `POSE_LADDER` visual-
+> orientation controller (0/7/12/30/60/90/120/150/180° with per-frame mirroring). The PIT spin is now
+> one of several posers feeding that pipeline rather than a standalone system — see the 08-27 entry.
+
+**Still open:** cops "die in one hit". NOT caused by the refactor — `git diff` across the whole
+police work shows no `hp` changes. Cop HP is `swat ? 20 : 10`, chipped 1 per ram, but the SAME pool
+is chipped by NPC traffic crashes (`_updateVehicleCrashes`), so a cruiser that has been smashing
+through traffic arrives nearly dead and pops on first contact. Predates all of this.
 
 ### 2026-08-17 — Deploy script was re-syncing 1.3 GB to iCloud; nosync symlinks restored (`ad29087`)
 Owner asked whether the disposable build copies need saving (`dist/`, `website/demo|fully/`).
@@ -615,6 +711,14 @@ three separate things; only the preload was approved for fixing:
    `start()` only runs when the intro will actually show.
 
 ### 2026-08-13 (pt 2) — Police pursuit AI rewritten; storefront metal buttons; tunnel composites
+
+> ⚠️ **REVERTED 2026-08-22 — everything in this "Police — independent pursuit"
+> section is NO LONGER IN THE GAME.** `src/cops/CopProfiles.js`, `CopDriver.js`
+> and `PursuitDirector.js` were deleted and `CopSystem.js` was restored to its
+> pre-refactor state (`24f9bf0`). Owner's report: cops stacked, died in one hit,
+> and could not keep up. The one-pursuer-per-star cap and the SWAT-at-5★ gate
+> were re-applied on top of the OLD pursuit code and DO still ship. See the
+> 2026-08-22 entry for why, and do not rebuild this without reading it first.
 
 **Police — independent pursuit.** Cops no longer derive their speed from the player's.
 The old rear path assigned `reactSpd + closing`, `playerSpeed * 0.80` and
