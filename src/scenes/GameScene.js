@@ -104,6 +104,23 @@ const POSE_LADDER = [
 // the base rear view and the LEGACY single turn frame keep their dedicated
 // sizing rules in _applyPlayerSpriteDisplaySize.
 const POSE_SIZED_RE = /^codex_beater_(spin_\d+|back_turn_0\d+|front)$/;
+
+// ── PLAYER CAR SCALE (2026-08-22) ────────────────────────────────────────
+// ONE factor, applied to the SOURCE PIXELS of every player frame. Canvas size
+// is deliberately not part of it: the exports share no canvas or padding
+// convention, and the 90-150° spin frames have wildly different canvases from
+// the rear view, so anything keyed off canvas width resized the car whenever
+// the frame changed.
+//
+// Because it multiplies the art's own trimmed content, real differences between
+// vehicles SURVIVE — a genuinely wider car has more content pixels and renders
+// wider; a taller one renders taller. That variation is the art, not an error.
+//
+// Calibration: an NPC level with the player projects to ~70 px of canvas at 94%
+// content = ~66 px of visible car. The player sits nearest the camera, so it
+// should read slightly larger than that.
+// Dev knob: ?dev=1 → window.__carScale (see main.js) to dial it live.
+const PLAYER_CAR_SCALE = 0.088;
 // Normal-steering ladder tuning: |wheel load| thresholds (with hysteresis so
 // input jitter can't flicker frames) and the visual-angle slew rates that
 // make every transition PASS THROUGH the intermediate frames (12→7→0 on
@@ -14662,6 +14679,14 @@ export class GameScene extends Phaser.Scene {
     return box;
   }
 
+  /** Shared source-pixel scale for every player frame. Live-tunable from the
+   *  ?dev=1 console (window.__carScale) so the size can be judged on the road
+   *  rather than guessed, then baked into PLAYER_CAR_SCALE. */
+  _playerCarScale() {
+    const o = globalThis.__carScale;
+    return (typeof o === 'number' && o > 0) ? o : PLAYER_CAR_SCALE;
+  }
+
   _applyPlayerSpriteDisplaySize(targetW = 78, fallbackH = 49) {
     if (!this.playerSprite) return;
     const texKey = this.playerSprite.texture?.key;
@@ -14677,14 +14702,15 @@ export class GameScene extends Phaser.Scene {
     // scan failed — worse framing, never a stall.
     if (POSE_SIZED_RE.test(texKey ?? '')) {
       const baseKey = 'codex_beater_back';
-      const bb   = this._texContentBox(baseKey);
-      const sb   = this._texContentBox(texKey);
-      const bSrc = this.textures.get(baseKey)?.getSourceImage?.();
-      if (bb && sb && bSrc?.width) {
-        const bRatio = bSrc.height / bSrc.width;
-        const bw = targetW + (bRatio >= 0.86 ? 2 : bRatio <= 0.72 ? -2 : 0);
-        const f0 = bw / bSrc.width;          // straight art's px factor at 78±2
-        const f  = (bb.h * f0) / sb.h;       // frame factor: same car height
+      const bb = this._texContentBox(baseKey);
+      const sb = this._texContentBox(texKey);
+      if (bb && sb && sb.h) {
+        // Match the BASE frame's content height: a turntable yaw keeps roof
+        // height steady while visible width grows toward the 90° side view.
+        // f0 is now the shared source-pixel scale, NOT a canvas ratio — the
+        // canvas of a 90° frame has nothing to do with how big the car is.
+        const f0 = this._playerCarScale();
+        const f  = (bb.h * f0) / sb.h;
         this.playerSprite.setDisplaySize(sb.cw * f, sb.ch * f);
         return;
       }
@@ -14695,6 +14721,18 @@ export class GameScene extends Phaser.Scene {
     if (procedural) {
       this.playerSprite.setDisplaySize(targetW, fallbackH);
       return;
+    }
+    // BASE REAR VIEW and the legacy single turn frame: scale the art's own
+    // SOURCE PIXELS, never its canvas. Two exports of the same car with
+    // different padding now render identically, and a genuinely wider or taller
+    // vehicle keeps that difference instead of being squashed to a fixed width.
+    {
+      const cb = this._texContentBox(texKey);
+      if (cb?.cw) {
+        const f = this._playerCarScale();
+        this.playerSprite.setDisplaySize(cb.cw * f, cb.ch * f);
+        return;
+      }
     }
     // TURN pose: size from the STRAIGHT art's pin factor, not from this
     // texture's own canvas.  buildTurnSprites.mjs guarantees the two arts

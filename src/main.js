@@ -355,6 +355,7 @@ const _boot = () => {
                               '  span ' + cur('span', 1).toFixed(2) +
                               '  dim ' + (window.__wildDim ?? 0.12).toFixed(2) +
                               '  shade ' + (window.__wildShade ?? 0.85).toFixed(2) +
+                              '  car ' + (window.__carScale ?? 0.088).toFixed(3) +
                               '  wall ' + (window.__wingTune?.wall ?? 1).toFixed(2) +
                               '  berm ' + (window.__wingTune?.fg ?? 1).toFixed(2) +
                               (window.__wingTune?.off ? ' (wings OFF)' : '');
@@ -384,6 +385,11 @@ const _boot = () => {
       mk('berm −', () => { window.__wingTune.fg   = Math.max(0.2, window.__wingTune.fg   - 0.05); showTune(); });
       mk('berm +', () => { window.__wingTune.fg   = Math.min(2.5, window.__wingTune.fg   + 0.05); showTune(); });
       mk('wings',  () => { window.__wingTune.off  = !window.__wingTune.off; showTune(); });
+      // Player-car size: one source-pixel scale shared by every frame
+      // (GameScene.PLAYER_CAR_SCALE). Bake the chosen value there.
+      window.__carScale = window.__carScale ?? 0.088;
+      mk('car −', () => { window.__carScale = Math.max(0.04, window.__carScale - 0.004); showTune(); });
+      mk('car +', () => { window.__carScale = Math.min(0.20, window.__carScale + 0.004); showTune(); });
       bar.appendChild(tuneTag);
       showTune();
       const mileTag = document.createElement('span');
