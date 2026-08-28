@@ -4952,7 +4952,9 @@ export class GameScene extends Phaser.Scene {
         // Screen-space sectors the blades physically sweep — EffectsSystem
         // only clears rain/snow INSIDE these; the rest of the glass keeps
         // building (owner 2026-08-27).
-        const wiperZones = wiperActive ? this._wiperSweepZones() : null;
+        // Passed even with the wipers OFF: stock-blade streak residue keeps
+        // rendering in the blade arcs after the motor stops (owner 2026-08-27).
+        const wiperZones = this._wiperSweepZones();
         this.effects.update(rawDt, this.vices, this.cameras.main, { mile, wiperActive, wiperSweepPulse, wiperPower, wiperZones });
       }
       // Weather / wiper indicator — visible during BOTH rain AND snow.

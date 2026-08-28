@@ -456,6 +456,20 @@ export class EffectsSystem {
         return false;
       };
       const WIPE_WEAR = 0.2;                          // ⅕ per wipe → 5 wipes
+      // Blade QUALITY (owner 2026-08-27): both blade tiers wipe the same
+      // ⅕-per-pass, but STOCK blades (wiperPower < 1) are old rubber — they
+      // SMEAR instead of squeegee.  Two residues, both shaped by the arc:
+      //   • some worn-out drops survive the final pass as knocked-back film
+      //     (see the pulse blocks below);
+      //   • streak marks build along the blade path — concentric arc smears
+      //     that persist after the motor stops and wash off slowly.
+      const wxWp = Math.max(0, Math.min(1, ctx.wiperPower ?? 1));
+      if (this._wiperStreak == null) this._wiperStreak = 0;
+      if (ctx.wiperSweepPulse && ctx.wiperZones && wxWp < 1) {
+        this._wiperStreak = Math.min(1, this._wiperStreak + 0.45 * (1 - wxWp));
+      }
+      // Rain re-wets the glass and washes streaks off over ~20 s.
+      this._wiperStreak = Math.max(0, this._wiperStreak - 0.05 * dt);
       // Device-wide glass (owner 2026-08-27): the canvas is widened to
       // WORLD_W on wide phones and the main camera scrolls −HUD_OFFSET_X, so
       // the visible x range is −HUD_OFFSET_X … SCREEN_W+HUD_OFFSET_X.  Rain
@@ -584,10 +598,17 @@ export class EffectsSystem {
           for (const d of this._wsDrops) {
             if (_inWiperPath(d.x, d.y)) {
               d.wipe = (d.wipe ?? 0) + WIPE_WEAR;
-              if (d.wipe >= 0.999) continue;           // fifth wipe removes it
-              d.r     *= 0.85;                          // visibly thins per pass
-              d.alpha *= 0.80;
-              d.trail  = (d.trail || 0) * 0.70;
+              if (d.wipe >= 0.999) {
+                // Fifth wipe: fresh rubber squeegees it clean; old rubber
+                // SMEARS — some film survives, knocked back but on the glass.
+                if (!(wxWp < 1 && Math.random() < (1 - wxWp) * 0.55)) continue;
+                d.wipe   = 0.55;
+                d.alpha *= 0.70;
+              } else {
+                d.r     *= 0.85;                        // visibly thins per pass
+                d.alpha *= 0.80;
+                d.trail  = (d.trail || 0) * 0.70;
+              }
             }
             survivors.push(d);
           }
@@ -729,9 +750,15 @@ export class EffectsSystem {
           for (const f of this._wsStuck) {
             if (_inWiperPath(f.x, f.y)) {
               f.wipe = (f.wipe ?? 0) + WIPE_WEAR;
-              if (f.wipe >= 0.999) continue;
-              f.a *= 0.80;
-              f.r *= 0.87;
+              if (f.wipe >= 0.999) {
+                // Old rubber drags a slush film instead of scraping clean.
+                if (!(wxWp < 1 && Math.random() < (1 - wxWp) * 0.55)) continue;
+                f.wipe = 0.55;
+                f.a   *= 0.65;
+              } else {
+                f.a *= 0.80;
+                f.r *= 0.87;
+              }
             }
             survivors.push(f);
           }
@@ -925,6 +952,30 @@ export class EffectsSystem {
         if (this._wsStuck?.length) {
           for (const f of this._wsStuck) f.a *= 0.95;
           this._wsStuck = this._wsStuck.filter(f => f.a > 0.08);
+        }
+      }
+
+      // ── Stock-blade streak marks (owner 2026-08-27) ─────────────────
+      // Concentric arc smears tracing the blade path — the tell that the
+      // rubber is old.  Built up by stock sweeps (see _wiperStreak above),
+      // they outlive the wiping itself and fade as the weather rinses them.
+      // Placed AFTER the weather chain so it cannot break the rain/snow/fog
+      // else-ladder (the snow-melt cleanup must stay the chain's final else).
+      if ((weatherState === 'rain' || weatherState === 'snow')
+          && weatherInt > 0.05 && this._wiperStreak > 0.02 && ctx.wiperZones) {
+        const _stkCol = weatherState === 'snow' ? 0xEAF2F8 : 0xCFE0EE;
+        const _stkA0  = this._wiperStreak * (weatherState === 'snow' ? 0.26 : 0.20);
+        const _A0 = -1.66, _A1 = -0.09;               // just inside the −100°…0° sweep
+        for (const z of ctx.wiperZones) {
+          // Stable per-zone jitter so the marks don't shimmer frame to frame.
+          const _j = (z.x * 7919) % 13 / 13;
+          [0.30, 0.46, 0.62, 0.77, 0.90].forEach((fr, k) => {
+            const rr = z.r * (fr + _j * 0.02);
+            this.overlay.lineStyle(k % 2 ? 2 : 3, _stkCol, _stkA0 * (0.55 + 0.45 * ((k * 5 + 3) % 7 / 7)));
+            this.overlay.beginPath();
+            this.overlay.arc(z.x, z.y, rr, _A0 + _j * 0.05, _A1 - (k % 3) * 0.04);
+            this.overlay.strokePath();
+          });
         }
       }
 

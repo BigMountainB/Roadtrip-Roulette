@@ -204,6 +204,27 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 9) — Stock blades smear: streaks + residue in the blade path
+
+- Owner clarified the blade-tier split: old wipers should "leave some rain and streaks in
+  the shape of the blade path", not clear like new ones.  Both tiers keep the ⅕-per-wipe
+  rule; STOCK (`wiperPower < 1`) now differs by RESIDUE, not speed:
+  - **Smear survivors**: on a drop/flake's clearing (5th) pass, stock rubber leaves it on
+    the glass with probability `(1−wp)×0.55` — knocked back to wear 0.55, dimmed — so the
+    arc stays visibly filmy; fresh rubber squeegees it gone.
+  - **Streak marks**: `_wiperStreak` builds `+0.45×(1−wp)` per stock sweep, decays 0.05/s
+    (rain rinses them off ~20 s); rendered as 5 concentric arc strokes per pivot tracing
+    the swept sector (radii 0.30–0.90 × blade length, angles −95°…−5°, stable per-zone
+    jitter).  Drawn AFTER the rain/snow/fog else-chain — regression caught mid-edit: the
+    first placement broke the chain so the snow-melt `else` ran during rain; the chain's
+    final else must stay intact.
+  - GameScene now passes `ctx.wiperZones` even with the wipers OFF, so streak residue
+    persists on the glass after the motor stops.
+  This resolves the pt-7 open flag — the New Wiper Blades upgrade matters again (clean
+  sweep vs smear), no change to wipe-count.  Probe: stock after sweeps → streak 1.0, arc
+  217 drops (3 mid-smear); upgraded → streak 0, arc 145, no marks.  Screenshots
+  tmp/wiper_stock_smear.png / tmp/wiper_upgraded_clean.png.
+
 ### 2026-08-27 (pt 8) — Device-wide windshield weather + Finesse SERVICES tab
 
 - **Weather fills every device's borders** (owner): the canvas widens to WORLD_W on wide
