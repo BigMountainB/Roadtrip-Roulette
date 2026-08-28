@@ -204,7 +204,11 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
-### 2026-08-27 (pt 10) — Playtest fixes: pull-over hijack, translucent cops, angled approach
+### 2026-08-27 (pt 12) — Playtest fixes: pull-over hijack, translucent cops, angled approach
+
+(Renumbered from a duplicate "pt 10" — a parallel session logged pt 10 (garage card) and
+pt 11 (jurisdiction police) the same evening; this entry is the newest of the three and
+also fixes the pt-11 art's angled-approach read.)
 
 Owner playtest reports ("game resetting a lot", "cops translucent", "car slows to almost 0",
 "cops come in at an angle"), all traced and fixed:
