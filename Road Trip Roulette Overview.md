@@ -204,6 +204,62 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 13) — Player-car scale from source pixels; tail lamps lowered
+
+Two sizing fixes, both from owner playtest reports. Committed inside `1a5c380` and the pt 11/12
+batches.
+
+**PLAYER CAR LOOKED SMALLER THAN NPC CARS.** Owner's report, with NPCs level with the player —
+so depth was never involved. The cause was the sizing chain keying off CANVAS width:
+
+    const f0 = bw / bSrc.width;        // bw = 78 (+/-2), bSrc = the CANVAS
+
+The exports share no canvas or padding convention, and the 90-150° spin frames have wildly
+different canvases from the rear view, so the car resized whenever the frame changed. The spin
+ladder inherited `f0`, propagating the canvas dependence through every pose.
+
+`PLAYER_CAR_SCALE` (0.088) is now ONE factor multiplying each frame's own **trimmed content**.
+Canvas plays no part. Real differences between vehicles therefore survive — a genuinely wider car
+has more content pixels and renders wider, a taller one taller.
+
+| genre | was | now |
+|---|---|---|
+| hiphop_phonk | 64 px | **72 px** |
+| edm_rave | 70 px | 79 px |
+| metal | 71 px | 80 px |
+| country | 73 px | 83 px |
+| *NPC level with the player* | — | ~66 px |
+
+Spin frames still match the BASE frame's content HEIGHT, so a turntable yaw keeps roof height
+steady while visible width grows toward the side view — that was already right, it was just being
+handed a canvas ratio.
+
+⚠️ **Two things I got wrong first, recorded so they are not re-chased.** (1) The ~15% spread
+between genres is NOT a defect — all ten already shared 80/1024, so those differences are the art
+and are meant to survive. (2) I chased perspective/depth before re-reading the report; the owner
+had already said the NPCs were level with the player.
+
+**TAIL LAMPS SAT TOO HIGH.** Were `0.50` of car height above the tire line (`0.55` trucks/SUVs) —
+dead mid-body, which reads as lamps floating on the glasshouse rather than seated in the rear
+panel. Now `0.36` / `0.42`; real taillights sit around a third of body height.
+
+The value existed as inline copies in **two** render passes (`_renderHeadlights` and the fog-night
+placement). Both now call one `lampFrac()` helper — two copies of one tuning number is how they
+end up disagreeing after someone adjusts one. Headlights untouched: separately tuned, not flagged.
+
+These lamps are drawn for **traffic and cop cars only** (`_renderHeadlights` iterates traffic), so
+they do not interact with the player's license-plate anchor at 0.51.
+
+**Dev knobs** (`?dev=1` bar): `car −/+` → `window.__carScale`, `lamp −/+` → `window.__lampFrac`.
+Both values above are calibrated, NOT eyeballed — bake whatever the owner lands on into
+`PLAYER_CAR_SCALE` / `LAMP_FRAC.tail`.
+
+⚠️ **Screenshots could not be viewed this session.** The API rejects images once several
+oversized ones are in context — even a 760 px, 31 KB copy was refused, so resizing does not help;
+a fresh session clears it. Uploads DO land on disk, so they were measured with Python instead
+(`PIL` → cluster red pixels → lamp centres, separation, implied car width). That is how the lamp
+positions above were derived. Useful fallback: **analyse the file, don't try to view it.**
+
 ### 2026-08-27 (pt 12) — Playtest fixes: pull-over hijack, translucent cops, angled approach
 
 (Renumbered from a duplicate "pt 10" — a parallel session logged pt 10 (garage card) and
