@@ -14969,6 +14969,88 @@ export class GameScene extends Phaser.Scene {
    *  (owner 2026-08-26).  Scan runs once per texture; the cache is rebuilt
    *  each scene create so a genre-art swap (same keys, new pixels) can't
    *  serve stale boxes. */
+  /**
+   * Where a vehicle texture PAINTS its taillights, in SOURCE pixel coords.
+   *
+   * The fog glow used a fixed +/-0.30 of display width and a fraction of CANVAS
+   * height. Both were wrong per genre: the canvases are square with wildly
+   * varying padding, and the art places lamps anywhere from u 0.06 to 0.29.
+   *
+   * WHY THIS IS NOT A SIMPLE COLOUR SCAN. Several of the cars are RED. Averaging
+   * red pixels returns the centroid of the bodywork (country: 50k red pixels,
+   * lopsided 7.9k/4.8k) — so a naive scan aims the glow at the middle of the
+   * car. Brightness thresholds alone still fail on norteno and reggaeton, and
+   * "the two biggest blobs" picks two body panels.
+   *
+   * What actually identifies a lamp PAIR is the pairing itself: two compact,
+   * similarly-sized blobs at the same height, symmetric about the car's centre
+   * and well apart. That is scored below, and it is what separates lamps from
+   * paint on every genre that has them.
+   *
+   * Cached per texture (one readback, same as _texContentBox). Returns null when
+   * no convincing pair exists — the caller then falls back to lampFrac().
+   */
+  _texLampSpots(texKey) {
+    const cache = (this._texLampCache = this._texLampCache ?? new Map());
+    if (cache.has(texKey)) return cache.get(texKey);
+    let spots = null;
+    try {
+      const cb = this._texContentBox(texKey);
+      const src = this.textures.get(texKey)?.getSourceImage?.();
+      if (cb?.w > 4 && src?.width) {
+        const cv = document.createElement('canvas');
+        cv.width = cb.w; cv.height = cb.h;
+        const ctx = cv.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(src, cb.x, cb.y, cb.w, cb.h, 0, 0, cb.w, cb.h);
+        const d = ctx.getImageData(0, 0, cb.w, cb.h).data;
+        const W = cb.w, H = cb.h, area = W * H;
+        // Lamp-bright red only: body paint does not reach this saturation.
+        const lit = new Uint8Array(area);
+        for (let i = 0, n = area; i < n; i++) {
+          const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2], a = d[i * 4 + 3];
+          if (a > 150 && r > 185 && r - g > 110 && r - b > 95) lit[i] = 1;
+        }
+        // Flood-fill into compact blobs; anything huge is bodywork.
+        const seen = new Uint8Array(area), blobs = [];
+        const maxBlob = area * 0.02, stack = [];
+        for (let p0 = 0; p0 < area; p0++) {
+          if (!lit[p0] || seen[p0]) continue;
+          stack.length = 0; stack.push(p0); seen[p0] = 1;
+          let sx = 0, sy = 0, n = 0;
+          while (stack.length) {
+            const p = stack.pop(), y = (p / W) | 0, x = p - y * W;
+            sx += x; sy += y; n++;
+            if (x > 0     && lit[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack.push(p - 1); }
+            if (x < W - 1 && lit[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack.push(p + 1); }
+            if (y > 0     && lit[p - W] && !seen[p - W]) { seen[p - W] = 1; stack.push(p - W); }
+            if (y < H - 1 && lit[p + W] && !seen[p + W]) { seen[p + W] = 1; stack.push(p + W); }
+          }
+          if (n >= 20 && n <= maxBlob) blobs.push({ x: sx / n, y: sy / n, n });
+        }
+        // Best PAIR: centred on the car, level with each other, similar size,
+        // and far enough apart to be opposite lamps rather than one cluster.
+        let best = null;
+        for (let i = 0; i < blobs.length; i++) {
+          for (let j = i + 1; j < blobs.length; j++) {
+            let a = blobs[i], b = blobs[j];
+            if (a.x > b.x) { const t = a; a = b; b = t; }
+            if ((b.x - a.x) / W < 0.30) continue;
+            const score = Math.abs((a.x + b.x) / 2 - W / 2) / W * 3
+                        + Math.abs(a.y - b.y) / H * 3
+                        + Math.abs(a.n - b.n) / Math.max(a.n, b.n);
+            if (!best || score < best.score) best = { score, a, b };
+          }
+        }
+        if (best) {
+          spots = { lx: cb.x + best.a.x, rx: cb.x + best.b.x,
+                    y:  cb.y + (best.a.y + best.b.y) / 2 };
+        }
+      }
+    } catch { spots = null; }
+    cache.set(texKey, spots);
+    return spots;
+  }
+
   _texContentBox(texKey) {
     const cache = (this._texTrimCache = this._texTrimCache ?? new Map());
     if (cache.has(texKey)) return cache.get(texKey);
@@ -15903,6 +15985,31 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /**
+   * One lightbar lamp: a RECTANGULAR bulb inside an OVAL haze.
+   *
+   * Lightbars are strips of rectangular lenses, not round bulbs, so the lit
+   * element is a rect sized to the lens the art actually paints. The bloom
+   * around it is a wide flat ellipse — a real bar throws a horizontal smear,
+   * not a circle. (Every path here previously drew the bulb itself as an
+   * ellipse, and the dark-bar path drew ONE ellipse that alternated colour,
+   * which read as a single bulb changing hue rather than a bar of lamps.)
+   *
+   * @param {number} w,h  the LENS size; the haze is derived from it.
+   */
+  _lightbarLamp(bar, cx, cy, w, h, color, a) {
+    if (!(a > 0.004) || !(w > 0.5)) return;
+    const hw = Math.max(1, w), hh = Math.max(1, h);
+    // Oval haze — deliberately much wider than tall.
+    bar.fillStyle(color, a * 0.20);
+    bar.fillEllipse(cx, cy, hw * 2.6, hh * 3.4);
+    bar.fillStyle(color, a * 0.38);
+    bar.fillEllipse(cx, cy, hw * 1.6, hh * 2.1);
+    // The bulb itself: a rectangle, the shape of the lens.
+    bar.fillStyle(color, a);
+    bar.fillRect(cx - hw / 2, cy - hh / 2, hw, hh);
+  }
+
   _renderVehicles() {
     const p = this.player;
     // Shared render-camera position — cockpit shifts the eye 3000 units
@@ -16474,8 +16581,42 @@ export class GameScene extends Phaser.Scene {
     if (this._fogGlowGfx && (_fogP?.density ?? 0) > 0.05
         && this.playerSprite?.visible !== false && !this._sinkState) {
       const pw = this.playerSprite.displayWidth  || 78;
-      const ph = this.playerSprite.displayHeight || 49;
-      const py = this.playerSprite.y - ph * 0.34 - 12;   // rear lights, net +12px (lowered ~half the prior 25px raise)
+      // LAMP HEIGHT FROM THE CAR, NOT THE CANVAS.
+      //
+      // This used `displayHeight * 0.34 - 12`, but displayHeight is the whole
+      // SQUARE 1024x1024 canvas while the car fills only part of it — and by a
+      // wildly different amount per genre (edm_rave 53%, country 87%). So
+      // 0.34 of canvas came out as 64% of car height on edm_rave: lamps up by
+      // the roofline. Rescaling the player sprite made it worse, since a bigger
+      // displayHeight pushed them higher still.
+      //
+      // The sprite's origin is the tire-contact point (_applyPlayerGroundAnchor),
+      // so y IS the ground line; the lamps sit LAMP_FRAC.tail of the car's own
+      // CONTENT height above it — the same fraction traffic lamps use.
+      const _key = this.playerSprite.texture?.key;
+      const _cb  = this._texContentBox(_key);
+      const _sp  = this._texLampSpots(_key);
+      // SOURCE-PIXEL -> SCREEN. The origin is the tire-contact anchor
+      // (_applyPlayerGroundAnchor), so a source point (sx, sy) lands at
+      // ps.(x,y) + (s - origin*canvas) * f. That places the glow exactly on the
+      // painted lamps, whatever the genre's framing, padding or canvas.
+      let py, lampL = null, lampR = null;
+      if (_sp && _cb?.cw) {
+        const f  = this.playerSprite.displayWidth / _cb.cw;
+        const ox = this.playerSprite.originX * _cb.cw;
+        const oy = this.playerSprite.originY * _cb.ch;
+        const mx = (sx) => this.playerSprite.flipX ? (_cb.cw - sx) : sx;
+        lampL = this.playerSprite.x + (mx(_sp.lx) - ox) * f;
+        lampR = this.playerSprite.x + (mx(_sp.rx) - ox) * f;
+        py    = this.playerSprite.y + (_sp.y - oy) * f;
+      } else {
+        // No lamps found in the art — fall back to a fraction of the car's
+        // CONTENT height (never the canvas: it is square and mostly padding).
+        const _carH = _cb?.ch
+          ? _cb.h * (this.playerSprite.displayHeight / _cb.ch)
+          : (this.playerSprite.displayHeight || 49) * 0.55;
+        py = this.playerSprite.y - _carH * lampFrac(false);
+      }
       const a  = 0.55 * _fogP.density;                   // dimmer — was punching through the fog looking unfogged
       const g  = this._fogGlowGfx;
       const r  = pw * 0.084;                              // ~60% of the old size; player is always "passing" range
@@ -16484,8 +16625,8 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xFF1A00, a * 0.35); g.fillCircle(cx, py, r * 1.3);   // mid haze
         g.fillStyle(0xFF3A14, a * 0.78); g.fillCircle(cx, py, r * 0.455); // bulb — dimmed (0.95→0.78), clearest of the scene (bottom)
       };
-      glow(this.playerSprite.x - pw * 0.30);
-      glow(this.playerSprite.x + pw * 0.30);
+      glow(lampL ?? (this.playerSprite.x - pw * 0.30));
+      glow(lampR ?? (this.playerSprite.x + pw * 0.30));
     }
 
     // Hide any sprites in the pool we didn't use this frame.
@@ -16639,21 +16780,25 @@ export class GameScene extends Phaser.Scene {
           // Measured per-side boxes — which side is red vs blue VARIES BY
           // DEPARTMENT (Seattle blue-left, Pullman red-left), so each glow
           // pulses on its own lenses instead of assuming a layout.
-          if (blue) {
-            bar.fillStyle(0x2255FF, _lbFa * (cop.flash ? 0.86 : 0.18));
-            bar.fillEllipse(blue.x, blue.y, blue.w, blue.h);
-          }
-          if (red) {
-            bar.fillStyle(0xFF3333, _lbFa * (cop.flash ? 0.18 : 0.86));
-            bar.fillEllipse(red.x, red.y, red.w, red.h);
-          }
+          if (blue) this._lightbarLamp(bar, blue.x, blue.y, blue.w, blue.h,
+                                        0x2255FF, _lbFa * (cop.flash ? 0.86 : 0.18));
+          if (red)  this._lightbarLamp(bar, red.x, red.y, red.w, red.h,
+                                        0xFF3333, _lbFa * (cop.flash ? 0.18 : 0.86));
         } else {
           // Dark low-profile bar (Snoqualmie/Adams) — no baked lenses to
           // light, so a restrained whole-strip wash alternates over the
           // bar's true position; off phase shows nothing (bar is black).
           if (cop.flash != null) {
-            bar.fillStyle(cop.flash ? 0xFF3333 : 0x2255FF, _lbFa * 0.68);
-            bar.fillEllipse(whole.x, whole.y, whole.w, whole.h);
+            // Was ONE ellipse alternating red/blue — a single bulb changing
+            // colour. A bar has lamps at both ends that swap, so split the
+            // measured strip into two lenses and rotate the colours between
+            // them: at any instant one end is red and the other blue.
+            const _lw = whole.w * 0.40;
+            const _dx = whole.w * 0.26;
+            this._lightbarLamp(bar, whole.x - _dx, whole.y, _lw, whole.h,
+                               cop.flash ? 0xFF3333 : 0x2255FF, _lbFa * 0.72);
+            this._lightbarLamp(bar, whole.x + _dx, whole.y, _lw, whole.h,
+                               cop.flash ? 0x2255FF : 0xFF3333, _lbFa * 0.72);
           }
         }
         continue;
@@ -16681,10 +16826,10 @@ export class GameScene extends Phaser.Scene {
         // CB: red half → amber (red↔dark reads as near-black on/off for
         // protan/deutan), blue half unchanged, + a white center that blinks
         // with the bar so "active chase" reads by shape + blink, not hue.
-        bar.fillStyle(cop.flash ? 0xFFB000 : 0x3A2600, _lbFa * 0.86);
-        bar.fillEllipse(x + halfDx, y, glowW, glowH);
-        bar.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
-        bar.fillEllipse(x - halfDx, y, glowW, glowH);
+        this._lightbarLamp(bar, x + halfDx, y, lensW, lensH,
+                           cop.flash ? 0xFFB000 : 0x3A2600, _lbFa * 0.86);
+        this._lightbarLamp(bar, x - halfDx, y, lensW, lensH,
+                           cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
         if (cop.flash) {
           bar.fillStyle(0xFFFFFF, _lbFa * 0.88);
           bar.fillRect(x - bodyW * 0.032, y - lensH, bodyW * 0.064, lensH * 2);
@@ -16693,10 +16838,12 @@ export class GameScene extends Phaser.Scene {
         // Artwork is blue on screen-left and red on screen-right in both
         // straight views; pulse each lens in place instead of repainting a
         // generic black bar over the car.
-        bar.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
-        bar.fillEllipse(x - halfDx, y, glowW, glowH);
-        bar.fillStyle(cop.flash ? 0xFF3333 : 0x440000, _lbFa * 0.86);
-        bar.fillEllipse(x + halfDx, y, glowW, glowH);
+        // Two rectangular lenses that swap colour, with the oval haze the
+        // helper adds — same treatment as the measured-frame path above.
+        this._lightbarLamp(bar, x - halfDx, y, lensW, lensH,
+                           cop.flash ? 0x2255FF : 0x000044, _lbFa * 0.86);
+        this._lightbarLamp(bar, x + halfDx, y, lensW, lensH,
+                           cop.flash ? 0xFF3333 : 0x440000, _lbFa * 0.86);
       }
     }
   }

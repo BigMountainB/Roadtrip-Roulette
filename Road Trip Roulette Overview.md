@@ -10189,3 +10189,239 @@ bounds + tire contacts, never stretched.
   wide viewport + 2★ carry-through, bit-exact hand-off, single RestStop launch; speed profile
   95 mph held to the nose then 82→60→47→41. Full suite green (737 tests).
 - Open items: hand playtest (esp. exit 32 at speed), night exit lighting, per-genre `_r` art.
+
+---
+
+# Chapter 17 — Police, Sheriff, SWAT & Helicopter Artwork
+
+**Art handoff consolidated 2026-08-28.** The assets described below exist in the project.
+
+**STATUS: INTEGRATED AND SHIPPED 2026-08-27/28** — see changelog pt 11 (core integration,
+commit `3fd5098`), pt 12 (playtest fixes), pt 13 (player scale/lamps), and the 08-28
+"Cop pose frames" entry (height-normalized sizing + scoped left-turn mirroring).  This
+chapter remains the ART CONTRACT (filenames, angle meanings, canvas/anchor conventions);
+the implementation notes below are where the code actually landed:
+
+- **Data home:** `src/data/policeAgencies.js` (agency table + route regions + the single
+  `resolvePoliceSprite` resolver and fallback chain) and `src/data/policeSpriteMeta.js`
+  (GENERATED — per-frame content bounds + red/blue lightbar lens boxes; regenerate with
+  `node scripts/buildPoliceSpriteMeta.mjs` after ANY police art re-export, never hand-edit).
+- **Scene glue:** GameScene `_ensurePoliceAssets` (region streaming via `Image()` +
+  `textures.addImage` — the scene LoaderPlugin jams after `scene.restart()`, do not switch
+  back to `this.load`), `_copSteerAngle` / `_resolveCopFrame` (steering ladder + pose),
+  `_spawnCopSpinFx` (PIT/crash frame ladders), measured-anchor lightbar overlay + fog
+  bloom + mirror branch; CopSystem `_stampAgency` (agency picked ONCE at spawn) and the
+  `ent` backref on `getCopsForRender` records (they are per-frame COPIES — persistent cop
+  state must live on `ent`).
+- **Mirroring rule as shipped:** spin/PIT ladders and 0°/180° never mirror (large
+  lettering); the small 7°/12° STEERING frames DO mirror for left turns with lens anchors
+  swapped (08-28 entry) — the art is native right-turn only.
+- **Parked speed traps:** right-shoulder traps wear the local `_spin_090` profile via
+  content-aware `SCENERY_IMAGE_PROFILES` entries; LEFT-shoulder traps still use the legacy
+  generic nose-left art (no nose-left jurisdiction profile exists — see 17.10).
+- **Validation:** `tests/police.test.mjs` (in `npm test`) + headless
+  `scripts/validate_police.mjs` (dev server on :3000; screenshots →
+  `tmp/police_validation/`).
+- **Sources parked:** `jurisdictions/sources/` contact sheets + the concept `*_back.png`
+  files were moved to `Archive/police_jurisdiction_sources_2026-08-27/` so they never
+  load or deploy — do not move them back into `public/`.
+
+## 17.10 Known art gaps (owner action)
+
+- `wsp_spin_180.png` wears a **"NEVADA HP 725" license plate** — needs a WA re-export.
+- No **nose-LEFT profile** exists, so left-shoulder speed traps keep the legacy generic
+  side art (mirroring a jurisdiction 090 would reverse the livery).
+- Spins cannot pass 180° without mirrored lettering; crash rotation stops at the front
+  view by design.  If more rotation is ever wanted, render 210-330° frames.
+- `heli_police_rendered_3.png` (+`_flip`) is pre-wired: drop the files into
+  `public/assets/cops/` and the rotor cycle picks them up with no code change.
+
+## 17.1 Jurisdiction vehicle sets
+
+Finished transparent sprites live in:
+
+`public/assets/cars/jurisdictions/`
+
+Nine agencies are represented:
+
+| Agency ID | Filename prefix | Vehicle class | Suggested territory |
+|---|---|---|---|
+| `seattle_police` | `seattle_police` | sedan | Seattle / West Seattle |
+| `bellevue_police` | `bellevue_police` | SUV | Bellevue / eastside urban area |
+| `snoqualmie_police` | `snoqualmie_police` | SUV | North Bend / Snoqualmie |
+| `washington_state_patrol` | `wsp` | SUV | Entire interstate; overlaps local agencies |
+| `kittitas_county_sheriff` | `kittitas_sheriff` | SUV | Rural Kittitas County |
+| `ellensburg_police` | `ellensburg_police` | sedan | Ellensburg urban area |
+| `adams_county_sheriff` | `adams_sheriff` | SUV | Adams County / rural Columbia Basin |
+| `othello_police` | `othello_police` | SUV | Othello and immediate area |
+| `pullman_police` | `pullman_police` | SUV | Pullman / destination area |
+
+Every set has nine standardized 768×512 transparent PNGs:
+
+```text
+{prefix}_spin_000.png
+{prefix}_spin_007.png
+{prefix}_spin_012.png
+{prefix}_spin_030.png
+{prefix}_spin_060.png
+{prefix}_spin_090.png
+{prefix}_spin_120.png
+{prefix}_spin_150.png
+{prefix}_spin_180.png
+```
+
+Angle intent:
+
+- `000`: centered rear pursuit view.
+- `007`: barely perceptible normal steering.
+- `012`: stronger but still ordinary steering.
+- `030`, `060`, `090`: PIT setup, sliding and broadside rotation.
+- `120`, `150`, `180`: continued crash rotation through centered front view.
+
+All angled frames expose the same side and progress in one direction. Do not mechanically
+mirror jurisdiction sprites to extend a spin: department names, badges and markings would be
+backwards. A 0→180° crash animation is sufficient until separately rendered 180→360° frames
+exist.
+
+The standardized `_spin_000.png` file is the gameplay rear view. A few earlier `*_back.png`
+concept files remain but should not replace the standardized frame. Original generation sheets
+are preserved under `public/assets/cars/jurisdictions/sources/` and must never be loaded by the
+game.
+
+## 17.2 Jurisdiction selection rules
+
+Agency selection should be centralized and data-driven, using existing mile/location/biome/
+checkpoint data — never a second route-location system or scattered mile checks.
+
+- WSP may appear anywhere on the interstate and may overlap a local agency's territory.
+- Local police should dominate inside their city/area; sheriffs should dominate rural county
+  territory.
+- Store a stable agency ID on each spawned police entity. A pursuit keeps the agency selected
+  when it began even if the player crosses a jurisdiction boundary.
+- Missing-asset fallback order: requested jurisdiction angle → jurisdiction `000` → generic
+  equivalent angle → `car_back_police.png`.
+
+The territory labels above are intent, not final hard boundaries. Resolve the exact ranges from
+the game's authoritative route data during integration and record them here afterward.
+
+## 17.3 Generic police fallback art
+
+Located in `public/assets/cars/`:
+
+```text
+car_back_police.png
+car_front_police.png
+car_left_police.png
+car_right_police.png
+car_back_police_turn_007.png
+car_back_police_turn_012.png
+car_back_police_spin_030.png
+car_back_police_spin_060.png
+```
+
+Use these only where a jurisdiction is unavailable or an angle is missing. Normal visual angle
+selection is `back/000` while straight, `007` for mild lateral intent, and `012` for stronger
+ordinary lane movement. Use hysteresis/minimum frame hold so the art does not flicker.
+
+## 17.4 SWAT replacement art
+
+New rendered SWAT files in `public/assets/cars/`:
+
+```text
+car_back_swat_rendered.png
+car_front_swat_rendered.png
+car_back_swat_turn_007.png
+car_back_swat_turn_012.png
+car_back_swat_spin_030.png
+car_back_swat_spin_060.png
+car_back_swat_spin_090.png
+```
+
+These supersede `car_back_swat.png` and `car_front_swat.png`, which remain fallbacks. SWAT must
+render visibly larger/heavier than police SUVs and sedans. Use `007/012` for steering and
+`030/060/090` for PIT or crash motion.
+
+## 17.5 Helicopter three-frame animation
+
+New helicopter files live in `public/assets/cops/`:
+
+```text
+heli_police_rendered_1.png
+heli_police_rendered_2.png
+heli_police_rendered_3.png
+heli_police_rendered_1_flip.png
+heli_police_rendered_2_flip.png
+heli_police_rendered_3_flip.png
+```
+
+Animate `1 → 2 → 3 → 1` at roughly **9–12 FPS** (about 10 Hz is the intended starting point).
+The body stays stable while the baked main- and tail-rotor phases change. The `_flip` files are
+separately rendered opposite-direction frames with readable `POLICE` markings; do not replace
+them with runtime mirroring. The old `heli_1/2` files remain fallbacks only.
+
+At the helicopter's ~170 px gameplay size, baked rotor phases are preferred to a separate rotor
+layer: they avoid pivot metadata through sway/bob/scale transforms and look more convincing for
+the nearly edge-on main rotor.
+
+## 17.6 PIT and crash-spin visual contract
+
+Integrate the new angles with the existing pursuit/contact/crash system — do not invent a
+parallel collision system.
+
+Suggested police visual sequence:
+
+`000 → 007 → 012 → 030 → 060 → 090 → 120 → 150 → 180`
+
+Starting timing for crash-only steps is about 50–90 ms per frame, tuned by speed and severity.
+During the animation, retain the exact agency/vehicle, keep road-space positioning authoritative,
+stop direction-frame oscillation, respect pause/restart/game-over, and cancel timers when an
+entity is removed. Existing damage, wanted level, arrest, collision and PIT eligibility should
+remain unchanged unless a narrowly scoped bug is found.
+
+If matching player-car crash angles exist, animate player and police together. Never substitute
+police art for the player's genre vehicle.
+
+## 17.7 Scale, anchoring and emergency lights
+
+Canvas dimensions are not physical vehicle size. Keep one stable world/display scale per entity:
+
+- SWAT is largest.
+- Police/sheriff SUVs are taller and heavier than sedans.
+- Seattle and Ellensburg sedans are lower but not toy-sized.
+- Frame changes must not shrink, grow, jump vertically or shift laterally.
+
+Anchor all ground vehicles bottom-center/on tire contact, not by changing opaque bounds or using
+each frame's natural size independently.
+
+Flashing lights must align with the lightbar actually drawn in every sprite. Store normalized
+per-agency/per-angle lightbar anchors (x, y, width, height and optional rotation) inside the same
+transformed vehicle container. The effect must follow scale, road perspective, steering, PIT
+rotation and camera motion. Illuminate the existing lenses rather than drawing large floating
+red/blue blobs. Generic police and SWAT require their own anchors.
+
+## 17.8 Loading and implementation shape
+
+- Preload/cache current-region and immediately upcoming-region agencies; never preload source
+  contact sheets.
+- Cache decoded images/textures so frame changes do not create new `Image` objects or requests.
+- Prefer one `POLICE_AGENCIES` configuration and one resolver such as
+  `resolvePoliceSprite({ agencyId, angle, maneuverState })`.
+- Follow the project's existing modules and rendering architecture. Do not create another Road,
+  police or chase renderer.
+
+## 17.9 Required validation after integration
+
+Run the build/tests and visually validate each agency in its intended area, WSP overlap, SWAT,
+both helicopter directions, the three-frame rotor loop, gentle `007/012` steering, PIT motion
+through 180°, night lights, pause, restart and checkpoint behavior.
+
+Specifically confirm:
+
+- no clipping or source-sheet rendering;
+- stable scale/baseline through every angle;
+- `007` is smaller than `012`, and `090/180` are true profile/front views;
+- department lettering is never mirrored;
+- light flashes remain attached to the drawn lightbars;
+- a chase never changes agency halfway through;
+- missing art falls back without making an entity disappear;
+- gameplay collision, damage, arrest and steering behavior did not regress.
