@@ -15362,7 +15362,13 @@ export class GameScene extends Phaser.Scene {
     else if (cur === 7) want = v >= P.E12 ? 12 : v >= P.R7 ? 7 : 0;
     else                want = v >= P.E12 ? 12 : v >= P.E7 ? 7 : 0;
     if (want !== cur && t - (ent._poseT ?? -9) < P.HOLD) want = cur;
-    if (want !== cur) { ent._poseDeg = want; ent._poseT = t; }
+    if (want !== cur) {
+      ent._poseDeg = want; ent._poseT = t;
+      // Latch the turn DIRECTION as the pose engages; held while the pose
+      // stays non-zero so the mirror can't flip mid-gesture on latV noise.
+      if (want > 0) ent._poseDir = (ent._latV ?? 0) < 0 ? -1 : 1;
+    }
+    if ((ent._poseDeg ?? 0) === 0) ent._poseDir = 0;
     return ent._poseDeg ?? 0;
   }
 
@@ -15400,14 +15406,17 @@ export class GameScene extends Phaser.Scene {
       const _closing = ent.kind === 'rear' && !ent._onStation && !(ent._lungeT > 0);
       if (_closing) {
         angle = 0;
-        ent._poseDeg = 0; ent._poseT = t;
+        ent._poseDeg = 0; ent._poseT = t; ent._poseDir = 0;
       } else {
         angle = this._copSteerAngle(ent, t);
       }
       // PIT setup: the cruiser is visibly rotating into the rear quarter.
       if (ent._pitArmed) angle = Math.max(angle, 30);
     }
-    const frame = resolvePoliceSprite({ agencyId: this._copAgencyId(ent), angle, has });
+    // Steering frames mirror for LEFT turns (native art is right-turn only);
+    // spin/PIT/head-on branches never set _steerFlip.
+    const _steerFlip = angle > 0 && angle <= 12 && ent._poseDir === -1;
+    const frame = resolvePoliceSprite({ agencyId: this._copAgencyId(ent), angle, has, flip: _steerFlip });
     ent._renderFrame = frame;   // probes/mirror read the entity, not the record
     return frame;
   }
@@ -16606,7 +16615,8 @@ export class GameScene extends Phaser.Scene {
         const seatY = proj.sy + (1 - rFrame.groundFrac) * bodyH;   // same seat as place()
         const topY  = seatY - bodyH;
         const lensAt = (box) => box && ({
-          x: proj.sx + (box.x - 0.5) * bodyW,
+          // Mirrored frame → mirrored lens anchors (canvas-normalized x).
+          x: proj.sx + (rFrame.flipX ? (0.5 - box.x) : (box.x - 0.5)) * bodyW,
           y: topY + box.y * bodyH,
           w: Math.max(2, box.w * bodyW * 1.12),
           h: Math.max(1.4, Math.max(box.h * bodyH * 1.6, bodyW * 0.02)),

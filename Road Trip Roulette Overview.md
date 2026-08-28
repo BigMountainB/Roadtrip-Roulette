@@ -204,6 +204,25 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-28 — Cop pose frames: height-normalized sizing + left-turn mirroring
+
+Owner reports on the jurisdiction steering frames, both fixed in `resolvePoliceSprite`:
+- **Size pop on angled frames**: sizing was pixel-content based (policeSpriteMeta bounds,
+  not canvas) but normalized content WIDTH to a constant — wrong for yaw: a turning car
+  keeps its HEIGHT and legitimately widens.  Width-normalizing shrank the whole car ~18%
+  at 7° / ~28% at 12%.  Now each frame scales so its content HEIGHT matches its set's 000
+  frame (`widthScale = cls × ch000 / (cw000 × ch)`, reduces to the old `cls/cw` at 0°);
+  fallback chain carries a `ref` key per set.  Probe: widthScale×chFrac identical (1.1442)
+  across 0/7/12°.
+- **One-direction art**: the steering set is native RIGHT-turn only (confirmed by reading
+  the sprite: nose recedes image-right), so left-drifting units read backwards.  The old
+  "NEVER mirror" rule is now scoped: STEERING frames (7/12°) mirror for left turns —
+  `_copSteerAngle` latches `ent._poseDir` from `_latV` sign as a pose engages (held while
+  non-zero, so latV noise can't flip mid-gesture), `_resolveCopFrame` passes `flip`, and
+  the lightbar lens anchors mirror with the frame (`lensAt` x flips; red/blue sides swap
+  with the body, as a mirror would).  Spin/PIT ladders and 0°/180° still never mirror
+  (big lettering).  Door/trunk decals at 7-12° are small enough to pass.
+
 ### 2026-08-27 (pt 13) — Player-car scale from source pixels; tail lamps lowered
 
 Two sizing fixes, both from owner playtest reports. Committed inside `1a5c380` and the pt 11/12

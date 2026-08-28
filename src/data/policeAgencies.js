@@ -161,31 +161,48 @@ const DEFAULT_META = { w: 768, h: 512, cx0: 0, cy0: 0, cx1: 1, cy1: 1, lb: null 
  *   4. generic car_back_police
  * `has(key)` reports whether a texture is actually loaded right now.
  */
-export function resolvePoliceSprite({ agencyId, angle = 0, has = () => true }) {
+export function resolvePoliceSprite({ agencyId, angle = 0, has = () => true, flip = false }) {
   const deg = nearestPoliceAngle(Math.abs(angle));
   const isSwat = agencyId === 'swat';
   const agency = !isSwat ? POLICE_AGENCIES[agencyId] : null;
   const tryKeys = [];
   if (agency) {
-    tryKeys.push({ key: jurFrameKey(agency.prefix, deg), cls: agency.vehicleClass });
-    tryKeys.push({ key: jurFrameKey(agency.prefix, 0),   cls: agency.vehicleClass });
+    tryKeys.push({ key: jurFrameKey(agency.prefix, deg), cls: agency.vehicleClass,
+                   ref: jurFrameKey(agency.prefix, 0) });
+    tryKeys.push({ key: jurFrameKey(agency.prefix, 0),   cls: agency.vehicleClass,
+                   ref: jurFrameKey(agency.prefix, 0) });
   }
   const genSet = isSwat ? SWAT_FRAMES : GENERIC_POLICE_FRAMES;
   const genCls = isSwat ? 'swat' : 'sedan';
   const genDeg = nearestOf(deg, Object.keys(genSet).map(Number));
-  tryKeys.push({ key: genSet[genDeg], cls: genCls });
+  tryKeys.push({ key: genSet[genDeg], cls: genCls, ref: genSet[0] });
   tryKeys.push({ key: 'car_back_police', cls: 'sedan' });
   if (isSwat) tryKeys.push({ key: 'car_back_swat', cls: 'swat' });   // legacy art fallback
 
-  for (const { key, cls } of tryKeys) {
+  for (const { key, cls, ref } of tryKeys) {
     if (!has(key)) continue;
     const meta = POLICE_SPRITE_META[key] ?? DEFAULT_META;
-    const contentFrac = Math.max(0.05, meta.cx1 - meta.cx0);
+    // HEIGHT-normalized sizing (owner bug 2026-08-28 "cop cars change size
+    // on the angled frames"): the old rule held content WIDTH constant, but
+    // a yawing car legitimately gets WIDER on screen while its HEIGHT stays
+    // put — width-normalizing shrank the whole car ~18% at 7° / ~28% at 12°.
+    // Scale each frame so its content HEIGHT matches the set's 000 frame
+    // (all canvases in a set share w/h, so the aspect term cancels):
+    //   widthScale = cls × ch000 / (cw000 × ch)   — reduces to cls/cw at 0°.
+    const refMeta = POLICE_SPRITE_META[ref ?? key] ?? meta;
+    const cw0 = Math.max(0.05, refMeta.cx1 - refMeta.cx0);
+    const ch0 = Math.max(0.05, refMeta.cy1 - refMeta.cy0);
+    const ch  = Math.max(0.05, meta.cy1 - meta.cy0);
     return {
       key,
-      widthScale: (VEHICLE_CLASS_SCALE[cls] ?? 1) / contentFrac,
+      widthScale: (VEHICLE_CLASS_SCALE[cls] ?? 1) * ch0 / (cw0 * ch),
       groundFrac: meta.cy1,          // content bottom = tire line
-      flipX: false,                  // NEVER mirror — markings must stay readable
+      // The steering set only exists in its native RIGHT-turn direction, so a
+      // LEFT-turning unit mirrors it (owner 2026-08-28: one-direction art
+      // "looks like it's turning right but the car drifts left" beat the old
+      // no-mirroring rule; door/trunk decals at 7-12° are small enough).
+      // Spin/PIT ladders still never pass flip — big mirrored lettering.
+      flipX: !!flip && deg !== 0 && deg !== 180,
       lb: meta.lb ?? null,
       meta,
       vehicleClass: cls,
