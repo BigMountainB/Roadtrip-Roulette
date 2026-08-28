@@ -16768,10 +16768,11 @@ export class GameScene extends Phaser.Scene {
         const dark  = !!rFrame.lb.dark;
         if (this._colorblind) {
           // CVD-safe amber↔blue + white blink center, anchored to the strip.
-          bar.fillStyle(cop.flash ? 0xFFB000 : 0x3A2600, _lbFa * (cop.flash ? 0.86 : (dark ? 0.06 : 0.42)));
-          bar.fillEllipse(whole.x + whole.w * 0.25, whole.y, whole.w * 0.5, whole.h);
-          bar.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * (cop.flash ? 0.86 : (dark ? 0.06 : 0.42)));
-          bar.fillEllipse(whole.x - whole.w * 0.25, whole.y, whole.w * 0.5, whole.h);
+          const _cbA = _lbFa * (cop.flash ? 0.86 : (dark ? 0.06 : 0.42));
+          this._lightbarLamp(bar, whole.x + whole.w * 0.26, whole.y, whole.w * 0.40, whole.h,
+                             cop.flash ? 0xFFB000 : 0x3A2600, _cbA);
+          this._lightbarLamp(bar, whole.x - whole.w * 0.26, whole.y, whole.w * 0.40, whole.h,
+                             cop.flash ? 0x2255FF : 0x000044, _cbA);
           if (cop.flash) {
             bar.fillStyle(0xFFFFFF, _lbFa * 0.88);
             bar.fillRect(whole.x - whole.w * 0.05, whole.y - whole.h * 0.5, whole.w * 0.1, whole.h);

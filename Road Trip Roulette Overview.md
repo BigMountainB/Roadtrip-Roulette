@@ -204,6 +204,70 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-28 (pt 2) — Lightbar lamps: two rect bulbs + oval haze; player taillights found in the art
+
+**LIGHTBAR READ AS ONE BULB CHANGING COLOUR** (owner). It was exactly that — the dark
+low-profile path drew a SINGLE ellipse over the whole strip, flipping red/blue:
+
+    bar.fillStyle(cop.flash ? 0xFF3333 : 0x2255FF, ...);
+    bar.fillEllipse(whole.x, whole.y, whole.w, whole.h);
+
+Now two lenses that SWAP: at any instant one end is red and the other blue, so colour rotates
+across the bar instead of the whole strip changing at once.
+
+Every path also drew the bulb itself as an **ellipse**. A lightbar is a strip of rectangular
+lenses, so the lit element is a `fillRect` sized to the lens the art paints, wrapped in a
+two-stage bloom **2.6× wider than tall** — a bar throws a horizontal smear, not a circle.
+
+All **four** paths were converted (measured red/blue lenses, dark low-profile bar, legacy flat
+art, and both colourblind variants) through one `_lightbarLamp()` helper — 11 call sites, zero
+`fillEllipse` bulbs left in the block. Four inline copies would have drifted, and department art
+genuinely varies (Seattle blue-left, Pullman red-left, Snoqualmie/Adams no baked lenses at all).
+Bulb size comes from the **measured lens boxes** in the frame metadata where they exist.
+
+**PLAYER TAILLIGHTS — found in the art, not guessed.** Owner reported them too high, then too
+low. Three separate bugs underneath:
+
+1. **Wrong lamps first.** `_renderHeadlights` (traffic/cop only) was lowered 0.50→0.36; the
+   owner was looking at the PLAYER's fog taillights, a different draw entirely.
+2. **My regression.** That draw used `displayHeight * 0.34 - 12`, and the player-sprite rescale
+   (pt 13) increased displayHeight, pushing the lamps up.
+3. **Canvas vs content, again.** displayHeight is the whole SQUARE 1024×1024 canvas while the car
+   fills 53% of it on edm_rave and 87% on country — so `0.34 of canvas` came out as **64% of car
+   height** on edm_rave, up by the roofline.
+
+Fixed by scanning each texture for the lamps the art actually paints (`_texLampSpots`, cached like
+`_texContentBox`) and mapping source px → screen through the tire-contact origin.
+
+⚠️ **A NAIVE COLOUR SCAN DOES NOT WORK — several cars are RED.** Averaging red pixels returns the
+centroid of the bodywork (country: 50,514 red px, lopsided 7.9k/4.8k). Approaches that failed:
+
+| approach | failure |
+|---|---|
+| average red pixels | red cars → centre of the body |
+| brightness threshold | still fooled norteno (71k px), reggaeton (59k) |
+| outermost blobs | picked stray specks |
+| two largest blobs | reggaeton returned both at dead centre |
+
+What works is **pair matching**: two compact, similarly-sized, lamp-bright blobs, level with each
+other, symmetric about the car's centre, ≥0.30 of width apart. Detects **9/10 genres**
+(`classic_rock` has no lamp-bright red and falls back to `lampFrac()`, which is the guard working).
+Country scores 0.0013 — two identical 336 px blobs at u 0.059/0.941.
+
+Also: traffic tail lamps 0.50→0.36 (0.55→0.42 tall vehicles), and that value now lives in ONE
+`lampFrac()` helper because it had been copied inline into two render passes.
+
+⚠️ **IMAGES COULD NOT BE VIEWED THIS ENTIRE SESSION.** The API rejects images once several
+oversized ones are in context — phone shots are 4032×3024, and after the first few bounced even a
+760 px / 31 KB copy was refused. Resizing does NOT help; only a fresh session clears it. Uploads DO
+land on disk, so everything above was MEASURED with Python (PIL → threshold → connected components
+→ pair scoring). **If this recurs: analyse the file, do not try to view it.**
+
+**Still open:** the 1-2★ pull-over regression. `12f292f` clears `_pursuitStopArmed` whenever
+eligibility lapses (e.g. the tail drifting past `PURSUIT_STOP_NEAR`), but the flag can only be SET
+above 20 mph — so slowing down to pull over wipes it permanently and the stop never fires. The
+dispatch pacing added the same day makes it easier to hit, since cops now sit further back.
+
 ### 2026-08-28 — Cop pose frames: height-normalized sizing + left-turn mirroring
 
 Owner reports on the jurisdiction steering frames, both fixed in `resolvePoliceSprite`:
