@@ -356,6 +356,7 @@ const _boot = () => {
                               '  dim ' + (window.__wildDim ?? 0.12).toFixed(2) +
                               '  shade ' + (window.__wildShade ?? 0.85).toFixed(2) +
                               '  car ' + (window.__carScale ?? 0.088).toFixed(3) +
+                              '  lamp ' + (window.__lampFrac ?? 0.36).toFixed(2) +
                               '  wall ' + (window.__wingTune?.wall ?? 1).toFixed(2) +
                               '  berm ' + (window.__wingTune?.fg ?? 1).toFixed(2) +
                               (window.__wingTune?.off ? ' (wings OFF)' : '');
@@ -390,6 +391,10 @@ const _boot = () => {
       window.__carScale = window.__carScale ?? 0.088;
       mk('car −', () => { window.__carScale = Math.max(0.04, window.__carScale - 0.004); showTune(); });
       mk('car +', () => { window.__carScale = Math.min(0.20, window.__carScale + 0.004); showTune(); });
+      // Tail-lamp height as a fraction of car height above the tire line.
+      window.__lampFrac = window.__lampFrac ?? 0.36;
+      mk('lamp −', () => { window.__lampFrac = Math.max(0.05, window.__lampFrac - 0.02); showTune(); });
+      mk('lamp +', () => { window.__lampFrac = Math.min(0.80, window.__lampFrac + 0.02); showTune(); });
       bar.appendChild(tuneTag);
       showTune();
       const mileTag = document.createElement('span');

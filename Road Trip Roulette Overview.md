@@ -204,6 +204,30 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 10) — Playtest fixes: pull-over hijack, translucent cops, angled approach
+
+Owner playtest reports ("game resetting a lot", "cops translucent", "car slows to almost 0",
+"cops come in at an angle"), all traced and fixed:
+- **Pull-over hijack** (the resets + 0-mph reports): the 1-2★ hold fired off "speed < 8 mph
+  with a tail within 30k" alone, so a cruiser spawning onto an already-slow car (store exit,
+  post-crash, gridlock) pinned it to 0 for 8-15 s — and traffic could still hit the pinned
+  car (deaths → respawns read as "resetting").  Fixes: `_pursuitStopArmed` — dwell only
+  counts after the player has DRIVEN > 20 mph with the tail present (disarmed on hold start
+  / eligibility loss); i-frames also block dwell; and `_checkCollisions` now skips entirely
+  during `_pursuitStopHold`, same as `_trapStopHeld`.
+- **Translucent cops**: pt-5's pack-formation `STATION_JITTER` (0-500 units) parked some
+  cruisers at camera-rel ~1600 — inside `_rearCopForwardFade`'s 1500→1900 hand-off band —
+  so they held station at ~25% alpha.  Jitter cut to 200 (worst station = the solid line).
+- **Angled approach**: the jurisdiction steering ladder (parallel session, 3fd5098) read
+  `_latV` during the whole chase; a CLOSING cruiser lane-tracks continuously, so it wore
+  7/12° frames all the way in.  `_resolveCopFrame` now forces 0° while `kind==='rear' &&
+  !_onStation && !lunging` and restarts the ladder on arrival — steering frames are for
+  on-station work (lunges, PIT, shuffles).
+- 90 s soak (2-3★, wipers, snow warp): 0 errors / 0 reloads / 0 restarts.  Probes: no
+  hijack on slow spawn, 0° while closing, armed-then-slow still pulls over, station alpha
+  solid.  NOTE for playtesting: localhost:3000 hard-reloads on every source save from any
+  session — use `npx vite preview --port 4173` (static dist) for uninterrupted runs.
+
 ### 2026-08-27 (pt 11) — Jurisdiction police art: 9 agencies × 9 angles, SWAT/heli renders, measured lightbars
 
 - **One data home:** `src/data/policeAgencies.js` — agency table (prefix, vehicle class,

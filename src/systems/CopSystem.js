@@ -176,7 +176,12 @@ const TAILGATE_GAP  = 900;
 const REACT_PACK_MIN    = 1.4;   // s — pack base lag lower bound
 const REACT_PACK_SPAN   = 0.8;   // s — pack base lag upper spread
 const REACT_UNIT_JITTER = 0.5;   // s — total per-unit spread around the pack
-const STATION_JITTER    = 500;   // units — per-cruiser extra following gap
+// 500 → 200 (owner bug 2026-08-27 "cops are translucent"): GameScene's
+// forward-view fade band hands rear cops to the mirror below camera-rel 1900
+// (solid at station 2100 = TAILGATE_GAP 900).  A 500-unit extra gap parked
+// some cruisers at camera-rel 1600 — INSIDE the fade band — so they held
+// station at ~25% alpha.  200 keeps every station at or above the solid line.
+const STATION_JITTER    = 200;   // units — per-cruiser extra following gap
 // How far back a pursuer still steers into the player's lane.  Must exceed
 // TAILGATE_GAP or a cop at station never lines up behind you.
 const LANE_TRACK_Z  = 2200;

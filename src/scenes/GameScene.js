@@ -2209,6 +2209,7 @@ export class GameScene extends Phaser.Scene {
     // 1-2★ comply-or-escalate state (see the pursuit block in update()).
     this._pursuitStopHold     = null;   // { t, mult } while held at the roadside
     this._pursuitStopDwell    = 0;      // seconds spent below the pull-over speed
+    this._pursuitStopArmed    = false;  // true once the player has DRIVEN with the tail
     this._pursuitFollowBaseMi = null;   // mile the current follow began at
     this._pursuitFollowStars  = 0;      // star level that baseline belongs to
     this._gameFinished   = false;
@@ -5444,10 +5445,19 @@ export class GameScene extends Phaser.Scene {
             this._showPopup('🚔 FAILING TO YIELD — wanted level up!', '#FF4444');
           }
           // Pull-over detection — held near-stopped with the cruiser on you.
-          if (_psP.speed < MAX_SPEED * (PURSUIT_STOP_MPH / 120)) {
+          // ARMED only after the player has actually DRIVEN (>20 mph) with the
+          // tail present (owner bug 2026-08-27 "car slows to almost 0 when
+          // cops appear"): a cruiser spawning onto an already-slow car — store
+          // exit, post-crash knockback, gridlock — must never hijack the car
+          // into a stop the player didn't choose.  I-frames also hold it off.
+          if (_psP.speed > MAX_SPEED * (20 / 120)) this._pursuitStopArmed = true;
+          const _psIframes = (this.time?.now ?? 0) < (this._invincibleUntil ?? 0);
+          if (this._pursuitStopArmed && !_psIframes
+              && _psP.speed < MAX_SPEED * (PURSUIT_STOP_MPH / 120)) {
             this._pursuitStopDwell += rawDt;
             if (this._pursuitStopDwell >= PURSUIT_STOP_DWELL_SEC) {
               this._pursuitStopDwell = 0;
+              this._pursuitStopArmed = false;
               this._pursuitFollowBaseMi = null;
               this._pursuitStopHold = _psStars === 1
                 ? { t: PURSUIT_STOP_SEC_1, mult: 1 }
@@ -5459,6 +5469,7 @@ export class GameScene extends Phaser.Scene {
         } else {
           this._pursuitFollowBaseMi = null;
           this._pursuitStopDwell = 0;
+          this._pursuitStopArmed = false;
         }
       }
     }
@@ -8164,7 +8175,7 @@ export class GameScene extends Phaser.Scene {
     // Pulled over and held for a traffic stop — the car is pinned and steering
     // is locked, so nothing should be able to hit it (and a crash here used to
     // jolt it forward out of the stop).  Skip all collision processing.
-    if (this._trapStopHeld) return;
+    if (this._trapStopHeld || this._pursuitStopHold) return;
     const segIdx = Math.floor(p.position / SEG_LENGTH) % this.road.segments.length;
 
     // Road sprite collectibles — collect ONLY when the pickup is visually
@@ -15380,7 +15391,19 @@ export class GameScene extends Phaser.Scene {
       // rear view instead of a stale steering frame.
       angle = 0;
     } else {
-      angle = this._copSteerAngle(ent, t);
+      // Approach reads dead-straight (owner 2026-08-27 "cops come in at an
+      // angle — they should be at 0°"): a cruiser still CLOSING is lane-
+      // tracking the player continuously, so its drift kept tripping the
+      // 7/12° steering frames the whole way in.  The steering ladder only
+      // runs once the unit is ON STATION (or mid-lunge); before that it's
+      // the clean rear view, and the ladder restarts from 0 on arrival.
+      const _closing = ent.kind === 'rear' && !ent._onStation && !(ent._lungeT > 0);
+      if (_closing) {
+        angle = 0;
+        ent._poseDeg = 0; ent._poseT = t;
+      } else {
+        angle = this._copSteerAngle(ent, t);
+      }
       // PIT setup: the cruiser is visibly rotating into the rear quarter.
       if (ent._pitArmed) angle = Math.max(angle, 30);
     }
