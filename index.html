@@ -2997,26 +2997,41 @@
       let _garageOpenSlot = null, _garageSelTier = null;
       const renderGarage = () => {
         const cars = window.__garage?.list?.() ?? [];
-        const carsHtml = cars.map(c => {
+        // Current-car card (owner 2026-08-27): the old owned-vehicles rows
+        // only ever held the vestigial "Used Sedan" catalog entry — the car
+        // actually driven is the genre starter. Show THAT car, stats derived
+        // as base beater × trait modifiers (top speed + drivetrain come from
+        // the trait itself). Accessories still key off the beater vehicleId.
+        const baseCar = cars.find(c => c.id === 'beater') ?? cars[0] ?? null;
+        const carGenre = window.__genre?.get?.() ?? null;
+        const carTrait = window.__vehTraits?.current?.() ?? null;
+        let carsHtml = '';
+        if (baseCar) {
+          const mods    = carTrait?.modifiers ?? {};
+          const carHp   = Math.round(baseCar.hp * (mods.maxHpMult ?? 1));
+          const carMi   = Math.round(baseCar.rangeMi * (mods.fuelRangeMult ?? 1) / (mods.fuelBurnMult ?? 1));
+          const carTop  = carTrait?.topSpeedMph ?? baseCar.topMph;
+          const carDrv  = carTrait?.drive ?? baseCar.drive;
+          const carName = carTrait?.vehicleName ?? baseCar.label;
           const accLabels = [];
-          if (c.accessories.bumper)   accLabels.push('<span class="badge">🛡 Bumper</span>');
-          if (c.accessories.nos > 0)  accLabels.push(`<span class="badge">⚡ NOS L${c.accessories.nos}</span>`);
-          if (c.accessories.traction) accLabels.push('<span class="badge">❄️ Traction</span>');
+          if (baseCar.accessories.bumper)   accLabels.push('<span class="badge">🛡 Bumper</span>');
+          if (baseCar.accessories.nos > 0)  accLabels.push(`<span class="badge">⚡ NOS L${baseCar.accessories.nos}</span>`);
+          if (baseCar.accessories.traction) accLabels.push('<span class="badge">❄️ Traction</span>');
           const accRow = accLabels.length ? accLabels.join('') : '<span style="color:#557;">— no accessories —</span>';
-          const imgHtml = c.imageUrl
-            ? `<img class="car-img" src="${c.imageUrl}" alt="${c.label}" onerror="this.style.display='none'"/>`
-            : `<div class="car-img" style="background:#${(c.tint).toString(16).padStart(6,'0')}; width:22%; height:8vmin; border-radius:4px;"></div>`;
-          return `<div class="row ${c.current ? 'current' : ''}" data-id="${c.id}">
+          const imgHtml = carGenre
+            ? `<img class="car-img" src="assets/culture/${carGenre}/vehicles/starter_back.png" alt="${carName}" onerror="this.style.display='none'"/>`
+            : (baseCar.imageUrl ? `<img class="car-img" src="${baseCar.imageUrl}" alt="${carName}" onerror="this.style.display='none'"/>` : '');
+          carsHtml = `<div class="row current">
             <div style="display:flex; flex-direction:column; align-items:center; width:30%;">
               <div class="acc">${accRow}</div>
               ${imgHtml}
             </div>
             <div class="info">
-              <div class="name">${c.label}${c.current ? ' ★' : ''}</div>
-              <div class="stats">${c.hp} HP · ${c.rangeMi} mi · ${c.topMph} mph · ${c.drive} · ${c.fuel}</div>
+              <div class="name">${carName} ★</div>
+              <div class="stats">${carHp} HP · ${carMi} mi · ${carTop} mph · ${carDrv}</div>
             </div>
           </div>`;
-        }).join('');
+        }
 
         // ── Upgrades + player-facing stats panel for the CURRENT car ──────
         const curId = cars.find(c => c.current)?.id ?? cars[0]?.id;
@@ -3133,18 +3148,9 @@
         }
         garageList.innerHTML = carsHtml + ridesHtml + traitHtml + panelHtml;
 
-        garageList.querySelectorAll('.row').forEach(row => {
-          row.addEventListener('click', (e) => {
-            e.preventDefault(); e.stopPropagation();
-            const id = row.dataset.id;
-            window.__garage?.select?.(id);
-            setPhoneMenuBg(id);   // re-skin the phone menu to the new car
-            // Defer the re-paint a frame: renderGarage() rebuilds garageList
-            // via innerHTML, destroying THIS row mid-gesture — on iOS that
-            // strands the touch and kills game input after returning to play.
-            requestAnimationFrame(renderGarage);   // re-paint with new "current"
-          });
-        });
+        // The current-car card is display-only — swapping rides happens in
+        // the MY RIDES grid (.g-ride) below, so the old .row select/re-skin
+        // tap went with the owned-vehicles rows.
         // MY RIDES — tap an owned genre car to make it the active ride.
         garageList.querySelectorAll('.g-ride').forEach(el => {
           el.addEventListener('click', (e) => {

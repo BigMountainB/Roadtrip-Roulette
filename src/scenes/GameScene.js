@@ -122,6 +122,29 @@ const POSE_SIZED_RE = /^codex_beater_(spin_\d+|back_turn_0\d+|front)$/;
 // should read slightly larger than that.
 // Dev knob: ?dev=1 → window.__carScale (see main.js) to dial it live.
 const PLAYER_CAR_SCALE = 0.088;
+
+// ── Vehicle lamp height (2026-08-22) ──────────────────────────────────────
+// Fraction of a car's on-screen HEIGHT above its tire line where the lamps sit.
+// Taillights were at 0.50/0.55 — dead mid-body, which reads as lights floating
+// up on the glasshouse rather than sitting in the rear panel. Real taillights
+// live low, around a third of body height. Headlights keep their existing
+// values: those were tuned separately and the owner has not flagged them.
+//
+// Declared once because the numbers appear in TWO passes (_renderHeadlights and
+// the fog-night placement) and inline copies drift apart.
+const LAMP_FRAC = {
+  tail:     0.36,   // cars
+  tailTall: 0.42,   // trucks / SUVs — higher body, higher lamp
+};
+/** Live tail-lamp height, dialable from ?dev=1 (window.__lampFrac) so the
+ *  placement can be judged on the road instead of measured off a screenshot.
+ *  Bake the chosen value into LAMP_FRAC.tail above; the tall variant keeps its
+ *  fixed +0.06 offset so trucks stay proportionally higher. */
+function lampFrac(tall) {
+  const o = globalThis.__lampFrac;
+  const base = (typeof o === 'number' && o > 0) ? o : LAMP_FRAC.tail;
+  return tall ? base + 0.06 : base;
+}
 // Normal-steering ladder tuning: |wheel load| thresholds (with hysteresis so
 // input jitter can't flicker frames) and the visual-angle slew rates that
 // make every transition PASS THROUGH the intermediate frames (12→7→0 on
@@ -6571,7 +6594,10 @@ export class GameScene extends Phaser.Scene {
       const TILT_SNOW_TAME = 0.70;   // tilt cancels up to 70% of the snow slide
       weatherSlide *= (1 - TILT_SNOW_TAME * _snowRamp);
     }
-    const _is4x4   = VEHICLES[this.player.vehicleId]?.drive === '4x4';
+    // Drivetrain lives on the genre trait when one is active (Mud Truck /
+    // War Van / Custom Pickup are 4x4); non-genre vehicles keep VEHICLES.drive.
+    const _is4x4   = (this._activeGenreTrait()?.drive
+                      ?? VEHICLES[this.player.vehicleId]?.drive) === '4x4';
     const _hasTrac = !!(this._vehicleAccessories?.().traction);
     // Weather-contextual grip from part upgrades + buffs: snow tires / chains
     // in snow, good all-seasons in rain.  Adds to the 4x4 + traction relief.
@@ -13970,7 +13996,7 @@ export class GameScene extends Phaser.Scene {
           // trucks/SUVs a little higher at 0.55).  Outer edge of the
           // halo touches the outer edge of the sprite.
           const isTallNpcT = t.colorSet && /truck|suv/i.test(t.colorSet);
-          const tailFrac   = isTallNpcT ? 0.55 : 0.50;
+          const tailFrac   = lampFrac(isTallNpcT);
           const tailY      = proj.sy - targetH * tailFrac;
           const haloRt     = dotR * 2.2;
           const tailDx     = Math.max(0, targetW * 0.50 - haloRt);
@@ -15837,7 +15863,7 @@ export class GameScene extends Phaser.Scene {
         const isTallFogNpc = /truck|suv|semi|tractor/i.test(vehicleLightKey);
         const headFrac = isSuv4x4FogNpc ? 0.56 : (isTallFogNpc ? 0.65 : 0.50);
         const headY = proj.sy - targetH * headFrac;                      // clear-night placement rule, with SUV art tweak
-        const tailY = proj.sy - targetH * (isTallFogNpc ? 0.55 : 0.50);  // clear-night placement rule
+        const tailY = proj.sy - targetH * lampFrac(isTallFogNpc);
         const dotR = targetW * 0.045;
         const headDxFull = Math.max(0, targetW * 0.42 - Math.max(1.6, dotR * 3.0));
         const tailDxFull = Math.max(0, targetW * 0.50 - dotR * 2.2);

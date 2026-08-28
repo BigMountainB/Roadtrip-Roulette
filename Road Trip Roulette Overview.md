@@ -204,6 +204,27 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 10) — Garage current-car card replaces Used Sedan row; genre 4x4
+
+- The phone Garage's top box was still rendering the `ownedVehicles` catalog rows — dead
+  since the 2026-07-19 one-vehicle rework, so it only ever showed "Used Sedan · 25 HP ·
+  75 mi · 100 mph · 2WD · gas".  Replaced with a single display-only card for the ACTIVE
+  genre car: culture `starter_back.png`, trait `vehicleName`, accessory badges
+  (🛡/⚡/❄️ — still keyed off the beater vehicleId), and a derived stat line
+  **HP · range mi · top mph · drivetrain** (HP = 25 × `maxHpMult`, range = 75 ×
+  `fuelRangeMult` ÷ `fuelBurnMult`, top speed = trait `topSpeedMph`).  Fuel type dropped
+  from the line (owner).  The old `.row` tap-to-select handler went with the rows; ride
+  swapping remains the MY RIDES `.g-ride` grid only.
+- Genre traits gain a top-level `drive` field — `'4x4'` on **Mud Truck (country), War Van
+  (metal), Custom Pickup (norteño)**, everything else defaults 2WD (owner pick).  Real
+  gameplay, not display: GameScene's snow-relief gate now reads
+  `_activeGenreTrait()?.drive` before falling back to `VEHICLES.drive`, so those three get
+  the 0.60 4x4 `penReduction` (stacks with traction tires).
+- Mud Truck's `hazardSteeringPenaltyMult` 0.50 REMOVED (owner: "the −50% penalty WAS the
+  4x4") — the real drivetrain relief replaces it rather than stacking on top; its strengths
+  line now reads "4x4 — holds its line in snow & wind".  Don't re-add the modifier.
+- All tests pass.  Committed locally, not pushed.
+
 ### 2026-08-27 (pt 9) — Stock blades smear: streaks + residue in the blade path
 
 - Owner clarified the blade-tier split: old wipers should "leave some rain and streaks in

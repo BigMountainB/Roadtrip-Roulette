@@ -110,19 +110,22 @@ export const GENRE_VEHICLE_TRAITS = {
   country: {
     key: 'country',
     vehicleName: 'Mud Truck',
+    drive: '4x4',       // gates the snow/traction relief (see GameScene _is4x4)
     topSpeedMph: 112,   // pedal-DOWN max (no caffeine)
     cruiseMph:   92,   // no-pedal cruise
     strengths: [
       'Traffic, scenery & weather damage −25%',
-      'Snow & crosswind steering penalty −50%',
+      '4x4 — holds its line in snow & wind',
     ],
     weaknesses: [
       'Fuel consumption +30%',
       'Accel & steering −20%; bonus builds 20% slower',
     ],
+    // The old hazardSteeringPenaltyMult 0.50 WAS this truck's 4x4 (owner,
+    // 2026-08-27) — removed when the real drive:'4x4' relief landed, else the
+    // two would stack and trivialize snow.
     modifiers: {
       damageTakenMult:           0.75,
-      hazardSteeringPenaltyMult: 0.50,
       fuelBurnMult:              1.30,
       accelerationMult:          0.80,
       steeringMult:              0.80,
@@ -177,6 +180,7 @@ export const GENRE_VEHICLE_TRAITS = {
   metal: {
     key: 'metal',
     vehicleName: 'War Van',
+    drive: '4x4',       // gates the snow/traction relief (see GameScene _is4x4)
     topSpeedMph: 104,   // pedal-DOWN max (no caffeine)
     cruiseMph:    84,   // no-pedal cruise
     strengths: [
@@ -294,6 +298,7 @@ export const GENRE_VEHICLE_TRAITS = {
   norteno: {
     key: 'norteno',
     vehicleName: 'Custom Pickup',
+    drive: '4x4',       // gates the snow/traction relief (see GameScene _is4x4)
     topSpeedMph: 122,   // pedal-DOWN max (no caffeine)
     cruiseMph:   102,   // no-pedal cruise
     strengths: [
