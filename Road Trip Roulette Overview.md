@@ -204,6 +204,31 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 8) — Device-wide windshield weather + Finesse SERVICES tab
+
+- **Weather fills every device's borders** (owner): the canvas widens to WORLD_W on wide
+  phones (main camera scrolled −HUD_OFFSET_X), but rain/snow only covered the 800 design
+  band, leaving dry side margins. EffectsSystem now derives `wxLeft/wxRight/wxW` from
+  `SCREEN_W + 2×HUD_OFFSET_X` (live binding) and spawns windshield drops, big runners,
+  stuck snowflakes, falling streaks AND falling flakes across the whole widened canvas;
+  all particle targets/counts scale by `wxScale = wxW / SCREEN_W` so density stays
+  constant per screen area (drop cap 380→380×scale, snow flake target likewise).
+  Verified at aspect 2.66 (canvas 1197): drops span −217…1018, flakes −198…1028.
+- **Finesse SERVICES tab** (owner picked option A): `SHOP_CATEGORIES.fap` now leads with a
+  synthetic `'services'` category — NOT in `GARAGE_CATEGORIES` (the toolbar strip has no
+  8th frame), so RestStopScene code-draws the tab (`tab_services_gen` render-texture:
+  dark plate, steel-blue frame, 🔧 + SERVICES label) and unshifts it leftmost.
+  `_selectGarageCategory` gains per-shop semantics: at a shop stocking 'services', rows
+  with `category == null` (repair / paint / coolant, bumper, body/police slots) file
+  under SERVICES instead of pinning above every parts tab; Les Schwasted keeps the old
+  pinned behavior (popcorn/water/chains). FAP opens on SERVICES by default (stocked[0]).
+  Probe-verified: services shows exactly repair/paint/coolant/armor/up_body_1/up_police_1;
+  ENGINE shows only nos_1-3 + up_engine_1-3.
+- Probe gotcha for future sessions: never stub `Math.random` to a CONSTANT around scene
+  creation (it broke RestStop create mid-way with misleading downstream nulls) — stub the
+  specific gate instead (`rs._maybeShowEncounter = noop` on the scene instance BEFORE
+  `scene.start`, instances are reused).
+
 ### 2026-08-27 (pt 7) — Wiper-path-only clearing, Easy need-based pickups, fatigue snowball
 
 - **Path-only wiping** (owner): running the wipers no longer suppresses/clears rain or snow

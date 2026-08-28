@@ -73,7 +73,11 @@ export const GARAGE_CATEGORIES = [
  *  entry-tier parts counter assembled separately in RestStopScene. */
 export const SHOP_CATEGORIES = {
   les_schwasted: ['tires', 'brakes', 'suspension'],
-  fap:           ['engine', 'fuel', 'coolant', 'wipers'],
+  // 'services' (owner 2026-08-27) is a SYNTHETIC tab — not in GARAGE_CATEGORIES
+  // (the toolbar strip has no 8th frame; RestStopScene code-draws it).  At
+  // Finesse it collects every untabbed row (repair / paint / coolant service
+  // items, bumper, body/police slots) that used to pin above all parts tabs.
+  fap:           ['services', 'engine', 'fuel', 'coolant', 'wipers'],
 };
 
 /** Slots with no toolbar tab — sold as flat services at Finesse. */

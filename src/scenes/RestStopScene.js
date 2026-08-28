@@ -1308,6 +1308,41 @@ export class RestStopScene extends Phaser.Scene {
         });
         this._garageTabs.push({ cat, img });
       });
+
+      // SERVICES tab (owner 2026-08-27) — dedicated home at Finesse for the
+      // untabbed service rows (repair / paint / coolant, bumper, body/police
+      // slots), which used to pin above EVERY parts tab.  The toolbar strip
+      // has no 8th frame, so this tab is code-drawn to match until the art
+      // is re-exported with a SERVICES cell.  Unshifted so it sits leftmost.
+      {
+        const _fw = Math.round(_tabW), _fh = _srcH;
+        if (!this.textures.exists('tab_services_gen')) {
+          const rt = this.make.renderTexture({ width: _fw, height: _fh }, false);
+          const g  = this.make.graphics({}, false);
+          g.fillStyle(0x10161F, 1).fillRoundedRect(2, 2, _fw - 4, _fh - 4, 20);
+          g.lineStyle(5, 0x3F6FB5, 1).strokeRoundedRect(5, 5, _fw - 10, _fh - 10, 17);
+          rt.draw(g, 0, 0);
+          const _ico = this.make.text({ x: _fw / 2, y: Math.round(_fh * 0.34),
+            text: '🔧', style: { fontSize: `${Math.round(_fh * 0.42)}px` } }, false).setOrigin(0.5);
+          const _lbl = this.make.text({ x: _fw / 2, y: Math.round(_fh * 0.78),
+            text: 'SERVICES', style: { fontSize: `${Math.round(_fh * 0.24)}px`,
+              fontFamily: IMPACT, color: '#FFFFFF', stroke: '#000000', strokeThickness: 6 } },
+            false).setOrigin(0.5);
+          rt.draw(_ico); rt.draw(_lbl);
+          rt.saveTexture('tab_services_gen');
+          g.destroy(); _ico.destroy(); _lbl.destroy(); rt.destroy();
+        }
+        const cat = { id: 'services', label: 'SERVICES', slots: [] };
+        const img = this.add.image(0, 0, 'tab_services_gen')
+          .setOrigin(0, 0).setVisible(false)
+          .setInteractive({ useHandCursor: true });
+        img.on('pointerdown', (ptr, _x, _y, ev) => {
+          this._eatTap(ptr, ev);
+          if (this._tapBlocked(ptr)) return;
+          this._selectGarageCategory(this._activeSection, cat.id);
+        });
+        this._garageTabs.unshift({ cat, img });
+      }
     }
 
     // ── DEALER chooser — two big tiles: Cars / Accessories ──────────
@@ -2567,13 +2602,17 @@ export class RestStopScene extends Phaser.Scene {
   }
 
   /**
-   * Filter the shop column to one toolbar category.  Items with no category
-   * (repair, paint, popcorn, the untabbed body/police slots) are SERVICES and
-   * stay pinned above the parts, so a tab never hides the reason you stopped.
+   * Filter the shop column to one toolbar category.  At a shop WITHOUT a
+   * services tab (Les Schwasted), items with no category (popcorn, water,
+   * chains) stay pinned above the parts under every tab.  At a shop WITH one
+   * (Finesse — owner 2026-08-27), uncategorized rows live under SERVICES
+   * instead, so the parts tabs finally show parts only.
    */
   _selectGarageCategory(key, catId) {
     const rec = this._garageRows?.[key];
     if (!rec || !GARAGE_KEYS.has(key)) return;
+    const _stocked = SHOP_CATEGORIES[key === 'schwasted' ? 'les_schwasted' : key] ?? [];
+    const _hasServicesTab = _stocked.includes('services');
     (this._garageCat ??= {})[key] = catId;
     this._garageTabs?.forEach(t => {
       if (!t.img.visible) return;
@@ -2585,7 +2624,8 @@ export class RestStopScene extends Phaser.Scene {
     let row = 0;
     for (const r of rec.rows) {
       const cat = r.item.category ?? null;
-      const show = cat === null || cat === catId;
+      const show = _hasServicesTab ? (cat ?? 'services') === catId
+                                   : (cat === null || cat === catId);
       r.objs.forEach((o, k) => {
         o.setVisible?.(show);
         if (show) o.y = rec.y + row * (rec.cellH + 6) + r.dy[k];

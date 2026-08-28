@@ -20,7 +20,7 @@
  *   - extraCurve     – adds phantom curve to road
  *   - inputDelay     – ms delay on steering (Slushie)
  */
-import { VICES, CAM } from '../constants.js';
+import { VICES, CAM, SCREEN_W, HUD_OFFSET_X } from '../constants.js';
 import { clamp, lerp } from '../utils/Helpers.js';
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
@@ -456,6 +456,15 @@ export class EffectsSystem {
         return false;
       };
       const WIPE_WEAR = 0.2;                          // ⅕ per wipe → 5 wipes
+      // Device-wide glass (owner 2026-08-27): the canvas is widened to
+      // WORLD_W on wide phones and the main camera scrolls −HUD_OFFSET_X, so
+      // the visible x range is −HUD_OFFSET_X … SCREEN_W+HUD_OFFSET_X.  Rain
+      // and snow must fill THAT (like the backdrop art), not the 800 design
+      // band.  `wxScale` keeps particle DENSITY constant as the area widens.
+      const wxLeft  = -HUD_OFFSET_X - 20;
+      const wxRight = SCREEN_W + HUD_OFFSET_X + 20;
+      const wxW     = wxRight - wxLeft;
+      const wxScale = wxW / SCREEN_W;
       const weatherState = Weather.state(mile);
       const weatherInt   = Weather.intensity(mile);
       if (weatherState === 'rain' && weatherInt > 0.05) {
@@ -473,15 +482,15 @@ export class EffectsSystem {
         // extended into the 150-px margin so a rotated camera still sees
         // rain instead of a sharp boundary at x=0 / 800.  Count + opacity
         // scale with severity: a light sprinkle early, a heavy sheet later.
-        const COUNT = Math.floor(110 * weatherInt * (1 + 1.4 * sevT));
+        const COUNT = Math.floor(110 * weatherInt * (1 + 1.4 * sevT) * wxScale);
         this.overlay.lineStyle(1, 0xC8DAE8, 0.45 + 0.30 * sevT);
         const SLANT  = 18;
         const HEIGHT = 22;
         for (let i = 0; i < COUNT; i++) {
-          const seedX = (i * 53) % 1100;
+          const seedX = (i * 53) % wxW;
           const seedY = (i * 91) % 750;
           const dropY = -150 + (seedY + t * 720) % 770;
-          const x     = -150 + (seedX + (i * 7) % 60) % 1100;
+          const x     = wxLeft + (seedX + (i * 7) % 60) % wxW;
           this.overlay.beginPath();
           this.overlay.moveTo(x,         dropY - HEIGHT);
           this.overlay.lineTo(x + SLANT, dropY);
@@ -518,9 +527,9 @@ export class EffectsSystem {
         // suppresses the drizzle globally — rain builds at the full weather
         // rate across the whole glass, and only the blades' swept sectors
         // get cleared (⅕ per sweep, below).
-        const TARGET_DROPS = Math.floor((40 + 320 * sevT) * weatherInt);
-        const MAX_DROPS    = 380;
-        const SPAWN_PER_SEC = (8 + 52 * sevT) * Math.max(0.2, weatherInt);
+        const TARGET_DROPS = Math.floor((40 + 320 * sevT) * weatherInt * wxScale);
+        const MAX_DROPS    = Math.floor(380 * wxScale);
+        const SPAWN_PER_SEC = (8 + 52 * sevT) * Math.max(0.2, weatherInt) * wxScale;
         this._wsSpawnT += dt;
         const spawnInterval = 1 / Math.max(0.1, SPAWN_PER_SEC);
         // Full-screen coverage (was 110–420, which left a bare strip at
@@ -532,7 +541,7 @@ export class EffectsSystem {
         while (this._wsSpawnT >= spawnInterval && this._wsDrops.length < spawnCap) {
           this._wsSpawnT -= spawnInterval;
           this._wsDrops.push({
-            x:     Math.random() * 800,
+            x:     wxLeft + Math.random() * wxW,
             y:     WS_BOTTOM - Math.random() * (WS_BOTTOM - WS_TOP) * 0.45,
             r:     (1.8 + Math.random() * 2.6) * (1 + 0.5 * sevT),
             alpha: 0.55 + Math.random() * 0.30,
@@ -554,7 +563,7 @@ export class EffectsSystem {
           this._wsBigT -= bigInterval;
           const rBase = 4.5 + Math.random() * 3.8;
           this._wsDrops.push({
-            x:     Math.random() * 800,
+            x:     wxLeft + Math.random() * wxW,
             y:     WS_BOTTOM - Math.random() * (WS_BOTTOM - WS_TOP) * 0.45,
             r:     rBase * (1 + 0.5 * sevT),
             alpha: 0.62 + Math.random() * 0.30,
@@ -621,7 +630,7 @@ export class EffectsSystem {
         // larger flakes get a cross sparkle.  Sway split across FOUR
         // distinct zigzag lanes (different frequencies + phases) so the
         // field doesn't read as a single duplicated waveform.
-        const COUNT = Math.floor(165 * weatherInt);
+        const COUNT = Math.floor(165 * weatherInt * ((SCREEN_W + 2 * HUD_OFFSET_X + 40) / SCREEN_W));
         // Four zigzag lanes — distinct frequencies break the lockstep
         // uniform pattern; flakes from different lanes oscillate at
         // different rates so neighbors visibly diverge.
@@ -640,7 +649,8 @@ export class EffectsSystem {
           const swayFreq  = LANE_FREQ[laneId];
           const swayPhase = LANE_PHASE[laneId] + (i * 0.31) % (Math.PI * 2);
 
-          const seedX = (i * 47 + (i % 13) * 91) % 1100;   // less grid-like
+          const _snowW = SCREEN_W + 2 * HUD_OFFSET_X + 300;   // widened canvas + sway margin
+          const seedX = (i * 47 + (i % 13) * 91) % _snowW;   // less grid-like
           const seedY = (i * 71 + (i % 17) * 53) % 800;
           const driftY = -150 + (seedY + t * fallSpeed + (i * 3 % 30)) % 820;
           // Two-octave sway — primary lane wave + a smaller secondary
@@ -648,7 +658,7 @@ export class EffectsSystem {
           // sine.  Reads as wind-buffeted drift.
           const sway = Math.sin(t * swayFreq        + swayPhase) * swayAmp
                      + Math.sin(t * swayFreq * 2.6 + swayPhase * 0.7) * swayAmp * 0.35;
-          const x    = -150 + (seedX + sway + 1100) % 1100;
+          const x    = (-HUD_OFFSET_X - 150) + (seedX + sway + _snowW) % _snowW;
 
           this.overlay.fillStyle(0xFFFFFF, alpha);
           this.overlay.fillCircle(x, driftY, r);
@@ -697,14 +707,14 @@ export class EffectsSystem {
         const cov = this._wsSnowCoverage;
         // Flake population grows with coverage (40 → 560); persistent so they
         // stack rather than recycle.  Topped up a few per tick toward target.
-        const flakeTarget = Math.floor(40 + 860 * cov);
+        const flakeTarget = Math.floor((40 + 860 * cov) * wxScale);
         this._wsStuckT += dt;
         if (this._wsStuckT >= 0.03) {
           this._wsStuckT = 0;
           const need = flakeTarget - this._wsStuck.length;
           for (let n = 0; n < need && n < 40; n++) {
             this._wsStuck.push({
-              x: -40 + Math.random() * 880,   // overscan past 0..800 / 0..450
+              x: wxLeft - 20 + Math.random() * (wxW + 40),   // full widened canvas
               y: -40 + Math.random() * 530,
               r: 1.6 + Math.random() * 2.6,
               a: 0.82 + Math.random() * 0.18,  // opaque specks — no haze
