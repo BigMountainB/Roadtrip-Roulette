@@ -396,7 +396,8 @@ for (const s of [1, 2]) {
   check('1 star — the tail is still on station (not despawned)', cs.cops.length >= 1);
 }
 
-// …and at 2★ the same setup strikes after the ~5 s hold.
+// …and at 2★ the same setup strikes on the ~15 s follow cadence
+// (owner 2026-08-27: a 2★ tail rams every 15 seconds while it follows).
 {
   const cs = new CopSystem();
   cs.stars = 2;
@@ -404,14 +405,14 @@ for (const s of [1, 2]) {
   const spd = MAX_SPEED * (60 / 120);
   cs.cops = [pursuitCop(pp + PLAYER_VIRTUAL_Z - 1200)];
   let firstStrikeAt = null;
-  for (let t = 0; t < 15; t += 1 / 60) {
+  for (let t = 0; t < 25; t += 1 / 60) {
     cs.update(1 / 60, pp, spd, 0);
     pp += spd / 60;
     if (firstStrikeAt == null && cs.cops.some(c => c._lungeT > 0)) firstStrikeAt = t;
   }
   check('2 stars — a strike lands', firstStrikeAt != null);
-  check('2 stars — but only after the on-station hold (>= ~5 s)',
-        firstStrikeAt == null || firstStrikeAt >= 4.5);
+  check('2 stars — but only after the ~15 s follow cadence',
+        firstStrikeAt == null || firstStrikeAt >= 13);
 }
 
 // One striker at a time: two cops on station never lunge simultaneously.

@@ -223,11 +223,17 @@ const SETTLE_SPEED_MULT = 0.98;   // pinned cops settle rather than stick
 // the displayed star tier (0-1 unused by the strike scheduler).
 const RAM_MIN_STARS = 2;
 // Time a cruiser must sit on station before its FIRST strike, by tier.
-const FIRST_HOLD_BY_STAR     = [0, 0, 5.0, 2.5, 2.0, 1.5];
+// 2★ re-tuned 2026-08-27 (owner): a 2★ tail rams every ~15 SECONDS while it
+// follows — pressure that reminds you to pull over, not a beatdown.  The
+// first hold matches the gap so the whole cadence is one steady metronome.
+const FIRST_HOLD_BY_STAR     = [0, 0, 15.0, 2.5, 2.0, 1.5];
 // Seconds between attempts… plus up to SPAN more, randomised per attempt.
-const LUNGE_GAP_MIN_BY_STAR  = [0, 0, 5.0, 3.5, 2.8, 2.2];
-const LUNGE_GAP_SPAN_BY_STAR = [0, 0, 3.5, 2.2, 1.8, 1.5];
+const LUNGE_GAP_MIN_BY_STAR  = [0, 0, 15.0, 3.5, 2.8, 2.2];
+const LUNGE_GAP_SPAN_BY_STAR = [0, 0, 2.0, 2.2, 1.8, 1.5];
 const LUNGE_SEC      = 2.5;    // how long the standoff stays lifted
+// Max closing surplus over the player's (lagged) speed — "cops can drive
+// 10 mph faster than the player" (owner 2026-08-27).
+const MPH10_UNITS = MAX_SPEED * (10 / 120);
 const LUNGE_CLOSE_MIN = 900;   // floor on the closing rate during a lunge
 // PIT attempts begin here (owner 2026-08-01): an alongside rear-quarter tap
 // is a PURSUIT manoeuvre, exempt from the no-lead rule — blocking/overtaking
@@ -1676,15 +1682,14 @@ export class CopSystem {
               // catches up or the cop drifts back into PIT range.
               cop.speed = Math.max(0, reactSpd * 0.92);
             } else {
-              // A CRUISER RUNS AT CRUISER PACE (owner 2026-07-31: "cops should
-              // not slow when player slows").  Its speed is its own — at least
-              // its cruise, faster if it needs to run down a quick player —
-              // and it is NOT tied to the player's throttle.  Braking no longer
-              // makes the car chasing you brake in sympathy a thousand feet
-              // back; it makes it arrive.  The anti-pass guards below only bite
-              // in the last stretch (see APPROACH_BAND).
-              cop.speed = Math.min(COP_TOP_UNITS,
-                                   Math.max(cop.baseSpeed ?? COP_TOP_UNITS, reactSpd + closing));
+              // CLOSING PACE (owner 2026-08-27, superseding the 2026-07-31
+              // "cruiser runs at cruiser pace" rule): a pursuer may run at most
+              // ~10 mph FASTER than the player — enough to visibly reel you in,
+              // never a missile.  It reads the LAGGED speed, so braking still
+              // lets it surge in during the reaction window rather than braking
+              // in sympathy, and the APPROACH_BAND easing below bleeds that
+              // surplus off as it arrives — it settles in and follows.
+              cop.speed = Math.min(COP_TOP_UNITS, reactSpd + Math.min(closing, MPH10_UNITS));
             }
             // Once alongside the player, hold the lateral position so PIT
             // detection in GameScene can fire on side-swipe contact.

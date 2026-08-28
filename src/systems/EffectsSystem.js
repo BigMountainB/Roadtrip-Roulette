@@ -440,6 +440,22 @@ export class EffectsSystem {
       }
 
       // ── Weather particles (rain / snow) ────────────────────────────
+      // Path-only wiping (owner 2026-08-27): a sweep clears ONLY inside the
+      // sectors the blades physically cover (ctx.wiperZones from GameScene);
+      // rain/snow keeps building everywhere else.  Inside the path each
+      // sweep wears a particle down by ⅕ — five wipes clear built-up glass.
+      const _inWiperPath = (x, y) => {
+        const zones = ctx.wiperZones;
+        if (!zones) return false;
+        for (const z of zones) {
+          const dx = x - z.x, dy = y - z.y;
+          if (dx * dx + dy * dy > z.r * z.r) continue;
+          const a = Math.atan2(dy, dx);              // screen-space angle
+          if (a >= -1.7453 && a <= 0.0001) return true;   // −100°…0° sector
+        }
+        return false;
+      };
+      const WIPE_WEAR = 0.2;                          // ⅕ per wipe → 5 wipes
       const weatherState = Weather.state(mile);
       const weatherInt   = Weather.intensity(mile);
       if (weatherState === 'rain' && weatherInt > 0.05) {
@@ -498,12 +514,13 @@ export class EffectsSystem {
         // clearing multiplier eases from its full-clear value toward 1 (= no
         // effect) as power drops.
         const wp  = Math.max(0, Math.min(1, ctx.wiperPower ?? 1));
-        const wOn = (fullMul) => wiperOn ? (1 - (1 - fullMul) * wp) : 1;
-        // Fine drizzle — the layer that actually fogs the glass.  Scales with
-        // weatherInt/sevT so LIGHT rain stays light; gutted when wipers run.
-        const TARGET_DROPS = Math.floor((40 + 320 * sevT) * weatherInt * wOn(0.12));
+        // Path-only wiping (owner 2026-08-27): running the wipers no longer
+        // suppresses the drizzle globally — rain builds at the full weather
+        // rate across the whole glass, and only the blades' swept sectors
+        // get cleared (⅕ per sweep, below).
+        const TARGET_DROPS = Math.floor((40 + 320 * sevT) * weatherInt);
         const MAX_DROPS    = 380;
-        const SPAWN_PER_SEC = (8 + 52 * sevT) * Math.max(0.2, weatherInt) * wOn(0.30);
+        const SPAWN_PER_SEC = (8 + 52 * sevT) * Math.max(0.2, weatherInt);
         this._wsSpawnT += dt;
         const spawnInterval = 1 / Math.max(0.1, SPAWN_PER_SEC);
         // Full-screen coverage (was 110–420, which left a bare strip at
@@ -531,7 +548,7 @@ export class EffectsSystem {
         // read as character, not as the thing that makes it hard to see.  A few
         // per second at the storm peak; slightly fewer while wiping.
         this._wsBigT += dt;
-        const bigPerSec   = (1.0 + 3.5 * sevT) * Math.max(0.25, weatherInt) * wOn(0.7);
+        const bigPerSec   = (1.0 + 3.5 * sevT) * Math.max(0.25, weatherInt);
         const bigInterval = 1 / Math.max(0.05, bigPerSec);
         while (this._wsBigT >= bigInterval && this._wsDrops.length < MAX_DROPS) {
           this._wsBigT -= bigInterval;
@@ -551,13 +568,19 @@ export class EffectsSystem {
         // stays clear (much easier to see).  Big runners get cleared too, but
         // their own spawner keeps a few streaking between sweeps.
         if (ctx.wiperSweepPulse) {
+          // Each sweep wears path drops down by ⅕: five wipes clear a
+          // built-up patch.  Drops OUTSIDE the blades' sectors are untouched
+          // — the glass beyond the wiper path stays wet and keeps building.
           const survivors = [];
           for (const d of this._wsDrops) {
-            if (Math.random() < 0.80 * wp) continue;   // stock blades clear far fewer
-            d.r     *= 0.55;
-            d.alpha *= 0.60;
-            d.trail  = (d.trail || 0) * 0.50;        // runners' tails shrink too
-            if (d.r > 0.6 && d.alpha > 0.08) survivors.push(d);
+            if (_inWiperPath(d.x, d.y)) {
+              d.wipe = (d.wipe ?? 0) + WIPE_WEAR;
+              if (d.wipe >= 0.999) continue;           // fifth wipe removes it
+              d.r     *= 0.85;                          // visibly thins per pass
+              d.alpha *= 0.80;
+              d.trail  = (d.trail || 0) * 0.70;
+            }
+            survivors.push(d);
           }
           this._wsDrops = survivors;
         }
@@ -668,7 +691,9 @@ export class EffectsSystem {
         // flurry (low weatherInt) takes proportionally longer.
         const COVER_PER_MILE = 0.17 * weatherInt * (0.7 + 0.3 * sevSnT);
         this._wsSnowCoverage = Math.min(1, this._wsSnowCoverage + mileDeltaSn * COVER_PER_MILE);
-        if (ctx.wiperSweepPulse) this._wsSnowCoverage = Math.max(0, this._wsSnowCoverage - 0.34);
+        // Path-only wiping (owner 2026-08-27): sweeps clear FLAKES inside the
+        // blade sectors (below), not the global coverage — snow outside the
+        // wiper path stays caked and keeps building.
         const cov = this._wsSnowCoverage;
         // Flake population grows with coverage (40 → 560); persistent so they
         // stack rather than recycle.  Topped up a few per tick toward target.
@@ -688,11 +713,17 @@ export class EffectsSystem {
         }
         // Wiper sweep clears ~60% of the pile so a few sweeps reset the glass.
         if (ctx.wiperSweepPulse) {
+          // ⅕ of the pile per sweep, only inside the blades' swept sectors —
+          // five wipes scrape a patch of caked snow clear.
           const survivors = [];
           for (const f of this._wsStuck) {
-            if (Math.random() < 0.60) continue;
-            f.a *= 0.8;
-            if (f.a > 0.08) survivors.push(f);
+            if (_inWiperPath(f.x, f.y)) {
+              f.wipe = (f.wipe ?? 0) + WIPE_WEAR;
+              if (f.wipe >= 0.999) continue;
+              f.a *= 0.80;
+              f.r *= 0.87;
+            }
+            survivors.push(f);
           }
           this._wsStuck = survivors;
         }

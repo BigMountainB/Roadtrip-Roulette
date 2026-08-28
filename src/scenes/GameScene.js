@@ -210,6 +210,20 @@ const CC_VARIANTS = {
   guardrail: { decelPow: 1.4, spinDeg:  80, spinJitter: 20, slidePx: 70, rebound: 0.15, scrape: true  },
   water:     { decelPow: 9.0, spinDeg:   0, spinJitter:  0, slidePx:  0, rebound: 0,    scrape: false },
 };
+// ── 1-2★ comply-or-escalate pursuit (owner 2026-08-27) ───────────────────
+// A low-star pursuit is a demand to stop, not yet a war.  Pull over (near-
+// stop with the cruiser on you) → held stop → ticket → slate wiped.  Keep
+// driving → the tail escalates by DISTANCE followed.
+const PURSUIT_STOP_NEAR      = 30000;  // units — cruiser this close counts as "on you"
+const PURSUIT_STOP_MPH       = 8;      // below this speed = pulling over
+const PURSUIT_STOP_DWELL_SEC = 0.8;    // held that slow this long → stop begins
+const PURSUIT_STOP_SEC_1     = 8;      // 1★ roadside wait
+const PURSUIT_STOP_SEC_2     = 15;     // 2★ roadside wait
+const PURSUIT_ESCALATE_MI_1  = 2;      // miles followed at 1★ before +1★
+const PURSUIT_ESCALATE_MI_2  = 5;      // miles followed at 2★ before +1★
+// Rear-view pursuit glow: full intensity at contact, first visible ~this far back.
+const MIRROR_GLOW_RANGE      = 45000;
+
 const CRASH_SFX = {
   sfx_crash_fatal_impact: BUSTED_SFX_DIR + 'crash_fatal_impact.wav',
   sfx_crash_glass:        BUSTED_SFX_DIR + 'crash_glass_debris.wav',
@@ -1450,8 +1464,9 @@ export class GameScene extends Phaser.Scene {
     // Third-person glass overlay uses the same real wiper-arm asset as
     // the cockpit. The image is 384x768; deriving width from height keeps
     // the blade at its native proportions rather than squeezing it thin.
-    const chaseWiperH = 405;
+    const chaseWiperH = 446;               // 405 × 1.1 — blades 10% bigger (owner 2026-08-27)
     const chaseWiperW = chaseWiperH * (384 / 768);
+    this._chaseWiperH = chaseWiperH;       // sweep-zone radius for path-only clearing
     this.chaseWipers = [
       { x: 125, y: SCREEN_H + 6 },
       { x: 410, y: SCREEN_H + 6 },
@@ -2150,6 +2165,11 @@ export class GameScene extends Phaser.Scene {
     this._lastCheckpoint = { name: 'Seattle, WA', position: 0, scoreAtCP: 0 };
     this._passedCheckpoints = new Set(['Seattle, WA']);
     this._probationTimer = 0;  // seconds remaining where vice use = +2 stars
+    // 1-2★ comply-or-escalate state (see the pursuit block in update()).
+    this._pursuitStopHold     = null;   // { t, mult } while held at the roadside
+    this._pursuitStopDwell    = 0;      // seconds spent below the pull-over speed
+    this._pursuitFollowBaseMi = null;   // mile the current follow began at
+    this._pursuitFollowStars  = 0;      // star level that baseline belongs to
     this._gameFinished   = false;
     // Finish cinematic — set when crossing mile-289; the car parks in front
     // of the Pullman Party House (input locked) before Game Over.  `_finishCause`
@@ -4929,7 +4949,11 @@ export class GameScene extends Phaser.Scene {
       if (!this._perf?.noEffects) {
         // Stock blades are weak (0.2); the "New Wiper Blades" upgrade = full.
         const wiperPower = this._wiperUpgraded ? 1 : 0.2;
-        this.effects.update(rawDt, this.vices, this.cameras.main, { mile, wiperActive, wiperSweepPulse, wiperPower });
+        // Screen-space sectors the blades physically sweep — EffectsSystem
+        // only clears rain/snow INSIDE these; the rest of the glass keeps
+        // building (owner 2026-08-27).
+        const wiperZones = wiperActive ? this._wiperSweepZones() : null;
+        this.effects.update(rawDt, this.vices, this.cameras.main, { mile, wiperActive, wiperSweepPulse, wiperPower, wiperZones });
       }
       // Weather / wiper indicator — visible during BOTH rain AND snow.
       // Icon is the custom wiper-blade drawing in drawWiper() above;
@@ -5301,12 +5325,95 @@ export class GameScene extends Phaser.Scene {
         const secs = Math.max(0, Math.ceil(this._trapStopHoldTimer));
         this._trapSign.setText('TRAFFIC STOP\n' + secs + 's')
           .setColor('#FFFFFF').setVisible(true);
+      } else if (this._pursuitStopHold) {
+        // 1-2★ roadside stop — countdown while the trooper writes it up.
+        const secs = Math.max(0, Math.ceil(this._pursuitStopHold.t));
+        this._trapSign.setText('PULLED OVER\n' + secs + 's')
+          .setColor('#FFFFFF').setVisible(true);
+      } else if (this._pursuitFollowBaseMi != null) {
+        // Low-star tail behind you — blue PULL OVER blink: the invitation.
+        const on = Math.floor((this.time?.now ?? 0) / 600) % 2 === 0;
+        this._trapSign.setText(on ? 'PULL OVER' : '')
+          .setColor('#2E9BFF').setVisible(true);
       } else if (this._trapPursuitActive) {
         const slow = Math.floor((this.time?.now ?? 0) / 500) % 2 === 0;
         this._trapSign.setText(slow ? 'SLOW DOWN' : 'PULL OVER')
           .setColor(slow ? '#FF3B30' : '#2E9BFF').setVisible(true);
       } else if (this._trapSign.visible) {
         this._trapSign.setText('').setVisible(false);
+      }
+    }
+
+    // ── 1-2★ comply-or-escalate pursuit (owner 2026-08-27) ─────────────
+    // A low-star pursuit is a demand to stop, not yet a war:
+    //   1★  cruiser follows, never strikes (RAM_MIN_STARS=2 in CopSystem).
+    //       Pull over → ticket + 8 s roadside wait.  Ignore it for 2 miles
+    //       of being followed → +1★.
+    //   2★  cruiser rams every ~15 s while it follows (tier-2 lunge cadence
+    //       in CopSystem).  Pull over → TRIPLE ticket + 15 s wait.  Ignore
+    //       it for 5 miles → +1★ (war).
+    // Complying resolves through the same clearArrest slate-wipe as a
+    // speed-trap stop.  "Pulling over" = holding near-stopped with the
+    // cruiser on your bumper — no extra button to learn.
+    {
+      const _psP = this.player;
+      if (this._pursuitStopHold) {
+        const h = this._pursuitStopHold;
+        h.t -= rawDt;
+        // Pinned at the roadside — engine idling, trooper walking up.
+        _psP.speed = 0;
+        _psP.steerVelocity = 0;
+        // No strikes while you comply: kill any live lunge, hold cadence.
+        for (const c of this.cops.cops) {
+          if (c._lungeT > 0) c._lungeT = 0;
+          c._lungeCd = Math.max(c._lungeCd ?? 0, 2);
+        }
+        this._drawTrapStopLights();
+        this._trapLightWasOn = true;
+        if (h.t <= 0) {
+          this._pursuitStopHold = null;
+          this._trapLightGfx?.clear();
+          this._trapLightWasOn = false;
+          this._resolvePursuitStop(h.mult);
+        }
+      } else {
+        const _psStars = this.cops.starDisplay;
+        const _psRear  = this.cops.getRearCopInfo?.(_psP.position + PLAYER_VIRTUAL_Z);
+        const _psEligible = (_psStars === 1 || _psStars === 2)
+          && !this._awaitingFirstGameTap
+          && !this._customFlags?.noPolice
+          && !this._trapPursuitActive && !this._trapStopping && !this._trapStopHeld
+          && _psRear?.count > 0 && _psRear.nearestRelZ > -PURSUIT_STOP_NEAR;
+        if (_psEligible) {
+          // Escalation clock — miles spent followed at THIS star level.
+          const _mi = this._mileNow();
+          if (this._pursuitFollowBaseMi == null || this._pursuitFollowStars !== _psStars) {
+            this._pursuitFollowBaseMi = _mi;
+            this._pursuitFollowStars  = _psStars;
+          }
+          const _limitMi = _psStars === 1 ? PURSUIT_ESCALATE_MI_1 : PURSUIT_ESCALATE_MI_2;
+          if (_mi - this._pursuitFollowBaseMi >= _limitMi) {
+            this._pursuitFollowBaseMi = null;   // next frame re-baselines at the new tier
+            this.cops.addStar(1, 3);
+            this._showPopup('🚔 FAILING TO YIELD — wanted level up!', '#FF4444');
+          }
+          // Pull-over detection — held near-stopped with the cruiser on you.
+          if (_psP.speed < MAX_SPEED * (PURSUIT_STOP_MPH / 120)) {
+            this._pursuitStopDwell += rawDt;
+            if (this._pursuitStopDwell >= PURSUIT_STOP_DWELL_SEC) {
+              this._pursuitStopDwell = 0;
+              this._pursuitFollowBaseMi = null;
+              this._pursuitStopHold = _psStars === 1
+                ? { t: PURSUIT_STOP_SEC_1, mult: 1 }
+                : { t: PURSUIT_STOP_SEC_2, mult: 3 };
+            }
+          } else {
+            this._pursuitStopDwell = 0;
+          }
+        } else {
+          this._pursuitFollowBaseMi = null;
+          this._pursuitStopDwell = 0;
+        }
       }
     }
 
@@ -7982,6 +8089,19 @@ export class GameScene extends Phaser.Scene {
         // meds rare.  Weapons/powerups spawn on their own channels.
         const _VICE_W = { water: 30, burrito: 22, sushi: 18, slushie: 14,
                           gummies: 12, coldbrew: 10, caffeine: 4, dramamine: 4 };
+        // EASY need-based spawn bias (owner 2026-08-27): on Easy the road
+        // quietly stocks what the driver is short on —
+        //   Drinks bar < 25%    → water + slushie spawn 30% MORE often
+        //   Food bar   > 75%    → food snacks spawn 30% LESS often
+        //   Alertness  < 20%    → coffee (cold brew) spawns 30% MORE often
+        // Weights only — the pool itself (unlocks) is untouched.
+        if (Difficulty.mode() === 'easy' && this.survival) {
+          const sv = this.survival;
+          const _wm = (id, m) => { _VICE_W[id] = (_VICE_W[id] ?? 8) * m; };
+          if (sv.hydration < 25) { _wm('water', 1.3); _wm('slushie', 1.3); }
+          if (sv.fullness  > 75) { _wm('burrito', 0.7); _wm('sushi', 0.7); _wm('gummies', 0.7); }
+          if (sv.tiredness > 80) { _wm('coldbrew', 1.3); }
+        }
         let _tot = 0; for (const v of _avail) _tot += (_VICE_W[v] ?? 8);
         let _r = Math.random() * _tot;
         sp.type = _avail[_avail.length - 1];
@@ -13147,12 +13267,12 @@ export class GameScene extends Phaser.Scene {
     wipers: {
       armAspect: 384 / 768,
       left: {
-        x: 125, y: 392, displayH: 340,
+        x: 125, y: 392, displayH: 374,   // 340 × 1.1 (owner 2026-08-27)
         parkAng:  Phaser.Math.DegToRad(90),
         sweepAng: Phaser.Math.DegToRad(-10),
       },
       center: {
-        x: 410, y: 392, displayH: 340,
+        x: 410, y: 392, displayH: 374,   // 340 × 1.1 (owner 2026-08-27)
         parkAng:  Phaser.Math.DegToRad(90),
         sweepAng: Phaser.Math.DegToRad(-10),
       },
@@ -13385,6 +13505,21 @@ export class GameScene extends Phaser.Scene {
 
   /** Third-person windshield overlay: two real wiper-arm image sprites
    *  sweep together through the same 0-to-100-degree path as cockpit view. */
+  /** Screen-space regions the wiper blades physically sweep.  Both views
+   *  share the same arc: blade rotation runs +90° (parked flat right) to
+   *  −10°, and image rotation r points the blade along screen angle
+   *  r − 90° — so the swept sector spans atan2 angles −100°…0° from each
+   *  pivot, out to the blade's length.  EffectsSystem clears rain/snow only
+   *  inside these sectors. */
+  _wiperSweepZones() {
+    if (this._cockpitActive) {
+      const W = GameScene._BEATER_COCKPIT.wipers;
+      return [W.left, W.center].map(w => ({ x: w.x, y: w.y, r: w.displayH }));
+    }
+    const r = this._chaseWiperH ?? 446;
+    return [{ x: 125, y: SCREEN_H + 6, r }, { x: 410, y: SCREEN_H + 6, r }];
+  }
+
   _renderWipers() {
     const g = this.wipersGfx;
     if (!g) return;
@@ -20766,24 +20901,42 @@ export class GameScene extends Phaser.Scene {
       : this.cops.getRearCopInfo?.(p.position + PLAYER_VIRTUAL_Z);
     if (this._ctrlEditMode) {
       // Editor: keep the placeholder visible so it can be positioned.
-    } else if (rear?.count && rear.nearestRelZ < -1500) {
-      // The -1500 gate (owner 2026-08-03): car-rel -1500 = camera-rel 1500,
-      // where the forward view starts drawing the cruiser.  Once the police
-      // are VISIBLE on the game screen the countdown is redundant — the
-      // chevron only tracks pursuit you can't see yet (mirror / off-screen).
-      // World units per foot, derived rather than guessed: the route is
-      // ROUTE_SEGS x SEG_LENGTH units over TOTAL_ROUTE_MILES.  The old /10
-      // divisor overstated every distance by ~6x.
-      // −10 ft calibration (owner 2026-07-27): rear distance is measured to
-      // the player's POSITION, but the cars READ as touching about a car
-      // length sooner — with the fix that made pursuit target the visible
-      // car, a cruiser showing "12 ft behind" was already drawing alongside
-      // the bumper.  Subtracting a flat 10 ft makes "0 ft" coincide with
-      // visual contact.  Floor at 0, not 1 — at contact it should read 0.
-      const distFt = Math.max(0, Math.round(-rear.nearestRelZ / (UNITS_PER_MILE_HUD / 5280)) - 10);
-      this.hudRearCop
-        .setText(`${this._colorblind ? '[!] ' : ''}◀ PURSUIT ${rear.count > 1 ? '×' + rear.count + ' ' : ''}— ${distFt} ft behind`)
-        .setVisible(true);
+    } else if (rear?.count && rear.nearestRelZ < 0) {
+      // MIRROR PURSUIT GLOW (owner 2026-08-27) — unseen pursuit announces
+      // itself the way it does in life: red/blue strobing in the rear-view
+      // glass, swelling as the cruiser closes.  This replaces the old
+      // "◀ PURSUIT — N ft behind" text readout; the text survives only in
+      // colorblind mode, where the red/blue strobe IS the signal being lost.
+      const prox = Math.max(0, Math.min(1, 1 + rear.nearestRelZ / MIRROR_GLOW_RANGE));
+      const mlg = (!this._perf?.noMirror && this._mirrorBounds) ? this.hudMirrorLights : null;
+      if (mlg && prox > 0.02) {
+        const mbG = this._mirrorBounds;
+        // Alternate with the cruisers' own light-bar clock so the glass
+        // strobes in sync with the bars drawn inside the mirror.
+        const col = this.cops?.lightFlash ? 0x2255FF : 0xFF3344;
+        const aG  = 0.10 + prox * 0.40;
+        // Full-glass wash (masked to the glass) …
+        mlg.fillStyle(col, aG * 0.45);
+        mlg.fillRect(mbG.glassX, mbG.glassY, mbG.glassW, mbG.glassH);
+        // … plus a hot core low in the glass where the cruiser sits,
+        // growing from a distant flicker to a windshield-filling blaze.
+        mlg.fillStyle(col, aG);
+        mlg.fillEllipse(
+          mbG.glassX + mbG.glassW / 2,
+          mbG.glassY + mbG.glassH * 0.72,
+          mbG.glassW * (0.25 + prox * 0.65),
+          mbG.glassH * (0.30 + prox * 0.50));
+      }
+      if (this._colorblind && rear.nearestRelZ < -1500) {
+        // −1500 gate + ft math preserved from the retired readout (see git
+        // history for the calibration notes).
+        const distFt = Math.max(0, Math.round(-rear.nearestRelZ / (UNITS_PER_MILE_HUD / 5280)) - 10);
+        this.hudRearCop
+          .setText(`[!] ◀ PURSUIT ${rear.count > 1 ? '×' + rear.count + ' ' : ''}— ${distFt} ft behind`)
+          .setVisible(true);
+      } else {
+        this.hudRearCop.setVisible(false);
+      }
     } else {
       this.hudRearCop.setVisible(false);
     }
@@ -26002,6 +26155,24 @@ export class GameScene extends Phaser.Scene {
   /** Resolve the held traffic stop (Stage 3): a plain speeding ticket — charge
    *  the fine, record the stat, and drive off.
    *  (Money == persisted score, so fines subtract from score.) */
+  /** Resolve a 1-2★ voluntary pull-over: charge the fine (×3 at 2★),
+   *  record the stat, wipe the wanted slate.  Unlike a speed-trap stop
+   *  there is no warning roll — the cruiser was already in pursuit. */
+  _resolvePursuitStop(mult = 1) {
+    let fine = Math.min(COP_TICKET_SPEEDING_CAP,
+      Math.round(Math.max(0, this.score) * COP_TICKET_SPEEDING_FRAC)) * mult;
+    fine += this._traitMod('ticketSurcharge');
+    fine = this._cashLoss(fine);   // Custom: wallet never depletes
+    this.score = Math.max(0, this.score - fine);
+    this.stats?.recordTrafficStop({ dui: false, amountPaid: fine, busted: false });
+    this._showPopup(
+      mult > 1 ? `🎫 TRIPLE FINE — −$${fine.toLocaleString()}\nSlate clean. Drive safe.`
+               : `🎫 Ticket — −$${fine.toLocaleString()}\nSlate clean. Drive safe.`,
+      '#FFDD44');
+    // Complying wipes the slate — stars gone, pursuers despawn, cooldown.
+    this.cops.clearArrest?.();
+  }
+
   _issueTrafficTicket() {
     const t = this._trapTicket;
     this._trapTicket = null;

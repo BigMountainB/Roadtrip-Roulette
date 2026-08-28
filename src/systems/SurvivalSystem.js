@@ -132,6 +132,11 @@ export class SurvivalSystem {
     if (this.hydration < 25) mult *= 1.5;                       // dehydrated
     if (this.fullness  > 75) mult *= 1 + 0.4 * ((this.fullness - 75) / 25); // food coma ramp
     if (this.inWithdrawal()) mult *= 1.25;
+    // Fatigue snowballs (owner 2026-08-27): the lower Alertness gets, the
+    // faster it degrades — ×1 when fresh, ramping QUADRATICALLY to ×2 at the
+    // edge of sleep.  Quadratic (not linear) so the early trip barely feels
+    // it and the last stretch before passing out falls away fast.
+    mult *= 1 + Math.pow(this.tiredness / 100, 2);
     this.tiredness = clamp(this.tiredness + DRIFT.tiredness * dMi * mult * drainMul);
 
     // Nausea: winding road induces motion sickness; empty road lets it settle.

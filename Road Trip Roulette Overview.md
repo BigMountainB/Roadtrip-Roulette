@@ -204,6 +204,50 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-27 (pt 7) — Wiper-path-only clearing, Easy need-based pickups, fatigue snowball
+
+- **Path-only wiping** (owner): running the wipers no longer suppresses/clears rain or snow
+  across the whole screen. GameScene passes `ctx.wiperZones` (the two blades' swept sectors:
+  pivots at (125, SCREEN_H+6) chase / (125|410, 392) cockpit, radius = blade length, atan2
+  angles −100°…0° — derived from the +90°→−10° rotation sweep) into `EffectsSystem.update`.
+  A sweep pulse wears ONLY particles inside those sectors: `wipe += 0.2` per pass (⅕ per
+  wipe → **5 wipes clear built-up glass**), shrinking r/alpha each pass, removal at wear 1.
+  Rain drizzle/runner spawn rates lost their wiper-on `wOn()` suppression and snow coverage
+  is no longer knocked back globally — **buildup continues outside the wiper path**.
+  Wipers drawn **10% bigger** (chase arm 405→446, cockpit displayH 340→374). NOTE: the
+  ⅕-per-wipe rate is flat per the owner spec — `wiperPower` (New Wiper Blades upgrade) no
+  longer changes clearing; flagged to owner for a call on re-differentiating stock blades.
+- **Easy need-based pickup bias** (owner): on Easy, `_assignPendingViceTypes` reweights by
+  live survival bars — Drinks < 25% → water+slushie ×1.3; Food > 75% → burrito/sushi/gummies
+  ×0.7; Alertness < 20% → cold brew ×1.3. Verified statistically headless (4000-draw samples:
+  water+slushie share 39%→45%, food 46%→36%, coldbrew 7.7%→10.6%).
+- **Fatigue snowball** (owner "alertness degrades quicker the closer to 0"): SurvivalSystem
+  tiredness drift gains `× (1 + (tiredness/100)²)` — ×1 fresh, ramping quadratically to ×2
+  at the edge of sleep. All difficulties (pure survival-model change).
+
+### 2026-08-27 (pt 6) — Pursuit redesign: mirror glow, +10 mph cap, 1-2★ comply-or-escalate
+
+- **Mirror pursuit glow** replaces the "◀ PURSUIT — N ft behind" HUD text: unseen pursuit now
+  strobes red/blue in the rear-view glass (`hudMirrorLights`, masked to the mirror), a full-glass
+  wash + a hot core low in the glass, both growing with proximity (`MIRROR_GLOW_RANGE` 45000,
+  synced to `cops.lightFlash`). The text readout survives ONLY in colorblind mode.
+- **+10 mph closing cap** (CopSystem): a rear-chase cruiser's speed is now
+  `min(COP_TOP_UNITS, laggedPlayerSpeed + MAX_SPEED×(10/120))` — it closes at most 10 mph faster
+  than the player and the APPROACH_BAND easing bleeds that surplus off near station, so it
+  visibly slows as it arrives, then follows. Supersedes the 2026-07-31 "cruiser runs at cruiser
+  pace" rule (comment documents this).
+- **1-2★ comply-or-escalate ladder** (GameScene block after the trap sign): at 1-2★ with a rear
+  pursuer within 30k units, a blue PULL OVER blink invites compliance. Holding < 8 mph for 0.8 s
+  = pulling over → `_pursuitStopHold`: car pinned, trap-stop light show, "PULLED OVER Ns" sign.
+  1★ = normal ticket + 8 s wait; 2★ = **triple** ticket + 15 s wait (`_resolvePursuitStop`,
+  same $300-cap formula as trap tickets ×mult, no warning roll, then `clearArrest()` slate-wipe).
+  Ignore the tail and stars escalate by DISTANCE followed: 2 mi at 1★ / 5 mi at 2★ → +1★
+  ("FAILING TO YIELD" popup). 1★ never rams (existing RAM_MIN_STARS=2); a 2★ tail now rams every
+  ~15 s while following (tier-2 lunge cadence: FIRST_HOLD/GAP_MIN 15.0 s).
+- Validation: chase.test 52/52 (new cadence + reaction-lag ranges), 21/21 headless probe checks
+  (glow drawn + text hidden, 8 s/15 s holds, ×1/×3 fines exact, slate wipes, 2-mi escalation),
+  full suite + build green.
+
 ### 2026-08-27 (pt 5) — Five pursuit/traffic-QoL fixes (owner batch)
 
 - **Complying at a traffic stop wipes the slate**: after the held stop resolves (ticket or
