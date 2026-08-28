@@ -41,6 +41,7 @@ import {
   COP_HEADONS_TO_ARREST, COP_PITS_TO_ARREST, COP_TOP_MPH, PLAYER_VIRTUAL_Z,
 } from '../constants.js';
 import { clamp } from '../utils/Helpers.js';
+import { pickAgencyId } from '../data/policeAgencies.js';
 import { Difficulty } from './Difficulty.js';
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
@@ -353,6 +354,18 @@ export class CopSystem {
   /** Triggered by GameScene when the player passes a random roadside cop
    *  with stars ≥ 1.  Spawns a rear-pursuit cop closing in from behind so
    *  the encounter has consequence. */
+  /** Stamp the STABLE agency id on a fresh cop — picked once from the
+   *  spawn mile and kept for the unit's whole life, so a chase never
+   *  changes department when the player crosses a jurisdiction line.
+   *  SWAT stays 'swat' (its own sprite set, no jurisdiction skin). */
+  _stampAgency(cop) {
+    if (!cop || cop.agencyId) return cop;
+    cop.agencyId = cop.colorSet === 'swat'
+      ? 'swat'
+      : pickAgencyId(clamp(cop.position / UNITS_PER_MILE, 0, TOTAL_ROUTE_MILES));
+    return cop;
+  }
+
   _spawnRearFromEncounter(playerPos) {
     // Rolling-coal lull — route encounters don't manifest pursuers either.
     // Returns the spawned cop (or null when the lull gated it) so callers
@@ -382,6 +395,7 @@ export class CopSystem {
       _closeFactor: 0.10 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
     };
+    this._stampAgency(cop);
     this.cops.push(cop);
     return cop;
   }
@@ -694,7 +708,7 @@ export class CopSystem {
       prevGap = gapIdx;
       for (let i = 0; i < laneSlots.length; i++) {
         if (i >= gapIdx && i < gapIdx + gapWidth) continue;   // the pass lane
-        this.cops.push({
+        this.cops.push(this._stampAgency({
           id:          Math.random(),
           position:    rowZ + (Math.random() - 0.5) * 80,    // tiny stagger
           laneOffset:  laneSlots[i],
@@ -708,7 +722,7 @@ export class CopSystem {
           painted:     false,
           _closeFactor: 0,
           _laneDrift:   0,
-        });
+        }));
       }
     }
   }
@@ -778,7 +792,7 @@ export class CopSystem {
       speed = -ONCOMING_UNITS;
     }
 
-    this.cops.push({
+    this.cops.push(this._stampAgency({
       id:          Math.random(),
       position,
       laneOffset,
@@ -793,7 +807,7 @@ export class CopSystem {
       painted:     false,
       _closeFactor: 0.06 + Math.random() * 0.06,
       _laneDrift:   0.4  + Math.random() * 0.4,
-    });
+    }));
   }
 
   addStar(amount = 1, sourceCap = MAX_STARS) {
@@ -991,6 +1005,7 @@ export class CopSystem {
           laneOffset: e.lane,
           isCop:      e.isCop,
           colorSet:   e.colorSet ?? null,
+          agencyId:   e.obj?.agencyId ?? null,   // wreck keeps its department's art
           texColor:   e.color ?? 0xFFFFFF,
         });
         const i = e.src.indexOf(e.obj);
@@ -1906,6 +1921,16 @@ export class CopSystem {
         if (dist < -3000  || dist > 80000) this.cops.splice(i, 1);
       }
     }
+
+    // ── Visual-only lateral velocity (steering-pose ladder) ────────────
+    // Smoothed d(laneOffset)/dt per unit — GameScene maps it onto the
+    // jurisdiction 000/007/012 steering frames with hysteresis.  Purely
+    // cosmetic: nothing in the chase AI reads it.
+    for (const c of this.cops) {
+      const lv = dt > 0 ? (c.laneOffset - (c._prevLane ?? c.laneOffset)) / dt : 0;
+      c._latV     = (c._latV ?? 0) + (lv - (c._latV ?? 0)) * Math.min(1, dt * 8);
+      c._prevLane = c.laneOffset;
+    }
   }
 
   // Closest cop matching `side` ('front' | 'rear' | 'any').
@@ -1928,6 +1953,10 @@ export class CopSystem {
     // the pseudo-3D camera can't display anything behind the player.
     return this.cops
       .map(cop => ({
+        // Backref to the LIVE entity — these records are per-frame copies,
+        // so anything persistent (agencyId, steering-pose ladder state,
+        // spin clocks) must live on `ent`, never on the record itself.
+        ent:         cop,
         relativePos: cop.position - playerPos,
         laneOffset:  cop.laneOffset,
         color:       cop.color,

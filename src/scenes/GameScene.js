@@ -66,6 +66,8 @@ import { getPaletteAtProgress, lerpColor } from '../utils/Colors.js';
 import { getUpgradeEffects, getInstalledUpgrade, clearTempUpgrades } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
 import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs, policeWarningChance } from '../data/genreVehicleTraits.js';
+import { POLICE_AGENCIES, POLICE_SPRITE_META, agencyPoolAt, agencyTextureList, pickAgencyId,
+         resolvePoliceSprite, jurFrameKey, SPIN_LADDER_FULL, PIT_CONTACT_LADDER } from '../data/policeAgencies.js';
 
 const CAM_DEPTH = 0.84;
 const IMPACT    = 'Impact, "Arial Black", Arial, sans-serif';
@@ -455,6 +457,22 @@ const SCENERY_IMAGE_PROFILES = {
   shrub_sage_2:        { heightMult: 0.85, maxW: 160, maxH: PLAYER_CAR_VISUAL_H * 1.2, minOffset: 1.55, groundDrop: 0.005 },
   shrub_rabbitbrush_1: { heightMult: 1.10, maxW: 180, maxH: PLAYER_CAR_VISUAL_H * 1.6, minOffset: 1.55, groundDrop: 0.005 },
 };
+
+// Jurisdiction speed-trap cruisers (2026-08-27): the parked-trap scenery
+// pass reads profiles by TEXTURE KEY, so each department's 090 profile
+// frame gets a content-aware entry — widthMult holds the CAR at the
+// legacy 1.6× trap size regardless of canvas padding, and groundDrop
+// sinks the transparent margin below the content so the tires sit on the
+// shoulder instead of floating on canvas air.
+for (const _pa of Object.values(POLICE_AGENCIES)) {
+  const _k = jurFrameKey(_pa.prefix, 90);
+  const _m = POLICE_SPRITE_META[_k];
+  if (!_m) continue;
+  SCENERY_IMAGE_PROFILES[_k] = {
+    widthMult:  1.6 / Math.max(0.05, _m.cx1 - _m.cx0),
+    groundDrop: 1 - _m.cy1,
+  };
+}
 
 // ────────────────────────────────────────────────────────────────────────
 // STRUCTURE_BBOX — per-texture painted-content bbox in normalized
@@ -4434,6 +4452,9 @@ export class GameScene extends Phaser.Scene {
     // finished, swap the real texture in the moment it's ready (no fallback —
     // we just wait).  No-op once the car is showing.
     this._ensurePlayerArtReady();
+    // Jurisdiction police sets stream in region-by-region (throttled to a
+    // check every ~2 s; queues the current + upcoming agencies' frames).
+    this._ensurePoliceAssets();
 
     // DUI bust-to-start screen is showing — freeze the world (the full-screen
     // overlay covers it) until the 5s delayedCall restarts the scene.
@@ -10866,6 +10887,8 @@ export class GameScene extends Phaser.Scene {
       cop.hp = (cop.hp ?? (cop.colorSet === 'swat' ? 20 : 10)) - 1;
       if (cop.hp <= 0) {
         this._spawnExplosion(sx, sy, sw);
+        // Wrecked cruiser careens off through its own spin frames.
+        this._spawnCopSpinFx(cop, sx, sy, sw, SPIN_LADDER_FULL);
         cop.alive = false;
         this.cops.cops.splice(idx, 1);
         if (this._dailyTracker) this._dailyTracker.copsKilled++;
@@ -10896,6 +10919,10 @@ export class GameScene extends Phaser.Scene {
         left > 0 ? `PIT MANEUVER! ${pits}/${pitMax}\n${left} more = JAIL` : 'BUSTED!',
         '#FF2222',
       );
+      // The striking cruiser rotates on past contact (60°→180°) in its own
+      // jurisdiction frames while the player spins via _startPitSpin above —
+      // both cars animate the maneuver together.
+      this._spawnCopSpinFx(cop, sx, sy, sw, PIT_CONTACT_LADDER);
       cop.alive = false;
       this.cops.cops.splice(idx, 1);
       if (this._dailyTracker) this._dailyTracker.copsKilled++;
@@ -10913,6 +10940,7 @@ export class GameScene extends Phaser.Scene {
       this._applyDamage(0.5 + impact.severity * 1.0, 'cop_smash');
       // Mark cop visually crashed (spawns debris cloud) and remove.
       this._spawnExplosion(sx, sy, sw);
+      this._spawnCopSpinFx(cop, sx, sy, sw, SPIN_LADDER_FULL);
       this._showPopup('SMASHED A COP!', '#FFAA22');
       cop.alive = false;
       this.cops.cops.splice(idx, 1);
@@ -12428,9 +12456,11 @@ export class GameScene extends Phaser.Scene {
         const sw = proj.sw;
         // Wreck — drifts laterally, spins, fades out over 1.5s.  Pass
         // colorSet so the wreck renders the actual car sprite (not a
-        // grey rectangle).  Cops fall back to a police car texture.
+        // grey rectangle).  Cop wrecks keep their department's livery.
         const wreckTex = v.isCop
-          ? (this.textures.exists('car_back_police') ? 'car_back_police' : 'cop_police')
+          ? (resolvePoliceSprite({ agencyId: v.agencyId ?? 'washington_state_patrol', angle: 0,
+                                   has: (k) => this.textures.exists(k) })?.key
+             ?? (this.textures.exists('car_back_police') ? 'car_back_police' : 'cop_police'))
           : this._carTexKey(v.colorSet, 'back');
         this._spawnWreck(sx, sy, sw, v.laneOffset, wreckTex);
       }
@@ -12870,7 +12900,9 @@ export class GameScene extends Phaser.Scene {
       const sw = proj.sw;
       this._spawnExplosion(sx, sy, sw * 1.2);
       const wreckTex = v.isCop
-        ? (this.textures.exists('car_back_police') ? 'car_back_police' : 'cop_police')
+        ? (resolvePoliceSprite({ agencyId: v.agencyId ?? v.obj?.agencyId ?? 'washington_state_patrol', angle: 0,
+                                 has: (k) => this.textures.exists(k) })?.key
+           ?? (this.textures.exists('car_back_police') ? 'car_back_police' : 'cop_police'))
         : this._carTexKey(v.colorSet, 'back');
       this._spawnWreck(sx, sy, sw, lane, wreckTex);
     }
@@ -15222,6 +15254,187 @@ export class GameScene extends Phaser.Scene {
     return 'npc_car_white';
   }
 
+  // ── Jurisdiction police sprites (2026-08-27) ─────────────────────────
+  // Data lives in src/data/policeAgencies.js (agency regions, angle
+  // resolver, per-frame content/lightbar metadata).  These methods are the
+  // scene-side glue: region-based texture loading, per-cop steering-pose
+  // ladder, and the PIT/crash spin effect.
+
+  /** Region-based loader — queues the jurisdiction sets for the CURRENT
+   *  and UPCOMING stretch of route (plus the shared generic/SWAT/heli
+   *  extras once) into Phaser's loader.  ~2.3 MB per set, so loading all
+   *  nine at boot would cost ~21 MB of mobile load; instead each set
+   *  arrives a few miles before its jurisdiction does.  The resolver's
+   *  fallback chain covers the (rare) frame drawn before its file lands. */
+  _ensurePoliceAssets(force = false) {
+    const t = this.gameTime ?? 0;
+    if (!force && t - (this._polAssetT ?? -99) < 2) return;
+    this._polAssetT = t;
+    this._polQueued ??= new Set();
+    const mile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+    const wanted = [];
+    // Shared extras: generic police turn/spin, rendered SWAT set, rendered
+    // helicopter frames.  Queued on the first call (scene create).
+    if (!this._polQueued.has('__extras')) {
+      this._polQueued.add('__extras');
+      for (const k of ['car_back_police_turn_007', 'car_back_police_turn_012',
+                       'car_back_police_spin_030', 'car_back_police_spin_060',
+                       'car_back_swat_rendered', 'car_front_swat_rendered',
+                       'car_back_swat_turn_007', 'car_back_swat_turn_012',
+                       'car_back_swat_spin_030', 'car_back_swat_spin_060',
+                       'car_back_swat_spin_090']) {
+        wanted.push({ key: k, path: `assets/cars/${k}.png` });
+      }
+      wanted.push(
+        { key: 'cop_heli_r1',      path: 'assets/cops/heli_police_rendered_1.png' },
+        { key: 'cop_heli_r2',      path: 'assets/cops/heli_police_rendered_2.png' },
+        { key: 'cop_heli_r1_flip', path: 'assets/cops/heli_police_rendered_1_flip.png' },
+        { key: 'cop_heli_r2_flip', path: 'assets/cops/heli_police_rendered_2_flip.png' },
+        // Optional 3rd rotor frame — joins the cycle automatically once the
+        // files exist (a missing file just logs one loader warning).
+        { key: 'cop_heli_r3',      path: 'assets/cops/heli_police_rendered_3.png' },
+        { key: 'cop_heli_r3_flip', path: 'assets/cops/heli_police_rendered_3_flip.png' },
+      );
+    }
+    const AHEAD_MI = 12;
+    for (const m of [mile, mile + AHEAD_MI]) {
+      const mm = Math.max(0, Math.min(TOTAL_ROUTE_MILES, m));
+      for (const { id } of agencyPoolAt(mm)) {
+        if (this._polQueued.has(id)) continue;
+        this._polQueued.add(id);
+        wanted.push(...agencyTextureList(id));
+      }
+    }
+    if (!wanted.length) return;
+    // Plain Image() elements + textures.addImage, NOT this.load: the scene
+    // LoaderPlugin can sit in a stuck LOADING state after a scene.restart()
+    // (verified headless 2026-08-27 — files queued after the restart never
+    // even hit the network).  The browser HTTP cache keeps re-entries free
+    // and the texture manager holds the decoded copy, so angle swaps never
+    // re-fetch or re-decode.
+    this._polLoading ??= new Set();
+    const texman = this.textures;   // game-level — survives scene restarts
+    for (const { key, path } of wanted) {
+      if (texman.exists(key) || this._polLoading.has(key)) continue;
+      this._polLoading.add(key);
+      const img = new Image();
+      img.onload  = () => { if (!texman.exists(key)) texman.addImage(key, img); };
+      img.onerror = () => {};   // missing optional file (e.g. heli r3) — resolver falls back
+      img.src = path;
+    }
+  }
+
+  /** Stable agency for a cop — normally stamped by CopSystem at spawn;
+   *  lazily backfilled here (from the COP's mile) for anything that
+   *  predates the stamp.  SWAT keeps its own set.  Accepts either the live
+   *  entity or a getCopsForRender record (which carries `ent`). */
+  _copAgencyId(cop) {
+    const ent = cop.ent ?? cop;
+    if (ent.agencyId) return ent.agencyId;
+    if (ent.colorSet === 'swat') return (ent.agencyId = 'swat');
+    const mile = ((ent.position ?? this.player.position) / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+    return (ent.agencyId = pickAgencyId(Math.max(0, Math.min(TOTAL_ROUTE_MILES, mile))));
+  }
+
+  /** Steering-pose ladder for a pursuing cruiser: 0/7/12° picked from the
+   *  unit's smoothed lateral velocity (CopSystem cop._latV, laneOffset/s)
+   *  with hysteresis + a minimum hold so frames can't flicker.  Thresholds
+   *  sized against the chase AI's actual lane-tracking rates (formation
+   *  drift ~0.2/s, lane snap ~0.6/s).  State lives on the LIVE entity —
+   *  the render records are per-frame copies. */
+  _copSteerAngle(ent, t) {
+    const P = { E7: 0.09, R7: 0.05, E12: 0.38, R12: 0.24, HOLD: 0.16 };
+    const v   = Math.abs(ent._latV ?? 0);
+    const cur = ent._poseDeg ?? 0;
+    let want;
+    if (cur === 12)     want = v >= P.R12 ? 12 : v >= P.R7 ? 7 : 0;
+    else if (cur === 7) want = v >= P.E12 ? 12 : v >= P.R7 ? 7 : 0;
+    else                want = v >= P.E12 ? 12 : v >= P.E7 ? 7 : 0;
+    if (want !== cur && t - (ent._poseT ?? -9) < P.HOLD) want = cur;
+    if (want !== cur) { ent._poseDeg = want; ent._poseT = t; }
+    return ent._poseDeg ?? 0;
+  }
+
+  /** Resolve THE frame for a cop this render frame: jurisdiction art at
+   *  the pose angle, with the agencies module's fallback chain.  Returns a
+   *  place()-compatible frame object (or null when nothing is loaded yet,
+   *  in which case the caller keeps the legacy flat texture). */
+  _resolveCopFrame(cop) {
+    const ent = cop.ent ?? cop;
+    const has = (k) => this.textures.exists(k);
+    const t = this.gameTime ?? 0;
+    let angle;
+    if (cop.coalFlee || cop.donutFlee) {
+      // Blinded/diverted spin-out — cycle the crash ladder (~2.5 rev/s
+      // equivalent).  Replaces the old back↔front texture flash; the 0→180
+      // ladder then restarts (the far half of the rotation has no
+      // un-mirrored art, and mirrored lettering is forbidden).
+      ent._spinT ??= t;
+      const seq = [0, ...SPIN_LADDER_FULL];
+      angle = seq[Math.floor((t - ent._spinT) / 0.09) % seq.length];
+    } else if (cop.kind === 'oncoming' || cop.kind === 'barricade' || (cop.speed ?? 0) < 0) {
+      angle = 180;                    // head-on → true front view
+    } else if (this._endingCine) {
+      // Arrest/crash cinematic moves cop positions directly (CopSystem is
+      // not updating _latV), so hold the converging cruisers on the clean
+      // rear view instead of a stale steering frame.
+      angle = 0;
+    } else {
+      angle = this._copSteerAngle(ent, t);
+      // PIT setup: the cruiser is visibly rotating into the rear quarter.
+      if (ent._pitArmed) angle = Math.max(angle, 30);
+    }
+    const frame = resolvePoliceSprite({ agencyId: this._copAgencyId(ent), angle, has });
+    ent._renderFrame = frame;   // probes/mirror read the entity, not the record
+    return frame;
+  }
+
+  /** Cruiser crash/PIT spin-out — a short frame-ladder animation of the
+   *  cop's OWN jurisdiction art (contact → broadside → 180) that plays
+   *  while the entity itself is removed by the game logic.  Rides the
+   *  existing explosions/wreck fx plumbing (timer, pause behavior, img
+   *  cleanup on expiry/restart), so no new lifecycle is introduced. */
+  _spawnCopSpinFx(cop, sx, sy, sw, ladder = PIT_CONTACT_LADDER) {
+    const has = (k) => this.textures.exists(k);
+    const agencyId = this._copAgencyId(cop);
+    const frames = [];
+    for (const deg of ladder) {
+      const f = resolvePoliceSprite({ agencyId, angle: deg, has });
+      if (f && !frames.some(o => o.key === f.key)) frames.push(f);
+    }
+    if (frames.length < 2) {   // art not loaded — legacy spinning wreck
+      this._spawnWreck(sx, sy, sw, cop.laneOffset,
+        frames[0]?.key ?? this._carTexKey('police', 'back'));
+      return;
+    }
+    if (!this.explosions) this.explosions = [];
+    // Content-stable display size per frame: content width pinned to the
+    // impact's projected width, canvas sized up around it.
+    const contentW = Math.max(20, sw * 1.35);
+    for (const f of frames) {
+      const cf = Math.max(0.05, f.meta.cx1 - f.meta.cx0);
+      f._dw = contentW / cf;
+      f._dh = f._dw * (f.meta.h / f.meta.w);
+      f._oy = (f.meta.cy0 + f.meta.cy1) / 2;   // content-center origin, no jumps
+      f._ox = (f.meta.cx0 + f.meta.cx1) / 2;
+    }
+    const f0 = frames[0];
+    const img = this.add.image(sx, sy, f0.key)
+      .setOrigin(f0._ox, f0._oy)
+      .setDisplaySize(f0._dw, f0._dh)
+      .setDepth(9.6);
+    this._uiCam?.ignore?.(img);
+    const STEP = 0.085;   // ~50-90 ms per crash-spin step (spec)
+    this.explosions.push({
+      sx, sy, sw: Math.max(14, sw),
+      timer: 0, maxTimer: frames.length * STEP + 0.55, kind: 'wreck',
+      lateralV: (cop.laneOffset >= 0 ? 1 : -1) * (120 + Math.random() * 70),
+      spinV: 0, rotation: 0,       // rotation comes from the FRAMES, not canvas spin
+      copFrames: frames, frameStep: STEP,
+      img,
+    });
+  }
+
   // ──────────────────────────────────────────────────────────────────────
   //  YAW-BILLBOARD SPIKE
   //  ---------------------------------------------------------------------
@@ -15905,11 +16118,12 @@ export class GameScene extends Phaser.Scene {
         if (lightsKind === 'cop') {
           // Cop = single bar bloom (one light bar, not a pair).
           const col = this.cops?.lightFlash ? 0x2A66FF : 0xFF2233;
-          // Match the baked roof bar in the current police art.  Front art's
-          // bar is ~10% down from the top; rear art's is ~15% down.  Using
-          // the old generic headY (mid-body) put the fog bloom on the glass.
-          const copBarTopFrac = /front_police/i.test(useTex) ? 0.10 : 0.15;
-          const ly = proj.sy - targetH * (1 - copBarTopFrac);
+          // Match the baked roof bar.  Jurisdiction/pose frames carry the
+          // measured lens anchor (spikeFrame.lb) + ground seat; legacy flat
+          // art keeps the front/back canvas-fraction estimate.
+          const ly = spikeFrame?.lb
+            ? proj.sy - (spikeFrame.groundFrac - spikeFrame.lb.y) * targetH
+            : proj.sy - targetH * (1 - (/front_police/i.test(useTex) ? 0.10 : 0.15));
           if (hazeA > 0.01) { g.fillStyle(col, hazeA * 0.62); g.fillEllipse(proj.sx, ly, hazeR * 3.0, hazeR * 1.35); }
           g.fillStyle(col, Math.min(0.70, coreA + 0.08));
           g.fillEllipse(proj.sx, ly, baseR * 0.78, baseR * 0.36);
@@ -16103,17 +16317,20 @@ export class GameScene extends Phaser.Scene {
     // back), oncoming cops barrel head-on (front), barricade cops parked
     // facing oncoming traffic = front.
     for (const cop of copsForRender) {
+      // Jurisdiction pose resolver (2026-08-27): picks the agency's angle
+      // frame — steering ladder 000/007/012 in pursuit, spin-ladder cycle
+      // for coal/donut spin-outs, 180 for oncoming/barricade — with the
+      // fallback chain down to the generic flat pair.  cop._renderFrame is
+      // cached for the lightbar overlay loop below so both passes always
+      // agree on the frame (and therefore on the lens anchors).
+      const frame = this._resolveCopFrame(cop);
+      cop._renderFrame = frame;
       const facing =
         cop.kind === 'oncoming'  ? 'front' :
         cop.kind === 'barricade' ? 'front' :
-        // Rolling-coal spin-out (owner 2026-08-04): flash back↔front while
-        // the blinded cruiser recedes so it reads as spinning out of
-        // control — same trick the crashed-traffic wrecks use, on a timer
-        // (~2.8 rev/s) instead of a crash angle.
-        cop.coalFlee             ? (Math.floor((this.gameTime ?? 0) / 0.18) % 2 ? 'front' : 'back') :
         (cop.speed ?? 0) < 0     ? 'front' :
                                    'back';
-      const texKey = this._carTexKey(cop.colorSet ?? 'police', facing);
+      const texKey = frame?.key ?? this._carTexKey(cop.colorSet ?? 'police', facing);
       // Cops draw at civilian scale (COP_VISUAL_SCALE) with no size cap — see
       // the constant.  They still skip the drunk double-vision ghost so they
       // always read as solid (you must be able to clearly see who's on you).
@@ -16176,7 +16393,10 @@ export class GameScene extends Phaser.Scene {
       const copFa   = (exitT > 0
         ? Math.max(0, Math.min(1, (1 - exitT) / 0.3))   // fade only over the exit's last stretch
         : (cop.fleeFade ?? 1)) * this._rearCopForwardFade(cop);
-      place(drawRel, cop.laneOffset, 0xFFFFFF, COP_VISUAL_SCALE, 0, texKey, true, undefined, 'cop', cop.colorSet ?? 'police', copFa, exitT, null, nearSynthRel);
+      // `frame` rides the spikeFrame slot: place() applies its widthScale
+      // (stable CONTENT width per vehicle class — canvas padding never
+      // resizes the car) and groundFrac (content bottom seated on the road).
+      place(drawRel, cop.laneOffset, 0xFFFFFF, COP_VISUAL_SCALE, 0, texKey, true, undefined, 'cop', cop.colorSet ?? 'police', copFa, exitT, frame, nearSynthRel);
     }
 
     // Player tire shadow — anchored to sprite.y (the actual on-screen
@@ -16351,12 +16571,64 @@ export class GameScene extends Phaser.Scene {
       // roof-bar pixel coordinates in the new sedan sprites.  The previous
       // pickup-era formula used raw projection width and landed on the rear
       // glass/trunk once the body was capped or viewed head-on.
+      // ── Per-frame measured anchors (2026-08-27) ────────────────────
+      // The body pass cached its resolved jurisdiction frame; the flash
+      // sits on the lenses actually drawn in THAT frame — same seat, same
+      // scale, so it follows steering/PIT/spin foreshortening exactly.
+      const rFrame = cop._renderFrame;
+      if (rFrame?.lb) {
+        const meta  = rFrame.meta;
+        const bodyW = proj.sw * COP_VISUAL_SCALE * rFrame.widthScale;
+        const bodyH = bodyW * (meta.h / meta.w);
+        const seatY = proj.sy + (1 - rFrame.groundFrac) * bodyH;   // same seat as place()
+        const topY  = seatY - bodyH;
+        const lensAt = (box) => box && ({
+          x: proj.sx + (box.x - 0.5) * bodyW,
+          y: topY + box.y * bodyH,
+          w: Math.max(2, box.w * bodyW * 1.12),
+          h: Math.max(1.4, Math.max(box.h * bodyH * 1.6, bodyW * 0.02)),
+        });
+        const whole = lensAt(rFrame.lb);
+        const red   = lensAt(meta.lbR);
+        const blue  = lensAt(meta.lbB);
+        const dark  = !!rFrame.lb.dark;
+        if (this._colorblind) {
+          // CVD-safe amber↔blue + white blink center, anchored to the strip.
+          bar.fillStyle(cop.flash ? 0xFFB000 : 0x3A2600, _lbFa * (cop.flash ? 0.86 : (dark ? 0.06 : 0.42)));
+          bar.fillEllipse(whole.x + whole.w * 0.25, whole.y, whole.w * 0.5, whole.h);
+          bar.fillStyle(cop.flash ? 0x2255FF : 0x000044, _lbFa * (cop.flash ? 0.86 : (dark ? 0.06 : 0.42)));
+          bar.fillEllipse(whole.x - whole.w * 0.25, whole.y, whole.w * 0.5, whole.h);
+          if (cop.flash) {
+            bar.fillStyle(0xFFFFFF, _lbFa * 0.88);
+            bar.fillRect(whole.x - whole.w * 0.05, whole.y - whole.h * 0.5, whole.w * 0.1, whole.h);
+          }
+        } else if (red || blue) {
+          // Measured per-side boxes — which side is red vs blue VARIES BY
+          // DEPARTMENT (Seattle blue-left, Pullman red-left), so each glow
+          // pulses on its own lenses instead of assuming a layout.
+          if (blue) {
+            bar.fillStyle(0x2255FF, _lbFa * (cop.flash ? 0.86 : 0.18));
+            bar.fillEllipse(blue.x, blue.y, blue.w, blue.h);
+          }
+          if (red) {
+            bar.fillStyle(0xFF3333, _lbFa * (cop.flash ? 0.18 : 0.86));
+            bar.fillEllipse(red.x, red.y, red.w, red.h);
+          }
+        } else {
+          // Dark low-profile bar (Snoqualmie/Adams) — no baked lenses to
+          // light, so a restrained whole-strip wash alternates over the
+          // bar's true position; off phase shows nothing (bar is black).
+          if (cop.flash != null) {
+            bar.fillStyle(cop.flash ? 0xFF3333 : 0x2255FF, _lbFa * 0.68);
+            bar.fillEllipse(whole.x, whole.y, whole.w, whole.h);
+          }
+        }
+        continue;
+      }
+      // ── Legacy flat art (frame not loaded yet) ─────────────────────
       const facing =
         cop.kind === 'oncoming'  ? 'front' :
         cop.kind === 'barricade' ? 'front' :
-        // Match the body's rolling-coal spin-out flash so the bar sits on
-        // whichever face is currently showing.
-        cop.coalFlee             ? (Math.floor((this.gameTime ?? 0) / 0.18) % 2 ? 'front' : 'back') :
         (cop.speed ?? 0) < 0     ? 'front' : 'back';
       const texKey = this._carTexKey(cop.colorSet ?? 'police', facing);
       const tex = this.textures.get(texKey)?.source?.[0];
@@ -16831,9 +17103,22 @@ export class GameScene extends Phaser.Scene {
         let copTexKey = null;
         if (sp.copEncounter && !sp.triggered) {
           if (sp.type === 'cop_random_parked') {
-            copTexKey = sp.side === 'left'
-              ? (this.textures.exists('car_left_police')  ? 'car_left_police'  : 'car_back_police')
-              : (this.textures.exists('car_right_police') ? 'car_right_police' : 'car_back_police');
+            // Jurisdiction trap cruiser (2026-08-27): the parked trap wears
+            // the local department's livery, picked ONCE from the trap's own
+            // mile and kept.  The jurisdiction 090 profile is nose-RIGHT —
+            // same convention as car_right_police — so it slots in for
+            // right-shoulder traps; LEFT-shoulder traps keep the legacy
+            // nose-left art (mirroring the 090 would reverse the lettering).
+            if (sp.agencyId === undefined) {
+              const _tm = sp.trapMile ?? ((this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES);
+              sp.agencyId = pickAgencyId(Math.max(0, Math.min(TOTAL_ROUTE_MILES, _tm)));
+            }
+            const _jk = sp.side === 'right' && POLICE_AGENCIES[sp.agencyId]
+              ? jurFrameKey(POLICE_AGENCIES[sp.agencyId].prefix, 90) : null;
+            copTexKey = (_jk && this.textures.exists(_jk)) ? _jk
+              : sp.side === 'left'
+                ? (this.textures.exists('car_left_police')  ? 'car_left_police'  : 'car_back_police')
+                : (this.textures.exists('car_right_police') ? 'car_right_police' : 'car_back_police');
           } else {
             copTexKey = this.textures.exists('car_back_police') ? 'car_back_police' : 'cop_police';
           }
@@ -17964,8 +18249,23 @@ export class GameScene extends Phaser.Scene {
         const h = w * 0.55;
         // Update the Phaser Image: position, rotation, fade.
         if (exp.img && exp.img.scene) {
+          // Cop spin-out (2026-08-27): the rotation comes from the agency's
+          // own spin FRAMES (30→180°), stepped on the fx timer — never a
+          // canvas rotation, and never mirrored (markings stay readable).
+          // Content-center origin + per-frame display size keep the vehicle
+          // a stable size while the canvas geometry changes under it.
+          if (exp.copFrames) {
+            const idx = Math.min(exp.copFrames.length - 1,
+              Math.floor(exp.timer / (exp.frameStep || 0.085)));
+            const f = exp.copFrames[idx];
+            if (exp.img.texture.key !== f.key) {
+              exp.img.setTexture(f.key);
+              exp.img.setOrigin(f._ox, f._oy);
+              exp.img.setDisplaySize(f._dw, f._dh);
+            }
+          }
           exp.img.setPosition(exp.sx, exp.sy);
-          exp.img.setRotation(exp.rotation ?? 0);
+          if (!exp.copFrames) exp.img.setRotation(exp.rotation ?? 0);
           exp.img.setAlpha(alpha);
         }
         // Smoke trail — multiple puffs drifting up + back, growing
@@ -20808,13 +21108,66 @@ export class GameScene extends Phaser.Scene {
         const copFa = cop.fleeing ? (cop._fleeFade ?? 1) : 1;
         if (copFa <= 0.01) continue;
         const proj = projectRear(vz, cop.laneOffset, MIRROR_FAR_Z);
-        const tex = this.textures.exists('car_front_police') ? 'car_front_police' : 'car_front_white';
         const slot = carPool[usedCars++];
-        // Cop floor scales with the glass (≈13% of its height) so the pursuer
-        // stays legible at any mirror size / zoom, never below 6 px.
-        placeSprite(slot, tex, proj.x, proj.y, proj.depthT, 20, copFa,
-                    Math.max(6, mb.glassH * 0.13));
-        if (_hlOnMirror) {
+        // Jurisdiction front view (2026-08-27): the pursuer's OWN department
+        // 180° frame (or the rendered SWAT front).  Padded 768×512 canvases
+        // need content-aware sizing here — placeSprite scales raw canvas
+        // height, which would shrink the car to ~45% — so this branch sizes
+        // the CONTENT to the legacy pixel budget and centers it on proj.y.
+        const _mf = resolvePoliceSprite({ agencyId: this._copAgencyId(cop), angle: 180,
+                                          has: (k) => this.textures.exists(k) });
+        const _mfPosed = _mf && (_mf.key.startsWith('jur_') || _mf.key === 'car_front_swat_rendered');
+        let mTexW, mTexH, mSlotY;
+        if (_mfPosed) {
+          const meta = _mf.meta;
+          const contentHF = Math.max(0.05, meta.cy1 - meta.cy0);
+          const wantH = Math.max(Math.max(6, mb.glassH * 0.13), 2 + proj.depthT * 18) * mirrorZoom;
+          mTexH = wantH / contentHF;
+          mTexW = mTexH * (meta.w / meta.h);
+          mSlotY = proj.y - ((meta.cy0 + meta.cy1) / 2 - 0.5) * mTexH;   // content centered on proj.y
+          if (slot.texture.key !== _mf.key) slot.setTexture(_mf.key);
+          slot.setDisplaySize(mTexW, mTexH);
+          slot.setPosition(proj.x, mSlotY);
+          slot.setAlpha(copFa);
+          slot.setVisible(true);
+        } else {
+          const tex = this.textures.exists('car_front_police') ? 'car_front_police' : 'car_front_white';
+          // Cop floor scales with the glass (≈13% of its height) so the pursuer
+          // stays legible at any mirror size / zoom, never below 6 px.
+          placeSprite(slot, tex, proj.x, proj.y, proj.depthT, 20, copFa,
+                      Math.max(6, mb.glassH * 0.13));
+        }
+        if (_hlOnMirror && _mfPosed && _mf.lb) {
+          // Measured lens anchors from the SAME frame the glass shows.
+          const flashOn = !!this.cops?.lightFlash;
+          const canvasTop = mSlotY - mTexH / 2;
+          const lens = (box) => box && ({
+            x: proj.x + (box.x - 0.5) * mTexW,
+            y: canvasTop + box.y * mTexH,
+            w: Math.max(2.5, box.w * mTexW * 1.1),
+            h: Math.max(1.2, box.h * mTexH * 1.8),
+          });
+          const wB = lens(_mf.lb), rB = lens(_mf.meta.lbR), bB = lens(_mf.meta.lbB);
+          ml.blendMode = Phaser.BlendModes.ADD;
+          const barA = Math.min(1, (flashOn ? 0.46 : 0.16) + _darknessMirror * 0.55) * copFa;
+          if (rB || bB) {
+            if (bB) { ml.fillStyle(0x2A66FF, flashOn ? barA : barA * 0.5); ml.fillEllipse(bB.x, bB.y, bB.w, bB.h); }
+            if (rB) { ml.fillStyle(0xFF2233, flashOn ? barA * 0.5 : barA); ml.fillEllipse(rB.x, rB.y, rB.w, rB.h); }
+          } else {
+            ml.fillStyle(flashOn ? 0xFF2233 : 0x2A66FF, barA);
+            ml.fillEllipse(wB.x, wB.y, wB.w, wB.h);
+          }
+          // Pursuit headlights — same cue as the legacy branch, placed off
+          // the frame's CONTENT box instead of the raw canvas.
+          const _cw = mTexW * (_mf.meta.cx1 - _mf.meta.cx0);
+          const _ch = mTexH * (_mf.meta.cy1 - _mf.meta.cy0);
+          const _cb = canvasTop + _mf.meta.cy1 * mTexH;      // content bottom
+          const lampR = Math.max(0.8, _cw * 0.055);
+          ml.fillStyle(0xFFE680, Math.min(1, lightAM * 1.8) * copFa);
+          ml.fillCircle(proj.x - _cw * 0.36, _cb - _ch * 0.30, lampR);
+          ml.fillCircle(proj.x + _cw * 0.36, _cb - _ch * 0.30, lampR);
+          ml.blendMode = Phaser.BlendModes.NORMAL;
+        } else if (_hlOnMirror) {
           const targetW = slot.displayWidth;
           const targetH = slot.displayHeight;
           // car_front_police roof-bar anchors (derived from the 768×615
@@ -21011,13 +21364,35 @@ export class GameScene extends Phaser.Scene {
       const x     = SCREEN_W / 2 + sway;
       if (this.hudHelicopterImg) {
         // Pick rotor frame + facing.  `sway < 0` = banking left → use the
-        // _flip variants so the chopper visually leans the right way.
+        // _flip variants — SEPARATELY RENDERED files, never a runtime
+        // mirror (the fuselage says POLICE).
+        // Rendered chopper (2026-08-27): heli_police_rendered_1/2 replace
+        // the old low-res pair when loaded; a third frame joins the rotor
+        // cycle automatically if assets/cops/heli_police_rendered_3.png
+        // (+_flip) ever lands (queued by _ensurePoliceAssets).  Display
+        // size is re-pinned after every setTexture — setTexture resets the
+        // frame size, and the rendered/legacy canvases differ wildly, so
+        // without this the chopper pulses between frames.
         const facingLeft = sway < 0;
-        const rotorFrame = (Math.sin(phase * 28) > 0) ? 1 : 2;
-        const key = facingLeft
-          ? (rotorFrame === 1 ? 'cop_heli_1_flip' : 'cop_heli_2_flip')
-          : (rotorFrame === 1 ? 'cop_heli_1'      : 'cop_heli_2');
+        const _hasR3  = this.textures.exists('cop_heli_r3')
+                     && (!facingLeft || this.textures.exists('cop_heli_r3_flip'));
+        const _newHeli = this.textures.exists('cop_heli_r1') && this.textures.exists('cop_heli_r2');
+        let key;
+        if (_newHeli) {
+          const n = _hasR3 ? 1 + (Math.floor(phase * 18) % 3)
+                           : ((Math.sin(phase * 28) > 0) ? 1 : 2);
+          key = `cop_heli_r${n}${facingLeft ? '_flip' : ''}`;
+          if (!this.textures.exists(key)) key = facingLeft ? 'cop_heli_r1_flip' : 'cop_heli_r1';
+        } else {
+          const rotorFrame = (Math.sin(phase * 28) > 0) ? 1 : 2;
+          key = facingLeft
+            ? (rotorFrame === 1 ? 'cop_heli_1_flip' : 'cop_heli_2_flip')
+            : (rotorFrame === 1 ? 'cop_heli_1'      : 'cop_heli_2');
+        }
         this.hudHelicopterImg.setTexture(key);
+        // Rendered art is 1998×787 (aspect ~2.54): hold that shape at a
+        // fixed on-screen size; the legacy pair keeps its original 140×80.
+        this.hudHelicopterImg.setDisplaySize(_newHeli ? 172 : 140, _newHeli ? 68 : 80);
         this.hudHelicopterImg.setPosition(x, bobY);
         this.hudHelicopterImg.setVisible(true);
         // Red/blue rotor flash via tint alternating each ~0.2s.
