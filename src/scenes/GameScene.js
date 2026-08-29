@@ -2222,6 +2222,7 @@ export class GameScene extends Phaser.Scene {
     this._finishCause     = null;
     this._statsTripEnded = false;   // one-shot guard for the stats trip-end hook
     this._arrestHandled  = false;   // one-shot guard so a bust charges bail once
+    this._endingPrePenaltyCash = null;   // pre-bail wallet stash for the ending outcomes
     // Per-texture caches (angle-frame sizing + tire-contact anchors) —
     // rebuilt every create so a genre-art swap (same texture keys, new
     // pixels) can't serve stale content boxes or anchors.
@@ -3883,7 +3884,9 @@ export class GameScene extends Phaser.Scene {
     const mode = this._activeSteeringMode?.();
     let label = '', color = '#BFE6FF';
     if (inWind && mode === 'flappy') { label = '💨 CROSSWIND — HOLD TO FIGHT IT'; color = '#FFE08A'; }
-    else if (inSnow && mode === 'tilt')          { label = '📱 TILT TO STEER'; color = '#BFE6FF'; }
+    // PINK + flashing (owner 2026-08-29) so the pass's control handoff can't
+    // be missed — the blink itself is applied in the alpha block below.
+    else if (inSnow && mode === 'tilt')          { label = '📱 TILT TO STEER'; color = '#FF7AD9'; }
     else if (inSnow && !this._tiltAttached)      { label = '❄️ SNOW — SLIPPERY';      color = '#E6F2FF'; }
     // A cue that already played then faded must NOT re-fire every ~1.4 mi
     // (that made it read as "permanent", owner 2026-07-16). Reset the
@@ -3909,7 +3912,12 @@ export class GameScene extends Phaser.Scene {
     const shown = this._snowCueShown;
     if (!shown) { if (cue.visible) cue.setVisible(false); return; }
     const age = (this._odometer ?? 0) - shown.startMile;
-    const alpha = age <= 1 ? 1 : Math.max(0, 1 - (age - 1) / 0.4);
+    let alpha = age <= 1 ? 1 : Math.max(0, 1 - (age - 1) / 0.4);
+    // TILT TO STEER flashes (owner 2026-08-29): ~1.2 Hz pulse between full
+    // and quarter brightness while the cue is up.  Other cues stay steady.
+    if (shown.text.includes('TILT')) {
+      alpha *= (Math.sin((this.gameTime ?? 0) * 7.5) > 0) ? 1 : 0.22;
+    }
     if (alpha <= 0) {
       // Remember what just faded so it won't immediately re-fire; it only
       // shows again once the computed label changes (see the guard above).
@@ -10878,6 +10886,14 @@ export class GameScene extends Phaser.Scene {
         p.xImpulse = sideDir * (0.5 + impact.severity * 0.5);
         p.speed    = Math.max(400, p.speed * clamp(0.90 - impact.severity * 0.10, 0.74, 0.88));
       }
+      // Snow (owner 2026-08-29): a cop bump on the pass should SLIDE the car
+      // a little — packed snow gives the shove nowhere to grip.  Scales with
+      // the same ramp the steering penalty uses, up to ~2.2× lateral drift at
+      // full cover; dry pavement is untouched.
+      {
+        const _snow = this._snowSteerRamp?.() ?? 0;
+        if (_snow > 0) p.xImpulse *= 1 + _snow * 1.2;
+      }
       this.effects.triggerShake(
         _lightBump ? 90 + impact.severity * 110 : 180 + impact.severity * 220,
         _lightBump ? 0.004 + impact.severity * 0.004 : 0.007 + impact.severity * 0.009);
@@ -13601,8 +13617,12 @@ export class GameScene extends Phaser.Scene {
       this.chaseWipers?.forEach(w => w.setVisible(false));
       return;
     }
-    // Single-speed wiper — always use the fast cycle (was slow/fast).
-    const cycleSec = 0.5;
+    // Single-speed wiper.  1.0 s/cycle = HALF the old 0.5 s sweep (owner
+    // 2026-08-29: "make the wiper image move at 50% of current speed") —
+    // VISUAL only: every per-sweep clearing effect in EffectsSystem was
+    // doubled to match, so rain/snow still clears at the same rate per
+    // second.  Change either side and the other must follow.
+    const cycleSec = 1.0;
     const dt = (this.game?.loop?.delta ?? 16) / 1000;
     const prevPhase = this._wiperPhase ?? 0;
     this._wiperPhase = (prevPhase + dt / cycleSec) % 1;
@@ -19135,6 +19155,19 @@ export class GameScene extends Phaser.Scene {
       fontSize: '18px', fontFamily: IMPACT,
       color: '#FFFF00', stroke: '#000000', strokeThickness: 4, align: 'center',
     }).setOrigin(0.5, 1).setDepth(d + 5);
+    // "📱 New text — X" toasts are TAPPABLE (owner 2026-08-29): tapping one
+    // opens the phone straight into that Messages thread, even in landscape
+    // (no rotation needed to OPEN; resuming still takes the normal rotate-up-
+    // then-back-down cycle).  _showPopup resizes the hit area per toast and
+    // only phone-text popups carry a `_popupTextCid`, so ordinary toasts stay
+    // inert and taps fall through to the road as before.
+    this.hudPopup.setInteractive();
+    if (this.hudPopup.input) this.hudPopup.input.enabled = false;
+    this.hudPopup.on('pointerdown', (ptr) => {
+      if (!this._popupTextCid || (this.popupTimer ?? 0) <= 0) return;
+      ptr.event?.stopPropagation?.();
+      try { window.__openTextThread?.(this._popupTextCid); } catch (_) {}
+    });
 
     // Speed-trap sign — same bottom-centre spot, driven persistently from
     // update(): alternating SLOW DOWN / PULL OVER during the comply window,
@@ -22852,6 +22885,16 @@ export class GameScene extends Phaser.Scene {
   _showPopup(text, color = '#FFFFFF', holdSec = 2.2) {
     this.hudPopup.setText(text).setColor(color);
     const isPhoneText = (typeof text === 'string' && text.startsWith('📱'));
+    // Tap-to-open-thread: callers that log a text set _popupTextCid right
+    // before this; any NON-text popup clears it so a stale cid can't make an
+    // unrelated toast tappable.  The hit area tracks the new text's size and
+    // input is enabled only while a text toast is up, so ordinary toasts
+    // never swallow road taps.
+    if (!isPhoneText) this._popupTextCid = null;
+    if (this.hudPopup.input) {
+      this.hudPopup.input.enabled = isPhoneText && !!this._popupTextCid;
+      this.hudPopup.input.hitArea?.setTo?.(0, 0, this.hudPopup.width, this.hudPopup.height);
+    }
     // Phone-text notifications (📱) and any caller that passes a longer hold
     // (e.g. CHECKPOINT banners) linger +3 s so they're readable while driving.
     // Pickup IDs + gameplay flashes keep the snappy 2.2 s default (per user).
@@ -22944,6 +22987,7 @@ export class GameScene extends Phaser.Scene {
     thread.push({ text, from, mile: Math.round(this._odometer ?? 0), time: this._worldClockLabel() });
     if (thread.length > 12) thread.shift();
     try { window.__notif?.bumpMsg?.(cid); } catch (_) {}   // Messages unread dot
+    this._popupTextCid = cid;   // makes the toast tappable → opens this thread
     this._showPopup('📱 New text — ' + from, '#9FE8FF');
   }
 
@@ -22978,6 +23022,7 @@ export class GameScene extends Phaser.Scene {
     (this._girlThread ??= []).push({ text, mile: Math.round(this._odometer ?? 0), time: this._worldClockLabel() });
     if (this._girlThread.length > 12) this._girlThread.shift();
     try { window.__notif?.bumpMsg?.('girl'); } catch (_) {}   // Messages unread dot
+    if (!quiet) this._popupTextCid = 'girl';   // tappable toast → her thread
     this._showPopup(quiet ? '💕 …' : '📱 New text — The Crush', quiet ? '#C9B6D8' : '#FF9FD0');
   }
 
@@ -25805,6 +25850,10 @@ export class GameScene extends Phaser.Scene {
       : this._trapIgnored                               ? FAIL_REASON.BUSTED_FAILED_STOP
       :                                                   FAIL_REASON.BUSTED_PURSUIT;
     const cp         = this._lastCheckpoint ?? { scoreAtCP: 0, position: 0 };
+    // Wallet BEFORE bail — the ending screen's RESTART must never show a cash
+    // loss (its penalty is starting the drive over), so the outcome math needs
+    // the pre-penalty figure (see endingOutcomes.computeEndingOutcomes).
+    this._endingPrePenaltyCash = Math.round(this.score);
     const earnedSince = Math.max(0, this.score - cp.scoreAtCP);
     let   lost        = Math.floor(earnedSince / 2);
     // Tow-insurance buff (from the Washtucna tow driver) cushions the loss too.
@@ -27041,6 +27090,7 @@ export class GameScene extends Phaser.Scene {
     const _outcomes = computeEndingOutcomes({
       cause,
       finalCash:       Math.round(this.score),
+      prePenaltyCash:  this._endingPrePenaltyCash ?? Math.round(this.score),
       snap:            this._driveStartSnap,
       checkpoint:      this._lastCheckpoint
         ? { name: this._lastCheckpoint.name, position: this._lastCheckpoint.position }

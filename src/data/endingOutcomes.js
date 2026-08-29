@@ -11,11 +11,14 @@
  *
  * Rules encoded here mirror the EXISTING engine behavior (GameScene create's
  * resumeFromPosition branch), not new design:
- *   RESTART DRIVE — restore the drive-start snapshot verbatim: the cash,
- *     position, HP, fuel, wanted level, vice levels and weapon stash the
- *     player had when this drive (or drive segment, after a rest stop /
- *     checkpoint resume) began.  The cost is losing everything that happened
- *     during the drive — gains AND losses.
+ *   RESTART DRIVE — restore the drive-start snapshot (position, HP, fuel,
+ *     wanted level, vice levels, weapon stash) but NEVER at a cash loss
+ *     (owner 2026-08-29: "restart should not receive a cash loss penalty —
+ *     the penalty is starting the game over").  Cash is the BETTER of the
+ *     snapshot wallet and the wallet at the moment of the ending BEFORE the
+ *     ending's own penalty (pre-bail for a bust): a drive that earned money
+ *     keeps the earnings, a drive that spent it still gets the snapshot's
+ *     refund along with the rolled-back purchases.
  *   CONTINUE — resume at the most recent checkpoint with current
  *     consequences kept: busted keeps the post-bail wallet as-is; wreck /
  *     pass-out checkpoint retries cost HALF the remaining cash (the shipped
@@ -42,6 +45,9 @@ export function fmtMoneyDelta(n) {
  *
  * @param cause            _endGame cause ('busted' | 'crash' | 'passed_out' | …)
  * @param finalCash        wallet after the ending's own penalties (bail etc.)
+ * @param prePenaltyCash   wallet at the moment of the ending BEFORE its own
+ *                         penalty (pre-bail).  Optional — defaults to
+ *                         finalCash for endings with no pre-screen charge.
  * @param snap             drive-start snapshot (GameScene._driveStartSnap) or null
  * @param checkpoint       { name, position } — most recent checkpoint, or null
  * @param baseVehicleHp    the vehicle's BASE hp (engine's checkpoint respawn
@@ -50,14 +56,15 @@ export function fmtMoneyDelta(n) {
  * @param totalRouteMiles  total route length in miles
  */
 export function computeEndingOutcomes({
-  cause, finalCash, snap, checkpoint, baseVehicleHp, routeUnits, totalRouteMiles,
+  cause, finalCash, prePenaltyCash, snap, checkpoint, baseVehicleHp, routeUnits, totalRouteMiles,
 }) {
   const toMi = (pos) => Math.max(0, (pos ?? 0) / (routeUnits || 1)) * (totalRouteMiles || 0);
   const cashNow = Math.max(0, Math.round(finalCash ?? 0));
+  const preCash = Math.max(0, Math.round(prePenaltyCash ?? finalCash ?? 0));
 
-  // ── RESTART DRIVE — the snapshot, verbatim ────────────────────────────
+  // ── RESTART DRIVE — the snapshot, but never at a cash loss ────────────
   const restart = snap ? {
-    cash:   Math.max(0, Math.round(snap.cash ?? 0)),
+    cash:   Math.max(0, Math.round(snap.cash ?? 0), preCash),
     mi:     toMi(snap.position),
     loc:    snap.locName ?? null,
     hp:     snap.hp != null ? Math.round(snap.hp) : null,

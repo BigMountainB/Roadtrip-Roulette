@@ -268,6 +268,47 @@ eligibility lapses (e.g. the tail drifting past `PURSUIT_STOP_NEAR`), but the fl
 above 20 mph — so slowing down to pull over wipes it permanently and the stop never fires. The
 dispatch pacing added the same day makes it easier to hit, since cops now sit further back.
 
+### 2026-08-29 (pt 2) — Owner playtest batch: tutorial stars, shop scrollbar, restart cash, pass cue, snow bumps, wipers, HUD genre, tappable texts
+
+Eight owner requests, all clarified via Q&A before building:
+- **Tutorial genre stars** (index.html): during the tutorial's Music step every
+  default ☆ pulses (`#phone-music.tut-star-wait` + `tutStarPulse`) until one is
+  tapped, and the menu CANNOT be quit before then — ✕/CLOSE pop a "⭐ Tap a star
+  to pick your genre first!" toast (`__tut.awaitingStar` gate; `tutGenreStarred`
+  latched by `genrePicked`).  `closeMusicForGameplay` doesn't advance the tour,
+  so it needed no guard.
+- **Storefront scrolling** (RestStopScene): list dragging NO LONGER scrolls —
+  it was ambiguous with selection.  A dedicated scrollbar (track + thumb,
+  `_updateScrollbar`/`_sbGeom`) sits right of the storefront column / inside
+  the sign menus' right edge; drag the thumb or tap the track to jump; wheel
+  unchanged; bar presses eat the tap (`_eatenTapAt`) so a track-tap can't buy
+  the row underneath.  Only shows when content overflows.
+- **Restart = no cash loss** (endingOutcomes + GameScene): RESTART's penalty is
+  starting the drive over, so its cash is now the BETTER of the drive-start
+  snapshot and the PRE-penalty wallet at the ending (`prePenaltyCash`, stashed
+  pre-bail in `_onArrested`).  The bail/half-cash penalties now bite only on
+  CONTINUE.  +4 outcome tests (40 total).
+- **Pass steering cue**: "📱 TILT TO STEER" is now PINK (#FF7AD9) and flashes
+  (~1.2 Hz alpha pulse) while shown; the 1-mile show/fade lifecycle is kept.
+- **Snow cop bumps**: rear rams/bumps multiply their lateral shove by up to
+  2.2× with `_snowSteerRamp` — the car visibly slides on the pass; dry
+  pavement untouched.
+- **Wipers at 50% speed, visual-only** (GameScene cycleSec 0.5→1.0): every
+  per-sweep effect in EffectsSystem doubled (WIPE_WEAR 0.2→0.4, streak build
+  0.45→0.9, thinning factors squared) so clearing per SECOND is unchanged.
+- **HUD genre delay** (AudioSystem): `_startTrack` now syncs `currentStation`
+  to whichever station owns the starting track — custom playlists/shuffle
+  used to leave the index (and the HUD label) a whole song behind.
+- **Tappable "📱 New text — X" toast** (GameScene + index.html): tapping it
+  opens the phone straight into that Messages thread even in landscape
+  (`_popupTextCid` → `window.__openTextThread` → menu-locked + scene pause +
+  `__openThread(cid)`); resuming takes the normal rotate-up-then-back-down
+  cycle (`__textThreadForced` clears on the portrait leg).  Desktop uses the
+  `__phoneMenu` bridge.  Only text toasts are tappable — every other popup
+  clears the cid and keeps its input disabled.
+All suites green (40/256/25/178/37/52/3/187/664) + build clean.  Not yet
+playtested on device.
+
 ### 2026-08-29 — Website: missing images/music fixed (sync-assets was never run here)
 
 - Owner report: images + music missing from the RTR website.  Root cause: the

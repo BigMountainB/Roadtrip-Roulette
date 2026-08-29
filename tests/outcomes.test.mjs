@@ -112,6 +112,37 @@ eq(fmtMoneyDelta(0), '+$0', 'delta zero reads as a (non-)gain, never a loss');
   eq(cont.note, 'HP 13', 'no fee note when nothing was charged');
 }
 
+// ── Restart never at a cash loss (owner 2026-08-29) ──────────────────────
+// The restart penalty is starting the drive over — cash is the BETTER of the
+// snapshot wallet and the pre-penalty wallet at the moment of the ending.
+{
+  // Earned money during the drive, then crashed: restart keeps the earnings.
+  const { restart } = computeEndingOutcomes({
+    cause: 'crash', finalCash: 20500, snap: SNAP, checkpoint: CP,
+    baseVehicleHp: 25, ...ROUTE,
+  });
+  eq(restart.cash, 20500, 'restart keeps drive earnings (no cash loss)');
+}
+{
+  // Busted: bail was charged before the screen — restart uses the PRE-bail
+  // wallet, so the bust's cash penalty applies only to CONTINUE.
+  const { restart, cont } = computeEndingOutcomes({
+    cause: 'busted', finalCash: 7863, prePenaltyCash: 15000, snap: SNAP,
+    checkpoint: CP, baseVehicleHp: 25, ...ROUTE,
+  });
+  eq(restart.cash, 15000, 'busted restart restores the pre-bail wallet');
+  eq(cont.cash, 7863, 'busted continue still pays the bail');
+}
+{
+  // Spent money during the drive (purchases roll back with the snapshot):
+  // the snapshot wallet is the higher figure and wins.
+  const { restart } = computeEndingOutcomes({
+    cause: 'crash', finalCash: 4000, prePenaltyCash: 4000, snap: SNAP,
+    checkpoint: CP, baseVehicleHp: 25, ...ROUTE,
+  });
+  eq(restart.cash, 13984, 'net-spender restart still gets the snapshot refund');
+}
+
 // ── Determinism: computing twice yields identical outcomes (repeat
 // restarts/continues can't drift, because apply == this same object) ─────
 {

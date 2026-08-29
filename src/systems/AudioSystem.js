@@ -887,6 +887,16 @@ export class AudioSystem {
     // Any real-track start that isn't the scan clip cancels scan mode —
     // covers every station/track/playlist path in one place.
     if (url !== RADIO_SCAN_URL) this._radioScanActive = false;
+    // Keep `currentStation` synced to the track that is ACTUALLY starting —
+    // custom-playlist advances (playPlaylist / shuffle) start tracks from any
+    // genre without touching the index, so the HUD genre label (and every
+    // genre-reactive read of currentStation) lagged a whole song behind what
+    // was playing (owner 2026-08-29: "there is a delay before it changes").
+    // The scan clip and non-station audio (si === -1) leave the index alone.
+    {
+      const si = STATIONS.findIndex(s => (s.tracks ?? []).includes(url));
+      if (si >= 0 && si !== this.currentStation) this.currentStation = si;
+    }
     this._stopTrack();
     // Generation token — only the LATEST _startTrack call is allowed
     // to actually wire up audio.  Two taps in quick succession (or a

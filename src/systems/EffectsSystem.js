@@ -455,7 +455,11 @@ export class EffectsSystem {
         }
         return false;
       };
-      const WIPE_WEAR = 0.2;                          // ⅕ per wipe → 5 wipes
+      // 0.4 per wipe (was 0.2): the blade cycle was slowed to 50% for looks
+      // (owner 2026-08-29, GameScene cycleSec 0.5→1.0), so every PER-SWEEP
+      // effect here doubles to keep the per-SECOND clearing rate identical —
+      // a drop still fully clears in ~2.5 s of running wipers.
+      const WIPE_WEAR = 0.4;
       // Blade QUALITY (owner 2026-08-27): both blade tiers wipe the same
       // ⅕-per-pass, but STOCK blades (wiperPower < 1) are old rubber — they
       // SMEAR instead of squeegee.  Two residues, both shaped by the arc:
@@ -466,7 +470,9 @@ export class EffectsSystem {
       const wxWp = Math.max(0, Math.min(1, ctx.wiperPower ?? 1));
       if (this._wiperStreak == null) this._wiperStreak = 0;
       if (ctx.wiperSweepPulse && ctx.wiperZones && wxWp < 1) {
-        this._wiperStreak = Math.min(1, this._wiperStreak + 0.45 * (1 - wxWp));
+        // 0.9 (was 0.45) — doubled with the half-speed sweep, same rule as
+        // WIPE_WEAR above, so streaks accumulate at the same rate per second.
+        this._wiperStreak = Math.min(1, this._wiperStreak + 0.9 * (1 - wxWp));
       }
       // Rain re-wets the glass and washes streaks off over ~20 s.
       this._wiperStreak = Math.max(0, this._wiperStreak - 0.05 * dt);
@@ -605,8 +611,8 @@ export class EffectsSystem {
                 d.wipe   = 0.55;
                 d.alpha *= 0.70;
               } else {
-                d.r     *= 0.85;                        // visibly thins per pass
-                d.alpha *= 0.80;
+                d.r     *= 0.72;   // squared (was 0.85) — half as many sweeps/s
+                d.alpha *= 0.64;   // squared (was 0.80) — same thinning per second
                 d.trail  = (d.trail || 0) * 0.70;
               }
             }
@@ -756,8 +762,8 @@ export class EffectsSystem {
                 f.wipe = 0.55;
                 f.a   *= 0.65;
               } else {
-                f.a *= 0.80;
-                f.r *= 0.87;
+                f.a *= 0.64;   // squared (was 0.80) — half as many sweeps/s
+                f.r *= 0.76;   // squared (was 0.87) — same scrape per second
               }
             }
             survivors.push(f);

@@ -1443,27 +1443,44 @@ export class RestStopScene extends Phaser.Scene {
       }).setOrigin(0.5).setVisible(false);
     }
 
-    // ── Wheel + drag scroll for sub-menus ────────────────────────────
+    // ── Wheel + SCROLLBAR scroll for sub-menus (owner 2026-08-29) ────
+    // Dragging the LIST no longer scrolls it — a finger on the items was
+    // ambiguous ("it either scrolls the menu or moves the selection with
+    // the finger"), so scrolling moved to a dedicated bar beside the
+    // column (drag the thumb, or tap anywhere on the track to jump).
+    // Touching list items now only ever selects (buy stays on a clean
+    // pointer-UP tap).  Mouse wheel still scrolls directly.
     this.input.on('wheel', (_p, _go, _dx, dy) => {
       if (!this._activeSection) return;
       this._scrollSection(this._activeSection, dy * 0.5);
     });
-    let dragStartY = null;
     this.input.on('pointerdown', (ptr) => {
-      if (!this._activeSection) return;
-      // Only start drag if the press lands in the content area.
-      if (ptr.x < this._contentX || ptr.x > this._contentX + this._contentW) return;
-      if (ptr.y < this._contentY || ptr.y > this._contentY + this._contentH) return;
-      dragStartY = ptr.y;
-      this._dragStartScroll = this._sectionScroll[this._activeSection] ?? 0;
+      const g = this._sbGeom;
+      if (!g || !this._activeSection) return;
+      // Generous ±10px halo so a thumb-width bar is grabbable on touch.
+      if (ptr.x < g.x - 10 || ptr.x > g.x + g.w + 10) return;
+      if (ptr.y < g.y || ptr.y > g.y + g.h) return;
+      // In sign menus the bar overlaps the buttons' right edge — eat this
+      // tap so the release can't ALSO fire a buy on the row underneath
+      // (_tapBlocked reads _eatenTapAt in every buy handler).
+      this._eatenTapAt = ptr.downTime;
+      // Track-tap: center the thumb on the touch, then let the same press
+      // keep dragging from there.
+      const frac = Math.max(0, Math.min(1,
+        (ptr.y - g.y - g.thumbH / 2) / Math.max(1, g.h - g.thumbH)));
+      this._setSectionScroll(this._activeSection, frac * g.max);
+      this._sbDrag = { startY: ptr.y, startScroll: this._sectionScroll[this._activeSection] ?? 0 };
     });
     this.input.on('pointermove', (ptr) => {
-      if (dragStartY == null || !this._activeSection) return;
-      if (!ptr.isDown) { dragStartY = null; return; }
-      const dy = ptr.y - dragStartY;
-      this._setSectionScroll(this._activeSection, this._dragStartScroll - dy);
+      if (!this._sbDrag || !this._activeSection) return;
+      if (!ptr.isDown) { this._sbDrag = null; return; }
+      const g = this._sbGeom;
+      if (!g) return;
+      const scale = g.max / Math.max(1, g.h - g.thumbH);   // bar px → content px
+      this._setSectionScroll(this._activeSection,
+        this._sbDrag.startScroll + (ptr.y - this._sbDrag.startY) * scale);
     });
-    this.input.on('pointerup', () => { dragStartY = null; });
+    this.input.on('pointerup', () => { this._sbDrag = null; });
 
     this._showLanding();
 
@@ -2349,6 +2366,7 @@ export class RestStopScene extends Phaser.Scene {
     this._gateTaps();
     this._screenStack = ['landing'];
     this._activeSection = null;
+    this._updateScrollbar();       // no section → bar hides
     this._applyShopChrome(null);   // back to the blue highway sign
     this._hideAllScreens();
     for (const obj of (this._landingObjs ?? [])) obj.setVisible?.(true);
@@ -2369,6 +2387,7 @@ export class RestStopScene extends Phaser.Scene {
     this._applyShopChrome(this._activeDealerKey);
     this._screenStack = ['landing', 'dealer'];
     this._activeSection = null;
+    this._updateScrollbar();       // no section → bar hides
     this._hideAllScreens();
     this._dealerCarsSubLbl?.setText?.(this._activeDealerBrand ?? this._brands?.dealer?.name ?? '');
     for (const obj of (this._dealerChooserObjs ?? [])) obj.setVisible?.(true);
@@ -2494,6 +2513,7 @@ export class RestStopScene extends Phaser.Scene {
     if (this._sectionContainers?.[key]) {
       this._sectionContainers[key].setVisible(true);
     }
+    this._updateScrollbar();
     this._backBtnBg?.setVisible(true);
     this._backMetal?.gfx.setVisible(true);
     this._backBtnLbl?.setVisible(true);
@@ -2701,9 +2721,45 @@ export class RestStopScene extends Phaser.Scene {
     this._sectionScroll[key] = clamped;
     const c = this._sectionContainers[key];
     if (c) c.y = -clamped;
+    this._updateScrollbar();
   }
   _scrollSection(key, dy) {
     this._setSectionScroll(key, (this._sectionScroll[key] ?? 0) + dy);
+  }
+
+  /** Draw/refresh the section scrollbar (owner 2026-08-29 — list dragging no
+   *  longer scrolls; this bar is THE touch scroll control).  Lazily builds a
+   *  track + thumb pair, shows them only when the active section's content
+   *  actually overflows, and publishes the geometry (`_sbGeom`) the input
+   *  handlers hit-test against.  Storefront columns get the bar just RIGHT
+   *  of the column (over the art's dead space); sign menus keep it inside
+   *  their right edge. */
+  _updateScrollbar() {
+    const SB_W = 12;
+    if (!this._sbTrack) {
+      this._sbTrack = this.add.rectangle(0, 0, SB_W, 10, 0x0A1626, 0.60)
+        .setOrigin(0, 0).setDepth(60).setVisible(false)
+        .setStrokeStyle(1, 0x39A8FF, 0.45);
+      this._sbThumb = this.add.rectangle(0, 0, SB_W - 4, 10, 0x39A8FF, 0.9)
+        .setOrigin(0, 0).setDepth(61).setVisible(false);
+    }
+    const key = this._activeSection;
+    const contentH = key ? (this._sectionContentH?.[key] ?? 0) : 0;
+    const r = key ? this._contentRectFor(key) : null;
+    if (!key || !r || contentH <= r.h + 4) {
+      this._sbTrack.setVisible(false);
+      this._sbThumb.setVisible(false);
+      this._sbGeom = null;
+      return;
+    }
+    const x = FULL_BLEED.has(key) ? r.x + r.w + 6 : r.x + r.w - SB_W;
+    const max    = contentH - r.h;
+    const thumbH = Math.max(26, r.h * (r.h / contentH));
+    const frac   = Math.max(0, Math.min(1, (this._sectionScroll[key] ?? 0) / max));
+    this._sbTrack.setPosition(x, r.y).setSize(SB_W, r.h).setVisible(true);
+    this._sbThumb.setPosition(x + 2, r.y + (r.h - thumbH) * frac)
+      .setSize(SB_W - 4, thumbH).setVisible(true);
+    this._sbGeom = { x, y: r.y, w: SB_W, h: r.h, thumbH, max };
   }
 
   /**

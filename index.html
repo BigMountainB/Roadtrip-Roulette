@@ -658,6 +658,22 @@
       background: #1E5BB8; border-color: #FFE066;
       box-shadow: 0 0 9px rgba(255,224,102,0.85);
     }
+    /* Tutorial genre step (owner 2026-08-29): until a default ☆ is chosen,
+       every star pulses so it's obvious ONE must be picked.  The class is
+       set by the tutorial (tut-star-wait on #phone-music) and dropped the
+       moment a star is tapped. */
+    #phone-music.tut-star-wait .genre-default {
+      animation: tutStarPulse 0.85s ease-in-out infinite;
+    }
+    @keyframes tutStarPulse {
+      0%, 100% { transform: scale(1); }
+      50% {
+        transform: scale(1.35);
+        color: #FFD24D;
+        border-color: #FFD24D;
+        box-shadow: 0 0 12px rgba(255,210,77,0.95);
+      }
+    }
     /* "DEFAULT" label — sits just below the star (top-left), out of flow so
        it never changes the tile's height. */
     #phone-music .genre-default-lbl {
@@ -3782,19 +3798,39 @@
           renderMusic();
           return;
         }
-        // GENRE grid view → CLOSE the music app.
+        // GENRE grid view → CLOSE the music app.  During the tutorial's
+        // genre step the menu CANNOT be quit until a default ☆ is chosen
+        // (owner 2026-08-29) — trying pops the pick-a-star reminder instead.
+        if (window.__tut?.awaitingStar?.()) { starPickToast(); return; }
         musicModal.classList.remove('open');
         releaseWakeLock();
         markModalClosing();
         try { window.__tut?.musicClosed?.(); } catch (_) {}
       });
-      // Corner ✕ — always fully closes the music app (matches every other menu).
+      // Corner ✕ — always fully closes the music app (matches every other
+      // menu) — EXCEPT during the tutorial's genre step before a star is
+      // picked (same guard as CLOSE above).
       addTap(document.getElementById('phone-music-x'), () => {
+        if (window.__tut?.awaitingStar?.()) { starPickToast(); return; }
         musicModal.classList.remove('open');
         releaseWakeLock();
         markModalClosing();
         try { window.__tut?.musicClosed?.(); } catch (_) {}
       });
+      // "Pick a star first" reminder for the guarded closes above.
+      let _starToastEl = null;
+      function starPickToast() {
+        if (_starToastEl) _starToastEl.remove();
+        const t = document.createElement('div');
+        t.textContent = '⭐ Tap a star to pick your genre first!';
+        t.style.cssText = 'position:fixed;left:50%;bottom:16%;transform:translateX(-50%);z-index:100001;'
+          + 'background:#04101e;color:#FFD24D;border:2px solid #FFD24D;border-radius:10px;'
+          + 'padding:12px 22px;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;'
+          + 'white-space:nowrap;';
+        document.body.appendChild(t);
+        _starToastEl = t;
+        setTimeout(() => { if (_starToastEl === t) { t.remove(); _starToastEl = null; } }, 2200);
+      }
       // Music app — short tap opens the modal; long-hold toggles mute
       // without opening anything.  Visual indicator added below.
       const musicHit = document.querySelector('.phone-hit[data-action="music"]');
@@ -4427,8 +4463,48 @@
           if (cid === 'girl') renderGirl();
           else if (BUDDY_NAMES[cid]) renderBuddy(cid);
         };
+        // Deep-link for the in-game "📱 New text" toast (owner 2026-08-29) —
+        // the render closures only exist while this handler runs, so publish
+        // the thread opener each time the app is built.
+        window.__openThread = renderContact;
         renderList();
       });
+
+      // Tap the in-game "📱 New text — X" toast → the phone opens STRAIGHT
+      // into that Messages thread, even in landscape (owner 2026-08-29).
+      // Mobile: force the portrait menu up (menu-locked) + pause the scene;
+      // the player then resumes the normal way — rotate up to portrait
+      // (which clears the force flag) and back down to landscape.  Desktop:
+      // the __phoneMenu bridge already pauses/opens with its own buttons.
+      window.__openTextThread = (cid) => {
+        try {
+          if (window.__isDesktop) {
+            window.__phoneMenu?.open?.();
+          } else {
+            document.body.classList.add('menu-locked');
+            window.__textThreadForced = true;
+            try { window.__phaserGame?.scene?.pause?.('Game'); } catch (_) {}
+            requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+          }
+          // Build the Messages app (its closures live in the tile handler),
+          // then jump to the thread once the DOM has painted.
+          qhit('messages')?.dispatchEvent(new Event('click'));
+          requestAnimationFrame(() => { try { window.__openThread?.(cid); } catch (_) {} });
+        } catch (_) {}
+      };
+      // Rotating up to portrait completes the tap-open's forced state — from
+      // there the ordinary orientation flow owns pause/resume, so rotating
+      // back down lands in the usual tap-to-resume hold.
+      {
+        const _clearTextForce = () => requestAnimationFrame(() => {
+          if (window.__textThreadForced && window.innerHeight > window.innerWidth) {
+            window.__textThreadForced = false;
+            document.body.classList.remove('menu-locked');
+          }
+        });
+        window.addEventListener('resize', _clearTextForce);
+        window.addEventListener('orientationchange', _clearTextForce);
+      }
 
       // First-ever-play nudge: the Tutorial tile pulses until the player opens
       // it the first time, then never again (persisted in localStorage).
@@ -4481,6 +4557,7 @@
       let tutActive = false, tutIdx = -1, tutPhase = 'highlight';   // tutIdx -1 = Tutorial starter
       let tutAwaitGenre = false;   // Music step: in the genre-pick step (text box or browse)
       let tutMusicBrowse = false;  // Music step phase B: text dismissed, player is auditioning genres
+      let tutGenreStarred = false; // Music step: a default ☆ has been chosen (gates closing the menu)
       let tutRotateWait = false;   // Final portrait step: locked until the player ROTATES to landscape
       const tutQhit = (a) => document.querySelector('.phone-hit[data-action="' + a + '"]');
       const tutClearFlash = () => document.querySelectorAll('.phone-hit.tut-flash').forEach(b => b.classList.remove('tut-flash'));
@@ -4506,6 +4583,8 @@
       const tutClearGenreWait = () => {
         tutAwaitGenre = false;
         tutMusicBrowse = false;
+        tutGenreStarred = false;
+        document.getElementById('phone-music')?.classList.remove('tut-star-wait');
         tutCap.classList.remove('pass'); tutBox.classList.remove('pass');
         const n = tutBox.querySelector('.tq-next'); if (n) n.textContent = 'next ❯';
       };
@@ -4535,6 +4614,11 @@
         if (step.pickGenre) {
           tutAwaitGenre = true;
           tutMusicBrowse = false;
+          // Blink every default ☆ until one is picked (owner 2026-08-29) —
+          // the genre menu also refuses to close until then (see the close
+          // handlers' awaitingStar guard).
+          tutGenreStarred = false;
+          document.getElementById('phone-music')?.classList.add('tut-star-wait');
           // Hide HOLD TO SKIP — it sits over the music menu's ✕ / CLOSE, which is
           // how the player advances this step (owner 2026-07-18).
           tutSkip.classList.remove('on');
@@ -4587,7 +4671,13 @@
         // New flow: picking a genre ☆ sets the default but does NOT advance —
         // the player keeps auditioning. CLOSING the music menu (in browse mode)
         // is what advances the tutorial.
-        genrePicked: () => {},
+        genrePicked: () => {
+          tutGenreStarred = true;
+          document.getElementById('phone-music')?.classList.remove('tut-star-wait');
+        },
+        // True while the tutorial's genre step still needs a default ☆ —
+        // the music menu's ✕/CLOSE refuse to quit while this holds.
+        awaitingStar: () => tutActive && tutAwaitGenre && !tutGenreStarred,
         musicClosed: () => { if (tutActive && tutAwaitGenre && tutMusicBrowse) tutFinishGenre(); },
       };
 
