@@ -35,7 +35,7 @@ eq(fmtMoneyDelta(0), '+$0', 'delta zero reads as a (non-)gain, never a loss');
     cause: 'crash', finalCash: 7863, snap: SNAP, checkpoint: CP,
     baseVehicleHp: 25, ...ROUTE,
   });
-  eq(restart.cash, 13984, 'crash restart restores drive-start cash');
+  eq(restart.cash, 7863, 'crash restart keeps the current wallet (money is kept, purchases reset)');
   eq(restart.mi, 0, 'crash restart returns to drive-start mileage');
   eq(restart.loc, 'West Seattle', 'restart location from snapshot');
   eq(restart.hp, 100, 'restart HP from snapshot');
@@ -112,40 +112,47 @@ eq(fmtMoneyDelta(0), '+$0', 'delta zero reads as a (non-)gain, never a loss');
   eq(cont.note, 'HP 13', 'no fee note when nothing was charged');
 }
 
-// ── Restart = run-start snapshot, VERBATIM (owner 2026-08-29) ────────────
-// The snapshot taken at the start of every game (money + inventory + stats)
-// is THE reset point: restart rewinds to it exactly — mid-run earnings AND
-// mid-run purchases (upgrades) go away together, and no ending penalty
-// (bail / half-cash) is layered on top.  Cash penalties bite only CONTINUE.
+// ── Restart keeps the MONEY; everything else resets (owner 2026-08-29,
+// final form: "it only keeps the money on a reset — all purchases go
+// back").  Inventory/stats/position rewind to the run-start snapshot,
+// the wallet stays at its pre-penalty (pre-bail) value, and the ending's
+// cash penalties bite only CONTINUE.  Removed purchases are NOT refunded.
 {
-  // Earned money during the run, then crashed: restart resets to run-start
-  // money regardless — the current wallet never leaks into the reset.
+  // Earned money during the run, then crashed: restart keeps the earnings.
   const { restart } = computeEndingOutcomes({
     cause: 'crash', finalCash: 20500, snap: SNAP, checkpoint: CP,
     baseVehicleHp: 25, ...ROUTE,
   });
-  eq(restart.cash, 13984, 'restart resets earnings back to run-start cash');
+  eq(restart.cash, 20500, 'restart keeps the current wallet (earnings included)');
+  ok(restart.snap === SNAP, 'restart still applies THE snapshot (upgrade maps, stats)');
 }
 {
-  // Busted: bail was charged before the screen — restart ignores it entirely
-  // (snapshot cash), continue keeps the post-bail wallet.
+  // Busted: bail was charged before the screen — restart uses the PRE-bail
+  // wallet (no penalty layered on a restart); continue pays the bail.
   const { restart, cont } = computeEndingOutcomes({
-    cause: 'busted', finalCash: 7863, snap: SNAP,
+    cause: 'busted', finalCash: 7863, prePenaltyCash: 15000, snap: SNAP,
     checkpoint: CP, baseVehicleHp: 25, ...ROUTE,
   });
-  eq(restart.cash, 13984, 'busted restart = run-start cash, bail not layered on');
+  eq(restart.cash, 15000, 'busted restart keeps the pre-bail wallet');
   eq(cont.cash, 7863, 'busted continue still pays the bail');
 }
 {
-  // Net spender (bought upgrades mid-run): the snapshot refunds the money
-  // WITH the upgrades rolled back — snap carries the run-start maps that
-  // _applyRestartOutcome writes over the save.
+  // Net spender (bought upgrades mid-run): the money stays SPENT — the
+  // purchases go back without a refund, wallet stays at its current value.
   const { restart } = computeEndingOutcomes({
-    cause: 'crash', finalCash: 4000, snap: SNAP, checkpoint: CP,
+    cause: 'crash', finalCash: 4000, prePenaltyCash: 4000, snap: SNAP,
+    checkpoint: CP, baseVehicleHp: 25, ...ROUTE,
+  });
+  eq(restart.cash, 4000, 'net-spender restart: purchases removed, money not refunded');
+}
+{
+  // No prePenaltyCash passed (endings with no pre-screen charge) → falls
+  // back to finalCash, never the snapshot wallet.
+  const { restart } = computeEndingOutcomes({
+    cause: 'passed_out', finalCash: 620, snap: SNAP, checkpoint: CP,
     baseVehicleHp: 25, ...ROUTE,
   });
-  eq(restart.cash, 13984, 'net-spender restart refunds to run-start cash');
-  ok(restart.snap === SNAP, 'restart applies THE snapshot (upgrade maps included)');
+  eq(restart.cash, 620, 'prePenaltyCash defaults to finalCash');
 }
 
 // ── Determinism: computing twice yields identical outcomes (repeat

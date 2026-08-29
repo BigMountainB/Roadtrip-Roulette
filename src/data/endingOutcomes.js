@@ -11,15 +11,16 @@
  *
  * Rules encoded here mirror the EXISTING engine behavior (GameScene create's
  * resumeFromPosition branch), not new design:
- *   RESTART DRIVE — restore the RUN-START snapshot VERBATIM (owner
- *     2026-08-29: "a snapshot of the player's inventory, money and stats,
- *     taken at the start of every game, is the reset point if restart is
- *     chosen").  Money, position, HP, fuel, wanted level, vice levels,
+ *   RESTART DRIVE — reset to the RUN-START snapshot, EXCEPT MONEY (owner
+ *     2026-08-29, final form: "it only keeps the money on a reset — all
+ *     purchases go back").  Position, HP, fuel, wanted level, vice levels,
  *     weapon stash, vehicle and the upgrade/accessory maps all rewind to
- *     exactly what the run began with — upgrades bought during the run are
- *     taken away along with the money that bought them, and NO ending
- *     penalty (bail / half-cash) is layered on top: the penalty of a
- *     restart is starting the game over, nothing else.
+ *     the run-start snapshot — upgrades bought during the run are taken
+ *     away — while the WALLET stays what it was at the moment of the
+ *     ending, BEFORE the ending's own penalty (pre-bail for a bust).  No
+ *     bail / half-cash is layered onto a restart: its penalty is starting
+ *     the game over.  Money spent on the removed purchases is NOT
+ *     refunded — the run consumed it.
  *   CONTINUE — resume at the most recent checkpoint with current
  *     consequences kept: busted keeps the post-bail wallet as-is; wreck /
  *     pass-out checkpoint retries cost HALF the remaining cash (the shipped
@@ -46,6 +47,9 @@ export function fmtMoneyDelta(n) {
  *
  * @param cause            _endGame cause ('busted' | 'crash' | 'passed_out' | …)
  * @param finalCash        wallet after the ending's own penalties (bail etc.)
+ * @param prePenaltyCash   wallet at the moment of the ending BEFORE its own
+ *                         penalty (pre-bail).  Optional — defaults to
+ *                         finalCash for endings with no pre-screen charge.
  * @param snap             run-start snapshot (GameScene._driveStartSnap /
  *                         registry 'runStartSnap') or null
  * @param checkpoint       { name, position } — most recent checkpoint, or null
@@ -55,14 +59,14 @@ export function fmtMoneyDelta(n) {
  * @param totalRouteMiles  total route length in miles
  */
 export function computeEndingOutcomes({
-  cause, finalCash, snap, checkpoint, baseVehicleHp, routeUnits, totalRouteMiles,
+  cause, finalCash, prePenaltyCash, snap, checkpoint, baseVehicleHp, routeUnits, totalRouteMiles,
 }) {
   const toMi = (pos) => Math.max(0, (pos ?? 0) / (routeUnits || 1)) * (totalRouteMiles || 0);
   const cashNow = Math.max(0, Math.round(finalCash ?? 0));
 
-  // ── RESTART DRIVE — the run-start snapshot, verbatim ──────────────────
+  // ── RESTART DRIVE — run-start snapshot, but the money is KEPT ─────────
   const restart = snap ? {
-    cash:   Math.max(0, Math.round(snap.cash ?? 0)),
+    cash:   Math.max(0, Math.round(prePenaltyCash ?? finalCash ?? 0)),
     mi:     toMi(snap.position),
     loc:    snap.locName ?? null,
     hp:     snap.hp != null ? Math.round(snap.hp) : null,

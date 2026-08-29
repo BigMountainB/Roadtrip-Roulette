@@ -2222,6 +2222,7 @@ export class GameScene extends Phaser.Scene {
     this._finishCause     = null;
     this._statsTripEnded = false;   // one-shot guard for the stats trip-end hook
     this._arrestHandled  = false;   // one-shot guard so a bust charges bail once
+    this._endingPrePenaltyCash = null;   // pre-bail wallet stash for the ending outcomes
     // Per-texture caches (angle-frame sizing + tire-contact anchors) —
     // rebuilt every create so a genre-art swap (same texture keys, new
     // pixels) can't serve stale content boxes or anchors.
@@ -3911,10 +3912,15 @@ export class GameScene extends Phaser.Scene {
     const shown = this._snowCueShown;
     if (!shown) { if (cue.visible) cue.setVisible(false); return; }
     const age = (this._odometer ?? 0) - shown.startMile;
-    let alpha = age <= 1 ? 1 : Math.max(0, 1 - (age - 1) / 0.4);
+    // TILT TO STEER shows for HALF A MILE at most (owner 2026-08-29):
+    // 0.35 mi full + 0.15 mi fade.  Other cues keep the 1 mi + 0.4 mi arc.
+    const _isTilt = shown.text.includes('TILT');
+    const _fullMi = _isTilt ? 0.35 : 1;
+    const _fadeMi = _isTilt ? 0.15 : 0.4;
+    let alpha = age <= _fullMi ? 1 : Math.max(0, 1 - (age - _fullMi) / _fadeMi);
     // TILT TO STEER flashes (owner 2026-08-29): ~1.2 Hz pulse between full
     // and quarter brightness while the cue is up.  Other cues stay steady.
-    if (shown.text.includes('TILT')) {
+    if (_isTilt) {
       alpha *= (Math.sin((this.gameTime ?? 0) * 7.5) > 0) ? 1 : 0.22;
     }
     if (alpha <= 0) {
@@ -25849,6 +25855,10 @@ export class GameScene extends Phaser.Scene {
       : this._trapIgnored                               ? FAIL_REASON.BUSTED_FAILED_STOP
       :                                                   FAIL_REASON.BUSTED_PURSUIT;
     const cp         = this._lastCheckpoint ?? { scoreAtCP: 0, position: 0 };
+    // Wallet BEFORE bail — RESTART keeps the player's money (only purchases
+    // go back), so the outcome math needs the pre-penalty figure; bail bites
+    // only on CONTINUE (see endingOutcomes.computeEndingOutcomes).
+    this._endingPrePenaltyCash = Math.round(this.score);
     const earnedSince = Math.max(0, this.score - cp.scoreAtCP);
     let   lost        = Math.floor(earnedSince / 2);
     // Tow-insurance buff (from the Washtucna tow driver) cushions the loss too.
@@ -27085,6 +27095,7 @@ export class GameScene extends Phaser.Scene {
     const _outcomes = computeEndingOutcomes({
       cause,
       finalCash:       Math.round(this.score),
+      prePenaltyCash:  this._endingPrePenaltyCash ?? Math.round(this.score),
       snap:            this._driveStartSnap,
       checkpoint:      this._lastCheckpoint
         ? { name: this._lastCheckpoint.name, position: this._lastCheckpoint.position }

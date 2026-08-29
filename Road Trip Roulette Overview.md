@@ -268,6 +268,26 @@ eligibility lapses (e.g. the tail drifting past `PURSUIT_STOP_NEAR`), but the fl
 above 20 mph — so slowing down to pull over wipes it permanently and the stop never fires. The
 dispatch pacing added the same day makes it easier to hit, since cops now sit further back.
 
+### 2026-08-29 (pt 4) — Owner corrections: drag-scroll restored, restart keeps money only, tilt cue ½ mi
+
+Three second-pass corrections on today's batch (each supersedes its earlier form):
+- **Shops scroll on drag. Period.** (supersedes pt 2's scrollbar-only design):
+  dragging anywhere in the list scrolls it again (`DRAG_SLOP` 10 px arms
+  `_dragScrolling`); the scrollbar stays as an indicator that can also be
+  dragged/track-tapped.  "No selection on drag" is enforced in MetalUI.dress:
+  while `scene._dragScrolling` holds, rows under the moving finger show NO
+  hover/press lift, and the buy handlers' TAP_MAX_DRIFT gate already blocks
+  the release — a clean, motionless tap is the only thing that selects.
+- **Restart keeps the MONEY; all purchases go back** (supersedes pt 3's
+  full-verbatim snapshot): inventory/stats/position/upgrades reset to
+  `runStartSnap`, but the wallet stays at its PRE-penalty value at the ending
+  (pre-bail; `prePenaltyCash` re-added).  Removed purchases are NOT refunded —
+  the run consumed that money.  Bail/half-cash still bite only CONTINUE.
+  GameOverScene's walletStore rewind now writes the kept figure.  42 outcome
+  tests green.
+- **TILT TO STEER shows ≤ ½ mile**: 0.35 mi full + 0.15 mi fade (was 1 + 0.4);
+  still pink + flashing; the other snow/wind cues keep the 1-mile arc.
+
 ### 2026-08-29 (pt 3) — Restart = run-start snapshot VERBATIM (supersedes pt 2's cash rule)
 
 - Owner refinement: "a restart takes away upgrades on that run — a snapshot of

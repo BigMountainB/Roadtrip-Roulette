@@ -1443,44 +1443,65 @@ export class RestStopScene extends Phaser.Scene {
       }).setOrigin(0.5).setVisible(false);
     }
 
-    // ── Wheel + SCROLLBAR scroll for sub-menus (owner 2026-08-29) ────
-    // Dragging the LIST no longer scrolls it — a finger on the items was
-    // ambiguous ("it either scrolls the menu or moves the selection with
-    // the finger"), so scrolling moved to a dedicated bar beside the
-    // column (drag the thumb, or tap anywhere on the track to jump).
-    // Touching list items now only ever selects (buy stays on a clean
-    // pointer-UP tap).  Mouse wheel still scrolls directly.
+    // ── Wheel + drag + scrollbar scroll for sub-menus ────────────────
+    // Owner 2026-08-29 (second pass): "it should scroll on drag. Period.
+    // No selection on drag."  So: dragging ANYWHERE in the list scrolls
+    // it; the moment a press moves past DRAG_SLOP it becomes a scroll —
+    // `_dragScrolling` flips on, MetalUI suppresses its hover/press
+    // visuals for that pointer (no row lights up under a scrolling
+    // finger), and every buy handler's TAP_MAX_DRIFT gate already keeps
+    // the release from selecting.  A clean tap (no movement) is the ONLY
+    // thing that selects.  The scrollbar stays as a position indicator
+    // that can also be dragged / track-tapped; mouse wheel unchanged.
     this.input.on('wheel', (_p, _go, _dx, dy) => {
       if (!this._activeSection) return;
       this._scrollSection(this._activeSection, dy * 0.5);
     });
+    const DRAG_SLOP = 10;
+    let dragStartY = null;
     this.input.on('pointerdown', (ptr) => {
+      if (!this._activeSection) return;
+      this._dragScrolling = false;
+      // Scrollbar press — thumb drag or track-tap jump.
       const g = this._sbGeom;
-      if (!g || !this._activeSection) return;
-      // Generous ±10px halo so a thumb-width bar is grabbable on touch.
-      if (ptr.x < g.x - 10 || ptr.x > g.x + g.w + 10) return;
-      if (ptr.y < g.y || ptr.y > g.y + g.h) return;
-      // In sign menus the bar overlaps the buttons' right edge — eat this
-      // tap so the release can't ALSO fire a buy on the row underneath
-      // (_tapBlocked reads _eatenTapAt in every buy handler).
-      this._eatenTapAt = ptr.downTime;
-      // Track-tap: center the thumb on the touch, then let the same press
-      // keep dragging from there.
-      const frac = Math.max(0, Math.min(1,
-        (ptr.y - g.y - g.thumbH / 2) / Math.max(1, g.h - g.thumbH)));
-      this._setSectionScroll(this._activeSection, frac * g.max);
-      this._sbDrag = { startY: ptr.y, startScroll: this._sectionScroll[this._activeSection] ?? 0 };
+      if (g && ptr.x >= g.x - 10 && ptr.x <= g.x + g.w + 10
+            && ptr.y >= g.y && ptr.y <= g.y + g.h) {
+        // Bar overlaps the buttons' right edge in sign menus — eat the tap
+        // so the release can't ALSO buy the row underneath (_tapBlocked).
+        this._eatenTapAt = ptr.downTime;
+        const frac = Math.max(0, Math.min(1,
+          (ptr.y - g.y - g.thumbH / 2) / Math.max(1, g.h - g.thumbH)));
+        this._setSectionScroll(this._activeSection, frac * g.max);
+        this._sbDrag = { startY: ptr.y, startScroll: this._sectionScroll[this._activeSection] ?? 0 };
+        return;
+      }
+      // List press — arms a potential drag-scroll.
+      if (ptr.x < this._contentX || ptr.x > this._contentX + this._contentW) return;
+      if (ptr.y < this._contentY || ptr.y > this._contentY + this._contentH) return;
+      dragStartY = ptr.y;
+      this._dragStartScroll = this._sectionScroll[this._activeSection] ?? 0;
     });
     this.input.on('pointermove', (ptr) => {
-      if (!this._sbDrag || !this._activeSection) return;
-      if (!ptr.isDown) { this._sbDrag = null; return; }
-      const g = this._sbGeom;
-      if (!g) return;
-      const scale = g.max / Math.max(1, g.h - g.thumbH);   // bar px → content px
-      this._setSectionScroll(this._activeSection,
-        this._sbDrag.startScroll + (ptr.y - this._sbDrag.startY) * scale);
+      if (!this._activeSection) return;
+      if (!ptr.isDown) { dragStartY = null; this._sbDrag = null; this._dragScrolling = false; return; }
+      if (this._sbDrag) {
+        const g = this._sbGeom;
+        if (!g) return;
+        const scale = g.max / Math.max(1, g.h - g.thumbH);   // bar px → content px
+        this._setSectionScroll(this._activeSection,
+          this._sbDrag.startScroll + (ptr.y - this._sbDrag.startY) * scale);
+        return;
+      }
+      if (dragStartY == null) return;
+      const dy = ptr.y - dragStartY;
+      if (!this._dragScrolling && Math.abs(dy) > DRAG_SLOP) this._dragScrolling = true;
+      if (this._dragScrolling) this._setSectionScroll(this._activeSection, this._dragStartScroll - dy);
     });
-    this.input.on('pointerup', () => { this._sbDrag = null; });
+    this.input.on('pointerup', () => {
+      dragStartY = null;
+      this._sbDrag = null;
+      this._dragScrolling = false;
+    });
 
     this._showLanding();
 

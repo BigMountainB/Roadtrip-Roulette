@@ -212,10 +212,17 @@ export function dress(scene, rect, opts = {}) {
   rect.setFillStyle(0x000000, 0.001);   // hit area only; the metal is the Graphics
   rect.setStrokeStyle();
   if (opts.state !== 'disabled') {
-    rect.on('pointerover', () => set('hover'));
+    // Drag-scroll guard (owner 2026-08-29: "no selection on drag"): while
+    // the scene has flagged an active list drag (`scene._dragScrolling`),
+    // rows passing under the moving finger must NOT light up — the
+    // hover/press lift reading as "the selection moves with the finger"
+    // was the whole complaint.  A held pointer sweeping over a row is a
+    // scroll; only pointer motion without the flag is a real hover.
+    const _scrolling = (p) => !!(p?.isDown && rect.scene?._dragScrolling);
+    rect.on('pointerover', (p) => { if (!_scrolling(p)) set('hover'); });
     rect.on('pointerout',  () => set('idle'));
     rect.on('pointerdown', () => set('down'));
-    rect.on('pointerup',   () => set('hover'));
+    rect.on('pointerup',   (p) => set(_scrolling(p) ? 'idle' : 'hover'));
   }
   return { gfx, set };
 }
