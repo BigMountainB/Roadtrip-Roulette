@@ -51,9 +51,11 @@ cp "$SRC"/npc/*.png "$DST/gallery/people/"
 cp "$SRC"/ui/music_genres/*.png "$DST/genre_art/"
 cp "$SRC"/ui/title_screen.png "$SRC"/ui/loading_screen.png "$DST/ui/"
 
-# Business logos (route-map stop expansions)
+# Business logos (route-map stop expansions).  CarGo was cut from the game
+# (owner directive 2026-07-28) and its art removed — keep this list in sync
+# with the live business roster.
 mkdir -p "$DST/businesses"
-for b in huffs cargo cowbellas aok lord suck gasnsip am_bm park-and-ride; do
+for b in huffs cowbellas aok lord suck gasnsip am_bm park-and-ride; do
   cp "$SRC/businesses/$b.png" "$DST/businesses/"
 done
 

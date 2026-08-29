@@ -36,6 +36,13 @@ else
 fi
 set -a; . "$ENV_FILE"; set +a
 
+# website/assets is GITIGNORED + DERIVED (music previews, culture sprites,
+# genre art for the marketing pages) — a deploy without this sync ships the
+# site with every dynamically-built image/music URL 404ing (happened
+# 2026-08-28: the Genres page lost all cars + soundtrack previews).
+echo "▶ Syncing website/assets from public/assets…"
+( cd website && sh sync-assets.sh )
+
 echo "▶ Rebuilding website/demo…"
 ( cd website && sh build-demo.sh )
 

@@ -268,6 +268,24 @@ eligibility lapses (e.g. the tail drifting past `PURSUIT_STOP_NEAR`), but the fl
 above 20 mph — so slowing down to pull over wipes it permanently and the stop never fires. The
 dispatch pacing added the same day makes it easier to hit, since cops now sit further back.
 
+### 2026-08-29 — Website: missing images/music fixed (sync-assets was never run here)
+
+- Owner report: images + music missing from the RTR website.  Root cause: the
+  Genres page builds its car sprites, genre art and soundtrack previews from
+  SITE-ROOT `assets/culture|music|genre_art|ui` — and `website/assets/` is
+  GITIGNORED + DERIVED, populated only by `website/sync-assets.sh`.  That sync
+  had never been run on this machine, so the 08-28 deploy shipped the site
+  without ~360 files (music 323M, culture 120M, genre_art, ui) and every
+  dynamically-built URL fell through to the 200-with-404-page fallback —
+  which is also why simple status-code checks passed.  Detection that works:
+  byte-compare `size_download` against the local file.
+- Fixes: ran the sync; `scripts/deploy.sh` now runs `sync-assets.sh` FIRST on
+  every deploy so this cannot recur; removed dead `cargo.png` from the sync
+  list (CarGo cut 2026-07-28 — its missing art hard-stopped the whole sync
+  under `set -e`, which may be exactly why it was never run).
+- Redeployed + live-verified: all 138 Genres-page assets exist locally and a
+  30-URL live sample matches local byte sizes exactly (music mp3s included).
+
 ### 2026-08-28 — Cop pose frames: height-normalized sizing + left-turn mirroring
 
 Owner reports on the jurisdiction steering frames, both fixed in `resolvePoliceSprite`:
