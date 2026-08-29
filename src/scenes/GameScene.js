@@ -2222,7 +2222,6 @@ export class GameScene extends Phaser.Scene {
     this._finishCause     = null;
     this._statsTripEnded = false;   // one-shot guard for the stats trip-end hook
     this._arrestHandled  = false;   // one-shot guard so a bust charges bail once
-    this._endingPrePenaltyCash = null;   // pre-bail wallet stash for the ending outcomes
     // Per-texture caches (angle-frame sizing + tire-contact anchors) —
     // rebuilt every create so a genre-art swap (same texture keys, new
     // pixels) can't serve stale content boxes or anchors.
@@ -25850,10 +25849,6 @@ export class GameScene extends Phaser.Scene {
       : this._trapIgnored                               ? FAIL_REASON.BUSTED_FAILED_STOP
       :                                                   FAIL_REASON.BUSTED_PURSUIT;
     const cp         = this._lastCheckpoint ?? { scoreAtCP: 0, position: 0 };
-    // Wallet BEFORE bail — the ending screen's RESTART must never show a cash
-    // loss (its penalty is starting the drive over), so the outcome math needs
-    // the pre-penalty figure (see endingOutcomes.computeEndingOutcomes).
-    this._endingPrePenaltyCash = Math.round(this.score);
     const earnedSince = Math.max(0, this.score - cp.scoreAtCP);
     let   lost        = Math.floor(earnedSince / 2);
     // Tow-insurance buff (from the Washtucna tow driver) cushions the loss too.
@@ -27090,7 +27085,6 @@ export class GameScene extends Phaser.Scene {
     const _outcomes = computeEndingOutcomes({
       cause,
       finalCash:       Math.round(this.score),
-      prePenaltyCash:  this._endingPrePenaltyCash ?? Math.round(this.score),
       snap:            this._driveStartSnap,
       checkpoint:      this._lastCheckpoint
         ? { name: this._lastCheckpoint.name, position: this._lastCheckpoint.position }

@@ -112,35 +112,40 @@ eq(fmtMoneyDelta(0), '+$0', 'delta zero reads as a (non-)gain, never a loss');
   eq(cont.note, 'HP 13', 'no fee note when nothing was charged');
 }
 
-// ── Restart never at a cash loss (owner 2026-08-29) ──────────────────────
-// The restart penalty is starting the drive over — cash is the BETTER of the
-// snapshot wallet and the pre-penalty wallet at the moment of the ending.
+// ── Restart = run-start snapshot, VERBATIM (owner 2026-08-29) ────────────
+// The snapshot taken at the start of every game (money + inventory + stats)
+// is THE reset point: restart rewinds to it exactly — mid-run earnings AND
+// mid-run purchases (upgrades) go away together, and no ending penalty
+// (bail / half-cash) is layered on top.  Cash penalties bite only CONTINUE.
 {
-  // Earned money during the drive, then crashed: restart keeps the earnings.
+  // Earned money during the run, then crashed: restart resets to run-start
+  // money regardless — the current wallet never leaks into the reset.
   const { restart } = computeEndingOutcomes({
     cause: 'crash', finalCash: 20500, snap: SNAP, checkpoint: CP,
     baseVehicleHp: 25, ...ROUTE,
   });
-  eq(restart.cash, 20500, 'restart keeps drive earnings (no cash loss)');
+  eq(restart.cash, 13984, 'restart resets earnings back to run-start cash');
 }
 {
-  // Busted: bail was charged before the screen — restart uses the PRE-bail
-  // wallet, so the bust's cash penalty applies only to CONTINUE.
+  // Busted: bail was charged before the screen — restart ignores it entirely
+  // (snapshot cash), continue keeps the post-bail wallet.
   const { restart, cont } = computeEndingOutcomes({
-    cause: 'busted', finalCash: 7863, prePenaltyCash: 15000, snap: SNAP,
+    cause: 'busted', finalCash: 7863, snap: SNAP,
     checkpoint: CP, baseVehicleHp: 25, ...ROUTE,
   });
-  eq(restart.cash, 15000, 'busted restart restores the pre-bail wallet');
+  eq(restart.cash, 13984, 'busted restart = run-start cash, bail not layered on');
   eq(cont.cash, 7863, 'busted continue still pays the bail');
 }
 {
-  // Spent money during the drive (purchases roll back with the snapshot):
-  // the snapshot wallet is the higher figure and wins.
+  // Net spender (bought upgrades mid-run): the snapshot refunds the money
+  // WITH the upgrades rolled back — snap carries the run-start maps that
+  // _applyRestartOutcome writes over the save.
   const { restart } = computeEndingOutcomes({
-    cause: 'crash', finalCash: 4000, prePenaltyCash: 4000, snap: SNAP,
-    checkpoint: CP, baseVehicleHp: 25, ...ROUTE,
+    cause: 'crash', finalCash: 4000, snap: SNAP, checkpoint: CP,
+    baseVehicleHp: 25, ...ROUTE,
   });
-  eq(restart.cash, 13984, 'net-spender restart still gets the snapshot refund');
+  eq(restart.cash, 13984, 'net-spender restart refunds to run-start cash');
+  ok(restart.snap === SNAP, 'restart applies THE snapshot (upgrade maps included)');
 }
 
 // ── Determinism: computing twice yields identical outcomes (repeat

@@ -268,6 +268,23 @@ eligibility lapses (e.g. the tail drifting past `PURSUIT_STOP_NEAR`), but the fl
 above 20 mph — so slowing down to pull over wipes it permanently and the stop never fires. The
 dispatch pacing added the same day makes it easier to hit, since cops now sit further back.
 
+### 2026-08-29 (pt 3) — Restart = run-start snapshot VERBATIM (supersedes pt 2's cash rule)
+
+- Owner refinement: "a restart takes away upgrades on that run — a snapshot of
+  the player's inventory, money and stats, taken at the start of every game,
+  is the reset point if restart is chosen."  The registry `runStartSnap`
+  (latched once per fresh run since 08-27: cash, position 0, HP, fuel, stars,
+  vices, F12 weapons, coal, vehicle, upgrade/tempUpgrade/accessory maps) IS
+  that snapshot — RESTART now restores it verbatim.  pt 2's "never at a cash
+  loss" max() rule was REMOVED (`prePenaltyCash` plumbing deleted): mid-run
+  earnings reset along with mid-run purchases, and the ending's bail/half-cash
+  penalties still bite only CONTINUE.
+- Leak sealed: `_endGame` banks the ending wallet into `walletStore` before
+  the choice screen, so `_applyRestartOutcome` now rewinds the bank to the
+  snapshot figure too — quitting to title mid-restarted-run can no longer
+  resurrect the pre-restart wallet.
+- outcomes tests rewritten to the reset-point semantics (41 total, all green).
+
 ### 2026-08-29 (pt 2) — Owner playtest batch: tutorial stars, shop scrollbar, restart cash, pass cue, snow bumps, wipers, HUD genre, tappable texts
 
 Eight owner requests, all clarified via Q&A before building:

@@ -1265,6 +1265,11 @@ export class GameOverScene extends Phaser.Scene {
       if (s.tempUpgrades) save?.set?.('tempUpgrades', JSON.parse(JSON.stringify(s.tempUpgrades)));
       if (s.accessories)  save?.set?.('accessories',  JSON.parse(JSON.stringify(s.accessories)));
       if (s.vehicleId)    this.registry?.set?.('vehicleId', s.vehicleId);
+      // The reset point includes MONEY (owner 2026-08-29): _endGame banked
+      // the ending wallet into walletStore, so rewind the bank to the
+      // run-start figure too — otherwise quitting to title mid-restarted-run
+      // would resurrect the pre-restart wallet around the reset.
+      if (save?.walletStore) save.walletStore.money = Math.max(0, Math.round(r.cash ?? 0));
       save?.save?.();
     } catch (_) {}
     this.scene.start('Game', {
