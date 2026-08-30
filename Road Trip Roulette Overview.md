@@ -285,6 +285,70 @@ eligibility lapses (e.g. the tail drifting past `PURSUIT_STOP_NEAR`), but the fl
 above 20 mph — so slowing down to pull over wipes it permanently and the stop never fires. The
 dispatch pacing added the same day makes it easier to hit, since cops now sit further back.
 
+### 2026-08-29 (pt 5) — Police pipeline review: 9-item repair (Codex findings, owner-directed)
+
+Owner pasted a Codex review of the police rendering pipeline; every claim was
+verified against live code before repair.  Ch.17's implementation notes are
+updated to match.  Root causes + fixes:
+1. **Light-bar metadata**: the red/blue lens scan mis-locked onto taillights,
+   the Adams red "7" unit number, and Othello's blue livery stripe.  New
+   `scripts/policeLightbarSheet.mjs` renders per-agency contact sheets with
+   every effective box drawn on the art (tmp/police_lightbar_sheets/);
+   hand-reviewed corrections live in `src/data/policeSpriteOverrides.js`
+   (survives builder reruns; merged at load in policeAgencies.js).  All 27
+   Snoqualmie/Adams/Othello frames overridden to WSP roof-bar geometry
+   remapped through SOLID body boxes, dark whole-bar flash, no per-color
+   lenses.  Visually verified on the sheets.
+2. **One shared render transform**: `place()` now returns the cop body's
+   FINAL geometry (tunnel 0.88, flee-exit sink, synth seat, caps, fades,
+   depth) — cached as `cop._renderGeom`; the light-bar pass consumes it
+   instead of rebuilding ~40 lines of projection (bars no longer detach in
+   tunnels).  GOTCHA: gate is `lightsKind === 'cop'` (vehicleKind carries
+   the colorSet).
+3. **Spin scaling + FULL 360 (owner: "a full 360 or more")**: `_spawnCopSpinFx`
+   now reuses the resolver's solid-height normalization (constant tire-to-roof,
+   width grows naturally at broadside) with a per-frame TIRE-BASELINE origin —
+   validated 0.0% height spread / 0.0 px baseline drift.  New `SPIN_360_WRECK`
+   / `SPIN_360_PIT` ladders play 0→180 then the RETURN leg (ping-pong) for a
+   full revolution with zero mirroring; genuine 210-330° art would replace the
+   return leg 1:1 (Ch.17 art gaps).
+4. **Diverted spin**: one-shot to 180° then HOLD while the flee exit slides
+   it away — the modulo cycle's 180→0 snap is gone.
+5. **No mirrored markings**: the 08-28 left-turn mirror is REVERTED.  Resolver
+   takes `dir`; left turns use dedicated `<prefix>_spin_007/012_left.png` art
+   when it exists (builder auto-measures, loader auto-fetches) and the straight
+   0° frame until then.  `flipX` is always false for marked vehicles.
+6. **Helicopter**: fuselage REGISTRATION from measured solid-body boxes
+   (alpha≥235 excludes rotor blur; frames were misaligned up to 7% of canvas)
+   — constant fuselage height + center anchor; 3-frame rotor at ~11 fps (was
+   18); facing hysteresis (±18 of ±60 sway) kills the center flicker; the
+   whole-body red/blue TINT is replaced by two small belly glow lamps
+   (fuselage keeps natural paint; colorblind amber/blue + 5★ tag kept).
+7. **Loader states**: per-key `_polTex` states (loading/failed/gone) with
+   3×-retry exponential backoff — the old `_polLoading` set marked keys
+   forever on first attempt.  `_polWanted` ledger sweeps every ~2 s; no
+   per-frame requests.
+8. **Texture memory**: instrumentation first (`_policeTexStats`, logged per
+   region queue + `window.__policeTexStats()`): ~121 MiB decoded if all 81
+   jurisdiction frames load.  EVICTION DEFERRED deliberately — pooled sprites
+   and live fx hold texture keys; a safe retention policy (current + previous
+   + upcoming region) needs a reference sweep.  Documented in Ch.17.
+9. **Art audit** (contact sheets + numbers): tire baselines are excellent
+   (≤0.002 spread) but per-frame CAR SCALE varies up to ~40% within a set
+   (7°/12° drawn small, 120° large — worst: Adams, Pullman, Seattle); the
+   solid-height normalization corrects it at render.  `sy0` (first
+   antenna-free body row) added to the meta so whip antennas can't distort
+   the normalization.
+Validation: both suites green repeatedly — validate_police.mjs (21 checks)
+and NEW validate_police_v2.mjs (18 motion checks: scale-pop/baseline watch,
+left/right steering, one-shot diverted hold, full-revolution PIT with 0.0%
+drift, tunnel geometry, 3 simultaneous cruisers, boundary agency stability,
+3-frame heli both facings, natural fuselage color, mobile viewport 844×390).
+Harness lessons: probes must clear `_awaitingFirstGameTap` (frozen gameTime
+freezes pose clocks), pin probe cops (position/hp getters), freeze autonomous
+spawns, and tag+find probe entities — the wanted system otherwise pollutes
+`cops[0]`.  All 9 unit suites green (police 678) + build clean.
+
 ### 2026-08-29 (pt 4) — Owner corrections: drag-scroll restored, restart keeps money only, tilt cue ½ mi
 
 Three second-pass corrections on today's batch (each supersedes its earlier form):
@@ -10403,15 +10467,32 @@ the implementation notes below are where the code actually landed:
   files were moved to `Archive/police_jurisdiction_sources_2026-08-27/` so they never
   load or deploy — do not move them back into `public/`.
 
-## 17.10 Known art gaps (owner action)
+## 17.10 Known art gaps (owner action — updated 2026-08-29 pipeline review)
 
 - `wsp_spin_180.png` wears a **"NEVADA HP 725" license plate** — needs a WA re-export.
 - No **nose-LEFT profile** exists, so left-shoulder speed traps keep the legacy generic
   side art (mirroring a jurisdiction 090 would reverse the livery).
-- Spins cannot pass 180° without mirrored lettering; crash rotation stops at the front
-  view by design.  If more rotation is ever wanted, render 210-330° frames.
-- `heli_police_rendered_3.png` (+`_flip`) is pre-wired: drop the files into
-  `public/assets/cops/` and the rotor cycle picks them up with no code change.
+- **LEFT-turn steering frames**: a left-drifting cruiser currently shows the straight
+  0° frame (mirroring is forbidden).  Render `<prefix>_spin_007_left.png` +
+  `<prefix>_spin_012_left.png` per agency, drop them in the jurisdictions folder, and
+  run `node scripts/buildPoliceSpriteMeta.mjs` — the loader + resolver pick them up
+  with no code change.
+- **Full-revolution spin frames**: the crash/PIT spin plays 0→180 then returns down the
+  same ladder (ping-pong) to fake the far half.  Genuine `_spin_210/240/270/300/330`
+  renders with readable markings would replace the return leg 1:1 (`SPIN_360_*` in
+  policeAgencies.js).
+- **Per-frame car scale drifts inside sets** (worst: Adams, Pullman, Seattle — the
+  7°/12° cars are drawn up to ~40% smaller than 0°, the 120° cars largest).  The
+  renderer's solid-height normalization corrects it, but re-exports at one camera
+  distance would remove the correction entirely.  Tire baselines are excellent
+  everywhere (≤0.2% spread) — keep that.
+- Rendered heli frames are not identically framed (fuselage shifts up to ~7% of
+  canvas between frames) — code compensates via measured body boxes; a re-export
+  on one locked camera would simplify that.
+- Validate ANY police re-export with `node scripts/buildPoliceSpriteMeta.mjs` +
+  `node scripts/policeLightbarSheet.mjs` (boxes-on-art contact sheets in
+  tmp/police_lightbar_sheets/), and hand-fix scanner mistakes in
+  `src/data/policeSpriteOverrides.js` — never in the generated meta.
 
 ## 17.1 Jurisdiction vehicle sets
 

@@ -4,6 +4,7 @@ import {
   POLICE_AGENCIES, POLICE_SPRITE_META, POLICE_ANGLES,
   agencyPoolAt, pickAgencyId, jurFrameKey, agencyTextureList,
   nearestPoliceAngle, resolvePoliceSprite, SPIN_LADDER_FULL, PIT_CONTACT_LADDER,
+  SPIN_360_WRECK, SPIN_360_PIT,
 } from '../src/data/policeAgencies.js';
 
 let pass = 0, fail = 0;
@@ -102,6 +103,49 @@ check('adams prefix', POLICE_AGENCIES.adams_county_sheriff.prefix === 'adams_she
 // Spin ladders stop at 180 — no mirrored second half.
 check('spin ladder capped at 180', SPIN_LADDER_FULL[SPIN_LADDER_FULL.length - 1] === 180
   && PIT_CONTACT_LADDER[PIT_CONTACT_LADDER.length - 1] === 180);
+
+// ── 2026-08-29 pipeline review ──────────────────────────────────────────
+// Left turns never mirror: with no dedicated left art the resolver falls
+// back to the straight 0° frame, flipX stays false everywhere.
+{
+  const l7 = resolvePoliceSprite({ agencyId: 'seattle_police', angle: 7, dir: -1, has: hasAll });
+  check('left 7° falls back to 000 (no left art)', l7.key === 'jur_seattle_police_000');
+  check('left fallback never mirrors', l7.flipX === false);
+  const l12 = resolvePoliceSprite({ agencyId: 'wsp' in POLICE_AGENCIES ? 'wsp' : 'washington_state_patrol', angle: 12, dir: -1, has: hasAll });
+  check('left 12° falls back to 000', l12.key.endsWith('_000'));
+  const r7 = resolvePoliceSprite({ agencyId: 'seattle_police', angle: 7, dir: 1, has: hasAll });
+  check('right 7° keeps native art', r7.key === 'jur_seattle_police_007');
+  const l90 = resolvePoliceSprite({ agencyId: 'seattle_police', angle: 90, dir: -1, has: hasAll });
+  check('dir only affects the 7/12 steering frames', l90.key === 'jur_seattle_police_090');
+}
+// Full-revolution ping-pong ladders: reach 180 mid-spin, return through the
+// same frames (no mirrored back half), and settle without a 180→0 snap
+// (adjacent steps are always one ladder rung apart).
+{
+  const mono = (lad) => lad.every((v, i) => i === 0
+    || Math.abs(POLICE_ANGLES.indexOf(v) - POLICE_ANGLES.indexOf(lad[i - 1])) === 1
+    || Math.abs(v - lad[i - 1]) <= 30);
+  check('wreck 360 passes through 180', SPIN_360_WRECK.includes(180));
+  check('wreck 360 ends settled at 0', SPIN_360_WRECK[SPIN_360_WRECK.length - 1] === 0);
+  check('wreck 360 has no angle jumps', mono(SPIN_360_WRECK));
+  check('pit 360 passes through 180', SPIN_360_PIT.includes(180));
+  check('pit 360 ends settled at 0', SPIN_360_PIT[SPIN_360_PIT.length - 1] === 0);
+  check('pit 360 has no angle jumps', mono(SPIN_360_PIT));
+}
+// Solid-height normalization invariance: widthScale × solid content height
+// is constant across a set's angles (tire-to-roof height never pops).
+{
+  for (const pfx of ['wsp', 'adams_sheriff', 'seattle_police']) {
+    const id = Object.keys(POLICE_AGENCIES).find(k => POLICE_AGENCIES[k].prefix === pfx);
+    const hs = POLICE_ANGLES.map(deg => {
+      const f = resolvePoliceSprite({ agencyId: id, angle: deg, has: hasAll });
+      const m = f.meta;
+      return f.widthScale * (m.cy1 - (m.sy0 ?? m.cy0)) * (m.h / m.w);
+    });
+    const spread = (Math.max(...hs) - Math.min(...hs)) / hs[0];
+    check(`solid-height invariant ${pfx} (spread ${spread.toFixed(3)})`, spread < 0.001);
+  }
+}
 
 console.log(`police.test: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

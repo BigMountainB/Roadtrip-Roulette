@@ -108,14 +108,25 @@ const pad3 = (deg) => String(deg).padStart(3, '0');
 /** Texture key for one jurisdiction frame. */
 export function jurFrameKey(prefix, deg) { return `jur_${prefix}_${pad3(deg)}`; }
 
-/** The 9 {key, path} pairs for one agency's sprite set (loader input). */
+/** The {key, path} pairs for one agency's sprite set (loader input) — the 9
+ *  spin angles, plus any dedicated LEFT-turn steering frames the builder has
+ *  measured (drop `<prefix>_spin_007_left.png` / `_012_left.png` into the
+ *  jurisdictions folder and rerun buildPoliceSpriteMeta.mjs; they join the
+ *  load + resolver automatically, no code change). */
 export function agencyTextureList(agencyId) {
   const a = POLICE_AGENCIES[agencyId];
   if (!a) return [];
-  return POLICE_ANGLES.map(deg => ({
+  const list = POLICE_ANGLES.map(deg => ({
     key:  jurFrameKey(a.prefix, deg),
     path: `assets/cars/jurisdictions/${a.prefix}_spin_${pad3(deg)}.png`,
   }));
+  for (const deg of [7, 12]) {
+    const k = `${jurFrameKey(a.prefix, deg)}_left`;
+    if (POLICE_SPRITE_META[k]) {
+      list.push({ key: k, path: `assets/cars/jurisdictions/${a.prefix}_spin_${pad3(deg)}_left.png` });
+    }
+  }
+  return list;
 }
 
 /** Agencies whose region contains `mile`, as [{id, weight}].  Never empty —
@@ -171,16 +182,38 @@ const DEFAULT_META = { w: 768, h: 512, cx0: 0, cy0: 0, cx1: 1, cy1: 1, lb: null 
  *   4. generic car_back_police
  * `has(key)` reports whether a texture is actually loaded right now.
  */
-export function resolvePoliceSprite({ agencyId, angle = 0, has = () => true, flip = false }) {
-  const deg = nearestPoliceAngle(Math.abs(angle));
+export function resolvePoliceSprite({ agencyId, angle = 0, has = () => true, dir = 1 }) {
+  let deg = nearestPoliceAngle(Math.abs(angle));
   const isSwat = agencyId === 'swat';
   const agency = !isSwat ? POLICE_AGENCIES[agencyId] : null;
   const tryKeys = [];
+  // LEFT-turn steering (dir === -1, 7/12° only): marked vehicles are NEVER
+  // runtime-mirrored (reversed "POLICE"/badge lettering — the 08-28 mirror
+  // experiment is reverted per the 08-29 pipeline review).  Dedicated
+  // left-facing art is used when it exists (<prefix>_spin_007_left.png →
+  // key jur_<prefix>_007_left, measured by the builder automatically);
+  // until those files land, the unsupported direction shows the straight
+  // 0° frame.  Spin/PIT/front angles are direction-agnostic.
+  const wantsLeft = dir === -1 && (deg === 7 || deg === 12);
   if (agency) {
+    if (wantsLeft) {
+      const leftKey = `${jurFrameKey(agency.prefix, deg)}_left`;
+      // "Left art exists" means the BUILDER measured it (meta entry) AND the
+      // texture is loaded — has() alone can't vouch for a file that was
+      // never rendered.  Without real left art the straight 0° frame stands
+      // in; the native right-turn frame is never shown for a left turn.
+      if (has(leftKey) && POLICE_SPRITE_META[leftKey]) {
+        tryKeys.push({ key: leftKey, cls: agency.vehicleClass,
+                       ref: jurFrameKey(agency.prefix, 0) });
+      }
+      deg = 0;
+    }
     tryKeys.push({ key: jurFrameKey(agency.prefix, deg), cls: agency.vehicleClass,
                    ref: jurFrameKey(agency.prefix, 0) });
     tryKeys.push({ key: jurFrameKey(agency.prefix, 0),   cls: agency.vehicleClass,
                    ref: jurFrameKey(agency.prefix, 0) });
+  } else if (wantsLeft) {
+    deg = 0;   // generic/SWAT sets are marked too — same no-mirror rule
   }
   const genSet = isSwat ? SWAT_FRAMES : GENERIC_POLICE_FRAMES;
   const genCls = isSwat ? 'swat' : 'sedan';
@@ -199,20 +232,18 @@ export function resolvePoliceSprite({ agencyId, angle = 0, has = () => true, fli
     // Scale each frame so its content HEIGHT matches the set's 000 frame
     // (all canvases in a set share w/h, so the aspect term cancels):
     //   widthScale = cls × ch000 / (cw000 × ch)   — reduces to cls/cw at 0°.
+    // SOLID heights (sy0 = first antenna-free body row, from the builder):
+    // whip antennas and spotlight stalks appear in some angles' raw bounds
+    // and not others, so raw-box normalization could pop the car size.
     const refMeta = POLICE_SPRITE_META[ref ?? key] ?? meta;
     const cw0 = Math.max(0.05, refMeta.cx1 - refMeta.cx0);
-    const ch0 = Math.max(0.05, refMeta.cy1 - refMeta.cy0);
-    const ch  = Math.max(0.05, meta.cy1 - meta.cy0);
+    const ch0 = Math.max(0.05, refMeta.cy1 - (refMeta.sy0 ?? refMeta.cy0));
+    const ch  = Math.max(0.05, meta.cy1 - (meta.sy0 ?? meta.cy0));
     return {
       key,
       widthScale: (VEHICLE_CLASS_SCALE[cls] ?? 1) * ch0 / (cw0 * ch),
       groundFrac: meta.cy1,          // content bottom = tire line
-      // The steering set only exists in its native RIGHT-turn direction, so a
-      // LEFT-turning unit mirrors it (owner 2026-08-28: one-direction art
-      // "looks like it's turning right but the car drifts left" beat the old
-      // no-mirroring rule; door/trunk decals at 7-12° are small enough).
-      // Spin/PIT ladders still never pass flip — big mirrored lettering.
-      flipX: !!flip && deg !== 0 && deg !== 180,
+      flipX: false,                  // marked vehicles are NEVER runtime-mirrored
       lb: meta.lb ?? null,
       meta,
       vehicleClass: cls,
@@ -223,8 +254,15 @@ export function resolvePoliceSprite({ agencyId, angle = 0, has = () => true, fli
   return null;
 }
 
-/** Crash/PIT spin ladders (rear-start).  The art covers 0→180 only; a spin
- *  past 180 either stops there or the effect ends — mirrored frames are
- *  forbidden (backwards lettering). */
+/** Crash/PIT spin ladders (rear-start).  The art covers 0→180 only and
+ *  marked vehicles are never mirrored. */
 export const SPIN_LADDER_FULL = [30, 60, 90, 120, 150, 180];
 export const PIT_CONTACT_LADDER = [60, 90, 120, 150, 180];
+/** FULL-REVOLUTION spins (owner 2026-08-29: "a full 360 or more").  With
+ *  only 0-180° art and no mirroring allowed, the back half of the turn
+ *  plays the ladder in REVERSE (ping-pong) — at ~85 ms/frame the return
+ *  sweep reads as the far side of the spin with lettering always correct.
+ *  If genuine 210/240/270/300/330° renders ever land, they replace the
+ *  reverse leg 1:1 (see Overview Ch.17 art gaps). */
+export const SPIN_360_WRECK = [30, 60, 90, 120, 150, 180, 150, 120, 90, 60, 30, 0];
+export const SPIN_360_PIT   = [60, 90, 120, 150, 180, 150, 120, 90, 60, 30, 0];
