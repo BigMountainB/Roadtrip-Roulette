@@ -285,6 +285,21 @@ eligibility lapses (e.g. the tail drifting past `PURSUIT_STOP_NEAR`), but the fl
 above 20 mph — so slowing down to pull over wipes it permanently and the stop never fires. The
 dispatch pacing added the same day makes it easier to hit, since cops now sit further back.
 
+### 2026-08-30 — Speed traps keep off the exit lanes
+
+- Owner report: a parked trooper sat ON an exit lane.  Root cause: the
+  corridor-aware trap placement (2026-08-14) keys off `_exitCorridorRight`,
+  but that flag was only ever set in the narrow SIGN windows — the exit
+  plan's actual painted ramp (taper→parallel→divergence→departure, ~1 mi,
+  tagged `exitInfo`/`rampStrength` by ExitPath.js) was unflagged, and the
+  1.20-1.45 shoulder offset lands exactly on the widening exit lane.
+- Fix (RouteData, just before trap placement): one backwards sweep flags
+  every plan-painted segment + a ~0.15 mi approach margin as exit corridor;
+  the existing re-roll/left-shoulder fallback then avoids the whole ramp
+  area.  Verified over 4 live route builds: 7,845/7,845 ramp segments
+  flagged, zero right-side traps inside any ramp or corridor segment
+  (left-shoulder fallbacks observed working).  All suites + build green.
+
 ### 2026-08-29 (pt 5) — Police pipeline review: 9-item repair (Codex findings, owner-directed)
 
 Owner pasted a Codex review of the police rendering pipeline; every claim was

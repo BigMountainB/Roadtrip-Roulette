@@ -3188,6 +3188,32 @@ export function buildRoute(count = ROUTE_SEGS) {
     // friend's advance "speed trap in <city> ~mile N" text 15-20 mi ahead.
     const _trapMiles = [];
 
+    // ── Exit-lane exclusion (owner 2026-08-30: "I saw a cop on the exit
+    // lane") ─────────────────────────────────────────────────────────────
+    // `_exitCorridorRight` used to be set only in the SIGN windows, but the
+    // exit plan paints its ramp (taper→parallel→divergence→departure) for
+    // ~a mile — a trap trooper whose roll landed inside that stretch parked
+    // on the widening exit lane itself.  Flag every segment the plan
+    // actually paints (`exitInfo` / `rampStrength`, tagged by ExitPath.js)
+    // plus a ~0.15 mi approach margin, so the corridor-aware placement
+    // below avoids the whole ramp area: it re-rolls elsewhere in the city
+    // window or falls back to the LEFT shoulder, never the exit side.
+    {
+      const RAMP_MARGIN_SEG = Math.floor(0.15 / TOTAL_ROUTE_MILES * count);
+      let carry = 0;
+      for (let i = count - 1; i >= 0; i--) {          // backwards → margin lands BEFORE the taper
+        const seg = segments[i];
+        if (!seg) continue;
+        if (seg.exitInfo || (seg.rampStrength ?? 0) > 0) {
+          seg._exitCorridorRight = true;
+          carry = RAMP_MARGIN_SEG;
+        } else if (carry > 0) {
+          seg._exitCorridorRight = true;
+          carry--;
+        }
+      }
+    }
+
     for (const cp of trapCities) {
       // Park at a random spot inside the city window (a little off each edge).
       // CORRIDOR-AWARE (owner 2026-08-14): this block now runs AFTER every
