@@ -387,6 +387,13 @@ export function initOpeningCall() {
     return 'replaying opening call';
   };
 
+  // ?intro=1 forces a replay (owner 2026-08-29): the sequence is once-per-
+  // device, so a device that ever completed it — including during the old
+  // dead-air era — never shows it again, which reads as "the audio doesn't
+  // play".  The param clears the flag and runs it like a first open.
+  let force = false;
+  try { force = new URLSearchParams(location.search).has('intro'); } catch (_) {}
+  if (force) markIntroDone(false);
   if (!introDone()) start();
   else suppressMusic(false);
 }

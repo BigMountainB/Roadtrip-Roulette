@@ -204,6 +204,23 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-29 — Opening-call audio: diagnosis + ?intro=1 replay param
+
+Owner report: "club manager audio doesn't play on first open, multiple devices."  Traced,
+NOT an audio bug — verified end-to-end (fresh profile, real slide gesture, strict autoplay
+policy) on localhost AND deployed /fully/: overlay shows, mp3 plays, clock advances, no
+errors; the file itself is healthy (12.5 s, −17.6 dBFS RMS, −1.7 dBFS peak).  Actual
+causes for the report:
+- **The sequence is once-per-device** (`settings.introCallDone` + `rtr_intro_call_done`),
+  so any device that ever completed it — including during the pre-2026-08-14 "dead air"
+  era — silently skips it forever.
+- **The root deployed URL is the LANDING PAGE**, not the game — no call there ever; the
+  game (and the intro) live at /fully/ (and /demo/).
+Added `?intro=1`: clears the completion flag at boot and replays the call like a first
+open (probe-verified on a flagged-done profile).  `window.__replayOpeningCall()` remains
+the console equivalent.  iPhone testing caveat: the hardware ring/silent switch can mute
+web audio — check it before judging silence on iOS.
+
 ### 2026-08-28 (pt 2) — Lightbar lamps: two rect bulbs + oval haze; player taillights found in the art
 
 **LIGHTBAR READ AS ONE BULB CHANGING COLOUR** (owner). It was exactly that — the dark
