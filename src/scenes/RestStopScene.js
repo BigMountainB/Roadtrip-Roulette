@@ -3115,8 +3115,12 @@ export class RestStopScene extends Phaser.Scene {
                : p.repair   ? 'REPAIR'
                : (p.buyGenre || p.driveGenre) ? 'TAKE'
                : p.hitchhike ? 'PICK UP'
+               : p.popcorn  ? 'EAT'     // owner: "you don't USE free popcorn"
                : shown > 0  ? 'BUY'
-               : 'USE';   // free things are USED, never bought (owner 2026-08-31)
+               // Free things are never BOUGHT (owner 2026-08-31): drinks are
+               // DRUNK, everything else (restroom) is USED.
+               : (p.survivalDelta?.hydration > 0) ? 'DRINK'
+               : 'USE';
     // Some labels already lead with the verb ("USE RESTROOM") — don't stutter.
     const nameUp = name.toUpperCase();
     const heading = nameUp.startsWith(verb + ' ') ? `${nameUp}?` : `${verb} ${nameUp}?`;

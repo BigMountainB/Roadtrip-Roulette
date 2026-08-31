@@ -204,6 +204,18 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 4) — Restart button names the place it actually restarts at; EAT/DRINK verbs
+
+- **"Start over said North Bend, delivered Seattle"** (owner, out-of-gas screen): when a
+  run is RESUMED after a page reload the registry has lost `runStartSnap`, so the latch
+  rebuilds it mid-run — position correctly pinned to 0, but `locName` came from
+  `_lastCheckpoint` (North Bend).  The name now follows the same branch as the position:
+  daily stages use their stage city, everything else pins to 'Seattle, WA'.  (Restarts
+  themselves always went to mile 0 — only the label lied.)
+- **Confirm verbs, round 2** (owner): free popcorn says **EAT** ("you don't USE free
+  popcorn"), free drinks say **DRINK** (payload `survivalDelta.hydration > 0` when free),
+  restroom stays USE, paid items stay BUY/INSTALL/FILL/etc.  Probe-verified all four.
+
 ### 2026-08-31 (pt 3) — Free items say USE, never BUY
 
 Owner: the free restroom's confirm asked to "buy" it.  `_confirmBuyPopup`'s verb chain now

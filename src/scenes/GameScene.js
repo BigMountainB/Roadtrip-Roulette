@@ -4616,7 +4616,15 @@ export class GameScene extends Phaser.Scene {
           // their stage city.  (The car has rolled a few world units by the
           // time this latches — display-irrelevant, so pin the real start.)
           position:   this._dailyStage ? Math.round(this.player.position) : 0,
-          locName:    this._lastCheckpoint?.name ?? 'Seattle, WA',
+          // locName must AGREE with the position above (owner bug 2026-08-31:
+          // a resume after a page reload rebuilds this snap MID-RUN — registry
+          // lost — and _lastCheckpoint said "North Bend" while position said
+          // mile 0, so the RESTART button promised North Bend and delivered
+          // Seattle).  Daily stages start at their stage city; everything
+          // else pins to the route start, same as the position.
+          locName:    this._dailyStage
+                        ? (this._lastCheckpoint?.name ?? 'Seattle, WA')
+                        : 'Seattle, WA',
           hp:         this.damage?.getDurability?.() ?? null,
           fuelMi:     this.player?.gasMi ?? null,
           stars:      this.cops?.stars ?? 0,
