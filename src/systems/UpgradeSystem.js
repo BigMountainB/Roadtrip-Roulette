@@ -93,12 +93,12 @@ export function getUpgradeEffects(save, vehicleId) {
       totals[k] = (totals[k] ?? 0) + v;
     }
   }
-  // Legacy accessory bridge — fold old bumper/tractionTires in if the new
-  // system hasn't already occupied that slot.
+  // Legacy accessory bridge — fold the old bumper in if the new system
+  // hasn't already occupied that slot.  (tractionTires bridge deleted
+  // 2026-08-30 with the accessory itself.)
   const acc = (_read(save, 'accessories')[vehicleId]) ?? {};
   const installed = getInstalled(save, vehicleId);
   if (acc.bumper && !installed.body)  totals.hp   = (totals.hp   ?? 0) + 12;
-  if (acc.tractionTires && !installed.tires) totals.grip = (totals.grip ?? 0) + 0.06;
   return totals;
 }
 

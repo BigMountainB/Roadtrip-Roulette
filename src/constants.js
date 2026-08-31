@@ -603,7 +603,7 @@ export const PASS_THROUGH_CITIES = _PASS_THROUGH_CITY_DEF.map(c => ({
 //                  >1 = planted, <1 = nervous)
 //   offroadGrip  — multiplier on shoulder/grass/dirt grip (1.00 baseline;
 //                  >1 better off-road like SUV/truck, <1 worse like sports)
-//   drive        — '2WD' | '4x4' (gates traction-tire bonus)
+//   drive        — '2WD' | '4x4' (gates the snow-slide relief)
 //   fuel         — 'gas' | 'electric' (charging stations only)
 //   heat         — wanted-level visibility multiplier (1 = neutral, >1 attracts cops)
 //   priceUsd     — purchase price at dealerships (null = not for sale)

@@ -204,6 +204,37 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 — Traction Tires deleted; per-shop level-3 exclusives replace the Lord gate
+
+Owner spec (Q&A settled the particulars):
+- **Traction Tires accessory DELETED, full removal, no refund**: redundant with Snow Tires
+  (tires lvl 3) + Snow Chains.  Removed everywhere — shop row, purchase handlers (both the
+  legacy `tractionTires` payload and `vehicleAccessory:'traction'`), the flat 0.40
+  penReduction term in the slide math (4x4 keeps 0.60; 4x4 + Snow Tires + Chains still
+  reaches a full 1.0 cancel; non-4x4 tops out ~0.5), the custom-mode SNO-TIRE sandbox
+  toggle (radar shifted into its slot), `_vehicleAccessories()`, the phone-garage ❄️
+  badge (index.html) + card field (main.js), VehicleStats grip bonus, the UpgradeSystem
+  legacy `tractionTires` bridge, and SaveSystem serialization (stale save flags are
+  silently discarded on load).  The mile-39 "TRACTION TIRES ADVISED" road sign stays —
+  real-world WSDOT flavor that now points at Snow Tires/Chains.
+- **`_applyDealerTierGate` DELETED** (the blanket "level 3 needs a Lord Motors at this
+  stop" rule).  Level 3 now has one home per part, ungated beyond the normal
+  install-the-previous-tier ladder locks:
+  - Les Schwasted — Snow Tires + Big Brake Kit + Lowering Kit (chassis, owner: a tire
+    shop does brakes/suspension)
+  - Finesse (FAP) — ECU Tune, High-Flow + Aux Fan, Reserve Gas Tank (internal)
+  - Lord Motors — NEW parts counter on its ACCESSORIES screen (`SECTIONS.dealer_acc`,
+    previously empty) selling the Bash Bar (body lvl 3); body 1-2 stay at FAP services
+  - Park & Ride + Sam's — police lvl 3, RENAMED "Fresh Plates" (paint dropped from label
+    and desc — the car's color never changes); both plate-sellers list it, ladder-locked
+    behind the Police Scanner
+  Untabbed slots (body/police) now surface their lvl-3 rung ALWAYS (lockable 🔒 row at
+  its exclusive home) while keeping next-tier-only listing at FAP for lvls 1-2.
+- Verified headless at Cle Elum (garages, no Lord: lvl-3 rows present with only ladder
+  locks, no Lord gate, no traction row) and Bellevue (Park & Ride + Sam's list Fresh
+  Plates, Lord's counter lists Bash Bar, no "Paint" wording).  Full suite green (police
+  suite included).
+
 ### 2026-08-29 — Opening-call audio: diagnosis + ?intro=1 replay param
 
 Owner report: "club manager audio doesn't play on first open, multiple devices."  Traced,

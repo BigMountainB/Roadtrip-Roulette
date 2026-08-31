@@ -36,7 +36,7 @@ function toBars(value, min, max) {
 
 /** Compute the eight display stats for a vehicle.
  *  saveState (optional): { accessories?, upgrades?, damageFrac? }
- *    accessories — per-vehicle map (bumper, nos, tractionTires…)
+ *    accessories — per-vehicle map (bumper, nos…)
  *    upgrades    — reserved for the part-upgrade system (Prompt 3)
  *    damageFrac  — 0..1 current durability fraction (adds a condition note) */
 export function getVehicleDisplayStats(vehicleId, saveState = {}) {
@@ -48,7 +48,7 @@ export function getVehicleDisplayStats(vehicleId, saveState = {}) {
 
   // Legacy accessory nudges (kept for old saves / NOS-era bumper+tires).  The
   // upgrade bridge in getUpgradeEffects avoids double-counting these.
-  const gripBonus  = acc.tractionTires ? 0.06 : 0;
+  const gripBonus  = 0;   // traction-tires accessory deleted 2026-08-30
   const hpBonus    = acc.bumper ? 12 : 0;
   const visBonus   = (acc.rallyLights ? 1 : 0) + (acc.fogLights ? 1 : 0);
 

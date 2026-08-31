@@ -144,8 +144,8 @@ const DEFAULT_PROFILE = {
   // every reload, wiping the manual save ("NO SAVE FOUND" after a Save+reload).
   manualSave:      null,
   // Per-vehicle accessory state.  Shape:
-  //   accessories: { [vehicleId]: { bumper: bool, traction: bool, nos: 0|1|2|3 } }
-  // Bumper / traction are one-shot purchases (boolean).  NOS is a tier
+  //   accessories: { [vehicleId]: { bumper: bool, nos: 0|1|2|3 } }
+  // Bumper is a one-shot purchase (boolean).  NOS is a tier
   // counter — 0 (none) → 3 (max).  Each tier adds +5 mph to cruise + boost.
   accessories:     {},
   // Installed part upgrades (UpgradeSystem).  Shape:
@@ -750,7 +750,8 @@ export class SaveSystem {
       if (!isObj(acc)) continue;
       out[vehicleId] = {
         bumper:   acc.bumper === true,
-        traction: acc.traction === true,
+        // (traction dropped 2026-08-30 with the accessory — stale saves'
+        // flags are silently discarded here, no refund per owner.)
         nos:      finiteInt(acc.nos, 0, 0, 3),
       };
     }
@@ -782,7 +783,6 @@ export class SaveSystem {
     if (out.accessories !== undefined) {
       out.accessories = {
         bumper:   out.accessories?.bumper === true,
-        traction: out.accessories?.traction === true,
         nos:      finiteInt(out.accessories?.nos, 0, 0, 3),
       };
     }

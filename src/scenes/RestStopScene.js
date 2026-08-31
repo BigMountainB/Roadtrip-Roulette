@@ -652,7 +652,7 @@ export class RestStopScene extends Phaser.Scene {
     // ACCESSORIES/upgrades directly. See the `dealer` tile handler.)
 
     // ── DEALER_ACC: per-vehicle accessory shop ──────────────────────
-    // Repair + Paint are always available.  Bumper, Traction, and NOS
+    // Repair + Paint are always available.  Bumper and NOS
     // are filtered against the CURRENT vehicle's accessory state so
     // already-installed items disappear (and NOS shows the next tier's
     // price + a tier indicator).
@@ -679,7 +679,6 @@ export class RestStopScene extends Phaser.Scene {
     const _accAll = _save?.get?.('accessories') ?? {};
     const _vAcc   = _accAll[this._vehicleId] ?? {};
     const _vHasBumper   = !!_vAcc.bumper;
-    const _vHasTraction = !!_vAcc.traction;
     const _vNosTier     = Math.max(0, Math.min(3, _vAcc.nos ?? 0));
     const NOS_PRICES = [5000, 10000, 15000];
 
@@ -696,6 +695,8 @@ export class RestStopScene extends Phaser.Scene {
     // per-visit to whichever dealer tile was actually tapped (see the
     // 'suck' tile handler below) so Lord Motors stays pure car sales.
     const samItems = [];
+    const lordItems = [];      // Lord Motors' parts counter (body lvl 3)
+    const parkrideItems = [];  // Park & Ride plates counter (police lvl 3)
 
     // Les Schwab's free popcorn and water, which is the whole joke.  Popcorn
     // is a genuine (if pitiful) repair: 1% of MAX health per serving, capped
@@ -743,7 +744,7 @@ export class RestStopScene extends Phaser.Scene {
     // names the exact tier it installs (payload.nosTier), owned tiers are
     // inert, and tiers past the next one are locked until their predecessor is
     // in.  `category: 'engine'` files it with the other go-fast parts (same
-    // trick the traction tyres use to sit under TIRES).
+    // trick accessory rows use to sit under a toolbar tab).
     for (let _t = 1; _t <= 3; _t++) {
       const _owned  = _t <= _vNosTier;
       const _locked = _t > _vNosTier + 1;
@@ -778,20 +779,9 @@ export class RestStopScene extends Phaser.Scene {
       // disabled/receipt state, and the two rows must not share one.
       samItems.push({ ..._bumperItem, payload: { ..._bumperItem.payload } });
     }
-    if (!_vHasTraction) {
-      schwastedItems.push({
-        id: 'traction', label: '❄️  TRACTION TIRES', cost: 1500,
-        desc: '−40% slide penalty on any car (−100% with 4x4).',
-        // category: 'tires' (owner 2026-07-29) — this is a legacy accessory
-        // item, never given a toolbar category, so it fell into the
-        // uncategorized-=-always-visible bucket meant for genuine
-        // cross-category services (popcorn/water/repair). Being a TIRE
-        // product that persisted under every tab — including BRAKES — is
-        // exactly what read as "the tabs don't filter anything."
-        category: 'tires',
-        payload: { vehicleAccessory: 'traction' },
-      });
-    }
+    // (TRACTION TIRES deleted 2026-08-30, owner: redundant with Snow Tires
+    // (tires lvl 3) + Snow Chains; 4x4 keeps its 60% slide relief and the
+    // snow-grip items close the rest.  No refund — effect stripped too.)
     // ── Slot part-upgrades (owner 2026-07-21): the CAR SHOP is now the ONLY
     // place to BUY tiered part-upgrades (tires / brakes / engine / …). The
     // phone Garage is read-only (browse tiers + "save for" goals). Buying
@@ -824,7 +814,10 @@ export class RestStopScene extends Phaser.Scene {
         // every tab — laddering them would stack 6 permanent rows above the
         // parts you actually opened the tab for.  They keep the next-tier-only
         // listing until the toolbar art grows BODY / POLICE tabs of their own.
-        const _rungs = _cat ? _tiers : _tiers.filter(t => t.level === _curLvl + 1);
+        // Untabbed slots list next-tier-only at Finesse, PLUS their level-3
+        // rung (always, lockable) for its exclusive home — see routing below.
+        const _rungs = _cat ? _tiers
+                            : _tiers.filter(t => t.level === _curLvl + 1 || t.level === 3);
         for (const _tier of _rungs) {
           const _owned  = _tier.level <= _curLvl;
           const _locked = _tier.level >  _curLvl + 1;
@@ -837,7 +830,7 @@ export class RestStopScene extends Phaser.Scene {
             _buyLabel: _buyLbl, _ownedLabel: _ownLbl,
             cost: _tier.cost,
             desc: (_tier.desc ?? '') + (_tier.tradeoff ? `  ⚠ ${_tier.tradeoff}` : ''),
-            lvl: _tier.level,   // read by _applyDealerTierGate (level-3 gate)
+            lvl: _tier.level,
             slot: _slot,
             category: _cat?.id ?? null,   // drives the toolbar tab
             // Row thumbnail — the same 1254px hero shot the toolbar tab uses,
@@ -850,9 +843,7 @@ export class RestStopScene extends Phaser.Scene {
               : `🔒 Install ${_prev?.label ?? 'the previous tier'} first.`,
             showCost: _locked,                        // locked rows still quote a price
             disabledCostText: _owned ? 'OWNED' : undefined,
-            // An owned row carries NO install payload: it must never charge, and
-            // _applyDealerTierGate keys off payload.upgradeInstall, so a bought
-            // level 3 can't be re-gated back into "Lord Motors exclusive".
+            // An owned row carries NO install payload: it must never charge.
             payload: _owned ? {} : { upgradeInstall: _tier.id },
           };
           // The two garages split the catalog by lane (SHOP_CATEGORIES); the
@@ -861,7 +852,19 @@ export class RestStopScene extends Phaser.Scene {
           if (_cat && SHOP_CATEGORIES.les_schwasted.includes(_cat.id)) {
             schwastedItems.push({ ..._item, payload: { ..._item.payload } });
           }
-          if (!_cat || (_cat && SHOP_CATEGORIES.fap.includes(_cat.id))) {
+          // LEVEL-3 EXCLUSIVES (owner 2026-08-30): each premium part has ONE
+          // home; the blanket "level 3 needs a Lord Motors at this stop" gate
+          // is GONE (_applyDealerTierGate deleted).
+          //   body 3 (Bash Bar)       → Lord Motors' parts counter
+          //   police 3 (Fresh Plates) → Park & Ride + Sam's (plate sellers)
+          //   chassis lvl 3 stays Schwasted, internal lvl 3 stays Finesse,
+          //   both simply ungated.
+          if (_slot === 'body' && _tier.level === 3) {
+            lordItems.push({ ..._item, payload: { ..._item.payload } });
+          } else if (_slot === 'police' && _tier.level === 3) {
+            parkrideItems.push({ ..._item, payload: { ..._item.payload } });
+            samItems.push({ ..._item, payload: { ..._item.payload } });
+          } else if (!_cat || (_cat && SHOP_CATEGORIES.fap.includes(_cat.id))) {
             fapItems.push({ ..._item, payload: { ..._item.payload } });
           }
           // Sam's Used Car Kingdom (owner 2026-07-30): windshield, headlights,
@@ -877,8 +880,9 @@ export class RestStopScene extends Phaser.Scene {
     SECTIONS.schwasted.items = schwastedItems;
     SECTIONS.fap.items = fapItems;
     SECTIONS.sam_acc.items = samItems;
+    SECTIONS.dealer_acc.items = lordItems;              // Lord's ACCESSORIES screen
+    SECTIONS.parkride.items.push(...parkrideItems);     // after the free restroom
     // Lord Motors stays pure car sales.
-    SECTIONS.dealer_acc.items = [];
     // Genre-car showroom — same catalog at every dealership (owner 2026-07-23).
     SECTIONS.dealer_cars.items = genreCarItems();
 
@@ -1238,12 +1242,10 @@ export class RestStopScene extends Phaser.Scene {
         if (this._tapBlocked(ptr)) return;
         // Dealers sell CARS again (owner 2026-07-23 — the genre-car showroom),
         // so a dealer tile opens the Cars/Accessories chooser.  Remember which
-        // brand was tapped: headers show it, and Sam's caps parts at level 2
-        // (level 3 is Lord Motors exclusive).
+        // brand was tapped: headers show it.
         if (key === 'dealer' || key === 'lord' || key === 'suck') {
           this._activeDealerBrand = stopBrands[key]?.name ?? null;
           this._activeDealerKey   = key;
-          this._applyDealerTierGate();
           this._showShopGreeter(key, () => this._showDealerChooser());
         } else {
           this._showShopGreeter(key, () => this._showSection(key));
@@ -2429,31 +2431,9 @@ export class RestStopScene extends Phaser.Scene {
    *  (owner 2026-07-23).  Flips the LIVE `disabled` flag on the prebuilt
    *  dealer_acc buttons; `_tierGated` marks OUR disables so this never
    *  re-enables an item disabled for another reason (e.g. ✓ Installed). */
-  _applyDealerTierGate() {
-    // Level-3 parts stay premium.  They used to be gated on which DEALER you
-    // walked in through, but parts moved to the two garages, so the gate now
-    // keys off whether this stop carries Lord Motors at all — same rule
-    // ("level 3 is Lord Motors exclusive"), re-homed rather than reinvented.
-    const sam = !(this._stop?.amenities ?? []).includes('lord');
-    const gated = [...(SECTIONS.schwasted.items ?? []), ...(SECTIONS.fap.items ?? [])];
-    for (const it of gated) {
-      if (!it?.payload?.upgradeInstall || (it.lvl ?? 0) < 3) continue;
-      if (sam && !it.disabled) {
-        it.disabled = true;
-        it._tierGated = true;
-        it.disabledReason = '⭐ Level-3 parts are Lord Motors exclusive.';
-      } else if (!sam && it._tierGated) {
-        it.disabled = false;
-        it._tierGated = false;
-        it.disabledReason = undefined;
-      }
-    }
-    this._buttonRefresh?.forEach?.(fn => fn());
-  }
-
   /** Turn a just-bought row into an inert "✓ OWNED" rung of the ladder.
    *  Emptying the payload is what actually kills the double-buy: the row can
-   *  no longer charge, re-apply, or be picked up by _applyDealerTierGate. */
+   *  no longer charge or re-apply. */
   _markRowOwned(item) {
     item.disabled = true;
     item.disabledReason = '✓ Already installed on this car.';
@@ -2528,7 +2508,7 @@ export class RestStopScene extends Phaser.Scene {
     this._activeSection = key;
     // Parts moved out of the dealership, so the level-3 gate has to re-evaluate
     // when a GARAGE opens rather than when a dealer placard is tapped.
-    if (key === 'schwasted' || key === 'fap') this._applyDealerTierGate();
+
     this._applyShopChrome(key);
     this._hideAllScreens();
     if (this._sectionContainers?.[key]) {
@@ -3328,13 +3308,8 @@ export class RestStopScene extends Phaser.Scene {
       this._purchases.coolEngineFrac =
         Math.min(0.9, (this._purchases.coolEngineFrac ?? 0) + p.coolEngineFrac);
     }
-    if (p.tractionTires) {
-      // Legacy payload (global flag) — kept so existing call sites don't
-      // break, but the new per-vehicle path below is the real source.
-      this._purchases.tractionTires = true;
-    }
     if (p.vehicleAccessory) {
-      // Per-vehicle accessory purchase (bumper / traction / nos).  Write
+      // Per-vehicle accessory purchase (bumper / nos).  Write
       // directly into the per-mode save profile under accessories[vid]
       // so the new VehicleId carries it across runs.
       const save = this.registry?.get?.('save');
@@ -3342,7 +3317,6 @@ export class RestStopScene extends Phaser.Scene {
         const all = save.get('accessories') ?? {};
         const cur = all[this._vehicleId] ?? {};
         if (p.vehicleAccessory === 'bumper')   cur.bumper   = true;
-        if (p.vehicleAccessory === 'traction') cur.traction = true;
         if (p.vehicleAccessory === 'nos') {
           // Install the tier the ROW names (p.nosTier), not "one more than
           // whatever's fitted".  The blind increment let a repeated tap on the

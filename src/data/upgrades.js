@@ -177,8 +177,11 @@ export const UPGRADE_CATALOG = {
       desc: 'Beeps before the ticket.', effects: { persistent: true } },
     { id: 'pol_2', slot: 'police', level: 2, label: 'Police Scanner', cost: 450,
       desc: 'Know where the traps are.', effects: { persistent: true } },
-    { id: 'pol_3', slot: 'police', level: 3, label: 'Fresh Paint + Plates', cost: 1500,
-      desc: 'A whole new terrible car.', effects: { persistent: true } },
+    // Paint dropped from the label (owner 2026-08-30): the car's color never
+    // actually changes, so it's plates only.  Sold at Park & Ride + Sam's
+    // (the plate sellers), not the garages — see the ladder routing.
+    { id: 'pol_3', slot: 'police', level: 3, label: 'Fresh Plates', cost: 1500,
+      desc: 'New plates, new registration — a whole new terrible car on paper.', effects: { persistent: true } },
   ],
 };
 

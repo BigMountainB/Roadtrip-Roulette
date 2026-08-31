@@ -3032,7 +3032,6 @@
           const accLabels = [];
           if (baseCar.accessories.bumper)   accLabels.push('<span class="badge">🛡 Bumper</span>');
           if (baseCar.accessories.nos > 0)  accLabels.push(`<span class="badge">⚡ NOS L${baseCar.accessories.nos}</span>`);
-          if (baseCar.accessories.traction) accLabels.push('<span class="badge">❄️ Traction</span>');
           const accRow = accLabels.length ? accLabels.join('') : '<span style="color:#557;">— no accessories —</span>';
           const imgHtml = carGenre
             ? `<img class="car-img" src="assets/culture/${carGenre}/vehicles/starter_back.png" alt="${carName}" onerror="this.style.display='none'"/>`

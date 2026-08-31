@@ -695,7 +695,6 @@ const _boot = () => {
           accessories: {
             bumper:   !!a.bumper,
             nos:      a.nos ?? 0,
-            traction: !!a.traction,
           },
         };
       }).filter(Boolean);

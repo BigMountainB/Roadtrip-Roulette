@@ -2890,10 +2890,6 @@ export class GameScene extends Phaser.Scene {
             this.player.gasMi = this.player.gasMaxMi;   // provisional
             this._strandedShown = false;
           }
-          if (buys.tractionTires) {
-            this._tractionTires = true;
-            this.registry.set('tractionTires', true);
-          }
           if (typeof buys.starsToDrop === 'number' && buys.starsToDrop > 0 && this.cops) {
             this.cops.stars = Math.max(0, (this.cops.stars ?? 0) - buys.starsToDrop);
           }
@@ -6601,7 +6597,7 @@ export class GameScene extends Phaser.Scene {
     // (slower lateral-velocity settle, more pronounced curve push):
     //
     //   WEATHER  → rain trims 15 %, snow chops 35 % at full intensity;
-    //              4x4 + traction tires reduce these slide penalties.
+    //              4x4 + snow tires / chains reduce these slide penalties.
     //   TERRAIN  → fog-line (|x|>1.0) starts costing grip the moment
     //              the player crosses the white stripe.  Rumble strip,
     //              grass, deep off-road each get harder to recover from.
@@ -6631,7 +6627,7 @@ export class GameScene extends Phaser.Scene {
     // ── Snow steering FEEL by input mode (per user 2026-06-06) ──────────
     // TILT tames the ice: cancel most of the snow slide so smooth analog
     // lean holds an almost-perfect line.  A small residual remains (so it's
-    // "almost", not "perfect") — the 4x4 + snow-tire (traction) penReduction
+    // "almost", not "perfect") — the 4x4 + snow-tire penReduction
     // below then closes that gap toward perfect, which is the intended
     // upgrade headroom.  Digital modes get NO grip relief here AND an
     // oversensitivity boost at desiredLateral, so L/R + tap feel twitchy and
@@ -6644,12 +6640,14 @@ export class GameScene extends Phaser.Scene {
     // War Van / Custom Pickup are 4x4); non-genre vehicles keep VEHICLES.drive.
     const _is4x4   = (this._activeGenreTrait()?.drive
                       ?? VEHICLES[this.player.vehicleId]?.drive) === '4x4';
-    const _hasTrac = !!(this._vehicleAccessories?.().traction);
     // Weather-contextual grip from part upgrades + buffs: snow tires / chains
-    // in snow, good all-seasons in rain.  Adds to the 4x4 + traction relief.
+    // in snow, good all-seasons in rain.  Adds to the 4x4 relief.  (The
+    // Traction Tires accessory and its flat 0.40 are DELETED, owner
+    // 2026-08-30 — redundant with Snow Tires + Chains; 4x4 + both still
+    // reaches a full 1.0 slide cancel, non-4x4 tops out around 0.5.)
     const _wCtxGrip = wState === 'snow' ? (this._upgradeFx?.snowGrip ?? 0)
                     : wState === 'rain' ? (this._upgradeFx?.rainGrip ?? 0) : 0;
-    const penReduction = Math.min(1, (_is4x4 ? 0.60 : 0) + (_hasTrac ? 0.40 : 0) + _wCtxGrip);
+    const penReduction = Math.min(1, (_is4x4 ? 0.60 : 0) + _wCtxGrip);
     const weatherGrip = 1 - weatherSlide * (1 - penReduction);
 
     // TERRAIN grip — based on how far off the painted road the car is.
@@ -9621,13 +9619,13 @@ export class GameScene extends Phaser.Scene {
 
     // ── ACCESSORIES toggles — sandbox override applied for this
     // custom run only; the persisted save's accessories stay intact.
-    let bumper = false, traction = false, nos = 0, radar = false;
+    let bumper = false, nos = 0, radar = false;
     const accY = panelY + 250;
     add(this.add.text(rightX, accY + 14, 'ACCESSORIES', {
       fontSize: '14px', fontFamily: IMPACT, color: '#F4F7FF',
     }).setOrigin(0, 0.5).setDepth(D + 5));
     const accBtnW = 76, accBtnH = 26, accGap = 4;
-    let bumperBtn, winterBtn, radarBtn;
+    let bumperBtn, radarBtn;
     const nosBtns = [];
     const refreshNosBtns = () => {
       nosBtns.forEach(btn => btn.refresh(btn.tier === nos));
@@ -9637,15 +9635,10 @@ export class GameScene extends Phaser.Scene {
         bumper = !bumper;
         bumperBtn.refresh(bumper);
       });
-    winterBtn = makeToggleButton(rightX + 103 + (accBtnW + accGap), accY, accBtnW, accBtnH,
-      'SNO-TIRE', 0x88DDFF, traction, () => {
-        traction = !traction;
-        winterBtn.refresh(traction);
-      });
-    // Radar detector — sandbox toggle (3rd slot of the accessory row).  Arms
-    // the speed-trap warning for this custom run only; doesn't touch the
-    // persisted global `radarDetector` ownership.
-    radarBtn = makeToggleButton(rightX + 103 + 2 * (accBtnW + accGap), accY, accBtnW, accBtnH,
+    // Radar detector — sandbox toggle (2nd slot; SNO-TIRE deleted with the
+    // Traction Tires accessory, 2026-08-30).  Arms the speed-trap warning for
+    // this custom run only; doesn't touch the persisted `radarDetector`.
+    radarBtn = makeToggleButton(rightX + 103 + (accBtnW + accGap), accY, accBtnW, accBtnH,
       'RADAR', 0x66FF99, radar, () => {
         radar = !radar;
         radarBtn.refresh(radar);
@@ -9679,7 +9672,7 @@ export class GameScene extends Phaser.Scene {
       onConfirm?.({
         viceLevels: { ...viceLevels }, checkpointPos, checkpointLabel,
         noNpcDamage, noPolice, startStars, customSub, drivingType,
-        vehicleId, accessories: { bumper, traction, nos }, radar,
+        vehicleId, accessories: { bumper, nos }, radar,
       });
     });
     const cancel = makeToggleButton(rightX + 182, actionY, 144, 34, 'CANCEL', 0x39A8FF, false, () => close());
@@ -9794,7 +9787,6 @@ export class GameScene extends Phaser.Scene {
       const accGlyphs = [];
       if (vAcc.bumper)   accGlyphs.push('🛡');
       if (vAcc.nos > 0)  accGlyphs.push(`⚡${vAcc.nos}`);
-      if (vAcc.traction) accGlyphs.push('❄️');
       const labelTxt = accGlyphs.length
         ? `${v.label}  ${accGlyphs.join(' ')}`
         : v.label;
@@ -10309,7 +10301,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Read the accessory map for the currently-driven vehicle.  Returns
-   *  `{ bumper, traction, nos }` with safe defaults so call sites can
+   *  `{ bumper, nos }` with safe defaults so call sites can
    *  read fields directly without optional-chain noise.  In Custom
    *  mode, a transient `_customStartAccessories` override wins over
    *  the persisted save so sandbox runs don't clobber real progress. */
@@ -10318,7 +10310,6 @@ export class GameScene extends Phaser.Scene {
       const cur = this._customStartAccessories;
       return {
         bumper:   !!cur.bumper,
-        traction: !!cur.traction,
         nos:      Math.max(0, Math.min(3, cur.nos ?? 0)),
       };
     }
@@ -10327,7 +10318,6 @@ export class GameScene extends Phaser.Scene {
     const cur  = all[this.player?.vehicleId] ?? {};
     return {
       bumper:   !!cur.bumper,
-      traction: !!cur.traction,
       nos:      Math.max(0, Math.min(3, cur.nos ?? 0)),
     };
   }
@@ -23392,7 +23382,7 @@ export class GameScene extends Phaser.Scene {
       hpMax: Math.max(1, hpMax),
       gas:   Math.max(0, Math.round(this.player?.gasMi ?? 0)),
       vehicleId: vid,
-      accessories: { bumper: !!acc.bumper, traction: !!acc.traction, nos: Math.max(0, Math.min(3, acc.nos ?? 0)) },
+      accessories: { bumper: !!acc.bumper, nos: Math.max(0, Math.min(3, acc.nos ?? 0)) },
       owned: (this.registry?.get?.('ownedVehicles') ?? ['beater']),
       vices, unlocked,
       weapons: { coal: this.cops?.coalAmmo ?? 0, fireworks: cnt('fireworks'), donut: cnt('paint_bomb'), disguise: cnt('disguise') ? 1 : 0 },
