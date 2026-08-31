@@ -3109,20 +3109,23 @@ export class RestStopScene extends Phaser.Scene {
     // this modal serves parts, food, fuel, hires and whole vehicles, so
     // "INSTALL NEW WINDSHIELD?" only fits some of them.
     const p = item.payload ?? {};
+    const shown = item._shownCost ?? item.cost ?? 0;
     const verb = (p.upgradeInstall || p.vehicleAccessory) ? 'INSTALL'
                : p.refuel   ? 'FILL'
                : p.repair   ? 'REPAIR'
                : (p.buyGenre || p.driveGenre) ? 'TAKE'
                : p.hitchhike ? 'PICK UP'
-               : 'BUY';
-    const heading = `${verb} ${name.toUpperCase()}?`;
+               : shown > 0  ? 'BUY'
+               : 'USE';   // free things are USED, never bought (owner 2026-08-31)
+    // Some labels already lead with the verb ("USE RESTROOM") — don't stutter.
+    const nameUp = name.toUpperCase();
+    const heading = nameUp.startsWith(verb + ' ') ? `${nameUp}?` : `${verb} ${nameUp}?`;
     objs.push(this.add.text(CX, CY - 34, heading, {
       fontSize: '19px', fontFamily: IMPACT, color: '#E6F2FA',
       stroke: '#000', strokeThickness: 4,
       wordWrap: { width: 356 }, align: 'center',
     }).setOrigin(0.5).setDepth(D));
     // Price beneath the heading, per the brief.
-    const shown = item._shownCost ?? item.cost ?? 0;
     objs.push(this.add.text(CX, CY - 10, shown > 0 ? `$${shown.toLocaleString()}` : 'FREE', {
       fontSize: '15px', fontFamily: IMPACT, color: '#C9A24A',
       stroke: '#000', strokeThickness: 3,

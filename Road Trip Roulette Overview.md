@@ -204,6 +204,15 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 3) — Free items say USE, never BUY
+
+Owner: the free restroom's confirm asked to "buy" it.  `_confirmBuyPopup`'s verb chain now
+ends `shown > 0 ? 'BUY' : 'USE'` (specific verbs INSTALL/FILL/REPAIR/TAKE/PICK UP still
+win), and a heading whose item label already leads with the verb no longer stutters
+("USE RESTROOM?", not "USE USE RESTROOM?").  The affirmative button tracks the same verb.
+Probe: restroom "USE RESTROOM? / FREE / USE", popcorn "USE FREE POPCORN?", burrito still
+"BUY BURRITO? / $12", parts still "INSTALL …".
+
 ### 2026-08-31 (pt 2) — HOTFIX: crash on every part purchase ("game restarts a lot")
 
 The 08-31 shop rework deleted `_applyDealerTierGate` and its two known call sites but
