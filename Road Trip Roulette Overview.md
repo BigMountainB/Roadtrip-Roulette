@@ -204,6 +204,16 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 2) — HOTFIX: crash on every part purchase ("game restarts a lot")
+
+The 08-31 shop rework deleted `_applyDealerTierGate` and its two known call sites but
+MISSED a third inside `_unlockTier` — which runs after EVERY upgrade purchase.  Each buy
+threw `TypeError: not a function` → main.js's uncaught-error handler marked a crash →
+reload + auto-resume, i.e. the game "restarting a lot".  The call is replaced with the
+plain `_buttonRefresh` repaint (all the gate's exit path still did).  Probe: `_unlockTier`
+runs clean, next rung unlocks, zero page errors.  Lesson recorded: when deleting a method,
+grep the WHOLE file for call sites, not just the ones found on the first pass.
+
 ### 2026-08-31 — Traction Tires deleted; per-shop level-3 exclusives replace the Lord gate
 
 Owner spec (Q&A settled the particulars):

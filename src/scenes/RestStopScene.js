@@ -2492,10 +2492,11 @@ export class RestStopScene extends Phaser.Scene {
         if (it._ui?.label?.scene) it._ui.label.setText(it.label);
       }
     }
-    // A newly unlocked level 3 is still Lord-Motors-only at a stop without one,
-    // so re-run the gate rather than the plain refresh — it repaints every
-    // button on its way out anyway.
-    this._applyDealerTierGate();
+    // (Used to re-run _applyDealerTierGate here; the gate is deleted —
+    // 2026-08-31 per-shop exclusives — and this surviving call was a crash
+    // on EVERY part purchase, the owner's "game restarts a lot" report.
+    // The plain repaint is all that's needed now.)
+    this._buttonRefresh?.forEach?.(fn => fn());
   }
 
   /** Show a sub-menu for a section key.  parent (optional) = the
