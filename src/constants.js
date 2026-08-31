@@ -306,7 +306,9 @@ export const COP_TRAP_SPEED_MPH = 80;
 // inside this and the auto-stop releases (you changed your mind / fled).
 export const COP_TRAP_COMPLY_SEC   = 30;
 export const COP_TRAP_PULLOVER_MPH = 8;
-export const COP_TRAP_SHOULDER_X   = 1.2;
+// 1.2 → 1.06 (owner 2026-08-31 "I pull over and nothing happens"): commit
+// begins just past the rumble strip — the old value demanded DEEP grass.
+export const COP_TRAP_SHOULDER_X   = 1.06;
 export const COP_TRAP_ABORT_X      = 0.9;
 // Once stopped on the shoulder, the car is HELD for the traffic stop while the
 // trooper "writes you up" (the ticket math lands in Stage 3).  The party clock

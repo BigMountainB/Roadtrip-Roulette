@@ -204,6 +204,26 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 6) — "PULL OVER" now works by actually pulling over
+
+Owner: "HUD says Pull Over, I do, but nothing happens — car keeps driving 60 over the
+grass."  Two causes:
+- **Speed-trap flow**: the commit chord required BRAKE HELD + x > 1.2 (deep grass) — just
+  steering onto the shoulder (the natural read of "PULL OVER") never committed, so the
+  30 s window always expired into "+1★ failed to pull over".  The brake requirement is
+  dropped and `COP_TRAP_SHOULDER_X` is 1.2 → 1.06 (just past the rumble strip).  Abort
+  by steering back inside 0.9 unchanged.
+- **1-2★ comply flow** had NO shoulder detection at all (near-stop only).  New
+  `_pursuitStopping`: armed + right shoulder (x > 1.06) → `_updatePlayer` targets 0 (the
+  cruise floor is 60, so the assist is what makes stopping possible), the near-stop dwell
+  then latches the hold as usual; steering back releases it.  Cleared during the hold and
+  on eligibility loss.
+- Complying is now penalty-free for the whole 1-2★ sequence too: `trafficStop` (the
+  slow-driving + off-road cash-penalty suppressor) includes `_pursuitStopping` and
+  `_pursuitStopHold`.
+Probe: 1★ tail, armed, steer to x=1.25 at ~60 mph → assist engages, car brakes itself,
+hold latches at 0 mph.
+
 ### 2026-08-31 — HOTFIX: garage crash on the second rest-stop visit
 
 - Owner hit an uncaught error on the LIVE build opening Les Schwasted at the

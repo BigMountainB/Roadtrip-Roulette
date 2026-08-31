@@ -2211,6 +2211,7 @@ export class GameScene extends Phaser.Scene {
     this._pursuitStopHold     = null;   // { t, mult } while held at the roadside
     this._pursuitStopDwell    = 0;      // seconds spent below the pull-over speed
     this._pursuitStopArmed    = false;  // true once the player has DRIVEN with the tail
+    this._pursuitStopping     = false;  // right-shoulder commit — auto-brake to the stop
     this._pursuitFollowBaseMi = null;   // mile the current follow began at
     this._pursuitFollowStars  = 0;      // star level that baseline belongs to
     this._gameFinished   = false;
@@ -5423,6 +5424,7 @@ export class GameScene extends Phaser.Scene {
     {
       const _psP = this.player;
       if (this._pursuitStopHold) {
+        this._pursuitStopping = false;      // committed — the hold owns the car now
         const h = this._pursuitStopHold;
         h.t -= rawDt;
         // Pinned at the roadside — engine idling, trooper walking up.
@@ -5470,6 +5472,12 @@ export class GameScene extends Phaser.Scene {
           // into a stop the player didn't choose.  I-frames also hold it off.
           if (_psP.speed > MAX_SPEED * (20 / 120)) this._pursuitStopArmed = true;
           const _psIframes = (this.time?.now ?? 0) < (this._invincibleUntil ?? 0);
+          // Right-shoulder commit (owner 2026-08-31): pulling onto the grass
+          // IS pulling over — _updatePlayer brakes the car to 0 while this
+          // holds, and the near-stop dwell below then latches the hold.
+          // Steering back onto the road releases it (you can still run).
+          this._pursuitStopping = this._pursuitStopArmed && !_psIframes
+                                  && this.player.x > COP_TRAP_SHOULDER_X;
           if (this._pursuitStopArmed && !_psIframes
               && _psP.speed < MAX_SPEED * (PURSUIT_STOP_MPH / 120)) {
             this._pursuitStopDwell += rawDt;
@@ -5488,6 +5496,7 @@ export class GameScene extends Phaser.Scene {
           this._pursuitFollowBaseMi = null;
           this._pursuitStopDwell = 0;
           this._pursuitStopArmed = false;
+          this._pursuitStopping  = false;
         }
       }
     }
@@ -5708,7 +5717,8 @@ export class GameScene extends Phaser.Scene {
       // to the right shoulder (off-road), so charging the slow-driving AND the
       // off-road penalty during the stop is double-jeopardy — suppress both for
       // the whole sequence (comply window → auto-stop → held stop).
-      const trafficStop = this._trapPursuitActive || this._trapStopping || this._trapStopHeld;
+      const trafficStop = this._trapPursuitActive || this._trapStopping || this._trapStopHeld
+                       || this._pursuitStopping || !!this._pursuitStopHold;
       let penalty   = 0;
 
       // Slow-driving penalty now kicks in below 15% UNDER the car's baseline
@@ -6331,7 +6341,11 @@ export class GameScene extends Phaser.Scene {
     if (this._trapPursuitActive) {
       const _seg     = this.road.segments[curSegIdx];
       const _safeSeg = !_seg?.bridge && !_seg?.tunnel && !_seg?.water;
-      if (!this._trapStopping && _safeSeg && this._isBrake() && p.x > COP_TRAP_SHOULDER_X) {
+      // Commit = steering onto the right shoulder, full stop (owner
+      // 2026-08-31): the old chord ALSO required the brake to be held, so
+      // players who just pulled onto the grass (the natural read of "PULL
+      // OVER") cruised along at 60 while the window expired into +1★.
+      if (!this._trapStopping && _safeSeg && p.x > COP_TRAP_SHOULDER_X) {
         this._trapStopping = true;
       }
       if (this._trapStopping && (!_safeSeg || p.x < COP_TRAP_ABORT_X)) {
@@ -6341,6 +6355,12 @@ export class GameScene extends Phaser.Scene {
     } else if (this._trapStopping) {
       this._trapStopping = false;
     }
+    // 1-2★ comply flow, same idea (owner 2026-08-31): with the blue PULL
+    // OVER blink up, steering onto the right shoulder auto-brakes the car to
+    // the stop — cruise braking floors at 60 mph, so without this the player
+    // "pulls over" onto the grass and just keeps driving.  Flag managed by
+    // the comply machine in update().
+    if (this._pursuitStopping) targetSpeed = 0;
     if (this._trapStopHeld || this._bladderStopHeld) targetSpeed = 0;   // pinned for a held stop (traffic / bathroom)
     if (this._finishCinematic) targetSpeed = 0;   // finish cinematic — ease to a stop at the house
 
