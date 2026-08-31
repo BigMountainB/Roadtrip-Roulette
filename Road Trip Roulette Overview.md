@@ -204,6 +204,17 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 7) — Pursuit hold pinned in the physics step (no creep, no drive-out)
+
+Owner: the car still crept during a 1-2★ traffic stop and could be driven out mid-hold.
+The hold zeroed speed/steer in the UPDATE loop — after cruise easing had already re-added
+a step of speed each frame (the creep) and without ever freezing steering (the escape).
+Now identical to the trap hold: `_pursuitStopHold` joins the `targetSpeed = 0` pin inside
+`_updatePlayer` AND freezes `p.x` at `_pursuitStopHoldX` (latched when the hold begins).
+Real-input probe (held ArrowUp+ArrowLeft 3 s mid-hold): creep 0 units, dx 0, speed 0,
+hold intact.  Probe gotcha: writing `player.speed` directly from an interval bypasses the
+targetSpeed pin and fakes an escape no real input can do — escape probes must use keys.
+
 ### 2026-08-31 (pt 6) — "PULL OVER" now works by actually pulling over
 
 Owner: "HUD says Pull Over, I do, but nothing happens — car keeps driving 60 over the

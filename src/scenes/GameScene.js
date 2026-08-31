@@ -5485,6 +5485,7 @@ export class GameScene extends Phaser.Scene {
               this._pursuitStopDwell = 0;
               this._pursuitStopArmed = false;
               this._pursuitFollowBaseMi = null;
+              this._pursuitStopHoldX = this.player.x;   // freeze steering here
               this._pursuitStopHold = _psStars === 1
                 ? { t: PURSUIT_STOP_SEC_1, mult: 1 }
                 : { t: PURSUIT_STOP_SEC_2, mult: 3 };
@@ -6361,7 +6362,10 @@ export class GameScene extends Phaser.Scene {
     // "pulls over" onto the grass and just keeps driving.  Flag managed by
     // the comply machine in update().
     if (this._pursuitStopping) targetSpeed = 0;
-    if (this._trapStopHeld || this._bladderStopHeld) targetSpeed = 0;   // pinned for a held stop (traffic / bathroom)
+    // _pursuitStopHold pins IN the physics step too (owner 2026-08-31: the
+    // update-loop zeroing ran AFTER cruise easing, so the car crept forward a
+    // step every frame during the stop and could even be steered away).
+    if (this._trapStopHeld || this._bladderStopHeld || this._pursuitStopHold) targetSpeed = 0;   // pinned for a held stop (traffic / bathroom / pursuit)
     if (this._finishCinematic) targetSpeed = 0;   // finish cinematic — ease to a stop at the house
 
     // Flat tire from roadblock — hard-cap top speed to 45 mph until timer ends.
@@ -7298,6 +7302,7 @@ export class GameScene extends Phaser.Scene {
     // it with no input, which showed as the car "rocking in place") so the car
     // is dead still — no translation, no lean.
     if (this._trapStopHeld) { p.x = this._trapStopHeldX ?? p.x; p.steerVelocity = 0; }
+    if (this._pursuitStopHold) { p.x = this._pursuitStopHoldX ?? p.x; p.steerVelocity = 0; }
     if (this._bladderStopHeld) { p.x = this._bladderStopHeldX ?? p.x; p.steerVelocity = 0; }
 
     // Advance
