@@ -10818,6 +10818,36 @@ export class GameScene extends Phaser.Scene {
     // legacy cop missing the field.
     const damageMul = cop.damageMul ?? 1;
 
+    // ── REDNECK RAGE bulldozes EVERY cop (owner 2026-08-31) ───────────
+    // During rage the player was still being nudged by pursuit rams and
+    // stopped by the parked speed-trap trooper.  Now ANY cop the player
+    // touches crashes out — rear pursuit, oncoming, SWAT, the trap cop —
+    // explosion + gone, zero effect on the player and zero bust counters
+    // (same rule the roadblock/barricade paths shipped 08-27).  Placed
+    // ABOVE registerBump() so rage contact never feeds the BUMPS tally.
+    if (this._rageActive?.()) {
+      this._spawnExplosion(sx, sy, sw);
+      if (cop.trapPursuit) {
+        // The parked trap trooper is owned by the stop machinery —
+        // endTrapPursuit() removes the unit; the stop state resets so the
+        // SLOW DOWN/PULL OVER sequence can't wait on a cruiser that's gone.
+        this.cops.endTrapPursuit?.();
+        this._trapPursuitActive = false;
+        this._trapComplyTimer   = 0;
+        this._trapStopping      = false;
+        this._trapStopHeld      = false;
+        this._trapStopHoldTimer = 0;
+        this._trapTicket        = null;
+        this._trapLightGfx?.clear();
+        this._trapLightWasOn    = false;
+      } else {
+        cop.alive = false;
+        this.cops.cops.splice(idx, 1);
+      }
+      this.effects?.triggerShake?.(70, 0.003);
+      return;
+    }
+
     // Generic bump tally (legacy, still drives `BUMPS x/8` HUD).
     if (type !== 'side-swipe') this.cops.registerBump();
 
@@ -10982,16 +11012,8 @@ export class GameScene extends Phaser.Scene {
 
     // ── Barricade cop — instant slow-to-45-mph for 5 seconds ─────────
     if (kind === 'barricade') {
-      // REDNECK RAGE bulldozes roadblock cruisers (owner 2026-08-27) — the
-      // cruiser explodes, the player keeps full speed: no damage, no flat
-      // tire, no slow.  Mirrors the rage rule in the NPC collision path.
-      if (this._rageActive?.()) {
-        this._spawnExplosion(sx, sy, sw);
-        cop.alive = false;
-        this.cops.cops.splice(idx, 1);
-        this.effects?.triggerShake?.(70, 0.003);
-        return;
-      }
+      // (Rage handling lives in the all-cops guard at the top of this
+      // handler since 2026-08-31 — barricades included.)
       const impact = this._impactModel(cop.speed ?? 0, hit, { headOn: false });
       this._spawnExplosion(sx, sy, sw);
       p.xImpulse = sideDir * (1.4 + impact.severity * 1.3);

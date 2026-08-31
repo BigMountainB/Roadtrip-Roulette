@@ -204,6 +204,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 5) — Road Rage bulldozes EVERY cop on contact
+
+Owner: during rage, pursuit nudges and the parked speed-trap trooper still affected the
+player.  `_onCopCollision` now opens with an all-kinds rage guard (ABOVE `registerBump()`,
+so rage contact never feeds bust counters): any cop the player touches — rear pursuit,
+oncoming, SWAT, barricade cruiser, the parked trap trooper — explodes and is gone with
+zero effect on the player, matching the 08-27 roadblock/barricade rule.  Touching the
+trap trooper also resets the whole traffic-stop machinery (`endTrapPursuit` + the six
+`_trap*` fields + light flash) so the SLOW DOWN/PULL OVER sequence can't wait on a
+cruiser that no longer exists.  The barricade branch's own (now unreachable) rage guard
+was removed.  Probe: committed lunge ram during rage → tagged cruiser despawned, HP and
+BUMPS tally unchanged.  (Probe gotcha: the anti-pass clamp snaps a teleported cop back to
+station before contact — only a committed lunge (`_lungeT`) can reach the bumper.)
+
 ### 2026-08-31 (pt 4) — Restart button names the place it actually restarts at; EAT/DRINK verbs
 
 - **"Start over said North Bend, delivered Seattle"** (owner, out-of-gas screen): when a
