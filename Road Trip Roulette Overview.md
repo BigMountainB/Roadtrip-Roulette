@@ -204,6 +204,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 — HOTFIX: garage crash on the second rest-stop visit
+
+- Owner hit an uncaught error on the LIVE build opening Les Schwasted at the
+  Bellevue stop: `_updateScrollbar → setSize` on a destroyed rectangle.
+  Phaser reuses the RestStop scene instance across visits; the shop
+  scrollbar's lazily-created track/thumb were destroyed with the previous
+  visit's display list but the stale refs survived on `this`, so the SECOND
+  stop's first garage-category select threw.  Same destroyed-GameObject
+  class as the GameScene pause-button gotcha — the guard is now
+  `!obj || !obj.scene` (destroy nulls `.scene`), rebuilding the pair per
+  visit and resetting `_sbGeom`/`_sbDrag`.
+- Verified headless on the real path: Mercer Island stop → garage + scroll →
+  hit the road → Bellevue stop → garage + scroll; zero page errors.
+
 ### 2026-08-31 (pt 5) — Road Rage bulldozes EVERY cop on contact
 
 Owner: during rage, pursuit nudges and the parked speed-trap trooper still affected the

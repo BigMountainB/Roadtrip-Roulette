@@ -2738,12 +2738,21 @@ export class RestStopScene extends Phaser.Scene {
    *  their right edge. */
   _updateScrollbar() {
     const SB_W = 12;
-    if (!this._sbTrack) {
+    // Guard against destroyed GameObjects (owner crash 2026-08-31, Bellevue
+    // garage): Phaser REUSES the scene instance across rest-stop visits, but
+    // the previous visit's shutdown destroyed these rectangles — the stale
+    // refs survived on `this`, and setSize on a destroyed object throws an
+    // uncaught error the moment the next stop opened a garage section.
+    // Destroy nulls `gameObject.scene`, so check it and rebuild (same
+    // pattern as the pause-button _pauseLblRef guard in GameScene).
+    if (!this._sbTrack || !this._sbTrack.scene || !this._sbThumb?.scene) {
       this._sbTrack = this.add.rectangle(0, 0, SB_W, 10, 0x0A1626, 0.60)
         .setOrigin(0, 0).setDepth(60).setVisible(false)
         .setStrokeStyle(1, 0x39A8FF, 0.45);
       this._sbThumb = this.add.rectangle(0, 0, SB_W - 4, 10, 0x39A8FF, 0.9)
         .setOrigin(0, 0).setDepth(61).setVisible(false);
+      this._sbGeom = null;
+      this._sbDrag = null;
     }
     const key = this._activeSection;
     const contentH = key ? (this._sectionContentH?.[key] ?? 0) : 0;
