@@ -19606,9 +19606,10 @@ export class GameScene extends Phaser.Scene {
     // Mode. Pulses gold until its first selection (_tutTitleGlowUpdate).
     {
       const { x: TX, y: TY, s: TS } = TUT_TITLE_BTN;
-      // Owner 2026-09-03: "Yellow is unselected" — filled-yellow sign idle,
-      // dark face + neon "?" while the mode is ON (see _tutTitleBtnLit).
-      const img = this.add.image(TX + TS / 2, TY + TS / 2, 'ui_menu_btn_tutorial_active')
+      // Owner 2026-09-03 (evening): "the images for the tutorial button are
+      // swapped" — back to the brief: dark face + neon "?" idle, filled-yellow
+      // sign while the mode is ON (see _tutTitleBtnLit).
+      const img = this.add.image(TX + TS / 2, TY + TS / 2, 'ui_menu_btn_tutorial')
         .setDisplaySize(TS, TS).setDepth(d + 12).setAlpha(0.94)
         .setVisible(!!this._awaitingStart)
         .setInteractive({ useHandCursor: true });
@@ -20500,8 +20501,8 @@ export class GameScene extends Phaser.Scene {
 
   _tutTitleBtnLit(lit) {
     const b = this._titleTutBtn; if (!b || !b.scene) return;
-    // Yellow filled sign = idle; dark face with the neon "?" = mode ON.
-    b.setTexture(lit ? 'ui_menu_btn_tutorial' : 'ui_menu_btn_tutorial_active').setDisplaySize(TUT_TITLE_BTN.s, TUT_TITLE_BTN.s);
+    // Dark face + neon "?" = idle; filled-yellow sign = mode ON.
+    b.setTexture(lit ? 'ui_menu_btn_tutorial_active' : 'ui_menu_btn_tutorial').setDisplaySize(TUT_TITLE_BTN.s, TUT_TITLE_BTN.s);
     this._titleTutClose?.setVisible?.(lit && b.visible);
   }
 
@@ -20673,7 +20674,12 @@ export class GameScene extends Phaser.Scene {
 
   _tutModeTap(ptr) {
     const T = this._tutMode; if (!T) return;
-    const px = ptr.x, py = ptr.y;
+    // Every bound here is in HUD (design) space on _uiCam, which is scrolled
+    // −HUD_OFFSET_X on the widened canvas — so translate the pointer the same
+    // way the pause-menu volume slider does. Without this, phone taps landed
+    // one card to the RIGHT of the touch (owner 2026-09-03: "when I click on
+    // driving type, the load save description comes up").
+    const px = ptr.x + (this._uiCam?.scrollX ?? 0), py = ptr.y + (this._uiCam?.scrollY ?? 0);
     const inside = (b) => b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
     // The "?" button sits UNDER the scrim; a tap on its bounds closes the mode.
     if (inside(this._tutBtnBounds(T.onTitle))) return this._tutModeClose();

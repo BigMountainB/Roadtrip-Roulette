@@ -298,6 +298,17 @@ box to cover any highlighted buttons, HUD, or text"*; *"Yellow is unselected"*; 
   overran the cap and GOT IT scrolled out of reach (probe caught it: the tap landed on a tile).
 - ⚠️ The owner's 2026-09-03 evening screenshots (dark "?", phantom top-right glow, bottom sheet with
   entry-name Prev/Next) are the PREVIOUS build — none of Pt 2/Pt 3 is deployed yet.
+
+**Pt 4 (same day, after deploy 7f4644d) — phone taps landed one card RIGHT.** Owner: *"When I click on
+driving type, the load save description comes up… the plates are not selectable and neither is the
+tutorial button after I selected the first time."* Cause: `_tutModeTap` compared raw `ptr.x` (canvas
+space) against HUD-space bounds, but `_uiCam` is scrolled −HUD_OFFSET_X on the widened phone canvas
+(975 wide at 932×430 → scrollX −87.5). Fix = the pause-menu volume-slider conversion:
+`px = ptr.x + _uiCam.scrollX`. Desktop probes never caught it because there the offset is 0. Verified
+with a phone-aspect Playwright run (`offset_probe.cjs`): plates/start/diff/drive/load each resolve to
+themselves and the "?" closes the mode. (Note: the slider comment "no-op on mobile" is stale — mobile
+IS widened.) Also owner: *"the images for the tutorial button are swapped"* → back to the brief's
+mapping: dark face + neon "?" idle, filled-yellow sign while ON.
 - Image viewing in this Claude session works again (screenshots ≤ 2000 px).
 
 - **Name collision found by the headless smoke** (`B.btnSeen is not a function`): the legacy tour's
