@@ -567,6 +567,7 @@ const _boot = () => {
     // mode needs a running scene; the phone closes itself after calling this.
     openGameplay: () => { try { game.scene.getScene('Game')?._tutModeOpen?.(); } catch (_) {} },
     openGameMenu: () => { try { game.scene.getScene('Game')?._tutTitleModeOpen?.(); } catch (_) {} },
+    _scene: () => game.scene.getScene('Game'),   // headless probe / dev hook only
   };
   window.__plate = {
     // Demo build: every player is "Guest" (a non-unique, un-nameable handle) —

@@ -19606,17 +19606,25 @@ export class GameScene extends Phaser.Scene {
     // Mode. Pulses gold until its first selection (_tutTitleGlowUpdate).
     {
       const { x: TX, y: TY, s: TS } = TUT_TITLE_BTN;
-      const img = this.add.image(TX + TS / 2, TY + TS / 2, 'ui_menu_btn_tutorial')
+      // Owner 2026-09-03: "Yellow is unselected" — filled-yellow sign idle,
+      // dark face + neon "?" while the mode is ON (see _tutTitleBtnLit).
+      const img = this.add.image(TX + TS / 2, TY + TS / 2, 'ui_menu_btn_tutorial_active')
         .setDisplaySize(TS, TS).setDepth(d + 12).setAlpha(0.94)
         .setVisible(!!this._awaitingStart)
         .setInteractive({ useHandCursor: true });
       img.on('pointerover', () => img.setAlpha(1));
       img.on('pointerout',  () => img.setAlpha(0.94));
       img.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); this._tutTitleToggle(); });
+      // "CLOSE" after the button — Game Menu only, only while the mode is on
+      // (owner: "maybe add some close text after the button in the Game menu,
+      // but all others no text").
+      const closeT = this.add.text(TX + TS + 8, TY + TS / 2, 'CLOSE', {
+        fontSize: '15px', fontFamily: IMPACT, color: '#FFD24D', stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0, 0.5).setDepth(d + 12).setVisible(false);
       this._titleTutBtn = img;
+      this._titleTutClose = closeT;
       this._titleTutGlow = null;
-      this._hudObjects?.push(img);
-      this.cameras?.main?.ignore?.([img]);   // UI camera only
+      this._tutUi([img, closeT]);   // UI camera only, exempt from the HUD alpha sweep
       this._tutTitleGlowUpdate();
     }
 
@@ -20035,14 +20043,45 @@ export class GameScene extends Phaser.Scene {
       return { bw, bh: boxT.height + PADY * 2 };
     };
 
+    // opts.avoid: rects the panel must not touch (other highlights, the "?"
+    // button, the banner). Pass 1 wants the largest font, in band order, at
+    // an alignment inside the band that clears every one of them; pass 2 is
+    // the old first-fit when nothing clears (rare: tiny screens).
+    const avoid = (opts.avoid ?? []).filter(Boolean);
+    const overlaps = (r) => avoid.some(a => r.x < a.x + a.w && r.x + r.w > a.x && r.y < a.y + a.h && r.y + r.h > a.y);
+    const rectFor = (band, bw, bh, ax, ay) => {       // ax/ay: 0 start · 0.5 centre · 1 end
+      let x = band.x + (band.w - bw) * ax;
+      if (ax === 0.5 && band.cx != null) x = Math.max(band.x, Math.min(band.x + band.w - bw, band.cx - bw / 2));
+      return { x, y: band.y + (band.h - bh) * ay, w: bw, h: bh };
+    };
+    const anchorAy = (band) => band.anchor === 'top' ? 0 : band.anchor === 'bottom' ? 1 : 0.5;
     let best = null;
-    outer:
-    for (const band of bands) {
-      if (band.w < 140 || band.h < 60) continue;         // too thin to be worth it
-      for (let px = base; px >= floor; px = Math.max(floor, Math.round(px * 0.88))) {
-        const m = measure(band, px);
-        if (m.bh <= band.h && m.bw <= band.w) { best = { band, px, ...m }; break outer; }
-        if (px === floor) break;
+    if (avoid.length) {
+      outer1:
+      for (const band of bands) {
+        if (band.w < 140 || band.h < 60) continue;
+        const yPref = band.anchor === 'top' ? [0, 0.5, 1] : band.anchor === 'bottom' ? [1, 0.5, 0] : [0.5, 0, 1];
+        for (let px = base; px >= floor; px = Math.max(floor, Math.round(px * 0.88))) {
+          const m = measure(band, px);
+          if (m.bh <= band.h && m.bw <= band.w) {
+            for (const ay of yPref) for (const ax of [0.5, 0, 1]) {
+              const r = rectFor(band, m.bw, m.bh, ax, ay);
+              if (!overlaps(r)) { best = { band, px, ...m, rect: r }; break outer1; }
+            }
+          }
+          if (px === floor) break;
+        }
+      }
+    }
+    if (!best) {
+      outer2:
+      for (const band of bands) {
+        if (band.w < 140 || band.h < 60) continue;         // too thin to be worth it
+        for (let px = base; px >= floor; px = Math.max(floor, Math.round(px * 0.88))) {
+          const m = measure(band, px);
+          if (m.bh <= band.h && m.bw <= band.w) { best = { band, px, ...m, rect: rectFor(band, m.bw, m.bh, 0.5, anchorAy(band)) }; break outer2; }
+          if (px === floor) break;
+        }
       }
     }
     if (!best) {
@@ -20050,23 +20089,19 @@ export class GameScene extends Phaser.Scene {
       const band = bands.filter(b => b.w >= 120 && b.h >= 40)
                         .sort((a, b) => (b.w * b.h) - (a.w * a.h))[0] ?? bands[0];
       const m = measure(band, floor);
-      best = { band, px: floor, bw: m.bw, bh: Math.min(m.bh, band.h) };
+      const bh = Math.min(m.bh, band.h);
+      best = { band, px: floor, bw: m.bw, bh, rect: rectFor(band, m.bw, bh, 0.5, anchorAy(band)) };
     }
-
-    const { band, bw, bh } = best;
-    let bx = band.cx != null ? band.cx : band.x + band.w / 2;
-    bx = Math.max(band.x + bw / 2, Math.min(band.x + band.w - bw / 2, bx));
-    const by = band.anchor === 'bottom' ? (band.y + band.h - bh)
-             : band.anchor === 'top'    ? band.y
-             : band.y + (band.h - bh) / 2;
+    measure(best.band, best.px);                          // leave the text at the chosen size/wrap
+    const { bw, bh, rect } = best;
     boxG.clear();
     boxG.fillStyle(0x06101E, 0.86);
-    boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 10);
-    this._lastTourBox = { x: bx - bw / 2, y: by, w: bw, h: bh };   // for Prev/Next hit-testing
+    boxG.fillRoundedRect(rect.x, rect.y, bw, bh, 10);
+    this._lastTourBox = { x: rect.x, y: rect.y, w: bw, h: bh };   // panel body swallows taps
     boxG.lineStyle(2, 0xFFD24D, 0.9);
-    boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 10);
-    boxT.setPosition(bx, by + PADY);
-    return { x: bx - bw / 2, y: by, w: bw, h: bh };
+    boxG.strokeRoundedRect(rect.x, rect.y, bw, bh, 10);
+    boxT.setPosition(rect.x + bw / 2, rect.y + PADY);
+    return { x: rect.x, y: rect.y, w: bw, h: bh };
   }
 
   // ── Guided title-screen tutorial (Stage 1b) ───────────────────────────
@@ -20419,6 +20454,16 @@ export class GameScene extends Phaser.Scene {
   // scrim sits above the HUD and owns every tap. Closing: the lit "?" button
   // again, ESC, or the panel's ✕.
   _tutCtx() { return { platform: navigator?.platform ?? '', custom: !!this._customFlags }; }
+  /** Tutorial chrome: UI camera only, tracked with the HUD pool, but EXEMPT
+   *  from _renderHUD's per-frame alpha sweep so the gold throb tween shows. */
+  _tutUi(objs) {
+    for (const o of objs) { if (o) o._noHudAlpha = true; }
+    try { this._hudObjects?.push(...objs); this.cameras?.main?.ignore?.(objs); } catch (_) {}
+  }
+  _objBounds(t, pad = 6) {
+    const b = t.getBounds();
+    return { x: b.x - pad, y: b.y - pad, w: b.width + pad * 2, h: b.height + pad * 2 };
+  }
   _tutSave() { return this.registry?.get?.('save'); }
 
   _tutModeToggle() {
@@ -20455,7 +20500,9 @@ export class GameScene extends Phaser.Scene {
 
   _tutTitleBtnLit(lit) {
     const b = this._titleTutBtn; if (!b || !b.scene) return;
-    b.setTexture(lit ? 'ui_menu_btn_tutorial_active' : 'ui_menu_btn_tutorial').setDisplaySize(TUT_TITLE_BTN.s, TUT_TITLE_BTN.s);
+    // Yellow filled sign = idle; dark face with the neon "?" = mode ON.
+    b.setTexture(lit ? 'ui_menu_btn_tutorial' : 'ui_menu_btn_tutorial_active').setDisplaySize(TUT_TITLE_BTN.s, TUT_TITLE_BTN.s);
+    this._titleTutClose?.setVisible?.(lit && b.visible);
   }
 
   /** Gold throb on the title "?" until its first selection; hidden while the
@@ -20468,7 +20515,7 @@ export class GameScene extends Phaser.Scene {
     if (!show) { if (this._titleTutGlow) { try { this._titleTutGlow.destroy(); } catch (_) {} this._titleTutGlow = null; } return; }
     if (this._titleTutGlow) return;
     const g = this.add.graphics().setDepth(btn.depth - 1);
-    try { this._hudObjects?.push(g); this.cameras?.main?.ignore?.(g); } catch (_) {}
+    this._tutUi([g]);
     this._drawTourGlow(g, this._tutBtnBounds(true));
     const rm = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } })();
     this.tweens.add({ targets: g, alpha: { from: 1, to: rm ? 0.8 : 0.35 }, duration: rm ? 1400 : 620, yoyo: true, repeat: -1 });
@@ -20496,7 +20543,7 @@ export class GameScene extends Phaser.Scene {
       padding: { x: 22, y: 8 },
     }).setOrigin(0.5).setDepth(D + 3).setInteractive({ useHandCursor: true });
     const objs = [scrim, hi, boxG, boxT, ok];
-    try { this._hudObjects?.push(...objs); this.cameras?.main?.ignore?.(objs); } catch (_) {}
+    this._tutUi(objs);
     const done = () => {
       for (const o of objs) { try { o.destroy(); } catch (_) {} }
       this._tutSave()?.set?.('tutorialIntroSeen', true);
@@ -20524,14 +20571,22 @@ export class GameScene extends Phaser.Scene {
       fontSize: '22px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
       align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5, 0).setDepth(D + 5).setVisible(false);
-    const banner = this.add.text(SCREEN_W / 2, SCREEN_H - 14, 'TUTORIAL MODE  ·  tap anything to learn what it does  ·  tap ? to exit', {
+    // Flush to the bottom edge: at y-14 it grazed the START/LOAD cards' frames.
+    const banner = this.add.text(SCREEN_W / 2, SCREEN_H - 3, 'TUTORIAL MODE  ·  tap anything to learn what it does  ·  tap ? to exit', {
       fontSize: '13px', fontFamily: IMPACT, color: '#FFD24D', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5, 1).setDepth(D + 5);
     // Reduced motion: a gentle 0.8→1 breathe instead of the strong pulse.
     const rm = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } })();
     const tw = this.tweens.add({ targets: glow, alpha: { from: 1, to: rm ? 0.8 : 0.35 }, duration: rm ? 1400 : 620, yoyo: true, repeat: -1 });
-    const objs = [scrim, glow, sel, boxG, boxT, banner];
-    try { this._hudObjects?.push(...objs); this.cameras?.main?.ignore?.(objs); } catch (_) {}
+    // Footer chips for the description box: ‹ PREV · ✕ · NEXT ›. ✕ closes
+    // the TEXT only; the "?" button closes the mode (owner 2026-09-03).
+    const navStyle = { fontSize: '15px', fontFamily: IMPACT, color: '#39D9FF', stroke: '#000', strokeThickness: 3,
+                       backgroundColor: '#0B1A2E', padding: { x: 10, y: 4 } };
+    const navPrev  = this.add.text(0, 0, '‹ PREV', navStyle).setOrigin(0, 1).setDepth(D + 6).setVisible(false);
+    const navClose = this.add.text(0, 0, '✕', { ...navStyle, color: '#FFD24D' }).setOrigin(0.5, 1).setDepth(D + 6).setVisible(false);
+    const navNext  = this.add.text(0, 0, 'NEXT ›', navStyle).setOrigin(1, 1).setDepth(D + 6).setVisible(false);
+    const objs = [scrim, glow, sel, boxG, boxT, banner, navPrev, navClose, navNext];
+    this._tutUi(objs);
     if (!onTitle) {
       this._paused = true;
       this._showEditorPopupPlaceholders();
@@ -20539,7 +20594,8 @@ export class GameScene extends Phaser.Scene {
     }
     const entries = Tut.entriesFor(this._tutCtx(), onTitle ? Tut.CATEGORY.GAME_MENU : Tut.CATEGORY.GAMEPLAY);
     const ordered = this._orderTourSteps(entries.map(e => ({ id: e.el, entry: e })), bounds).map(s => s.entry);
-    this._tutMode = { scrim, glow, sel, boxG, boxT, banner, tw, objs, entries: ordered, cur: null, bounds, onTitle };
+    this._tutMode = { scrim, glow, sel, boxG, boxT, banner, tw, objs, entries: ordered, cur: null, bounds, onTitle,
+                      nav: { prev: navPrev, close: navClose, next: navNext } };
     scrim.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); this._tutModeTap(ptr); });
     this._tutFirstRunGlow?.destroy?.(); this._tutFirstRunGlow = null;
     this._applyTopRowHandedness();   // lights the HUD "?"
@@ -20551,6 +20607,7 @@ export class GameScene extends Phaser.Scene {
   _tutModeClose() {
     const T = this._tutMode; if (!T) return;
     this._tutMode = null;
+    this._lastTourBox = null;
     try { T.tw?.stop?.(); } catch (_) {}
     for (const o of T.objs) { try { o.destroy(); } catch (_) {} }
     if (!T.onTitle) {
@@ -20575,16 +20632,19 @@ export class GameScene extends Phaser.Scene {
       const seen = !save || Tut.btnSeen(save, 'gameplay');
       if (seen) { this._tutFirstRunDone = true; this._tutFirstRunGlow?.destroy?.(); this._tutFirstRunGlow = null; }
       else {
-        const tbb = this._tutBtnBounds(false);
+        // Only while the HUD row is shown — on the title screen the buttons are
+        // hidden and the glow was floating alone in the corner (owner 2026-09-03).
+        const tbtn = this._topRowButtons?.find(b => b.id === 'tutorial');
+        const tbb = tbtn?.lbl?.visible ? this._tutBtnBounds(false) : null;
         if (tbb) {
           if (!this._tutFirstRunGlow) {
             this._tutFirstRunGlow = this.add.graphics().setDepth(64);
-            try { this._hudObjects?.push(this._tutFirstRunGlow); this.cameras?.main?.ignore?.(this._tutFirstRunGlow); } catch (_) {}
+            this._tutUi([this._tutFirstRunGlow]);
             const rm = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } })();
             this.tweens.add({ targets: this._tutFirstRunGlow, alpha: { from: 1, to: rm ? 0.8 : 0.35 }, duration: rm ? 1400 : 620, yoyo: true, repeat: -1 });
           }
           this._drawTourGlow(this._tutFirstRunGlow, tbb);
-        }
+        } else this._tutFirstRunGlow?.clear();
       }
     }
     const T = this._tutMode; if (!T) return;
@@ -20617,14 +20677,13 @@ export class GameScene extends Phaser.Scene {
     const inside = (b) => b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
     // The "?" button sits UNDER the scrim; a tap on its bounds closes the mode.
     if (inside(this._tutBtnBounds(T.onTitle))) return this._tutModeClose();
-    // Panel open: its left / right third is Prev / Next (browsing is optional,
-    // never required — the middle third just keeps the panel up).
-    const pb = T.cur ? this._lastTourBox : null;
-    if (pb && inside(pb)) {
-      const f = (px - pb.x) / pb.w;
-      if (f < 0.34) return this._tutModeStep(-1);
-      if (f > 0.66) return this._tutModeStep(1);
-      return;
+    // Box open: the footer chips are real hit rects; the panel body swallows.
+    if (T.cur) {
+      const hit = (t) => t.visible && inside(this._objBounds(t));
+      if (hit(T.nav.prev))  return this._tutModeStep(-1);
+      if (hit(T.nav.next))  return this._tutModeStep(1);
+      if (hit(T.nav.close)) return this._tutModeHideBox();
+      if (this._lastTourBox && inside(this._lastTourBox)) return;
     }
     // Any entry, read or unread, in any order.
     for (const e of T.entries) if (inside(T.bounds(e.el))) return this._tutModeShow(e);
@@ -20636,9 +20695,20 @@ export class GameScene extends Phaser.Scene {
     const save = this._tutSave();
     const b = T.bounds(e.el) ?? { x: SCREEN_W / 2 - 40, y: SCREEN_H / 2 - 20, w: 80, h: 40 };
     const i = T.entries.indexOf(e);
-    const nav = `\n\n‹ ${i > 0 ? T.entries[i - 1].title : '—'}   ·   ${i < T.entries.length - 1 ? T.entries[i + 1].title : '—'} ›`;
+    // The box must never cover another highlighted element, the "?" button
+    // (+ its CLOSE label on the title) or the banner (owner 2026-09-03).
+    const avoid = [];
+    for (const o of T.entries) { if (o !== e) { const ob = T.bounds(o.el); if (ob) avoid.push(ob); } }
+    const qb = this._tutBtnBounds(T.onTitle);
+    if (qb) avoid.push({ x: qb.x, y: qb.y, w: qb.w + (T.onTitle ? 70 : 0), h: qb.h });
+    avoid.push(this._objBounds(T.banner, 0));
     T.boxT.setVisible(true);
-    this._placeTourBox(T.boxG, T.boxT, b, `${e.title.toUpperCase()}\n${e.desc}${nav}`);
+    // Trailing blank line reserves the footer row for the chips.
+    const box = this._placeTourBox(T.boxG, T.boxT, b, `${e.title.toUpperCase()}\n${e.desc}\n `, { avoid });
+    const fy = box.y + box.h - 6;
+    T.nav.prev.setPosition(box.x + 10, fy).setVisible(i > 0);
+    T.nav.close.setPosition(box.x + box.w / 2, fy).setVisible(true);
+    T.nav.next.setPosition(box.x + box.w - 10, fy).setVisible(i < T.entries.length - 1);
     // Viewed → read. Persisted by id; Road Scholar on the last one.
     if (Tut.markRead(save, e.id) && Tut.checkRoadScholar(save, this._tutCtx())) {
       AchievementSystem.awardUntiered(Tut.ROAD_SCHOLAR_ID, this.registry);
@@ -20646,8 +20716,15 @@ export class GameScene extends Phaser.Scene {
     this._tutModeUpdate();
   }
 
-  /** Prev / Next — the panel's footer names them; tapping the LEFT or RIGHT
-   *  third of the panel steps through in reading order. Never required. */
+  /** ✕ on the box: drop the text, stay in the mode. */
+  _tutModeHideBox() {
+    const T = this._tutMode; if (!T) return;
+    T.cur = null; T.boxG.clear(); T.boxT.setVisible(false); T.sel.clear();
+    for (const k of ['prev', 'close', 'next']) T.nav[k].setVisible(false);
+    this._lastTourBox = null;
+  }
+
+  /** Prev / Next chips step through in reading order. Never required. */
   _tutModeStep(dir) {
     const T = this._tutMode; if (!T || !T.cur) return;
     const i = T.entries.indexOf(T.cur) + dir;
@@ -20926,7 +21003,9 @@ export class GameScene extends Phaser.Scene {
       const _alpha = Math.max(0, _fade * (_flick > 0 ? 1 - _flick * Math.random() : 1));
       if (this._hudObjects) {
         for (const obj of this._hudObjects) {
-          if (obj && 'alpha' in obj) obj.alpha = _alpha;
+          // _noHudAlpha: tutorial chrome runs its own alpha tween (the gold
+          // throb); this sweep was pinning it to 1 every frame (2026-09-03).
+          if (obj && 'alpha' in obj && !obj._noHudAlpha) obj.alpha = _alpha;
         }
       }
     }
@@ -24276,10 +24355,11 @@ export class GameScene extends Phaser.Scene {
       this._titleScrim, this._titleBackdrop, this._titleMain, this._titleSub, this._titleRoute, this._titleTap,
       this._titleResume,    this._titleResumeTxt,
       this._titleEnterCode, this._titleEnterCodeTxt,
-      this._titleDemoBadge, this._titleTutBtn, this._titleTutGlow,
+      this._titleDemoBadge, this._titleTutBtn, this._titleTutGlow, this._titleTutClose,
       ...(this._titleDifficultyBtns ?? []),
     ].forEach(o => o?.setVisible(v));
     this._tutTitleGlowUpdate();
+    this._tutTitleBtnLit(!!this._tutMode?.onTitle);
     if (Array.isArray(this._titleLetters)) {
       this._titleLetters.forEach(img => img?.setVisible(v));
     }
@@ -25957,7 +26037,7 @@ export class GameScene extends Phaser.Scene {
       this._titleScrim, this._titleBackdrop, this._titleMain, this._titleSub, this._titleRoute, this._titleTap,
       this._titleResume,    this._titleResumeTxt,
       this._titleEnterCode, this._titleEnterCodeTxt,
-      this._titleTutBtn,    this._titleTutGlow,
+      this._titleTutBtn,    this._titleTutGlow, this._titleTutClose,
       ...(this._titleDifficultyBtns ?? []),
       ...(this._titleLetters ?? []),
     ];

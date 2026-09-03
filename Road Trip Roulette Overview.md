@@ -256,6 +256,50 @@ first time, each having its own pulse life."*
   left in place this pass so the removal can be reviewed on its own.
 - Tests: tutorial.test 38 (was 30) — counts re-baselined to 40/24, +9 pulse-life checks (per-button
   independence, idempotence, unknown button, junk repair, intro flag ≠ button flag).
+**Pt 3 (same day) — first on-device playtest (owner screenshots, title screen).** Rulings: *"an X in the
+text box will close the text, but not the tutorial. The Tutorial button closes the tutorial. Maybe add
+some 'close' text after the button in the Game menu, but all others no text"*; *"I don't want the text
+box to cover any highlighted buttons, HUD, or text"*; *"Yellow is unselected"*; Reduce Motion is OFF.
+- **Root cause of "nothing throbs"**: `_renderHUD`'s per-frame HUD alpha sweep (`obj.alpha = _alpha`
+  for every `_hudObjects` entry — the fentanyl fade / caffeine flicker) was pinning every tutorial
+  glow to alpha 1, killing the tween. Tutorial chrome now goes through `_tutUi(objs)` which flags
+  `_noHudAlpha` and the sweep skips it. (The legacy title tour pushed its glow the same way and would
+  have had the same bug.)
+- **Phantom "button" upper-right**: the HUD "?" first-run glow drawn from its bounds while the HUD row
+  is hidden on the title (owner is left-handed → that slot is top-right). Now gated on `lbl.visible`.
+- **Title sign swapped**: filled-yellow `menu_btn_tutorial_active.png` is IDLE; dark face + neon "?"
+  `menu_btn_tutorial.png` is ON. A small `CLOSE` label appears right of it only while on (title only).
+- **Box placement avoids everything**: `_placeTourBox(…, { avoid })` — pass 1 finds the largest font,
+  in band order, at an alignment (centre/start/end × anchor-first y) that clears every rect in
+  `avoid` = all other highlighted bounds + the "?" (+70 px for CLOSE on the title) + the banner; pass 2
+  = old first-fit. So PLATES now lands in the open art to the right instead of over the four cards.
+- **Footer chips**: `‹ PREV · ✕ · NEXT ›` are real Phaser text chips with padded hit rects (generic
+  labels — the old "next-entry name" footer read as broken buttons). ✕ = `_tutModeHideBox()` (text
+  only). Panel body swallows taps.
+- **Phone sheet → TOP** over the status strip (weather / location / time — not targets):
+  `tutmFitSheet()` spans the tile columns (`tutorial` left → `maps` right), top = art top or the notch
+  inset, `max-height` capped above the first tile row (599 art px, tile 233 wide → scale). Nav are real
+  `<button>`s via `addTap` (iOS was not delivering `click` to the spans). ✕ = `tutmHideSheet()` (text
+  only). Banner hides while the sheet is up. This also ends the Safari-bottom-bar clipping.
+- Banner dropped flush to the bottom edge (`SCREEN_H - 3`): at −14 it grazed the START/LOAD frames.
+- **Verified headless** (Playwright probe, scratchpad `tut_probe.cjs`): frames 300 ms apart differ in the
+  glow region with the mode off AND on (throb live); PLATES box → (177,10) 613×283 right of the plates,
+  START box → centred art area, neither touches a card; ✕ leaves `_tutMode` set; close → yellow sign,
+  CLOSE label hidden. Phone: hub → PHONE → sheet at the top (bottom 241 px vs tile row 292 px), NEXT →
+  Maps, ✕ hides the sheet with the capture layer still on. Harness gotchas: `#tilt-explainer.on` pops
+  over the hub ~1 s after the phone opens (drop its `on` class); Playwright's own `click()` never
+  reached the tiles — dispatch pointerdown/up + click at `elementFromPoint` instead; scene handle for
+  probes = `window.__tut._scene()`.
+- **Intro card in the sheet too** (owner: *"say the same thing as it currently does, but without going
+  to a new page"*): `tutmIntro()` now renders the intro text + GOT IT in the same top sheet; no
+  `openApp` page. GOT IT → `tutorialIntroSeen`, sheet hides; the next tile tap opens the hub (still an
+  app page — owner has not asked to move the hub). Sheet is now `display:flex; column` with a
+  scrolling `.tm-body` and a PINNED `.tm-nav`, because in the narrow desktop phone frame the content
+  overran the cap and GOT IT scrolled out of reach (probe caught it: the tap landed on a tile).
+- ⚠️ The owner's 2026-09-03 evening screenshots (dark "?", phantom top-right glow, bottom sheet with
+  entry-name Prev/Next) are the PREVIOUS build — none of Pt 2/Pt 3 is deployed yet.
+- Image viewing in this Claude session works again (screenshots ≤ 2000 px).
+
 - **Name collision found by the headless smoke** (`B.btnSeen is not a function`): the legacy tour's
   music-menu hooks were ALSO published as `window.__tut`, so the two scripts clobbered each other
   depending on load order. Legacy object renamed `window.__tutLegacy` (5 consumer calls in

@@ -186,15 +186,25 @@
     .phone-hit.tutm-selected { outline: 0.7vmin solid #39D9FF; outline-offset: 0.4vmin; border-radius: 2vmin; }
     #tutm-active { position: absolute; display: none; pointer-events: none; z-index: 5; }
     #tutm-active.on { display: block; }
-    #tutm-sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%) translateY(110%); width: min(94vw, 720px);
-      z-index: 999985; box-sizing: border-box; padding: 3vmin 3.2vmin 2.4vmin; text-align: left;
-      background: rgba(6, 16, 30, 0.94); border: 0.5vmin solid #FFD24D; border-bottom: 0; border-radius: 2.4vmin 2.4vmin 0 0;
+    /* Sits over the phone art's status strip (weather / location / time — not
+       tutorial targets) so it never covers a highlighted tile and never sits
+       behind Safari's bottom bar (owner 2026-09-03). left/width/top/max-height
+       are set by tutmFitSheet() from the live tile rects. */
+    #tutm-sheet { position: fixed; top: 0; left: 0; width: 100vw; transform: translateY(-110%); --tutm-sat: env(safe-area-inset-top, 0px);
+      z-index: 999985; box-sizing: border-box; padding: 2.4vmin 3.2vmin 2.4vmin; text-align: left; display: flex; flex-direction: column;
+      background: rgba(6, 16, 30, 0.94); border: 0.5vmin solid #FFD24D; border-top: 0; border-radius: 0 0 2.4vmin 2.4vmin;
       color: #FFF6E0; font: 600 clamp(15px, 3.8vmin, 21px)/1.4 "Helvetica Neue", Arial, sans-serif;
       transition: transform 220ms cubic-bezier(.22,.9,.28,1); }
-    #tutm-sheet.show { transform: translateX(-50%) translateY(0); }
+    #tutm-sheet.show { transform: translateY(0); }
+    /* Only the text scrolls when the cap bites; the button row stays pinned. */
+    #tutm-sheet .tm-body { overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 0; flex: 1 1 auto; }
+    #tutm-sheet .tm-nav { flex: none; }
     #tutm-sheet .tm-title { font: 900 clamp(18px, 4.6vmin, 26px)/1.2 Impact, "Arial Black", sans-serif; color: #FFD24D; letter-spacing: 0.04em; margin-bottom: 1.2vmin; }
-    #tutm-sheet .tm-nav { display: flex; justify-content: space-between; margin-top: 2vmin; color: #39D9FF; font-weight: 800; }
-    #tutm-sheet .tm-nav span { padding: 1vmin 2vmin; cursor: pointer; }
+    #tutm-sheet .tm-nav { display: flex; justify-content: space-between; align-items: center; gap: 2vmin; margin-top: 2vmin; }
+    #tutm-sheet .tm-nav button { background: rgba(57,217,255,0.10); border: 0.35vmin solid #39D9FF; border-radius: 1.6vmin; color: #39D9FF;
+      font: 900 clamp(14px, 3.6vmin, 18px) Impact, "Arial Black", sans-serif; letter-spacing: 0.05em; padding: 1.4vmin 2.4vmin; cursor: pointer; min-width: 22%; white-space: nowrap; }
+    #tutm-sheet .tm-nav button[data-nav="x"] { color: #FFD24D; border-color: #FFD24D; background: rgba(255,210,77,0.10); min-width: 14%; }
+    #tutm-sheet .tm-nav button[disabled] { opacity: 0.3; pointer-events: none; }
     #tutm-banner { position: fixed; top: 1.2vmin; left: 50%; transform: translateX(-50%); z-index: 999986; display: none;
       padding: 0.8vmin 2.4vmin; border-radius: 99px; background: rgba(6,16,30,0.9); border: 0.4vmin solid #FFD24D;
       color: #FFD24D; font: 900 clamp(12px, 3vmin, 16px) Impact, "Arial Black", sans-serif; letter-spacing: 0.06em; white-space: nowrap; }
@@ -4808,15 +4818,45 @@
       const tutmGlow = () => {
         for (const e of tutmEls()) qhit(e.el)?.classList.toggle('tut-flash', !T().isRead(e.id));
       };
+      // Sheet geometry from the LIVE tile rects: spans the tile columns, top
+      // at the art's top edge (or the notch inset), and capped so its bottom
+      // never reaches the first tile row (tiles start 599 art px down; the
+      // tutorial tile is 233 art px wide → scale).
+      const tutmFitSheet = () => {
+        const a = qhit('tutorial')?.getBoundingClientRect(), z = qhit('maps')?.getBoundingClientRect();
+        if (!a || !z || !a.width) return;
+        const scale  = a.width / 233;
+        const artTop = a.top - 599 * scale;
+        const sat    = parseFloat(getComputedStyle(tutmSheet).getPropertyValue('--tutm-sat')) || 0;
+        const top    = Math.max(artTop, sat, 0);
+        tutmSheet.style.left = a.left + 'px';
+        tutmSheet.style.width = (z.right - a.left) + 'px';
+        tutmSheet.style.top = top + 'px';
+        tutmSheet.style.maxHeight = Math.max(80, a.top - top - 8) + 'px';
+      };
+      window.addEventListener('resize', tutmFitSheet);
+      const tutmHideSheet = () => {              // ✕: drop the text, stay in the mode
+        tutmCur = null;
+        tutmSheet.classList.remove('show');
+        document.querySelectorAll('.phone-hit.tutm-selected').forEach(x => x.classList.remove('tutm-selected'));
+        if (tutmOn) tutmBanner.classList.add('on');
+      };
       const tutmShow = (e) => {
         tutmCur = e;
         document.querySelectorAll('.phone-hit.tutm-selected').forEach(x => x.classList.remove('tutm-selected'));
         qhit(e.el)?.classList.add('tutm-selected');
         const list = tutmEls(), i = list.indexOf(e);
-        tutmSheet.innerHTML = `<div class="tm-title">${e.title}</div><div>${e.desc}</div>
-          <div class="tm-nav"><span data-nav="-1">${i > 0 ? '‹ ' + list[i-1].title : ''}</span>
-          <span data-nav="x">✕</span><span data-nav="1">${i < list.length-1 ? list[i+1].title + ' ›' : ''}</span></div>`;
+        tutmSheet.innerHTML = `<div class="tm-title">${e.title}</div><div class="tm-body">${e.desc}</div>
+          <div class="tm-nav"><button data-nav="-1" ${i > 0 ? '' : 'disabled'}>‹ PREV</button>
+          <button data-nav="x">✕</button><button data-nav="1" ${i < list.length - 1 ? '' : 'disabled'}>NEXT ›</button></div>`;
+        // Real buttons through the project's tap helper — iOS was not
+        // delivering click events to the old text spans (owner 2026-09-03).
+        addTap(tutmSheet.querySelector('[data-nav="-1"]'), () => { if (i > 0) tutmShow(list[i - 1]); });
+        addTap(tutmSheet.querySelector('[data-nav="1"]'),  () => { if (i < list.length - 1) tutmShow(list[i + 1]); });
+        addTap(tutmSheet.querySelector('[data-nav="x"]'),  tutmHideSheet);
+        tutmFitSheet();
         tutmSheet.classList.add('show');
+        tutmBanner.classList.remove('on');       // the sheet occupies the banner's strip
         T().markRead(e.id); tutmGlow();
       };
       const tutmOpen = () => {
@@ -4841,13 +4881,6 @@
       };
       tutmCap.addEventListener('pointerup', tutmHit, { passive: false });
       tutmCap.addEventListener('click',     tutmHit, { passive: false });
-      tutmSheet.addEventListener('click', (ev) => {
-        const nav = ev.target?.dataset?.nav; if (!nav) return;
-        ev.preventDefault(); ev.stopPropagation();
-        if (nav === 'x') { tutmSheet.classList.remove('show'); return; }
-        const list = tutmEls(), i = list.indexOf(tutmCur) + Number(nav);
-        if (i >= 0 && i < list.length) tutmShow(list[i]);
-      });
       const tutmHub = () => {
         const pr = T().progress(), L = T().labels;
         const row = (cat) => `<button data-cat="${cat}">${L[cat]}<b>${pr.byCat[cat].read}/${pr.byCat[cat].total}</b></button>`;
@@ -4861,11 +4894,17 @@
           if (cat === 'game_menu') T().openGameMenu();
         }));
       };
+      // Intro card IN the top sheet over the weather / location / time strip —
+      // no app page (owner 2026-09-03: "say the same thing as it currently
+      // does, but without going to a new page").
       const tutmIntro = () => {
-        openApp('TUTORIAL', `<div style="text-align:center;font-weight:700">This is the Tutorial button. You'll find this icon on each screen.
+        tutmSheet.innerHTML = `<div class="tm-title">Tutorial</div><div class="tm-body">This is the Tutorial button. You'll find this icon on each screen.
           Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
-          or display to learn what it does.</div><div class="tm-hub" style="margin-top:3vmin"><button data-ok="1" style="justify-content:center">GOT IT</button></div>`);
-        addTap(appBody.querySelector('[data-ok]'), () => { T().setIntroSeen(); qhit('tutorial')?.classList.remove('tut-flash'); appModal.classList.remove('open'); markModalClosing(); });
+          or display to learn what it does.</div>
+          <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>`;
+        addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); qhit('tutorial')?.classList.remove('tut-flash'); tutmSheet.classList.remove('show'); });
+        tutmFitSheet();
+        tutmSheet.classList.add('show');
       };
       addTap(qhit('tutorial'), () => {
         if (tutmOn) return tutmClose();
