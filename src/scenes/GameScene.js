@@ -59,13 +59,14 @@ import { Difficulty }    from '../systems/Difficulty.js';
 import { TimeOfDay }     from '../world/TimeOfDay.js';
 import { Weather }       from '../world/Weather.js';
 import { AchievementSystem } from '../systems/AchievementSystem.js';
+import * as Tut from '../systems/TutorialSystem.js';
 import { DamageModel }   from '../car/DamageModel.js';
 import { CloudSave }     from '../systems/CloudSave.js';
 import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
 import { getPaletteAtProgress, lerpColor } from '../utils/Colors.js';
 import { getUpgradeEffects, getInstalledUpgrade, clearTempUpgrades } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
-import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs, policeWarningChance } from '../data/genreVehicleTraits.js';
+import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs, policeWarningChance, speedForDifficulty } from '../data/genreVehicleTraits.js';
 import { POLICE_AGENCIES, POLICE_SPRITE_META, agencyPoolAt, agencyTextureList, pickAgencyId,
          resolvePoliceSprite, jurFrameKey, SPIN_LADDER_FULL, PIT_CONTACT_LADDER,
          SPIN_360_WRECK, SPIN_360_PIT } from '../data/policeAgencies.js';
@@ -577,6 +578,9 @@ function makePlayer() {
 // `wiper` sits in the bottom gap between the location/mileage readout and the
 // accelerator (its base hugs the top-right edge, hence the large −dx/+dy);
 // rearCop rides its y73 top-anchored base (15px below the mirror bottom) + dy.
+// Title-screen Tutorial "?" — 800×450 design coords, upper-left, above the
+// driver plates (which start at y104). Same 56 px as the HUD tile.
+const TUT_TITLE_BTN = { x: 16, y: 16, s: 56 };
 const DEFAULT_HUD_LAYOUT = {
   popup:      { dx: -1,   dy: -25, scale: 1.1262099400177235 },
   hpDamage:   { dx: 396,  dy: 275, scale: 1.7629642295565735 },
@@ -588,7 +592,7 @@ const DEFAULT_HUD_LAYOUT = {
   btn_genre:  { dx: -66,  dy: 1,   scale: 1 },
   mult:       { dx: 41,   dy: 6,   scale: 1 },
   score:      { dx: 2,    dy: -2,  scale: 1.0853674898138321 },
-  btn_garage: { dx: 49,   dy: 2,   scale: 1 },
+  btn_tutorial: { dx: 49, dy: 2,   scale: 1 },   // the slot Garage held until 2026-09-03
   btn_map:    { dx: 59,   dy: 3,   scale: 1 },
   btn_mute:   { dx: 68,   dy: 3,   scale: 1 },
   wiper:      { dx: -150, dy: 320, scale: 1.033918411681667  },   // shifted left off the accelerator into the location↔pedal gap (owner 2026-07-20)
@@ -1200,6 +1204,15 @@ export class GameScene extends Phaser.Scene {
       if (this._hudLayout.survbars && !this._hudLayout.survA) {
         this._hudLayout.survA = { ...this._hudLayout.survbars };
         delete this._hudLayout.survbars;
+      }
+      // Migration (2026-09-03): the in-game Garage shortcut became the Tutorial
+      // "?" in the SAME slot, so a saved Garage offset is the Tutorial offset.
+      // Non-destructive: an explicit btn_tutorial entry wins; the stale key is
+      // dropped either way so the editor never shows a phantom control.
+      if (this._hudLayout.btn_garage) {
+        if (!this._hudLayout.btn_tutorial) this._hudLayout.btn_tutorial = { ...this._hudLayout.btn_garage };
+        delete this._hudLayout.btn_garage;
+        _save?.set?.('controlsLayout', this._hudLayout);
       }
       this._hudUndoStack = [];
       // Colorblind mode removed (owner 2026-07-17) — permanently off; the
@@ -1888,6 +1901,7 @@ export class GameScene extends Phaser.Scene {
       this.scene.restart();
     };
     this.input.keyboard?.on('keydown', this._handednessHandler);
+    this.input.keyboard?.on('keydown-ESC', () => { if (this._tutMode) this._tutModeClose(); });
     this.events.once('shutdown', () => this.input.keyboard?.off('keydown', this._handednessHandler));
 
     // ── DEV WARP — REMOVE BEFORE RELEASE ──────────────────────────────
@@ -2360,19 +2374,21 @@ export class GameScene extends Phaser.Scene {
       return [bg, lbl];
     };
     // New layout — readout reservation (speed/time/$) sits adjacent to
-    // the mirror, then Mute, then Map, then Garage further right.
-    // (Wiper, when shown, sits beyond Garage; see music-cluster code.)
+    // the mirror, then Mute, then Map, then the Tutorial "?" further right.
+    // (Wiper, when shown, sits beyond it; see music-cluster code.)
     const READOUT_W = 95;
     const mapX = MIRROR_RIGHT + READOUT_W + iconGap + iconSize + iconGap;   // past Mute
-    const garX = mapX + iconSize + iconGap;
+    // TUTORIAL "?" takes the slot Garage held (owner 2026-09-03: "Get rid of the
+    // garage button on the HUD"). Garage is reached from the Phone menu only.
+    const tutX = mapX + iconSize + iconGap;
     const [mapBg, mapLbl] = makeIconBtn(mapX, 'map', () => this._buildMapModal());
-    const [garBg, garLbl] = makeIconBtn(garX, 'garage', () => this._buildGarageModal());
+    const [tutBg, tutLbl] = makeIconBtn(tutX, 'tutorial', () => this._tutModeToggle());
     // Tracked via _hudObjects (always-visible HUD pool) instead of
     // _pauseObjects so they survive the _togglePause visibility sweep.
-    this._hudObjects.push(mapBg, mapLbl, garBg, garLbl);
+    this._hudObjects.push(mapBg, mapLbl, tutBg, tutLbl);
     if (this._topRowButtons) {
-      this._topRowButtons.push({ id: 'map',    bg: mapBg, lbl: mapLbl, artType: 'map',    baseLeft: mapX, size: iconSize });
-      this._topRowButtons.push({ id: 'garage', bg: garBg, lbl: garLbl, artType: 'garage', baseLeft: garX, size: iconSize });
+      this._topRowButtons.push({ id: 'map',      bg: mapBg, lbl: mapLbl, artType: 'map',      baseLeft: mapX, size: iconSize });
+      this._topRowButtons.push({ id: 'tutorial', bg: tutBg, lbl: tutLbl, artType: 'tutorial', baseLeft: tutX, size: iconSize });
     }
 
     const checkpointBtn = this._buildPauseButton(
@@ -6161,7 +6177,7 @@ export class GameScene extends Phaser.Scene {
    *  ×0.85 penalty) is measured off this fixed per-car baseline. */
   _baselineCruiseMph() {
     const gvt = this._activeGenreTrait?.();
-    if (gvt) return gvt.cruiseMph;
+    if (gvt) return speedForDifficulty(gvt.cruiseMph, Difficulty.mode());
     const veh = VEHICLES[this.player.vehicleId] ?? VEHICLES.beater;
     return (veh.topMph + (veh.boostMph ?? 20)) * 0.75;
   }
@@ -6192,8 +6208,8 @@ export class GameScene extends Phaser.Scene {
     // (topSpeedMph) and no-pedal cruise (cruiseMph) — see genreVehicleTraits.js.
     // Caffeine + upgrades add on top of both. Non-genre beater falls back to its
     // own topMph + boost for the max and 75% of that for cruise.
-    const _boostBase  = _gvt ? _gvt.topSpeedMph : (_vehSpec.topMph + _boostDelta);
-    const _cruiseBase = _gvt ? _gvt.cruiseMph   : (_vehSpec.topMph + _boostDelta) * 0.75;
+    const _boostBase  = _gvt ? speedForDifficulty(_gvt.topSpeedMph, Difficulty.mode()) : (_vehSpec.topMph + _boostDelta);
+    const _cruiseBase = _gvt ? speedForDifficulty(_gvt.cruiseMph,   Difficulty.mode()) : (_vehSpec.topMph + _boostDelta) * 0.75;
     // Engine top-speed upgrade is a PERCENT of the base top speed (owner
     // 2026-07-21): Tune-Up/Cold Air/ECU = +3/+5/+10%.  Flat upMph (buffs) still
     // stacks on top.
@@ -9833,7 +9849,7 @@ export class GameScene extends Phaser.Scene {
       // phone Garage panel + the Music long-hold peek.
       const _rowTrait = genreTraitFor(this.registry?.get?.('save')?.get?.('genre', null), vid);
       const _statsTxt = _rowTrait
-        ? `${_rowTrait.vehicleName} · ${v.hp} HP · ${v.rangeMi} mi · ${_rowTrait.topSpeedMph} mph`
+        ? `${_rowTrait.vehicleName} · ${v.hp} HP · ${v.rangeMi} mi · ${speedForDifficulty(_rowTrait.topSpeedMph, Difficulty.mode())} mph`
         : `${v.hp} HP · ${v.rangeMi} mi · ${v.topMph} mph`;
       const stats = this.add.text(rx + 40, ry + 24, _statsTxt, {
         fontSize: '12px', fontFamily: 'Arial', color: '#A9DFFF',
@@ -11755,10 +11771,13 @@ export class GameScene extends Phaser.Scene {
     if (type === 'genre') return 'ui_top_btn_genre';
     if (type === 'mute') return lit ? 'ui_top_btn_mute' : 'ui_top_btn_unmute';
     if (type === 'map') return 'ui_top_btn_map';
-    if (type === 'garage') return 'ui_top_btn_garage';
+    if (type === 'tutorial') return lit ? 'ui_top_btn_tutorial_active' : 'ui_top_btn_tutorial';
     return 'ui_top_btn_genre';
   }
 
+  /** Placeholder "?" caution signs, generated once, ONLY if the manifest has
+   *  not supplied the real plates. Normal = yellow triangle, dark "?".
+   *  Active = inverse. Both 150x150 to match the top_btn_* convention. */
   _setTopRowButtonTexture(img, type, lit = false, size = 56) {
     // Guard against destroyed GameObjects (scene-restart leaves dead
     // refs on `this` until _buildHUD reassigns).  Phaser nulls
@@ -11797,36 +11816,6 @@ export class GameScene extends Phaser.Scene {
       icon.lineBetween(7, -1, 7, 5);
       icon.fillStyle(pink, 1);
       icon.fillCircle(7, -6, 1.8);
-      return;
-    }
-
-    if (type === 'garage') {
-      const garagePts = [
-        { x: -16, y: 16 }, { x: -16, y: -6 }, { x: 0, y: -16 },
-        { x: 16, y: -6 }, { x: 16, y: 16 },
-      ];
-      glowLine(3, cyan);
-      icon.strokePoints(garagePts, false);
-      hotLine(2, cyan);
-      icon.strokePoints(garagePts, false);
-      hotLine(1.5, cyan);
-      icon.lineBetween(-10, 0, 10, 0);
-      icon.lineBetween(-10, 5, 10, 5);
-      icon.lineBetween(-10, 10, 10, 10);
-      icon.strokeRect(-7, 8, 14, 8);
-      const carPts = [
-        { x: -14, y: 18 }, { x: -10, y: 12 }, { x: 10, y: 12 },
-        { x: 14, y: 18 },
-      ];
-      icon.fillStyle(pink, 0.55);
-      icon.fillPoints([{ x: -14, y: 18 }, { x: -10, y: 12 }, { x: 10, y: 12 }, { x: 14, y: 18 }], true);
-      glowLine(3, pink, 0.12);
-      icon.strokePoints(carPts, false);
-      hotLine(2.5, pink);
-      icon.strokePoints(carPts, false);
-      icon.fillStyle(pink, 1);
-      icon.fillCircle(-9, 18, 2.4);
-      icon.fillCircle(9, 18, 2.4);
       return;
     }
 
@@ -11902,7 +11891,9 @@ export class GameScene extends Phaser.Scene {
     for (const btn of this._topRowButtons) {
       const x = lh ? btn.baseLeft : (SCREEN_W - btn.baseLeft - btn.size);
       const isPause = btn.id === 'pause';
-      const lit = isPause ? this._paused : (btn.id === 'mute' ? !!this.audio?.muted : false);
+      const lit = isPause ? this._paused
+                : btn.id === 'mute'     ? !!this.audio?.muted
+                : btn.id === 'tutorial' ? !!this._tutMode : false;
       if (btn.artType) {
         btn.bg.clear();
         this._setTopRowButtonTexture(btn.lbl, btn.artType, lit, btn.size);
@@ -19599,13 +19590,34 @@ export class GameScene extends Phaser.Scene {
     // toggled with the rest of the title by _setTitleVisible.
     this._titleDemoBadge = null;
     if (C.DEMO_MODE) {
-      this._titleDemoBadge = this.add.text(60, 28, 'DEMO', {
+      // Sits right of the Tutorial "?" (x16–72) since 2026-09-03.
+      this._titleDemoBadge = this.add.text(124, 44, 'DEMO', {
         fontSize: '20px', fontFamily: IMPACT, color: '#FFFFFF',
         backgroundColor: '#FF39AF', padding: { x: 12, y: 5 },
         stroke: '#39A8FF', strokeThickness: 3,
       }).setOrigin(0.5).setDepth(d + 20).setVisible(!!this._awaitingStart);
       this._hudObjects?.push(this._titleDemoBadge);
       this.cameras?.main?.ignore?.([this._titleDemoBadge]);   // UI camera only
+    }
+
+    // ── Tutorial "?" (owner 2026-09-03): standalone caution sign in the open
+    // upper-left corner, above the driver-plate column (plates start y104,
+    // x16–153). Same 56 px as the HUD tile; toggles the Game Menu Tutorial
+    // Mode. Pulses gold until its first selection (_tutTitleGlowUpdate).
+    {
+      const { x: TX, y: TY, s: TS } = TUT_TITLE_BTN;
+      const img = this.add.image(TX + TS / 2, TY + TS / 2, 'ui_menu_btn_tutorial')
+        .setDisplaySize(TS, TS).setDepth(d + 12).setAlpha(0.94)
+        .setVisible(!!this._awaitingStart)
+        .setInteractive({ useHandCursor: true });
+      img.on('pointerover', () => img.setAlpha(1));
+      img.on('pointerout',  () => img.setAlpha(0.94));
+      img.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); this._tutTitleToggle(); });
+      this._titleTutBtn = img;
+      this._titleTutGlow = null;
+      this._hudObjects?.push(img);
+      this.cameras?.main?.ignore?.([img]);   // UI camera only
+      this._tutTitleGlowUpdate();
     }
 
     const save = this.registry.get('save');
@@ -19632,7 +19644,9 @@ export class GameScene extends Phaser.Scene {
         new Phaser.Geom.Point(x + w, y + h),
         new Phaser.Geom.Point(x,     y + h),
       ];
-      return { points: pts, outline: pts };
+      // `rect` lets the contextual tutorial outline a zone from the SAME
+      // geometry the hit-test uses — never a second hand-typed copy.
+      return { points: pts, outline: pts, rect: { x, y, w, h } };
     };
     const makeTitleZone = (shape, glow, onTap, paintInterior = null) => {
       const g = this.add.graphics().setDepth(d + 10);
@@ -19647,6 +19661,7 @@ export class GameScene extends Phaser.Scene {
       draw();
       const hitArea = new Phaser.Geom.Polygon(shape.points);
       g.setInteractive(hitArea, Phaser.Geom.Polygon.Contains);
+      g._tutRect = shape.rect ?? null;
       g.input.cursor = 'pointer';
       g.on('pointerover', () => draw(true));
       g.on('pointerout',  () => draw(false));
@@ -19787,6 +19802,8 @@ export class GameScene extends Phaser.Scene {
       () => this._titleLoadSave());
     this._titleDifficultyBtns.push(startBg, diffBg, steeringBg, savedBg);
     this._titleResume = savedBg;
+    // Title-screen tutorial targets, by the same element keys the registry uses.
+    this._titleZones = { start: startBg, diff: diffBg, drive: steeringBg, load: savedBg };
     this._titleResumeTxt = null;
     updateSelectionText();
     // Force the difficulty/driving wheels to specific ids — used by the guided
@@ -20045,6 +20062,7 @@ export class GameScene extends Phaser.Scene {
     boxG.clear();
     boxG.fillStyle(0x06101E, 0.86);
     boxG.fillRoundedRect(bx - bw / 2, by, bw, bh, 10);
+    this._lastTourBox = { x: bx - bw / 2, y: by, w: bw, h: bh };   // for Prev/Next hit-testing
     boxG.lineStyle(2, 0xFFD24D, 0.9);
     boxG.strokeRoundedRect(bx - bw / 2, by, bw, bh, 10);
     boxT.setPosition(bx, by + PADY);
@@ -20215,6 +20233,23 @@ export class GameScene extends Phaser.Scene {
   // The first guided run freezes on start and walks EVERY movable HUD element
   // with a golden highlight + a description box placed clear of it, ending on
   // the Pause button (tap it → resume). owner 2026-07-18.
+  /** Live bounds for a Game Menu (title screen) tutorial element. Zones come
+   *  from the geometry their own hit-tests use; the plate strip is the union of
+   *  the slot objects. Replaces the five hand-typed rects the old title walk
+   *  carried, which drifted the first time the layout moved. */
+  _titleElementBounds(el) {
+    if (el === 'plates') {
+      const objs = this._plateSlotObjs ?? [];
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, n = 0;
+      for (const o of objs) {
+        const b = o?.getBounds?.(); if (!b || !(b.width > 0)) continue;
+        x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.right); y1 = Math.max(y1, b.bottom); n++;
+      }
+      return n ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+    }
+    return this._titleZones?.[el]?._tutRect ?? null;
+  }
+
   _hudElementBounds(id) {
     const textB = (o) => {
       if (!o) return null;
@@ -20286,7 +20321,6 @@ export class GameScene extends Phaser.Scene {
       { id: 'radio',      text: "Shows you what you're jamming to." },
       { id: 'weapons',    text: "Your stash — rolling coal, fireworks, donuts. Grab them off the road (3 max each) and deploy to shake the law." },
       { id: 'btn_map',    text: "Your route map — rest stops ahead, and fast-travel in Custom." },
-      { id: 'btn_garage', text: "Buy upgrades with the cash you earn." },
       { id: 'btn_genre',  text: "You chose your jams, but there are plenty more to earn. Each genre has its own vehicle and item artwork." },
       { id: 'btn_mute',   text: "Mute or unmute the game." },
       { id: 'btn_ff',     text: "Skip to the next song on your playlist." },
@@ -20332,12 +20366,12 @@ export class GameScene extends Phaser.Scene {
    *  bounds: top→bottom by row, left→right within a row.  Pause is forced last
    *  (tapping it ends the tour); any step still lacking bounds is appended just
    *  before Pause so it's never dropped. */
-  _orderTourSteps(steps) {
+  _orderTourSteps(steps, boundsFor = (id) => this._hudElementBounds(id)) {
     const pause = steps.filter(s => s.id === 'btn_pause');
     const rest  = steps.filter(s => s.id !== 'btn_pause');
     const withB = [], noB = [];
     for (const s of rest) {
-      const b = this._hudElementBounds(s.id);
+      const b = boundsFor(s.id);
       if (b && b.w > 0 && b.h > 0) withB.push({ s, cx: b.x + b.w / 2, cy: b.y + b.h / 2 });
       else noB.push(s);
     }
@@ -20374,6 +20408,250 @@ export class GameScene extends Phaser.Scene {
     while (n < T.steps.length && !this._hudElementBounds(T.steps[n].id)) n++;
     if (n >= T.steps.length) { this._endHudTour(); return; }
     this._hudTourShow(n);
+  }
+
+  // ═══ CONTEXTUAL TUTORIAL MODE (in-game) ═══════════════════════════════
+  // Toggled by the "?" button. Pauses the run (same mechanism as the HUD tour),
+  // outlines every UNREAD gameplay entry in the throbbing gold border, and lets
+  // the player tap ANY entry — read or unread — in any order for a title +
+  // description. Reading clears that entry's border and persists by stable id
+  // (TutorialSystem). Normal button actions cannot fire while it is open: the
+  // scrim sits above the HUD and owns every tap. Closing: the lit "?" button
+  // again, ESC, or the panel's ✕.
+  _tutCtx() { return { platform: navigator?.platform ?? '', custom: !!this._customFlags }; }
+  _tutSave() { return this.registry?.get?.('save'); }
+
+  _tutModeToggle() {
+    if (this._tutMode) return this._tutModeClose();
+    // This button's pulse life ends on its first selection (owner 2026-09-03:
+    // "every tutorial button will pulse until each is selected for the first
+    // time, each having its own pulse life").
+    Tut.setBtnSeen(this._tutSave(), 'gameplay');
+    // First ever press of ANY Tutorial button: the intro card, not the mode.
+    const save = this._tutSave();
+    if (save && !save.get('tutorialIntroSeen', false)) return this._tutShowIntro(false);
+    this._tutModeOpen();
+  }
+
+  /** Title-screen "?" (standalone caution sign, upper-left). */
+  _tutTitleToggle() {
+    if (this._tutMode) return this._tutModeClose();
+    Tut.setBtnSeen(this._tutSave(), 'game_menu');
+    this._tutTitleGlowUpdate();
+    const save = this._tutSave();
+    if (save && !save.get('tutorialIntroSeen', false)) return this._tutShowIntro(true);
+    this._tutModeOpen('game_menu');
+  }
+
+  /** Live bounds of the Tutorial button on the current screen. */
+  _tutBtnBounds(onTitle) {
+    if (onTitle) {
+      const b = this._titleTutBtn;
+      return (b && b.scene) ? { x: b.x - b.displayWidth / 2, y: b.y - b.displayHeight / 2, w: b.displayWidth, h: b.displayHeight } : null;
+    }
+    const tb = this._topRowButtons?.find(b => b.id === 'tutorial');
+    return (tb && tb._lsz != null) ? { x: tb._lx, y: tb._ly, w: tb._lsz, h: tb._lsz } : null;
+  }
+
+  _tutTitleBtnLit(lit) {
+    const b = this._titleTutBtn; if (!b || !b.scene) return;
+    b.setTexture(lit ? 'ui_menu_btn_tutorial_active' : 'ui_menu_btn_tutorial').setDisplaySize(TUT_TITLE_BTN.s, TUT_TITLE_BTN.s);
+  }
+
+  /** Gold throb on the title "?" until its first selection; hidden while the
+   *  mode is open (the active icon never pulses) and while the title is away.
+   *  Event-driven (build / toggle / open / close / visibility), not per-frame:
+   *  the title button never moves. */
+  _tutTitleGlowUpdate() {
+    const btn = this._titleTutBtn; if (!btn || !btn.scene) return;
+    const show = btn.visible && !this._tutMode && !Tut.btnSeen(this._tutSave(), 'game_menu');
+    if (!show) { if (this._titleTutGlow) { try { this._titleTutGlow.destroy(); } catch (_) {} this._titleTutGlow = null; } return; }
+    if (this._titleTutGlow) return;
+    const g = this.add.graphics().setDepth(btn.depth - 1);
+    try { this._hudObjects?.push(g); this.cameras?.main?.ignore?.(g); } catch (_) {}
+    this._drawTourGlow(g, this._tutBtnBounds(true));
+    const rm = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } })();
+    this.tweens.add({ targets: g, alpha: { from: 1, to: rm ? 0.8 : 0.35 }, duration: rm ? 1400 : 620, yoyo: true, repeat: -1 });
+    this._titleTutGlow = g;
+  }
+
+  _tutShowIntro(onTitle = false) {
+    const D = 97;
+    const scrim = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 3, SCREEN_H * 3, 0x02060E, 0.6)
+      .setDepth(D).setScrollFactor(0).setInteractive();
+    const boxG = this.add.graphics().setDepth(D + 1);
+    const boxT = this.add.text(0, 0, '', {
+      fontSize: '24px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
+      align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5, 0).setDepth(D + 2);
+    const target = this._tutBtnBounds(onTitle) ?? { x: SCREEN_W / 2, y: 4, w: 56, h: 56 };
+    const hi = this.add.graphics().setDepth(D + 1);
+    this._drawTourGlow(hi, target);
+    this._placeTourBox(boxG, boxT, target,
+      "This is the Tutorial button. You'll find this icon on each screen. Whenever you have a " +
+      "question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, " +
+      "text, or display to learn what it does.");
+    const ok = this.add.text(SCREEN_W / 2, SCREEN_H - 34, 'GOT IT', {
+      fontSize: '20px', fontFamily: IMPACT, color: '#12161C', backgroundColor: '#FFD24D',
+      padding: { x: 22, y: 8 },
+    }).setOrigin(0.5).setDepth(D + 3).setInteractive({ useHandCursor: true });
+    const objs = [scrim, hi, boxG, boxT, ok];
+    try { this._hudObjects?.push(...objs); this.cameras?.main?.ignore?.(objs); } catch (_) {}
+    const done = () => {
+      for (const o of objs) { try { o.destroy(); } catch (_) {} }
+      this._tutSave()?.set?.('tutorialIntroSeen', true);
+      this._tutFirstRunGlow?.destroy?.(); this._tutFirstRunGlow = null;
+    };
+    ok.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); done(); });
+    scrim.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); });
+  }
+
+  /** Category-generic: 'gameplay' (HUD, pauses the run) or 'game_menu' (title
+   *  screen, nothing to pause). Both share one chrome and one read model. */
+  _tutTitleModeOpen() { this._tutModeOpen('game_menu'); }
+
+  _tutModeOpen(cat = 'gameplay') {
+    if (this._tutMode) return;
+    const onTitle = cat === 'game_menu';
+    const bounds  = onTitle ? (el) => this._titleElementBounds(el) : (el) => this._hudElementBounds(el);
+    const D = 96;
+    const scrim = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 3, SCREEN_H * 3, 0x02060E, 0.42)
+      .setDepth(D).setScrollFactor(0).setInteractive();
+    const glow  = this.add.graphics().setDepth(D + 2);   // unread borders (all)
+    const sel   = this.add.graphics().setDepth(D + 3);   // the selected element
+    const boxG  = this.add.graphics().setDepth(D + 4);
+    const boxT  = this.add.text(0, 0, '', {
+      fontSize: '22px', fontFamily: '"Helvetica Neue", Arial, sans-serif', color: '#FFF6E0',
+      align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5, 0).setDepth(D + 5).setVisible(false);
+    const banner = this.add.text(SCREEN_W / 2, SCREEN_H - 14, 'TUTORIAL MODE  ·  tap anything to learn what it does  ·  tap ? to exit', {
+      fontSize: '13px', fontFamily: IMPACT, color: '#FFD24D', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5, 1).setDepth(D + 5);
+    // Reduced motion: a gentle 0.8→1 breathe instead of the strong pulse.
+    const rm = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } })();
+    const tw = this.tweens.add({ targets: glow, alpha: { from: 1, to: rm ? 0.8 : 0.35 }, duration: rm ? 1400 : 620, yoyo: true, repeat: -1 });
+    const objs = [scrim, glow, sel, boxG, boxT, banner];
+    try { this._hudObjects?.push(...objs); this.cameras?.main?.ignore?.(objs); } catch (_) {}
+    if (!onTitle) {
+      this._paused = true;
+      this._showEditorPopupPlaceholders();
+      this.hudStars?.setText('★★☆☆☆').setColor('#FFD24D').setVisible(true);
+    }
+    const entries = Tut.entriesFor(this._tutCtx(), onTitle ? Tut.CATEGORY.GAME_MENU : Tut.CATEGORY.GAMEPLAY);
+    const ordered = this._orderTourSteps(entries.map(e => ({ id: e.el, entry: e })), bounds).map(s => s.entry);
+    this._tutMode = { scrim, glow, sel, boxG, boxT, banner, tw, objs, entries: ordered, cur: null, bounds, onTitle };
+    scrim.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); this._tutModeTap(ptr); });
+    this._tutFirstRunGlow?.destroy?.(); this._tutFirstRunGlow = null;
+    this._applyTopRowHandedness();   // lights the HUD "?"
+    this._tutTitleBtnLit(onTitle);   // lights the title "?" (active = filled yellow sign)
+    this._tutTitleGlowUpdate();
+    this._tutModeUpdate();
+  }
+
+  _tutModeClose() {
+    const T = this._tutMode; if (!T) return;
+    this._tutMode = null;
+    try { T.tw?.stop?.(); } catch (_) {}
+    for (const o of T.objs) { try { o.destroy(); } catch (_) {} }
+    if (!T.onTitle) {
+      this._hideEditorPopupPlaceholders();
+      this.hudStars?.setText('').setVisible(false);
+      this._paused = false;
+    }
+    this._applyTopRowHandedness();   // un-lights the HUD "?"
+    this._tutTitleBtnLit(false);
+    this._tutTitleGlowUpdate();
+  }
+
+  /** Redraw every unread border from LIVE bounds. Runs each frame while open,
+   *  so a customized, resized or handedness-flipped control keeps its border
+   *  glued on. ~24 rects — trivial. */
+  _tutModeUpdate() {
+    // Pulse life of the in-game "?": gold throb until ITS first selection
+    // (tutorialBtnSeen.gameplay — independent of the title and phone buttons).
+    // Drawn from LIVE bounds so it follows handedness and custom layouts.
+    if (!this._tutMode && !this._tutFirstRunDone) {
+      const save = this._tutSave();
+      const seen = !save || Tut.btnSeen(save, 'gameplay');
+      if (seen) { this._tutFirstRunDone = true; this._tutFirstRunGlow?.destroy?.(); this._tutFirstRunGlow = null; }
+      else {
+        const tbb = this._tutBtnBounds(false);
+        if (tbb) {
+          if (!this._tutFirstRunGlow) {
+            this._tutFirstRunGlow = this.add.graphics().setDepth(64);
+            try { this._hudObjects?.push(this._tutFirstRunGlow); this.cameras?.main?.ignore?.(this._tutFirstRunGlow); } catch (_) {}
+            const rm = (() => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } })();
+            this.tweens.add({ targets: this._tutFirstRunGlow, alpha: { from: 1, to: rm ? 0.8 : 0.35 }, duration: rm ? 1400 : 620, yoyo: true, repeat: -1 });
+          }
+          this._drawTourGlow(this._tutFirstRunGlow, tbb);
+        }
+      }
+    }
+    const T = this._tutMode; if (!T) return;
+    const save = this._tutSave();
+    T.glow.clear(); T.sel.clear();
+    for (const e of T.entries) {
+      const b = T.bounds(e.el); if (!b) continue;
+      if (!Tut.isRead(save, e.id)) this._drawTourGlowInto(T.glow, b);
+    }
+    if (T.cur) {
+      const b = T.bounds(T.cur.el);
+      if (b) { T.sel.lineStyle(3, 0x39D9FF, 1); T.sel.strokeRoundedRect(b.x - 6, b.y - 6, b.w + 12, b.h + 12, 8); }
+    }
+  }
+
+  /** _drawTourGlow clears its graphics; this variant ADDS a border so many
+   *  elements share one Graphics object. */
+  _drawTourGlowInto(g, b) {
+    const GOLD = 0xFFD24D, x = b.x - 4, y = b.y - 4, w = b.w + 8, h = b.h + 8;
+    for (const r of [{ g: 10, lw: 9, a: 0.15 }, { g: 6, lw: 6, a: 0.26 }, { g: 3, lw: 4, a: 0.48 }, { g: 0, lw: 2.5, a: 1 }]) {
+      g.lineStyle(r.lw, GOLD, r.a);
+      g.strokeRoundedRect(x - r.g, y - r.g, w + r.g * 2, h + r.g * 2, Math.min(16, 6 + r.g));
+    }
+    g.fillStyle(GOLD, 0.10); g.fillRoundedRect(x, y, w, h, 6);
+  }
+
+  _tutModeTap(ptr) {
+    const T = this._tutMode; if (!T) return;
+    const px = ptr.x, py = ptr.y;
+    const inside = (b) => b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
+    // The "?" button sits UNDER the scrim; a tap on its bounds closes the mode.
+    if (inside(this._tutBtnBounds(T.onTitle))) return this._tutModeClose();
+    // Panel open: its left / right third is Prev / Next (browsing is optional,
+    // never required — the middle third just keeps the panel up).
+    const pb = T.cur ? this._lastTourBox : null;
+    if (pb && inside(pb)) {
+      const f = (px - pb.x) / pb.w;
+      if (f < 0.34) return this._tutModeStep(-1);
+      if (f > 0.66) return this._tutModeStep(1);
+      return;
+    }
+    // Any entry, read or unread, in any order.
+    for (const e of T.entries) if (inside(T.bounds(e.el))) return this._tutModeShow(e);
+  }
+
+  _tutModeShow(e) {
+    const T = this._tutMode; if (!T) return;
+    T.cur = e;
+    const save = this._tutSave();
+    const b = T.bounds(e.el) ?? { x: SCREEN_W / 2 - 40, y: SCREEN_H / 2 - 20, w: 80, h: 40 };
+    const i = T.entries.indexOf(e);
+    const nav = `\n\n‹ ${i > 0 ? T.entries[i - 1].title : '—'}   ·   ${i < T.entries.length - 1 ? T.entries[i + 1].title : '—'} ›`;
+    T.boxT.setVisible(true);
+    this._placeTourBox(T.boxG, T.boxT, b, `${e.title.toUpperCase()}\n${e.desc}${nav}`);
+    // Viewed → read. Persisted by id; Road Scholar on the last one.
+    if (Tut.markRead(save, e.id) && Tut.checkRoadScholar(save, this._tutCtx())) {
+      AchievementSystem.awardUntiered(Tut.ROAD_SCHOLAR_ID, this.registry);
+    }
+    this._tutModeUpdate();
+  }
+
+  /** Prev / Next — the panel's footer names them; tapping the LEFT or RIGHT
+   *  third of the panel steps through in reading order. Never required. */
+  _tutModeStep(dir) {
+    const T = this._tutMode; if (!T || !T.cur) return;
+    const i = T.entries.indexOf(T.cur) + dir;
+    if (i >= 0 && i < T.entries.length) this._tutModeShow(T.entries[i]);
   }
 
   _endHudTour() {
@@ -23998,9 +24276,10 @@ export class GameScene extends Phaser.Scene {
       this._titleScrim, this._titleBackdrop, this._titleMain, this._titleSub, this._titleRoute, this._titleTap,
       this._titleResume,    this._titleResumeTxt,
       this._titleEnterCode, this._titleEnterCodeTxt,
-      this._titleDemoBadge,
+      this._titleDemoBadge, this._titleTutBtn, this._titleTutGlow,
       ...(this._titleDifficultyBtns ?? []),
     ].forEach(o => o?.setVisible(v));
+    this._tutTitleGlowUpdate();
     if (Array.isArray(this._titleLetters)) {
       this._titleLetters.forEach(img => img?.setVisible(v));
     }
@@ -24083,6 +24362,7 @@ export class GameScene extends Phaser.Scene {
    *  custom spot and an un-moved one keeps its normal placement.  Cheap: just
    *  sets x/y/displaySize + hit areas on ~10 objects. */
   _applyControlLayout() {
+    this._tutModeUpdate();          // tutorial glows track live bounds every frame
     if (!this._hudLayout) return;
     const lh  = !!this._leftHanded;
     const top = 2;
@@ -25578,7 +25858,7 @@ export class GameScene extends Phaser.Scene {
     let _tutBusy = !!this._titleTut;
     try {
       _tutBusy = _tutBusy
-        || !!window.__tut?.active?.()
+        || !!window.__tutLegacy?.active?.()
         || !!localStorage.getItem('rtr_tutStage1')
         || !!localStorage.getItem('rtr_tutStage2');
     } catch (_) {}
@@ -25677,6 +25957,7 @@ export class GameScene extends Phaser.Scene {
       this._titleScrim, this._titleBackdrop, this._titleMain, this._titleSub, this._titleRoute, this._titleTap,
       this._titleResume,    this._titleResumeTxt,
       this._titleEnterCode, this._titleEnterCodeTxt,
+      this._titleTutBtn,    this._titleTutGlow,
       ...(this._titleDifficultyBtns ?? []),
       ...(this._titleLetters ?? []),
     ];

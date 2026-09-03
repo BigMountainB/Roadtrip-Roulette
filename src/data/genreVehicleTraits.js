@@ -85,12 +85,16 @@ export const MODIFIER_DEFAULTS = Object.freeze({
   ignoreFirstOverheatPerLeg: false, // shrug off the first overheat each route leg
 });
 
+// Speeds are the owner's 2026-08-31 table, REGULAR column.  Easy and Hard
+// derive at read time via speedForDifficulty(): Easy = Regular − 5 (the
+// owner's Easy column is uniformly −5), Hard = Regular × 1.1 rounded
+// (owner: "10% more than Regular").  Braking floor stays 60 mph everywhere.
 export const GENRE_VEHICLE_TRAITS = {
   hiphop_phonk: {
     key: 'hiphop_phonk',
     vehicleName: 'VIP Sedan',
-    topSpeedMph: 130,   // pedal-DOWN max (no caffeine)
-    cruiseMph:   110,   // no-pedal cruise
+    topSpeedMph: 118,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   95,   // no-pedal cruise
     strengths: [
       'Reaches top speed 20% faster',
       'Driving-bonus grace period lasts 50% longer',
@@ -111,8 +115,8 @@ export const GENRE_VEHICLE_TRAITS = {
     key: 'country',
     vehicleName: 'Mud Truck',
     drive: '4x4',       // gates the snow/traction relief (see GameScene _is4x4)
-    topSpeedMph: 112,   // pedal-DOWN max (no caffeine)
-    cruiseMph:   92,   // no-pedal cruise
+    topSpeedMph: 105,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   85,   // no-pedal cruise
     strengths: [
       'Traffic, scenery & weather damage −25%',
       '4x4 — holds its line in snow & wind',
@@ -136,11 +140,11 @@ export const GENRE_VEHICLE_TRAITS = {
   reggaeton: {
     key: 'reggaeton',
     vehicleName: 'Lowrider',
-    topSpeedMph: 126,   // pedal-DOWN max (no caffeine)
-    cruiseMph:   106,   // no-pedal cruise
+    topSpeedMph: 115,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   92,   // no-pedal cruise
     strengths: [
       'Passenger fares +30%',
-      'Drinks & caffeine +25% above 110 mph',
+      'Drinks & caffeine +25% above 100 mph',
     ],
     weaknesses: [
       'First moving violation = instant wanted star',
@@ -149,7 +153,7 @@ export const GENRE_VEHICLE_TRAITS = {
     modifiers: {
       passengerPayMult:          1.30,
       drinkBenefitHiSpeedMult:   1.25,
-      drinkBenefitHiSpeedMph:    110,
+      drinkBenefitHiSpeedMph:    100,   // 110 rescaled with the top 126→115 (2026-08-31)
       firstViolationInstantStar: true,
       collisionDamageMult:       1.20,
       snowSteeringPenaltyMult:   1.25,
@@ -159,8 +163,8 @@ export const GENRE_VEHICLE_TRAITS = {
   k_pop: {
     key: 'k_pop',
     vehicleName: 'Idol EV',
-    topSpeedMph: 135,   // pedal-DOWN max (no caffeine)
-    cruiseMph:   115,   // no-pedal cruise
+    topSpeedMph: 120,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   98,   // no-pedal cruise
     strengths: [
       'Roadside pickup radius +30%',
       'On-time bonus +25% on timed jobs',
@@ -181,8 +185,8 @@ export const GENRE_VEHICLE_TRAITS = {
     key: 'metal',
     vehicleName: 'War Van',
     drive: '4x4',       // gates the snow/traction relief (see GameScene _is4x4)
-    topSpeedMph: 104,   // pedal-DOWN max (no caffeine)
-    cruiseMph:    84,   // no-pedal cruise
+    topSpeedMph: 100,   // pedal-DOWN max (no caffeine)
+    cruiseMph:    80,   // no-pedal cruise
     strengths: [
       'Collision & police damage −30%',
       'Weapons last +25%; 20% chance of a bonus use',
@@ -205,10 +209,10 @@ export const GENRE_VEHICLE_TRAITS = {
   classic_rock: {
     key: 'classic_rock',
     vehicleName: 'Muscle Car',
-    topSpeedMph: 140,   // pedal-DOWN max (no caffeine)
-    cruiseMph:   125,   // no-pedal cruise
+    topSpeedMph: 122,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   100,   // no-pedal cruise
     strengths: [
-      'Driving cash above 120 mph +20%',
+      'Driving cash above 115 mph +20%',
       'Shrugs off the first overheat each leg',
     ],
     weaknesses: [
@@ -226,8 +230,8 @@ export const GENRE_VEHICLE_TRAITS = {
   edm_rave: {
     key: 'edm_rave',
     vehicleName: 'Laser Supercar',
-    topSpeedMph: 150,   // pedal-DOWN max (no caffeine)
-    cruiseMph:   130,   // no-pedal cruise
+    topSpeedMph: 125,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   105,   // no-pedal cruise
     strengths: [
       'ACCEL boost +35% & 25% longer',
       'Caffeine +35% Alertness, delayed crash',
@@ -274,8 +278,8 @@ export const GENRE_VEHICLE_TRAITS = {
   pop_punk_emo: {
     key: 'pop_punk_emo',
     vehicleName: 'Tour Hatchback',
-    topSpeedMph: 117,   // pedal-DOWN max (no caffeine)
-    cruiseMph:   97,   // no-pedal cruise
+    topSpeedMph: 110,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   88,   // no-pedal cruise
     strengths: [
       'Repairs & basic upgrades −25%',
       'Driving bonus +50% below 25 HP',
@@ -299,8 +303,8 @@ export const GENRE_VEHICLE_TRAITS = {
     key: 'norteno',
     vehicleName: 'Custom Pickup',
     drive: '4x4',       // gates the snow/traction relief (see GameScene _is4x4)
-    topSpeedMph: 122,   // pedal-DOWN max (no caffeine)
-    cruiseMph:   102,   // no-pedal cruise
+    topSpeedMph: 112,   // pedal-DOWN max (no caffeine)
+    cruiseMph:   90,   // no-pedal cruise
     strengths: [
       'Delivery/cargo missions pay +25%',
       'Cargo survives one minor collision',
@@ -346,6 +350,17 @@ export function mult(trait, field) {
  *  non-genre vehicle should use its own VEHICLES.topMph. */
 export function traitTopSpeedMph(trait) {
   return trait?.topSpeedMph ?? null;
+}
+
+/** Difficulty-adjusted speed (owner 2026-08-31): traits store the REGULAR
+ *  column; Easy runs −5 mph, Hard ×1.1 (rounded).  Boosts (caffeine / NOS /
+ *  engine %) stack on top of the returned value, clamped by SPEED_CAP_MPH
+ *  at the call sites as ever. */
+export function speedForDifficulty(mph, mode) {
+  if (mph == null || !Number.isFinite(mph)) return mph;
+  if (mode === 'easy') return mph - 5;
+  if (mode === 'hard') return Math.round(mph * 1.1);
+  return mph;
 }
 
 /** Metal War Van: roll whether a weapon pickup grants a BONUS use.

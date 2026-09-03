@@ -9,7 +9,7 @@
 
 import {
   GENRE_VEHICLE_TRAITS, MODIFIER_DEFAULTS, STARTER_VEHICLE_ID,
-  genreTraitFor, traitMods, mult, traitTopSpeedMph, rollWeaponBonusUse,
+  genreTraitFor, traitMods, mult, traitTopSpeedMph, speedForDifficulty, rollWeaponBonusUse,
   cargoShieldAbsorbs, CARGO_MINOR_DMG, policeWarningChance, POLICE_WARNING_CHANCE,
 } from '../src/data/genreVehicleTraits.js';
 
@@ -25,17 +25,17 @@ const KEYS = [
   'hiphop_phonk', 'country', 'reggaeton', 'k_pop', 'metal',
   'classic_rock', 'edm_rave', 'reggae', 'pop_punk_emo', 'norteno',
 ];
-// Owner ladder 2026-08-02: same personality spread as before, shifted down
-// so EDM tops at 150 and nothing can cross the 160 hard cap with ECU alone.
+// Owner's 2026-08-31 speed table, REGULAR column (Easy = −5, Hard = ×1.1
+// via speedForDifficulty — asserted below).
 const TOP_SPEEDS = {
-  hiphop_phonk: 130, country: 112, reggaeton: 126, k_pop: 135, metal: 104,
-  classic_rock: 140, edm_rave: 150, reggae: 95, pop_punk_emo: 117, norteno: 122,
+  hiphop_phonk: 118, country: 105, reggaeton: 115, k_pop: 120, metal: 100,
+  classic_rock: 122, edm_rave: 125, reggae: 95, pop_punk_emo: 110, norteno: 112,
 };
 // Explicit no-pedal cruise per car (same per-car cruise/boost gap as the
 // original 2026-07-19 table).
 const CRUISE_SPEEDS = {
-  hiphop_phonk: 110, country: 92, reggaeton: 106, k_pop: 115, metal: 84,
-  classic_rock: 125, edm_rave: 130, reggae: 75, pop_punk_emo: 97, norteno: 102,
+  hiphop_phonk: 95, country: 85, reggaeton: 92, k_pop: 98, metal: 80,
+  classic_rock: 100, edm_rave: 105, reggae: 75, pop_punk_emo: 88, norteno: 90,
 };
 
 // ── 1. Resolution for all 10 keys (only on the starter/beater) ────────────
@@ -60,6 +60,15 @@ for (const k of KEYS) {
   check(`${k} cruise < top`, genreTraitFor(k, 'beater').cruiseMph < genreTraitFor(k, 'beater').topSpeedMph);
 }
 check('no cap for a non-genre vehicle', traitTopSpeedMph(genreTraitFor('metal', 'sportsCar')) === null);
+
+// ── Difficulty speed adjustment (owner 2026-08-31 table) ──────────────────
+eq('easy = regular − 5',      speedForDifficulty(118, 'easy'),   113);
+eq('normal = regular',        speedForDifficulty(118, 'normal'), 118);
+eq('hard = regular × 1.1',    speedForDifficulty(118, 'hard'),   130);
+eq('hard rounds (95→105)',    speedForDifficulty(95,  'hard'),   105);
+eq('edm easy top matches table', speedForDifficulty(TOP_SPEEDS.edm_rave, 'easy'), 120);
+eq('reggae easy cruise matches table', speedForDifficulty(CRUISE_SPEEDS.reggae, 'easy'), 70);
+check('null passes through', speedForDifficulty(null, 'easy') === null);
 
 // ── 4. Multiplier math: overrides applied, everything else neutral ────────
 const country = genreTraitFor('country', 'beater');

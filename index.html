@@ -180,6 +180,32 @@
       0%, 100% { box-shadow: 0 0 0.6vmin 0.2vmin rgba(255, 205, 60, 0.45); }
       50%      { box-shadow: 0 0 3.2vmin 1.1vmin rgba(255, 205, 60, 0.95); }
     }
+    /* ── Contextual Tutorial Mode (phone) ── */
+    #tutm-capture { position: fixed; inset: 0; z-index: 999980; display: none; background: rgba(2,6,14,0.28); touch-action: none; }
+    #tutm-capture.on { display: block; }
+    .phone-hit.tutm-selected { outline: 0.7vmin solid #39D9FF; outline-offset: 0.4vmin; border-radius: 2vmin; }
+    #tutm-active { position: absolute; display: none; pointer-events: none; z-index: 5; }
+    #tutm-active.on { display: block; }
+    #tutm-sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%) translateY(110%); width: min(94vw, 720px);
+      z-index: 999985; box-sizing: border-box; padding: 3vmin 3.2vmin 2.4vmin; text-align: left;
+      background: rgba(6, 16, 30, 0.94); border: 0.5vmin solid #FFD24D; border-bottom: 0; border-radius: 2.4vmin 2.4vmin 0 0;
+      color: #FFF6E0; font: 600 clamp(15px, 3.8vmin, 21px)/1.4 "Helvetica Neue", Arial, sans-serif;
+      transition: transform 220ms cubic-bezier(.22,.9,.28,1); }
+    #tutm-sheet.show { transform: translateX(-50%) translateY(0); }
+    #tutm-sheet .tm-title { font: 900 clamp(18px, 4.6vmin, 26px)/1.2 Impact, "Arial Black", sans-serif; color: #FFD24D; letter-spacing: 0.04em; margin-bottom: 1.2vmin; }
+    #tutm-sheet .tm-nav { display: flex; justify-content: space-between; margin-top: 2vmin; color: #39D9FF; font-weight: 800; }
+    #tutm-sheet .tm-nav span { padding: 1vmin 2vmin; cursor: pointer; }
+    #tutm-banner { position: fixed; top: 1.2vmin; left: 50%; transform: translateX(-50%); z-index: 999986; display: none;
+      padding: 0.8vmin 2.4vmin; border-radius: 99px; background: rgba(6,16,30,0.9); border: 0.4vmin solid #FFD24D;
+      color: #FFD24D; font: 900 clamp(12px, 3vmin, 16px) Impact, "Arial Black", sans-serif; letter-spacing: 0.06em; white-space: nowrap; }
+    #tutm-banner.on { display: block; }
+    @media (prefers-reduced-motion: reduce) { .phone-hit.tut-flash { animation-duration: 2.4s; } }
+    .tm-hub { display: grid; gap: 2vmin; }
+    .tm-hub button { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 2.4vmin 3vmin;
+      background: rgba(255,210,77,0.08); border: 0.4vmin solid #FFD24D; border-radius: 2vmin; color: #FFF6E0;
+      font: 900 clamp(16px, 4.2vmin, 22px) Impact, "Arial Black", sans-serif; letter-spacing: 0.04em; cursor: pointer; }
+    .tm-hub button b { color: #39D9FF; }
+    .tm-hub .tm-total { text-align: center; color: #FFD24D; font-weight: 800; margin-top: 1vmin; }
     .phone-hit.tut-flash {
       background: rgba(255, 205, 60, 0.12);
       animation: tutFlash 1.05s ease-in-out infinite;
@@ -3652,7 +3678,7 @@
               }
               renderMusic();
               // If the tutorial is waiting on a genre pick, this completes it.
-              try { window.__tut?.genrePicked?.(); } catch (_) {}
+              try { window.__tutLegacy?.genrePicked?.(); } catch (_) {}
             });
           });
         } else {
@@ -3800,21 +3826,21 @@
         // GENRE grid view → CLOSE the music app.  During the tutorial's
         // genre step the menu CANNOT be quit until a default ☆ is chosen
         // (owner 2026-08-29) — trying pops the pick-a-star reminder instead.
-        if (window.__tut?.awaitingStar?.()) { starPickToast(); return; }
+        if (window.__tutLegacy?.awaitingStar?.()) { starPickToast(); return; }
         musicModal.classList.remove('open');
         releaseWakeLock();
         markModalClosing();
-        try { window.__tut?.musicClosed?.(); } catch (_) {}
+        try { window.__tutLegacy?.musicClosed?.(); } catch (_) {}
       });
       // Corner ✕ — always fully closes the music app (matches every other
       // menu) — EXCEPT during the tutorial's genre step before a star is
       // picked (same guard as CLOSE above).
       addTap(document.getElementById('phone-music-x'), () => {
-        if (window.__tut?.awaitingStar?.()) { starPickToast(); return; }
+        if (window.__tutLegacy?.awaitingStar?.()) { starPickToast(); return; }
         musicModal.classList.remove('open');
         releaseWakeLock();
         markModalClosing();
-        try { window.__tut?.musicClosed?.(); } catch (_) {}
+        try { window.__tutLegacy?.musicClosed?.(); } catch (_) {}
       });
       // "Pick a star first" reminder for the guarded closes above.
       let _starToastEl = null;
@@ -4520,8 +4546,14 @@
         if (window.__DEMO) return false;   // demo → always run the tutorial
         try { return !!(localStorage.getItem(TUT_SEEN_KEY) || localStorage.getItem('dui_tutorialSeen')); } catch (_) { return true; }
       };
-      // First-open nudge: keep the Tutorial tile flashing until it's run once.
-      if (!tutSeenAlready()) qhit('tutorial')?.classList.add('tut-flash');
+      // First-selection nudge (owner 2026-09-03): the tile pulses until it is
+      // selected once — its OWN pulse life, independent of the title and HUD
+      // "?" buttons. Read from the save through the Phaser bridge once it is up.
+      const tutmTilePulse = () => {
+        const B = window.__tut; if (!B) return setTimeout(tutmTilePulse, 300);
+        qhit('tutorial')?.classList.toggle('tut-flash', !B.btnSeen('phone'));
+      };
+      tutmTilePulse();
 
       // ── Guided tutorial tour (owner 2026-07-17) — replaces the old slide
       // carousel. Tutorial is forced first; each listed button highlights, the
@@ -4663,8 +4695,10 @@
           });
         } catch (_) {}
       }
-      // Bridge for the music menu (index.html menu script).
-      window.__tut = {
+      // Bridge for the music menu (index.html menu script). Renamed from
+      // window.__tut on 2026-09-03: that name is the contextual-tutorial bridge
+      // (src/main.js) and the collision clobbered whichever script ran first.
+      window.__tutLegacy = {
         active: () => tutActive,
         awaitingGenre: () => tutActive && tutAwaitGenre,
         // New flow: picking a genre ☆ sets the default but does NOT advance —
@@ -4748,20 +4782,105 @@
 
       // Tutorial tile → run the tour (replaces the old carousel). Manual replay
       // jumps straight to the Garage highlight.
-      addTap(qhit('tutorial'), () => tutStart(false));
+      // ── CONTEXTUAL TUTORIAL (replaces the linear portrait tour) ──────────
+      // The tile is a HUB + a toggle. First press ever → the intro card. After
+      // that → the hub (3 categories with progress). "iPhone" enters phone
+      // Tutorial Mode: every unread hotspot gets the gold throb, the player taps
+      // any of them in any order, reads, the throb clears, progress persists by
+      // stable id via window.__tut. Tapping the tile again, ✕, or the app's
+      // close button leaves the mode. `tutStart` (the old tour) is no longer
+      // called from anywhere.
+      const T = () => window.__tut;
+      const tutmCap    = document.createElement('div'); tutmCap.id = 'tutm-capture';
+      const tutmSheet  = document.createElement('div'); tutmSheet.id = 'tutm-sheet';
+      const tutmBanner = document.createElement('div'); tutmBanner.id = 'tutm-banner';
+      tutmBanner.textContent = 'TUTORIAL MODE · tap anything · tap ? to exit';
+      document.body.append(tutmCap, tutmSheet, tutmBanner);
+      // Active-state tile overlay: the real inverse art when it exists, else a
+      // CSS inversion of the painted tile so the toggle state always reads.
+      const tutmActive = document.createElement('img'); tutmActive.id = 'tutm-active';
+      tutmActive.src = 'assets/ui/phone_app_tutorial_active.png';
+      tutmActive.onerror = () => { tutmActive.removeAttribute('src'); tutmActive.style.cssText += ';background:rgba(255,210,77,0.55);mix-blend-mode:difference;'; };
+      qhit('tutorial')?.appendChild(tutmActive);
 
-      // Forced first-ever open: start the tour once the phone menu is visible.
-      if (!tutSeenAlready()) {
-        const menu = document.getElementById('phone-menu');
-        let tries = 0;
-        const tryForce = () => {
-          if (tutActive || tutSeenAlready()) return;
-          const vis = menu && getComputedStyle(menu).display !== 'none' && menu.getBoundingClientRect().width > 0;
-          if (vis) tutStart(true);
-          else if (++tries < 40) setTimeout(tryForce, 500);   // give up after ~20s (safety)
-        };
-        setTimeout(tryForce, 700);
-      }
+      let tutmOn = false, tutmCur = null;
+      const tutmEls  = () => T()?.entries('phone') ?? [];
+      const tutmGlow = () => {
+        for (const e of tutmEls()) qhit(e.el)?.classList.toggle('tut-flash', !T().isRead(e.id));
+      };
+      const tutmShow = (e) => {
+        tutmCur = e;
+        document.querySelectorAll('.phone-hit.tutm-selected').forEach(x => x.classList.remove('tutm-selected'));
+        qhit(e.el)?.classList.add('tutm-selected');
+        const list = tutmEls(), i = list.indexOf(e);
+        tutmSheet.innerHTML = `<div class="tm-title">${e.title}</div><div>${e.desc}</div>
+          <div class="tm-nav"><span data-nav="-1">${i > 0 ? '‹ ' + list[i-1].title : ''}</span>
+          <span data-nav="x">✕</span><span data-nav="1">${i < list.length-1 ? list[i+1].title + ' ›' : ''}</span></div>`;
+        tutmSheet.classList.add('show');
+        T().markRead(e.id); tutmGlow();
+      };
+      const tutmOpen = () => {
+        if (tutmOn) return; tutmOn = true;
+        tutmCap.classList.add('on'); tutmBanner.classList.add('on'); tutmActive.classList.add('on');
+        tutCloseModals(); tutmGlow();
+      };
+      const tutmClose = () => {
+        if (!tutmOn) return; tutmOn = false; tutmCur = null;
+        tutmCap.classList.remove('on'); tutmBanner.classList.remove('on'); tutmActive.classList.remove('on');
+        tutmSheet.classList.remove('show');
+        document.querySelectorAll('.phone-hit.tut-flash, .phone-hit.tutm-selected').forEach(x => x.classList.remove('tut-flash', 'tutm-selected'));
+      };
+      // Taps while the mode is on: the capture layer owns them, so no app opens.
+      const tutmHit = (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        const p = tutPoint(ev); if (!p) return;
+        const inR = (r) => p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom;
+        const tile = qhit('tutorial'); if (tile && inR(tile.getBoundingClientRect())) return tutmClose();
+        if (tutmSheet.classList.contains('show') && inR(tutmSheet.getBoundingClientRect())) return;   // sheet handles itself
+        for (const e of tutmEls()) { const el = qhit(e.el); if (el && inR(el.getBoundingClientRect())) return tutmShow(e); }
+      };
+      tutmCap.addEventListener('pointerup', tutmHit, { passive: false });
+      tutmCap.addEventListener('click',     tutmHit, { passive: false });
+      tutmSheet.addEventListener('click', (ev) => {
+        const nav = ev.target?.dataset?.nav; if (!nav) return;
+        ev.preventDefault(); ev.stopPropagation();
+        if (nav === 'x') { tutmSheet.classList.remove('show'); return; }
+        const list = tutmEls(), i = list.indexOf(tutmCur) + Number(nav);
+        if (i >= 0 && i < list.length) tutmShow(list[i]);
+      });
+      const tutmHub = () => {
+        const pr = T().progress(), L = T().labels;
+        const row = (cat) => `<button data-cat="${cat}">${L[cat]}<b>${pr.byCat[cat].read}/${pr.byCat[cat].total}</b></button>`;
+        openApp('TUTORIAL', `<div class="tm-hub">${row('phone')}${row('game_menu')}${row('gameplay')}
+          <div class="tm-total">Overall: ${pr.read}/${pr.total}</div></div>`);
+        appBody.querySelectorAll('.tm-hub button').forEach(b => addTap(b, () => {
+          const cat = b.dataset.cat;
+          appModal.classList.remove('open'); markModalClosing();
+          if (cat === 'phone')     tutmOpen();
+          if (cat === 'gameplay')  T().openGameplay();
+          if (cat === 'game_menu') T().openGameMenu();
+        }));
+      };
+      const tutmIntro = () => {
+        openApp('TUTORIAL', `<div style="text-align:center;font-weight:700">This is the Tutorial button. You'll find this icon on each screen.
+          Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
+          or display to learn what it does.</div><div class="tm-hub" style="margin-top:3vmin"><button data-ok="1" style="justify-content:center">GOT IT</button></div>`);
+        addTap(appBody.querySelector('[data-ok]'), () => { T().setIntroSeen(); qhit('tutorial')?.classList.remove('tut-flash'); appModal.classList.remove('open'); markModalClosing(); });
+      };
+      addTap(qhit('tutorial'), () => {
+        if (tutmOn) return tutmClose();
+        if (!T()) return;                             // bridge not up yet (very early boot)
+        T().setBtnSeen('phone'); markTutorialSeen();  // this tile's pulse life ends (+ the notif dot)
+        qhit('tutorial')?.classList.remove('tut-flash');
+        if (!T().introSeen()) return tutmIntro();
+        tutmHub();
+      });
+      // Back / app-close also leaves the mode.
+      document.getElementById('phone-app-close')?.addEventListener('click', () => { if (tutmOn) tutmClose(); });
+
+      // (2026-09-03) The forced first-ever linear tour is retired: the first
+      // selection of any Tutorial button shows the short intro card instead
+      // (tutmIntro / GameScene._tutShowIntro) and nothing is forced after it.
 
       // Calendar — Daily Challenge ("Run of the Day"). Read-only preview for
       // now; Play activates once the stage runner is wired (__daily.playable).

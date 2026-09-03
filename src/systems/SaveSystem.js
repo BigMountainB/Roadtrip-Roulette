@@ -38,7 +38,7 @@ const SLOT_COUNT = 3;
 // type keeps everything.  Money was already global.  The per-mode `profiles`
 // buckets are now vestigial (kept only to read + lift legacy saves).
 const GLOBAL_KEYS = new Set([
-  'achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector',
+  'achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector', 'tutorialRead', 'tutorialIntroSeen', 'tutorialBtnSeen',
   'npcMemory', 'missionRep', 'missionStats',
   // ── Progression, moved from per-mode profile to the plate ──
   'money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
@@ -59,7 +59,7 @@ const GLOBAL_KEYS = new Set([
 const SANDBOX_KEYS = new Set([
   'money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
   'lastRestStop', 'restStopSaves', 'liveRun', 'manualSave', 'accessories',
-  'upgrades', 'tempUpgrades', 'survivalState', 'activeBuffs', 'radarDetector',
+  'upgrades', 'tempUpgrades', 'survivalState', 'activeBuffs', 'radarDetector', 'tutorialRead', 'tutorialIntroSeen', 'tutorialBtnSeen',
   // Genre cars: a $25k dealership buy (or a genre swap) inside a Custom run
   // must not persist.  setSandbox SEEDS these two from the real plate so the
   // player still drives their own car in Custom.

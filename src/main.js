@@ -11,6 +11,7 @@ import { SCREEN_W, SCREEN_H, VEHICLES, getLocationName, TOTAL_ROUTE_MILES, REST_
 try { window.__DEMO = DEMO_MODE; window.__DEMO_GENRES = DEMO_GENRES; } catch (_) {}
 import { Weather } from './world/Weather.js';
 import { GENRE_VEHICLE_TRAITS } from './data/genreVehicleTraits.js';
+import * as Tut from './systems/TutorialSystem.js';
 import { AchievementSystem } from './systems/AchievementSystem.js';
 import { getVehicleDisplayStats } from './systems/VehicleStats.js';
 import {
@@ -535,6 +536,37 @@ const _boot = () => {
     if (_RESERVED.has(norm))  return { ok: false, reason: 'That name is reserved — pick another.' };
     for (const b of _BANNED) if (norm.includes(b)) return { ok: false, reason: 'Please choose a different name.' };
     return { ok: true, plate };
+  };
+  // ── Contextual tutorial bridge (phone DOM ↔ TutorialSystem / GameScene) ──
+  // The phone menu is DOM, the registry and the in-game mode are Phaser. This
+  // is the ONE seam between them: read/mark progress by stable id, gate the
+  // first-run intro, and hand off to the in-game or title-screen mode.
+  window.__tut = {
+    save:     () => game.registry.get('save'),
+    ctx:      () => ({ platform: navigator.platform ?? '' }),
+    entries:  (cat) => Tut.entriesFor(window.__tut.ctx(), cat),
+    progress: () => Tut.progress(game.registry.get('save'), window.__tut.ctx()),
+    isRead:   (id) => Tut.isRead(game.registry.get('save'), id),
+    markRead: (id) => {
+      const save = game.registry.get('save');
+      const changed = Tut.markRead(save, id);
+      if (changed && Tut.checkRoadScholar(save, window.__tut.ctx())) {
+        AchievementSystem.awardUntiered(Tut.ROAD_SCHOLAR_ID, game.registry);
+      }
+      return changed;
+    },
+    introSeen:    () => !!game.registry.get('save')?.get?.('tutorialIntroSeen', false),
+    setIntroSeen: () => game.registry.get('save')?.set?.('tutorialIntroSeen', true),
+    // Per-button first-selection flags (owner 2026-09-03: "every tutorial
+    // button will pulse until each is selected for the first time, each having
+    // its own pulse life"). which = 'phone' | 'game_menu' | 'gameplay'.
+    btnSeen:    (which) => !!Tut.btnSeen(game.registry.get('save'), which),
+    setBtnSeen: (which) => Tut.setBtnSeen(game.registry.get('save'), which),
+    labels:   Tut.CATEGORY_LABEL,
+    // Hub shortcuts: open the matching mode on the Phaser side. The in-game
+    // mode needs a running scene; the phone closes itself after calling this.
+    openGameplay: () => { try { game.scene.getScene('Game')?._tutModeOpen?.(); } catch (_) {} },
+    openGameMenu: () => { try { game.scene.getScene('Game')?._tutTitleModeOpen?.(); } catch (_) {} },
   };
   window.__plate = {
     // Demo build: every player is "Guest" (a non-unique, un-nameable handle) —

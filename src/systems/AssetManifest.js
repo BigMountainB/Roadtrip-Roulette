@@ -549,7 +549,12 @@ export const ASSET_MANIFEST = {
     { key: 'ui_top_btn_mute',    path: 'assets/ui/top_btn_mute.png' },
     { key: 'ui_top_btn_unmute',  path: 'assets/ui/top_btn_unmute.png' },
     { key: 'ui_top_btn_map',     path: 'assets/ui/top_btn_map.png' },
-    { key: 'ui_top_btn_garage',  path: 'assets/ui/top_btn_garage.png' },
+    // Tutorial "?" — HUD tile pair (replaces the in-game Garage shortcut,
+    // owner 2026-09-03) + standalone caution-sign pair for the title screen.
+    { key: 'ui_top_btn_tutorial',         path: 'assets/ui/top_btn_tutorial.png' },
+    { key: 'ui_top_btn_tutorial_active',  path: 'assets/ui/top_btn_tutorial_active.png' },
+    { key: 'ui_menu_btn_tutorial',        path: 'assets/ui/menu_btn_tutorial.png' },
+    { key: 'ui_menu_btn_tutorial_active', path: 'assets/ui/menu_btn_tutorial_active.png' },
     // ── Garage upgrade UI (owner art, 2026-07-28) ────────────────────
     // Toolbar is a 1672x220 strip of SEVEN category tabs with the labels
     // already baked into the art (TIRES / BRAKES / SUSPENSION / ENGINE /

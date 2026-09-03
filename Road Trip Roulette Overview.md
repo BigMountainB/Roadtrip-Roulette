@@ -204,6 +204,133 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 8) — Genre-car speed table: per-difficulty cruise/top (owner table)
+
+All 10 genre cars re-speeded from the owner's table.  Traits store the REGULAR column
+(topSpeedMph/cruiseMph); `speedForDifficulty(mph, mode)` derives the rest at read time —
+**Easy = Regular − 5** (the owner's Easy column is uniformly −5), **Hard = Regular × 1.1
+rounded** (owner: "10% more than Regular").  Braking floor stays 60 mph everywhere.
+Regular (top/cruise): Reggae 95/75 · Metal 100/80 · Country 105/85 · Pop Punk 110/88 ·
+Norteño 112/90 · Reggaeton 115/92 · Hip-Hop 118/95 · K-Pop 120/98 · Classic Rock 122/100 ·
+EDM 125/105.  Consumers: `_baselineCruiseMph`, `_updatePlayer` boost/cruise bases, the
+garage row + dealer row mph displays.  Boosts (energy/caffeine/coffee/NOS/engine %) still
+stack on top, clamped at SPEED_CAP_MPH 160 (owner choice).  Perk thresholds rescaled
+proportionally with their genre's top change: Reggaeton drinks-above threshold 110 → 100
+(top 126→115) + text; Classic Rock cash text 120 → 115 mph (the code rule is cruise×1.15
+= 100×1.15); Reggae's below-100 band unchanged (still spans its whole range).
+genreTraits.test: new tables + 7 difficulty asserts (185 total).
+NOTE (owner Q&A): non-genre cars were requested REMOVED — already true since 2026-07-19:
+VEHICLES holds only the beater CHASSIS that genre cars ride on; dealers sell genre cars
+only.  The chassis' fallback speeds (cruise 90/top 120) apply only pre-genre-pick.
+
+### 2026-09-03 — Contextual Tutorial Mode (replaces the three linear tours)
+
+**Pt 2 (same day) — art in, Garage off the HUD, per-button pulse lives.** ChatGPT's follow-up brief
+plus owner rulings: *"Get rid of the garage button on the HUD"*, *"the upper left corner of the title
+screen is open… above the plates"*, *"every tutorial button will pulse until each is selected for the
+first time, each having its own pulse life."*
+- **Art**: the four finished 150×150 PNGs copied to `public/assets/ui/` (`top_btn_tutorial[_active]`
+  = skewed black-glass HUD tile; `menu_btn_tutorial[_active]` = standalone caution sign, dark face /
+  neon-yellow "?" normal, filled-yellow face active). Manifest keys `ui_top_btn_tutorial[_active]`,
+  `ui_menu_btn_tutorial[_active]`; `ui_top_btn_garage` unregistered (the PNG stays on disk, unused);
+  the canvas placeholder generator `_ensureTutorialTextures` and the Garage vector fallback deleted.
+- **HUD**: Garage button REMOVED from the top row; the "?" takes its slot (`mapX + 56 + 1`). Garage
+  remains reachable only from the Phone GARAGE tile (`openGarage`, unchanged). `DEFAULT_HUD_LAYOUT`
+  key `btn_garage` → `btn_tutorial`; on load any saved `btn_garage` offset is copied to `btn_tutorial`
+  (only if that is unset) and the stale key deleted — non-destructive, no layout-version bump needed
+  since the slot is identical. Registry entry `gameplay.btn_garage` dropped → **40 entries (11/5/24)**.
+- **Title screen**: real `?` image at design (16,16) 56 px (`TUT_TITLE_BTN`), depth d+12, UI camera
+  only, in the `_setTitleVisible` and fade lists; `_tutTitleToggle()` → intro card on first-ever
+  press, else `_tutModeOpen('game_menu')`. Active state swaps to the filled-yellow sign; closing
+  swaps back. The DEMO badge moved right to x124 to clear it.
+- **Pulse lives**: new save key `tutorialBtnSeen = { phone, game_menu, gameplay }` (whitelisted in
+  SaveSystem; `Tut.btnSeen/setBtnSeen`; bridge `__tut.btnSeen/setBtnSeen`). Each button throbs gold
+  until ITS first selection, never while active. Phone tile: `tutmTilePulse()` polls for the bridge
+  then toggles `.tut-flash` off the flag; first tap also calls the legacy `markTutorialSeen()` so the
+  phone's notification dot clears. HUD "?": `_tutModeUpdate` first-run block now reads the flag.
+  Title "?": `_tutTitleGlowUpdate()` is event-driven (build / toggle / open / close / visibility).
+  `tutorialIntroSeen` still gates the ONE intro card, shared across all three buttons.
+- **Forced tour retired**: the phone's boot-time `tryForce → tutStart(true)` block is gone and the
+  tile no longer falls back to `tutStart(false)`. The ~300-line legacy tour body (`tutStart`,
+  `TUT_TOUR`, `_startTitleTutorial`, `_buildHudTour`) is now unreachable and is the next cleanup —
+  left in place this pass so the removal can be reviewed on its own.
+- Tests: tutorial.test 38 (was 30) — counts re-baselined to 40/24, +9 pulse-life checks (per-button
+  independence, idempotence, unknown button, junk repair, intro flag ≠ button flag).
+- **Name collision found by the headless smoke** (`B.btnSeen is not a function`): the legacy tour's
+  music-menu hooks were ALSO published as `window.__tut`, so the two scripts clobbered each other
+  depending on load order. Legacy object renamed `window.__tutLegacy` (5 consumer calls in
+  index.html + one `__tutLegacy?.active?.()` guard in GameScene). `window.__tut` is now ONLY the
+  contextual-tutorial bridge from `src/main.js`.
+
+**Owner brief:** optional Tutorial Mode — tap any button / icon / readout to learn what it does, in
+any order, with read/unread progress that persists; a "?" caution-sign toggle on each screen; a hub
+with per-category progress; a **Road Scholar** achievement at 100%.
+
+**Registry — `src/systems/TutorialSystem.js`** (no Phaser, no DOM). **41 entries** with stable ids
+`<category>.<element>`: 11 `phone.*`, 5 `game_menu.*`, 25 `gameplay.*`. The element half is the
+SAME key the live resolvers already use (`_hudElementBounds`, the phone's `qhit`, the new
+`_titleElementBounds`), so an entry finds its own UI object with no lookup table. Progress is an
+id→true map under save key **`tutorialRead`** (per plate, whitelisted in SaveSystem beside
+`radarDetector`); **never by index**, so reordering or inserting entries cannot corrupt it.
+
+**Live bounds, not hotspots.** Stage 2 (HUD tour) already resolved from live objects — `_lx/_ly/_lsz`
+carry the player's customized position/size — and that is reused unchanged. The title screen's five
+hand-typed rects are gone: `titleRectShape()` now returns `rect` and `makeTitleZone()` stamps it on the
+zone as `_tutRect`, so the outline comes from the SAME geometry the hit-test uses. Plates = union of
+`_plateSlotObjs`.
+
+**The "?" button.** In-game it takes **Garage's slot** in the top row and Garage shifts one slot right
+(owner: "this is a replacement"; Garage relocated, never removed). Toggle: normal art off, inverse art
+on (`_applyTopRowHandedness` lights it via `_tutMode`). Until the PNGs land, `_ensureTutorialTextures()`
+generates 150×150 caution-sign placeholders under the FINAL keys, so dropping the art in is a
+manifest-only change. First run: gold throb on the button until the intro card is acknowledged
+(`tutorialIntroSeen`). ESC closes the mode.
+
+**In-game / title mode** (`_tutModeOpen(cat)`): scrim owns every tap so no normal action fires;
+gameplay pauses (title does not); every UNREAD entry gets the throbbing gold border redrawn **each
+frame from live bounds** (`_tutModeUpdate` is called from `_applyControlLayout`), so custom layouts,
+resize and handedness flips keep borders glued on. Tap any entry, read or unread → title + description
+via `_placeTourBox` (never overlaps its target); viewed → read → border clears → Road Scholar check.
+Panel left/right thirds = Prev/Next (optional, never required). Reduced motion → gentle 0.8↔1 breathe.
+
+**Phone** (`index.html`): the tile is now a HUB (3 categories with N/M + Overall) and a toggle. "iPhone"
+enters phone Tutorial Mode (unread hotspots `tut-flash`, capture layer, bottom sheet, Prev/Next, ✕);
+"Game Menu"/"In Game" close the phone and open the matching Phaser mode through **`window.__tut`**
+(main.js), the single DOM↔Phaser seam. The inverse tile art overlays the painted icon at (42,599); if
+the file is missing it falls back to a CSS inversion so the toggle state always reads. **`tutStart`
+(the old linear tour) is no longer called from anywhere** — dead code, remove once the mode is confirmed.
+
+**Road Scholar** — `AchievementSystem.awardUntiered()` (new): not a run, so the mode-gated tiered
+`award()` was wrong for it (Custom refuses, Easy would call it bronze). Denominator = entries whose
+`applies(ctx)` passes; **latched** — once in `achievements` it never re-evaluates, so future entries
+cannot revoke it.
+
+**Tests** — `tests/tutorial.test.mjs` (wired into `npm test`): 41/ids unique/format, category counts,
+element keys match `_hudElementBounds`, read/idempotent/unknown-id, save round-trip, positional
+independence, progress + completion, applies() exclusion, latch.
+
+**Copy audit — all 41 rewritten** (Title / one sentence / optional second), `audited: true` on every
+entry. Four old claims the code did NOT confirm were dropped from the text and kept as `review:`
+on the entry for the owner to rule on:
+- `game_menu.diff` — "Custom unlocks after completing the drive": no such gate found.
+- `gameplay.hp` — "Food & Drink add health on Easy": no heal path found.
+- `gameplay.pedalGas` — "+20 mph": boost is a per-car base × traits, not a fixed bump.
+- `gameplay.pedalBrake` — "under 100 mph you're losing money": the cash bonus gates at **15% above
+  the car's cruise baseline**, not a fixed mph. (The brake itself does drop you to 60 mph — verified.)
+
+**Copy audit (spot checks):** `stars` was incomplete — `clearStarsAtStateLine()` gives ZERO reduction
+at 4★+ (weapon-earned heat is immune); fixed. `weapons` "3 max each" verified (`canCarryMore`).
+`pedalGas` "+20 mph" could NOT be verified — flagged, not guessed. Stage 1b copy was developer voice.
+
+**ART NEEDED (owner producing):** `assets/ui/top_btn_tutorial.png` + `_active.png` (150×150, the
+`top_btn_pause`/`_active` convention) and `assets/ui/phone_app_tutorial_active.png` (230×360, inverse
+of the icon painted at (42,599) on `iphone_menu_bg.png`). Then add the two `ui_top_btn_tutorial*`
+manifest keys; the placeholder generator steps aside automatically.
+
+**Open:** phone/title modes verified by build + inline-script parse only — needs a hand playtest; the
+`?dev=1` bar has no tutorial knobs yet; the old `TUT_TOUR`/`_startTitleTutorial`/`_buildHudTour` code
+is now reachable only from legacy flags and should be retired with the owner's OK.
+
 ### 2026-08-31 (pt 7) — Pursuit hold pinned in the physics step (no creep, no drive-out)
 
 Owner: the car still crept during a 1-2★ traffic stop and could be driven out mid-hold.

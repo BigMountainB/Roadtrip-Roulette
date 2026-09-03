@@ -97,6 +97,10 @@ const VICE_INFO = {
 
 // Run-tracking achievements (the broader set — fire from event hooks).
 const RUN_DEFS = {
+  // Tutorial completion. Awarded through awardUntiered() — it is not a run
+  // and has no difficulty, so the mode-gated, tiered award() path is wrong
+  // for it: Custom mode would refuse it and Easy would call it bronze.
+  road_scholar:      { label: 'ROAD SCHOLAR',       icon: '🎓', desc: 'Read every tutorial entry.', untiered: true },
   stone_cold_sober:  { label: 'CLEAN EATING',      icon: '🥗', desc: 'Finish a Pullman run without picking up any consumable.' },
   crystal_clean:     { label: 'CRYSTAL CLEAN',     icon: '✨', desc: 'Finish without ever raising a wanted star.' },
   iron_bladder:      { label: 'IRON BLADDER',      icon: '🚽', desc: 'Finish without using any rest stop.' },
@@ -157,6 +161,22 @@ export const AchievementSystem = {
    *  upgraded (i.e. either first time or higher tier than before).
    *  Custom mode awards nothing — vice levels are user-set so there's
    *  no challenge baseline. */
+  /** Mode-independent, single-tier award for achievements that are not
+   *  runs (Road Scholar). Persists as 'gold' so the trophy UI needs no new
+   *  tier concept; pays the gold reward once; never downgrades. */
+  awardUntiered(id, registry) {
+    const save = registry?.get?.('save');
+    if (!save) return false;
+    const owned = save.get('achievements') ?? {};
+    if (owned[id]) return false;
+    owned[id] = 'gold';
+    save.set('achievements', owned);
+    const def = RUN_DEFS[id];
+    const reward = TIER_REWARD.gold ?? 0;
+    if (def && _onAward) _onAward({ id, tier: 'gold', def, reward });
+    return true;
+  },
+
   award(id, registry) {
     if (Difficulty.noScore?.()) return false;
     const tier = TIER_BY_MODE[Difficulty.mode()] ?? 'silver';

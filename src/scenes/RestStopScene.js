@@ -24,7 +24,7 @@ import { UPGRADE_SLOTS, SLOT_LABELS, getSlotTiers,
 // free item from replacing the $1500 repair.
 const POPCORN_MAX_PCT   = 0.05;
 const POPCORN_PER_SERVE = 0.01;
-import { GENRE_VEHICLE_TRAITS } from '../data/genreVehicleTraits.js';
+import { GENRE_VEHICLE_TRAITS, speedForDifficulty } from '../data/genreVehicleTraits.js';
 
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
@@ -198,7 +198,7 @@ function genreCarItems() {
       label: `🚗  ${t.vehicleName.toUpperCase()} — ${gLabel}`,
       cost: isOwned ? 0 : GENRE_CAR_PRICE,
       desc: isActive ? 'Your current ride.'
-                     : `${t.topSpeedMph} mph top · ${t.strengths?.[0] ?? ''}`,
+                     : `${speedForDifficulty(t.topSpeedMph, Difficulty.mode())} mph top · ${t.strengths?.[0] ?? ''}`,
       disabled: isActive,
       disabledReason: 'Already driving it.',
       payload: isOwned ? { driveGenre: t.key } : { buyGenre: t.key },
