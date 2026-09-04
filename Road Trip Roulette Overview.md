@@ -223,6 +223,24 @@ NOTE (owner Q&A): non-genre cars were requested REMOVED — already true since 2
 VEHICLES holds only the beater CHASSIS that genre cars ride on; dealers sell genre cars
 only.  The chassis' fallback speeds (cruise 90/top 120) apply only pre-genre-pick.
 
+### 2026-09-04 — Tutorial Mode un-paused on every tap; Genre corner; polygon rings
+Owner (deploy 0c600bc): *"I click GOT IT and the tutorial continues, however so does gameplay… most
+buttons have multiple outlines that flash… but pause, ff, genre, map and mute do not… an additional
+corner on the Genre button."*
+- **Un-pause**: the scene-level `pointerdown` treats a body tap while `_paused` as RESUME unless
+  `_anyModalOpen()`. Tutorial Mode was never a modal there, so GOT IT — and every entry tap below
+  y 64 — flipped the run back on (my probes called the handlers directly and skipped this path).
+  `_anyModalOpen()` now includes `_tutMode` and `_tutIntroDone`. Probe: `input.emit('pointerdown',
+  {x:400,y:300})` in the mode → still paused, odometer frozen.
+- **Genre corner**: `top_btn_genre.png` has a stray 1-px opaque black column down x=0 (alpha 255, then
+  0 until the glass at x≈20). `_texQuad`'s span now needs a ≥3-px opaque run → TL corner 21%, like its
+  siblings. The art itself is untouched — worth cleaning in the PNG when convenient.
+- **Rings**: polygons get the same solid→transparent ring set as the rectangles, stepping INWARD from
+  the glass edge (insets 0/3/6/9 px about the centroid) so nothing crosses the 1-px gap to a neighbour.
+- Open question for the owner: the PURSUIT readout (`hudRearCop`, "◀ PURSUIT — 120 ft behind") is still
+  a live gameplay element (shown during 1–2★ pursuits) and the mode shows its placeholder; owner
+  "thought we got rid of that" — remove from the game, or just from the tutorial?
+
 ### 2026-09-04 — Top-row buttons: hit area + tutorial outline = the visible glass (parallelogram)
 Owner: *"make the buttons match the visible pixels of the image… more like a parallelogram instead of a
 square. The highlighted border would also be a lot smaller and not overlap other buttons."*

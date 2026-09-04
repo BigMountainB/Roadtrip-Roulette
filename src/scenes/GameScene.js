@@ -11623,7 +11623,12 @@ export class GameScene extends Phaser.Scene {
            || this._mapModalOpen
            || this._garageModalOpen
            || this._sliderModalOpen
-           || this._achievementsModalOpen);
+           || this._achievementsModalOpen
+           // Tutorial Mode and its intro card own the screen: without this the
+           // scene-level "tap while paused = resume" path un-paused the run on
+           // the GOT IT tap and on every entry tap (owner 2026-09-04).
+           || this._tutMode
+           || this._tutIntroDone);
   }
 
   /** Currently selected weapon slot, falling back to the last token in
@@ -15142,7 +15147,15 @@ export class GameScene extends Phaser.Scene {
         const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.drawImage(src, 0, 0);
         const d = ctx.getImageData(0, 0, W, H).data;
         const A = (x, y) => d[(y * W + x) * 4 + 3];
-        const span = (y) => { let l = -1, r = -1; for (let x = 0; x < W; x++) if (A(x, y) > 40) { if (l < 0) l = x; r = x; } return l < 0 ? null : [l, r + 1]; };
+        // A run of ≥3 opaque px starts/ends the span — stray export columns
+        // (top_btn_genre has a 1-px black line down x=0) must not widen it.
+        const on = (x, y) => x >= 0 && x < W && A(x, y) > 40;
+        const span = (y) => {
+          let l = -1, r = -1;
+          for (let x = 0; x < W - 2; x++) if (on(x, y) && on(x + 1, y) && on(x + 2, y)) { l = x; break; }
+          for (let x = W - 1; x >= 2; x--) if (on(x, y) && on(x - 1, y) && on(x - 2, y)) { r = x; break; }
+          return (l < 0 || r < l) ? null : [l, r + 1];
+        };
         let top = -1, bot = -1;
         for (let y = 0; y < H && top < 0; y++) if (span(y)) top = y;
         for (let y = H - 1; y >= 0 && bot < 0; y--) if (span(y)) bot = y;
@@ -20762,10 +20775,16 @@ export class GameScene extends Phaser.Scene {
   _drawTourGlowInto(g, b) {
     const GOLD = 0xFFD24D, x = b.x - 4, y = b.y - 4, w = b.w + 8, h = b.h + 8;
     if (b.poly) {
-      // Skewed HUD tile: hug the visible glass with tight rings (~3 px out)
-      // so 1-px-apart neighbours don't get swallowed by the halo.
-      for (const r of [{ lw: 7, a: 0.16 }, { lw: 4.5, a: 0.34 }, { lw: 2.5, a: 1 }]) {
-        g.lineStyle(r.lw, GOLD, r.a); g.strokePoints(b.poly, true);
+      // Skewed HUD tile: the same solid→transparent ring set as the rectangles,
+      // but stepping INWARD from the glass edge (owner: rings yes, but "not
+      // overlap other buttons" — the tiles sit 1 px apart, so nothing may go
+      // outside the glass). Each ring is the polygon shrunk about its centroid.
+      const cx = b.poly.reduce((a, p) => a + p.x, 0) / b.poly.length;
+      const cy = b.poly.reduce((a, p) => a + p.y, 0) / b.poly.length;
+      const half = Math.max(8, Math.min(b.w, b.h) / 2);
+      const inset = (d) => b.poly.map(p => new Phaser.Geom.Point(cx + (p.x - cx) * (1 - d / half), cy + (p.y - cy) * (1 - d / half)));
+      for (const r of [{ d: 9, lw: 4, a: 0.12 }, { d: 6, lw: 3, a: 0.22 }, { d: 3, lw: 2.5, a: 0.45 }, { d: 0, lw: 2.5, a: 1 }]) {
+        g.lineStyle(r.lw, GOLD, r.a); g.strokePoints(inset(r.d), true);
       }
       g.fillStyle(GOLD, 0.10); g.fillPoints(b.poly, true);
       return;
