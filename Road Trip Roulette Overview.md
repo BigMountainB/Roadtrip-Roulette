@@ -223,6 +223,17 @@ NOTE (owner Q&A): non-genre cars were requested REMOVED — already true since 2
 VEHICLES holds only the beater CHASSIS that genre cars ride on; dealers sell genre cars
 only.  The chassis' fallback speeds (cruise 90/top 120) apply only pre-genre-pick.
 
+### 2026-09-03 — In-game Tutorial outlines were one layout offset off their buttons
+Owner screenshot (left-handed HUD, mode open): every top-row outline (Pause/FF/Genre/Mute/Map/?) sat
+beside its button. Reproduced headless (`hud_probe.cjs`, 932×430, `_leftHanded=true`): bounds vs art
+differed by exactly the saved layout `dx` (pause −45 vs 4, genre 52 vs 118, mute 694 vs 626). Cause:
+`_applyTopRowHandedness()` placed the art at the BARE base slot (no layout offset/scale), and with the
+run paused the per-frame `_applyControlLayout` never ran to move it back — so opening the mode (which
+calls the handedness pass to light the "?") shoved every button off its own hit rect. Same latent bug
+for the pause menu / mute toggle while paused. Fix: the handedness pass now uses the identical
+placement (`base + _ctrlOff dx/dy`, `size × scale`) and publishes `_lx/_ly/_lsz` itself. Verified: all
+six buttons bounds == art.
+
 ### 2026-09-03 — Pull-over requires the BRAKE (1–2★ comply flow)
 Owner: *"I pulled off the road and was pulled over, without hitting the brakes. You should only get into
 a traffic stop if your brakes are on."* The stop latched on speed alone (< 8 mph for 0.8 s with the tail),

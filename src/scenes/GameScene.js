@@ -11892,22 +11892,32 @@ export class GameScene extends Phaser.Scene {
     const lh  = !!this._leftHanded;
     const top = 2;
     for (const btn of this._topRowButtons) {
-      const x = lh ? btn.baseLeft : (SCREEN_W - btn.baseLeft - btn.size);
+      // SAME placement as _applyControlLayout (base slot + the saved layout
+      // offset/scale). This used to place the art at the bare base slot, and
+      // while the run is paused (Tutorial Mode, pause menu) the per-frame
+      // layout pass never ran to move it back — so the art sat one layout
+      // offset away from its own hit rect / tutorial outline (owner 2026-09-03
+      // screenshot: every top-row outline off its button).
+      const o  = this._ctrlOff('btn_' + btn.id);
+      const sz = btn.size * o.s;
+      const x  = (lh ? btn.baseLeft : (SCREEN_W - btn.baseLeft - btn.size)) + o.dx;
+      const y  = top + o.dy;
       const isPause = btn.id === 'pause';
       const lit = isPause ? this._paused
                 : btn.id === 'mute'     ? !!this.audio?.muted
                 : btn.id === 'tutorial' ? !!this._tutMode : false;
       if (btn.artType) {
         btn.bg.clear();
-        this._setTopRowButtonTexture(btn.lbl, btn.artType, lit, btn.size);
+        this._setTopRowButtonTexture(btn.lbl, btn.artType, lit, sz);
       } else {
         // Legacy vector fallback for any toolbar entry not converted to art.
-        this._drawTopRowButton(btn.bg, x, top, btn.size, lit);
+        this._drawTopRowButton(btn.bg, x, y, sz, lit);
       }
-      if (btn.lbl) btn.lbl.x = x + btn.size / 2;
+      if (btn.lbl) btn.lbl.setPosition(x + sz / 2, y + sz / 2);
       if (btn.bg.input) {
-        btn.bg.input.hitArea = new Phaser.Geom.Rectangle(x, top, btn.size, btn.size);
+        btn.bg.input.hitArea = new Phaser.Geom.Rectangle(x, y, sz, sz);
       }
+      btn._lx = x; btn._ly = y; btn._lsz = sz;
     }
     // hudRadio (station name label) sits under the Genre button — keep
     // it anchored to whichever side Genre is now on.
