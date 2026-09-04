@@ -563,10 +563,6 @@ const _boot = () => {
     btnSeen:    (which) => !!Tut.btnSeen(game.registry.get('save'), which),
     setBtnSeen: (which) => Tut.setBtnSeen(game.registry.get('save'), which),
     labels:   Tut.CATEGORY_LABEL,
-    // Hub shortcuts: open the matching mode on the Phaser side. The in-game
-    // mode needs a running scene; the phone closes itself after calling this.
-    openGameplay: () => { try { game.scene.getScene('Game')?._tutModeOpen?.(); } catch (_) {} },
-    openGameMenu: () => { try { game.scene.getScene('Game')?._tutTitleModeOpen?.(); } catch (_) {} },
     _scene: () => game.scene.getScene('Game'),   // headless probe / dev hook only
   };
   window.__plate = {

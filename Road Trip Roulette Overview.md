@@ -223,6 +223,17 @@ NOTE (owner Q&A): non-genre cars were requested REMOVED — already true since 2
 VEHICLES holds only the beater CHASSIS that genre cars ride on; dealers sell genre cars
 only.  The chassis' fallback speeds (cruise 90/top 120) apply only pre-genre-pick.
 
+### 2026-09-04 — Phone: hub/progress page REMOVED; tile = mode + description card
+Owner: *"This tutorial progress screen should not be available anywhere. Numbers are for internal
+stats for the achievement. Each screen has a tutorial button so this screen is confusing. On iPhone
+menu, click the tutorial button and the description of the tutorial comes up, while all of the buttons
+throb with the gold border."* `tutmHub()` deleted (+ its `.tm-hub` CSS, + the `__tut.openGameplay /
+openGameMenu` bridge shortcuts and `_tutTitleModeOpen`, all only the hub used). Tile tap now =
+`tutmOpen()` (every tile throbs) **and** `tutmIntro()` (the description card in the top sheet), every
+time; GOT IT / ✕ drop the card and the mode stays; tapping the tile again exits. Progress counts still
+exist in `TutorialSystem.progress()` for Road Scholar only — no UI shows them. Probe: tile → mode on +
+card + 11 pulsing; GOT IT → card down, mode on; tile → off; tile → on + card again.
+
 ### 2026-09-04 — Tutorial Mode un-paused on every tap; Genre corner; polygon rings
 Owner (deploy 0c600bc): *"I click GOT IT and the tutorial continues, however so does gameplay… most
 buttons have multiple outlines that flash… but pause, ff, genre, map and mute do not… an additional

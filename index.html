@@ -210,12 +210,8 @@
       color: #FFD24D; font: 900 clamp(12px, 3vmin, 16px) Impact, "Arial Black", sans-serif; letter-spacing: 0.06em; white-space: nowrap; }
     #tutm-banner.on { display: block; }
     @media (prefers-reduced-motion: reduce) { .phone-hit.tut-flash { animation-duration: 2.4s; } }
-    .tm-hub { display: grid; gap: 2vmin; }
-    .tm-hub button { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 2.4vmin 3vmin;
       background: rgba(255,210,77,0.08); border: 0.4vmin solid #FFD24D; border-radius: 2vmin; color: #FFF6E0;
       font: 900 clamp(16px, 4.2vmin, 22px) Impact, "Arial Black", sans-serif; letter-spacing: 0.04em; cursor: pointer; }
-    .tm-hub button b { color: #39D9FF; }
-    .tm-hub .tm-total { text-align: center; color: #FFD24D; font-weight: 800; margin-top: 1vmin; }
     .phone-hit.tut-flash {
       background: rgba(255, 205, 60, 0.12);
       animation: tutFlash 1.05s ease-in-out infinite;
@@ -4881,19 +4877,6 @@
       };
       tutmCap.addEventListener('pointerup', tutmHit, { passive: false });
       tutmCap.addEventListener('click',     tutmHit, { passive: false });
-      const tutmHub = () => {
-        const pr = T().progress(), L = T().labels;
-        const row = (cat) => `<button data-cat="${cat}">${L[cat]}<b>${pr.byCat[cat].read}/${pr.byCat[cat].total}</b></button>`;
-        openApp('TUTORIAL', `<div class="tm-hub">${row('phone')}${row('game_menu')}${row('gameplay')}
-          <div class="tm-total">Overall: ${pr.read}/${pr.total}</div></div>`);
-        appBody.querySelectorAll('.tm-hub button').forEach(b => addTap(b, () => {
-          const cat = b.dataset.cat;
-          appModal.classList.remove('open'); markModalClosing();
-          if (cat === 'phone')     tutmOpen();
-          if (cat === 'gameplay')  T().openGameplay();
-          if (cat === 'game_menu') T().openGameMenu();
-        }));
-      };
       // Intro card IN the top sheet over the weather / location / time strip —
       // no app page (owner 2026-09-03: "say the same thing as it currently
       // does, but without going to a new page").
@@ -4902,19 +4885,23 @@
           Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
           or display to learn what it does.</div>
           <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>`;
-        // GOT IT drops straight into phone Tutorial Mode (owner 2026-09-04:
-        // "GOT IT should drop into tutorial mode on all menus").
-        addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); qhit('tutorial')?.classList.remove('tut-flash'); tutmSheet.classList.remove('show'); tutmOpen(); });
+        // GOT IT drops the card; the mode (already on) stays.
+        addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); tutmSheet.classList.remove('show'); if (tutmOn) tutmBanner.classList.add('on'); });
         tutmFitSheet();
         tutmSheet.classList.add('show');
+        tutmBanner.classList.remove('on');       // the sheet occupies the banner's strip
       };
+      // Tile = toggle. ON: every tile throbs AND the description card sits in
+      // the top sheet, every time (owner 2026-09-04: "click the tutorial button
+      // and the description of the tutorial comes up, while all of the buttons
+      // throb"). No hub / progress page — the counts are internal to Road Scholar.
       addTap(qhit('tutorial'), () => {
         if (tutmOn) return tutmClose();
         if (!T()) return;                             // bridge not up yet (very early boot)
         T().setBtnSeen('phone'); markTutorialSeen();  // this tile's pulse life ends (+ the notif dot)
         qhit('tutorial')?.classList.remove('tut-flash');
-        if (!T().introSeen()) return tutmIntro();
-        tutmHub();
+        tutmOpen();
+        tutmIntro();
       });
       // Back / app-close also leaves the mode.
       document.getElementById('phone-app-close')?.addEventListener('click', () => { if (tutmOn) tutmClose(); });

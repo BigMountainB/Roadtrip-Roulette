@@ -154,10 +154,14 @@ function lampFrac(tall) {
 // make every transition PASS THROUGH the intermediate frames (12→7→0 on
 // release, never a snap to straight).
 const STEER_POSE = {
-  ENGAGE_7:   0.18,   // a quick tap (~0.15 s of load) reaches the 7° frame
-  RELEASE_7:  0.10,
-  ENGAGE_12:  0.78,   // holding toward the limit (~0.5 s) advances to 12°
-  RELEASE_12: 0.60,
+  // Owner retune 2026-08-31: 7° shows up 20% LATER (0.18→0.216) and 12°
+  // 20% QUICKER (0.78→0.624).  Releases scale with their engage thresholds
+  // so the hysteresis bands keep their width (a 0.60 release under a 0.624
+  // engage would flicker between frames on steering noise).
+  ENGAGE_7:   0.216,  // a quick tap of load reaches the 7° frame
+  RELEASE_7:  0.12,
+  ENGAGE_12:  0.624,  // holding toward the limit advances to 12°
+  RELEASE_12: 0.48,
   RATE_ENGAGE:  70,   // deg/s toward a larger angle
   RATE_RELEASE: 50,   // deg/s back toward straight
 };
@@ -20655,8 +20659,6 @@ export class GameScene extends Phaser.Scene {
 
   /** Category-generic: 'gameplay' (HUD, pauses the run) or 'game_menu' (title
    *  screen, nothing to pause). Both share one chrome and one read model. */
-  _tutTitleModeOpen() { this._tutModeOpen('game_menu'); }
-
   _tutModeOpen(cat = 'gameplay') {
     if (this._tutMode) return;
     const onTitle = cat === 'game_menu';
