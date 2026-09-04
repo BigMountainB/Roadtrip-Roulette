@@ -11914,9 +11914,7 @@ export class GameScene extends Phaser.Scene {
         this._drawTopRowButton(btn.bg, x, y, sz, lit);
       }
       if (btn.lbl) btn.lbl.setPosition(x + sz / 2, y + sz / 2);
-      if (btn.bg.input) {
-        btn.bg.input.hitArea = new Phaser.Geom.Rectangle(x, y, sz, sz);
-      }
+      this._setTopRowHitArea(btn, x, y, sz);   // parallelogram = the visible glass
       btn._lx = x; btn._ly = y; btn._lsz = sz;
     }
     // hudRadio (station name label) sits under the Genre button — keep
@@ -15124,6 +15122,65 @@ export class GameScene extends Phaser.Scene {
     } catch { spots = null; }
     cache.set(texKey, spots);
     return spots;
+  }
+
+  /** Visible-glass parallelogram of a skewed HUD tile in 0..1 texture coords
+   *  (TL, TR, BR, BL). Sampled from the alpha channel: the opaque span at 15%
+   *  and 85% of the content height, extrapolated to the content top/bottom so
+   *  the rounded corners don't pinch the fit. Cached per texture; a texture
+   *  that can't be read falls back to the full square (owner 2026-09-04:
+   *  "make the buttons match the visible pixels of the image"). */
+  _texQuad(texKey) {
+    const cache = (this._texQuadCache ??= new Map());
+    if (cache.has(texKey)) return cache.get(texKey);
+    let quad = null;
+    try {
+      const src = this.textures.get(texKey)?.getSourceImage?.();
+      const W = src?.width | 0, H = src?.height | 0;
+      if (W && H) {
+        const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+        const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.drawImage(src, 0, 0);
+        const d = ctx.getImageData(0, 0, W, H).data;
+        const A = (x, y) => d[(y * W + x) * 4 + 3];
+        const span = (y) => { let l = -1, r = -1; for (let x = 0; x < W; x++) if (A(x, y) > 40) { if (l < 0) l = x; r = x; } return l < 0 ? null : [l, r + 1]; };
+        let top = -1, bot = -1;
+        for (let y = 0; y < H && top < 0; y++) if (span(y)) top = y;
+        for (let y = H - 1; y >= 0 && bot < 0; y--) if (span(y)) bot = y;
+        if (top >= 0 && bot > top + 4) {
+          const y1 = Math.round(top + (bot - top) * 0.15), y2 = Math.round(top + (bot - top) * 0.85);
+          const s1 = span(y1), s2 = span(y2);
+          if (s1 && s2 && y2 > y1) {
+            const ext = (a, b, t) => a + (b - a) * t;
+            const t0 = (top - y1) / (y2 - y1), t1 = (bot + 1 - y1) / (y2 - y1);
+            const cl = (v) => Math.max(0, Math.min(W, v));
+            quad = [
+              { u: cl(ext(s1[0], s2[0], t0)) / W, v: top / H },
+              { u: cl(ext(s1[1], s2[1], t0)) / W, v: top / H },
+              { u: cl(ext(s1[1], s2[1], t1)) / W, v: (bot + 1) / H },
+              { u: cl(ext(s1[0], s2[0], t1)) / W, v: (bot + 1) / H },
+            ];
+          }
+        }
+      }
+    } catch (_) {}
+    if (!quad) quad = [{ u: 0, v: 0 }, { u: 1, v: 0 }, { u: 1, v: 1 }, { u: 0, v: 1 }];
+    cache.set(texKey, quad);
+    return quad;
+  }
+
+  /** Screen-space corners of a top-row button's visible glass for the tile it
+   *  currently shows, given the square it is displayed in. */
+  _topRowQuadPts(btn, x, y, sz) {
+    const key = btn?.lbl?.texture?.key;
+    const Q = key ? this._texQuad(key) : [{ u: 0, v: 0 }, { u: 1, v: 0 }, { u: 1, v: 1 }, { u: 0, v: 1 }];
+    return Q.map(p => new Phaser.Geom.Point(x + p.u * sz, y + p.v * sz));
+  }
+
+  /** Install the parallelogram hit area (replaces the square from creation). */
+  _setTopRowHitArea(btn, x, y, sz) {
+    if (!btn.bg?.input) return;
+    btn.bg.input.hitArea = new Phaser.Geom.Polygon(this._topRowQuadPts(btn, x, y, sz));
+    btn.bg.input.hitAreaCallback = Phaser.Geom.Polygon.Contains;
   }
 
   _texContentBox(texKey) {
@@ -19999,6 +20056,7 @@ export class GameScene extends Phaser.Scene {
     const GOLD = 0xFFD24D;
     const x = b.x - 4, y = b.y - 4, w = b.w + 8, h = b.h + 8;
     g.clear();
+    if (b.poly) return this._drawTourGlowInto(g, b);
     // Wide + soft on the outside → tight + bright at the edge.
     const RINGS = [
       { grow: 19, lw: 16, a: 0.05 },
@@ -20320,7 +20378,9 @@ export class GameScene extends Phaser.Scene {
     if (RO[id] !== undefined) return textB(RO[id]);
     if (id.startsWith('btn_')) {
       const b = this._topRowButtons?.find(x => 'btn_' + x.id === id);
-      return (b && b._lsz != null) ? { x: b._lx, y: b._ly, w: b._lsz, h: b._lsz } : null;
+      if (!b || b._lsz == null) return null;
+      // `poly` = the visible glass; the rect stays for box placement / chips.
+      return { x: b._lx, y: b._ly, w: b._lsz, h: b._lsz, poly: this._topRowQuadPts(b, b._lx, b._ly, b._lsz) };
     }
     if (id === 'pedalGas')   return this._pedalHitZones?.[1];
     if (id === 'pedalBrake') return this._pedalHitZones?.[0];
@@ -20689,7 +20749,11 @@ export class GameScene extends Phaser.Scene {
     }
     if (T.cur) {
       const b = T.bounds(T.cur.el);
-      if (b) { T.sel.lineStyle(3, 0x39D9FF, 1); T.sel.strokeRoundedRect(b.x - 6, b.y - 6, b.w + 12, b.h + 12, 8); }
+      if (b) {
+        T.sel.lineStyle(3, 0x39D9FF, 1);
+        if (b.poly) T.sel.strokePoints(b.poly, true);
+        else T.sel.strokeRoundedRect(b.x - 6, b.y - 6, b.w + 12, b.h + 12, 8);
+      }
     }
   }
 
@@ -20697,6 +20761,15 @@ export class GameScene extends Phaser.Scene {
    *  elements share one Graphics object. */
   _drawTourGlowInto(g, b) {
     const GOLD = 0xFFD24D, x = b.x - 4, y = b.y - 4, w = b.w + 8, h = b.h + 8;
+    if (b.poly) {
+      // Skewed HUD tile: hug the visible glass with tight rings (~3 px out)
+      // so 1-px-apart neighbours don't get swallowed by the halo.
+      for (const r of [{ lw: 7, a: 0.16 }, { lw: 4.5, a: 0.34 }, { lw: 2.5, a: 1 }]) {
+        g.lineStyle(r.lw, GOLD, r.a); g.strokePoints(b.poly, true);
+      }
+      g.fillStyle(GOLD, 0.10); g.fillPoints(b.poly, true);
+      return;
+    }
     for (const r of [{ g: 10, lw: 9, a: 0.15 }, { g: 6, lw: 6, a: 0.26 }, { g: 3, lw: 4, a: 0.48 }, { g: 0, lw: 2.5, a: 1 }]) {
       g.lineStyle(r.lw, GOLD, r.a);
       g.strokeRoundedRect(x - r.g, y - r.g, w + r.g * 2, h + r.g * 2, Math.min(16, 6 + r.g));
@@ -20712,7 +20785,9 @@ export class GameScene extends Phaser.Scene {
     // one card to the RIGHT of the touch (owner 2026-09-03: "when I click on
     // driving type, the load save description comes up").
     const px = ptr.x + (this._uiCam?.scrollX ?? 0), py = ptr.y + (this._uiCam?.scrollY ?? 0);
-    const inside = (b) => b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
+    const inside = (b) => !!b && (b.poly
+      ? Phaser.Geom.Polygon.Contains(new Phaser.Geom.Polygon(b.poly), px, py)
+      : (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h));
     // The "?" button sits UNDER the scrim; a tap on its bounds closes the mode.
     if (inside(this._tutBtnBounds(T.onTitle))) return this._tutModeClose();
     // Box open: the footer chips are real hit rects; the panel body swallows.
@@ -24495,7 +24570,7 @@ export class GameScene extends Phaser.Scene {
         const x     = baseX + o.dx, y = top + o.dy;
         btn.lbl.setDisplaySize(sz, sz);
         btn.lbl.setPosition(x + sz / 2, y + sz / 2);
-        if (btn.bg?.input) btn.bg.input.hitArea = new Phaser.Geom.Rectangle(x, y, sz, sz);
+        this._setTopRowHitArea(btn, x, y, sz);   // parallelogram = the visible glass
         // Published live bounds for the editor proxy + (mute) the disguise anchor.
         btn._lx = x; btn._ly = y; btn._lsz = sz;
       }

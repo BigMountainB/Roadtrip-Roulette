@@ -223,6 +223,20 @@ NOTE (owner Q&A): non-genre cars were requested REMOVED — already true since 2
 VEHICLES holds only the beater CHASSIS that genre cars ride on; dealers sell genre cars
 only.  The chassis' fallback speeds (cruise 90/top 120) apply only pre-genre-pick.
 
+### 2026-09-04 — Top-row buttons: hit area + tutorial outline = the visible glass (parallelogram)
+Owner: *"make the buttons match the visible pixels of the image… more like a parallelogram instead of a
+square. The highlighted border would also be a lot smaller and not overlap other buttons."*
+`_texQuad(texKey)` samples each 150×150 tile's alpha (opaque span at 15% / 85% of the content height,
+extrapolated to the content top/bottom so rounded corners don't pinch) → 4 normalised corners, cached
+per texture, full-square fallback. `_setTopRowHitArea()` installs `Phaser.Geom.Polygon` +
+`Polygon.Contains` from BOTH placement passes (`_applyControlLayout`, `_applyTopRowHandedness`), so the
+creation-time squares are replaced on the first frame — no creator edits. `_hudElementBounds('btn_*')`
+now carries `poly`; `_drawTourGlow[Into]` draws tight polygon rings (7/4.5/2.5 px, ~3 px halo) + fill,
+the cyan selection ring follows the glass, `_tutModeTap`'s `inside()` is polygon-aware; box placement
+and the PREV/✕/NEXT chips keep the enclosing rect. Measured quads (u,v %): pause TL(21,8) TR(99,8)
+BR(77,91) BL(0,91) — Genre's top edge runs to u=0 (its icon art reaches the tile edge). Probe: tap at the
+square's corner → nothing; centre → the entry; "?" → closes.
+
 ### 2026-09-04 — Intro card pauses the run; GOT IT lands IN Tutorial Mode (all three menus)
 Owner: *"When I first click on the tutorial button, the message comes up… but the game keeps playing in
 the background. The game should pause and after the message is closed, the game should remain in the
