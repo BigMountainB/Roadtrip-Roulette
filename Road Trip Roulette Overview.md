@@ -204,6 +204,22 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 2) — Game pause HOLDS the music in place
+
+- Owner: "when the game pauses, pause the music too — pause in place, don't
+  just mute it."  `AudioSystem.setPaused` only DUCKED the master gain while
+  the track element kept advancing, so resuming skipped everything that had
+  "played" silently under the overlay.  Now a game pause also pauses the
+  element itself (`_heldByGamePause`), and resume picks the song up at the
+  exact same spot.  Applies everywhere setPaused routes: the PAUSED overlay,
+  garage/map modals, the out-of-gas card.
+- Guardrails: a Music-app pause (`_musicPaused`) or mute set by the player is
+  never overridden by the game-pause resume; an explicit song play clears the
+  hold flag (`_enablePlayback`); the pause-menu volume-slider bookkeeping
+  (duck snapshot/restore) is unchanged.  Headless-verified: currentTime
+  frozen across a 2 s pause, resume continues from the same timestamp,
+  app-pause survives a game pause/resume cycle.
+
 ### 2026-08-31 (pt 9) — Player steering frames: 7° 20% later, 12° 20% quicker
 
 Owner retune of the STEER_POSE ladder: ENGAGE_7 0.18 → 0.216 (+20%, the first angled

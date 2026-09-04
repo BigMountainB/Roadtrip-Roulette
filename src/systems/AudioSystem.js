@@ -798,6 +798,9 @@ export class AudioSystem {
     // preference — pressing play on a song or restarting the run
     // must never override the mute toggle.
     this.paused = false;
+    // An explicit play supersedes a game-pause hold — drop the flag so a
+    // later pause-exit can't fire a stray play() on whatever is loaded.
+    this._heldByGamePause = false;
     this._applyMasterGain();
   }
   playSpecificTrack(url) {
@@ -1252,10 +1255,27 @@ export class AudioSystem {
 
     this._applyMasterGain();
 
-    // Track element stays playing across pause toggles — gain handles
-    // the duck.  Only resume the element on exit if it somehow got
-    // paused via an external interruption.
-    if (this._trackEl && comingOut && this._trackEl.paused && !this.muted) {
+    // TRUE in-place hold (owner 2026-08-31: "pause the music too — pause in
+    // place, don't just mute").  The duck alone kept the track ADVANCING
+    // under the pause overlay, so resuming skipped everything that played
+    // silently.  Game pause now pauses the element itself; resume picks the
+    // song back up at the same spot.  `_heldByGamePause` scopes the resume
+    // to holds WE made — a Music-app pause (`_musicPaused`) or mute set by
+    // the player is never overridden.  The volume snapshot/duck bookkeeping
+    // above stays so the pause-menu slider behaves exactly as before.
+    if (goingIn && this._trackEl && !this._trackEl.paused) {
+      this._heldByGamePause = true;
+      try { this._trackEl.pause(); } catch (_) {}
+    }
+    if (comingOut && this._heldByGamePause) {
+      this._heldByGamePause = false;
+      if (this._trackEl && this._trackEl.paused && !this.muted && !this._musicPaused) {
+        try { this._trackEl.play().catch(() => {}); } catch (_) {}
+      }
+    } else if (this._trackEl && comingOut && this._trackEl.paused
+               && !this.muted && !this._musicPaused) {
+      // Pre-existing behavior: recover from an external interruption
+      // (backgrounded tab, audio-session steal) on pause exit.
       try { this._trackEl.play().catch(() => {}); } catch (_) {}
     }
   }
