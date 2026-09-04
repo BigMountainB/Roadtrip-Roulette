@@ -5489,12 +5489,15 @@ export class GameScene extends Phaser.Scene {
           if (_psP.speed > MAX_SPEED * (20 / 120)) this._pursuitStopArmed = true;
           const _psIframes = (this.time?.now ?? 0) < (this._invincibleUntil ?? 0);
           // Right-shoulder commit (owner 2026-08-31): pulling onto the grass
-          // IS pulling over — _updatePlayer brakes the car to 0 while this
-          // holds, and the near-stop dwell below then latches the hold.
+          // slows the car — _updatePlayer brakes it to 0 while this holds.
           // Steering back onto the road releases it (you can still run).
           this._pursuitStopping = this._pursuitStopArmed && !_psIframes
                                   && this.player.x > COP_TRAP_SHOULDER_X;
-          if (this._pursuitStopArmed && !_psIframes
+          // The STOP itself latches only while the BRAKE is held (owner
+          // 2026-09-03: "You should only get into a traffic stop if your
+          // brakes are on" — coasting to 0 on the grass, or being slowed by
+          // anything else, must not start the stop on its own).
+          if (this._pursuitStopArmed && !_psIframes && this._isBrake()
               && _psP.speed < MAX_SPEED * (PURSUIT_STOP_MPH / 120)) {
             this._pursuitStopDwell += rawDt;
             if (this._pursuitStopDwell >= PURSUIT_STOP_DWELL_SEC) {

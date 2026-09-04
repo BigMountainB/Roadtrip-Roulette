@@ -223,6 +223,21 @@ NOTE (owner Q&A): non-genre cars were requested REMOVED — already true since 2
 VEHICLES holds only the beater CHASSIS that genre cars ride on; dealers sell genre cars
 only.  The chassis' fallback speeds (cruise 90/top 120) apply only pre-genre-pick.
 
+### 2026-09-03 — Pull-over requires the BRAKE (1–2★ comply flow)
+Owner: *"I pulled off the road and was pulled over, without hitting the brakes. You should only get into
+a traffic stop if your brakes are on."* The stop latched on speed alone (< 8 mph for 0.8 s with the tail),
+and the 2026-08-31 shoulder rule auto-brakes the car to 0 on the grass — so shoulder → auto-stop → stop.
+Owner's pick (tap-to-choose): **brake required, shoulder still slows**. `_isBrake()` is now part of the
+dwell condition; `_pursuitStopping` (grass auto-brake) is unchanged, so you can sit on the shoulder at 0
+without a stop until you hold the brake. Steering back onto the road still releases everything.
+
+**Steering turn frames (same conversation):** owner saw "only one angled image" on Classic Rock. Normal
+steering uses exactly two frames — `starter_back_turn_007.png` (tap) and `starter_back_turn_012.png`
+(held) — and the 30–150° spins are PIT-only. On Classic Rock the two exports differ by ~8 px of yaw per
+side, so they read as one image. Owner will re-export the **012** frame with more yaw (per genre:
+`public/assets/culture/<genre>/vehicles/starter_back_turn_012.png`, 1024×1024, alpha-measured tire
+anchor). No code change.
+
 ### 2026-09-03 — Contextual Tutorial Mode (replaces the three linear tours)
 
 **Pt 2 (same day) — art in, Garage off the HUD, per-button pulse lives.** ChatGPT's follow-up brief
