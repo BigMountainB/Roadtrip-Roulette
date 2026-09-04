@@ -20606,6 +20606,12 @@ export class GameScene extends Phaser.Scene {
     const objs = [scrim, glow, sel, boxG, boxT, banner, navPrev, navClose, navNext];
     this._tutUi(objs);
     if (!onTitle) {
+      // One HUD render with the placeholder gate open BEFORE freezing, so a
+      // cold engine gauge publishes bounds and can be inspected (_renderHUD
+      // does not run while paused; the legacy tour idled 180 ms for this).
+      this._tutArming = true;
+      try { this._renderHUD(); } catch (_) {}
+      this._tutArming = false;
       this._paused = true;
       this._showEditorPopupPlaceholders();
       this.hudStars?.setText('★★☆☆☆').setColor('#FFD24D').setVisible(true);
@@ -22383,10 +22389,11 @@ export class GameScene extends Phaser.Scene {
       this._hudObjects?.push(this._engineTempTxt);
       this.cameras?.main?.ignore?.([this._engineTempTxt]);   // late-created — UI camera only
     }
-    // Cold engine → hidden.  Exception: the controls editor shows a warm
-    // placeholder so the gauge can be grabbed (editor id `engine`).
+    // Cold engine → hidden.  Exception: the controls editor and Tutorial Mode
+    // show a warm placeholder so the gauge can be grabbed / inspected
+    // (editor id `engine`; tutorial entry gameplay.engine).
     if (temp < 55 && !this._engineLimp) {
-      if (!this._ctrlEditMode && !this._hudTourActive) { this._engineTempTxt.setVisible(false); this._engineTempBounds = null; return; }
+      if (!this._ctrlEditMode && !this._hudTourActive && !this._tutMode && !this._tutArming) { this._engineTempTxt.setVisible(false); this._engineTempBounds = null; return; }
       temp = 80;   // placeholder: mid-scale, normal (blue) state
     }
     const g  = this.hudGfx;

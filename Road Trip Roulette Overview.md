@@ -233,6 +233,10 @@ calls the handedness pass to light the "?") shoved every button off its own hit 
 for the pause menu / mute toggle while paused. Fix: the handedness pass now uses the identical
 placement (`base + _ctrlOff dx/dy`, `size × scale`) and publishes `_lx/_ly/_lsz` itself. Verified: all
 six buttons bounds == art.
+Also: the cold-engine gauge is hidden unless the controls editor / legacy tour forces it, so
+`gameplay.engine` had NO bounds in the mode (unreachable → would block Road Scholar for anyone whose
+engine never ran hot). `_renderHUD` does not run while paused, so `_tutModeOpen` now renders ONE armed
+HUD frame (`_tutArming`) before freezing — the gauge draws its warm placeholder and publishes bounds.
 
 ### 2026-09-03 — Pull-over requires the BRAKE (1–2★ comply flow)
 Owner: *"I pulled off the road and was pulled over, without hitting the brakes. You should only get into
