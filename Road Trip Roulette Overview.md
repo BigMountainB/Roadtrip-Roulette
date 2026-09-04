@@ -223,6 +223,15 @@ NOTE (owner Q&A): non-genre cars were requested REMOVED — already true since 2
 VEHICLES holds only the beater CHASSIS that genre cars ride on; dealers sell genre cars
 only.  The chassis' fallback speeds (cruise 90/top 120) apply only pre-genre-pick.
 
+### 2026-09-04 — Intro card pauses the run; GOT IT lands IN Tutorial Mode (all three menus)
+Owner: *"When I first click on the tutorial button, the message comes up… but the game keeps playing in
+the background. The game should pause and after the message is closed, the game should remain in the
+tutorial mode."* + *"GOT IT should drop into tutorial mode on all menus."* `_tutShowIntro()` now sets
+`_paused` immediately for the in-run card (odometer verified frozen while the card is up) and its GOT
+IT calls `_tutModeOpen('gameplay' | 'game_menu')`; the phone's GOT IT calls `tutmOpen()`. Probes:
+in-run card → paused, no movement; GOT IT → mode on with 24 entries, still paused; close → unpaused.
+Phone GOT IT → capture on, all 11 tiles pulsing. `_tutIntroDone` is the probe hook for the card.
+
 ### 2026-09-03 — In-game Tutorial outlines were one layout offset off their buttons
 Owner screenshot (left-handed HUD, mode open): every top-row outline (Pause/FF/Genre/Mute/Map/?) sat
 beside its button. Reproduced headless (`hud_probe.cjs`, 932×430, `_leftHanded=true`): bounds vs art

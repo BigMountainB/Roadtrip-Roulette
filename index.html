@@ -4902,7 +4902,9 @@
           Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
           or display to learn what it does.</div>
           <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>`;
-        addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); qhit('tutorial')?.classList.remove('tut-flash'); tutmSheet.classList.remove('show'); });
+        // GOT IT drops straight into phone Tutorial Mode (owner 2026-09-04:
+        // "GOT IT should drop into tutorial mode on all menus").
+        addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); qhit('tutorial')?.classList.remove('tut-flash'); tutmSheet.classList.remove('show'); tutmOpen(); });
         tutmFitSheet();
         tutmSheet.classList.add('show');
       };

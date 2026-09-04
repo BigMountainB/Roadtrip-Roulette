@@ -20542,6 +20542,10 @@ export class GameScene extends Phaser.Scene {
 
   _tutShowIntro(onTitle = false) {
     const D = 97;
+    // In a run the card must FREEZE the game (owner 2026-09-04: "the game
+    // keeps playing in the background") — same pause flag the mode uses;
+    // _tutModeOpen keeps it set and _tutModeClose releases it.
+    if (!onTitle) this._paused = true;
     const scrim = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W * 3, SCREEN_H * 3, 0x02060E, 0.6)
       .setDepth(D).setScrollFactor(0).setInteractive();
     const boxG = this.add.graphics().setDepth(D + 1);
@@ -20566,7 +20570,12 @@ export class GameScene extends Phaser.Scene {
       for (const o of objs) { try { o.destroy(); } catch (_) {} }
       this._tutSave()?.set?.('tutorialIntroSeen', true);
       this._tutFirstRunGlow?.destroy?.(); this._tutFirstRunGlow = null;
+      this._tutIntroDone = null;
+      // GOT IT lands IN Tutorial Mode (owner: "after the message is closed, the
+      // game should remain in the tutorial mode"), not back in the game.
+      this._tutModeOpen(onTitle ? 'game_menu' : 'gameplay');
     };
+    this._tutIntroDone = done;   // headless probe / dev hook
     ok.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); done(); });
     scrim.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); });
   }
