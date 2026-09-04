@@ -204,6 +204,15 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 9) — Player steering frames: 7° 20% later, 12° 20% quicker
+
+Owner retune of the STEER_POSE ladder: ENGAGE_7 0.18 → 0.216 (+20%, the first angled
+frame holds off longer on light steering) and ENGAGE_12 0.78 → 0.624 (−20%, the second
+frame arrives sooner on a committed turn).  RELEASE_7 0.10 → 0.12 and RELEASE_12
+0.60 → 0.48 scale with their engage thresholds — leaving RELEASE_12 at 0.60 under a
+0.624 engage would shrink that hysteresis band to 0.024 and flicker between frames on
+steering noise.  Rates unchanged.
+
 ### 2026-08-31 (pt 8) — Genre-car speed table: per-difficulty cruise/top (owner table)
 
 All 10 genre cars re-speeded from the owner's table.  Traits store the REGULAR column
