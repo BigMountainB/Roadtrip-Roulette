@@ -20036,8 +20036,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Measure the panel this band+font would need.
-    const measure = (band, px) => {
-      const bw = Math.max(120, Math.min(maxW, band.w));
+    const measure = (band, px, wFrac = 1) => {
+      const bw = Math.max(120, Math.min(maxW, band.w * wFrac));
       boxT.setFontSize(px);
       boxT.setWordWrapWidth(bw - PADX * 2);
       boxT.setText(text);
@@ -20063,11 +20063,15 @@ export class GameScene extends Phaser.Scene {
         if (band.w < 140 || band.h < 60) continue;
         const yPref = band.anchor === 'top' ? [0, 0.5, 1] : band.anchor === 'bottom' ? [1, 0.5, 0] : [0.5, 0, 1];
         for (let px = base; px >= floor; px = Math.max(floor, Math.round(px * 0.88))) {
-          const m = measure(band, px);
-          if (m.bh <= band.h && m.bw <= band.w) {
+          // Narrower panels too: a full-band panel can never clear a highlight
+          // that sits INSIDE the band (LOAD/SAVE's box was burying the plates,
+          // owner 2026-09-03). Same font first, then shrink.
+          for (const wFrac of [1, 0.78, 0.6, 0.48]) {
+            const m = measure(band, px, wFrac);
+            if (m.bh > band.h || m.bw > band.w) continue;
             for (const ay of yPref) for (const ax of [0.5, 0, 1]) {
               const r = rectFor(band, m.bw, m.bh, ax, ay);
-              if (!overlaps(r)) { best = { band, px, ...m, rect: r }; break outer1; }
+              if (!overlaps(r)) { best = { band, px, wFrac, ...m, rect: r }; break outer1; }
             }
           }
           if (px === floor) break;
@@ -20093,7 +20097,7 @@ export class GameScene extends Phaser.Scene {
       const bh = Math.min(m.bh, band.h);
       best = { band, px: floor, bw: m.bw, bh, rect: rectFor(band, m.bw, bh, 0.5, anchorAy(band)) };
     }
-    measure(best.band, best.px);                          // leave the text at the chosen size/wrap
+    measure(best.band, best.px, best.wFrac ?? 1);         // leave the text at the chosen size/wrap
     const { bw, bh, rect } = best;
     boxG.clear();
     boxG.fillStyle(0x06101E, 0.86);
@@ -20573,7 +20577,7 @@ export class GameScene extends Phaser.Scene {
       align: 'center', fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5, 0).setDepth(D + 5).setVisible(false);
     // Flush to the bottom edge: at y-14 it grazed the START/LOAD cards' frames.
-    const banner = this.add.text(SCREEN_W / 2, SCREEN_H - 3, 'TUTORIAL MODE  ·  tap anything to learn what it does  ·  tap ? to exit', {
+    const banner = this.add.text(SCREEN_W / 2, SCREEN_H - 3, 'TUTORIAL MODE  -  tap anything to learn what it does  -  tap ? to exit', {
       fontSize: '13px', fontFamily: IMPACT, color: '#FFD24D', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5, 1).setDepth(D + 5);
     // Reduced motion: a gentle 0.8→1 breathe instead of the strong pulse.

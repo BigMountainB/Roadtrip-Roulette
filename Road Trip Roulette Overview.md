@@ -309,6 +309,11 @@ with a phone-aspect Playwright run (`offset_probe.cjs`): plates/start/diff/drive
 themselves and the "?" closes the mode. (Note: the slider comment "no-op on mobile" is stale — mobile
 IS widened.) Also owner: *"the images for the tutorial button are swapped"* → back to the brief's
 mapping: dark face + neon "?" idle, filled-yellow sign while ON.
+- **Pt 5 — LOAD/SAVE box buried the plates** (owner screenshot after 1165c84). `_placeTourBox` only
+  tried a panel as wide as the free band, so above the LOAD card the panel spanned the whole width and
+  could never clear the plates → fell back to first-fit. Pass 1 now also tries 0.78 / 0.6 / 0.48 band
+  widths (same font first, then shrink) at each alignment. Phone-aspect probe (`overlap_probe.cjs`):
+  all five title boxes clear every other highlight + "?" + banner (LOAD → x182 w608, right of plates).
 - Image viewing in this Claude session works again (screenshots ≤ 2000 px).
 
 - **Name collision found by the headless smoke** (`B.btnSeen is not a function`): the legacy tour's
