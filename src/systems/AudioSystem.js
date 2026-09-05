@@ -478,6 +478,11 @@ const RADIO_SCAN_URL = 'assets/music/rtr_radio_scan.mp3';
 
 export class AudioSystem {
   constructor() {
+    // EVERY game open holds the radio-scan mix on repeat (owner 2026-08-31)
+    // until a run starts (_kickRadio's run branch) or the player picks a
+    // genre (any station action clears this via _startTrack/_refreshStation).
+    // play()/init() route to the scan while this is armed.
+    this._radioScanActive = true;
     this._ctx          = null;
     this._master       = null;
     this._bus          = null;   // compressor mix bus

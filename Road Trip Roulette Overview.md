@@ -204,6 +204,22 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 22) — The radio-scan mix opens EVERY session
+
+Owner: "every time the game is opened, it should play the mix on repeat until the game
+starts or the player selects a default music genre."  The post-voicemail scan machinery
+already had every hook (playRadioScan loop, station actions cancel via
+_refreshStationPlayback → stopRadioScan, _startTrack clears the flag for any non-scan
+url); two changes make it the standard boot state:
+- `AudioSystem` constructor arms `_radioScanActive = true` — play()/init() route to the
+  scan from the first legal gesture of every page load.
+- `_kickRadio()` gets a TITLE branch: while `_awaitingStart`, the kick starts/keeps the
+  scan and returns — the persisted-genre resume no longer runs at the title (a station
+  pick or the run-start branch is what hands playback to a genre).  Run-start behavior
+  unchanged: scan stops, starred/default station takes over.
+Probe: title gesture → rtr_radio_scan.mp3 looping; Music-app station pick → scan off,
+genre track; run start → genre holds.
+
 ### 2026-08-31 (pt 21) — Correction: card BOTTOM rides the weather box's bottom border (b20)
 
 Owner corrected pt 20: the text box's BOTTOM border attaches to the weather box's bottom

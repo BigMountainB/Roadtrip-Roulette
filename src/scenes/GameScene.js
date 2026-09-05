@@ -26003,10 +26003,20 @@ export class GameScene extends Phaser.Scene {
   _kickRadio() {
     const a = this.audio;
     if (!a) return;
-    // A run is starting — the post-voicemail radio-scan hold loop ends here
-    // and the default station takes over (owner 2026-08-11).  Remember
-    // whether it was sounding: with the scan stopped and the context already
-    // running, no branch below would otherwise start any music.
+    // TITLE / MENU kick (owner 2026-08-31): every open plays the radio-scan
+    // mix on repeat until the run starts or the player picks a genre in the
+    // Music app.  The persisted-genre resume no longer runs at the title —
+    // the scan owns the menu; a station action or the run-start branch below
+    // is what hands playback to a genre.
+    if (this._awaitingStart) {
+      if (!a.ready) a.init(); else a._enablePlayback?.();
+      a.playRadioScan?.();
+      return;
+    }
+    // A run is starting — the radio-scan hold loop ends here and the default
+    // station takes over (owner 2026-08-11).  Remember whether it was
+    // sounding: with the scan stopped and the context already running, no
+    // branch below would otherwise start any music.
     const _scanWasOn = !!a._radioScanActive;
     a.stopRadioScan?.();
     // DEFAULT GENRE = the Music app's starred station (owner 2026-07-22: a
