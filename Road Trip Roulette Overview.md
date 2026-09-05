@@ -204,6 +204,22 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 10) — Opening-call audio: iOS gesture unlock + rejection retry
+
+Owner: voicemail silent on the phone, fine on desktop.  Root cause class: iOS only
+permits playback that BEGINS inside a real user activation, and a slide-to-answer can end
+in `pointercancel` (edge swipe / system gesture) — not an activation context — so
+`audio.play()` in accept() could reject and the sequence ran its SUPPORTED silent
+fallback with no visible error.  Desktop mouse drags always end in `pointerup`, hence the
+split.  Two-layer fix in OpeningCallSequence:
+1. **Gesture bless**: the knob's `pointerdown` (always a gesture) does a play-and-pause
+   on the element, unlocking later programmatic play() regardless of how the drag ends.
+2. **Rejection retry**: if accept()'s play() still rejects, the NEXT `pointerdown`
+   anywhere retries (fresh gesture); only after that fails — or 4 s with no touch — does
+   the silent fallback engage.  The wall-clock timeline runs underneath either way.
+Desktop path regression-probed (strict autoplay policy, real slide): plays from 0:00.
+Needs an on-phone confirm with /fully/?intro=1.
+
 ### 2026-08-31 (pt 3) — Rotation/menu wedge: forced-open menu now pauses, toast taps armed, iOS clear hardened
 
 - Owner: "can't rotate into the game menu since your last edit."  Could not

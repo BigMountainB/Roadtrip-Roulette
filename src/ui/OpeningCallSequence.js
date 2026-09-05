@@ -172,6 +172,25 @@ export function initOpeningCall() {
 
   knob.addEventListener('pointerdown', (e) => {
     if (state !== 'ringing') return;
+    // iOS unlock (owner 2026-08-31 "silent on my phone, fine on desktop"):
+    // playback must BEGIN inside a real user gesture, and on iOS a slide can
+    // end in pointercancel (edge swipes / system gestures), which is NOT an
+    // activation context — so the play() in accept() could be rejected and
+    // the sequence ran its silent fallback with no visible error.  The
+    // pointerdown that starts the drag IS always a gesture: bless the
+    // element here with a play-and-pause so the later programmatic play()
+    // is allowed no matter how the drag ends.  The pause lands within
+    // milliseconds — inaudible.
+    try {
+      if (audio && !audio._blessed) {
+        audio._blessed = true;
+        const pr = audio.play();
+        if (pr?.then) {
+          pr.then(() => { audio.pause(); audio.currentTime = 0; },
+                  () => { audio._blessed = false; });
+        } else { audio.pause(); audio.currentTime = 0; }
+      }
+    } catch (_) {}
     // Repeated / multi-touch pointerdowns must not hijack an in-flight drag.
     if (dragId !== null) return;
     dragId = e.pointerId;
@@ -229,7 +248,24 @@ export function initOpeningCall() {
       // reject, so the promise catch below still routes to the fallback.
       audio.addEventListener('error', onAudioMissing, { once: true });
       const p = audio.play();
-      if (p?.catch) p.catch(onAudioMissing);
+      if (p?.catch) p.catch(() => {
+        // Autoplay rejection (e.g. an iOS drag that ended in pointercancel).
+        // The NEXT touch anywhere is a fresh gesture — retry there; only if
+        // that also fails does the silent fallback timer take over.  The 4 s
+        // guard keeps a touchless session from stalling: the wall-clock
+        // timeline is already running underneath either way.
+        const retry = () => {
+          try {
+            const pp = audio?.play?.();
+            if (pp?.catch) pp.catch(onAudioMissing);
+          } catch (_) { onAudioMissing(); }
+        };
+        document.addEventListener('pointerdown', retry, { once: true });
+        setTimeout(() => {
+          document.removeEventListener('pointerdown', retry);
+          if (audio && audio.paused && !usingFallback) onAudioMissing();
+        }, 4000);
+      });
     } catch (_) {
       onAudioMissing();
     }

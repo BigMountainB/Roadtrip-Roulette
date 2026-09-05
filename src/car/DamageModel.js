@@ -88,9 +88,17 @@ export class DamageModel {
 
   /** Restore durability to an exact value (used to carry damage across
    *  scene restarts so a rest-stop pull-over doesn't silently full-heal
-   *  a player who didn't buy REPAIR CAR). */
+   *  a player who didn't buy REPAIR CAR).
+   *
+   *  Floor is 1, not 0 (owner bug 2026-08-31): 0 is a WRECKED state, and a
+   *  restore is always bringing a LIVE car back — a save written at/after
+   *  the moment of death (e.g. a pagehide autosave racing the crash
+   *  cinematic) used to resume the run at exactly 0 HP, where takeDamage's
+   *  "already wrecked — no-op" guard made the car unkillable forever.
+   *  Such a save now limps back in on 1 HP and the next scrape ends the
+   *  run properly. */
   setDurability(value) {
-    const v = Math.max(0, Math.min(this._max, value ?? 0));
+    const v = Math.max(1, Math.min(this._max, value ?? 0));
     this._durability = v;
     this._stage      = _resolveStage(this._durability);
   }

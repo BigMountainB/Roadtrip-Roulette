@@ -2242,6 +2242,7 @@ export class GameScene extends Phaser.Scene {
     this._finishCause     = null;
     this._statsTripEnded = false;   // one-shot guard for the stats trip-end hook
     this._arrestHandled  = false;   // one-shot guard so a bust charges bail once
+    this._wreckWatchdogFired = false;   // one-shot for the zero-HP watchdog
     this._endingPrePenaltyCash = null;   // pre-bail wallet stash for the ending outcomes
     // Per-texture caches (angle-frame sizing + tire-contact anchors) —
     // rebuilt every create so a genre-art swap (same texture keys, new
@@ -4782,6 +4783,20 @@ export class GameScene extends Phaser.Scene {
     if (this._pendingFullTank && this.player) {
       this.player.gasMi = this.player.gasMaxMi ?? this.player.gasMi;
       this._pendingFullTank = false;
+    }
+
+    // ── Zero-HP watchdog (owner bug 2026-08-31) ────────────────────
+    // A wrecked car must never keep driving.  DamageModel only emits its
+    // 'wreck' event on the TRANSITION to 0 inside takeDamage — durability
+    // that arrives at 0 any other way (a stale save, a future write path)
+    // parks the model in "already wrecked — no-op" and the run becomes
+    // unkillable.  If we're in live gameplay with 0 HP and no ending in
+    // flight, end the run the same way the killing blow would have.
+    if (this.damage?.isWrecked?.() && !this._endingCine && !this._gameFinished
+        && !this._finishCinematic && !this._awaitingStart && !this._wreckWatchdogFired) {
+      this._wreckWatchdogFired = true;
+      this._failReason = FAIL_REASON.CRASHED_ACCUMULATED;
+      this._startCrashCinematic({}, { source: 'attrition' });
     }
 
     // ── Low-HP smoke ───────────────────────────────────────────────
@@ -21936,9 +21951,19 @@ export class GameScene extends Phaser.Scene {
         if (_mfPosed) {
           const meta = _mf.meta;
           const contentHF = Math.max(0.05, meta.cy1 - meta.cy0);
-          const wantH = Math.max(Math.max(6, mb.glassH * 0.13), 2 + proj.depthT * 18) * mirrorZoom;
+          // Close-range presence (owner 2026-08-31: "in the rearview mirror
+          // they are not big enough when they are this close").  A station
+          // cop sits ~600 units back — INSIDE the 700-unit near plane — so
+          // the old flat 20 px cap drew a bumper-distance cruiser barely
+          // bigger than one far up the road.  The near end now fills ~80%
+          // of the glass (masked, so the spill crops like a real mirror);
+          // the far floor is unchanged.
+          const wantH = Math.max(
+            Math.max(6, mb.glassH * 0.13),
+            Math.pow(proj.depthT, 1.25) * mb.glassH * 0.80) * mirrorZoom;
           mTexH = wantH / contentHF;
           mTexW = mTexH * (meta.w / meta.h);
+          this._probeMirrorCopH = Math.round(wantH);   // validation hook (harness reads it)
           mSlotY = proj.y - ((meta.cy0 + meta.cy1) / 2 - 0.5) * mTexH;   // content centered on proj.y
           if (slot.texture.key !== _mf.key) slot.setTexture(_mf.key);
           slot.setDisplaySize(mTexW, mTexH);
@@ -21948,8 +21973,10 @@ export class GameScene extends Phaser.Scene {
         } else {
           const tex = this.textures.exists('car_front_police') ? 'car_front_police' : 'car_front_white';
           // Cop floor scales with the glass (≈13% of its height) so the pursuer
-          // stays legible at any mirror size / zoom, never below 6 px.
-          placeSprite(slot, tex, proj.x, proj.y, proj.depthT, 20, copFa,
+          // stays legible at any mirror size / zoom, never below 6 px.  Near
+          // cap raised to ~80% of the glass (2026-08-31) — see the posed
+          // branch: a bumper-distance cruiser must FILL the mirror.
+          placeSprite(slot, tex, proj.x, proj.y, proj.depthT, mb.glassH * 0.80, copFa,
                       Math.max(6, mb.glassH * 0.13));
         }
         if (_hlOnMirror && _mfPosed && _mf.lb) {
@@ -25633,6 +25660,12 @@ export class GameScene extends Phaser.Scene {
     try {
       if (this._awaitingStart || this._awaitingResumeOk || this._ctrlEditMode
           || this._bustingToStart || this._odEnding || !this._introDone) return;
+      // Never snapshot a dead car (owner bug 2026-08-31): the pagehide/
+      // visibility FLUSH can fire during the crash/arrest cinematic — the
+      // 3s timer path can't reach here then, but the flush path could, and
+      // it wrote hp 0 into liveRun.  Resuming that save made the car
+      // permanently unkillable (takeDamage no-ops at 0).
+      if (this._endingCine || this.damage?.isWrecked?.()) return;
       // Run is ending — no autosave once the finish is crossed (cinematic) or
       // the technical-loss restart modal is up, so no stale save lands post-finish.
       if (this._finishCinematic || this._finishCineEnded
