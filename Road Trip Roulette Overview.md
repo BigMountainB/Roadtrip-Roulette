@@ -204,6 +204,18 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 3) — "Tilt steering access" row was hiding in the standalone app
+
+Owner: "I remember seeing Tilt steering access — where is it now?"  The Settings ▸
+Accessibility row was gated on `requestPermission` existing, which iOS can OMIT inside
+Home-Screen standalone web apps even though motion is still gated there — the row
+vanished in exactly the context players need it (the owner's screenshot was the
+standalone app).  New gate: any touch device with `DeviceOrientationEvent` shows the row.
+Button behavior by context: stored grant → GRANTED; `requestPermission` available →
+RE-ENABLE (prompt, as before); neither → **TEST**, a 1.5 s live sensor probe — real
+motion data → GRANTED, silence → guidance (open in Safari to grant + re-add the
+Home-Screen app; check iOS Settings ▸ Safari's Motion & Orientation Access toggle).
+
 ### 2026-09-05 (pt 2) — Custom-game TILT fixed; tutorial blink re-arms per game update
 
 - **Custom-game TILT silently stayed on tap** (owner): `_setSteeringMode('tilt')` queued
@@ -8229,6 +8241,7 @@ Forward warps **drain gas** equal to trip distance. Hard mode disallows warping 
 ### Tier 0 — Pre-ship blockers
 - **DELETE THE DEV WARP** — digit-keys 1-9 mile-warp cheat in [src/scenes/GameScene.js](src/scenes/GameScene.js), bracketed by `// ── DEV WARP — REMOVE BEFORE RELEASE ──`. **Must be deleted before shipping.**
 - **DELETE THE TEST SPEED TRAP** — a guaranteed parked speed trap at ~mile 2.3 in [src/road/RouteData.js](src/road/RouteData.js), bracketed by `// ── TEST TRAP — REMOVE BEFORE RELEASE ──`. Added so the 0★ pull-over flow is testable seconds into a run; **delete before shipping** (the real traps are the 5–7 randomized city ones).
+- **Decide and harden the mobile background-audio policy before App Store release.** Current behavior is intentional: `AudioSystem.backgroundRadio` and `SaveSystem.settings.backgroundRadio` default to `true`; a hidden page is allowed to keep a real track playing, and the last track/time are persisted and restored on reopen. Brendan has observed music continuing after force-closing the saved-home-screen game and iPhone media controls reopening the web app. Decide whether background radio should be removed, default OFF as an explicit opt-in, or remain a supported player setting; then test Home Screen/PWA termination, lock-screen controls, app switching, browser closure, mute, and external music/podcast mixing on a physical iPhone. **Important:** the lifecycle behavior is code-confirmed, but a separate game-performance slowdown caused by music has not yet been profiled or proven.
 
 ### Tier 1 — Active features the user has flagged
 - **Murrow skyline sinks into Lake Washington (proper fix, diagnosed)** — on the Murrow floating bridge onto Mercer Island the distant skyline silhouette (which exists to COVER a charcoal "junk" backdrop band) gets overpainted by the per-segment lake-water fills drawn AFTER it in the same `roadGfx` layer, so it looks like it sinks into the lake. The `SKYLINE_SHORE_LIFT` band-aid was reverted (it exposed the junk). Proper fix is a DRAW-ORDER / layer change: render the silhouette ABOVE the per-segment water fills but BEHIND the cranes (e.g. its own depth between road and scenery sprites), keeping it LOW so it still covers the junk. Awaiting user go-ahead (delicate layering change).
@@ -8263,6 +8276,17 @@ Forward warps **drain gas** equal to trip distance. Hard mode disallows warping 
 - **Phase 2 — Mission system** (Job Done achievement is wired but waiting on missions).
 - **Phase 5 — DJ chatter** (record MP3s; wiring is straightforward).
 - **Phase 6 — Daily challenge** (half-day's work). *(Local leaderboard portion DONE 2026-06-05 — see §8 House Leaderboard.)*
+
+### Tier 2 — Smaller replayability and polish improvements (added 2026-09-05)
+- **Complete ending-card coverage.** Give `busted_late` the same polished outcome-card treatment as every other run ending, with cause, consequence, and valid restart/continue choices.
+- **Actionable post-run diagnosis.** Expand the existing next-run advice into one evidence-based lesson from that run (largest cash loss, dominant damage source, avoidable time loss, survival failure, missed fuel stop, or police hold) plus one suggested adjustment.
+- **Checkpoint split times.** Record and display the player's current/best time at major route checkpoints. This can ship before full ghost replay and later become the data foundation for an asynchronous rival/ghost car.
+- **Route-earned cosmetics.** Add collectible license plates, bumper stickers, dashboard objects, vehicle scars, horns, and genre-specific cosmetic variants tied to feats, NPC arcs, towns, and difficulty rather than raw stat power.
+- **Weekend/weekly challenge layer.** Extend the weekday daily system with a weekend event or themed weekly route. Reward participation and completion without deleting progress or punishing a broken login streak.
+- **Player-facing terminology audit.** Replace stale drug/vice-era achievement descriptions, statistics labels, comments that surface in tooling, and other obsolete text so all current food/drink/caffeine/special-item behavior is described accurately.
+- **Resolve inert encounter rewards.** Give `warm` and `elk_ready` real, visible effects or remove/replace them so encounter choices never promise a buff that changes nothing.
+- **Short-session route legs.** Explore an optional 8–12 minute Leg mode using existing checkpoint boundaries. Each leg should produce a valid result and modest progression while the full Seattle→Pullman run remains the primary campaign achievement.
+- **Progressively reduce `GameScene` risk.** Extract coherent systems from the monolithic scene as related gameplay work touches them (scoring/combo, run pacing, collision resolution, endings, and HUD are candidates). Preserve behavior with focused tests; this is an enabling refactor, not a rewrite milestone.
 
 ### Tier 3 — Bigger features
 - Mission system full build-out

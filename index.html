@@ -4303,10 +4303,16 @@
           // Tilt/accelerometer re-enable (owner 2026-08-16) — only where the
           // OS actually gates motion behind a permission prompt (iOS).  The
           // way back in after declining the prompt at first launch.
-          ((typeof window.DeviceOrientationEvent?.requestPermission === 'function'
-            || typeof window.DeviceMotionEvent?.requestPermission === 'function')
-            ? `<div class="pa-row"><span class="k">📐 Tilt steering access</span><button id="set-tilt" class="pa-toggle ${localStorage.getItem('rtr.tiltGranted') === '1' ? 'on' : ''}">${localStorage.getItem('rtr.tiltGranted') === '1' ? 'GRANTED' : 'RE-ENABLE'}</button></div>` +
-              `<p class="pa-note">Declined the motion prompt? Tap RE-ENABLE to ask iOS again so TILT steering can work.</p>`
+          // Row shows on ANY touch device with the motion event class (owner
+          // 2026-09-05 "where is it now?"): the old requestPermission-only
+          // gate hid the row inside Home-Screen standalone apps, where iOS
+          // can omit requestPermission yet still gate the sensor — the exact
+          // place players need the status.  Without requestPermission the
+          // button runs a live sensor TEST instead of a prompt.
+          ((!!window.DeviceOrientationEvent && (navigator.maxTouchPoints ?? 0) > 0)
+            ? `<div class="pa-row"><span class="k">📐 Tilt steering access</span><button id="set-tilt" class="pa-toggle ${localStorage.getItem('rtr.tiltGranted') === '1' ? 'on' : ''}">${localStorage.getItem('rtr.tiltGranted') === '1' ? 'GRANTED'
+                : ((typeof window.DeviceOrientationEvent?.requestPermission === 'function' || typeof window.DeviceMotionEvent?.requestPermission === 'function') ? 'RE-ENABLE' : 'TEST')}</button></div>` +
+              `<p class="pa-note">TILT steering needs motion access. Tap the button to grant or test it; GRANTED means you're set.</p>`
             : '') +
           (isIOS
             ? sSec('Appearance') +
@@ -4363,10 +4369,32 @@
           };
           if (window.__tiltRetry) { window.__tiltRetry(done); return; }
           const P = (typeof window.DeviceOrientationEvent?.requestPermission === 'function')
-            ? window.DeviceOrientationEvent : window.DeviceMotionEvent;
-          P?.requestPermission?.()
-            .then(r => done(r === 'granted' ? 'granted' : 'denied'))
-            .catch(() => done('denied'));
+            ? window.DeviceOrientationEvent
+            : ((typeof window.DeviceMotionEvent?.requestPermission === 'function') ? window.DeviceMotionEvent : null);
+          if (P) {
+            P.requestPermission()
+              .then(r => done(r === 'granted' ? 'granted' : 'denied'))
+              .catch(() => done('denied'));
+            return;
+          }
+          // No requestPermission (Home-Screen standalone / Android): the
+          // sensor either flows or it doesn't — listen for one real event.
+          tiltBtn.textContent = 'TESTING…';
+          let heard = false;
+          const probe = (ev) => {
+            if (ev?.alpha == null && ev?.beta == null && ev?.gamma == null) return;
+            heard = true;
+            window.removeEventListener('deviceorientation', probe, true);
+            done('granted');
+          };
+          window.addEventListener('deviceorientation', probe, true);
+          setTimeout(() => {
+            window.removeEventListener('deviceorientation', probe, true);
+            if (!heard) {
+              tiltBtn.textContent = 'TEST';
+              showConfirm('🚫 No motion data is reaching the game here. If you added the game to your Home Screen, iOS may block motion in that mode — open the game in Safari itself, grant access there, then re-add it. Also check iOS Settings ▸ Safari for a Motion & Orientation Access toggle.');
+            }
+          }, 1500);
         });
         const customize = document.getElementById('set-customize');
         addTap(customize, () => {
