@@ -204,6 +204,30 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 4) — Zero-HP immortality fixed; close cops fill the rear-view mirror
+
+- **Immortality at 0 HP (gameplay-breaking, owner hit it live):** a save
+  written at/after the moment of death — a pagehide/visibility autosave
+  FLUSH racing the crash cinematic — persisted hp 0 into `liveRun`.
+  Resuming it parked DamageModel at 0, where `takeDamage`'s "already
+  wrecked — no-op" guard made the car unkillable: drive forever at 0 HP
+  with a cracked windshield.  Three-layer fix: (1) `setDurability` floors
+  to 1 (a restore is always reviving a LIVE car; 0 is a wrecked state);
+  (2) `_autosaveRun` bails if `isWrecked()`/`_endingCine` so a dead car is
+  never snapshotted; (3) a per-frame zero-HP WATCHDOG ends the run via the
+  crash cinematic if durability ever sits at 0 in live play (belt-and-
+  suspenders for any future 0-without-transition path).  Verified: a
+  forced setDurability(0) floors to 1 and stays killable; a real hit at
+  1 HP wrecks and ends the run.
+- **Rear-view mirror cops too small when close (owner):** the mirror
+  capped cop sprite height at a flat 20 px, so a cruiser right on the
+  bumper drew barely bigger than one far up the road.  The near cap is now
+  ~80% of the glass on a `depthT^1.25` curve (far floor unchanged, masked
+  so the spill crops like a real mirror).  Measured: a cop 300 units
+  behind the car now fills 79% of the glass (was ~42%).
+- Forward-view cop size (owner: "seem larger… could just be placement")
+  left as-is — it passed the 08-29 pipeline-review size validation.
+
 ### 2026-08-31 (pt 10) — Opening-call audio: iOS gesture unlock + rejection retry
 
 Owner: voicemail silent on the phone, fine on desktop.  Root cause class: iOS only
