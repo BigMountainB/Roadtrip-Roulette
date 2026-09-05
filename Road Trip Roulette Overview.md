@@ -204,6 +204,13 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 6) — ACCEL pedal restored in tilt mode
+
+Owner: "where did the accelerator pedal go?"  Companion to pt 5: the tilt rework HID the
+gas pedal in tilt mode (pitch was to be the throttle) — with a silent sensor that left no
+throttle control at all.  Both pedals now render and work in every steering mode; tilt's
+pitch throttle/brake stay additive on top.
+
 ### 2026-09-05 (pt 5) — BRAKE is BRAKE again; NPC outcomes are tap-to-dismiss cards
 
 - **"Who gave direction for that?" — nobody the owner recognizes.**  In tilt mode the

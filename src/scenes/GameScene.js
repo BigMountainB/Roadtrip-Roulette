@@ -19530,14 +19530,14 @@ export class GameScene extends Phaser.Scene {
       const isTilt = (this._steeringMode?.() === 'tilt');
       if (!force && this._lastPedalModeIsTilt === isTilt) return;
       this._lastPedalModeIsTilt = isTilt;
-      // ACCEL: hidden + non-interactive in tilt mode; shown otherwise.
-      if (this._gasBtn) {
-        this._gasBtn.setVisible(!isTilt);
-        if (isTilt) this._gasBtn.disableInteractive?.();
-        else        this._gasBtn.setInteractive({ useHandCursor: true });
-      }
-      this._gasArt?.setVisible(!isTilt);
-      if (this._gasLbl) this._gasLbl.setVisible(!isTilt);
+      // ACCEL stays visible + working in EVERY mode (owner 2026-09-05:
+      // "where did the accelerator pedal go?" — the tilt rework hid it,
+      // which left tilt players with no throttle when the sensor is
+      // silent).  Tilt pitch-throttle stays additive on top.
+      if (this._gasBtn) this._gasBtn.setInteractive({ useHandCursor: true });
+      this._gasBtn?.setVisible(true);
+      this._gasArt?.setVisible(true);
+      if (this._gasLbl) this._gasLbl.setVisible(true);
       // BRAKE keeps its label + style in every mode (owner 2026-09-05).
       if (this._brakeLbl) {
         this._brakeLbl.setText('BRAKE\n▼')
