@@ -204,6 +204,17 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 20) — Tutorial card bound to the weather box; banner moved below the grid (b19)
+
+Owner layout spec: the tutorial text boxes now anchor to the BOTTOM of the weather box
+(fitter: tile-row top − 27 art-px, i.e. the weather panel's bottom edge) and drop over
+the tile grid as a detached card — full gold border, all corners rounded, drop shadow.
+The mode banner is reworded to the owner's exact copy — "Tutorial mode: Tap Tutorial to
+Exit" — and sits just below the Leaderboard / Settings / Get Help row (art-y 1552),
+straddling the seam above the ROTATE bar like a badge.  `tutmOpen()` seats card + banner
+before anything shows.  Hide guarantee unchanged (extra travel bumped for the lower
+anchor + delayed visibility:hidden).  Stamp b19.
+
 ### 2026-08-31 (pt 19) — Stuck tutorial card SOLVED (b18): hide travel vs the safe-area anchor
 
 Owner's b17 screenshot + exact repro ("select Tutorial, then GOT IT — the box slides up

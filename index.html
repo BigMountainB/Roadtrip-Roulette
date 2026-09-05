@@ -201,10 +201,14 @@
        offscreen — the card "slid up but didn't disappear".  Extra 120px of
        travel covers every inset, and visibility:hidden (delayed until the
        slide finishes) is the hard guarantee. */
-    #tutm-sheet { position: fixed; top: 0; left: 0; width: 100vw; transform: translateY(calc(-110% - 120px));
+    /* Card is BOUND to the bottom of the weather box (owner 2026-08-31) —
+       tutmFitSheet sets top from the tile rects; it drops over the tile grid
+       as a detached card (full border, all corners rounded). */
+    #tutm-sheet { position: fixed; top: 0; left: 0; width: 100vw; transform: translateY(calc(-110% - 220px));
       visibility: hidden;
       z-index: 999985; box-sizing: border-box; padding: 2.4vmin 3.2vmin 2.4vmin; text-align: left; display: flex; flex-direction: column;
-      background: rgba(6, 16, 30, 0.94); border: 0.5vmin solid #FFD24D; border-top: 0; border-radius: 0 0 2.4vmin 2.4vmin;
+      background: rgba(6, 16, 30, 0.96); border: 0.5vmin solid #FFD24D; border-radius: 2.4vmin;
+      box-shadow: 0 1.6vmin 5vmin rgba(0,0,0,0.6);
       color: #FFF6E0; font: 600 clamp(15px, 3.8vmin, 21px)/1.4 "Helvetica Neue", Arial, sans-serif;
       transition: transform 220ms cubic-bezier(.22,.9,.28,1), visibility 0s linear 220ms; }
     #tutm-sheet.show { transform: translateY(0); visibility: visible;
@@ -218,6 +222,8 @@
       font: 900 clamp(14px, 3.6vmin, 18px) Impact, "Arial Black", sans-serif; letter-spacing: 0.05em; padding: 1.4vmin 2.4vmin; cursor: pointer; min-width: 22%; white-space: nowrap; }
     #tutm-sheet .tm-nav button[data-nav="x"] { color: #FFD24D; border-color: #FFD24D; background: rgba(255,210,77,0.10); min-width: 14%; }
     #tutm-sheet .tm-nav button[disabled] { opacity: 0.3; pointer-events: none; }
+    /* Banner sits just below the Leaderboard/Settings/Get Help row (owner
+       2026-08-31); `top` is set by tutmFitSheet from the live tile rects. */
     #tutm-banner { position: fixed; top: 1.2vmin; left: 50%; transform: translateX(-50%); z-index: 999986; display: none;
       padding: 0.8vmin 2.4vmin; border-radius: 99px; background: rgba(6,16,30,0.9); border: 0.4vmin solid #FFD24D;
       color: #FFD24D; font: 900 clamp(12px, 3vmin, 16px) Impact, "Arial Black", sans-serif; letter-spacing: 0.06em; white-space: nowrap; }
@@ -4856,7 +4862,7 @@
       const tutmCap    = document.createElement('div'); tutmCap.id = 'tutm-capture';
       const tutmSheet  = document.createElement('div'); tutmSheet.id = 'tutm-sheet';
       const tutmBanner = document.createElement('div'); tutmBanner.id = 'tutm-banner';
-      tutmBanner.textContent = 'TUTORIAL MODE · tap anything · tap ? to exit';
+      tutmBanner.textContent = 'Tutorial mode: Tap Tutorial to Exit';   // owner wording 2026-08-31
       document.body.append(tutmCap, tutmSheet, tutmBanner);
       // Active-state tile overlay: the real inverse art when it exists, else a
       // CSS inversion of the painted tile so the toggle state always reads.
@@ -4891,13 +4897,19 @@
         const a = qhit('tutorial')?.getBoundingClientRect(), z = qhit('maps')?.getBoundingClientRect();
         if (!a || !z || !a.width) return;
         const scale  = a.width / 233;
-        const artTop = a.top - 599 * scale;
         const sat    = tutmSat.getBoundingClientRect().top;
-        const top    = Math.max(artTop, sat, 0);
+        // Card top = the WEATHER BOX's bottom edge (owner 2026-08-31): the
+        // tile row starts at art-y 599, the weather panel ends ~27 art-px
+        // above it — the card drops from there over the tile grid.
+        const top    = Math.max(a.top - 27 * scale, sat, 0);
         tutmSheet.style.left = a.left + 'px';
         tutmSheet.style.width = (z.right - a.left) + 'px';
         tutmSheet.style.top = top + 'px';
-        tutmSheet.style.maxHeight = Math.max(80, a.top - top - 8) + 'px';
+        tutmSheet.style.maxHeight = Math.max(120, Math.min(innerHeight * 0.55, innerHeight - top - 90)) + 'px';
+        // Banner just below the Leaderboard / Settings / Get Help row
+        // (art row 1375 + height 167 + a small gap).
+        const artTop = a.top - 599 * scale;
+        tutmBanner.style.top = (artTop + 1552 * scale) + 'px';
       };
       window.addEventListener('resize', tutmFitSheet);
       const tutmHideSheet = () => {              // ✕: drop the text, stay in the mode
@@ -4914,7 +4926,7 @@
         tutmSheet.innerHTML = `<div class="tm-title">${e.title}</div><div class="tm-body">${e.desc}</div>
           <div class="tm-nav"><button data-nav="-1" ${i > 0 ? '' : 'disabled'}>‹ PREV</button>
           <button data-nav="x">✕</button><button data-nav="1" ${i < list.length - 1 ? '' : 'disabled'}>NEXT ›</button></div>
-          <div class="tm-build">b18</div>`;
+          <div class="tm-build">b19</div>`;
         // Real buttons through the project's tap helper — iOS was not
         // delivering click events to the old text spans (owner 2026-09-03).
         addTap(tutmSheet.querySelector('[data-nav="-1"]'), () => { if (i > 0) tutmShow(list[i - 1]); });
@@ -4928,6 +4940,7 @@
       };
       const tutmOpen = () => {
         if (tutmOn) return; tutmOn = true;
+        tutmFitSheet();            // seat the card + banner before anything shows
         tutmVisited = new Set();   // fresh visit → every tile throbs again
         tutmCap.classList.add('on'); tutmBanner.classList.add('on'); tutmActive.classList.add('on');
         tutCloseModals(); tutmGlow();
@@ -4966,7 +4979,7 @@
           Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
           or display to learn what it does.</div>
           <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>
-          <div class="tm-build">b18</div>`;
+          <div class="tm-build">b19</div>`;
         // GOT IT drops the card; the mode (already on) stays.
         addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); tutmSheet.classList.remove('show'); if (tutmOn) tutmBanner.classList.add('on'); });
         tutmFitSheet();
