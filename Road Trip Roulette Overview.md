@@ -204,6 +204,21 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 5) — BRAKE is BRAKE again; NPC outcomes are tap-to-dismiss cards
+
+- **"Who gave direction for that?" — nobody the owner recognizes.**  In tilt mode the
+  parallel session had relabeled the Brake pedal "RE-ZERO ⟲" (tap = recalibrate the tilt
+  neutral, flashing "ZEROING") — an unapproved repurposing, now removed.  The pedal reads
+  BRAKE and brakes in EVERY steering mode (`_isBrake()` already honors the touch toggle
+  under tilt; the tilt pitch-brake stays additive).  If a re-zero control is wanted, it
+  belongs in Settings ▸ Accessibility — owner's call, not shipped.
+- **NPC-interaction outcomes** (on-road hitchhiker reveals + rest-stop rider outcomes)
+  now show in `_showOutcomeCard`: a bordered box that STAYS until tapped ("TAP TO
+  CONTINUE" hint), replacing the 2.2 s popups the owner couldn't read in time.  The run
+  continues behind it; one card at a time, newer outcomes replace the text.  Other
+  gameplay toasts (pickups, stars, checkpoints) keep their timed popups.
+Probe: brake reads BRAKE in tilt + classic; card still up after 4 s, gone on tap.
+
 ### 2026-09-05 (pt 4) — Settings build stamp (b21); tilt row unconditional on touch
 
 Owner still saw no tilt row + tilt still tap — indistinguishable from the standalone

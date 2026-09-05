@@ -11550,26 +11550,26 @@ export class GameScene extends Phaser.Scene {
 
     if (r < 0.18) {
       this.cops.addF12Token('fireworks');
-      this._showPopup('🤝 FRIENDLY BIKER\ngave you 🎆 FIREWORKS!', '#88FFCC');
+      this._showOutcomeCard('🤝 FRIENDLY BIKER\ngave you 🎆 FIREWORKS!', '#88FFCC');
       return;
     }
     if (r < 0.40) {
       const bonus = 800;
       this.score += bonus;
       this.stats?.recordEarn(bonus, 'hitchhiker', bonus);
-      this._showPopup(`🤝 OFF-DUTY TRUCKER\ntipped you $${bonus}!`, '#88FFCC');
+      this._showOutcomeCard(`🤝 OFF-DUTY TRUCKER\ntipped you $${bonus}!`, '#88FFCC');
       return;
     }
     if (r < 0.55) {
       this.vices?.refillAll?.();
-      this._showPopup('🤝 OLD HIPPIE\nRESTOCKED your vices!', '#88FFCC');
+      this._showOutcomeCard('🤝 OLD HIPPIE\nRESTOCKED your vices!', '#88FFCC');
       return;
     }
     if (r < 0.75) {
       const loss = this._cashLoss(Math.min(this.score, 600));
       this.score -= loss;
       this.stats?.recordRobbery(loss);
-      this._showPopup(`💀 ROBBED!\n−$${loss}`, '#FF4444');
+      this._showOutcomeCard(`💀 ROBBED!\n−$${loss}`, '#FF4444');
       return;
     }
     if (r < 0.90) {
@@ -11584,14 +11584,14 @@ export class GameScene extends Phaser.Scene {
         this.cops.f12Tokens.length = 0;
         tookWeapons = true;
       }
-      this._showPopup(
+      this._showOutcomeCard(
         tookWeapons ? `💀 ARMED ROBBERY!\n−$${loss} + your weapons!`
                     : `💀 ARMED ROBBERY!\n−$${loss}`,
         '#FF4444',
       );
       return;
     }
-    this._showPopup('😐 RIDER BAILED\nat the next exit.', '#FFCC44');
+    this._showOutcomeCard('😐 RIDER BAILED\nat the next exit.', '#FFCC44');
   }
 
   /** Order in which the weapon-cycle button steps through types. */
@@ -19514,22 +19514,10 @@ export class GameScene extends Phaser.Scene {
     brakeBtn.setInteractive({ useHandCursor: true });
     brakeBtn.on('pointerdown', (ptr) => {
       ptr.event?.stopPropagation?.();
-      if (this._steeringMode?.() === 'tilt') {
-        // RE-ZERO: kick off a fresh ~0.5 s averaging window.
-        this._tiltCalibrating = true;
-        this._tiltCalSamples  = [];
-        this._tiltThrottle    = 0;
-        this._tiltBrake       = 0;
-        const lbl = this._brakeLbl;
-        if (lbl) {
-          const prev = lbl.text;
-          lbl.setText('ZEROING');
-          this.time?.delayedCall?.(620, () => {
-            if (lbl?.scene) lbl.setText(prev);
-          });
-        }
-        return;
-      }
+      // BRAKE is BRAKE in every mode (owner 2026-09-05: the tilt-mode
+      // "RE-ZERO/ZEROING" relabel shipped without approval and is removed;
+      // _isBrake() honors the toggle regardless of steering mode, so the
+      // pedal works as a brake under tilt too).
       this._touchBrake = !this._touchBrake;
       if (this._touchBrake) this._touchBoost = false;
       this._refreshPedals();
@@ -19550,14 +19538,10 @@ export class GameScene extends Phaser.Scene {
       }
       this._gasArt?.setVisible(!isTilt);
       if (this._gasLbl) this._gasLbl.setVisible(!isTilt);
-      // BRAKE slot: relabel + restyle for RE-ZERO when tilt is on.
+      // BRAKE keeps its label + style in every mode (owner 2026-09-05).
       if (this._brakeLbl) {
-        this._brakeLbl
-          .setText(isTilt ? 'RE-ZERO\n⟲' : 'BRAKE\n▼')
-          .setStyle({
-            stroke: isTilt ? '#FFD23A' : '#FF39AF',
-            fontSize: isTilt ? '15px' : '17px',
-          });
+        this._brakeLbl.setText('BRAKE\n▼')
+          .setStyle({ stroke: '#FF39AF', fontSize: '17px' });
       }
       // When entering tilt mode, clear any toggled-on brake state so
       // the player isn't stuck slowing after the mode swap.
@@ -23547,6 +23531,40 @@ export class GameScene extends Phaser.Scene {
       this._renderF12Cell(DISGUISE, dx, dy, dCount, dCount > 0 && topTok === 'disguise', dgo.s);
       this._disguiseHitBounds = { x: dx, y: dy, w: dIconW, h: dIconH };
     }
+  }
+
+  /** NPC-interaction OUTCOME card (owner 2026-09-05: the timed popups
+   *  "disappear too quickly to see").  A boxed message that STAYS until the
+   *  player taps it — the run keeps going behind it.  One card at a time;
+   *  a newer outcome replaces the text. */
+  _showOutcomeCard(text, color = '#FFFFFF') {
+    if (!this._outcomeCardBg) {
+      const D = 15.5;   // over the HUD popups, under modal overlays
+      this._outcomeCardBg = this.add.rectangle(SCREEN_W / 2, 150, 10, 10, 0x08101E, 0.94)
+        .setStrokeStyle(3, 0xFFD24D).setDepth(D).setVisible(false)
+        .setInteractive({ useHandCursor: true });
+      this._outcomeCardTxt = this.add.text(SCREEN_W / 2, 142, '', {
+        fontSize: '19px', fontFamily: IMPACT, align: 'center',
+        stroke: '#000000', strokeThickness: 4, wordWrap: { width: 360 },
+      }).setOrigin(0.5).setDepth(D + 0.1).setVisible(false);
+      this._outcomeCardHint = this.add.text(SCREEN_W / 2, 0, 'TAP TO CONTINUE', {
+        fontSize: '11px', fontFamily: IMPACT, color: '#8FB4D8',
+      }).setOrigin(0.5).setDepth(D + 0.1).setVisible(false);
+      const hide = () => {
+        this._outcomeCardBg.setVisible(false);
+        this._outcomeCardTxt.setVisible(false);
+        this._outcomeCardHint.setVisible(false);
+      };
+      this._outcomeCardBg.on('pointerdown', (ptr) => { ptr.event?.stopPropagation?.(); hide(); });
+      this._hudObjects?.push(this._outcomeCardBg, this._outcomeCardTxt, this._outcomeCardHint);
+    }
+    this._outcomeCardTxt.setText(text).setColor(color).setVisible(true);
+    const w = Math.max(240, this._outcomeCardTxt.width + 48);
+    const h = this._outcomeCardTxt.height + 52;
+    this._outcomeCardBg.setSize(w, h).setPosition(SCREEN_W / 2, 150).setVisible(true);
+    this._outcomeCardBg.input.hitArea?.setTo?.(0, 0, w, h);
+    this._outcomeCardTxt.setY(150 - 8);
+    this._outcomeCardHint.setY(150 + h / 2 - 14).setVisible(true);
   }
 
   _showPopup(text, color = '#FFFFFF', holdSec = 2.2) {
