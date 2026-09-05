@@ -20576,6 +20576,10 @@ export class GameScene extends Phaser.Scene {
       this._tutArming = true;
       try { this._renderHUD(); } catch (_) {}
       this._tutArming = false;
+      // Remember whether the PLAYER's pause screen was up when the tutorial
+      // opened (owner 2026-09-05): the tutorial pauses, but never overrides
+      // an existing pause — closing restores whichever state we came from.
+      this._tutFromPause = this._paused === true;
       this._paused = true;
       // The pause chrome (PAUSED text, START OVER / FROM CHECKPOINT, the
       // volume slider) is not part of the tutorial and sat in the way when
@@ -20607,13 +20611,22 @@ export class GameScene extends Phaser.Scene {
     if (!T.onTitle) {
       this._hideEditorPopupPlaceholders();
       this.hudStars?.setText('').setVisible(false);
-      // Unpause CLEANLY (owner 2026-09-05: closing the tutorial unpaused the
-      // game but left the PAUSED text on screen — the raw flag flip skipped
-      // _togglePause's chrome sweep).  Hide every pause object; the next real
-      // pause re-shows them through _togglePause as usual.
-      this._pauseObjects?.forEach(o => o?.setVisible?.(false));
-      this._pauseGfx?.clear?.();
-      this._paused = false;
+      if (this._tutFromPause) {
+        // The player had paused BEFORE opening the tutorial — hand control
+        // back to the real pause screen (full chrome, still paused) through
+        // the canonical toggle path (owner 2026-09-05: "that original pause
+        // remains").
+        this._paused = false;
+        this._togglePause();
+      } else {
+        // Tutorial was opened mid-drive — closing it resumes gameplay.
+        // Sweep the chrome so no stale PAUSED text survives the raw flag
+        // flip; the next real pause re-shows everything via _togglePause.
+        this._pauseObjects?.forEach(o => o?.setVisible?.(false));
+        this._pauseGfx?.clear?.();
+        this._paused = false;
+      }
+      this._tutFromPause = false;
     }
     this._applyTopRowHandedness();   // un-lights the HUD "?"
     this._tutTitleBtnLit(false);

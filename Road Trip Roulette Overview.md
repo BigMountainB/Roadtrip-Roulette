@@ -204,6 +204,15 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 11) — Tutorial pause is a layer, never an override
+
+Owner spec: the tutorial pauses the game, but if the player had ALREADY paused (pause
+button) before opening it, closing the tutorial returns to that pause screen — chrome
+restored, still paused, via the canonical `_togglePause` path.  Opened mid-drive, closing
+resumes gameplay as before.  `_tutFromPause` latched at `_tutModeOpen` (pre-force),
+consumed at `_tutModeClose`.  Probe: pause → tutorial (no chrome) → close → PAUSED screen
+back; drive → tutorial → close → running, no chrome.
+
 ### 2026-09-05 (pt 10) — Gameplay tutorial: pause chrome hidden, clean unpause
 
 Owner: closing the tutorial unpaused the game but the PAUSED text stayed, and the pause
