@@ -183,19 +183,21 @@
     /* ── Contextual Tutorial Mode (phone) ── */
     #tutm-capture { position: fixed; inset: 0; z-index: 999980; display: none; background: rgba(2,6,14,0.28); touch-action: none; }
     #tutm-capture.on { display: block; }
-    .phone-hit.tutm-selected { outline: 0.7vmin solid #39D9FF; outline-offset: 0.4vmin; border-radius: 2vmin; }
+    /* Selected tile — GOLD like everything else in the tutorial (owner
+       2026-08-31: the blue outline read as foreign). */
+    .phone-hit.tutm-selected { outline: 0.7vmin solid #FFD24D; outline-offset: 0.4vmin; border-radius: 2vmin; }
     #tutm-active { position: absolute; display: none; pointer-events: none; z-index: 5; }
     #tutm-active.on { display: block; }
-    /* Sits over the phone art's status strip (weather / location / time — not
-       tutorial targets) so it never covers a highlighted tile and never sits
-       behind Safari's bottom bar (owner 2026-09-03). left/width/top/max-height
-       are set by tutmFitSheet() from the live tile rects. */
-    #tutm-sheet { position: fixed; top: 0; left: 0; width: 100vw; transform: translateY(-110%); --tutm-sat: env(safe-area-inset-top, 0px);
-      z-index: 999985; box-sizing: border-box; padding: 2.4vmin 3.2vmin 2.4vmin; text-align: left; display: flex; flex-direction: column;
-      background: rgba(6, 16, 30, 0.94); border: 0.5vmin solid #FFD24D; border-top: 0; border-radius: 0 0 2.4vmin 2.4vmin;
+    /* Bottom sheet — restored to the pre-rework anchor (owner 2026-08-31:
+       "go back to how it looked yesterday"; the top sheet also collided with
+       the iPhone notch/Dynamic Island).  Geometry is pure CSS again. */
+    #tutm-sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%) translateY(110%); width: min(94vw, 720px);
+      z-index: 999985; box-sizing: border-box; padding: 3vmin 3.2vmin calc(2.4vmin + env(safe-area-inset-bottom, 0px)); text-align: left;
+      display: flex; flex-direction: column; max-height: 62vh;
+      background: rgba(6, 16, 30, 0.94); border: 0.5vmin solid #FFD24D; border-bottom: 0; border-radius: 2.4vmin 2.4vmin 0 0;
       color: #FFF6E0; font: 600 clamp(15px, 3.8vmin, 21px)/1.4 "Helvetica Neue", Arial, sans-serif;
       transition: transform 220ms cubic-bezier(.22,.9,.28,1); }
-    #tutm-sheet.show { transform: translateY(0); }
+    #tutm-sheet.show { transform: translateX(-50%) translateY(0); }
     /* Only the text scrolls when the cap bites; the button row stays pinned. */
     #tutm-sheet .tm-body { overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 0; flex: 1 1 auto; }
     #tutm-sheet .tm-nav { flex: none; }
@@ -4862,18 +4864,9 @@
       // at the art's top edge (or the notch inset), and capped so its bottom
       // never reaches the first tile row (tiles start 599 art px down; the
       // tutorial tile is 233 art px wide → scale).
-      const tutmFitSheet = () => {
-        const a = qhit('tutorial')?.getBoundingClientRect(), z = qhit('maps')?.getBoundingClientRect();
-        if (!a || !z || !a.width) return;
-        const scale  = a.width / 233;
-        const artTop = a.top - 599 * scale;
-        const sat    = parseFloat(getComputedStyle(tutmSheet).getPropertyValue('--tutm-sat')) || 0;
-        const top    = Math.max(artTop, sat, 0);
-        tutmSheet.style.left = a.left + 'px';
-        tutmSheet.style.width = (z.right - a.left) + 'px';
-        tutmSheet.style.top = top + 'px';
-        tutmSheet.style.maxHeight = Math.max(80, a.top - top - 8) + 'px';
-      };
+      // Sheet geometry is CSS-owned again (bottom anchor, 2026-08-31) — the
+      // top-layout fitter is retired; kept as a no-op for its call sites.
+      const tutmFitSheet = () => {};
       window.addEventListener('resize', tutmFitSheet);
       const tutmHideSheet = () => {              // ✕: drop the text, stay in the mode
         tutmCur = null;

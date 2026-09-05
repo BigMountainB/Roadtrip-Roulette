@@ -204,6 +204,24 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 15) — Tutorial presentation restored to the pre-rework look (owner)
+
+Owner: "go back to how the tutorial highlighted yesterday — the blue seems new."  Note
+for future sessions: TWO parallel sessions have been editing this area; visual changes to
+the tutorial (top sheet, cyan selection) shipped from the other session without an
+explicit owner sign-off the owner recognizes.  Restored per direct owner instruction:
+- **Description sheet back to the BOTTOM anchor** (pure-CSS geometry, safe-area padded).
+  The top-sheet variant also collided with the iPhone notch/Dynamic Island (owner
+  screenshot: the GOT IT card wedged behind the status bar).  `tutmFitSheet` retired to a
+  no-op; the top-layout CSS block replaced wholesale.
+- **Selected tile outline is GOLD (#FFD24D)**, matching the tutorial's visual language —
+  the cyan #39D9FF outline is gone.
+- Per-visit all-tiles throb (pt 14) and the one-shot first-open pulse are unchanged —
+  both confirmed against the owner's restated spec.
+Probe: sheet bottom-anchored, selection outline rgb(255,210,77), 10 tiles glowing with
+one viewed.  ⚠️ Sessions: do NOT change tutorial look/flow again without the owner
+explicitly approving in the conversation making the change.
+
 ### 2026-08-31 (pt 14) — Phone Tutorial Mode: the glow is per-VISIT, as specced
 
 Owner restated the intended design and it matched the in-code spec quote ("all of the
