@@ -204,6 +204,32 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 15) — Vertical title screen is the first thing on every open
+
+- Owner: the vertical title (`title_screen_vertical.png`) must be THE FIRST
+  screen on every open, and the Club Manager call must RING before the
+  voicemail plays (answering a call you're already hearing made no sense).
+  `src/ui/OpeningCallSequence.js` restructured around a per-open title splash:
+  - **First paint** is the title — `#opening-call` is now `display:block` by
+    default with the title art shown and the call art + ANSWER/DECLINE hidden
+    (opacity 0 / display none), so the opaque overlay covers the iPhone menu
+    from frame 0 instead of popping in after JS booted (title art loads
+    `fetchpriority="high"`; DOM order stays call-then-title so the title still
+    layers on top for the mid-voicemail return).
+  - **Every open** shows the title as a tap splash (`startTitleSplash`).
+  - **First open** (intro not done): the tap promotes it into the RINGING call
+    (`beginCall`) — a synthesized ring cadence (WebAudio 440+480 Hz, 2 s on /
+    4 s off, own AudioContext, started from the tap gesture) loops until
+    Accept/Decline.  Accept plays the voicemail; Decline goes to the menu;
+    both stop the ring.  The voicemail no longer plays during the ring.
+  - **Returning open** (intro done): the tap starts the menu music and opens
+    the iPhone menu (`dismissToMenu`).
+  - No ring recording ships — the cadence is generated (fail-soft, offline);
+    drop a file in and swap `ring.start()` for an `<audio loop>` to replace it.
+  Commits 601b802 (splash + ring) + 3baa0f0 (first-paint); shipped in the same
+  deploy as pt 14 (economy V1), live-verified: first paint = title, first tap
+  = ringing call with Answer/Decline, no early voicemail.
+
 ### 2026-09-05 (pt 14) — CASH ECONOMY + DRIVING COMBO V1 IMPLEMENTED (Ch. 7 prompt)
 
 The full economy overhaul from the Ch. 7 copy-ready prompt is built, tested, and
