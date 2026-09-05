@@ -81,13 +81,64 @@ export function initOpeningCall() {
   const declineBtn = root.querySelector('.oc-decline');
   if (!callArt || !titleArt || !ui || !answerBtn || !declineBtn) return;
 
-  let state = 'idle';   // idle | ringing | speaking | finishing | done
+  // state: idle | splash | ringing | speaking | finishing | done
+  //   splash  — the vertical title screen is up, waiting for the first tap
+  //             (owner 2026-09-05: the title shows on EVERY open now).
+  //   ringing — first open only: the tap promoted the title into the
+  //             incoming Club Manager call; the ringtone loops until
+  //             Accept/Decline.
+  let state = 'idle';
   let audio = null;
   let usingFallback = false;
   let warned = false;
   let startedAt = 0;
   let raf = 0;
   let titleShown = false;
+
+  // ── Synthesized phone ringtone (owner 2026-09-05) ───────────────────────
+  // No ring recording ships, so the classic North-American cadence is
+  // generated with WebAudio: a 440+480 Hz tone pair, 2 s on / 4 s off,
+  // looping until Accept/Decline stops it.  Its own AudioContext (not the
+  // game's) so music suppression/gain never touches it.  Started from the
+  // title tap — a valid iOS audio-activation gesture.  Drop a real
+  // recording in later and swap start() for an <audio loop> if desired.
+  const ring = (() => {
+    let ctx = null, gain = null, o1 = null, o2 = null, cad = 0, dead = false;
+    const pulse = () => {
+      if (dead || !ctx || !gain) return;
+      const t = ctx.currentTime;
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.12, t + 0.06);   // ring ON
+      gain.gain.setValueAtTime(0.12, t + 1.9);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 2.0);  // ring OFF
+    };
+    return {
+      start() {
+        if (ctx) return;
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          dead = false;
+          ctx = new AC();
+          if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+          gain = ctx.createGain(); gain.gain.value = 0.0001; gain.connect(ctx.destination);
+          o1 = ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 440;
+          o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 480;
+          o1.connect(gain); o2.connect(gain); o1.start(); o2.start();
+          pulse();
+          cad = setInterval(pulse, 6000);   // 2 s ring + 4 s silence
+        } catch (_) { ctx = null; }
+      },
+      stop() {
+        dead = true;
+        try { clearInterval(cad); } catch (_) {}
+        try { o1?.stop?.(); o2?.stop?.(); } catch (_) {}
+        try { ctx?.close?.(); } catch (_) {}
+        ctx = gain = o1 = o2 = null;
+      },
+    };
+  })();
 
   // ── Music suppression ───────────────────────────────────────────────────
   // setMusicPaused HOLDS the music (stops the scheduler and any real track)
@@ -198,6 +249,7 @@ export function initOpeningCall() {
   function accept() {
     if (state !== 'ringing') return;      // repeated events are inert
     state = 'speaking';
+    ring.stop();                          // ringtone ends the moment it's answered
     root.classList.add('oc-answered');
     suppressMusic(true);
 
@@ -251,6 +303,7 @@ export function initOpeningCall() {
   function decline() {
     if (state !== 'ringing') return;
     state = 'finishing';
+    ring.stop();                         // silence the ring on decline
     root.classList.add('oc-answered');   // buttons fade out immediately
     cancelAnimationFrame(raf);
     startMusicAfterCall();
@@ -340,6 +393,7 @@ export function initOpeningCall() {
   function teardown() {
     state = 'done';
     disarmUnlock();
+    ring.stop();                         // never leave the ringtone running
     cancelAnimationFrame(raf);
     root.style.display = 'none';
     root.setAttribute('aria-hidden', 'true');
@@ -359,12 +413,16 @@ export function initOpeningCall() {
   });
 
 
-  // ── Start / replay ──────────────────────────────────────────────────────
+  // ── Title splash → (first open) ring the call, or (returning) menu ───────
 
-  function start() {
+  /** The vertical title screen — shown on EVERY open (owner 2026-09-05).
+   *  A tap decides what happens next: a FIRST open rings the Club Manager
+   *  (beginCall); a returning open goes straight to the iPhone menu
+   *  (dismissToMenu).  Either way the title is the first thing seen. */
+  function startTitleSplash() {
     if (state !== 'idle' && state !== 'done') return;
-    state = 'ringing';
-    titleShown = false;
+    state = 'splash';
+    titleShown = true;
     usingFallback = false;
     warned = false;
     root.style.display = 'block';
@@ -372,21 +430,65 @@ export function initOpeningCall() {
     root.removeAttribute('aria-hidden');
     root.classList.remove('oc-answered');
     document.body.classList.add('opening-call-active');
+    // Title only: the call artwork + call UI stay hidden until a first-open
+    // tap promotes this into the ringing call.
+    callArt.style.display = 'none';
+    ui.style.display = 'none';
+    ui.setAttribute('aria-hidden', 'true');
     titleArt.style.transition = 'none';
+    titleArt.style.opacity = '1';
+    // Hold the music until the tap so the tap is what "starts" it (and is a
+    // valid iOS audio-activation gesture, whichever branch it takes).
+    suppressMusic(true);
+
+    const onTap = (ev) => {
+      if (state !== 'splash') return;
+      ev?.preventDefault?.();
+      root.removeEventListener('pointerup', onTap);
+      root.removeEventListener('click', onTap);
+      if (introDone()) dismissToMenu();   // returning open → straight to menu
+      else beginCall(ev);                 // first open → ring the manager
+    };
+    root.addEventListener('pointerup', onTap);
+    root.addEventListener('click', onTap);
+  }
+
+  /** Returning open: tap on the title starts the menu music and reveals the
+   *  real iPhone menu, then fades the splash off it. */
+  function dismissToMenu() {
+    if (state === 'finishing' || state === 'done') return;
+    state = 'finishing';
+    startMusicAfterCall();                 // the tap is the gesture that starts it
+    try { window.__phoneMenu?.open?.(); } catch (_) {}
+    requestAnimationFrame(() => {
+      root.style.transition = `opacity ${fadeMs()}ms ease`;
+      root.style.opacity = '0';
+      setTimeout(teardown, fadeMs() + 40);
+    });
+  }
+
+  /** First open: the title tap promotes the splash into the incoming Club
+   *  Manager call — the ringtone loops from THIS gesture until Accept /
+   *  Decline, and the existing accept()/decline() state machine takes over. */
+  function beginCall() {
+    state = 'ringing';
+    titleShown = false;
+    ring.start();                          // rings until accept()/decline() stop it
+    // Reveal the call artwork under the title, then fade the title off it.
+    callArt.style.display = '';
+    callArt.style.transition = 'none';
+    callArt.style.opacity = '1';
+    titleArt.style.transition = `opacity ${fadeMs()}ms ease`;
     titleArt.style.opacity = '0';
     ui.style.display = '';
-    ui.style.transition = 'none';
+    ui.style.transition = `opacity ${fadeMs()}ms ease`;
     ui.style.opacity = '1';
     ui.removeAttribute('aria-hidden');
-    suppressMusic(true);
     armUnlock();
-    // PRELOAD the recording while the phone rings.  It used to be fetched
-    // inside accept(), so on the deployed site the ~300 KB download raced the
-    // player's slide-to-answer and the manager opened with dead air (owner
-    // report 2026-08-14).  Only the download starts here — play() stays inside
-    // the accept gesture, which is what iOS autoplay policy requires.  No
-    // wasted fetch on normal boots: start() only runs when the intro will
-    // actually show.
+    // PRELOAD the voicemail while the phone rings (owner report 2026-08-14:
+    // fetching it inside accept() raced the answer and opened with dead air).
+    // Only the download starts here — play() stays inside the accept gesture,
+    // which is what iOS autoplay policy requires.
     if (!audio) {
       try {
         audio = new Audio(AUDIO_SRC);
@@ -394,28 +496,30 @@ export function initOpeningCall() {
         audio.load();
       } catch (_) { audio = null; }
     }
-    // Focus the control so a keyboard-only player can answer immediately.
+    // Focus ANSWER so a keyboard-only player can pick up immediately.
     try { answerBtn.focus({ preventScroll: true }); } catch (_) {}
   }
 
   // Dev-only replay: clears the completion flag and runs it again WITHOUT
   // touching game progress — nothing else in the save is read or written.
+  // With the flag cleared the title tap will ring the call, like a first open.
   window.__replayOpeningCall = () => {
     markIntroDone(false);
     try { window.__phoneMenu?.close?.(); } catch (_) {}
     musicStarted = false;                // a replay gets its music cue back
+    ring.stop();
     state = 'idle';
-    start();
+    startTitleSplash();
     return 'replaying opening call';
   };
 
-  // ?intro=1 forces a replay (owner 2026-08-29): the sequence is once-per-
-  // device, so a device that ever completed it — including during the old
-  // dead-air era — never shows it again, which reads as "the audio doesn't
-  // play".  The param clears the flag and runs it like a first open.
+  // ?intro=1 forces a first-open flow (owner 2026-08-29): the call is
+  // once-per-device, so a device that ever completed it never rings again,
+  // which read as "the audio doesn't play".  The param clears the flag so
+  // the title tap rings the call like a first open.
   let force = false;
   try { force = new URLSearchParams(location.search).has('intro'); } catch (_) {}
   if (force) markIntroDone(false);
-  if (!introDone()) start();
-  else suppressMusic(false);
+  // The title screen shows on EVERY open now (owner 2026-09-05).
+  startTitleSplash();
 }
