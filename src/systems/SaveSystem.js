@@ -161,7 +161,7 @@ const DEFAULT_PROFILE = {
 const DEFAULT_GLOBAL = {
   achievements:    {},
   checkpointTiers: {},          // { [stopId]: 'bronze' | 'silver' | 'gold' }
-  settings:        { muted: false, radio: -1, backgroundRadio: true },   // radio -1 = no default station chosen
+  settings:        { muted: false, radio: -1, backgroundRadio: false, bgRadioPolicyV2: false },  // radio -1 = no default station chosen; background radio is OPT-IN (Tier-0 policy 2026-09-05)
   // Career stats — full canonical shape is owned by StatsTracker, which
   // deep-merges its defaults over whatever is here on boot.  Empty is fine.
   stats:           {},
@@ -704,7 +704,11 @@ export class SaveSystem {
     // to -1 (unset → weighted-random start).  2026-07-23.
     s.radioSet = src.radioSet === true;
     s.radio    = s.radioSet ? finiteInt(src.radio, -1, -1, 9) : -1;
-    if (src.backgroundRadio !== undefined) s.backgroundRadio = src.backgroundRadio !== false;
+    if (src.backgroundRadio !== undefined) s.backgroundRadio = src.backgroundRadio === true;
+    // The one-time Tier-0 migration stamp MUST survive sanitization or the
+    // migration re-runs every boot and force-disables a deliberate opt-in
+    // (caught by probe: policy re-stamped, backgroundRadio wiped on reload).
+    s.bgRadioPolicyV2 = src.bgRadioPolicyV2 === true;
     if (src.haptics !== undefined) s.haptics = src.haptics !== false;
     if (src.units === 'kmh' || src.units === 'mph') s.units = src.units;
     if (src.shake !== undefined) s.shake = finiteNum(src.shake, 1, 0, 1);

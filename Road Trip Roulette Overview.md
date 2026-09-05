@@ -204,6 +204,43 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 13) — Tier-0 mobile music lifecycle IMPLEMENTED (owner Q&A settled)
+
+The Tier-0 "act like a music app" policy is code-complete (NOT deployed — the Tier-0
+prompt withholds deploys until Brendan asks).  Owner Q&A: menu mix on first tap stays;
+run-start soundtrack resume counts as an approved gesture; FULL lock-screen Now Playing
+for opted-in players.
+- **Defaults OFF everywhere**: AudioSystem constructor, SaveSystem template + sanitizer
+  (`backgroundRadio === true` required), BootScene read; the Music-app toggle reads live
+  audio state so it follows.
+- **One-time migration** `settings.bgRadioPolicyV2`: inherited default-ON installs are
+  forced OFF once; a deliberate toggle then persists.  ⚠️ The stamp MUST stay in
+  `_sanitizeSettings`'s whitelist — unlisted keys are dropped on load, which made the
+  migration re-run each boot and wipe the opt-in (probe-caught).
+- **Hidden with OFF**: persist position → PAUSE the element (ctx-suspend alone never
+  stopped the <audio> — the original music-outlives-the-app bug) → stop scheduler → clear
+  Media Session → emit background-stop → suspend ctx.  New `_lifecycleHalted` flag: the
+  anti-interruption listener's 120 ms auto-replay resurrected the policy pause until it
+  learned to respect the halt (probe-caught); every legit play path clears the flag.
+- **Visible/reopen never autoplays**: only the opted-in background continuation reclaims
+  its scheduler; everything else waits for a real action (game unpause via
+  setMusicPaused(false), station picks, run start).  Skip-watchdog is inert while hidden
+  without opt-in.
+- **pagehide → `lifecycleStop()`**: full stop with OFF; with an audible opted-in track it
+  only persists + hands off to the native bridge (iOS can fire pagehide on app-switch).
+  `destroy()` routes through it.
+- **Media Session Now Playing** (opt-in only): title from the track filename, station as
+  artist, play/pause/nexttrack handlers, playbackState synced by setMusicPaused, cleared
+  whenever the lifecycle stops audio — the game never retains lock-screen ownership when
+  silenced.
+- Probes: fresh OFF + stamp; hidden-OFF pauses AND STAYS paused; visible does not
+  autoplay, explicit action resumes; opt-in survives reload; Now Playing metadata set;
+  scan-on-open + run-resume regression intact.  Full suite + build green.
+- **Manual-only (physical iPhone)**: the acceptance matrix (lock screen, app switch,
+  force-close, control-center retention, external-audio mixing, opt-in background
+  continuation) and the unproven music-vs-frame-rate concern — NOT profiled, per the
+  prompt no perf claim is made.
+
 ### 2026-09-05 (pt 12) — Player car locked at the LOWER tire line (owner correction)
 
 Owner recalled the "car base lowering" conversation and that the fixed-Y lock landed at
@@ -8346,7 +8383,52 @@ Forward warps **drain gas** equal to trip distance. Hard mode disallows warping 
 ### Tier 0 — Pre-ship blockers
 - **DELETE THE DEV WARP** — digit-keys 1-9 mile-warp cheat in [src/scenes/GameScene.js](src/scenes/GameScene.js), bracketed by `// ── DEV WARP — REMOVE BEFORE RELEASE ──`. **Must be deleted before shipping.**
 - **DELETE THE TEST SPEED TRAP** — a guaranteed parked speed trap at ~mile 2.3 in [src/road/RouteData.js](src/road/RouteData.js), bracketed by `// ── TEST TRAP — REMOVE BEFORE RELEASE ──`. Added so the 0★ pull-over flow is testable seconds into a run; **delete before shipping** (the real traps are the 5–7 randomized city ones).
-- **Decide and harden the mobile background-audio policy before App Store release.** Current behavior is intentional: `AudioSystem.backgroundRadio` and `SaveSystem.settings.backgroundRadio` default to `true`; a hidden page is allowed to keep a real track playing, and the last track/time are persisted and restored on reopen. Brendan has observed music continuing after force-closing the saved-home-screen game and iPhone media controls reopening the web app. Decide whether background radio should be removed, default OFF as an explicit opt-in, or remain a supported player setting; then test Home Screen/PWA termination, lock-screen controls, app switching, browser closure, mute, and external music/podcast mixing on a physical iPhone. **Important:** the lifecycle behavior is code-confirmed, but a separate game-performance slowdown caused by music has not yet been profiled or proven.
+- **Harden the mobile background-audio policy — CODE-COMPLETE 2026-09-05 (see changelog pt 13); physical-iPhone acceptance matrix still pending, deploy withheld per this prompt.** Current behavior is intentional: `AudioSystem.backgroundRadio` and `SaveSystem.settings.backgroundRadio` default to `true`; a hidden page is allowed to keep a real track playing, and the last track/time are persisted and restored on reopen. Brendan has observed music continuing after force-closing the saved-home-screen game and iPhone media controls reopening the web app. New direction: background radio defaults **OFF**; closing/hiding/terminating the PWA stops playback; “Continue music in background” remains an explicit opt-in setting; remember the song position without automatically resuming playback; preserve external music/podcast mixing. Test Home Screen/PWA termination, lock-screen controls, app switching, browser closure, mute, opt-in background playback, and external audio on a physical iPhone. **Important:** the lifecycle behavior is code-confirmed, but a separate game-performance slowdown caused by music has not yet been profiled or proven. Include these requirements in the future Claude implementation prompt.
+
+  **COPY-READY CLAUDE IMPLEMENTATION PROMPT — MOBILE MUSIC LIFECYCLE:**
+
+  ```text
+  Implement the approved Road Trip Roulette mobile music lifecycle policy. Work from the current code; do not redesign the music player, replace tracks, change genre selection, change SFX, or deploy unless separately asked. Read this Overview section and inspect the complete audio call graph before editing, especially:
+
+  - src/systems/AudioSystem.js
+  - src/systems/SaveSystem.js
+  - src/scenes/BootScene.js
+  - src/scenes/GameScene.js (_kickRadio and persisted-playback restoration)
+  - src/ui/OpeningCallSequence.js
+  - src/main.js (window.__music API)
+  - index.html (Music-app background-radio control and visibility listeners)
+
+  Product behavior:
+
+  1. “Continue music in background” defaults OFF for new profiles and is an explicit player opt-in. Make the default/fallback false consistently in AudioSystem, SaveSystem, BootScene, and UI reads. Do not leave competing defaults in localStorage and the save profile.
+  2. Apply a safe one-time migration so existing installs that inherited the old default-ON policy do not silently retain background playback. After migration, a deliberate user toggle must persist normally. Document the migration key/version.
+  3. With background music OFF, visibilitychange(hidden) and pagehide must immediately:
+     - persist station, track index, and current time;
+     - pause the HTMLAudioElement;
+     - stop procedural scheduling and any skip/watchdog behavior that could call play();
+     - suspend the AudioContext where safe;
+     - emit the native/background-stop state if that bridge is present;
+     - leave no active audio source capable of retaining iPhone Now Playing ownership.
+  4. Returning to visible state or reopening the PWA must NOT call play(), restorePersistedPlayback(), _kickRadio(), playRadioScan(), or an equivalent autoplay path merely because the page became visible. Restore the saved station/position as pending state only. Playback may begin only after a clear user action that requests audio, such as Play/selecting a song, or another existing explicitly approved playback gesture. Do not treat a generic visibility/focus event as permission.
+  5. With background music ON, ordinary backgrounding/locking may continue the selected real track as the current feature intends. Muting or explicitly pausing Music always overrides background playback. Turning the background toggle OFF while hidden must stop it immediately.
+  6. Closing/terminating the app should stop playback. Use pagehide/lifecycle cleanup where the web platform exposes it, and clean up the real track, scheduler, watchdog interval, and AudioContext in AudioSystem.destroy()/a dedicated lifecycle-stop method. Do not claim JavaScript can guarantee a callback after an operating-system hard kill; verify that the OS termination path releases playback and document any native-wrapper requirement.
+  7. Remember the track position without automatically resuming sound on a fresh launch. The current restorePersistedPlayback() starts playback and therefore needs to be split or replaced with a non-playing restore/queue operation.
+  8. Audit all competing replay paths. In particular, AudioSystem currently starts with _radioScanActive=true, init() ends in play(), OpeningCallSequence calls play()/playRadioScan(), GameScene._kickRadio restores/starts music, and visibility handlers can resume it. Ensure none can defeat the OFF lifecycle policy or create duplicate audio.
+  9. Preserve these existing behaviors: explicit track selection works on iOS within a user gesture; mute remains durable; game pause versus Music pause remains distinct; selected station and time remain durable; external music/podcasts continue mixing when game audio is muted or stopped; opting into background music still works.
+  10. Do not describe the previously reported frame-rate concern as fixed unless it is measured. Separately profile with music ON versus OFF on a physical iPhone if practical (FPS/frame time, long frames, memory, and audio stalls) and report evidence rather than assuming causation.
+
+  Acceptance matrix on a physical iPhone/Home Screen PWA:
+
+  - Fresh/new or migrated profile opens silently; background toggle is OFF.
+  - Choosing a track plays it; pausing/muting genuinely silences it.
+  - Background OFF: lock screen, app switch, Home gesture, hidden tab, page close, and force-close do not leave audible playback; returning/reopening does not autoplay; saved position is retained.
+  - Background ON: lock/app switch continues a real track; returning does not duplicate or restart it; turning the option OFF stops it immediately.
+  - iPhone media controls do not reopen or retain Road Trip Roulette as an active audio source after playback was stopped with background OFF.
+  - External Apple Music/Spotify/podcast playback is not seized when RTR is muted/stopped.
+  - Repeated hide/show, rotate, pause/resume, and track-change cycles create only one audio element/scheduler/watchdog and do not skip or double-play tracks.
+
+  Add focused regression coverage where practical, run the existing test suite and npm run build, report exactly what changed and what could only be manually verified, and update Road Trip Roulette Overview.md with the completed behavior. Do not deploy or sync native builds unless Brendan separately requests it.
+  ```
 
 ### Tier 1 — Active features the user has flagged
 - **Murrow skyline sinks into Lake Washington (proper fix, diagnosed)** — on the Murrow floating bridge onto Mercer Island the distant skyline silhouette (which exists to COVER a charcoal "junk" backdrop band) gets overpainted by the per-segment lake-water fills drawn AFTER it in the same `roadGfx` layer, so it looks like it sinks into the lake. The `SKYLINE_SHORE_LIFT` band-aid was reverted (it exposed the junk). Proper fix is a DRAW-ORDER / layer change: render the silhouette ABOVE the per-segment water fills but BEHIND the cranes (e.g. its own depth between road and scenery sprites), keeping it LOW so it still covers the junk. Awaiting user go-ahead (delicate layering change).
@@ -8381,6 +8463,12 @@ Forward warps **drain gas** equal to trip distance. Hard mode disallows warping 
 - **Phase 2 — Mission system** (Job Done achievement is wired but waiting on missions).
 - **Phase 5 — DJ chatter** (record MP3s; wiring is straightforward).
 - **Phase 6 — Daily challenge** (half-day's work). *(Local leaderboard portion DONE 2026-06-05 — see §8 House Leaderboard.)*
+
+### Agreed replayability direction (design workshop 2026-09-05; not implemented)
+- **Keep one cash currency; add a skill-driving combo rather than a separate leaderboard currency.** Proposed starting tune: reduce distance income from roughly **$25/mi** to **$3/mi**, then multiply it by a driving combo capped at **15×** (absolute distance-income ceiling **$45/mi**). The 15× cap must be applied AFTER all survival, wanted, and genre effects—or those old cash multipliers must be converted into combo-building/grace behavior—so multipliers cannot stack past 15×. Total cash can remain in its existing HUD position; show the current combo and earned increment temporarily in a Crazy-Taxi-style road callout. Requires economy simulation and playtesting before locking the $3 value.
+- **Mission preparation favors / temporary perks.** Do not add an unexplained generic perk shop. After the player accepts an NPC mission, the NPC or an appropriate business can offer a contextual temporary preparation choice: a mechanic adjustment, borrowed equipment, food/drink preparation, route information, police favor, cargo protection, or cash advance. These are run- or mission-limited situational modifiers and must not replace the genre vehicle's permanent identity. Workshop the content and ordering before implementation.
+- **Hard-mode persistent route condition.** On a plate's first Hard run, the player chooses a Hard route condition. Save the selection to that plate and keep it for future Hard runs until the plate is erased. Consolidate mechanically duplicate themes (holiday/tourist/concert traffic are one congestion family). Conditions belong to Hard rather than normal mode; Custom/Daily may preview or override them. Workshop a small set of genuinely distinct conditions, their benefits as well as burdens, selection confirmation, and save schema before implementation.
+- **Ellensburg Record Shop + two earnable genre coupons.** Ellensburg is the mid-route shop where a coupon can unlock one genre. The player can earn two free-genre coupons by completing specified mission requirements by the Cle Elum and Othello checkpoints. Paid individual genre unlocks and a full-game/all-genre purchase remain available as convenience alternatives; purchased and earned ownership must converge on the same durable entitlement state. Open flow question: because Othello is east of Ellensburg, either its coupon deliberately banks for redemption at Ellensburg on the next run or receives a later redemption path—decide during the genre workshop.
 
 ### Tier 2 — Smaller replayability and polish improvements (added 2026-09-05)
 - **Complete ending-card coverage.** Give `busted_late` the same polished outcome-card treatment as every other run ending, with cause, consequence, and valid restart/continue choices.

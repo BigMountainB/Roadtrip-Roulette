@@ -153,8 +153,16 @@ export class BootScene extends Phaser.Scene {
     if (Number.isInteger(_defStation) && _defStation >= 0) {   // 0 = HIP-HOP is a real choice
       this.registry.get('audio')?.setStation?.(_defStation);
     }
+    // One-time Tier-0 migration (key settings.bgRadioPolicyV2, owner
+    // 2026-09-05): installs that INHERITED the old default-ON background
+    // radio are forced OFF once; any deliberate toggle after this persists
+    // normally and is never re-forced.
+    if (save.get('settings.bgRadioPolicyV2', false) !== true) {
+      save.set('settings.backgroundRadio', false);
+      save.set('settings.bgRadioPolicyV2', true);
+    }
     this.registry.get('audio')?.setBackgroundRadioEnabled?.(
-      save.get('settings.backgroundRadio', true) !== false,
+      save.get('settings.backgroundRadio', false) === true,
     );
 
     // Boot straight into GameScene — its own title overlay handles the

@@ -509,7 +509,10 @@ export class AudioSystem {
     // is hidden.  Browsers can still suspend us, but this avoids voluntarily
     // stopping the AudioContext.  Native iOS wrappers can mirror this through
     // the duiAudio bridge emitted below.
-    this.backgroundRadio = true;
+    // Tier-0 mobile policy (owner 2026-09-05): background radio defaults
+    // OFF — an explicit player opt-in turns it on.  BootScene migrates old
+    // installs that inherited the previous default-ON once (bgRadioPolicyV2).
+    this.backgroundRadio = false;
     try {
       // rtr.backgroundRadio, falling back to the legacy dui.backgroundRadio key.
       const bg = window.localStorage?.getItem?.('rtr.backgroundRadio')
@@ -639,6 +642,8 @@ export class AudioSystem {
       this._trackIdx    = 0;        // index into the station's tracks[]
 
       document.addEventListener('visibilitychange', () => this._handleVisibilityChange());
+      window.addEventListener('pagehide', () => this.lifecycleStop());
+      this._mediaSessionArm();
 
       // Watch for a frozen real-track (the "song skips / gets stuck" after an
       // app-switch) and recover: resume, then skip to next if still stuck.
@@ -663,6 +668,9 @@ export class AudioSystem {
     this._watchLastTime = -1;
     this._watchStall    = 0;
     this._skipWatchdog  = setInterval(() => {
+      // Hidden without opt-in background play → the page is silent by policy;
+      // the watchdog must never be the thing that calls play().
+      if (document.hidden && !this._bgContinuing) return;
       const el = this._trackEl;
       if (!el || el.paused || el.ended || this.muted || this._musicPaused
           || (this._ctx && this._ctx.state !== 'running')) {
@@ -700,6 +708,7 @@ export class AudioSystem {
 
   play() {
     if (!this.ready) return;
+    this._lifecycleHalted = false;   // a real playback request lifts the lifecycle halt
     // Don't resume the context while muted — that would re-grab the audio
     // session and silence the player's own background music.
     if (!this.muted && this._ctx.state === 'suspended') this._ctx.resume();
@@ -895,6 +904,12 @@ export class AudioSystem {
     // Any real-track start that isn't the scan clip cancels scan mode —
     // covers every station/track/playlist path in one place.
     if (url !== RADIO_SCAN_URL) this._radioScanActive = false;
+    this._lifecycleHalted = false;
+    // Lock-screen Now Playing tracks the real song (scan clip excluded);
+    // a lifecycleStop may have cleared the watchdog — every real track
+    // start re-arms it.
+    if (url !== RADIO_SCAN_URL) this._updateMediaSession(url); else this._clearMediaSession();
+    this._startSkipWatchdog();
     // Keep `currentStation` synced to the track that is ACTUALLY starting —
     // custom-playlist advances (playPlaylist / shuffle) start tracks from any
     // genre without touching the index, so the HUD genre label (and every
@@ -975,10 +990,14 @@ export class AudioSystem {
           // effect: "pause" muted the sound while the song kept advancing,
           // and un-pausing resumed somewhere further along.
           if (this.paused || this.muted || this._musicPaused) return;   // intentional
+          // Tier-0 lifecycle pause (hidden with background OFF / pagehide) is
+          // ALSO intentional — without this the anti-interruption replay
+          // resurrected the track 120 ms after the policy silenced it.
+          if (this._lifecycleHalted) return;
           if (el.ended) return;
           if (el !== this._trackEl) return;          // superseded
           setTimeout(() => {
-            if (this.paused || this.muted || this._musicPaused) return;
+            if (this.paused || this.muted || this._musicPaused || this._lifecycleHalted) return;
             if (el !== this._trackEl || el.ended) return;
             el.play().catch(() => {});
           }, 120);
@@ -1311,12 +1330,18 @@ export class AudioSystem {
     if (p) {
       try { this._trackEl?.pause(); } catch (_) {}
     } else {
+      this._lifecycleHalted = false;
       try { if (this._ctx?.state === 'suspended') this._ctx.resume(); } catch (_) {}
       if (this._trackEl) { try { this._trackEl.play().catch(() => {}); } catch (_) {} }
     }
     // Force the master gain to 0 while paused so it's silent regardless of
     // source (procedural voices, lingering tails, track) — restored on resume.
     this._applyMasterGain();
+    try {
+      if (navigator.mediaSession?.metadata) {
+        navigator.mediaSession.playbackState = this._musicPaused ? 'paused' : 'playing';
+      }
+    } catch (_) {}
     this._emitNativeAudioState(this._musicPaused ? 'music-paused' : 'music-resumed');
   }
   get musicPaused() { return !!this._musicPaused; }
@@ -1711,6 +1736,7 @@ export class AudioSystem {
   }
 
   destroy() {
+    this.lifecycleStop();
     this._stopScheduler();
     this._ctx?.close();
   }
@@ -1726,28 +1752,98 @@ export class AudioSystem {
     if (!this._ctx) return;
     if (document.hidden) {
       if (this._hasBackgroundRadioTrack()) {
-        // Let real MP3 radio try to keep playing.  Stop only synthetic/game
-        // scheduling; do not voluntarily suspend the AudioContext.  Mobile
-        // browsers may still suspend us, and the native wrapper can continue
-        // playback from the bridge payload below.
+        // OPT-IN background radio: let the real MP3 keep playing.  Stop only
+        // synthetic/game scheduling; the native wrapper can continue playback
+        // from the bridge payload below.
         this._stopScheduler();
+        this._bgContinuing = true;
         this._emitNativeAudioState('background-start');
         try { this._trackEl?.play?.().catch?.(() => {}); } catch (_) {}
         return;
       }
+      // Background OFF (Tier-0 policy, owner 2026-09-05): a hidden page goes
+      // FULLY silent and releases Now Playing.  Persist the position, PAUSE
+      // the real element (suspending the ctx alone never stopped the <audio>
+      // — which is exactly how music outlived the closed app), stop the
+      // scheduler, drop the media session.
+      this._bgContinuing = false;
+      this._lifecycleHalted = true;
+      this._persistPlaybackState();
+      try { this._trackEl?.pause?.(); } catch (_) {}
+      this._stopScheduler();
+      this._clearMediaSession();
       this._emitNativeAudioState('background-stop');
       try { this._ctx.suspend(); } catch (_) {}
       return;
     }
-    // Stay suspended while muted so returning to the foreground doesn't
-    // re-grab the audio session out from under the player's own music.
-    if (!this.muted) {
+    // VISIBLE again.  Policy: a visibility event alone never STARTS audio.
+    // The only resume here is the opt-in background track reclaiming its
+    // scheduler; everything else waits for a real user action (the game's
+    // tap-to-resume unpause releases the music hold via setMusicPaused(false),
+    // station picks call play, etc.).
+    if (this._bgContinuing && !this.muted) {
+      this._lifecycleHalted = false;
       try { this._ctx.resume(); } catch (_) {}
       if (this._trackEl && !this._musicPaused) {
         try { this._trackEl.play().catch(() => {}); } catch (_) {}
       }
     }
+    this._bgContinuing = false;
     this._emitNativeAudioState('foreground');
+  }
+
+  /** Page close / termination teardown (Tier-0 policy).  With opt-in
+   *  background ON and an audible track, iOS can fire pagehide on a mere
+   *  app-switch — then we only persist and hand off to the native bridge (a
+   *  real close still dies with the page).  Background OFF = full stop. */
+  lifecycleStop() {
+    this._persistPlaybackState();
+    if (this._hasBackgroundRadioTrack()) { this._emitNativeAudioState('background-start'); return; }
+    this._lifecycleHalted = true;
+    try { this._trackEl?.pause?.(); } catch (_) {}
+    this._stopScheduler();
+    if (this._skipWatchdog) { clearInterval(this._skipWatchdog); this._skipWatchdog = null; }
+    this._clearMediaSession();
+    this._emitNativeAudioState('background-stop');
+    try { this._ctx?.suspend?.(); } catch (_) {}
+  }
+
+  // ── Media Session (owner 2026-09-05: full lock-screen Now Playing for
+  //    opted-in background players — title, station, play/pause, next) ──
+  _mediaSessionArm() {
+    const ms = navigator.mediaSession;
+    if (!ms || this._msArmed) return;
+    this._msArmed = true;
+    try { ms.setActionHandler('play',  () => { try { this._enablePlayback?.(); } catch (_) {} this.setMusicPaused(false); }); } catch (_) {}
+    try { ms.setActionHandler('pause', () => this.setMusicPaused(true)); } catch (_) {}
+    try { ms.setActionHandler('nexttrack', () => { try { this.skipTrack?.(); } catch (_) {} }); } catch (_) {}
+  }
+
+  _updateMediaSession(url) {
+    const ms = navigator.mediaSession;
+    if (!ms || typeof MediaMetadata === 'undefined') return;
+    // Now Playing is an OPT-IN surface: without background radio the game
+    // must never retain lock-screen ownership.
+    if (!this.backgroundRadio) { this._clearMediaSession(); return; }
+    try {
+      const file  = decodeURIComponent((url ?? '').split('/').pop() ?? '').replace(/\.[a-z0-9]+$/i, '');
+      const title = file.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'Road Trip Roulette';
+      ms.metadata = new MediaMetadata({
+        title,
+        artist: STATIONS[this.currentStation]?.name ?? 'Road Trip Roulette',
+        album:  'Road Trip Roulette',
+      });
+      ms.playbackState = 'playing';
+    } catch (_) {}
+  }
+
+  _clearMediaSession() {
+    try {
+      if (navigator.mediaSession) {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      }
+    } catch (_) {}
   }
 
   _emitNativeAudioState(type = 'state') {
