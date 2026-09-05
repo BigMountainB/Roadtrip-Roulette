@@ -204,6 +204,23 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 12) — Opening call: ANSWER / DECLINE buttons replace the slide
+
+Owner (on-phone report): the slide wasn't even answering on iOS — drags ended in
+pointercancel, so the call neither accepted nor got an audio gesture; a later tap (the
+pt-11 retry) started the voice.  Owner asked for iPhone-style buttons — built:
+- `.oc-buttons`: red DECLINE (rotated white SVG handset) + green ACCEPT, labels beneath,
+  same container-query sizing as the old track; answer circle keeps the pulse ring.
+- **Answering = one tap** whose gesture starts the voicemail directly; DECLINE skips the
+  voicemail straight to the phone menu (title beat still shown, intro marked done).
+- **Codebase trap re-hit**: the game's global tap handler preventDefault()s touches,
+  which SUPPRESSES synthetic `click` on mobile — buttons must bind `pointerup` + `click`
+  (the documented tilt-explainer pattern); a click-only binding tested fine with a mouse
+  and dead on touch.  The 'ringing' state guards absorb the double-fire.
+- Slide machinery deleted (knob/track/drag/ANSWER_AT/resize reseat); pt-11's lift-event
+  bless + retry kept as belt-and-suspenders.  Touch-context probes: answer tap plays from
+  the top, decline dismisses + marks done.
+
 ### 2026-08-31 (pt 11) — Opening-call audio unlock, round 2: LIFT events
 
 Owner: pt-10's fix didn't take on the phone.  The flaw: the bless ran on `pointerdown`,

@@ -4,10 +4,13 @@
  * A full-portrait overlay that sits ABOVE both Phaser and the phone menu:
  *
  *   1. `incoming_call_club_manager.png` with an iPhone-style call UI over it.
- *      The player slides to answer (pointer, touch, or Enter/Space).
- *   2. Answering starts the manager's voicemail FROM THE GESTURE — iOS only
- *      permits playback that begins inside a real user event, so `play()` is
- *      called synchronously in the accept handler, never from a timer.
+ *      ANSWER / DECLINE buttons (owner 2026-08-31 — the slide was unreliable
+ *      on iOS: drags ending in pointercancel neither answered nor counted as
+ *      an audio gesture; a tap's `click` is exactly what iOS honors).
+ *   2. Answering starts the manager's voicemail FROM THE GESTURE — `play()`
+ *      is called synchronously in the click handler, never from a timer.
+ *      DECLINE skips the voicemail and goes straight to the phone menu
+ *      (the intro still counts as done).
  *   3. At t=10s the call art crossfades to `title_screen_vertical.png` while
  *      the audio keeps running underneath.
  *   4. When the audio ends (or at t=20s on the fallback clock) the title
@@ -33,8 +36,6 @@ const LS_KEY      = 'rtr_intro_call_done';
 const TITLE_AT_S  = 10;
 /** Seconds from answering to the end, when running without audio. */
 const FALLBACK_S  = 20;
-/** Fraction of the track the knob must cross before the call is accepted. */
-const ANSWER_AT   = 0.65;
 
 const reduceMotion = () => {
   try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
@@ -76,9 +77,9 @@ export function initOpeningCall() {
   const callArt  = root.querySelector('.oc-art-call');
   const titleArt = root.querySelector('.oc-art-title');
   const ui       = root.querySelector('.oc-ui');
-  const track    = root.querySelector('.oc-track');
-  const knob     = root.querySelector('.oc-knob');
-  if (!callArt || !titleArt || !ui || !track || !knob) return;
+  const answerBtn  = root.querySelector('.oc-answer');
+  const declineBtn = root.querySelector('.oc-decline');
+  if (!callArt || !titleArt || !ui || !answerBtn || !declineBtn) return;
 
   let state = 'idle';   // idle | ringing | speaking | finishing | done
   let audio = null;
@@ -87,9 +88,6 @@ export function initOpeningCall() {
   let startedAt = 0;
   let raf = 0;
   let titleShown = false;
-  let dragId = null;    // pointerId of the drag that owns the knob
-  let dragFrom = 0;
-  let knobAt = 0;       // 0..1
 
   // ── Music suppression ───────────────────────────────────────────────────
   // setMusicPaused HOLDS the music (stops the scheduler and any real track)
@@ -105,7 +103,7 @@ export function initOpeningCall() {
   // Any lift anywhere while the phone is ringing blesses the element with a
   // play-and-pause inside that gesture (including a touch BEFORE the drag —
   // the owner's own suggestion — and the lift that ends the answer slide,
-  // whose capture listener runs before the knob's own handler).  If accept()
+  // whose capture listener runs before the button's own handler).  If accept()
   // has already fired, the bless leaves the playback running.
   const UNLOCK_EVENTS = ['touchend', 'pointerup', 'click'];
   const unlockAudio = () => {
@@ -180,66 +178,20 @@ export function initOpeningCall() {
     } catch (_) {}
   };
 
-  // ── Knob ────────────────────────────────────────────────────────────────
-
-  const maxTravel = () => Math.max(1, track.clientWidth - knob.offsetWidth - 8);
-
-  const setKnob = (t, animate) => {
-    knobAt = Math.max(0, Math.min(1, t));
-    knob.style.transition = animate
-      ? `transform ${reduceMotion() ? 90 : 260}ms cubic-bezier(.22,.9,.28,1)`
-      : 'none';
-    knob.style.transform = `translateX(${knobAt * maxTravel()}px)`;
-    // Hint text fades out as the knob travels, like the real control.
-    const hint = root.querySelector('.oc-slide-hint');
-    if (hint) hint.style.opacity = String(Math.max(0, 1 - knobAt * 2.2));
-    knob.setAttribute('aria-valuenow', String(Math.round(knobAt * 100)));
-    root.classList.toggle('oc-dragging', knobAt > 0.02);
+  // ── Answer / Decline ────────────────────────────────────────────────────
+  // Bound on pointerup AND click (the tilt-explainer pattern): the game's
+  // global tap handler preventDefault()s touches, which SUPPRESSES the
+  // synthetic click on mobile — pointerup still fires and is a valid iOS
+  // media-activation gesture, so accept()'s play() stays legal.  click is
+  // the desktop/keyboard fallback (<button> fires it for Enter/Space); the
+  // state machine ('ringing' guards in accept/decline) absorbs double-fires.
+  const bindTap = (btn, cb) => {
+    const handler = (ev) => { ev?.preventDefault?.(); cb(); };
+    btn.addEventListener('pointerup', handler);
+    btn.addEventListener('click', handler);
   };
-
-  const releaseKnob = () => {
-    dragId = null;
-    if (knobAt >= ANSWER_AT) accept();
-    else setKnob(0, true);                // spring back
-  };
-
-  knob.addEventListener('pointerdown', (e) => {
-    if (state !== 'ringing') return;
-    // Repeated / multi-touch pointerdowns must not hijack an in-flight drag.
-    if (dragId !== null) return;
-    dragId = e.pointerId;
-    dragFrom = e.clientX - knobAt * maxTravel();
-    try { knob.setPointerCapture(e.pointerId); } catch (_) {}
-    e.preventDefault();
-    e.stopPropagation();
-  });
-
-  knob.addEventListener('pointermove', (e) => {
-    if (state !== 'ringing' || e.pointerId !== dragId) return;
-    setKnob((e.clientX - dragFrom) / maxTravel(), false);
-    e.preventDefault();
-  });
-
-  const endDrag = (e) => {
-    if (e.pointerId !== dragId) return;
-    try { knob.releasePointerCapture(e.pointerId); } catch (_) {}
-    releaseKnob();
-    e.preventDefault();
-  };
-  knob.addEventListener('pointerup', endDrag);
-  knob.addEventListener('pointercancel', endDrag);
-
-  // Keyboard: no dragging required — Enter or Space answers outright, with the
-  // knob animating across so the action still reads visually.
-  knob.addEventListener('keydown', (e) => {
-    if (state !== 'ringing') return;
-    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-      e.preventDefault();
-      e.stopPropagation();
-      setKnob(1, true);
-      accept();
-    }
-  });
+  bindTap(answerBtn, () => accept());
+  bindTap(declineBtn, () => decline());
 
   // ── Accept ──────────────────────────────────────────────────────────────
 
@@ -291,6 +243,16 @@ export function initOpeningCall() {
 
     startedAt = performance.now();
     tick();
+  }
+
+  /** DECLINE — no voicemail: straight through the title beat to the phone
+   *  menu.  Marks the intro done (teardown), so it won't ring again. */
+  function decline() {
+    if (state !== 'ringing') return;
+    state = 'speaking';                 // finish() requires a live sequence
+    usingFallback = true;               // no audio will drive the timeline
+    startedAt = performance.now();
+    finish();
   }
 
   function onAudioMissing() {
@@ -389,11 +351,6 @@ export function initOpeningCall() {
     else { try { audio.play()?.catch?.(() => {}); } catch (_) {} }
   });
 
-  // Orientation / resize only re-seats the knob; the sequence itself is
-  // unaffected and must never restart.
-  window.addEventListener('resize', () => {
-    if (state === 'ringing') setKnob(knobAt, false);
-  });
 
   // ── Start / replay ──────────────────────────────────────────────────────
 
@@ -403,7 +360,6 @@ export function initOpeningCall() {
     titleShown = false;
     usingFallback = false;
     warned = false;
-    knobAt = 0;
     root.style.display = 'block';
     root.style.opacity = '1';
     root.removeAttribute('aria-hidden');
@@ -415,7 +371,6 @@ export function initOpeningCall() {
     ui.style.transition = 'none';
     ui.style.opacity = '1';
     ui.removeAttribute('aria-hidden');
-    setKnob(0, false);
     suppressMusic(true);
     armUnlock();
     // PRELOAD the recording while the phone rings.  It used to be fetched
@@ -433,7 +388,7 @@ export function initOpeningCall() {
       } catch (_) { audio = null; }
     }
     // Focus the control so a keyboard-only player can answer immediately.
-    try { knob.focus({ preventScroll: true }); } catch (_) {}
+    try { answerBtn.focus({ preventScroll: true }); } catch (_) {}
   }
 
   // Dev-only replay: clears the completion flag and runs it again WITHOUT
