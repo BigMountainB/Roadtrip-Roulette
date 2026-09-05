@@ -214,6 +214,9 @@
       padding: 0.8vmin 2.4vmin; border-radius: 99px; background: rgba(6,16,30,0.9); border: 0.4vmin solid #FFD24D;
       color: #FFD24D; font: 900 clamp(12px, 3vmin, 16px) Impact, "Arial Black", sans-serif; letter-spacing: 0.06em; white-space: nowrap; }
     #tutm-banner.on { display: block; }
+    /* Diagnostic build stamp on the tutorial cards (owner debugging a
+       stuck-card report across cached builds). */
+    #tutm-sheet .tm-build { position: absolute; right: 1.2vmin; bottom: 0.6vmin; font-size: 2.2vmin; opacity: 0.45; color: #FFD24D; }
     @media (prefers-reduced-motion: reduce) { .phone-hit.tut-flash { animation-duration: 2.4s; } }
     /* Every tile in Tutorial Mode carries the SAME gold border while it
        throbs (owner 2026-08-31), regardless of the tile art's own colors. */
@@ -4902,7 +4905,8 @@
         const list = tutmEls(), i = list.indexOf(e);
         tutmSheet.innerHTML = `<div class="tm-title">${e.title}</div><div class="tm-body">${e.desc}</div>
           <div class="tm-nav"><button data-nav="-1" ${i > 0 ? '' : 'disabled'}>‹ PREV</button>
-          <button data-nav="x">✕</button><button data-nav="1" ${i < list.length - 1 ? '' : 'disabled'}>NEXT ›</button></div>`;
+          <button data-nav="x">✕</button><button data-nav="1" ${i < list.length - 1 ? '' : 'disabled'}>NEXT ›</button></div>
+          <div class="tm-build">b17</div>`;
         // Real buttons through the project's tap helper — iOS was not
         // delivering click events to the old text spans (owner 2026-09-03).
         addTap(tutmSheet.querySelector('[data-nav="-1"]'), () => { if (i > 0) tutmShow(list[i - 1]); });
@@ -4940,11 +4944,21 @@
       // Intro card IN the top sheet over the weather / location / time strip —
       // no app page (owner 2026-09-03: "say the same thing as it currently
       // does, but without going to a new page").
+      // Third input path for the sheet's buttons: some iOS gesture endings
+      // deliver touchend but neither pointerup nor a synthetic click.  The
+      // 350 ms guard inside addTap dedupes when several paths fire together.
+      tutmSheet.addEventListener('touchend', (ev) => {
+        const b = ev.target?.closest?.('button');
+        if (!b) return;
+        ev.preventDefault();
+        b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+      }, { passive: false });
       const tutmIntro = () => {
         tutmSheet.innerHTML = `<div class="tm-title">Tutorial</div><div class="tm-body">This is the Tutorial button. You'll find this icon on each screen.
           Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
           or display to learn what it does.</div>
-          <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>`;
+          <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>
+          <div class="tm-build">b17</div>`;
         // GOT IT drops the card; the mode (already on) stays.
         addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); tutmSheet.classList.remove('show'); if (tutmOn) tutmBanner.classList.add('on'); });
         tutmFitSheet();
@@ -4972,8 +4986,21 @@
       // into landscape and whenever the menu bridge opens/closes.
       const tutmForceHide = () => {
         tutmClose();
-        tutmSheet.classList.remove('show');   // even if the mode never armed
+        // Hide EVERY sheet node — if a duplicate #tutm-sheet ever exists
+        // (double-mounted script, bfcache resurrection), the JS reference
+        // only covers one of them and the other strands on screen.
+        document.querySelectorAll('#tutm-sheet').forEach((el) => {
+          el.classList.remove('show');
+          if (el !== tutmSheet) el.remove();
+        });
       };
+      // WATCHDOG (owner 2026-08-31: card stuck on a real device through
+      // paths no probe reproduces): a visible sheet while the mode is off
+      // is illegal by definition — sweep it away within a second.
+      setInterval(() => {
+        if (tutmOn) return;
+        document.querySelectorAll('#tutm-sheet.show').forEach((el) => el.classList.remove('show'));
+      }, 800);
       window.__tutmClose = tutmForceHide;
       try {
         const mqLand = window.matchMedia('(orientation: landscape)');

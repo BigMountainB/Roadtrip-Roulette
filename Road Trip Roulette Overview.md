@@ -204,6 +204,23 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 18) — Tutorial card: watchdog + touchend path + build stamp (b17)
+
+Owner: even on a clean slate the GOT IT card stuck at the top of the menu after toggling
+Tutorial Mode off — a real-device path no headless probe reproduces (every driveable
+path, including on the production URL, comes back clean).  Defense in depth so the sheet
+CANNOT strand regardless of cause:
+- **Watchdog** (800 ms): a visible `#tutm-sheet` while the mode is off is illegal by
+  definition — swept automatically.
+- **Duplicate sweep**: force-hide clears EVERY `#tutm-sheet` node and removes strays
+  beyond the JS-owned one (double-mounted script / bfcache resurrection insurance).
+- **touchend delegation** on the sheet's buttons — a third input path beside
+  pointerup/click for iOS gesture endings that deliver neither; addTap's 350 ms guard
+  dedupes.
+- **`b17` build stamp** rendered faintly on both card variants so a device screenshot
+  identifies the running build — the repeated "still broken" reports may be stale
+  Home-Screen/standalone caches, and the stamp settles that question per screenshot.
+
 ### 2026-08-31 (pt 17) — Stranded tutorial sheet: force-hide on rotation + menu transitions
 
 Owner: an unidentified "text box at the very top" (the GOT IT intro card) stuck on the
