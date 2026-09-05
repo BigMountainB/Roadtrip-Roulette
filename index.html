@@ -4847,9 +4847,16 @@
       qhit('tutorial')?.appendChild(tutmActive);
 
       let tutmOn = false, tutmCur = null;
+      // Per-VISIT glow (owner 2026-08-31 spec restated: "any time the tutorial
+      // button is pressed... all the buttons light up until each is
+      // individually selected").  The old glow keyed off the PERSISTED read
+      // state, so after one full pass no tile ever threw again on re-entry.
+      // Visited resets every time the mode opens; markRead still feeds the
+      // Road Scholar counts underneath.
+      let tutmVisited = new Set();
       const tutmEls  = () => T()?.entries('phone') ?? [];
       const tutmGlow = () => {
-        for (const e of tutmEls()) qhit(e.el)?.classList.toggle('tut-flash', !T().isRead(e.id));
+        for (const e of tutmEls()) qhit(e.el)?.classList.toggle('tut-flash', !tutmVisited.has(e.id));
       };
       // Sheet geometry from the LIVE tile rects: spans the tile columns, top
       // at the art's top edge (or the notch inset), and capped so its bottom
@@ -4890,10 +4897,12 @@
         tutmFitSheet();
         tutmSheet.classList.add('show');
         tutmBanner.classList.remove('on');       // the sheet occupies the banner's strip
+        tutmVisited.add(e.id);
         T().markRead(e.id); tutmGlow();
       };
       const tutmOpen = () => {
         if (tutmOn) return; tutmOn = true;
+        tutmVisited = new Set();   // fresh visit → every tile throbs again
         tutmCap.classList.add('on'); tutmBanner.classList.add('on'); tutmActive.classList.add('on');
         tutCloseModals(); tutmGlow();
       };

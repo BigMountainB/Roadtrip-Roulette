@@ -204,6 +204,22 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 14) — Phone Tutorial Mode: the glow is per-VISIT, as specced
+
+Owner restated the intended design and it matched the in-code spec quote ("all of the
+buttons throb") — but `tutmGlow()` keyed off the PERSISTED read state, so once a tile's
+card had ever been viewed it never threw again on any later visit; after one full pass,
+entering Tutorial Mode lit nothing (the owner's "doesn't make the other buttons highlight
+like they used to").  Now `tutmVisited` is a per-visit Set: `tutmOpen()` resets it (every
+tile throbs on every entry), `tutmShow()` adds the viewed tile (its glow goes out for
+this visit), `markRead` still feeds the Road Scholar counts underneath.  The first-ever
+pulse on the Tutorial tile itself stays one-shot (unchanged, per the same owner spec).
+Probe: 11 tiles glow on entry → 10 after viewing one → 11 again on re-entry.
+Probe gotcha: Playwright touchscreen taps get eaten by the global touch preventDefault
+before reaching menu tiles — drive phone-menu handlers with dispatched `pointerup`
+events (addTap listens for those), and drive in-mode selections through the
+`#tutm-capture` layer with clientX/Y.
+
 ### 2026-08-31 (pt 13) — Call screen polish: bigger buttons, face push-in, instant decline
 
 Owner pass on the pt-12 buttons (confirmed working on-phone):
