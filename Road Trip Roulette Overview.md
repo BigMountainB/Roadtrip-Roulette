@@ -204,6 +204,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 19) — Stuck tutorial card SOLVED (b18): hide travel vs the safe-area anchor
+
+Owner's b17 screenshot + exact repro ("select Tutorial, then GOT IT — the box slides up
+but doesn't disappear") cracked it, and the bug was pt 16's own notch fix: the card hides
+by sliding −110% of its own height, which always cleared the screen when its anchor was
+`top: 0` — but the safe-area fix moves the anchor DOWN below the Dynamic Island, so the
+slide starts lower and the card's bottom strip (anchor-offset minus 10% of card height)
+stayed parked in the status-bar area.  Every earlier "it persists" report was this strip.
+Fix: hidden transform is `translateY(calc(-110% - 120px))` (clears any inset) AND
+`visibility: hidden` delayed until the slide finishes — the hard guarantee; `.show`
+restores both.  Verified with the anchor forced to 59px (owner's phone): after GOT IT the
+card's bottom sits at −80px, visibility hidden.  Stamp bumped to **b18**.
+The pt-18 watchdog/duplicate-sweep/touchend hardening stays — cheap insurance.
+
 ### 2026-08-31 (pt 18) — Tutorial card: watchdog + touchend path + build stamp (b17)
 
 Owner: even on a clean slate the GOT IT card stuck at the top of the menu after toggling

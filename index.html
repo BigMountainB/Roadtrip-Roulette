@@ -195,12 +195,20 @@
        measured with a probe element because parseFloat(getComputedStyle) of
        an env() custom property is NaN on iOS Safari — which is exactly how
        the GOT IT card ended up wedged behind the Dynamic Island. */
-    #tutm-sheet { position: fixed; top: 0; left: 0; width: 100vw; transform: translateY(-110%);
+    /* HIDDEN state must clear the screen from ANY anchor (owner b17 repro,
+       2026-08-31): the safe-area fix moved the card's `top` below the
+       Dynamic Island, so a plain −110% slide no longer took the bottom strip
+       offscreen — the card "slid up but didn't disappear".  Extra 120px of
+       travel covers every inset, and visibility:hidden (delayed until the
+       slide finishes) is the hard guarantee. */
+    #tutm-sheet { position: fixed; top: 0; left: 0; width: 100vw; transform: translateY(calc(-110% - 120px));
+      visibility: hidden;
       z-index: 999985; box-sizing: border-box; padding: 2.4vmin 3.2vmin 2.4vmin; text-align: left; display: flex; flex-direction: column;
       background: rgba(6, 16, 30, 0.94); border: 0.5vmin solid #FFD24D; border-top: 0; border-radius: 0 0 2.4vmin 2.4vmin;
       color: #FFF6E0; font: 600 clamp(15px, 3.8vmin, 21px)/1.4 "Helvetica Neue", Arial, sans-serif;
-      transition: transform 220ms cubic-bezier(.22,.9,.28,1); }
-    #tutm-sheet.show { transform: translateY(0); }
+      transition: transform 220ms cubic-bezier(.22,.9,.28,1), visibility 0s linear 220ms; }
+    #tutm-sheet.show { transform: translateY(0); visibility: visible;
+      transition: transform 220ms cubic-bezier(.22,.9,.28,1), visibility 0s; }
     /* Only the text scrolls when the cap bites; the button row stays pinned. */
     #tutm-sheet .tm-body { overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 0; flex: 1 1 auto; }
     #tutm-sheet .tm-nav { flex: none; }
@@ -4906,7 +4914,7 @@
         tutmSheet.innerHTML = `<div class="tm-title">${e.title}</div><div class="tm-body">${e.desc}</div>
           <div class="tm-nav"><button data-nav="-1" ${i > 0 ? '' : 'disabled'}>‹ PREV</button>
           <button data-nav="x">✕</button><button data-nav="1" ${i < list.length - 1 ? '' : 'disabled'}>NEXT ›</button></div>
-          <div class="tm-build">b17</div>`;
+          <div class="tm-build">b18</div>`;
         // Real buttons through the project's tap helper — iOS was not
         // delivering click events to the old text spans (owner 2026-09-03).
         addTap(tutmSheet.querySelector('[data-nav="-1"]'), () => { if (i > 0) tutmShow(list[i - 1]); });
@@ -4958,7 +4966,7 @@
           Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
           or display to learn what it does.</div>
           <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>
-          <div class="tm-build">b17</div>`;
+          <div class="tm-build">b18</div>`;
         // GOT IT drops the card; the mode (already on) stays.
         addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); tutmSheet.classList.remove('show'); if (tutmOn) tutmBanner.classList.add('on'); });
         tutmFitSheet();
