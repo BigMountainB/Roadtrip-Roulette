@@ -204,6 +204,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 9) — Tutorial mode shows every image; UNSUPPORTED-tilt dialog explained
+
+- **Tutorial demo state** (owner: "show all images even if the player doesn't have them —
+  police stars, weapons, etc."): while the gameplay tutorial is up (or arming its frozen
+  frame), every weapon cell renders BRIGHT with its real art at ×1 (live counts win when
+  higher), disguise included; the ★★☆☆☆ wanted-star placeholder was already in.  Verified
+  with a stripped inventory: all four cells at alpha 1, ×1 badges, stars visible.
+- **Owner's UNSUPPORTED dialog decoded**: "This device/browser exposes no motion sensor
+  API" = `DeviceOrientationEvent` is entirely ABSENT in the owner's Home-Screen standalone
+  app — iOS ships no motion API there on this version, so TILT cannot function in that
+  context at all (no permission exists to grant).  Safari proper has the API + prompt.
+  This closes the tilt-mystery chain: mode engaged, sensor impossible.  Native motion for
+  the Home-Screen/App-Store build is a Capacitor-side feature if wanted later.
+
 ### 2026-09-05 (pt 8) — First open never requires the tutorial: rotation always enters the game
 
 Owner: "Don't require people to look at the tutorial on the first open.  If the player

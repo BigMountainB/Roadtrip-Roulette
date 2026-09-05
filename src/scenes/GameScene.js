@@ -23371,6 +23371,12 @@ export class GameScene extends Phaser.Scene {
     // Rolling coal is charge-counted (1 cloud per pickup) so its count is
     // the raw cloud total, not the number of stacked tokens.
     counts.coal = this.cops.coalAmmo ?? 0;
+    // TUTORIAL MODE demo state (owner 2026-09-05: "show all images even if
+    // the player doesn't have them — police stars, weapons, etc.").  Every
+    // weapon cell renders bright with its real art at ×1 while the gameplay
+    // tutorial is up (or arming its frozen frame); live counts win when the
+    // player actually owns more.
+    const tutDemo = this._tutArming || (this._tutMode && !this._tutMode.onTitle);
     const topTok = tokens.length ? tokens[tokens.length - 1] : null;
 
     // Weapons run as a HORIZONTAL ROW along the bottom band, right of the
@@ -23394,7 +23400,8 @@ export class GameScene extends Phaser.Scene {
       const o  = this._ctrlOff('weapon_' + w.id);
       const bx = cellBaseX(slot) + o.dx;
       const by = ROW_Y + o.dy;
-      this._renderF12Cell(w, bx, by, count, count > 0 && w.id === topTok, o.s);
+      const shownCount = count || (tutDemo ? 1 : 0);
+      this._renderF12Cell(w, bx, by, shownCount, count > 0 && w.id === topTok, o.s);
       this._weaponCellBounds[w.id] = { x: bx, y: by, w: CELL_W * o.s, h: CELL_H * o.s };
       slot++;
     }
@@ -23405,8 +23412,8 @@ export class GameScene extends Phaser.Scene {
       const dIconW = CELL_W * dgo.s, dIconH = CELL_H * dgo.s;
       const dx = cellBaseX(slot) + dgo.dx;            // slot === WEAPONS.length
       const dy = ROW_Y + dgo.dy;
-      const dCount = counts.disguise ?? 0;
-      this._renderF12Cell(DISGUISE, dx, dy, dCount, dCount > 0 && topTok === 'disguise', dgo.s);
+      const dCount = (counts.disguise ?? 0) || (tutDemo ? 1 : 0);
+      this._renderF12Cell(DISGUISE, dx, dy, dCount, (counts.disguise ?? 0) > 0 && topTok === 'disguise', dgo.s);
       this._disguiseHitBounds = { x: dx, y: dy, w: dIconW, h: dIconH };
     }
   }
