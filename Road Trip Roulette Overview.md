@@ -204,6 +204,15 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 12) — Player car locked at the LOWER tire line (owner correction)
+
+Owner recalled the "car base lowering" conversation and that the fixed-Y lock landed at
+the wrong end: `PLAYER_CAR_BASELINE_Y` froze the car at SCREEN_H−130 (y 320) — the
+pre-drop height (higher even than the historical 331).  Measured the projected tire line
+live: starts ~331, settles at ~344 once route elevation kicks in — the "lowering" the
+owner observed.  Lock moved to the settled LOWER height: SCREEN_H−106 (y 344).  If the
+intended lock was the 331 start instead, it's a one-number change (SCREEN_H−119).
+
 ### 2026-09-05 (pt 11) — Tutorial pause is a layer, never an override
 
 Owner spec: the tutorial pauses the game, but if the player had ALREADY paused (pause

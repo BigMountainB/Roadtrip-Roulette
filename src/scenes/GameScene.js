@@ -131,7 +131,11 @@ const PLAYER_CAR_SCALE = 0.088;
 // screen-space baseline while the projected road, scenery, and traffic move
 // around it. Intentional cinematics (exit ramp and water sinking) may override
 // the baseline temporarily.
-const PLAYER_CAR_BASELINE_Y = SCREEN_H - 130;
+// SCREEN_H−130 → −106 (owner 2026-09-05): the fixed lock was set at the
+// HIGHER pre-drop height; the owner wants the LOWER height the car used to
+// settle at.  Measured live: the projected tire line starts ~331 and settles
+// at ~344 once route elevation kicks in — 344 = SCREEN_H − 106.
+const PLAYER_CAR_BASELINE_Y = SCREEN_H - 106;
 
 // ── Vehicle lamp height (2026-08-22) ──────────────────────────────────────
 // Fraction of a car's on-screen HEIGHT above its tire line where the lamps sit.
