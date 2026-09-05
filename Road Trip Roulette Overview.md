@@ -273,6 +273,16 @@ NOTE (owner Q&A): non-genre cars were requested REMOVED — already true since 2
 VEHICLES holds only the beater CHASSIS that genre cars ride on; dealers sell genre cars
 only.  The chassis' fallback speeds (cruise 90/top 120) apply only pre-genre-pick.
 
+### 2026-09-04 — PURSUIT text readout removed (mirror is the signal)
+Owner: *"Remove it. I think having the cops appear in the rear view mirror earlier, even if small helps
+with this."* The "◀ PURSUIT — N ft behind" text had already been retired from normal play on
+2026-08-27 in favour of the mirror pursuit glow (it survived only under the permanently-off colorblind
+flag), which is why it read as a ghost when the tutorial's placeholder showed it. Now gone entirely:
+`hudRearCop` object, the colorblind text branch, editor group `rearCop`, its placeholder, the
+DEFAULT_HUD_LAYOUT slot (saved `rearCop` keys dropped on load), the bounds map entry, the legacy tour
+step, and registry entry `gameplay.rearCop` → **39 entries (11/5/23)**. Mirror ranges for reference:
+cars draw to `MIRROR_FAR_Z` 36 000 units, the pursuit glow starts at `MIRROR_GLOW_RANGE` 45 000.
+
 ### 2026-09-04 — Phone: hub/progress page REMOVED; tile = mode + description card
 Owner: *"This tutorial progress screen should not be available anywhere. Numbers are for internal
 stats for the achievement. Each screen has a tutorial button so this screen is confusing. On iPhone

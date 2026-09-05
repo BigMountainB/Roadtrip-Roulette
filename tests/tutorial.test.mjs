@@ -19,19 +19,19 @@ const mkStore = (init = {}) => {
 
 // ── Registry shape ────────────────────────────────────────────────────────
 {
-  check('40 entries (11 phone + 5 game menu + 24 in game)', TUTORIAL_ENTRIES.length === 40);
+  check('39 entries (11 phone + 5 game menu + 23 in game)', TUTORIAL_ENTRIES.length === 39);
   const ids = TUTORIAL_ENTRIES.map(e => e.id);
   check('every id is unique', new Set(ids).size === ids.length);
   check('every id is <category>.<element>', ids.every(id => /^(phone|game_menu|gameplay)\.[A-Za-z_]+$/.test(id)));
   check('every entry has title + desc', TUTORIAL_ENTRIES.every(e => e.title && e.desc));
   check('category counts', entriesFor({}, CATEGORY.PHONE).length === 11
                          && entriesFor({}, CATEGORY.GAME_MENU).length === 5
-                         && entriesFor({}, CATEGORY.GAMEPLAY).length === 24);
+                         && entriesFor({}, CATEGORY.GAMEPLAY).length === 23);
   // The element key must match what the live resolvers use — the HUD tour's
   // own step ids are the ground truth for gameplay.
   const hudIds = ['pedalGas','pedalBrake','speed','hp','engine','gas','survB','survA','score','mult',
                   'dist','region','stars','radio','weapons','btn_map','btn_genre',
-                  'btn_mute','btn_ff','wiper','popup','hpDamage','rearCop','btn_pause'];
+                  'btn_mute','btn_ff','wiper','popup','hpDamage','btn_pause'];
   check('gameplay element keys match _hudElementBounds keys',
         hudIds.every(k => entry('gameplay.' + k)?.el === k));
 }
@@ -63,14 +63,14 @@ const mkStore = (init = {}) => {
 {
   const s = mkStore();
   let p = progress(s);
-  check('progress totals 40 / 0 read', p.total === 40 && p.read === 0);
-  check('per-category totals', p.byCat.phone.total === 11 && p.byCat.game_menu.total === 5 && p.byCat.gameplay.total === 24);
+  check('progress totals 39 / 0 read', p.total === 39 && p.read === 0);
+  check('per-category totals', p.byCat.phone.total === 11 && p.byCat.game_menu.total === 5 && p.byCat.gameplay.total === 23);
   for (const e of entriesFor({}, CATEGORY.PHONE)) markRead(s, e.id);
   p = progress(s);
   check('phone 11/11 after reading the category', p.byCat.phone.read === 11 && p.read === 11);
-  check('not complete with 29 unread', !complete(s));
+  check('not complete with 28 unread', !complete(s));
   for (const e of TUTORIAL_ENTRIES) markRead(s, e.id);
-  check('complete at 40/40', complete(s) && progress(s).read === 40);
+  check('complete at 39/39', complete(s) && progress(s).read === 39);
 }
 
 // ── Road Scholar: applicable-only denominator, latched once earned ────────

@@ -588,7 +588,6 @@ const TUT_TITLE_BTN = { x: 16, y: 16, s: 56 };
 const DEFAULT_HUD_LAYOUT = {
   popup:      { dx: -1,   dy: -25, scale: 1.1262099400177235 },
   hpDamage:   { dx: 396,  dy: 275, scale: 1.7629642295565735 },
-  rearCop:    { dx: 1,    dy: 33,  scale: 1.1811808179050012 },
   mission:    { dx: 5,    dy: -14, scale: 1.151805693372507  },
   radio:      { dx: -75,  dy: -8,  scale: 1.002349011885947  },
   btn_pause:  { dx: -49,  dy: 1,   scale: 1 },
@@ -1213,6 +1212,7 @@ export class GameScene extends Phaser.Scene {
       // "?" in the SAME slot, so a saved Garage offset is the Tutorial offset.
       // Non-destructive: an explicit btn_tutorial entry wins; the stale key is
       // dropped either way so the editor never shows a phantom control.
+      if (this._hudLayout.rearCop) delete this._hudLayout.rearCop;   // readout removed 2026-09-04
       if (this._hudLayout.btn_garage) {
         if (!this._hudLayout.btn_tutorial) this._hudLayout.btn_tutorial = { ...this._hudLayout.btn_garage };
         delete this._hudLayout.btn_garage;
@@ -19601,16 +19601,6 @@ export class GameScene extends Phaser.Scene {
     this._hudObjects?.push(pauseBtn, pauseLbl);
     registerTopBtn({ id: 'pause', bg: pauseBtn, lbl: pauseLbl, artType: 'pause', baseLeft: pauseLeft, size: pauseSize });
 
-    // ── REAR-COP indicator (cop behind the player; visible only when active).
-    // Base sits 15px below the rear-view mirror's bottom (mirror top y2 +
-    // height 56 = 58; +15 = 73), top-anchored so the gap is measured from the
-    // text's top edge.  DEFAULT_HUD_LAYOUT.rearCop keeps dy 0 off this base.
-    this.hudRearCop = this.add.text(SCREEN_W / 2, 73, '', {
-      fontSize: '14px', fontFamily: IMPACT,
-      color: this._colorblind ? '#FFB000' : '#FF3333', stroke: '#000000', strokeThickness: 4,
-      align: 'center',
-    }).setOrigin(0.5, 0).setDepth(d).setVisible(false);
-
     // ── PASSENGER indicator — a rider is aboard and hasn't shown their hand
     // yet.  Without this the one-at-a-time rule is invisible: a second
     // hitchhiker refusing to be picked up just reads as a broken pickup.
@@ -20038,7 +20028,7 @@ export class GameScene extends Phaser.Scene {
         ...[
           this.hudScore, this.hudMult, this.hudDist, this.hudRegion, this.hudStars, this.hudRage, this.hudEspresso, this.hudHP, this.hudHPDamage, this.hudAccelBar,
           this.hudSpeed, this.hudRadio, this.hudPopup, this._trapSign,
-          this.hudRearCop, this.hudPassenger, this.hudRestStop, this.hudHelicopter, this.hudHelicopterImg,
+          this.hudPassenger, this.hudRestStop, this.hudHelicopter, this.hudHelicopterImg,
           this._titleScrim, this._titleBackdrop, this._titleMain, this._titleSub, this._titleRoute, this._titleTap,
           this._titleResume,    this._titleResumeTxt,
           this._titleEnterCode, this._titleEnterCodeTxt,
@@ -20395,7 +20385,7 @@ export class GameScene extends Phaser.Scene {
     const RO = {
       speed: this.hudSpeed, hp: this.hudHP, score: this.hudScore, mult: this.hudMult,
       dist: this.hudDist, region: this.hudRegion, stars: this.hudStars, radio: this.hudRadio,
-      popup: this.hudPopup, hpDamage: this.hudHPDamage, rearCop: this.hudRearCop,
+      popup: this.hudPopup, hpDamage: this.hudHPDamage,
     };
     if (RO[id] !== undefined) return textB(RO[id]);
     if (id.startsWith('btn_')) {
@@ -20462,7 +20452,6 @@ export class GameScene extends Phaser.Scene {
       { id: 'wiper',      text: "Windshield wipers — clear rain and snow so you can see in bad weather." },
       { id: 'popup',      text: "Pickup and text-message alerts pop up here as you drive." },
       { id: 'hpDamage',   text: "Take a hit and the HP you lost flashes here." },
-      { id: 'rearCop',    text: "When a cop's on your tail, a warning shows up here." },
       { id: 'btn_pause',  text: "Pause anytime right here. That's the whole dashboard — hit Pause now to close this out and get driving!" },
     ];
     const D = 96;
@@ -22097,23 +22086,19 @@ export class GameScene extends Phaser.Scene {
       this.hudMirrorLights?.clear();
     }
 
-    // Rear cop pursuit indicator — pseudo-3D can't render behind the player,
-    // so we show a HUD chevron when a cop is closing from the rear.
-    // Measured to the player's CAR (position + PLAYER_VIRTUAL_Z), which is what
-    // the mirror draws and what collisions test — reading from the camera made
-    // the countdown 3000 units optimistic, so it hit "20 ft" while the cruiser
-    // was still a car-length-times-six back and tiny in the glass.
+    // Rear pursuit — pseudo-3D can't render behind the player, so an unseen
+    // cruiser announces itself in the rear-view glass (below).  Measured to the
+    // player's CAR (position + PLAYER_VIRTUAL_Z), which is what the mirror draws
+    // and what collisions test.  The "◀ PURSUIT — N ft behind" text readout was
+    // retired 2026-08-27 (colorblind-only) and REMOVED 2026-09-04 (owner: the
+    // mirror is the signal).
     const rear = this._ctrlEditMode
       ? null
       : this.cops.getRearCopInfo?.(p.position + PLAYER_VIRTUAL_Z);
-    if (this._ctrlEditMode) {
-      // Editor: keep the placeholder visible so it can be positioned.
-    } else if (rear?.count && rear.nearestRelZ < 0) {
+    if (rear?.count && rear.nearestRelZ < 0) {
       // MIRROR PURSUIT GLOW (owner 2026-08-27) — unseen pursuit announces
       // itself the way it does in life: red/blue strobing in the rear-view
-      // glass, swelling as the cruiser closes.  This replaces the old
-      // "◀ PURSUIT — N ft behind" text readout; the text survives only in
-      // colorblind mode, where the red/blue strobe IS the signal being lost.
+      // glass, swelling as the cruiser closes.
       const prox = Math.max(0, Math.min(1, 1 + rear.nearestRelZ / MIRROR_GLOW_RANGE));
       const mlg = (!this._perf?.noMirror && this._mirrorBounds) ? this.hudMirrorLights : null;
       if (mlg && prox > 0.02) {
@@ -22134,18 +22119,6 @@ export class GameScene extends Phaser.Scene {
           mbG.glassW * (0.25 + prox * 0.65),
           mbG.glassH * (0.30 + prox * 0.50));
       }
-      if (this._colorblind && rear.nearestRelZ < -1500) {
-        // −1500 gate + ft math preserved from the retired readout (see git
-        // history for the calibration notes).
-        const distFt = Math.max(0, Math.round(-rear.nearestRelZ / (UNITS_PER_MILE_HUD / 5280)) - 10);
-        this.hudRearCop
-          .setText(`[!] ◀ PURSUIT ${rear.count > 1 ? '×' + rear.count + ' ' : ''}— ${distFt} ft behind`)
-          .setVisible(true);
-      } else {
-        this.hudRearCop.setVisible(false);
-      }
-    } else {
-      this.hudRearCop.setVisible(false);
     }
 
     // Passenger aboard — icon + miles until they show their hand.
@@ -24535,7 +24508,6 @@ export class GameScene extends Phaser.Scene {
       // can be positioned; they appear at the custom spot when they fire in-game.
       ['popup',    [this.hudPopup]],                  // pickups + phone-text toasts
       ['hpDamage', [this.hudHPDamage]],               // damage numbers
-      ['rearCop',  [this.hudRearCop]],                // cop-behind pursuit indicator
     ].map(([id, objs]) => [id, objs.filter(Boolean)]).filter(e => e[1].length > 0);
   }
 
@@ -24821,7 +24793,6 @@ export class GameScene extends Phaser.Scene {
   _showEditorPopupPlaceholders() {
     this.hudPopup?.setText('📱  +$8  PICKUP / TEXT').setColor('#FFFFFF').setAlpha(1).setVisible(true);
     this.hudHPDamage?.setText('-15').setVisible(true);
-    this.hudRearCop?.setText('◀ PURSUIT — 120 ft behind').setVisible(true);
     // The score multiplier is hidden whenever the live mult is ≤1 (always true
     // in the frozen editor), so give it placeholder text + force it visible so
     // it has bounds to grab.  _renderHUD's edit-mode guard keeps it shown.
@@ -24831,7 +24802,6 @@ export class GameScene extends Phaser.Scene {
   _hideEditorPopupPlaceholders() {
     this.hudPopup?.setText('').setVisible(false);
     this.hudHPDamage?.setText('').setVisible(false);
-    this.hudRearCop?.setText('').setVisible(false);
   }
 
   _saveHudLayout() {

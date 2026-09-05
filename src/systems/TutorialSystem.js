@@ -130,8 +130,6 @@ export const TUTORIAL_ENTRIES = [
     desc: 'Pickup and text-message alerts appear here.', audited: true },
   { id: 'gameplay.hpDamage',   cat: 'gameplay', el: 'hpDamage',   title: 'Damage Taken',
     desc: 'The HP you just lost flashes here.', audited: true },
-  { id: 'gameplay.rearCop',    cat: 'gameplay', el: 'rearCop',    title: 'Cop Warning',
-    desc: 'Shows when a cop is on your tail.', audited: true },
   { id: 'gameplay.btn_pause',  cat: 'gameplay', el: 'btn_pause',  title: 'Pause',
     desc: 'Pauses the game.', audited: true },
 ];
