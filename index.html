@@ -1687,6 +1687,17 @@
       display: block;
     }
     #opening-call .oc-art-title { opacity: 0; }
+    /* Answer push-in (owner): zoom 30%, centered on the manager's face —
+       the portrait circle's center sits ~36% down the 853x1844 art. */
+    #opening-call .oc-art-call {
+      transform-origin: 50% 36%;
+      transition: transform 1400ms cubic-bezier(.22, .9, .32, 1);
+      will-change: transform;
+    }
+    #opening-call.oc-answered .oc-art-call { transform: scale(1.3); }
+    @media (prefers-reduced-motion: reduce) {
+      #opening-call .oc-art-call { transition: none; }
+    }
 
     /* Call UI — laid out in cqw so it scales with the phone frame, matching
        how the rest of the menu chrome is sized. */
@@ -1723,6 +1734,12 @@
       width: 84cqw;
       justify-content: space-between;
       pointer-events: auto;
+      transition: opacity 240ms ease;
+    }
+    /* A choice was made — the buttons leave immediately (owner). */
+    #opening-call.oc-answered .oc-buttons {
+      opacity: 0;
+      pointer-events: none;
     }
     #opening-call .oc-btn {
       display: flex;
@@ -1742,13 +1759,12 @@
     #opening-call .oc-btn { outline: 0; }   /* focus ring lives on the circle */
     #opening-call .oc-btn .oc-btn-circle svg { width: 52%; height: 52%; display: block; }
     #opening-call .oc-btn .oc-btn-circle {
-      width: 17cqw;
-      height: 17cqw;
+      width: 23cqw;                  /* 17 → 23 (owner: bigger) */
+      height: 23cqw;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 8.4cqw;
       color: #fff;
       box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, .45);
     }
@@ -1759,8 +1775,15 @@
     #opening-call .oc-decline .oc-btn-circle {
       background: #FF3B30;           /* iOS decline red */
     }
-    /* The classic handset glyph — decline shows it hung-up (rotated). */
-    #opening-call .oc-decline .oc-btn-circle span { transform: rotate(135deg); display: block; }
+    /* The classic handset glyph — decline shows it hung-up (rotated).  The
+       wrapper fills the circle and flex-centers, so the rotation pivots on
+       the circle's true center (owner: the glyph sat off-center — it was
+       rotating around a loose inline box). */
+    #opening-call .oc-decline .oc-btn-circle span {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      transform: rotate(135deg);
+    }
     #opening-call .oc-btn:active .oc-btn-circle { filter: brightness(0.85); }
     #opening-call .oc-btn:focus-visible .oc-btn-circle {
       outline: 0.6cqw solid #7FD8FF;

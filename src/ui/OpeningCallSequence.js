@@ -245,14 +245,21 @@ export function initOpeningCall() {
     tick();
   }
 
-  /** DECLINE — no voicemail: straight through the title beat to the phone
-   *  menu.  Marks the intro done (teardown), so it won't ring again. */
+  /** DECLINE — no voicemail, no title beat: straight to the phone menu
+   *  (owner 2026-08-31).  Marks the intro done (teardown), so it won't
+   *  ring again; menu music still comes up under the fade. */
   function decline() {
     if (state !== 'ringing') return;
-    state = 'speaking';                 // finish() requires a live sequence
-    usingFallback = true;               // no audio will drive the timeline
-    startedAt = performance.now();
-    finish();
+    state = 'finishing';
+    root.classList.add('oc-answered');   // buttons fade out immediately
+    cancelAnimationFrame(raf);
+    startMusicAfterCall();
+    try { window.__phoneMenu?.open?.(); } catch (_) {}
+    requestAnimationFrame(() => {
+      root.style.transition = `opacity ${fadeMs()}ms ease`;
+      root.style.opacity = '0';
+      setTimeout(teardown, fadeMs() + 40);
+    });
   }
 
   function onAudioMissing() {

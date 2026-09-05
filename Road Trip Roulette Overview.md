@@ -204,6 +204,21 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 13) — Call screen polish: bigger buttons, face push-in, instant decline
+
+Owner pass on the pt-12 buttons (confirmed working on-phone):
+- Circles 17 → 23cqw; the decline handset now pivots on the circle's true center (its
+  rotation wrapper fills the circle and flex-centers — it was rotating a loose inline box,
+  which read as off-center).
+- **Answer push-in**: `.oc-answered .oc-art-call` scales 1.3 over 1.4 s, transform-origin
+  50% 36% (the portrait circle's center in the 853×1844 art) — the screen zooms 30% onto
+  the manager's face while he talks.  Reduced-motion snaps.
+- **Buttons leave the moment one is tapped** (240 ms opacity fade, pointer-events off).
+- **DECLINE goes STRAIGHT to the iPhone menu** — no title beat: fades the overlay over the
+  already-open menu, menu music still comes up, intro still marked done.
+Probed on a touch context: push-in reaches scale(1.3) with buttons at opacity 0; decline
+lands on the phone menu in under 2 s.
+
 ### 2026-08-31 (pt 12) — Opening call: ANSWER / DECLINE buttons replace the slide
 
 Owner (on-phone report): the slide wasn't even answering on iOS — drags ended in
