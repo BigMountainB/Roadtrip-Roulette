@@ -204,6 +204,23 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 11) — Opening-call audio unlock, round 2: LIFT events
+
+Owner: pt-10's fix didn't take on the phone.  The flaw: the bless ran on `pointerdown`,
+but iOS grants media activation on finger-LIFT events (touchend / pointerup / click) —
+never on finger-down.  Rebuilt:
+- Document-level capture listeners on all three lift events while the phone rings; ANY
+  lift blesses the element with an in-gesture play-and-pause (owner's own observation —
+  "you touch something before the call screen" — now actually banks that gesture).  The
+  lift that ends the answer slide blesses via capture BEFORE the knob handler accepts.
+- accept()'s rejection path retries on EVERY lift until one lands (each is a fresh
+  gesture), un-fallbacks on success; `onAudioMissing` no longer nulls the element so a
+  late gesture can still bring the voice in mid-sequence.
+- `elapsed()` hardened: paused audio never drives the clock, and a late-unlocked voice
+  can't rewind the visual timeline past the title beat.
+Probed: stray tap blesses (unlocked, parked at 0), slide then plays from the top.
+Awaiting on-phone confirm at /fully/?intro=1.
+
 ### 2026-08-31 (pt 4) — Zero-HP immortality fixed; close cops fill the rear-view mirror
 
 - **Immortality at 0 HP (gameplay-breaking, owner hit it live):** a save

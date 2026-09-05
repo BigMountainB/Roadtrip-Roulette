@@ -98,6 +98,39 @@ export function initOpeningCall() {
   // that the player themselves had paused in the Music app.
   let musicWasPaused = null;
   let musicStarted = false;
+
+  // ── iOS audio unlock (owner 2026-08-31, round 2) ────────────────────────
+  // iOS grants media activation on finger-LIFT events (touchend / click /
+  // pointerup) — NOT on pointerdown, which is why the first fix didn't take.
+  // Any lift anywhere while the phone is ringing blesses the element with a
+  // play-and-pause inside that gesture (including a touch BEFORE the drag —
+  // the owner's own suggestion — and the lift that ends the answer slide,
+  // whose capture listener runs before the knob's own handler).  If accept()
+  // has already fired, the bless leaves the playback running.
+  const UNLOCK_EVENTS = ['touchend', 'pointerup', 'click'];
+  const unlockAudio = () => {
+    try {
+      if (!audio || audio._unlocked) return;
+      const pr = audio.play();
+      if (pr?.then) {
+        pr.then(() => {
+          audio._unlocked = true;
+          if (state !== 'speaking') { audio.pause(); audio.currentTime = 0; }
+        }, () => {});
+      } else {
+        audio._unlocked = true;
+        if (state !== 'speaking') { audio.pause(); audio.currentTime = 0; }
+      }
+    } catch (_) {}
+  };
+  const armUnlock = () => {
+    for (const ev of UNLOCK_EVENTS)
+      document.addEventListener(ev, unlockAudio, { capture: true, passive: true });
+  };
+  const disarmUnlock = () => {
+    for (const ev of UNLOCK_EVENTS)
+      document.removeEventListener(ev, unlockAudio, { capture: true });
+  };
   const suppressMusic = (on) => {
     const a = window.__audio;
     if (!a?.setMusicPaused) return;
@@ -172,25 +205,6 @@ export function initOpeningCall() {
 
   knob.addEventListener('pointerdown', (e) => {
     if (state !== 'ringing') return;
-    // iOS unlock (owner 2026-08-31 "silent on my phone, fine on desktop"):
-    // playback must BEGIN inside a real user gesture, and on iOS a slide can
-    // end in pointercancel (edge swipes / system gestures), which is NOT an
-    // activation context — so the play() in accept() could be rejected and
-    // the sequence ran its silent fallback with no visible error.  The
-    // pointerdown that starts the drag IS always a gesture: bless the
-    // element here with a play-and-pause so the later programmatic play()
-    // is allowed no matter how the drag ends.  The pause lands within
-    // milliseconds — inaudible.
-    try {
-      if (audio && !audio._blessed) {
-        audio._blessed = true;
-        const pr = audio.play();
-        if (pr?.then) {
-          pr.then(() => { audio.pause(); audio.currentTime = 0; },
-                  () => { audio._blessed = false; });
-        } else { audio.pause(); audio.currentTime = 0; }
-      }
-    } catch (_) {}
     // Repeated / multi-touch pointerdowns must not hijack an in-flight drag.
     if (dragId !== null) return;
     dragId = e.pointerId;
@@ -249,20 +263,25 @@ export function initOpeningCall() {
       audio.addEventListener('error', onAudioMissing, { once: true });
       const p = audio.play();
       if (p?.catch) p.catch(() => {
-        // Autoplay rejection (e.g. an iOS drag that ended in pointercancel).
-        // The NEXT touch anywhere is a fresh gesture — retry there; only if
-        // that also fails does the silent fallback timer take over.  The 4 s
-        // guard keeps a touchless session from stalling: the wall-clock
-        // timeline is already running underneath either way.
+        // Autoplay rejection (an iOS drag that ended in pointercancel, or a
+        // lift the browser didn't credit).  Retry on EVERY lift event until
+        // one lands — each is a fresh gesture — and stop once we're audible
+        // or the sequence ends.  The wall-clock timeline runs underneath, so
+        // the sequence never stalls; a late success just brings the voice in.
         const retry = () => {
+          if (state !== 'speaking' || !audio || !audio.paused) { stopRetry(); return; }
           try {
-            const pp = audio?.play?.();
-            if (pp?.catch) pp.catch(onAudioMissing);
-          } catch (_) { onAudioMissing(); }
+            const pp = audio.play();
+            if (pp?.then) pp.then(() => { usingFallback = false; stopRetry(); }, () => {});
+          } catch (_) {}
         };
-        document.addEventListener('pointerdown', retry, { once: true });
+        const stopRetry = () => {
+          for (const ev of UNLOCK_EVENTS)
+            document.removeEventListener(ev, retry, { capture: true });
+        };
+        for (const ev of UNLOCK_EVENTS)
+          document.addEventListener(ev, retry, { capture: true, passive: true });
         setTimeout(() => {
-          document.removeEventListener('pointerdown', retry);
           if (audio && audio.paused && !usingFallback) onAudioMissing();
         }, 4000);
       });
@@ -285,8 +304,8 @@ export function initOpeningCall() {
         `${FALLBACK_S}s FALLBACK TIMER. The sequence is fully functional; drop the ` +
         `recording in to replace the timer.`);
     }
-    try { audio?.pause?.(); } catch (_) {}
-    audio = null;
+    // The element is KEPT (2026-08-31): a later lift-event retry can still
+    // bring the voice in mid-sequence; elapsed() ignores it while paused.
   }
 
   // ── Timeline ────────────────────────────────────────────────────────────
@@ -295,10 +314,13 @@ export function initOpeningCall() {
   // backgrounded intro resumes at the right place instead of stalling.
 
   function elapsed() {
-    if (audio && !usingFallback && Number.isFinite(audio.currentTime) && audio.currentTime > 0) {
-      return audio.currentTime;
+    const wall = (performance.now() - startedAt) / 1000;
+    if (audio && !usingFallback && !audio.paused
+        && Number.isFinite(audio.currentTime) && audio.currentTime > 0) {
+      // A late-unlocked voice must not rewind the visual timeline.
+      return Math.max(audio.currentTime, Math.min(wall, TITLE_AT_S - 0.01));
     }
-    return (performance.now() - startedAt) / 1000;
+    return wall;
   }
 
   function tick() {
@@ -348,6 +370,7 @@ export function initOpeningCall() {
 
   function teardown() {
     state = 'done';
+    disarmUnlock();
     cancelAnimationFrame(raf);
     root.style.display = 'none';
     root.setAttribute('aria-hidden', 'true');
@@ -394,6 +417,7 @@ export function initOpeningCall() {
     ui.removeAttribute('aria-hidden');
     setKnob(0, false);
     suppressMusic(true);
+    armUnlock();
     // PRELOAD the recording while the phone rings.  It used to be fetched
     // inside accept(), so on the deployed site the ~300 KB download raced the
     // player's slide-to-answer and the manager opened with dead air (owner
