@@ -127,6 +127,12 @@ const POSE_SIZED_RE = /^codex_beater_(spin_\d+|back_turn_0\d+|front)$/;
 // Dev knob: ?dev=1 → window.__carScale (see main.js) to dial it live.
 const PLAYER_CAR_SCALE = 0.088;
 
+// The rear-view car is the chase-camera anchor. Its bottom edge stays at this
+// screen-space baseline while the projected road, scenery, and traffic move
+// around it. Intentional cinematics (exit ramp and water sinking) may override
+// the baseline temporarily.
+const PLAYER_CAR_BASELINE_Y = SCREEN_H - 130;
+
 // ── Vehicle lamp height (2026-08-22) ──────────────────────────────────────
 // Fraction of a car's on-screen HEIGHT above its tire line where the lamps sit.
 // Taillights were at 0.50/0.55 — dead mid-body, which reads as lights floating
@@ -1655,7 +1661,7 @@ export class GameScene extends Phaser.Scene {
     this._playerArtKey = _vehSpriteBack || null;
     const _hasArt = !!(_vehSpriteBack && this.textures.exists(_vehSpriteBack));
     this._playerArtPending = !_hasArt && !!_vehSpriteBack;   // waiting for art to load
-    this.playerSprite = this.add.image(SCREEN_W / 2, SCREEN_H - 130, _hasArt ? _vehSpriteBack : '__WHITE')
+    this.playerSprite = this.add.image(SCREEN_W / 2, PLAYER_CAR_BASELINE_Y, _hasArt ? _vehSpriteBack : '__WHITE')
       .setOrigin(0.5, 1)
       .setDepth(9.95)
       .setVisible(_hasArt);
@@ -1673,9 +1679,9 @@ export class GameScene extends Phaser.Scene {
     // UNDER the handle text.  The handle no longer needs a cream background —
     // the plate art is the background now.
     this._rearPlateImg = this.textures.exists(PLATE_KEYS[0])
-      ? this.add.image(SCREEN_W / 2, SCREEN_H - 130, PLATE_KEYS[0]).setDepth(9.955).setVisible(false)
+      ? this.add.image(SCREEN_W / 2, PLAYER_CAR_BASELINE_Y, PLATE_KEYS[0]).setDepth(9.955).setVisible(false)
       : null;
-    this._rearPlate = this.add.text(SCREEN_W / 2, SCREEN_H - 130, '', {
+    this._rearPlate = this.add.text(SCREEN_W / 2, PLAYER_CAR_BASELINE_Y, '', {
       fontFamily: 'Arial, "Helvetica Neue", sans-serif',
       fontStyle: 'bold',
       fontSize: '16px',
@@ -16281,26 +16287,25 @@ export class GameScene extends Phaser.Scene {
     if (shadowG) shadowG.clear();
     if (this._fogGlowGfx) this._fogGlowGfx.clear();
 
-    // ── Position the player car on the CURRENT-FRAME road surface ───
-    // road.render() ran moments ago and built this frame's _drawn array.
-    // _updatePlayer (way earlier in update()) only set X + angle; Y is
-    // set here so we never read from a stale projection.  No lerp —
-    // current-frame data doesn't need smoothing.
+    // ── Position the player car ──────────────────────────────────────
+    // Normal chase play uses a fixed screen-space tire line. Following the
+    // projected surface here made the whole car drift vertically as route
+    // elevation changed, including a visible drop near the start of the run.
+    // The committed exit is the exception: there the car becomes a projected
+    // world object so it can visibly follow the ramp off screen.
     if (this.playerSprite?.visible !== false) {
-      // During the committed exit cinematic the car is placed like any
-      // world object: projected through sampleSurface at its ExitPath
-      // lane offset (p.x), against the FROZEN camera — x and y both come
-      // from the same current-frame projection the painted ramp uses, so
-      // the car visibly rides the painted path off the screen.
-      const laneU = this._exitAuto ? this.player.x : 0;
-      const surf = this.road?.sampleSurface?.(PLAYER_VIRTUAL_Z, laneU, { allowClipped: true });
-      if (surf && Number.isFinite(surf.sy)) {
-        // +17 px nudges the player car down so its tires read as
-        // touching the asphalt instead of hovering above it.  The
-        // bottom-of-screen sample point hits the road plane a couple
-        // pixels above where the car art's contact line sits.
-        this.playerSprite.y = surf.sy + 17;
-        if (this._exitAuto && Number.isFinite(surf.sx)) this.playerSprite.x = surf.sx;
+      if (this._exitAuto) {
+        const surf = this.road?.sampleSurface?.(PLAYER_VIRTUAL_Z, this.player.x, { allowClipped: true });
+        if (surf && Number.isFinite(surf.sy)) {
+          // +17 px nudges the player car down so its tires read as
+          // touching the asphalt instead of hovering above it.  The
+          // bottom-of-screen sample point hits the road plane a couple
+          // pixels above where the car art's contact line sits.
+          this.playerSprite.y = surf.sy + 17;
+          if (Number.isFinite(surf.sx)) this.playerSprite.x = surf.sx;
+        }
+      } else {
+        this.playerSprite.y = PLAYER_CAR_BASELINE_Y;
       }
     }
     // Glue the rear license plate to the (now-positioned) player car.
@@ -26003,14 +26008,19 @@ export class GameScene extends Phaser.Scene {
   _kickRadio() {
     const a = this.audio;
     if (!a) return;
-    // TITLE / MENU kick (owner 2026-08-31): every open plays the radio-scan
-    // mix on repeat until the run starts or the player picks a genre in the
-    // Music app.  The persisted-genre resume no longer runs at the title —
-    // the scan owns the menu; a station action or the run-start branch below
-    // is what hands playback to a genre.
+    // TITLE / MENU kick (owner 2026-08-31 + 09-05 refinement): a FRESH open
+    // plays the radio-scan mix on repeat at the menu.  Once the mix has been
+    // handed off (first run start, or a Music-app genre pick), it never
+    // returns this session — a mid-session visit back to the title/menu
+    // keeps the player's soundtrack playing as normal, until the game is
+    // closed (next page load re-arms the scan in the constructor).
     if (this._awaitingStart) {
-      if (!a.ready) a.init(); else a._enablePlayback?.();
-      a.playRadioScan?.();
+      if (a._radioScanActive) {
+        if (!a.ready) a.init(); else a._enablePlayback?.();
+        a.playRadioScan?.();
+      } else if (a.ready && a._ctx?.state !== 'running') {
+        a._enablePlayback?.(); a.play?.();     // resume after an autoplay block
+      }
       return;
     }
     // A run is starting — the radio-scan hold loop ends here and the default
@@ -26031,15 +26041,19 @@ export class GameScene extends Phaser.Scene {
     if (!a.ready) {
       if (station >= 0) a.setStation?.(station);
       a.init();             // first ever → inits + starts the chosen station
-      // Plain app/browser REOPEN (title up, not loading a save): pick the music
-      // back up exactly where it left off (owner 2026-07-23).
-      if (this._awaitingStart && !pend) a.restorePersistedPlayback?.();
+      // Entering GAMEPLAY resumes the soundtrack exactly where the player
+      // left it last session (owner 2026-09-05) — the menu mix never owns
+      // the run.  Falls back to the chosen station started by init().
+      if (!pend) a.restorePersistedPlayback?.();
     } else if (a._ctx?.state !== 'running') { a._enablePlayback?.(); a.play?.(); }  // resume after an autoplay block
     else if (_scanWasOn) {
-      // Scan was the only thing sounding — start the default (or current)
-      // station now that it's stopped.
+      // The menu mix hands off to gameplay: resume the soundtrack where the
+      // player left it last session (owner 2026-09-05); if nothing is
+      // persisted, start the starred/default (or current) station fresh.
       a._enablePlayback?.();
-      a.setStation?.(station >= 0 ? station : a.currentStation);
+      if (pend || !a.restorePersistedPlayback?.()) {
+        a.setStation?.(station >= 0 ? station : a.currentStation);
+      }
     }
 
     // Resuming a SAVE → default genre, one song PAST the saved one.  A genre

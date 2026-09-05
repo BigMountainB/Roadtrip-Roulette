@@ -204,6 +204,21 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 — Menu mix hands the run back to the player's soundtrack
+
+Owner refinement of the every-open mix (08-31 pt 22):
+- **Run start resumes the soundtrack where the player left it** last session
+  (`restorePersistedPlayback` — song + position from `rtr.music.state`, which the scan
+  never overwrites since `_persistPlaybackState` refuses the scan clip).  Fallback when
+  nothing is persisted: starred/default station fresh, as before.  Save-file music
+  (`_pendingResumeMusic`) still wins.
+- **The mix plays ONLY at the fresh-open menu**: once handed off (first run start or a
+  Music-app genre pick) it never returns this session — mid-session menu/title visits
+  keep the soundtrack playing as normal, until the game is closed (the next page load's
+  constructor re-arms the scan).
+Probe: fresh open → scan at title; run start → persisted track resumes at 46 s (persisted
+42 + spin-up); mid-session menu kick → soundtrack continues, no scan.
+
 ### 2026-08-31 (pt 22) — The radio-scan mix opens EVERY session
 
 Owner: "every time the game is opened, it should play the mix on repeat until the game
