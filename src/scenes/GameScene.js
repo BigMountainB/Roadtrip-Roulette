@@ -3426,37 +3426,21 @@ export class GameScene extends Phaser.Scene {
     this._tiltRightActive = false;
     this._tiltSteerAmt = 0;
     this._tiltAttached = false;
-    // Forward/back pitch for accel + brake.  Auto-calibrates by
-    // averaging the first 30 orientation samples (~0.5s @ 60Hz) so a
-    // single odd reading at the wrong moment doesn't poison the zero.
-    // The intro-end hook also forces a fresh cal once gameplay really
-    // begins — by then the player is settled into playing posture.
-    this._tiltPitchZero   = 0;
-    this._tiltCalibrating = true;   // true → accumulating samples
-    this._tiltCalSamples  = [];
-    this._tiltThrottle    = 0;      // 0..1 — forward tilt fraction
-    this._tiltBrake       = 0;      // 0..1 — back tilt fraction
     this._tiltEventSeen = false;   // set true by the FIRST real sensor event
     this._tiltOnOrient = (e) => {
       this._tiltEventSeen = true;
       const angle = (screen.orientation?.angle ?? window.orientation ?? 0);
       const landscape = (angle === 90 || angle === -90 || angle === 270);
-      let tilt, pitchRaw;
+      // TILT IS STEERING ONLY (owner 2026-09-05: "Brake should have nothing
+      // to do with Tilt steering... go back to the version before the tilt
+      // rework").  The pitch→throttle/brake mapping, its calibration and the
+      // RE-ZERO machinery are all REMOVED — pedals own speed in every mode.
+      let tilt;
       if (landscape) {
         const sign = (angle === 90 || angle === -270) ? 1 : -1;
-        tilt     = (e.beta  ?? 0) * sign;
-        // In landscape, gamma is the device's "long-axis roll" — i.e.,
-        // forward/back pitch from the user's POV.  Positive gamma in
-        // landscape-left = top of screen away from face = accelerate.
-        // (Sign verified empirically; flip if the user reports it
-        // inverted on their phone.)
-        pitchRaw = (e.gamma ?? 0) * sign;
+        tilt = (e.beta ?? 0) * sign;
       } else {
-        tilt     = (e.gamma ?? 0);
-        // Portrait orientation isn't really a supported play stance,
-        // but if it happens, positive beta = top of screen away from
-        // face = forward.
-        pitchRaw = (e.beta  ?? 0);
+        tilt = (e.gamma ?? 0);
       }
       this._tiltGamma = tilt;
       // Lower threshold = more responsive to small wrist tilts.  DEAD is
@@ -3477,47 +3461,6 @@ export class GameScene extends Phaser.Scene {
         frac = Math.max(-1, Math.min(1, tilt / FULL));
       }
       this._tiltSteerAmt = frac;
-
-      // ── Pitch → throttle / brake ────────────────────────────────────
-      // Auto-calibration: average the first ~30 readings (≈0.5 s) so
-      // jitter / a single weird sample doesn't poison the zero.
-      // Throttle/brake stay 0 during calibration so the player can't
-      // accelerate before the zero settles.  Re-cal is triggered on
-      // scene start (constructor sets _tiltCalibrating=true), intro-end
-      // (_onIntroEnded), and RE-ZERO button tap.
-      if (this._tiltCalibrating) {
-        this._tiltCalSamples = this._tiltCalSamples ?? [];
-        this._tiltCalSamples.push(pitchRaw);
-        if (this._tiltCalSamples.length >= 30) {
-          const sum = this._tiltCalSamples.reduce((a, b) => a + b, 0);
-          this._tiltPitchZero = sum / this._tiltCalSamples.length;
-          this._tiltCalibrating = false;
-          this._tiltCalSamples  = null;
-        }
-        this._tiltThrottle = 0;
-        this._tiltBrake    = 0;
-        return;
-      }
-      const pitchDelta = pitchRaw - this._tiltPitchZero;
-
-      // Accel zones: 8°-15° = linear ramp 0→1, 15°+ = full.
-      // Brake zones: 10°-15° back = linear ramp 0→1, 15°+ back = full.
-      // The slightly wider brake deadzone (10° vs 8°) makes "coast" the
-      // natural state and prevents accidental brake taps from posture.
-      const ACC_START = 8,  ACC_FULL = 15;
-      const BRK_START = 10, BRK_FULL = 15;
-      let throttle = 0, brake = 0;
-      if (pitchDelta >= ACC_FULL) {
-        throttle = 1;
-      } else if (pitchDelta > ACC_START) {
-        throttle = (pitchDelta - ACC_START) / (ACC_FULL - ACC_START);
-      } else if (-pitchDelta >= BRK_FULL) {
-        brake = 1;
-      } else if (-pitchDelta > BRK_START) {
-        brake = (-pitchDelta - BRK_START) / (BRK_FULL - BRK_START);
-      }
-      this._tiltThrottle = throttle;
-      this._tiltBrake    = brake;
     };
     // Pre-arm a native-DOM gesture listener that fires iOS's
     // requestPermission() INSIDE the same touch frame as the next user
@@ -4282,15 +4225,6 @@ export class GameScene extends Phaser.Scene {
       this._introDone = true;
       // First guided run (from the title tutorial) → the paused HUD tour (Stage 2).
       try { if (localStorage.getItem('rtr_tutStage2')) this.time.delayedCall(250, () => this._startHudTour?.()); } catch (_) {}
-      // Re-calibrate tilt pitch zero now that the player is past the
-      // intro and settled into their actual playing posture.  The
-      // earlier (scene-start) calibration may have averaged title-
-      // screen / pre-game readings that don't match the player's
-      // game-time hold angle.
-      if (this._steeringMode?.() === 'tilt') {
-        this._tiltCalibrating = true;
-        this._tiltCalSamples  = [];
-      }
       return;
     }
 
@@ -4461,10 +4395,6 @@ export class GameScene extends Phaser.Scene {
     this._brakeBtn?.setVisible(v);
     this._brakeArt?.setVisible(v);
     this._brakeLbl?.setVisible(v);
-    // Re-apply tilt-mode pedal UI after the uniform toggle above — in
-    // tilt mode the ACCEL slot stays hidden even when the rest of the
-    // HUD is shown.
-    if (v) this._applyPedalModeUI?.(true);
     // Hide vice bar labels + weapon icons when on title.  Bars + icon
     // graphics are skipped by their drawers below when _awaitingStart.
     if (this._viceLabels) {
@@ -6252,23 +6182,11 @@ export class GameScene extends Phaser.Scene {
     // when the player is panic-mashing.  (Touch pedals are mutually
     // exclusive at the toggle layer, so this priority only matters for
     // keyboard up+down held together.)
-    // Tilt mode = analog: throttle (forward tilt) lerps cruise→boost,
-    // brake (back tilt) lerps cruise→slow.  Brake still wins.  Falls
-    // back to the discrete keyboard/button path when tilt isn't
-    // attached (permission denied, desktop without orientation, etc.)
-    // so the player still has controls.
-    const _tiltOn   = (this._steeringMode?.() === 'tilt') && this._tiltAttached;
-    const _tiltThr  = _tiltOn ? (this._tiltThrottle ?? 0) : 0;
-    const _tiltBrk  = _tiltOn ? (this._tiltBrake    ?? 0) : 0;
-    if (_tiltOn && (_tiltThr > 0 || _tiltBrk > 0)) {
-      if (_tiltBrk > 0) {
-        targetSpeed = mphToUnits(cruiseMph * (1 - _tiltBrk) + slowMph * _tiltBrk);
-      } else {
-        targetSpeed = mphToUnits(cruiseMph * (1 - _tiltThr) + boostMph * _tiltThr);
-      }
-    } else if (this._isBrake()) targetSpeed = mphToUnits(slowMph);
-    else if (this._isBoost())   targetSpeed = mphToUnits(boostMph);
-    else                        targetSpeed = mphToUnits(cruiseMph);
+    // Speed comes from the PEDALS in every steering mode (owner 2026-09-05:
+    // tilt is steering only — the analog pitch throttle/brake is removed).
+    if (this._isBrake())      targetSpeed = mphToUnits(slowMph);
+    else if (this._isBoost()) targetSpeed = mphToUnits(boostMph);
+    else                      targetSpeed = mphToUnits(cruiseMph);
 
     targetSpeed *= phys.speedMult;
     // Heroin nod-cycle throttle sag — driver eases off the pedal during
@@ -6321,7 +6239,6 @@ export class GameScene extends Phaser.Scene {
       // cooling upgrades (coolFactor), exactly the four inputs the owner named.
       let pedal;
       if (this._isBrake())      pedal = 0;
-      else if (_tiltThr > 0)    pedal = 0.40 + 0.60 * _tiltThr;
       else if (this._isBoost()) pedal = 1.0;
       else                      pedal = 0.40;
       const accelLoad  = pedal * (12 + speedRatio * 34);
@@ -19413,11 +19330,8 @@ export class GameScene extends Phaser.Scene {
     // _layoutPedalsToText() (called at the end of HUD build); the buttons
     // are created at those X's below so there's no first-frame flash.
 
-    // Buttons are always created in the BRAKE/ACCEL layout, but their
-    // labels + visibility + handler logic switch dynamically based on
-    // the current steering mode via _applyPedalModeUI().  This avoids
-    // a stale snapshot when the user picks TILT after _buildHUD has
-    // already run (e.g. switching modes from the title carousel).
+    // Buttons are always created in the BRAKE/ACCEL layout and never
+    // change with the steering mode (owner 2026-09-05).
     // The texture stays legible in both states. Engaged pedals brighten to
     // full opacity and gain a white outer stroke; idle pedals retain their
     // blue/magenta identity stroke at slightly lower opacity.
@@ -19453,14 +19367,6 @@ export class GameScene extends Phaser.Scene {
       drawPedalGlow(this._gasGlow, this._gasArt, '_gasGlowTween', on);
     };
     const refreshBrake = () => {
-      if (this._lastPedalModeIsTilt) {
-        // RE-ZERO button: no press-glow.
-        this._brakeArt?.setAlpha(0.86);
-        this._brakeLbl?.setColor?.('#F4F7FF');
-        this._brakeLbl?.setStroke?.('#6B5600', 2);
-        drawPedalGlow(this._brakeGlow, this._brakeArt, '_brakeGlowTween', false);
-        return;
-      }
       // Effective brake — touch toggle OR a held ↓ / S key (desktop).
       const on = this._isBrake();
       this._brakeArt?.setAlpha(on ? 1 : 0.86);
@@ -19523,32 +19429,8 @@ export class GameScene extends Phaser.Scene {
       this._refreshPedals();
     });
 
-    // Centralised mode-swap.  Called from end of _buildHUD AND from the
-    // update loop whenever the steering mode changes — including after
-    // a title-carousel pick that doesn't rebuild HUD.
-    this._applyPedalModeUI = (force = false) => {
-      const isTilt = (this._steeringMode?.() === 'tilt');
-      if (!force && this._lastPedalModeIsTilt === isTilt) return;
-      this._lastPedalModeIsTilt = isTilt;
-      // ACCEL stays visible + working in EVERY mode (owner 2026-09-05:
-      // "where did the accelerator pedal go?" — the tilt rework hid it,
-      // which left tilt players with no throttle when the sensor is
-      // silent).  Tilt pitch-throttle stays additive on top.
-      if (this._gasBtn) this._gasBtn.setInteractive({ useHandCursor: true });
-      this._gasBtn?.setVisible(true);
-      this._gasArt?.setVisible(true);
-      if (this._gasLbl) this._gasLbl.setVisible(true);
-      // BRAKE keeps its label + style in every mode (owner 2026-09-05).
-      if (this._brakeLbl) {
-        this._brakeLbl.setText('BRAKE\n▼')
-          .setStyle({ stroke: '#FF39AF', fontSize: '17px' });
-      }
-      // When entering tilt mode, clear any toggled-on brake state so
-      // the player isn't stuck slowing after the mode swap.
-      if (isTilt) this._touchBrake = this._touchBoost = false;
-      this._refreshPedals?.();
-    };
-    this._applyPedalModeUI(true);
+    // (The tilt-era _applyPedalModeUI mode-swap is retired — owner
+    // 2026-09-05: pedals are identical in every steering mode.)
     // Apply the fixed bottom-flanking positions + publish steer-exclusion
     // zones + anchor the wiper beside the brake.
     this._layoutPedalsToText();
@@ -21271,10 +21153,6 @@ export class GameScene extends Phaser.Scene {
       const c = tones[Difficulty.mode()] ?? tones.normal;
       if (this.hudSpeed && this.hudSpeed.style.color !== c) this.hudSpeed.setColor(c);
     }
-    // Catch mid-run mode changes (e.g. title-carousel pick that
-    // didn't trigger a scene rebuild).  Function early-returns when
-    // the mode hasn't actually changed, so cost is one comparison.
-    this._applyPedalModeUI?.();
 
     // Party clock readout — MM:SS, with color thresholds.  At 0 it shows
     // a ring-of-fire "TOO LATE" tag so the player knows the bonus is gone.

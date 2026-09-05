@@ -204,6 +204,24 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 7) — Tilt is STEERING ONLY: the pitch throttle/brake rework is fully reverted
+
+Owner (emphatic): "Brake should have nothing to do with Tilt steering. It slows the
+vehicle down and nothing more. Go back to the version before your tilt rework."  Done —
+every piece of the pitch→speed coupling is removed:
+- The orient handler keeps ONLY gamma → steering (thresholds, proportional
+  `_tiltSteerAmt`); pitchRaw, the 8-15° accel / 10-15° brake bands, `_tiltThrottle`,
+  `_tiltBrake`, the 30-sample zero calibration (`_tiltCalibrating`/`_tiltPitchZero`) and
+  the intro-end recalibration are all gone.
+- `_updatePlayer`'s target speed reads the PEDALS in every mode (brake → slow, boost →
+  boost, else cruise) — the analog cruise↔boost/slow lerp is gone; engine-heat's pedal
+  load likewise no longer reads tilt throttle (a leftover `_tiltThr` reference threw every
+  frame until the 10 s soak caught it — 0 errors after).
+- `_applyPedalModeUI` (pedal hiding/relabeling by mode) retired along with the
+  `_lastPedalModeIsTilt` brake-glow special case; both pedals render identically and work
+  in every steering mode (pts 5-6).
+Tests green; probe: gamma 15/beta 40 → steer 0.75, no throttle/brake fields, pedals live.
+
 ### 2026-09-05 (pt 6) — ACCEL pedal restored in tilt mode
 
 Owner: "where did the accelerator pedal go?"  Companion to pt 5: the tilt rework HID the
