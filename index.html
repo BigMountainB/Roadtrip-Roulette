@@ -4898,14 +4898,17 @@
         if (!a || !z || !a.width) return;
         const scale  = a.width / 233;
         const sat    = tutmSat.getBoundingClientRect().top;
-        // Card top = the WEATHER BOX's bottom edge (owner 2026-08-31): the
-        // tile row starts at art-y 599, the weather panel ends ~27 art-px
-        // above it — the card drops from there over the tile grid.
-        const top    = Math.max(a.top - 27 * scale, sat, 0);
+        // Card BOTTOM = the WEATHER BOX's bottom edge (owner correction
+        // 2026-08-31: "the text box bottom border attached to the bottom
+        // border of the weather box").  The tile row starts at art-y 599 and
+        // the weather panel ends ~27 art-px above it; the card grows UPWARD
+        // from that line, covering the weather panel, never the tiles.
+        const weatherBottom = a.top - 27 * scale;
         tutmSheet.style.left = a.left + 'px';
         tutmSheet.style.width = (z.right - a.left) + 'px';
-        tutmSheet.style.top = top + 'px';
-        tutmSheet.style.maxHeight = Math.max(120, Math.min(innerHeight * 0.55, innerHeight - top - 90)) + 'px';
+        tutmSheet.style.top = 'auto';
+        tutmSheet.style.bottom = (innerHeight - weatherBottom) + 'px';
+        tutmSheet.style.maxHeight = Math.max(120, weatherBottom - sat - 8) + 'px';
         // Banner just below the Leaderboard / Settings / Get Help row
         // (art row 1375 + height 167 + a small gap).
         const artTop = a.top - 599 * scale;
@@ -4926,7 +4929,7 @@
         tutmSheet.innerHTML = `<div class="tm-title">${e.title}</div><div class="tm-body">${e.desc}</div>
           <div class="tm-nav"><button data-nav="-1" ${i > 0 ? '' : 'disabled'}>‹ PREV</button>
           <button data-nav="x">✕</button><button data-nav="1" ${i < list.length - 1 ? '' : 'disabled'}>NEXT ›</button></div>
-          <div class="tm-build">b19</div>`;
+          <div class="tm-build">b20</div>`;
         // Real buttons through the project's tap helper — iOS was not
         // delivering click events to the old text spans (owner 2026-09-03).
         addTap(tutmSheet.querySelector('[data-nav="-1"]'), () => { if (i > 0) tutmShow(list[i - 1]); });
@@ -4979,7 +4982,7 @@
           Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
           or display to learn what it does.</div>
           <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>
-          <div class="tm-build">b19</div>`;
+          <div class="tm-build">b20</div>`;
         // GOT IT drops the card; the mode (already on) stays.
         addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); tutmSheet.classList.remove('show'); if (tutmOn) tutmBanner.classList.add('on'); });
         tutmFitSheet();

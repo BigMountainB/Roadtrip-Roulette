@@ -204,6 +204,14 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 21) — Correction: card BOTTOM rides the weather box's bottom border (b20)
+
+Owner corrected pt 20: the text box's BOTTOM border attaches to the weather box's bottom
+border — the card grows UPWARD from that line and covers the weather panel, never the
+tiles.  Fitter switched to bottom anchoring (`style.bottom = innerHeight − weatherBottom`,
+`top: auto`), maxHeight caps at the safe-area so a long card can't climb under the
+Dynamic Island.  Banner and hide guarantees unchanged.  Stamp b20.
+
 ### 2026-08-31 (pt 20) — Tutorial card bound to the weather box; banner moved below the grid (b19)
 
 Owner layout spec: the tutorial text boxes now anchor to the BOTTOM of the weather box
