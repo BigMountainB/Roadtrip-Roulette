@@ -204,6 +204,24 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 16) — Correction: TOP sheet is the approved design; uniform gold throb
+
+Owner corrected pt 15: the top-anchored description sheet WAS his approved design ("we
+moved the text box to the top so it wasn't in any button's way") — the pt-15 rollback to
+the bottom was a mistake; only the glow regression and the blue outline were unapproved.
+This entry restores and finishes the intended design:
+- **Sheet back at the TOP**, with the notch collision actually fixed: the fitter's
+  `parseFloat(getComputedStyle('--tutm-sat'))` is NaN on iOS Safari, so the safe-area
+  inset read as 0 and the card wedged behind the Dynamic Island.  The inset is now
+  MEASURED from a probe element positioned by `env(safe-area-inset-top)`.
+- **Uniform gold border throb** (owner): every tile in Tutorial Mode carries the same
+  gold outline + tutFlash pulse until touched, regardless of the tile art's own colors;
+  selection stays gold.
+- Repaired a pt-15 casualty: two orphaned property lines (a `.tm-hub button` fragment)
+  after the reduced-motion media query were invalid CSS that silently killed the
+  following `.tut-flash` rule — probe caught it via a black computed outline.
+Probe: 11 tiles glowing, single outline color rgb(255,210,77), animation tutFlash.
+
 ### 2026-08-31 (pt 15) — Tutorial presentation restored to the pre-rework look (owner)
 
 Owner: "go back to how the tutorial highlighted yesterday — the blue seems new."  Note

@@ -188,16 +188,19 @@
     .phone-hit.tutm-selected { outline: 0.7vmin solid #FFD24D; outline-offset: 0.4vmin; border-radius: 2vmin; }
     #tutm-active { position: absolute; display: none; pointer-events: none; z-index: 5; }
     #tutm-active.on { display: block; }
-    /* Bottom sheet — restored to the pre-rework anchor (owner 2026-08-31:
-       "go back to how it looked yesterday"; the top sheet also collided with
-       the iPhone notch/Dynamic Island).  Geometry is pure CSS again. */
-    #tutm-sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%) translateY(110%); width: min(94vw, 720px);
-      z-index: 999985; box-sizing: border-box; padding: 3vmin 3.2vmin calc(2.4vmin + env(safe-area-inset-bottom, 0px)); text-align: left;
-      display: flex; flex-direction: column; max-height: 62vh;
-      background: rgba(6, 16, 30, 0.94); border: 0.5vmin solid #FFD24D; border-bottom: 0; border-radius: 2.4vmin 2.4vmin 0 0;
+    /* TOP sheet — owner-approved placement (moved up 2026-09-03 so the card
+       never covers any button; owner re-confirmed 2026-08-31 after a mistaken
+       rollback to the bottom).  left/width/top/max-height are set by
+       tutmFitSheet() from the live tile rects; the safe-area inset is
+       measured with a probe element because parseFloat(getComputedStyle) of
+       an env() custom property is NaN on iOS Safari — which is exactly how
+       the GOT IT card ended up wedged behind the Dynamic Island. */
+    #tutm-sheet { position: fixed; top: 0; left: 0; width: 100vw; transform: translateY(-110%);
+      z-index: 999985; box-sizing: border-box; padding: 2.4vmin 3.2vmin 2.4vmin; text-align: left; display: flex; flex-direction: column;
+      background: rgba(6, 16, 30, 0.94); border: 0.5vmin solid #FFD24D; border-top: 0; border-radius: 0 0 2.4vmin 2.4vmin;
       color: #FFF6E0; font: 600 clamp(15px, 3.8vmin, 21px)/1.4 "Helvetica Neue", Arial, sans-serif;
       transition: transform 220ms cubic-bezier(.22,.9,.28,1); }
-    #tutm-sheet.show { transform: translateX(-50%) translateY(0); }
+    #tutm-sheet.show { transform: translateY(0); }
     /* Only the text scrolls when the cap bites; the button row stays pinned. */
     #tutm-sheet .tm-body { overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 0; flex: 1 1 auto; }
     #tutm-sheet .tm-nav { flex: none; }
@@ -212,10 +215,13 @@
       color: #FFD24D; font: 900 clamp(12px, 3vmin, 16px) Impact, "Arial Black", sans-serif; letter-spacing: 0.06em; white-space: nowrap; }
     #tutm-banner.on { display: block; }
     @media (prefers-reduced-motion: reduce) { .phone-hit.tut-flash { animation-duration: 2.4s; } }
-      background: rgba(255,210,77,0.08); border: 0.4vmin solid #FFD24D; border-radius: 2vmin; color: #FFF6E0;
-      font: 900 clamp(16px, 4.2vmin, 22px) Impact, "Arial Black", sans-serif; letter-spacing: 0.04em; cursor: pointer; }
+    /* Every tile in Tutorial Mode carries the SAME gold border while it
+       throbs (owner 2026-08-31), regardless of the tile art's own colors. */
     .phone-hit.tut-flash {
       background: rgba(255, 205, 60, 0.12);
+      outline: 0.7vmin solid #FFD24D;
+      outline-offset: 0.4vmin;
+      border-radius: 2vmin;
       animation: tutFlash 1.05s ease-in-out infinite;
     }
     /* ── Guided tutorial tour (owner 2026-07-17) ── */
@@ -4864,9 +4870,24 @@
       // at the art's top edge (or the notch inset), and capped so its bottom
       // never reaches the first tile row (tiles start 599 art px down; the
       // tutorial tile is 233 art px wide → scale).
-      // Sheet geometry is CSS-owned again (bottom anchor, 2026-08-31) — the
-      // top-layout fitter is retired; kept as a no-op for its call sites.
-      const tutmFitSheet = () => {};
+      // Safe-area probe: a fixed element positioned by env() and MEASURED —
+      // parseFloat(getComputedStyle(--var)) is NaN on iOS Safari, which is
+      // how the sheet ended up behind the Dynamic Island (owner screenshot).
+      const tutmSat = document.createElement('div');
+      tutmSat.style.cssText = 'position:fixed;top:env(safe-area-inset-top,0px);left:0;width:0;height:0;pointer-events:none;visibility:hidden;';
+      document.body.appendChild(tutmSat);
+      const tutmFitSheet = () => {
+        const a = qhit('tutorial')?.getBoundingClientRect(), z = qhit('maps')?.getBoundingClientRect();
+        if (!a || !z || !a.width) return;
+        const scale  = a.width / 233;
+        const artTop = a.top - 599 * scale;
+        const sat    = tutmSat.getBoundingClientRect().top;
+        const top    = Math.max(artTop, sat, 0);
+        tutmSheet.style.left = a.left + 'px';
+        tutmSheet.style.width = (z.right - a.left) + 'px';
+        tutmSheet.style.top = top + 'px';
+        tutmSheet.style.maxHeight = Math.max(80, a.top - top - 8) + 'px';
+      };
       window.addEventListener('resize', tutmFitSheet);
       const tutmHideSheet = () => {              // ✕: drop the text, stay in the mode
         tutmCur = null;
