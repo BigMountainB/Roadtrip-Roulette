@@ -4514,7 +4514,10 @@
           } else {
             document.body.classList.add('menu-locked');
             window.__textThreadForced = true;
-            try { window.__phaserGame?.scene?.pause?.('Game'); } catch (_) {}
+            // The resize dispatch re-lays the hit zones AND pauses the scene:
+            // applyOrientation now treats menu-locked as "must pause" (its
+            // old behavior actively RESUMED the scene here — the game drove
+            // on blind under the forced-open menu).
             requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
           }
           // Build the Messages app (its closures live in the tile handler),
@@ -4525,14 +4528,22 @@
       };
       // Rotating up to portrait completes the tap-open's forced state — from
       // there the ordinary orientation flow owns pause/resume, so rotating
-      // back down lands in the usual tap-to-resume hold.
+      // back down lands in the usual tap-to-resume hold.  Double-rAF: iOS
+      // fires orientationchange BEFORE innerWidth/Height update (see
+      // applyOrientation), and one frame is not always enough on Safari —
+      // a missed clear here left menu-locked stuck and wedged the whole
+      // rotate-into-menu flow.
       {
-        const _clearTextForce = () => requestAnimationFrame(() => {
-          if (window.__textThreadForced && window.innerHeight > window.innerWidth) {
+        const _clearTextForce = () => requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (!window.__textThreadForced) return;
+          if (window.innerHeight > window.innerWidth) {
             window.__textThreadForced = false;
             document.body.classList.remove('menu-locked');
+          } else if (!document.body.classList.contains('menu-locked')) {
+            // Lock got dropped some other way — retire the stale flag too.
+            window.__textThreadForced = false;
           }
-        });
+        }));
         window.addEventListener('resize', _clearTextForce);
         window.addEventListener('orientationchange', _clearTextForce);
       }

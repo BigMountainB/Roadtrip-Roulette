@@ -19352,6 +19352,11 @@ export class GameScene extends Phaser.Scene {
     if (this.hudPopup.input) this.hudPopup.input.enabled = false;
     this.hudPopup.on('pointerdown', (ptr) => {
       if (!this._popupTextCid || (this.popupTimer ?? 0) <= 0) return;
+      // Arm delay (owner rotation-wedge investigation 2026-08-31): the toast
+      // appears bottom-center between the touch pedals, so a driving thumb
+      // could hit it the same instant it popped and force-open the phone
+      // mid-run.  Taps only count once the toast has been readable a beat.
+      if ((this.time?.now ?? 0) - (this._popupTextShownAt ?? 0) < 350) return;
       ptr.event?.stopPropagation?.();
       try { window.__openTextThread?.(this._popupTextCid); } catch (_) {}
     });
@@ -23551,6 +23556,7 @@ export class GameScene extends Phaser.Scene {
     if (this.hudPopup.input) {
       this.hudPopup.input.enabled = isPhoneText && !!this._popupTextCid;
       this.hudPopup.input.hitArea?.setTo?.(0, 0, this.hudPopup.width, this.hudPopup.height);
+      this._popupTextShownAt = this.time?.now ?? 0;   // tap arm-delay reference
     }
     // Phone-text notifications (📱) and any caller that passes a longer hold
     // (e.g. CHECKPOINT banners) linger +3 s so they're readable while driving.

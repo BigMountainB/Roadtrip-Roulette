@@ -287,6 +287,12 @@ const _boot = () => {
       document.body.classList.remove('menu-locked');
       const gs = game.scene.getScene('Game');
       if (gs && gs._paused) gs._togglePause();         // resume gameplay
+      // menu-locked now feeds applyOrientation's shouldPause, so the scene
+      // got paused while the menu was up — resume it DIRECTLY here (the
+      // "enter gameplay" click is the whole resume gesture; routing through
+      // applyOrientation would arm the tap-to-resume hold and eat a click).
+      if (game.scene.isPaused('Game')) game.scene.resume('Game');
+      pendingTapResume = false;
     },
   };
   // One-time opening call.  Mounted AFTER __phoneMenu above, because the
@@ -1359,8 +1365,15 @@ const _boot = () => {
     const isPortrait = window.innerHeight > window.innerWidth;
     // Locked = the phone-menu CSS override keeps the menu open even in
     // landscape, so the game must also stay paused regardless of
-    // rotation.
-    const shouldPause = isPortrait || lockedByPhone;
+    // rotation.  `menu-locked` (the body class any force-open path sets —
+    // tutorial, desktop bridge, tapped text toast) counts the same way:
+    // whenever the menu is force-shown the sim must not run under it.
+    // Before this, a tapped "New text" toast opened the menu in landscape
+    // but its own layout resize re-ran this function, which RESUMED the
+    // scene it had just paused — the game drove on blind under the menu
+    // (found investigating the owner's 2026-08-31 rotation report).
+    const menuForced  = document.body.classList.contains('menu-locked');
+    const shouldPause = isPortrait || lockedByPhone || menuForced;
     if (shouldPause) {
       pendingTapResume = false;       // portrait/locked taps belong to the menu, never to gameplay resume
     }

@@ -204,6 +204,31 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 3) — Rotation/menu wedge: forced-open menu now pauses, toast taps armed, iOS clear hardened
+
+- Owner: "can't rotate into the game menu since your last edit."  Could not
+  reproduce a clean-rotation failure in emulation, but the investigation
+  exposed real defects in the shipped tappable-toast feature that can wedge
+  the rotate/menu state machine on a device:
+  1. `__openTextThread`'s pause NEVER STUCK — its own layout `resize`
+     dispatch re-ran applyOrientation, which resumed the scene it had just
+     paused (landscape + menu-locked wasn't a pause condition).  The game
+     drove on blind under the forced-open menu.  `applyOrientation` now
+     counts `menu-locked` in shouldPause; the desktop `__phoneMenu.close`
+     resumes the scene directly (no eaten click).
+  2. Text toasts sit bottom-center between the touch pedals for 5.2 s — a
+     driving thumb could force-open the phone the instant one appeared.
+     Taps now arm 350 ms after the toast shows.
+  3. `_clearTextForce` (the rotate-up leg that clears the forced state) ran
+     one rAF after orientationchange — iOS updates innerWidth/Height late,
+     so a missed clear left `menu-locked` stuck.  Now double-rAF, and a
+     stale `__textThreadForced` flag retires itself if the lock is already
+     gone.
+- Verified headless (touch-emulated): clean rotate up/down, toast tap →
+  menu forced open WITH the scene paused, rotate up clears, rotate down
+  resumes on tap, repeat rotations clean; desktop bridge opens paused and
+  closes resumed.  All suites + build green.
+
 ### 2026-08-31 (pt 2) — Game pause HOLDS the music in place
 
 - Owner: "when the game pauses, pause the music too — pause in place, don't
