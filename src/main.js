@@ -274,6 +274,8 @@ const _boot = () => {
   //   close() — hide the menu and resume the run ("enter gameplay").
   window.__phoneMenu = {
     open: () => {
+      // A stale tutorial sheet (fixed overlay) must never greet the menu.
+      try { window.__tutmClose?.(); } catch (_) {}
       const gs = game.scene.getScene('Game');
       // The pause overlay (where the PHONE MENU button lives) is already
       // paused; guard anyway so opening from anywhere leaves us paused.
@@ -284,6 +286,7 @@ const _boot = () => {
       requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
     },
     close: () => {
+      try { window.__tutmClose?.(); } catch (_) {}   // leaving the menu ends Tutorial Mode
       document.body.classList.remove('menu-locked');
       const gs = game.scene.getScene('Game');
       if (gs && gs._paused) gs._togglePause();         // resume gameplay

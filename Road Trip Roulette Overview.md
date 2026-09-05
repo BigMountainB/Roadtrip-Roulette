@@ -204,6 +204,18 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-08-31 (pt 17) — Stranded tutorial sheet: force-hide on rotation + menu transitions
+
+Owner: an unidentified "text box at the very top" (the GOT IT intro card) stuck on the
+menu and persisted into landscape gameplay.  Cause: `#tutm-sheet` is a FIXED overlay
+above everything, and only tapping the Tutorial tile again or app-close ever hid it —
+rotating out of the menu (or any other exit) stranded it on screen indefinitely.
+Fixes: `tutmForceHide()` (tutmClose + unconditional `.show` removal) exposed as
+`window.__tutmClose`, called from BOTH `__phoneMenu.open()` and `.close()` (main.js), and
+from an `(orientation: landscape)` matchMedia listener so physically rotating the phone
+clears the whole mode.  Probe: GOT IT card up → rotate → sheet, capture layer and banner
+all cleared.
+
 ### 2026-08-31 (pt 16) — Correction: TOP sheet is the approved design; uniform gold throb
 
 Owner corrected pt 15: the top-anchored description sheet WAS his approved design ("we

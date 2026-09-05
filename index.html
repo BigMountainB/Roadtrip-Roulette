@@ -4965,6 +4965,21 @@
       });
       // Back / app-close also leaves the mode.
       document.getElementById('phone-app-close')?.addEventListener('click', () => { if (tutmOn) tutmClose(); });
+      // The sheet is a FIXED overlay above everything, so any path that
+      // leaves the menu without tapping the tile again used to strand it on
+      // screen — the owner's "text box at the very top that persists through
+      // to the game menu when rotated" (2026-08-31).  Force-hide on rotation
+      // into landscape and whenever the menu bridge opens/closes.
+      const tutmForceHide = () => {
+        tutmClose();
+        tutmSheet.classList.remove('show');   // even if the mode never armed
+      };
+      window.__tutmClose = tutmForceHide;
+      try {
+        const mqLand = window.matchMedia('(orientation: landscape)');
+        const onFlip = (e) => { if (e.matches) tutmForceHide(); };
+        mqLand.addEventListener ? mqLand.addEventListener('change', onFlip) : mqLand.addListener(onFlip);
+      } catch (_) {}
 
       // (2026-09-03) The forced first-ever linear tour is retired: the first
       // selection of any Tutorial button shows the short intro card instead
