@@ -204,6 +204,26 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 2) — Custom-game TILT fixed; tutorial blink re-arms per game update
+
+- **Custom-game TILT silently stayed on tap** (owner): `_setSteeringMode('tilt')` queued
+  the iOS motion permission on the next-tap prefetch, but the custom run restarts the
+  scene and the queued callback died with it — permission was never requested.  The
+  custom confirm now routes tilt through `_titleSteerPermission` (the gesture-safe title
+  flow: DOM explainer → its Continue tap fires requestPermission natively → attach +
+  persist); denial falls back to tap with a popup pointing at Settings ▸ Accessibility.
+  NOTE (owner asked for a Settings entry): it already exists — Settings ▸ Accessibility ▸
+  "📐 Tilt steering access" (GRANTED / RE-ENABLE + hard-denial recovery text, iOS-only
+  row) — shipped 2026-08-16.
+- **Tutorial-button blink lives are per GAME UPDATE** (owner): buttons blink until first
+  selected and then never again — except the first open after an update, which grants one
+  fresh blink-until-selected life to every button.  `__BUILD_ID__` (vite define, new value
+  per production build, literal 'dev' locally) is compared against the save's
+  `tutorialBtnSeenBuild`; a mismatch wipes `tutorialBtnSeen` once.  The check polls for
+  the save (a one-shot read raced Boot and silently no-oped — caught by probe).
+Probes: reload with a stale build stamp → phone-button blink re-armed; tilt pick on a
+no-gate platform → mode 'tilt', listener attached.
+
 ### 2026-09-05 — Menu mix hands the run back to the player's soundtrack
 
 Owner refinement of the every-open mix (08-31 pt 22):

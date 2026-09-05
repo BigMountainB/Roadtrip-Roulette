@@ -35,6 +35,12 @@ const useHttp = process.env.DUI_HTTP === '1';
 
 export default defineConfig({
   base: './',
+  // Per-BUILD stamp — the tutorial buttons re-arm their first-open blink when
+  // this changes (owner 2026-09-05: "blink until selected... unless it is the
+  // first time the player has opened since a game update").  Every production
+  // build gets a fresh value; the dev server uses the literal 'dev' so local
+  // hot-testing doesn't re-blink on every restart.
+  define: { __BUILD_ID__: JSON.stringify(process.env.NODE_ENV === 'production' ? String(Date.now()) : 'dev') },
   plugins: useHttp ? [hudLayoutDump()] : [basicSsl(), hudLayoutDump()],
   build: {
     outDir: 'dist',

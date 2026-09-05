@@ -550,6 +550,25 @@ const _boot = () => {
   // The phone menu is DOM, the registry and the in-game mode are Phaser. This
   // is the ONE seam between them: read/mark progress by stable id, gate the
   // first-run intro, and hand off to the in-game or title-screen mode.
+  // GAME-UPDATE re-arm (owner 2026-09-05): the tutorial buttons blink until
+  // selected, and NEVER again on later opens — except the first open after a
+  // game update, where every button gets one more blink-until-selected life.
+  // A changed build id wipes the per-button seen flags once.
+  // The save registers in the registry during Boot — poll until it's up so
+  // the reset actually runs (a one-shot read here raced it and silently
+  // no-oped).
+  const _armBlinkReset = () => {
+    const _sv = game.registry.get('save');
+    if (!_sv?.get) return setTimeout(_armBlinkReset, 250);
+    try {
+      const _bid = (typeof __BUILD_ID__ !== 'undefined') ? __BUILD_ID__ : 'dev';
+      if (_sv.get('tutorialBtnSeenBuild', null) !== _bid) {
+        _sv.set(Tut.BTN_SEEN_KEY, null);        // all buttons blink again
+        _sv.set('tutorialBtnSeenBuild', _bid);
+      }
+    } catch (_) {}
+  };
+  _armBlinkReset();
   window.__tut = {
     save:     () => game.registry.get('save'),
     ctx:      () => ({ platform: navigator.platform ?? '' }),

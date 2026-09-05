@@ -25738,7 +25738,25 @@ export class GameScene extends Phaser.Scene {
         if (customSub) Difficulty.setCustomSub(customSub, this.registry);
         if (drivingType) {
           this.registry?.set?.('titleThumbsPick', drivingType);
-          this._setSteeringMode?.(drivingType);
+          if (drivingType === 'tilt') {
+            // Owner bug 2026-09-05: picking TILT in a custom game silently
+            // stayed on tap.  _setSteeringMode queued the iOS permission on
+            // the next-tap prefetch, but the run start restarts the scene
+            // and the queued callback died with it — permission was never
+            // requested.  _titleSteerPermission is the gesture-safe flow
+            // built for title-time picks: DOM explainer → its Continue tap
+            // fires requestPermission natively → attach + persist; denial
+            // falls back to tap with a pointer at Settings ▸ Accessibility.
+            this._titleSteerPermission(
+              () => this._setSteeringMode?.('tilt'),
+              () => {
+                this._setSteeringMode?.('classic');
+                this._showPopup?.('Motion access denied — using tap steering.\nRe-enable: Settings ▸ Accessibility.', '#FFD24D');
+              },
+            );
+          } else {
+            this._setSteeringMode?.(drivingType);
+          }
         }
         // Custom is a sandbox — let the player drive ANY vehicle
         // and toggle ANY accessory for this run.  Stored as
