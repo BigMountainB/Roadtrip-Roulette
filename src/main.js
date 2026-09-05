@@ -298,6 +298,22 @@ const _boot = () => {
       pendingTapResume = false;
     },
   };
+  // Rotating to landscape ALWAYS enters gameplay (owner 2026-09-05: "don't
+  // require people to look at the tutorial on the first open — if the player
+  // wants to rotate into the game, allow it").  The old rotate-to-enter
+  // handler only armed inside the post-genre-pick prompt, so a fresh player
+  // who just rotated was stranded on a locked, hidden menu with the game
+  // paused.  The deliberate 🔒 lock-pause is the one exception.
+  const _rotateEnter = () => {
+    if (window.__isDesktop) return;
+    if (!window.matchMedia?.('(orientation: landscape)')?.matches) return;
+    if (!document.body.classList.contains('menu-locked')) return;
+    if (window.__phoneLock?.get?.()) return;   // player locked the menu on purpose
+    try { window.__phoneMenu.close(); } catch (_) {}
+  };
+  window.addEventListener('orientationchange', () => setTimeout(_rotateEnter, 120));
+  window.addEventListener('resize',            () => setTimeout(_rotateEnter, 120));
+
   // One-time opening call.  Mounted AFTER __phoneMenu above, because the
   // sequence finishes by opening that menu rather than rebuilding it.  It
   // no-ops immediately when the intro has already been seen.

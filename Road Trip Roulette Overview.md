@@ -204,6 +204,18 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 8) — First open never requires the tutorial: rotation always enters the game
+
+Owner: "Don't require people to look at the tutorial on the first open.  If the player
+wants to rotate into the game, allow it."  On a fresh open the phone menu came up
+`menu-locked`, and rotating stranded the player — menu hidden by the landscape CSS, game
+paused by the lock — because the rotate-to-enter handler only ever armed inside the
+post-genre-pick "Rotate Phone to Enter Game Play" prompt.  New global handler in main.js:
+landscape + `menu-locked` (and not desktop) → `__phoneMenu.close()` — rotation ALWAYS
+enters gameplay; the deliberate 🔒 lock-pause is the sole exception.  Probe: fresh open →
+decline call → rotate → title screen, unlocked, unpaused.  The tutorial stays fully
+optional (pulsing invitation only).
+
 ### 2026-09-05 (pt 7) — Tilt is STEERING ONLY: the pitch throttle/brake rework is fully reverted
 
 Owner (emphatic): "Brake should have nothing to do with Tilt steering. It slows the
