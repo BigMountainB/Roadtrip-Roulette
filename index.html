@@ -1677,7 +1677,14 @@
        430x932 = 0.461, art = 0.4626) that fills the glass; anything wider
        letterboxes against black rather than distorting. */
     #opening-call {
-      display: none;
+      /* Visible from the FIRST paint (owner 2026-09-05: "THE FIRST SCREEN
+         must be the vertical title") — display:none let the iPhone menu show
+         for the frames before initOpeningCall() ran, then the title popped in
+         on top.  Now the overlay + its opaque #000 ground are painted before
+         any JS, so the title is genuinely the first thing on screen; JS only
+         wires up the tap and (first open) the call.  A device without JS
+         can't run the game anyway, so there's no dismissal-stuck risk. */
+      display: block;
       position: fixed;
       inset: 0;
       z-index: 1000000;              /* over #phone-menu (9999) and all modals */
@@ -1711,7 +1718,13 @@
       object-position: center;
       display: block;
     }
-    #opening-call .oc-art-title { opacity: 0; }
+    /* First-paint state = TITLE ONLY: the title art is shown, the incoming-
+       call art is hidden until a first-open tap reveals it (beginCall).  This
+       is the static state before JS; startTitleSplash() re-affirms it. */
+    #opening-call .oc-art-title { opacity: 1; }
+    #opening-call .oc-art-call  { opacity: 0; }
+    /* Call UI (ANSWER/DECLINE) hidden until the call is actually ringing. */
+    #opening-call .oc-ui { opacity: 0; }
     /* Answer push-in (owner): zoom 30%, centered on the manager's face —
        the portrait circle's center sits ~36% down the 853x1844 art. */
     #opening-call .oc-art-call {
@@ -5136,8 +5149,11 @@
        artwork, used as-is; the title starts at opacity 0 and crossfades in. -->
   <div id="opening-call" aria-hidden="true">
     <div class="oc-stage">
-      <img class="oc-art oc-art-call"  src="assets/ui/incoming_call_club_manager.png" alt="" />
-      <img class="oc-art oc-art-title" src="assets/ui/title_screen_vertical.png" alt="" />
+      <!-- DOM order matters: call FIRST, title SECOND, so the title paints on
+           TOP (needed for the mid-voicemail title return).  The title still
+           loads first via fetchpriority so first paint is the title. -->
+      <img class="oc-art oc-art-call"  src="assets/ui/incoming_call_club_manager.png" alt="" loading="lazy" />
+      <img class="oc-art oc-art-title" src="assets/ui/title_screen_vertical.png" alt="" fetchpriority="high" decoding="async" />
       <div class="oc-ui" role="dialog" aria-label="Incoming call from Club Manager">
         <div class="oc-caller">
           <div class="oc-name">Club Manager</div>
