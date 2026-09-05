@@ -25,7 +25,7 @@ const MODES = {
     arrest:           { rear: 7, headOn: 5, pit: 5 },  // takes more hits to jail
     speedGraceMul:    2.0,        // most forgiving speed-band grace (owner 2026-07-30)
     partyClockSec:    50 * 60,    // 50 min
-    onTimeBonusMul:   1.0,        // no bonus on Easy (per user spec)
+    onTimeBonusFrac:  0.0,   // economy V1: % of ELIGIBLE run earnings        // no bonus on Easy (per user spec)
   },
   normal: {
     id:               'normal',
@@ -38,7 +38,7 @@ const MODES = {
     trafficMul:       1.0,
     speedGraceMul:    1.4,        // more grace than Hard, less than Easy
     partyClockSec:    40 * 60,    // 40 min
-    onTimeBonusMul:   1.5,        // 1.5× cash on time
+    onTimeBonusFrac:  0.25,  // economy V1: % of ELIGIBLE run earnings        // 1.5× cash on time
   },
   hard: {
     id:               'hard',
@@ -51,7 +51,7 @@ const MODES = {
     trafficMul:       1.10,
     speedGraceMul:    1.0,        // the tightest budget — Hard is the baseline
     partyClockSec:    30 * 60,    // 30 min
-    onTimeBonusMul:   2.0,        // 2× cash on time
+    onTimeBonusFrac:  0.50,  // economy V1: % of ELIGIBLE run earnings        // 2× cash on time
   },
   custom: {
     id:               'custom',
@@ -63,7 +63,7 @@ const MODES = {
     copEscalationMul: 1.0,
     trafficMul:       1.0,
     partyClockSec:    40 * 60,
-    onTimeBonusMul:   1.0,        // no bonus — score disabled in custom anyway
+    onTimeBonusFrac:  0.0,        // no bonus — score disabled in custom anyway
     noScore:          true,       // suppress all $ awards
   },
 };
@@ -147,7 +147,10 @@ export const Difficulty = {
    *  from its sub-difficulty like every other gameplay multiplier. */
   speedGraceMul()    { return this._gameplaySrc().speedGraceMul ?? 1.0; },
   partyClockSec()    { return this.current().partyClockSec ?? 40 * 60; },
-  onTimeBonusMul()   { return this.current().onTimeBonusMul ?? 1.0; },
+  /** ON-TIME completion bonus as a FRACTION of the run's ELIGIBLE gross
+   *  earnings (economy V1 2026-09-05: Easy 0%, Normal 25%, Hard 50%) — it
+   *  can never multiply the lifetime wallet again. */
+  onTimeBonusFrac()  { return this.current().onTimeBonusFrac ?? 0; },
   noScore()          { return !!this.current().noScore; },
 
   /** All modes for the selector UI.  Custom is a 4th option that opens

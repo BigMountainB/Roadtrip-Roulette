@@ -706,9 +706,9 @@ export class RestStopScene extends Phaser.Scene {
       Math.ceil(this._vehMaxHp() - (this._durabilityAtEntry ?? this._vehMaxHp())));
     fapItems.push(
       { id: 'repair',  label: _repairMissingHp > 0 ? '🔧  REPAIR CAR' : '✓  NO REPAIRS NEEDED',
-        cost: _repairMissingHp * 80,
+        cost: _repairMissingHp * 30,   // $80 → $30/HP (economy V1 2026-09-05)
         desc: _repairMissingHp > 0
-          ? `Restore ${_repairMissingHp} HP to full health ($80 per HP).`
+          ? `Restore ${_repairMissingHp} HP to full health ($30 per HP).`
           : 'Car is already at full health.',
         disabled: _repairMissingHp === 0,
         disabledReason: 'Car is already at full health.',
@@ -1142,6 +1142,13 @@ export class RestStopScene extends Phaser.Scene {
         if (!paid) return;                       // double-tap / rewind safe
         const pay = Math.round((_missionsSys?.payoutFor?.(paid) ?? (paid.payout + (paid.tip ?? 0))) * _payMultFor(paid.type));
         this._score += pay;
+        // Completed-mission pay is ELIGIBLE run earnings (economy V1) — the
+        // accumulator lives in the registry between scenes.
+        try {
+          if (Difficulty.noScore?.() !== true && pay > 0) {
+            this.registry.set('runEligibleEarnings', (this.registry.get('runEligibleEarnings') ?? 0) + pay);
+          }
+        } catch (_) {}
         this._stats?.recordEarn?.(pay, 'mission');
         this._stats?.recordMissionComplete?.(paid.type, pay);
         this._refreshScore();

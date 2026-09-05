@@ -119,7 +119,7 @@ function deliver(m, stopId, mile = 0, stars = 0) {
   const risk = riskBonus(109, 149);
   check('legend fugitive payout', computePayout({ routeMiles: 40, risk, terms: { fugitive: true }, repMult: 5 })
     === r5((PAYOUT_BASE + 40 * PAYOUT_PER_MI + risk + TERM_BONUS.fugitive) * 5 * PAYOUT_MULT));
-  check('tier thresholds', tierFor(0).mult === 1 && tierFor(3).mult === 2.5 && tierFor(8).mult === 5
+  check('tier thresholds', tierFor(0).mult === 1 && tierFor(3).mult === 1.35 && tierFor(8).mult === 1.75
     && MISSION_TIERS.length === 3);
 }
 
@@ -409,7 +409,7 @@ function acrossStops(m, types) {
   const wL = mL.offersForStop('N', { weatherOk: true }).find(o => o.type === 'weather');
   check('Legend gets the no-chains dare', wL.terms.no_chains === true);
   check('dare pays a big bonus', wL.payout === computePayout({ routeMiles: 52,
-    risk: riskBonus(32, 84), terms: wL.terms, repMult: 5 }));
+    risk: riskBonus(32, 84), terms: wL.terms, repMult: 1.75 }));
   mL.accept(wL.id, 32);
   check('checkChains is a no-op without chains', mL.checkChains(false).length === 0);
   const fc = mL.checkChains(true);
@@ -440,7 +440,7 @@ function acrossStops(m, types) {
   const dK = firstOfType(mK, 'delivery');
   mK.accept(dK.id, 0);
   deliver(mK, dK.targetStopId, dK.targetMile);
-  check('Rookie→Known tier-up tagged at 3', dK.tierUp?.name === 'Known' && dK.tierUp?.mult === 2.5);
+  check('Rookie→Known tier-up tagged at 3', dK.tierUp?.name === 'Known' && dK.tierUp?.mult === 1.35);
 
   // 7→8 crosses Known→Legend — and only on the crossing type.
   const mL = sys(42);
@@ -448,7 +448,7 @@ function acrossStops(m, types) {
   const rL = firstOfType(mL, 'timed');
   mL.accept(rL.id, 0, 9000);
   deliver(mL, rL.targetStopId, rL.targetMile);
-  check('Known→Legend tier-up tagged at 8', rL.tierUp?.name === 'Legend' && rL.tierUp?.mult === 5);
+  check('Known→Legend tier-up tagged at 8', rL.tierUp?.name === 'Legend' && rL.tierUp?.mult === 1.75);
   const dL = allOffers(mL).find(o => o.type === 'delivery' && o.status === 'offered'
     && !mL.acceptedAtStop(o.originStopId));
   mL.accept(dL.id, 0);

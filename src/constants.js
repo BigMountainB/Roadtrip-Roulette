@@ -154,10 +154,13 @@ export const TURN_SPEED   = 2.8;
 export const OFFROAD_SLOW = 0.6;
 export const CENTRIFUGAL  = 0.3;
 
-// Scoring — baseline goal is 25 pts per mile of normal driving (no vices,
-// no stars).  PTS_DIST is multiplied by `_scoreMult()` (≥1) and accumulated
-// per-segment.  ROUTE_SEGS / TOTAL_ROUTE_MILES = 1632 segs/mi → 25/1632 ≈ 0.0153.
-export const PTS_DIST     = 0.0153;
+// Scoring — CASH ECONOMY V1 (owner workshop 2026-09-05): distance pays an
+// explicit $3.00 per route mile at 1×, multiplied by the DRIVING COMBO
+// (DrivingCombo.js) whose FINAL effective multiplier is hard-capped at 15×
+// → absolute distance-income ceiling $45/mi.  PTS_DIST (the per-SEGMENT
+// base) is DERIVED from CASH_PER_MILE below TOTAL_ROUTE_MILES — no more
+// undocumented magic per-segment value.
+export const CASH_PER_MILE = 3.0;
 // PTS_CRASH retained for legacy reference; live crash scoring is now
 // `$5 × damage received` (see _onNpcCollision in GameScene.js).
 export const PTS_CRASH    = 500;
@@ -339,7 +342,7 @@ export const FINISH_PARK_LERP = 2.0;
 // (gone for good this run).  Arrive at the Pullman party still with her (not
 // gone, and you texted at least once) → GIRL_PARTY_BONUS at the finish.
 export const GIRL_MAX_SKIPS   = 4;       // tolerated skipped towns; the 5th loses her
-export const GIRL_PARTY_BONUS = 15000;   // finish payoff for arriving with her
+export const GIRL_PARTY_BONUS = 1500;    // finish payoff for arriving with her ($15k → $1.5k, economy V1 2026-09-05)
 // Top speed for any cop, in MPH (matched against player display speed).
 // 135 mph lets a clean top-speed player slowly open a gap, while cops still
 // feel fast enough to matter if the player is slowed by crashes/weather.
@@ -396,6 +399,27 @@ const _CP_RAW = [
 ];
 // Total route length is the END mile of the final checkpoint (Pullman = 293).
 export const TOTAL_ROUTE_MILES = _CP_RAW[_CP_RAW.length - 1].end ?? _CP_RAW[_CP_RAW.length - 1].mileage;
+
+// Per-SEGMENT distance cash at 1× — derived, not magic:
+// $/mi ÷ (segments per mile).  Fractional cents accumulate internally;
+// rounding happens only at display/persistence.
+export const PTS_DIST = CASH_PER_MILE * TOTAL_ROUTE_MILES / ROUTE_SEGS;
+
+// ── DRIVING COMBO V1 tuning (owner workshop 2026-09-05) ──────────────────
+// One home for every knob so overtakes-per-level, grace, pickup extension,
+// decay, base $/mile (above) and the cap can be retuned without hunting
+// through GameScene.  See src/systems/DrivingCombo.js.
+export const COMBO = {
+  CAP:               15,    // ABSOLUTE final multiplier ceiling (after genre)
+  PASSES_PER_LEVEL:  3,     // clean overtakes per +1× (1×→15× = 42 passes)
+  GRACE_SEC:         8,     // grace refreshed by a qualifying overtake
+  GRACE_MAX_SEC:     12,    // pickup extensions can never push grace past this
+  PICKUP_EXT_SEC:    3,     // +grace per collected roadside sprite (active combo only)
+  DECAY_STEP_SEC:    2,     // one level lost per this many seconds once grace = 0
+  OFFROAD_DECAY_MULT: 2,    // off-road accelerates decay
+  SURVIVAL_GRACE_SEC: 0.5,  // +refresh grace per healthy survival condition…
+  SURVIVAL_GRACE_CAP: 2.0,  // …capped here (4 conditions × 0.5 = the cap)
+};
 export const CHECKPOINTS = _CP_RAW.map(cp => ({
   ...cp,
   t:    cp.mileage / TOTAL_ROUTE_MILES,

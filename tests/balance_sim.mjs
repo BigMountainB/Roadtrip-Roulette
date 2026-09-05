@@ -1,89 +1,93 @@
-// ── Mission-economy balance simulation (Ch. 8 Phase 7) ────────────────────
+// ── Cash Economy V1 balance simulation (owner prompt 2026-09-05) ──────────
 // Run: node tests/balance_sim.mjs
 //
-// Models plausible Seattle→Pullman runs and prints expected $ per run by
-// income source, at each rep tier, for a mission-focused vs ignore-missions
-// player — compared against the part-upgrade catalog prices.  Mission income
-// uses the REAL offer generation + payout code (MissionSystem.js); sprite /
-// distance income use the live constants (PTS_DIST, $10 pickups) with
-// assumed collection behavior, since there's no playtest telemetry yet.
-//
-// Assumptions (flagged, not measured):
-//   PICKUP_SPAWNS_PER_MI = 8, PICKUP_COLLECT_RATE = 0.45 (given), mult = 1
-//   Mission player pulls into EVERY stop; ignore-missions player just drives.
-//   Success rates: 0.9 plain, 0.75 per risky term (fragile/rush/quirk…).
+// Everything here uses LIVE values imported from the game (no stale $10
+// pickups, no hardcoded catalog totals).  Lines marked [ASSUMED] are behavior
+// assumptions awaiting playtest telemetry; everything else is [MEASURED]
+// straight from the live constants/code.
 
-import { MissionSystem } from '../src/systems/MissionSystem.js';
-import { REST_STOPS, PTS_DIST, ROUTE_SEGS, TOTAL_ROUTE_MILES } from '../src/constants.js';
+import { MissionSystem, computePayout, MISSION_TIERS } from '../src/systems/MissionSystem.js';
+import { REST_STOPS, PTS_DIST, ROUTE_SEGS, TOTAL_ROUTE_MILES, CASH_PER_MILE, COMBO,
+         GIRL_PARTY_BONUS } from '../src/constants.js';
+import { UPGRADE_CATALOG } from '../src/data/upgrades.js';
+import { DAILY_BASE_REWARD, DAILY_REWARD_STEP, DAILY_WEEKLY_BONUS, rewardForAttempt } from '../src/systems/DailyChallenges.js';
 
-const RUNS = 500;
-const ROUTE_MILES = REST_STOPS[REST_STOPS.length - 1].mileage - REST_STOPS[0].mileage; // 285
-const DIST_PER_MI = PTS_DIST * (ROUTE_SEGS / TOTAL_ROUTE_MILES);   // ≈ $25/mi
-const PICKUP_SPAWNS_PER_MI = 8, PICKUP_COLLECT_RATE = 0.45, PICKUP_VALUE = 10;
+const r0 = (n) => Math.round(n);
+const money = (n) => `$${r0(n).toLocaleString()}`;
 
+console.log('════ CASH ECONOMY V1 — balance simulation ════\n');
+
+// ── Distance income [MEASURED] ────────────────────────────────────────────
+const PER_MI = PTS_DIST * (ROUTE_SEGS / TOTAL_ROUTE_MILES);
+console.log(`Distance income [MEASURED]: ${money(PER_MI)}/mi at 1× · ${money(PER_MI * COMBO.CAP)}/mi at the ${COMBO.CAP}× cap`);
+console.log(`Route: ${TOTAL_ROUTE_MILES} mi → full-route distance income ${money(PER_MI * TOTAL_ROUTE_MILES)} at 1×, ${money(PER_MI * TOTAL_ROUTE_MILES * COMBO.CAP)} at cap\n`);
+
+// ── Checkpoint projections at representative average combos [ASSUMED avg] ─
+const CHECKPOINT_MILES = { 'Cle Elum': 84, 'Ellensburg': 107, 'Vantage': 132, 'Othello': 180, 'Pullman': 289 };
+const AVG_COMBOS = [1.2, 2, 3.5, 6];
+console.log('Cumulative distance income by checkpoint (average combo across the drive is [ASSUMED]):');
+console.log('  checkpoint      ' + AVG_COMBOS.map(c => `@${c}×`.padStart(9)).join(''));
+for (const [name, mi] of Object.entries(CHECKPOINT_MILES)) {
+  console.log(`  ${name.padEnd(14)}` + AVG_COMBOS.map(c => money(PER_MI * mi * c).padStart(9)).join(''));
+}
+
+// ── Mission income distribution per tier [MEASURED offers, ASSUMED success]
+console.log('\nMission payout distribution (live offer generation, 400 samples/tier):');
+const TARGET = {
+  Rookie: { lo: 100, hi: 250, ceil: 350 },
+  Known:  { lo: 175, hi: 400, ceil: 600 },
+  Legend: { lo: 300, hi: 650, ceil: 900 },
+};
 function fakeSave(rep) {
   const data = { missionRep: { ...rep } };
   return { get: (k, d) => (k in data ? data[k] : d), set: (k, v) => { data[k] = v; } };
 }
-
-// Success odds: each risky term multiplies the completion chance down.
-const RISKY = ['fragile', 'perishable', 'illegal', 'rush', 'nervous', 'carsick',
-               'fugitive', 'heat_escape', 'weather_run', 'no_chains'];
-function successProb(m) {
-  let p = 0.9;
-  for (const t of RISKY) if (m.terms?.[t]) p *= 0.75 / 0.9 * 0.9; // 0.75 per risky term
-  return p;
-}
-
-/** One mission-focused run at a fixed rep level: stop at every rest stop,
- *  greedily accept one offer per free type slot (prefer the highest payout
- *  whose target we will visit).  Returns expected mission $ (payout ×
- *  success prob, tips ignored). */
-function missionRun(seed, rep) {
-  const sys = new MissionSystem(fakeSave(rep));
-  sys.resetRun(seed);
-  let expected = 0, accepted = 0;
-  const active = {};                              // type -> {payout, prob, targetMile}
-  for (const rs of REST_STOPS) {
-    // Arrivals: settle anything targeting this stop.
-    for (const [type, a] of Object.entries(active)) {
-      if (a.targetStopId === rs.id) { expected += a.payout * a.prob; delete active[type]; }
-    }
-    // New offers (heat/weather ctx: assume weather live; heat needs 2★,
-    // model the mission player as hot ~25% of stop entries).
-    const hot = (seed % 4) === 0;
-    const offers = sys.offersForStop(rs.id, { stars: hot ? 2 : 0, weatherOk: true, windOk: true });
-    const open = offers.filter(o => o.status === 'offered')
-      .sort((a, b) => b.payout - a.payout);
-    for (const o of open) {
-      if (active[o.type]) continue;
-      const m = sys.accept(o.id, rs.mileage, 100000);
-      if (!m) continue;
-      accepted++;
-      active[o.type] = { payout: m.payout, prob: successProb(m), targetStopId: m.targetStopId };
+const stopIds = REST_STOPS.map(rs => rs.id);
+let bandsOk = true;
+for (const tier of MISSION_TIERS) {
+  const rep = tier.name === 'Rookie' ? {} : tier.name === 'Known'
+    ? { passenger: 3, cargo: 3, weather: 3, heat: 3, timed: 3 }
+    : { passenger: 9, cargo: 9, weather: 9, heat: 9, timed: 9 };
+  // Split typical tier-length jobs from authored LONG-HAUL business chains
+  // (priced per-mile over 100+ route miles — intentionally above the bands;
+  // "do not flatten authored risk differences" per the economy prompt).
+  const pays = [], longHaul = [];
+  for (let i = 0; i < 40 && pays.length < 400; i++) {
+    const m = new MissionSystem(fakeSave(rep));
+    for (const sid of stopIds) {
+      for (const o of (m.offersForStop(sid, { weatherOk: true }) ?? [])) {
+        const total = o.payout + (o.tip ?? 0);
+        ((o.routeMiles ?? 0) > tier.milesMax * 1.5 ? longHaul : pays).push(total);
+      }
     }
   }
-  return { expected, accepted };
+  pays.sort((a, b) => a - b);
+  const q = (f) => pays[Math.min(pays.length - 1, Math.floor(f * pays.length))];
+  const med = q(0.5), p10 = q(0.10), p90 = q(0.90), max = pays[pays.length - 1];
+  const t = TARGET[tier.name];
+  const inBand = med >= t.lo * 0.8 && med <= t.hi * 1.2 && max <= t.ceil * 1.25;
+  bandsOk = bandsOk && inBand;
+  console.log(`  ${tier.name.padEnd(7)} ×${tier.mult}  n=${pays.length}  p10 ${money(p10)}  median ${money(med)}  p90 ${money(p90)}  max ${money(max)}  target ${money(t.lo)}–${money(t.hi)} (ceil ~${money(t.ceil)})  ${inBand ? 'OK' : '⚠ OUT OF BAND'}`);
+  if (longHaul.length) {
+    longHaul.sort((a, b) => a - b);
+    console.log(`           long-haul business chains (per-mile pricing, above-band by design): n=${longHaul.length}  ${money(longHaul[0])}–${money(longHaul[longHaul.length - 1])}`);
+  }
 }
 
-const TIERS = {
-  Rookie: {},
-  Known:  { delivery: 3, timed: 3, passenger: 3, heat: 3, weather: 3 },
-  Legend: { delivery: 8, timed: 8, passenger: 8, heat: 8, weather: 8 },
-};
+// ── Operating costs [MEASURED constants] ──────────────────────────────────
+const catalogTotal = Object.values(UPGRADE_CATALOG).flat().reduce((a, u) => a + (u.cost ?? 0), 0);
+console.log(`\nOperating costs [MEASURED]:`);
+console.log(`  Full upgrade catalog (dynamic): ${money(catalogTotal)} across ${Object.values(UPGRADE_CATALOG).flat().length} parts`);
+console.log(`  Repairs: $30/missing HP (dealership) · $400 partial camp repair`);
+console.log(`  Gas: $0.50/mi → full route ≈ ${money(0.5 * TOTAL_ROUTE_MILES)}`);
 
-const distance = Math.round(ROUTE_MILES * DIST_PER_MI);
-const pickups  = Math.round(ROUTE_MILES * PICKUP_SPAWNS_PER_MI * PICKUP_COLLECT_RATE * PICKUP_VALUE);
-const baseline = distance + pickups;
+// ── Windfalls + bonuses [MEASURED] ────────────────────────────────────────
+console.log(`\nWindfalls [MEASURED]:`);
+console.log(`  Crush payoff: ${money(GIRL_PARTY_BONUS)}`);
+console.log(`  Daily: first attempt ${money(rewardForAttempt(1))}, 2nd ${money(rewardForAttempt(2))}, floor $0 (step $${DAILY_REWARD_STEP}); weekly bonus ${money(DAILY_WEEKLY_BONUS)}`);
+console.log(`  Completion bonus (% of ELIGIBLE run earnings): Easy 0% · Normal 25% · Hard 50%`);
+const elig = (avgCombo, missions$) => PER_MI * TOTAL_ROUTE_MILES * avgCombo + missions$;
+console.log(`  e.g. Normal full run @2× + $800 missions → eligible ${money(elig(2, 800))} → bonus ${money(elig(2, 800) * 0.25)}`);
 
-console.log(`route: ${ROUTE_MILES} mi · distance $${DIST_PER_MI.toFixed(2)}/mi = $${distance} · pickups (8/mi × 45% × $10) = $${pickups}`);
-console.log(`ignore-missions player ≈ $${baseline}/run (mult 1; vice mult scales this up)\n`);
-console.log('tier    | avg jobs | mission $ | total $/run | vs full catalog ($17,905)');
-console.log('--------|----------|-----------|-------------|--------------------------');
-for (const [name, rep] of Object.entries(TIERS)) {
-  let sum = 0, jobs = 0;
-  for (let s = 1; s <= RUNS; s++) { const r = missionRun(s, rep); sum += r.expected; jobs += r.accepted; }
-  const avg = Math.round(sum / RUNS);
-  const total = baseline + avg;
-  console.log(`${name.padEnd(7)} | ${(jobs / RUNS).toFixed(1).padStart(8)} | ${('$' + avg).padStart(9)} | ${('$' + total).padStart(11)} | ${(17905 / total).toFixed(1)} runs to max everything`);
-}
+console.log(`\nDistribution bands: ${bandsOk ? 'ALL WITHIN TARGET' : '⚠ SOME OUT OF BAND — see rows above'}`);
+if (!bandsOk) process.exitCode = 1;

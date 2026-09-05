@@ -50,13 +50,15 @@ export const ACTIVE_PER_BUSINESS = 2;
 // may take exactly one per stop (owner 2026-07-30).
 export const OFFERS_PER_STOP = 3;
 
-// ── Reputation tiers (Brendan's override: ×1 / ×2.5 / ×5) ────────────────
+// ── Reputation tiers (economy V1 2026-09-05: ×1 / ×1.35 / ×1.75 — distance,
+//    risk, terms and longer hauls are WHY advanced jobs pay more, not a
+//    runaway tier multiplier) ───────────────────────────────────────────────
 // Tier is per TYPE, keyed off lifetime completions of that type.  The tier
 // also widens the offer mileage window (longer hauls, bigger money).
 export const MISSION_TIERS = [
   { name: 'Rookie', minDone: 0, mult: 1,   milesMin: 6,  milesMax: 22 },
-  { name: 'Known',  minDone: 3, mult: 2.5, milesMin: 15, milesMax: 45 },
-  { name: 'Legend', minDone: 8, mult: 5,   milesMin: 25, milesMax: 75 },
+  { name: 'Known',  minDone: 3, mult: 1.35, milesMin: 15, milesMax: 45 },
+  { name: 'Legend', minDone: 8, mult: 1.75,   milesMin: 25, milesMax: 75 },
 ];
 
 // ── Payout formula constants ──────────────────────────────────────────────
@@ -65,7 +67,9 @@ export const MISSION_TIERS = [
 export const PAYOUT_BASE   = 30;
 export const PAYOUT_PER_MI = 3.5;
 // Global payout scalar — bumps every mission's take (owner 2026-07-19: 5×).
-export const PAYOUT_MULT   = 5;
+// Economy V1 (2026-09-05): the global ×5 payout inflation is GONE — the
+// scalar is a neutral 1 (kept as a named knob for future tuning).
+export const PAYOUT_MULT   = 1;
 export const TERM_BONUS    = {
   fragile: 40, perishable: 30, illegal: 60,
   // Phase 4 — Timed premium + passenger quirk bonuses (the quirk IS the term).

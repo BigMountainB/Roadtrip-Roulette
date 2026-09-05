@@ -11,11 +11,11 @@
 
 import { VICES } from '../constants.js';
 
-export const DAILY_BASE_REWARD = 5000;
-export const DAILY_REWARD_STEP = 1000;
-export const DAILY_WEEKLY_BONUS = 5000;
+export const DAILY_BASE_REWARD = 750;    // economy V1 2026-09-05
+export const DAILY_REWARD_STEP = 150;    // per extra attempt, to a $0 floor
+export const DAILY_WEEKLY_BONUS = 1500;  // full-week completion bonus
 
-/** Payout for completing on attempt N (1-based): max(0, 5000 − 1000·(N−1)). */
+/** Payout for completing on attempt N (1-based): max(0, 750 − 150·(N−1)). */
 export function rewardForAttempt(attempt) {
   const n = Math.max(1, attempt | 0);
   return Math.max(0, DAILY_BASE_REWARD - DAILY_REWARD_STEP * (n - 1));

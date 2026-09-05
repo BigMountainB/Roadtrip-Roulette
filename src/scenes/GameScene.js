@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {
   SCREEN_W, SCREEN_H, SEG_LENGTH, ROUTE_SEGS, ROAD_WIDTH, DRAW_DIST,
   MAX_SPEED, SPEED_CAP_MPH, ACCEL, BRAKE, DECEL, TURN_SPEED, OFFROAD_SLOW, CENTRIFUGAL,
-  PTS_DIST, PTS_CRASH, PTS_HITCH, HITCH_REVEAL_MILES, VICE_MULT, VICE_PTS, FULL_BAR_THRESHOLD,
+  PTS_DIST, PTS_CRASH, PTS_HITCH, HITCH_REVEAL_MILES, VICE_MULT, VICE_PTS, FULL_BAR_THRESHOLD, COMBO,
   VICES, VICE_CONFIG, VICE_COMBOS, CHECKPOINTS, TOTAL_ROUTE_MILES, REST_STOPS, PASS_THROUGH_CITIES,
   getLocationName,
   getLastSignTown,
@@ -62,11 +62,12 @@ import { AchievementSystem } from '../systems/AchievementSystem.js';
 import * as Tut from '../systems/TutorialSystem.js';
 import { DamageModel }   from '../car/DamageModel.js';
 import { CloudSave }     from '../systems/CloudSave.js';
-import { DAILY_BASE_REWARD } from '../systems/DailyChallenges.js';
+import { rewardForAttempt } from '../systems/DailyChallenges.js';
 import { getPaletteAtProgress, lerpColor } from '../utils/Colors.js';
 import { getUpgradeEffects, getInstalledUpgrade, clearTempUpgrades } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
 import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs, policeWarningChance, speedForDifficulty } from '../data/genreVehicleTraits.js';
+import { DrivingCombo } from '../systems/DrivingCombo.js';
 import { POLICE_AGENCIES, POLICE_SPRITE_META, agencyPoolAt, agencyTextureList, pickAgencyId,
          resolvePoliceSprite, jurFrameKey, SPIN_LADDER_FULL, PIT_CONTACT_LADDER,
          SPIN_360_WRECK, SPIN_360_PIT } from '../data/policeAgencies.js';
@@ -1016,6 +1017,17 @@ export class GameScene extends Phaser.Scene {
     this.road    = new Road();
     this.vices   = new ViceSystem();
     this.survival = new SurvivalSystem();   // road-trip survival bars (see Overview.md Ch4)
+    // ── Driving combo (CASH ECONOMY V1, owner 2026-09-05) ────────────────
+    // The ×1–×15 distance-income multiplier built by clean overtakes.  A
+    // fresh scene starts at 1×; an EXACT live-run resume restores it from
+    // the save snapshot (rest-stop/checkpoint rewinds start at 1× by rule).
+    this.combo = new DrivingCombo(COMBO);
+    this._comboCalloutAt = 0;
+    // Eligible RUN earnings — the completion bonus multiplies THIS, never
+    // the lifetime wallet (the old bonus compounded savings).  Registry-
+    // backed so rest-stop scene bounces carry it; snapshot-backed so exact
+    // live resumes restore it; a fresh run resets it (see the run latch).
+    this._runEligible = this.registry.get('runEligibleEarnings') ?? 0;
     this._asleepHandled = false;
     // Phaser reuses the scene instance across restarts; the cached survival-HUD
     // objects were destroyed on shutdown, so drop the refs to rebuild them
@@ -2781,7 +2793,16 @@ export class GameScene extends Phaser.Scene {
         // restore the FULL run — money, HP, gas, vices, weapons, vehicle,
         // accessories, owned set.  Live rest-stop exits use the `buys` path
         // below instead (mutually exclusive: no snapshot is passed then).
-        if (this._resumeSnapshot) this._applyResumeSnapshot(this._resumeSnapshot);
+        if (this._resumeSnapshot) {
+          this._applyResumeSnapshot(this._resumeSnapshot);
+          // Exact-spot resume: eligible earnings + driving combo come back
+          // without counting hidden wall-clock time (economy V1).
+          if (typeof this._resumeSnapshot.eligibleEarnings === 'number') {
+            this._runEligible = Math.max(0, this._resumeSnapshot.eligibleEarnings);
+            this.registry.set('runEligibleEarnings', this._runEligible);
+          }
+          if (this._resumeSnapshot.combo) this.combo?.restore?.(this._resumeSnapshot.combo);
+        }
         // Mark this stop and all earlier stops as "passed" so we don't
         // re-prompt the player as they continue.
         if (!this._passedRestStops) this._passedRestStops = new Set();
@@ -4600,6 +4621,10 @@ export class GameScene extends Phaser.Scene {
         };
         this.registry.set('runStartSnap', _snap);
       }
+      if (_fresh) {
+        this._runEligible = 0;                       // a fresh run earns from zero
+        this.registry.set('runEligibleEarnings', 0);
+      }
       this._driveStartSnap = _snap;
       // Accounting is run-level too, so CASH BEFORE DRIVE always equals the
       // RESTART DRIVE button's amount.
@@ -5281,6 +5306,7 @@ export class GameScene extends Phaser.Scene {
         this._trapStopping      = false;
         this._trapComplyTimer   = 0;
         this._trapStopHeld      = true;
+        this.combo?.reset?.();   // a civil police stop ends the combo
         this._trapStopHoldTimer = COP_TRAP_HOLD_SEC;
         this._trapStopHeldX     = this.player.x;             // freeze steering here for the stop
         this._trapCopArrive     = 0;                         // cruiser pull-up animation 0→1
@@ -5464,6 +5490,7 @@ export class GameScene extends Phaser.Scene {
               this._pursuitStopArmed = false;
               this._pursuitFollowBaseMi = null;
               this._pursuitStopHoldX = this.player.x;   // freeze steering here
+              this.combo?.reset?.();   // a civil police stop ends the combo
               this._pursuitStopHold = _psStars === 1
                 ? { t: PURSUIT_STOP_SEC_1, mult: 1 }
                 : { t: PURSUIT_STOP_SEC_2, mult: 3 };
@@ -5583,6 +5610,7 @@ export class GameScene extends Phaser.Scene {
         for (const _c of _ch.done) {
           const _pay = _c.payout ?? 0;
           if (Difficulty.noScore?.() !== true) this.score += _pay;
+          this._addEligible(_pay);
           this.stats?.recordEarn?.(_pay, 'mission');
           this.stats?.recordMissionComplete?.('challenge', _pay);
           this._showPopup?.(`✅ ${_c.missionName ?? 'CHALLENGE'} — +$${_pay.toLocaleString()}`, '#88FF88', 4);
@@ -5654,82 +5682,57 @@ export class GameScene extends Phaser.Scene {
     const currentSeg = Math.floor(this.player.position / SEG_LENGTH);
     const passed     = currentSeg - this.lastSegIdx;
     if (passed > 0) {
-      const _distBase = passed * PTS_DIST;
-      // Genre-vehicle driving-cash modifiers (owner 2026-07-19): flat rate ×
-      // bonus-earnings (reggae 0.80) × hi-speed bonus above its gate (classic-
-      // rock +30% over 120 mph) × low-HP bonus under its gate (pop-punk +50%
-      // below 25 HP).
-      let _gvCash = this._traitMod('drivingCashMult') * this._traitMod('drivingBonusEarningsMult');
-      // Hi-speed cash bonus now gates on 15% ABOVE the car's baseline cruise
-      // (owner 2026-07-20), not a fixed mph — so it's the same "push past
-      // cruise" ask for every genre car.
-      const _hiMult = this._traitMod('drivingCashHiSpeedMult');
-      if (_hiMult !== 1 && this._displayMPH() > this._baselineCruiseMph() * 1.15) _gvCash *= _hiMult;
-      const _hpGate = this._traitMod('lowHpBonusHp');
-      if (_hpGate > 0 && (this.damage?.getDurability?.() ?? 999) < _hpGate) _gvCash *= this._traitMod('lowHpBonusMult');
-      const _distEarn = _distBase * this._scoreMult() * _gvCash;
+      // CASH ECONOMY V1 (owner 2026-09-05): $3/mi base × the DRIVING COMBO's
+      // final effective multiplier, ABSOLUTE cap 15× → $45/mi ceiling.
+      // Fractional cents accumulate in this.score; rounding is display-only.
+      const _distBase = passed * PTS_DIST;             // $ at 1× (derived, see constants)
+      const _distEarn = _distBase * this._driveMult();
       this.score    += _distEarn;
+      this._addEligible(_distEarn);
       this.stats?.recordEarn(_distEarn, 'distance', _distBase);
       this.lastSegIdx = currentSeg;
     }
-    // Penalties: slowing to 80 mph or below and driving off-road both bleed
-    // score.  80 is "slow" for EVERY vehicle (the slowest tops out at 110), so
-    // no car is perpetually taxed for its top speed.  Scale with the vice
-    // multiplier so highs don't trivially cancel the penalties.
+    // ── Driving-combo clock (CASH ECONOMY V1) ─────────────────────────
+    // The old continuous slow-driving and off-road CASH bleed is GONE —
+    // those behaviors now shape the COMBO instead: slow driving can't build
+    // and lets an active combo decay; off-road can't build and decays
+    // FASTER; forced police stops freeze the clock (no extra punishment).
     {
       const dispMph = this._displayMPH();
-      const mult    = this._scoreMult();
-      // Fentanyl: while in your system the car is hard-capped at 30%
-      // speed.  Penalising the player for that drop is double-jeopardy,
-      // so suppress the slowness penalty entirely until it clears.
-      const comaActive = (this.vices?.get?.(VICES.COMA) ?? 0) > 0.05;
-      // Burrito ≥ 60% — heavy mode: no slow-driving penalty at all,
-      // and off-road penalty cut in half (per owner spec).
-      const burritoHigh  = (this.vices?.get?.(VICES.BURRITO) ?? 0) >= 0.60;
-      // Any vice dragging max speed below baseline (Combo, Coma, Burrito-
-      // alone, Slushie, Cold Brew) suppresses the slowness penalty — getting
-      // docked $ for a slowdown the vice is forcing on you is double-
-      // jeopardy.  speedMult < 1 means SOMETHING is slowing the car;
-      // the player can't help it, so don't drain their wallet for it.
+      const comaActive  = (this.vices?.get?.(VICES.COMA) ?? 0) > 0.05;
+      const burritoHigh = (this.vices?.get?.(VICES.BURRITO) ?? 0) >= 0.60;
       const viceSlowing = (phys?.speedMult ?? 1) < 0.99;
-      // Speed-trap traffic stop: the game is FORCING you to slow down and pull
-      // to the right shoulder (off-road), so charging the slow-driving AND the
-      // off-road penalty during the stop is double-jeopardy — suppress both for
-      // the whole sequence (comply window → auto-stop → held stop).
       const trafficStop = this._trapPursuitActive || this._trapStopping || this._trapStopHeld
                        || this._pursuitStopping || !!this._pursuitStopHold;
-      let penalty   = 0;
-
-      // Slow-driving penalty now kicks in below 15% UNDER the car's baseline
-      // cruise (owner 2026-07-20), per-car off its inherent cruise — so no car
-      // is taxed for its own natural cruising speed.
       const _slowThresh = this._baselineCruiseMph() * 0.85;
-      // Reggae (noSlowDrivePenalty) earns its normal rate even below the band.
-      if (dispMph < _slowThresh && !comaActive && !burritoHigh && !viceSlowing && !trafficStop
-          && !this._traitMod('noSlowDrivePenalty')) {
-        // -$5/sec floor at 20 mph, linear up to 0 at the threshold.
-        const slowness = Math.min(1, (_slowThresh - dispMph) / Math.max(1, _slowThresh - 20));
-        penalty += 5 * slowness * mult;
-      }
-      if (Math.abs(this.player.x) > 1 && !trafficStop) {
-        // -$10/sec when off the road; scales by how deep into the dirt.
-        // Weed ≥ 60 % halves the penalty (the player is in chill mode).
-        const depth = Math.min(1, (Math.abs(this.player.x) - 1) / 1.0);
-        let offroad = 10 * (0.5 + 0.5 * depth) * mult;
-        if (burritoHigh) offroad *= 0.5;
-        penalty += offroad;
-      }
-      // Haptic feedback — light buzz on the rumble strip, heavy buzz off-road.
-      // The painted asphalt half-width is ±1.0; the rumble band sits in
-      // (1.0, ~1.06]; everything past that is dirt/grass.
+      // Reggae keeps its identity: no-slow-driving-penalty = a slow Reggae
+      // van still holds normal combo grace at its intended pace.  Vice-forced
+      // slowdowns are the same double-jeopardy exemption as before.
+      const _slowNow = dispMph < _slowThresh && !comaActive && !burritoHigh && !viceSlowing
+                    && !this._traitMod('noSlowDrivePenalty');
       const ax = Math.abs(this.player.x);
+      const _offroadNow = ax > 1.06;
+      // Haptics unchanged — light buzz on the rumble strip, heavy off-road.
       let hapticTier = 0;
-      if (ax > 1.06)      hapticTier = 2;          // off-road
-      else if (ax > 1.00) hapticTier = 1;          // rumble strip
+      if (ax > 1.06)      hapticTier = 2;
+      else if (ax > 1.00) hapticTier = 1;
       this.haptics?.pulse?.(hapticTier);
-      if (penalty > 0) {
-        this.score = Math.max(0, this.score - penalty * rawDt);
+      if (!this._paused && !this._awaitingStart) {
+        const freeze = trafficStop || this._exitAuto || !!this._endingCine || !!this._finishCinematic;
+        // Slow or off-road: the combo can't build (overtake detection also
+        // gates on this) and its grace bleeds; off-road decays double-time.
+        const bleed = (_slowNow || _offroadNow) && !freeze;
+        const res = this.combo.tick(rawDt, {
+          decayMult: _offroadNow ? COMBO.OFFROAD_DECAY_MULT : 1,
+          freeze,
+        });
+        if (bleed && this.combo.grace > 0) this.combo.grace = Math.max(0, this.combo.grace - rawDt);
+        if (res.lost)         this._comboCallout('COMBO LOST', '#FF5555');
+        else if (res.dropped) this._comboCallout(`COMBO ×${this.combo.mult}`, '#FFAA22');
       }
+      this._comboCanBuild = !_slowNow && !_offroadNow && !trafficStop
+        && !this._exitAuto && !this._endingCine && !this._finishCinematic
+        && !this._awaitingStart && !this._awaitingFirstGameTap && !this._paused;
     }
     // ── Checkpoint detection ──────────────────────────────────────────
     // HARD mode: passing a checkpoint marker no longer auto-registers
@@ -5780,10 +5783,16 @@ export class GameScene extends Phaser.Scene {
       const grade = this._gradeDailyObjective();
       this._dailyResult = grade;
       try { window.__notif?.bump?.('calendar'); } catch (_) {}   // daily finished → Calendar dot
+      // Attempt decay (economy V1 2026-09-05): reward = $750 − $150 per
+      // extra attempt to a $0 floor.  Attempts are counted per challenge per
+      // UTC day (pass OR fail both consume one) — the flat DAILY_BASE_REWARD
+      // path never used rewardForAttempt at all.
+      const _dSave = this.registry.get('save');
+      const _dKey  = `dailyAttempts.${this._dailyStage?.id ?? 'daily'}.${new Date().toISOString().slice(0, 10)}`;
+      const _dTry  = (_dSave?.get?.(_dKey, 0) ?? 0) + 1;
+      _dSave?.set?.(_dKey, _dTry);
       if (grade.pass) {
-        // Flat base payout for now — attempt-decay + per-profile completion
-        // save (which lights the Calendar ✓ dots) is the next increment.
-        const reward = DAILY_BASE_REWARD;
+        const reward = rewardForAttempt(_dTry);
         this.score += reward;
         const why = grade.reason ? `\n${grade.reason}` : '';
         this._showPopup(
@@ -5830,6 +5839,7 @@ export class GameScene extends Phaser.Scene {
                           :                              this._traitMod('cargoPayMult');
               const pay = Math.round((paid.payout + (paid.tip ?? 0)) * _mult);
               this.score += pay;
+              this._addEligible(pay);
               this.stats?.recordEarn(pay, 'mission');
               this.stats?.recordMissionComplete?.(paid.type, pay);
             }
@@ -5845,10 +5855,18 @@ export class GameScene extends Phaser.Scene {
           const finishLines = [];
           let   finishColor = '#FFEE00';
           if (onTime) {
-            const mul   = Difficulty.onTimeBonusMul();
-            const bonus = Math.round(this.score * (mul - 1));
+            // Economy V1 (2026-09-05): the bonus is a FRACTION of the run's
+            // ELIGIBLE gross earnings (distance + missions + authored
+            // encounter cash) — NEVER the whole wallet (the old formula
+            // compounded lifetime savings every finish).  Applied once.
+            const frac  = Difficulty.onTimeBonusFrac?.() ?? 0;
+            const bonus = this._finishBonusPaid ? 0
+              : Math.round(Math.max(0, this._runEligible ?? 0) * frac);
+            this._finishBonusPaid = true;
             if (bonus > 0) { this.score += bonus; this.stats?.recordEarn(bonus, 'completionBonus'); }
-            finishLines.push(`🎉 YOU MADE IT! +$${bonus.toLocaleString()} bonus`);
+            finishLines.push(bonus > 0
+              ? `🎉 YOU MADE IT! +$${bonus.toLocaleString()} bonus`
+              : '🎉 YOU MADE IT!');
             finishColor = '#FFEE00';
             AchievementSystem.award('on_time', this.registry);
           } else if (stars >= 5) {
@@ -7776,6 +7794,42 @@ export class GameScene extends Phaser.Scene {
       // vz = 36000 → dist = -33000.  Use -35000 with a small buffer.
       if (crashedDone || dist < -35000 || dist > 80000) {
         this.traffic.splice(i, 1);
+      }
+    }
+  
+    // ── Clean-overtake detection (DRIVING COMBO V1) ───────────────────
+    // A pass counts when a SAME-DIRECTION car crosses from ahead of the
+    // player's car to behind it with real closing speed, while the player is
+    // on the driveable roadway and not in any forced state.  Each spawned
+    // car awards at most once; a collision with it taints the pass; big
+    // frame deltas (warps, restores) can't fake one.
+    {
+      const pz = this.player.position + PLAYER_VIRTUAL_Z;
+      for (const car of this.traffic) {
+        if (!car.alive) { car._ovPrevRel = undefined; continue; }
+        const rel = car.position - pz;
+        const prev = car._ovPrevRel;
+        car._ovPrevRel = rel;
+        if (prev === undefined) continue;                       // first frame seen
+        if (car._passAwarded || car._comboTainted) continue;
+        if ((car.speed ?? 0) <= 0) continue;                    // oncoming never counts
+        if (!(prev > 0 && rel <= 0)) continue;                  // must cross ahead→behind
+        if (prev - rel > 4000) continue;                        // teleport/warp guard
+        if (!this._comboCanBuild) continue;                     // slow/off-road/forced states
+        if (Math.abs(this.player.x) > 1.0) continue;            // must be ON the roadway
+        if (this.player.speed <= (car.speed ?? 0) + 400) continue;  // meaningful closing speed
+        car._passAwarded = true;
+        const res = this.combo.overtake({
+          graceBonus: this._comboGraceBonus(),
+          buildMult:  this._traitMod('drivingBonusBuildMult'),
+          graceMult:  this._traitMod('drivingBonusGraceMult'),
+        });
+        if (res.leveled) {
+          this._comboCallout(`COMBO ×${this.combo.mult}`, this.combo.mult >= 10 ? '#FF2244' : this.combo.mult >= 5 ? '#FFAA22' : '#44FF88');
+          this.haptics?.notify?.();
+        } else {
+          this._comboCallout('CLEAN PASS', '#9FD8FF');
+        }
       }
     }
   }
@@ -10528,6 +10582,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   _onVehicleCollision(car, _idx, hit) {
+    // DRIVING COMBO: an ordinary vehicle collision resets the combo, and the
+    // struck car can never count as a clean pass (economy V1 2026-09-05).
+    // Rage bulldozing is invincible-by-design and exempt.
+    if (!this._rageActive?.()) {
+      car._comboTainted = true;
+      if (this.combo?.collisionReset?.()) this._comboCallout('COMBO LOST', '#FF5555');
+    }
     // Player is phasing through traffic during i-frame — skip the
     // entire collision (no popup, no damage, no score, no NPC spin
     // either, since they didn't actually hit anything).
@@ -10544,9 +10605,7 @@ export class GameScene extends Phaser.Scene {
     if (this._rageActive?.()) {
       this._spawnExplosion(sx, sy, sw);
       car.alive = false;
-      const gain = Math.round(15 * (this._scoreMult?.() ?? 1));
-      this.score += gain;
-      this.stats?.recordEarn?.(gain, 'collision', 3);
+      // (Rage bulldoze cash REMOVED - economy V1 2026-09-05.)
       this.effects?.triggerShake?.(70, 0.003);
       return;
     }
@@ -10605,9 +10664,7 @@ export class GameScene extends Phaser.Scene {
         const dmgSemi = this._applyDamage(
           (isHeadOn ? 3 + impact.severity * 3 : 1 + impact.severity * 2) * classDmgMul,
           isHeadOn ? 'head_on' : 'traffic');
-        const _earnSemi = Math.round(5 * dmgSemi * this._scoreMult());
-        this.score += _earnSemi;
-        this.stats?.recordEarn(_earnSemi, 'collision', Math.round(5 * dmgSemi));
+        // (Collision cash REMOVED - economy V1 2026-09-05: taking damage is not profitable.)
         // A fatal blow started the crash cinematic inside _applyDamage's wreck
         // event — the recovery snap below must not fight the scripted motion.
         if (isHeadOn && !this._endingCine) {
@@ -10640,9 +10697,7 @@ export class GameScene extends Phaser.Scene {
       // _applyDamage return value so bumper / vice / difficulty mods are
       // reflected — protected cars get less score, but also take less.
       const dmg = this._applyDamage((isHeadOn ? 3 + impact.severity * 3 : 1 + impact.severity * 2) * classDmgMul, isHeadOn ? 'head_on' : 'traffic');
-      const _earnRE = Math.round(5 * dmg * this._scoreMult());
-      this.score += _earnRE;
-      this.stats?.recordEarn(_earnRE, 'collision', Math.round(5 * dmg));
+      // (Collision cash REMOVED - economy V1 2026-09-05: taking damage is not profitable.)
       // Fatal blow → the crash cinematic (started synchronously by the wreck
       // event inside _applyDamage) owns the car — skip the recovery snap so
       // it can't teleport the wreck to the recovery lane.  The struck NPC's
@@ -10685,9 +10740,7 @@ export class GameScene extends Phaser.Scene {
         this.effects.triggerShake(150 + impact.severity * 150, 0.006 + impact.severity * 0.006);
         this._showPopup('SIDESWIPED A SEMI!', '#FFAA22');
         const dmg = this._applyDamage((0.4 + impact.severity * 0.9) * classDmgMul, 'sideswipe');
-        const _earn = Math.round(5 * dmg * this._scoreMult());
-        this.score += _earn;
-        this.stats?.recordEarn(_earn, 'collision', Math.round(5 * dmg));
+        // (Collision cash REMOVED - economy V1 2026-09-05: taking damage is not profitable.)
         return;   // the semi keeps rolling — NOT destroyed, NOT shoved off-road
       }
       // Sideways brush — NPC pushed off the road, player keeps full speed,
@@ -10698,9 +10751,7 @@ export class GameScene extends Phaser.Scene {
       this._showPopup('SIDESWIPE!', '#FFEE44');
       // Score = $5 × damage received × _scoreMult().
       const dmg = this._applyDamage((0.4 + impact.severity * 0.9) * classDmgMul, 'sideswipe');
-      const _earnSS = Math.round(5 * dmg * this._scoreMult());
-      this.score += _earnSS;
-      this.stats?.recordEarn(_earnSS, 'collision', Math.round(5 * dmg));
+      // (Collision cash REMOVED - economy V1 2026-09-05: taking damage is not profitable.)
       car.alive      = false;
       car.crashed    = true;
       car.crashTimer = 1.4;
@@ -10726,9 +10777,7 @@ export class GameScene extends Phaser.Scene {
       this.effects.triggerShake(160 + impact.severity * 200, 0.007 + impact.severity * 0.008);
       this._showPopup('CLIPPED A SEMI!', '#FFAA22');
       const dmgS = this._applyDamage((0.6 + impact.severity * 1.4) * classDmgMul, 'corner');
-      const _earnS = Math.round(5 * dmgS * this._scoreMult());
-      this.score += _earnS;
-      this.stats?.recordEarn(_earnS, 'collision', Math.round(5 * dmgS));
+      // (Collision cash REMOVED - economy V1 2026-09-05: taking damage is not profitable.)
       return;   // immovable — NOT destroyed, NOT shoved off-road
     }
     p.xImpulse  = sideDir * (0.9 + impact.severity * 1.2);
@@ -10737,9 +10786,7 @@ export class GameScene extends Phaser.Scene {
     this._showPopup('CORNER CLIP!', '#FFAA44');
     // Score = $5 × damage received × _scoreMult().
     const dmgC = this._applyDamage((0.6 + impact.severity * 1.4) * classDmgMul, 'corner');
-    const _earnCC = Math.round(5 * dmgC * this._scoreMult());
-    this.score += _earnCC;
-    this.stats?.recordEarn(_earnCC, 'collision', Math.round(5 * dmgC));
+    // (Collision cash REMOVED - economy V1 2026-09-05: taking damage is not profitable.)
     car.alive      = false;
     car.crashed    = true;
     car.crashTimer = 1.5;
@@ -11301,11 +11348,12 @@ export class GameScene extends Phaser.Scene {
       }
       // Meta-unlock accounting (Cold Brew count → Caffeine Pills).
       this._recordViceUnlockProgress?.(itemId);
-      const earned = Math.round(5 * this._scoreMult());   // $5/sprite (was $10, 2026-07-15)
-      this.score  += earned;
-      this.stats?.recordEarn(earned, 'pickup', 5);
+      // Economy V1 (2026-09-05): roadside pickups award NO cash - the item
+      // effect stands, and a collected sprite extends an ACTIVE combo's
+      // grace by +3 s (never past 12 s, never levels).
+      const _extended = this.combo?.pickupExtend?.() ?? false;
       const label  = VICE_CONFIG[itemId]?.label ?? itemId;
-      this._showPopup(`${label}  +$${earned}`, '#FFFF44');
+      this._showPopup(_extended ? `${label}  ⏱ +${COMBO.PICKUP_EXT_SEC}s` : `${label}`, '#FFFF44');
       this.effects.triggerShake(55, 0.002);
       // Special events from the item.
       if (ev.badFish)  this._showPopup('🤢 BAD FISH!\nGotta GO — hit a rest stop!', '#9AE66E');
@@ -11380,8 +11428,9 @@ export class GameScene extends Phaser.Scene {
     // ── 14% — sober up + bonus $ ─────────────────────────────────────
     if (r < 0.56) {
       this.vices.applyRecovery(0.20);
-      const bonus = Math.round(PTS_HITCH * this._scoreMult());
+      const bonus = Difficulty.noScore?.() ? 0 : PTS_HITCH;   // authored flat (economy V1)
       this.score += bonus;
+      this._addEligible(bonus);
       this.stats?.recordEarn(bonus, 'hitchhiker', PTS_HITCH);
       this._showPopup(`🤝 NICE FOLKS!\n+$${bonus}, sobered up`, '#88FFCC');
       return;
@@ -11391,8 +11440,9 @@ export class GameScene extends Phaser.Scene {
       const safeVices = [VICES.SUSHI, VICES.BURRITO, VICES.GUMMIES, VICES.HOTDOG]
         .filter(id => this.vices.isUnlocked?.(id));
       // Cash bonus is mixed in regardless — the favor isn't just chemical.
-      const bonus = Math.round(PTS_HITCH * this._scoreMult() * 0.5);
+      const bonus = Difficulty.noScore?.() ? 0 : Math.round(PTS_HITCH * 0.5);   // authored flat
       this.score += bonus;
+      this._addEligible(bonus);
       this.stats?.recordEarn(bonus, 'hitchhiker', PTS_HITCH * 0.5);
       if (safeVices.length) {
         const vice = safeVices[(Math.random() * safeVices.length) | 0];
@@ -12365,6 +12415,7 @@ export class GameScene extends Phaser.Scene {
       for (const _c of (this.missions?.noteItemUsed?.(base) ?? [])) {
         const _pay = _c.payout ?? 0;
         if (Difficulty.noScore?.() !== true) this.score += _pay;
+        this._addEligible(_pay);
         this.stats?.recordEarn?.(_pay, 'mission');
         this.stats?.recordMissionComplete?.('challenge', _pay);
         this._showPopup(`✅ ${_c.missionName ?? 'CHALLENGE'} — +$${_pay.toLocaleString()}`, '#88FF88', 4);
@@ -21122,7 +21173,7 @@ export class GameScene extends Phaser.Scene {
     // Multiplier readout — just the number now ("×3.5"), no combo
     // name.  Combos still drive the score multiplier underneath and
     // still feed the Connoisseur achievement.
-    const mult   = this._scoreMult();
+    const mult   = this._driveMult();   // the ×1–×15 driving combo (economy V1)
     const combos = this.vices.getActiveCombos?.() ?? [];
     if (combos.length) {
       this._combosFiredThisRun = this._combosFiredThisRun ?? new Set();
@@ -23709,24 +23760,63 @@ export class GameScene extends Phaser.Scene {
    *  Example (sushi 50% + burrito 25% + Cross-Faded label active):
    *    1 + 0.5 (sushi) + 0.5 (burrito) = 2.0×  ✓
    */
+  /** LEGACY guard only (CASH ECONOMY V1, 2026-09-05): the old survival+stars
+   *  cash multiplier is retired — survival now buys combo GRACE and stars
+   *  buy nothing passively.  Remaining callsites get a neutral 1 (0 in
+   *  Custom, which never earns). */
   _scoreMult() {
-    // Custom mode awards zero score — multiplier collapses to 0 so every
-    // additive `this.score += pts * _scoreMult()` callsite no-ops.
+    return Difficulty.noScore?.() ? 0 : 1;
+  }
+
+  /** The FINAL distance-income multiplier: driving combo × genre scalers,
+   *  hard-clamped 1–COMBO.CAP (15).  Nothing may stack past the cap; Custom
+   *  earns zero.  Genre mapping (identities preserved, see traits):
+   *    drivingCashMult / drivingBonusEarningsMult / hi-speed / low-HP →
+   *    FINAL-multiplier scalers (inside the cap);
+   *    drivingBonusBuildMult → combo build rate;
+   *    drivingBonusGraceMult → combo grace refresh. */
+  _driveMult() {
     if (Difficulty.noScore?.()) return 0;
-    // Survival-driven multiplier (2026-07-13): +1× per well-managed condition —
-    //   Drinks 25–75 · Food 25–75 · Alertness > 75 (tiredness < 25) · Bladder < 25.
-    // Start state (bars at 25, bladder 25) = 1× (alertness only); an early
-    // restroom stop buys 2×.  ZERO conditions met = 0× (no earnings).
-    // Wanted stars still ADD on top (risk pays).
+    let m = this.combo?.mult ?? 1;
+    m *= this._traitMod('drivingCashMult') * this._traitMod('drivingBonusEarningsMult');
+    const _hi = this._traitMod('drivingCashHiSpeedMult');
+    if (_hi !== 1 && this._displayMPH() > this._baselineCruiseMph() * 1.15) m *= _hi;
+    const _hpGate = this._traitMod('lowHpBonusHp');
+    if (_hpGate > 0 && (this.damage?.getDurability?.() ?? 999) < _hpGate) {
+      m *= this._traitMod('lowHpBonusMult');
+    }
+    return Math.max(1, Math.min(COMBO.CAP, m));
+  }
+
+  /** Survival grace bonus for an overtake refresh: +0.5 s per healthy
+   *  condition, centrally capped (constants.COMBO). */
+  _comboGraceBonus() {
     const s = this.survival;
     let cond = 0;
     if (s) {
       if (s.hydration > 25 && s.hydration < 75) cond++;
       if (s.fullness  > 25 && s.fullness  < 75) cond++;
-      if (s.tiredness < 25)                     cond++;   // Alertness > 75
+      if (s.tiredness < 25)                     cond++;
       if (s.bladder   < 25)                     cond++;
     }
-    return cond + (this.cops.starDisplay ?? 0);
+    return Math.min(COMBO.SURVIVAL_GRACE_CAP, cond * COMBO.SURVIVAL_GRACE_SEC);
+  }
+
+  /** Eligible-run-earnings accumulator (completion bonus base).  Distance,
+   *  completed missions and authored positive encounter/hitch cash only;
+   *  spending never subtracts. */
+  _addEligible(v) {
+    if (!(v > 0) || Difficulty.noScore?.()) return;
+    this._runEligible = (this._runEligible ?? 0) + v;
+    this.registry.set('runEligibleEarnings', this._runEligible);
+  }
+
+  /** Crazy-Taxi-style road callout — short, throttled, never a spam stream. */
+  _comboCallout(text, color) {
+    const now = this.time?.now ?? 0;
+    if (now - (this._comboCalloutAt ?? 0) < 900) return;
+    this._comboCalloutAt = now;
+    this._showPopup(text, color, 1.2);
   }
 
   /** Inject a long line of vice pickups onto consecutive segments ahead.
@@ -23818,6 +23908,9 @@ export class GameScene extends Phaser.Scene {
    *  same-device) AND encoded into the portable code so it restores the full
    *  run on ANY device. */
   _collectSaveSnapshot(stopId) {
+    // Economy V1 (2026-09-05): the eligible-run-earnings accumulator and the
+    // driving combo travel with the exact-spot snapshot.  Combo is restored
+    // ONLY on exact resumes (checkpoint rewinds start at 1× by rule).
     const dmode = Difficulty.mode?.() ?? 'normal';
     const vid   = this.player?.vehicleId ?? 'beater';
     const save  = this.registry?.get?.('save');
@@ -23850,6 +23943,8 @@ export class GameScene extends Phaser.Scene {
       buddyThreads[id] = cleanThread(this._buddyThreads?.[id]);
     }
     return {
+      eligibleEarnings: Math.round(this._runEligible ?? 0),
+      combo: this.combo?.snapshot?.() ?? null,
       v: 1, id: stopId,
       difficulty: dmode,
       customSub:  dmode === 'custom' ? (Difficulty.customSub?.() ?? 'normal') : 'normal',
@@ -24333,6 +24428,7 @@ export class GameScene extends Phaser.Scene {
     // scene-restart amnesia — persist and re-hydrate them too.
     this.registry.get('save')?.set?.('activeBuffs', [...(this._activeBuffs ?? [])]);
     this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.combo?.reset?.();   // a rest-stop pull-in ends the combo (economy V1)
       this.scene.start('RestStop', {
         stop:     rs,
         score:    Math.round(this.score),
@@ -27601,8 +27697,10 @@ export class GameScene extends Phaser.Scene {
   _triggerDemoFinish() {
     this._gameFinished = true;
     if (Difficulty.mode?.() !== 'custom') {
-      const mul   = Difficulty.onTimeBonusMul?.() ?? 1;
-      const bonus = Math.round(this.score * (mul - 1));
+      const frac  = Difficulty.onTimeBonusFrac?.() ?? 0;
+      const bonus = this._finishBonusPaid ? 0
+        : Math.round(Math.max(0, this._runEligible ?? 0) * frac);
+      this._finishBonusPaid = true;
       if (bonus > 0) { this.score += bonus; this.stats?.recordEarn?.(bonus, 'completionBonus'); }
       this._showPopup?.(`🎉 DEMO COMPLETE — you made it to Snoqualmie!\n+$${bonus.toLocaleString()} bonus`, '#44FF88', 4);
     } else {

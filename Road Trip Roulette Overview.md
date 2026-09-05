@@ -204,6 +204,48 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 14) — CASH ECONOMY + DRIVING COMBO V1 IMPLEMENTED (Ch. 7 prompt)
+
+The full economy overhaul from the Ch. 7 copy-ready prompt is built, tested, and
+runtime-verified.  Money now comes from DRIVING WELL, not collecting trinkets.
+
+- **Distance is the engine**: `CASH_PER_MILE = $3` × the driving-combo multiplier,
+  absolute cap **15× → $45/mi**.  `PTS_DIST` is now DERIVED
+  (`CASH_PER_MILE × TOTAL_ROUTE_MILES / ROUTE_SEGS`) so per-segment granularity can
+  never drift from the per-mile promise.  Runtime probe measured exactly $3.00/mi at
+  1× and $6.00/mi at 2×.
+- **DrivingCombo** (`src/systems/DrivingCombo.js`, pure class + 34-test suite):
+  3 clean overtakes = +1 level (1–15); grace clock 8s per pass (12s max), pickups
+  extend +3s (combo alive only, no leveling); any collision with a vehicle you're
+  responsible for = full reset ("COMBO LOST"); expired grace decays −1 level / 2s
+  (off-road decays 2× faster; slow driving can't build); forced police stops FREEZE
+  the clock (no punishment); snapshot/restore rides the save.  Overtake detection
+  lives at the end of `_updateTraffic` (rel-Z sign flip with speed margin +
+  taint-on-contact); genre cash scalers still apply INSIDE the 1–15 clamp; Custom
+  difficulty stays $0 (`_driveMult()` returns 0 under `noScore`).
+- **Removed cash sources**: per-pickup cash, all collision cash (6 sites), rage-kill
+  cash + rage-meter-from-cash.  Pickups now = combo time + their item effect.
+- **Missions retuned to real dollars**: PAYOUT_MULT ×5 → ×1; tier mults Rookie ×1 /
+  Known ×1.35 / Legend ×1.75.  Sim (400 offers/tier, live generation): Rookie median
+  $220 max $400, Known median $300 max $585, Legend median $350 max $965 — all inside
+  the target bands.  Long-haul BUSINESS CHAINS ($285–$1,400) price per-mile over
+  100+ route miles and sit above the bands BY DESIGN (authored risk kept, per prompt).
+- **Costs / windfalls**: repair $30/HP; Crush payoff $1,500; daily challenge
+  750/−150-per-retry/weekly 1500 (`rewardForAttempt`, keyed per-day per-challenge);
+  completion bonus = % of ELIGIBLE run earnings (distance + missions + authored
+  hitchhiker cash only) — Easy 0% / Normal 25% / Hard 50%, paid once
+  (`_finishBonusPaid`), accumulator `_runEligible` persisted via registry + snapshot
+  `eligibleEarnings`.
+- **Tests/sim**: `tests/combo.test.mjs` (34 green, added to `npm test` chain);
+  missions suite retuned (256 green); `tests/balance_sim.mjs` REWRITTEN on live
+  imports (no stale $10-pickup / $17,905 catalog — catalog is now computed
+  dynamically: $18,235 / 28 parts) with checkpoint projections at 1.2×/2×/3.5×/6×
+  average combos and labeled ASSUMED-vs-MEASURED lines.  Full suite + build green.
+- **Wallet.js audited**: pure transaction ledger, no economy constants — unchanged.
+- **Needs playtest**: combo pacing feel (does 3-passes-per-level read fair in real
+  traffic density), HUD multiplier legibility, and whether Normal's 25% completion
+  bonus makes the Pullman push feel worth it.
+
 ### 2026-09-05 (pt 13) — Tier-0 mobile music lifecycle IMPLEMENTED (owner Q&A settled)
 
 The Tier-0 "act like a music app" policy is code-complete (NOT deployed — the Tier-0
@@ -8466,6 +8508,102 @@ Forward warps **drain gas** equal to trip distance. Hard mode disallows warping 
 
 ### Agreed replayability direction (design workshop 2026-09-05; not implemented)
 - **Keep one cash currency; add a skill-driving combo rather than a separate leaderboard currency.** Proposed starting tune: reduce distance income from roughly **$25/mi** to **$3/mi**, then multiply it by a driving combo capped at **15×** (absolute distance-income ceiling **$45/mi**). The 15× cap must be applied AFTER all survival, wanted, and genre effects—or those old cash multipliers must be converted into combo-building/grace behavior—so multipliers cannot stack past 15×. Total cash can remain in its existing HUD position; show the current combo and earned increment temporarily in a Crazy-Taxi-style road callout. Requires economy simulation and playtesting before locking the $3 value.
+
+  **COPY-READY CLAUDE IMPLEMENTATION PROMPT — CASH ECONOMY + DRIVING COMBO V1:**
+
+  ```text
+  Implement Road Trip Roulette's approved cash-economy and skill-driving-combo V1. Read the current code and this Overview section completely before editing. This game is KEEPING one cash currency; do not add a separate score currency or a second permanent HUD total. The current GameScene field named `score` is the live cash balance for compatibility.
+
+  Primary files to audit include src/constants.js, src/scenes/GameScene.js, src/scenes/RestStopScene.js, src/systems/Difficulty.js, src/systems/MissionSystem.js, src/systems/StatsTracker.js, src/systems/SaveSystem.js, src/data/genreVehicleTraits.js, src/data/upgrades.js, src/economy/Wallet.js, GameOverScene, and tests/balance_sim.mjs. Search every `_scoreMult()` and cash-award callsite rather than changing only PTS_DIST.
+
+  PRODUCT RULES
+
+  1. Distance cash
+     - Replace the approximate $24.54/$25 base payment with an explicit $3.00 per route mile.
+     - Do not leave another magic per-segment value undocumented. Prefer a named CASH_PER_MILE constant and derive its per-segment rate from ROUTE_SEGS and TOTAL_ROUTE_MILES.
+     - Distance cash formula: miles × $3 × final effective driving multiplier.
+     - The multiplier starts/floors at 1× and has an ABSOLUTE final cap of 15× after every genre or other modifier. Maximum distance income is therefore $45/mi. Nothing may stack beyond it.
+     - Preserve fractional accumulation internally and round only for display/persistence so frame rate and segment granularity cannot change earnings.
+
+  2. Driving combo V1 (use a distinct internal name such as DrivingComboSystem/RoadHeat; do not collide with the existing Combo Meal or ViceSystem's named consumable combos)
+     - A clean overtake of a same-direction traffic vehicle grants 1 combo-progress point.
+     - Three clean-overtake points raise the multiplier by exactly one level. Therefore reaching 15× from 1× requires 42 clean passes, not merely 14 easy passes.
+     - Each spawned traffic vehicle can award at most once. Reset its awarded flag when a pooled vehicle is reused.
+     - Count a clean overtake only when the player moves from behind to safely ahead of a same-direction vehicle, has meaningful positive relative speed, remains on the driveable roadway, and did not collide with that vehicle during the pass. Do not count oncoming cars, despawns, teleports, checkpoint restoration, dev warps, police scripted movement, parked speed traps, or cars passed while the player is being forcibly positioned/stopped.
+     - Centralize all thresholds and timing constants so Brendan can quickly retune or revert the experiment after playtesting.
+     - Initial timing: a qualifying overtake refreshes combo grace to 8 seconds. When grace reaches zero, drop one multiplier level every 2 seconds until 1× and clear partial progress when decay begins.
+     - Every successfully collected roadside collectible sprite extends an ACTIVE combo's remaining grace by +3 seconds, capped at 12 seconds. This applies to all ordinary roadside collectible types; do not attempt to classify whether placement was difficult. Collection extends time only—it does not directly increase the multiplier or progress points. At 1×, collecting remains mechanically useful as a pickup but does not pre-charge a nonexistent combo.
+     - Any ordinary vehicle collision resets multiplier, progress, and grace to 1×/0/0. A rest-stop pull-in, civil police stop, arrest, wreck, pass-out, fresh run, checkpoint restart, or completed run also resets it.
+     - Game pause freezes combo timing. An exact live-run reload/resume may restore combo state without counting hidden wall-clock time; a rest-stop/checkpoint rewind starts at 1×.
+     - Below the vehicle's existing slow-driving threshold, non-Reggae vehicles cannot build combo and an active combo decays. Reggae's existing no-slow-driving-penalty identity should instead allow normal combo grace at its lower intended speed. Off-road driving cannot build combo and accelerates decay; forced police shoulder behavior must not impose extra punishment.
+
+  3. HUD and feedback
+     - Reuse the existing multiplier readout location currently fed by `_scoreMult()`; do not add another permanent HUD row or move the controls.
+     - Display the driving multiplier as a clear `×N` value only. Cash remains in its current location.
+     - Show short Crazy-Taxi-style event callouts in the existing road/popup presentation: e.g. CLEAN PASS, COMBO ×4, COMBO LOST. Avoid covering the roadway for long periods and do not spam a full popup for every pickup extension.
+     - Add restrained escalating color/scale/audio/haptic feedback as the multiplier rises, using existing UI/audio/haptic infrastructure. Do not add new art requirements for V1.
+
+  4. Replace the old cash multiplier correctly
+     - The current `_scoreMult()` based on survival conditions + wanted stars must no longer multiply arbitrary cash sources.
+     - Survival management may modify combo GRACE only; it does not directly multiply cash. Initial rule: each currently healthy survival condition adds +0.5 seconds to the overtake refresh grace, with a reasonable centralized cap.
+     - Wanted stars may increase combo progress opportunity/rewards later, but V1 must not passively add cash multiplier levels just for having stars.
+     - Existing genre fields (`drivingCashMult`, `drivingCashHiSpeedMult`, `drivingBonusBuildMult`, `drivingBonusGraceMult`, `drivingBonusEarningsMult`, and low-HP bonus fields) must be deliberately mapped to combo build, grace, or the final effective multiplier while preserving the player-facing genre identity. Whatever mapping is chosen, clamp the FINAL distance multiplier to 1–15. Update trait descriptions where their behavior changes.
+
+  5. Pickups and collisions
+     - Ordinary roadside pickups no longer award direct cash. Their item/survival effect remains, and they extend an active combo as described above. Remove the `+$` pickup popup and record them as collected, not cash earned.
+     - Ordinary traffic collisions/sideswipes/semi impacts no longer award cash proportional to damage. Remove those cash additions and earnings-stat entries; taking damage is not profitable.
+     - Intentional weapon/cop takedown rewards and explicit demolition mission rewards may remain only if they are authored intentional-action payouts. They must not inherit the driving multiplier unless specifically documented.
+     - Hitchhiker and encounter cash outcomes use their authored flat values, not the driving multiplier.
+     - Remove the continuous slow-driving and off-road CASH bleed. Those behaviors now affect combo build/decay, vehicle speed, and risk instead. Preserve exemptions/forced-stop guards through the combo rules.
+
+  6. Mission economy
+     - Remove the global mission PAYOUT_MULT=5 inflation (make the neutral scalar 1 or remove it cleanly).
+     - Change reputation payout multipliers from 1×/2.5×/5× to Rookie 1×, Known 1.35×, Legend 1.75×.
+     - Keep distance, risk, terms, longer haul windows, and future mission-preparation favors as the primary reasons advanced jobs pay more.
+     - Tune/verify generated offers so typical completed payouts approximately land at:
+       Rookie $100–250, risky/long ceiling about $350;
+       Known $175–400, ceiling about $600;
+       Legend $300–650, ceiling about $900.
+     - Do not flatten authored risk differences merely to hit an exact number. Add deterministic payout-distribution tests/simulation output so outliers are visible.
+
+  7. Repairs and major windfalls
+     - Change full dealership repair from $80 per missing HP to $30 per missing HP. Preserve Pop-Punk's repair discount and the $400 partial camp repair unless an actual conflict is found.
+     - Change the Crush Pullman payoff from $15,000 to $1,500. Preserve its story/achievement behavior.
+     - Change Daily Challenge values to: first attempt $750, decrement $150 per attempt to a $0 floor, and $1,500 weekly completion bonus. Ensure the live grading path actually uses rewardForAttempt rather than always paying the base constant.
+     - Achievement rewards remain unchanged for V1.
+
+  8. Completion bonus must never multiply lifetime savings
+     - Current code starts a run with the plate's persistent wallet in `this.score`, then calculates Normal/Hard finish bonuses from the entire current balance. Fix this compounding bug.
+     - Track `eligibleRunEarnings` separately from starting wallet and spending. Eligible sources: distance, completed missions, and authored positive encounter/hitchhiker cash. Exclude starting cash, purchases/refunds, penalties, achievements, daily payouts, the Crush payoff, and the completion bonus itself.
+     - Buying gas/repairs during the run must not reduce eligible gross earnings.
+     - Persist/restore this accumulator through exact live saves and rest-stop transitions so reloads neither erase nor duplicate it. A fresh run resets it.
+     - Easy on-time bonus: 0% of eligible run earnings. Normal: 25%. Hard: 50%. Apply once only. Update Difficulty values/descriptions and the ending breakdown.
+
+  9. Cash loss and persistence integrity
+     - Keep the plate-level persistent wallet architecture and existing checkpoint banking behavior.
+     - Fines, bail, purchases, failed-run loss, Custom no-score/infinite-money behavior, restart/continue rules, and one-time transaction guards must remain correct.
+     - No combo event, scene transition, resume, pooled-car reuse, or duplicate collision callback may double-award or double-charge cash.
+
+  TESTS AND BALANCE EVIDENCE
+
+  Add focused automated coverage for at least:
+  - $3/mi at 1× and $45/mi at the capped 15×, independent of frame rate;
+  - three qualifying clean overtakes raise one level;
+  - one traffic car cannot award twice and pool reuse resets safely;
+  - pickups add no cash and extend active grace +3 seconds only up to 12;
+  - collisions add no cash and reset combo;
+  - pause freezes timing; rest-stop/checkpoint rules reset or restore as specified;
+  - survival/wanted state cannot push cash beyond 15×;
+  - every genre remains within the 15× final cap;
+  - Custom mode never earns cash;
+  - mission payout distributions and tier ranges;
+  - completion bonus uses eligible current-run gross earnings, not saved wallet, and applies once across resume/finish paths.
+
+  Rewrite tests/balance_sim.mjs so it uses live values rather than its stale $10-pickup assumption and stale $17,905 catalog total. Calculate the upgrade catalog dynamically. Print checkpoint projections for Cle Elum, Ellensburg, Vantage, Othello, and Pullman at representative average combos (1.2×, 2×, 3.5×, 6×), plus mission income, operating costs, and completion bonuses. Clearly label assumptions versus measured values.
+
+  Run the full existing test suite and npm run build. Report files changed, formulas, balance simulation results, any behavior that still requires playtesting, and any deviation from this prompt. Update this Overview with the implemented behavior. Keep all tuning constants centralized so Brendan can change overtakes-per-level, grace, pickup extension, decay, base $/mile, and cap without hunting through GameScene.
+  ```
+
 - **Mission preparation favors / temporary perks.** Do not add an unexplained generic perk shop. After the player accepts an NPC mission, the NPC or an appropriate business can offer a contextual temporary preparation choice: a mechanic adjustment, borrowed equipment, food/drink preparation, route information, police favor, cargo protection, or cash advance. These are run- or mission-limited situational modifiers and must not replace the genre vehicle's permanent identity. Workshop the content and ordering before implementation.
 - **Hard-mode persistent route condition.** On a plate's first Hard run, the player chooses a Hard route condition. Save the selection to that plate and keep it for future Hard runs until the plate is erased. Consolidate mechanically duplicate themes (holiday/tourist/concert traffic are one congestion family). Conditions belong to Hard rather than normal mode; Custom/Daily may preview or override them. Workshop a small set of genuinely distinct conditions, their benefits as well as burdens, selection confirmation, and save schema before implementation.
 - **Ellensburg Record Shop + two earnable genre coupons.** Ellensburg is the mid-route shop where a coupon can unlock one genre. The player can earn two free-genre coupons by completing specified mission requirements by the Cle Elum and Othello checkpoints. Paid individual genre unlocks and a full-game/all-genre purchase remain available as convenience alternatives; purchased and earned ownership must converge on the same durable entitlement state. Open flow question: because Othello is east of Ellensburg, either its coupon deliberately banks for redemption at Ellensburg on the next run or receives a later redemption path—decide during the genre workshop.
