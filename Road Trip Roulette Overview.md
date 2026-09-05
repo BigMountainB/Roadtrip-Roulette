@@ -204,6 +204,17 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 10) — Gameplay tutorial: pause chrome hidden, clean unpause
+
+Owner: closing the tutorial unpaused the game but the PAUSED text stayed, and the pause
+screen's START OVER / FROM CHECKPOINT buttons + volume slider sat in the tutorial's way.
+Cause: entering from the pause screen left the pause chrome up under the tutorial, and
+`_tutModeClose` flipped `_paused` raw, skipping `_togglePause`'s visibility sweep.
+Fix: `_tutModeOpen` hides every `_pauseObjects` entry (+ clears `_pauseGfx`) while the
+tutorial owns the screen; `_tutModeClose` sweeps them again before unpausing, so the next
+real pause re-shows them through `_togglePause` normally.  Probe: pause → tutorial (no
+chrome) → deselect → unpaused, zero chrome visible.
+
 ### 2026-09-05 (pt 9) — Tutorial mode shows every image; UNSUPPORTED-tilt dialog explained
 
 - **Tutorial demo state** (owner: "show all images even if the player doesn't have them —

@@ -20577,6 +20577,12 @@ export class GameScene extends Phaser.Scene {
       try { this._renderHUD(); } catch (_) {}
       this._tutArming = false;
       this._paused = true;
+      // The pause chrome (PAUSED text, START OVER / FROM CHECKPOINT, the
+      // volume slider) is not part of the tutorial and sat in the way when
+      // the mode was entered from the pause screen (owner 2026-09-05) —
+      // hide it all while the tutorial owns the screen.
+      this._pauseObjects?.forEach(o => o?.setVisible?.(false));
+      this._pauseGfx?.clear?.();
       this._showEditorPopupPlaceholders();
       this.hudStars?.setText('★★☆☆☆').setColor('#FFD24D').setVisible(true);
     }
@@ -20601,6 +20607,12 @@ export class GameScene extends Phaser.Scene {
     if (!T.onTitle) {
       this._hideEditorPopupPlaceholders();
       this.hudStars?.setText('').setVisible(false);
+      // Unpause CLEANLY (owner 2026-09-05: closing the tutorial unpaused the
+      // game but left the PAUSED text on screen — the raw flag flip skipped
+      // _togglePause's chrome sweep).  Hide every pause object; the next real
+      // pause re-shows them through _togglePause as usual.
+      this._pauseObjects?.forEach(o => o?.setVisible?.(false));
+      this._pauseGfx?.clear?.();
       this._paused = false;
     }
     this._applyTopRowHandedness();   // un-lights the HUD "?"
