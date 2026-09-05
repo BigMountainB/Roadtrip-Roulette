@@ -4309,8 +4309,9 @@
           // can omit requestPermission yet still gate the sensor — the exact
           // place players need the status.  Without requestPermission the
           // button runs a live sensor TEST instead of a prompt.
-          ((!!window.DeviceOrientationEvent && (navigator.maxTouchPoints ?? 0) > 0)
+          (((navigator.maxTouchPoints ?? 0) > 0)
             ? `<div class="pa-row"><span class="k">📐 Tilt steering access</span><button id="set-tilt" class="pa-toggle ${localStorage.getItem('rtr.tiltGranted') === '1' ? 'on' : ''}">${localStorage.getItem('rtr.tiltGranted') === '1' ? 'GRANTED'
+                : !window.DeviceOrientationEvent ? 'UNSUPPORTED'
                 : ((typeof window.DeviceOrientationEvent?.requestPermission === 'function' || typeof window.DeviceMotionEvent?.requestPermission === 'function') ? 'RE-ENABLE' : 'TEST')}</button></div>` +
               `<p class="pa-note">TILT steering needs motion access. Tap the button to grant or test it; GRANTED means you're set.</p>`
             : '') +
@@ -4321,7 +4322,8 @@
             : '') +
           sSec('Data') +
           `<div class="pa-row"><span class="k">♻️ Reset player</span><button id="set-reset" class="pa-toggle" style="border-color:#FF4466;color:#FF7799;background:#2a1118;">RESET</button></div>` +
-          `<p class="pa-note">Reset clears money, vehicles, vices &amp; checkpoints. Your lifetime stats, records and trophies are KEPT. Volume + mute apply instantly here on the start menu — no run needed.</p>`);
+          `<p class="pa-note">Reset clears money, vehicles, vices &amp; checkpoints. Your lifetime stats, records and trophies are KEPT. Volume + mute apply instantly here on the start menu — no run needed.</p>` +
+          `<p class="pa-note" style="opacity:.55">Game build: b21 · ${(window.__BUILD_ID ?? 'dev')}</p>`);
         const plateBtn = document.getElementById('set-plate');
         addTap(plateBtn, () => {
           // Edit the ACTIVE player's plate from Settings (not just first launch).
@@ -4356,6 +4358,10 @@
         const tiltBtn = document.getElementById('set-tilt');
         if (tiltBtn) addTap(tiltBtn, () => {
           if (tiltBtn.textContent === 'GRANTED') return;
+          if (tiltBtn.textContent === 'UNSUPPORTED') {
+            showConfirm('🚫 This device/browser exposes no motion sensor API to the game, so TILT cannot work here.');
+            return;
+          }
           const done = (res) => {
             if (res === 'granted') {
               try { localStorage.setItem('rtr.tiltGranted', '1'); } catch (_) {}

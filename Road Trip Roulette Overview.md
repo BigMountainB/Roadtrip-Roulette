@@ -204,6 +204,16 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 4) — Settings build stamp (b21); tilt row unconditional on touch
+
+Owner still saw no tilt row + tilt still tap — indistinguishable from the standalone
+app's stale-cache pattern that has recurred all week.  Made staleness self-evident:
+- Settings ▸ Data footer now prints **"Game build: b21 · <build id>"** — any device
+  screenshot identifies the running build at a glance.
+- The Accessibility tilt row renders on EVERY touch device — even with no motion API it
+  shows an UNSUPPORTED button that explains itself.  Row absence now means exactly one
+  thing: an old build.
+
 ### 2026-09-05 (pt 3) — "Tilt steering access" row was hiding in the standalone app
 
 Owner: "I remember seeing Tilt steering access — where is it now?"  The Settings ▸

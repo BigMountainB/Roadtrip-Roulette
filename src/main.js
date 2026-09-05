@@ -303,6 +303,7 @@ const _boot = () => {
   // no-ops immediately when the intro has already been seen.
   try { initOpeningCall(); } catch (e) { console.warn('[OpeningCall] init failed', e); }
 
+  try { window.__BUILD_ID = (typeof __BUILD_ID__ !== 'undefined') ? __BUILD_ID__ : 'dev'; } catch (_) {}
   window.__phaserGame = game;          // for the menu's map renderer
   window.__restStops  = REST_STOPS;    // for the phone-map "Next Rest Stop" panel
   // Daily Challenges ("Run of the Day") bridge — read by the phone Calendar
