@@ -333,13 +333,6 @@ const _boot = () => {
   try { window.__DEV = new URLSearchParams(window.location.search).get('dev') === '1'; }
   catch (_) { window.__DEV = false; }
 
-  // Persisted dev car-size override (the ?devtools console's car −/+ writes
-  // it via GameScene): seed it so the car opens at the last-dialled size.
-  try {
-    const _savedCar = parseFloat(localStorage.getItem('rtr.carScale'));
-    if (_savedCar > 0) window.__carScale = _savedCar;
-  } catch (_) {}
-
   // ── ?devtools=1 — an on-screen console ─────────────────────────────────
   // The game is played on a phone over the LAN, where there is no inspector,
   // so console output was effectively invisible while debugging the tunnel
@@ -354,11 +347,9 @@ const _boot = () => {
       // 2026-09-05).  Still above the game HUD + phone menu, so it shows over
       // gameplay for live tuning; the intro overlay simply paints above it and
       // tears down before the console is needed.
-      // TOP-anchored (owner 2026-09-05): bottom:0 put this 38vh panel on top
-      // of the player car (bottom-centre), so you couldn't see what the car
-      // −/+ buttons were doing.  At the top it covers the HUD row instead and
-      // leaves the whole lower half — car included — visible while tuning.
-      box.style.cssText = 'position:fixed;left:0;right:0;top:0;max-height:34vh;overflow:auto;' +
+      // z below the opening-call overlay (1000000) so it never covers the
+      // intro's ANSWER/DECLINE buttons; still above the game HUD + phone menu.
+      box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:38vh;overflow:auto;' +
         'z-index:999000;background:rgba(0,0,0,.86);color:#0f8;font:11px/1.35 monospace;' +
         'padding:4px 6px;white-space:pre-wrap;-webkit-overflow-scrolling:touch';
       const bar = document.createElement('div');
@@ -432,11 +423,8 @@ const _boot = () => {
       // Player-car size: one source-pixel scale shared by every frame
       // (GameScene.PLAYER_CAR_SCALE). Bake the chosen value there.
       window.__carScale = window.__carScale ?? 0.088;
-      // Persist each change to localStorage so the dialled size survives a
-      // reload (GameScene._playerCarScale reads window.__carScale ?? this).
-      const _carPersist = () => { try { localStorage.setItem('rtr.carScale', String(window.__carScale)); } catch (_) {} };
-      mk('car −', () => { window.__carScale = Math.max(0.04, window.__carScale - 0.004); _carPersist(); showTune(); });
-      mk('car +', () => { window.__carScale = Math.min(0.20, window.__carScale + 0.004); _carPersist(); showTune(); });
+      mk('car −', () => { window.__carScale = Math.max(0.04, window.__carScale - 0.004); showTune(); });
+      mk('car +', () => { window.__carScale = Math.min(0.20, window.__carScale + 0.004); showTune(); });
       // Tail-lamp height as a fraction of car height above the tire line.
       window.__lampFrac = window.__lampFrac ?? 0.36;
       mk('lamp −', () => { window.__lampFrac = Math.max(0.05, window.__lampFrac - 0.02); showTune(); });
