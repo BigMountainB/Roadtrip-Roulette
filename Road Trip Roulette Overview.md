@@ -204,6 +204,53 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 20) — Touch steering now reads HELD fingers, not the last press/release
+
+Owner report: "press both left and right thumb at the same time and release
+your left thumb and the car will not go right — it's like it was locked out
+during the double press and needs to be pressed again."  Requirement, verbatim:
+*anytime only one direction is being held, the car should go in that direction
+whether an initial tap was detected or not.*
+
+Root cause: steering was ONE global `_touchLeft` / `_touchRight` pair driven by
+whichever pointer fired last.  `pointerup` cleared BOTH flags on ANY finger
+lift, so releasing one thumb of a two-thumb press wiped the direction still
+being held; `pointermove` likewise set the pair exclusively from a single
+pointer's x.  Nothing tracked which fingers were actually down.
+
+Fix (`GameScene.js`): a `_steerPtrs` Map keyed by Phaser pointer id →
+`'L' | 'R' | 'X'` (X = suppressed).  `pointerdown` records the pressed side,
+`pointermove` retargets that pointer, and `pointerup` / `pointerupoutside`
+delete ONLY the pointer that lifted; `_syncTouchSteer()` then re-derives
+`_touchLeft` / `_touchRight` from what remains held.  Both sides held still
+resolves left-wins (unchanged); lifting either thumb hands the steer to the
+other instantly, no re-tap.
+
+Supporting details:
+- Every non-steer press is now tracked as `'X'` rather than left untracked —
+  button bands, pedals, weapon column, vice/status/star drag zones, paused
+  taps, modal taps.  An untracked finger is adopted by `pointermove` (that
+  adoption is what satisfies "whether an initial tap was detected or not"),
+  so anything meant to be inert has to say so explicitly.
+- `_noSteerThisGesture` survives as an EXTERNAL suppression only (the tour
+  dismiss at `_endTourTip`); it blocks adoption and clears when the last
+  finger lifts.
+- Tap/flappy mode: any live non-suppressed finger holds the single action.
+- `_steerPtrs.clear()` added at all five existing latch-reset sites (scene
+  reuse, run reset, pause toggle, tour dismiss, mile warp) so a stale finger
+  set can't cross a scene restart.
+
+Validation: `scripts/validate_steering.mjs` (new) boots the real game headless
+and drives Phaser's own input emitter with multiple pointer ids — 17 checks,
+all passing: the reported two-thumb sequence in both mirrorings, three-finger
+churn, single-finger drag across the centre line, and a button-band finger that
+must neither steer nor cancel the thumb that is steering.
+
+Noted, not changed: `_updateIntro` dereferences `this._introGfx`, which is only
+ever assigned `null` — the intro-pan branch is unreachable in real play because
+`_introDone` is latched true before `update()` can reach it.  Dead code, would
+crash if ever re-enabled.
+
 ### 2026-09-05 (pt 19) — Dev console moved to top so car-size tuning is usable; reverted the baked bump
 
 - Reverted pt 18: `PLAYER_CAR_SCALE` back to 0.088 (owner wants to CHOOSE the

@@ -889,6 +889,7 @@ export class GameScene extends Phaser.Scene {
     // Touch-input latches — same Phaser-reuse issue.  If the player was
     // mid-tap (or held a touch button) when scene.start fired, the latch
     // stayed true into the next run and triggered phantom input.
+    this._steerPtrs?.clear();
     this._touchLeft  = false;
     this._touchRight = false;
     this._touchF12   = false;
@@ -2223,6 +2224,7 @@ export class GameScene extends Phaser.Scene {
     this._trafficTimer   = 0;
     this._prevTown       = 0;   // town-line star cooldown tracker (CHECKPOINTS index)
     this._announcedUnlocks = {};
+    this._steerPtrs?.clear();
     this._touchLeft      = false;
     this._touchRight     = false;
     this._touchF12       = false;
@@ -3259,8 +3261,17 @@ export class GameScene extends Phaser.Scene {
     // landed on a UI button (skip resume) or on the open road
     // (toggle pause off).
     this.input.on('gameobjectdown', () => { this._uiTapBlocker = true; });
+    // Live steer touches, keyed by Phaser pointer id → 'L' | 'R' | 'X'
+    // (suppressed).  Steering is derived from what is STILL HELD rather than
+    // from the last press/release, so a two-thumb press that releases one
+    // thumb immediately steers the way the remaining thumb is holding.
+    this._steerPtrs = new Map();
     this.input.on('pointerdown', (p) => {
-      if (this._ctrlEditMode) return;   // Customize Controls editor owns all input
+      // Any press that isn't a steer press is still TRACKED, as 'X'.  An
+      // untracked finger gets adopted by pointermove, which would turn a
+      // bar-drag or a paused-screen press into a phantom turn.
+      const deny = () => { this._steerPtrs.set(p.id, 'X'); };
+      if (this._ctrlEditMode) return deny();   // Customize Controls editor owns all input
       // Decoupled-width fix: the pointer is in CANVAS space (0…WORLD_W) but the
       // road/HUD live in 800-wide scene space centered at sx=400.  Convert once
       // so every manual hit-test (steer halves, weapon column, pedals, mirror,
@@ -3282,24 +3293,24 @@ export class GameScene extends Phaser.Scene {
           || this._mapModalJustClosed
           || this._garageModalJustClosed
           || this._achievementsModalJustClosed;
-        if (onUI || p.y < 64 || _modalActive) return;
+        if (onUI || p.y < 64 || _modalActive) return deny();
         this._togglePause();
-        return;
+        return deny();
       }
       this._uiTapBlocker = false;
-      if (this._anyModalOpen()) return;
+      if (this._anyModalOpen()) return deny();
       // While the title is up, taps must hit one of the explicit
       // difficulty buttons — don't latch any steer/F12 flags from
       // anywhere else on screen, so the player isn't accidentally
       // starting the run by tapping near a difficulty button.
-      if (this._awaitingStart) return;
+      if (this._awaitingStart) return deny();
       // HUD vice bars (custom mode) — let the bar drag handler own
       // this pointer without also veering the car.
-      if (overViceBar(p)) return;
+      if (overViceBar(p)) return deny();
       // Same for the survival STATUS bars (custom-mode drag-to-set).
-      if (overSurvBar(p)) return;
+      if (overSurvBar(p)) return deny();
       // …and the wanted-star row (custom-mode drag-to-set).
-      if (overStarRow(p)) return;
+      if (overStarRow(p)) return deny();
       // Top-row UI band + weapon stack — initial tap must NOT
       // start on these zones (so buttons work), but once a valid
       // steer-tap has started, the player can drag across them.
@@ -3363,40 +3374,32 @@ export class GameScene extends Phaser.Scene {
       // jitter and latch a turn while the player is just holding
       // Pause / FF / Genre.
       if (overTopButtons || overWeaponCol || overDisguise || overPedals || overWiper || overMissionChip) {
-        this._noSteerThisGesture = true;
-        return;
-      }
-      this._noSteerThisGesture = false;
-      // Tap mode: ANY tap in the play area = action.  Latch sticky —
-      // once on, stays on until pointerup, regardless of where the
-      // finger drags afterward.
-      if (this._activeSteeringMode() === 'flappy') {
-        this._touchRight = true;
-        this._tapLatchValid = true;
+        this._steerPtrs.set(p.id, 'X');
+        this._syncTouchSteer();
         return;
       }
       // Classic mode — line straight down the middle (owner 2026-07-22):
       // ANY tap left of center steers left, any tap right of center steers
       // right — no dead band.  (The old 30%/70% halves left the middle 40%
       // of the screen inert; the center-tap weapon shortcut is gone with it —
-      // weapons fire from their own buttons, excluded above.)
-      if (sx < SCREEN_W / 2) { this._touchLeft  = true; }
-      else                   { this._touchRight = true; }
-      this._tapLatchValid = (this._touchLeft || this._touchRight);
+      // weapons fire from their own buttons, excluded above.)  Tap mode maps
+      // every live pointer to the single action; _syncTouchSteer sorts it out.
+      this._steerPtrs.set(p.id, sx < SCREEN_W / 2 ? 'L' : 'R');
+      this._syncTouchSteer();
     });
-    this.input.on('pointerup', () => {
-      this._touchLeft  = false;
-      this._touchRight = false;
-      this._touchF12   = false;
-      this._tapLatchValid    = false;
-      this._noSteerThisGesture = false;
+    this.input.on('pointerup', (p) => {
+      this._releaseSteerPtr(p);
+      this._touchF12 = false;
       // Releasing anywhere ends a mirror touch-and-HOLD (no-ops if the
       // mirror is already at rest).
       this._setMirrorZoom(1);
     });
     // A release that lands OFF the canvas (finger lifts past the edge)
     // doesn't fire 'pointerup' — catch it so the mirror can't stick zoomed.
-    this.input.on('pointerupoutside', () => { this._setMirrorZoom(1); });
+    this.input.on('pointerupoutside', (p) => {
+      this._releaseSteerPtr(p);
+      this._setMirrorZoom(1);
+    });
     // Resume-boot radio kick (owner 2026-07-22): fresh runs kick the radio in
     // _startGameplay, but a scene booted directly into a resumed run (LOAD
     // SAVE / auto-resume / checkpoint respawn) skips it — leaving the whole
@@ -3411,35 +3414,74 @@ export class GameScene extends Phaser.Scene {
     }
     this.input.on('pointermove', (p) => {
       if (this._anyModalOpen()) return;
-      if (!p.isDown) return;
-      // No-steer-this-gesture — set when the down-event landed on a
-      // top-row button or weapon column.  Suppresses move-tracked
-      // steering until pointerup so holding a button doesn't latch a
-      // turn.
-      if (this._noSteerThisGesture) {
-        this._touchLeft = this._touchRight = false;
-        return;
-      }
-      // While dragging a vice, status bar OR the star row, never steer.
-      if (this._draggingViceId || this._draggingSurvKey || this._draggingStars) {
-        this._touchLeft = this._touchRight = false;
-        return;
-      }
-      // Tap mode: if the touch started in a valid area, KEEP the
-      // steer engaged no matter where the finger moves now — including
-      // over UI clusters, pedals, edges.  Released only on pointerup.
+      if (!p.isDown) { this._releaseSteerPtr(p); return; }
+      const held = this._steerPtrs.get(p.id);
+      // A finger that went down on a button band ('X') stays suppressed for
+      // its whole down-up cycle, so holding Pause / FF / a pedal never latches
+      // a turn no matter how far it drifts.
+      if (held === 'X') return;
+      // Tap mode: once a pointer is live it KEEPS the action engaged wherever
+      // it drags — over UI clusters, pedals, edges.  Released only on lift.
       if (this._activeSteeringMode() === 'flappy') {
-        if (this._tapLatchValid) this._touchRight = true;
+        if (held === undefined && !this._noSteerThisGesture) this._steerPtrs.set(p.id, 'R');
+        this._syncTouchSteer();
         return;
       }
       // Classic mode — position-tracked halves during drag, split at the
       // same center line as the tap (owner 2026-07-22: no middle dead band).
       // Convert canvas → scene space so the halves stay centered on the car
       // under the decoupled width (see the pointerdown handler's `sx`).
+      // An UNTRACKED finger is adopted here (owner 2026-09-04: "anytime only
+      // one direction is being held, the car should go in that direction
+      // whether an initial tap was detected or not") — it covers fingers that
+      // went down while paused or over a modal.  _noSteerThisGesture still
+      // blocks adoption so a tour-dismiss tap can't drag into a turn.
+      if (held === undefined && this._noSteerThisGesture) return;
       const sx = p.x - C.HUD_OFFSET_X;
-      this._touchLeft  = sx < SCREEN_W / 2;
-      this._touchRight = sx >= SCREEN_W / 2;
+      this._steerPtrs.set(p.id, sx < SCREEN_W / 2 ? 'L' : 'R');
+      this._syncTouchSteer();
     });
+  }
+
+  /** Drop one lifted finger from the live-touch set and re-derive steering.
+   *  Only the pointer that actually lifted is removed — the rest keep
+   *  steering. */
+  _releaseSteerPtr(p) {
+    if (!this._steerPtrs) this._steerPtrs = new Map();
+    if (p && p.id != null) this._steerPtrs.delete(p.id);
+    else                   this._steerPtrs.clear();
+    // A suppression set from OUTSIDE the pointer handlers (tour dismiss)
+    // lasts until every finger is off the glass.
+    if (this._steerPtrs.size === 0) this._noSteerThisGesture = false;
+    this._syncTouchSteer();
+  }
+
+  /** Re-derive _touchLeft / _touchRight from the fingers currently held.
+   *  Both sides held = both flags true, which the steering code reads as a
+   *  wash; lifting either one leaves the other steering with no re-tap. */
+  _syncTouchSteer() {
+    if (!this._steerPtrs) this._steerPtrs = new Map();
+    // While dragging a vice, status bar OR the star row, never steer.
+    if (this._draggingViceId || this._draggingSurvKey || this._draggingStars) {
+      this._touchLeft = this._touchRight = false;
+      this._tapLatchValid = false;
+      return;
+    }
+    let left = false, right = false, live = false;
+    for (const side of this._steerPtrs.values()) {
+      if (side === 'X') continue;
+      live = true;
+      if (side === 'L') left = true; else right = true;
+    }
+    if (this._activeSteeringMode() === 'flappy') {
+      // Tap mode has one action — any live finger holds it.
+      this._touchLeft  = false;
+      this._touchRight = live;
+    } else {
+      this._touchLeft  = left;
+      this._touchRight = right;
+    }
+    this._tapLatchValid = live;
   }
 
   /** Phone tilt steering — opt-in.  Toggle from the title screen sets
@@ -11991,6 +12033,7 @@ export class GameScene extends Phaser.Scene {
     // a steer / no-steer flag latched before the pause stays frozen and the
     // car won't steer (or veers on its own) after you return to gameplay.
     if (!this._paused) {
+      this._steerPtrs?.clear();
       this._touchLeft          = false;
       this._touchRight         = false;
       this._touchF12           = false;
@@ -20309,6 +20352,7 @@ export class GameScene extends Phaser.Scene {
     // inline would let the dismissing tap fall through and latch a steer.
     // Suppress this gesture and resume on the next tick.
     this._noSteerThisGesture = true;
+    this._steerPtrs?.clear();
     this._touchLeft = this._touchRight = false;
     this.time.delayedCall(1, () => { this._paused = false; });
   }
@@ -26335,6 +26379,7 @@ export class GameScene extends Phaser.Scene {
     this.lastSegIdx = Math.floor(this.player.position / SEG_LENGTH);
     this.gameTime   = 0;
     // Clear any tap latch so it doesn't immediately fire steering.
+    this._steerPtrs?.clear();
     this._touchLeft = this._touchRight = this._touchF12 = false;
   }
 
