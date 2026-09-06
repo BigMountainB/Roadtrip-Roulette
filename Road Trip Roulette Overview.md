@@ -204,6 +204,45 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 22) — Brake required to pull over again; stale one-job-per-stop lock
+
+**1. "I got pulled over again without using the brake."**  The 1-2★ pursuit
+comply flow re-required the brake on 2026-09-03 ("You should only get into a
+traffic stop if your brakes are on") — the PARKED-TRAP flow was missed, so the
+2026-08-31 chord still stood there: `p.x > COP_TRAP_SHOULDER_X` alone set
+`_trapStopping`, which drives `targetSpeed = 0`.  A drift past the fog line
+during a comply window pulled the car over by itself, no brake anywhere.
+`GameScene._updatePlayer` now requires `this._isBrake()` in that chord, matching
+the pursuit flow.  `COP_TRAP_SHOULDER_X` stays 1.06 — with the brake back in
+the chord the looser threshold is no longer a trap.  Owner was told this
+re-opens the 08-31 "I pull over and nothing happens" case and chose it anyway.
+
+**2. A stop offered three jobs with no accept button** (reported at Mercer
+Island, but NOT Mercer-specific — verified to have hit all 18 offer-bearing
+stops; Pullman is payoff-only).  Reproduced.
+`RestStopScene`'s `hiredHere` gate suppresses the accept choice on ALL offers at
+a stop at once, and `MissionSystem.restore()` union-merged `acceptedAtStop`
+without ever pruning it.  A checkpoint rewind past the hire reverted the mission
+to `offered` but KEPT the stop lock — the player ends up with neither the job
+nor any way to take one, at that stop, for the rest of the run.  `restore()` now
+drops a lock whose mission isn't genuinely taken (`active` / `ready` /
+`completed` / `failed`); the anti-double-dip intent is unchanged for resumes and
+completed jobs.  Also added a `console.warn` in `_buildMissionEncounter` naming
+WHICH gate closed every offer (hired-here vs. per-type clash), since "all busy"
+is legitimate but indistinguishable from a bug in play.
+
+Verified: 5-case lock harness (resume keeps lock, rewind drops it, completed
+keeps it); an all-stops sweep — hire then rewind at each of the 19 stops, all
+offers accept again everywhere; a reachability sweep confirming every stop's
+`_missionShopKeyFor` contact is in `TAB_ORDER` and so actually renders a
+placard (no stop has an unreachable mission contact); a live headless trap
+harness (shoulder without brake leaves the comply window open; with brake it
+commits); 11 test files; clean build.
+
+Harness gotcha: a probe that flips `_awaitingStart` late must also set
+`_introDone = true`, or `update()` drops into the unreachable intro-pan branch
+and throws on the never-created `_introGfx` every frame (see pt 20).
+
 ### 2026-09-05 (pt 21) — Cold Brew hydration +25%
 
 `ITEM_FX.coldbrew.h` 3 → 3.75 in `SurvivalSystem.js`.  The diuretic clawback

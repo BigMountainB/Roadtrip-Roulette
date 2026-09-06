@@ -6387,11 +6387,16 @@ export class GameScene extends Phaser.Scene {
     if (this._trapPursuitActive) {
       const _seg     = this.road.segments[curSegIdx];
       const _safeSeg = !_seg?.bridge && !_seg?.tunnel && !_seg?.water;
-      // Commit = steering onto the right shoulder, full stop (owner
-      // 2026-08-31): the old chord ALSO required the brake to be held, so
-      // players who just pulled onto the grass (the natural read of "PULL
-      // OVER") cruised along at 60 while the window expired into +1★.
-      if (!this._trapStopping && _safeSeg && p.x > COP_TRAP_SHOULDER_X) {
+      // Commit = right shoulder + BRAKE (owner 2026-09-05: "I got pulled over
+      // again without using the brake").  2026-08-31 dropped the brake from
+      // this chord so shoulder position alone committed you — and since
+      // _trapStopping drives targetSpeed to 0, a drift past the fog line
+      // during a comply window pulled the car over on its own.  The 1-2★
+      // pursuit flow already re-required the brake on 2026-09-03 ("You should
+      // only get into a traffic stop if your brakes are on"); this is the
+      // parked-trap flow that was missed.  SHOULDER_X stays at 1.06 — with the
+      // brake back in the chord the looser threshold is no longer a trap.
+      if (!this._trapStopping && _safeSeg && this._isBrake() && p.x > COP_TRAP_SHOULDER_X) {
         this._trapStopping = true;
       }
       if (this._trapStopping && (!_safeSeg || p.x < COP_TRAP_ABORT_X)) {

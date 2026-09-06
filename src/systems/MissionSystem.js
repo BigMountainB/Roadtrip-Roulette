@@ -385,6 +385,19 @@ export class MissionSystem {
       const o = this._outcomes[m.id];
       if (o) { m.status = o.status; m.paid = !!o.paid; }
     }
+    // …but a lock whose mission the rewind put BACK to 'offered' is STALE.
+    // The union above exists so a rewind can't hand out a second job at a
+    // stop you already hired at — it wasn't accounting for the rewind also
+    // taking the first job away.  That left the player with neither: every
+    // pitch at that stop rendered with no accept button, because
+    // RestStopScene's `hiredHere` gate suppresses all of them at once (owner
+    // 2026-09-05, Mercer Island).  Keep the lock only while the job it names
+    // is genuinely taken; drop it if the mission reverted or vanished.
+    const TAKEN = new Set(['active', 'ready', 'completed', 'failed']);
+    for (const [stopId, mid] of Object.entries(this._acceptedAtStop)) {
+      const m = this.byId(mid);
+      if (!m || !TAKEN.has(m.status)) delete this._acceptedAtStop[stopId];
+    }
   }
 
   // ── Offers ──────────────────────────────────────────────────────────────

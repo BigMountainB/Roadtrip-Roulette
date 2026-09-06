@@ -1714,6 +1714,16 @@ export class RestStopScene extends Phaser.Scene {
     const hiredHere = !!missions.acceptedAtStop?.(stopId);
     const busyType = (t) => hiredHere || missions.hasActiveOfType(t);
     const anyBusy  = open.some(o => busyType(o.type));
+    // Why-is-there-no-accept-button trace (owner 2026-09-05, Mercer Island).
+    // Every offer being busy is legitimate but indistinguishable from a bug
+    // in play, so say WHICH gate closed them — `hiredHere` kills all three at
+    // once, a per-type clash kills only its own.
+    if (open.every(o => busyType(o.type))) {
+      console.warn(`[missions] ${stopId}: no accept button on any of ${open.length} offers — `
+        + (hiredHere
+          ? `already hired here this run (${missions.acceptedAtStop(stopId)})`
+          : `types already active: ${open.map(o => o.type).join(', ')}`));
+    }
 
     // NPC continuity (Ch. 8 Phase 6): the contact remembers you — greeting
     // shifts with jobs done for them, and a pending failure gets a nod first
