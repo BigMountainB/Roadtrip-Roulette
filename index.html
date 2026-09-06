@@ -5175,6 +5175,39 @@
     </div>
   </div>
 
+  <!-- Pre-paint intro guard (owner 2026-09-05: "the intro image is only
+       shown at the intro, not after a game has been started").  An iOS
+       mid-run tab reload auto-resumes the liveRun autosave; without this the
+       display:block title overlay would cover the resuming game.  This
+       classic (non-module, so it runs synchronously DURING parse, before the
+       first paint) checks the active save slot for an in-progress live run
+       and hides the overlay + flags the skip, so a resume never flashes the
+       intro.  initOpeningCall() reads the same flag and skips the splash.
+       ?intro=1 still forces the intro (handled module-side). -->
+  <script>
+    (function () {
+      try {
+        var raw = localStorage.getItem('rtr.save.v3');
+        if (!raw) return;
+        var d = JSON.parse(raw);
+        var slot = d && d.slots ? d.slots[d.activeSlot] : null;
+        var lr = slot && slot.global ? slot.global.liveRun : null;
+        var live = lr && lr.snap && (lr.snap.position || 0) > 50;
+        if (!live && d && d.slots) {                 // fallback: any slot mid-run
+          var slots = d.slots, keys = Object.keys(slots);
+          for (var i = 0; i < keys.length; i++) {
+            var s = slots[keys[i]], l = s && s.global ? s.global.liveRun : null;
+            if (l && l.snap && (l.snap.position || 0) > 50) { live = true; break; }
+          }
+        }
+        if (live) {
+          window.__introSkipForResume = true;
+          var oc = document.getElementById('opening-call');
+          if (oc) oc.style.display = 'none';
+        }
+      } catch (_) {}
+    })();
+  </script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

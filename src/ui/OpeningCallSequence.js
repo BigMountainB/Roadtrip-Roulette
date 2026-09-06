@@ -95,23 +95,27 @@ export function initOpeningCall() {
   let raf = 0;
   let titleShown = false;
 
-  // ── Synthesized phone ringtone (owner 2026-09-05) ───────────────────────
-  // No ring recording ships, so the classic North-American cadence is
-  // generated with WebAudio: a 440+480 Hz tone pair, 2 s on / 4 s off,
-  // looping until Accept/Decline stops it.  Its own AudioContext (not the
-  // game's) so music suppression/gain never touches it.  Started from the
-  // title tap — a valid iOS audio-activation gesture.  Drop a real
-  // recording in later and swap start() for an <audio loop> if desired.
+  // ── Synthesized phone ringtone — RECEIVER side (owner 2026-09-05) ───────
+  // NOT the caller's ringback buzz (a smooth 440+480 Hz pair — the first
+  // cut); this is the classic electromechanical BELL you hear when YOUR
+  // phone rings: two detuned gong tones (~1000 + ~1320 Hz, triangle for a
+  // metallic edge) rapidly warbled by a ~20 Hz clapper tremolo, in ring
+  // bursts (1.6 s ring / 1.6 s gap).  Its own AudioContext so music
+  // suppression/gain never touches it; started from the title tap (a valid
+  // iOS audio-activation gesture).  No recording ships — drop a file in and
+  // swap start() for an <audio loop> to replace it.
   const ring = (() => {
-    let ctx = null, gain = null, o1 = null, o2 = null, cad = 0, dead = false;
-    const pulse = () => {
-      if (dead || !ctx || !gain) return;
+    let ctx = null, master = null, tone = null, o1 = null, o2 = null,
+        lfo = null, lfoGain = null, cad = 0, dead = false;
+    const RING_S = 1.6, GAP_S = 1.6;
+    const burst = () => {
+      if (dead || !ctx || !master) return;
       const t = ctx.currentTime;
-      gain.gain.cancelScheduledValues(t);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.12, t + 0.06);   // ring ON
-      gain.gain.setValueAtTime(0.12, t + 1.9);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 2.0);  // ring OFF
+      master.gain.cancelScheduledValues(t);
+      master.gain.setValueAtTime(0.0001, t);
+      master.gain.exponentialRampToValueAtTime(1, t + 0.02);          // strike on
+      master.gain.setValueAtTime(1, t + RING_S - 0.04);
+      master.gain.exponentialRampToValueAtTime(0.0001, t + RING_S);   // damp off
     };
     return {
       start() {
@@ -122,20 +126,28 @@ export function initOpeningCall() {
           dead = false;
           ctx = new AC();
           if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-          gain = ctx.createGain(); gain.gain.value = 0.0001; gain.connect(ctx.destination);
-          o1 = ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 440;
-          o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 480;
-          o1.connect(gain); o2.connect(gain); o1.start(); o2.start();
-          pulse();
-          cad = setInterval(pulse, 6000);   // 2 s ring + 4 s silence
+          master = ctx.createGain(); master.gain.value = 0.0001; master.connect(ctx.destination);
+          tone = ctx.createGain(); tone.gain.value = 0.06; tone.connect(master);
+          o1 = ctx.createOscillator(); o1.type = 'triangle'; o1.frequency.value = 1000;
+          o2 = ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.value = 1320;
+          o1.connect(tone); o2.connect(tone);
+          // Clapper warble — a 20 Hz tremolo on the tone gain: the rapid
+          // two-bell strike that makes this read as a RINGING PHONE, not a
+          // ringback tone.
+          lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 20;
+          lfoGain = ctx.createGain(); lfoGain.gain.value = 0.05;
+          lfo.connect(lfoGain); lfoGain.connect(tone.gain);
+          o1.start(); o2.start(); lfo.start();
+          burst();
+          cad = setInterval(burst, (RING_S + GAP_S) * 1000);
         } catch (_) { ctx = null; }
       },
       stop() {
         dead = true;
         try { clearInterval(cad); } catch (_) {}
-        try { o1?.stop?.(); o2?.stop?.(); } catch (_) {}
+        try { o1?.stop?.(); o2?.stop?.(); lfo?.stop?.(); } catch (_) {}
         try { ctx?.close?.(); } catch (_) {}
-        ctx = gain = o1 = o2 = null;
+        ctx = master = tone = o1 = o2 = lfo = lfoGain = null;
       },
     };
   })();
@@ -520,6 +532,18 @@ export function initOpeningCall() {
   let force = false;
   try { force = new URLSearchParams(location.search).has('intro'); } catch (_) {}
   if (force) markIntroDone(false);
-  // The title screen shows on EVERY open now (owner 2026-09-05).
+  // A game already in progress (iOS mid-run reload → liveRun auto-resume):
+  // the pre-paint guard in index.html already hid the overlay and set this
+  // flag.  Don't show the intro title over a resuming game — release any
+  // music hold and leave it hidden.  ?intro=1 overrides (force the intro).
+  if (window.__introSkipForResume && !force) {
+    try { root.style.display = 'none'; root.setAttribute('aria-hidden', 'true'); } catch (_) {}
+    document.body.classList.remove('opening-call-active');
+    suppressMusic(false);
+    state = 'done';
+    return;
+  }
+  // Otherwise the title screen is the first thing on this open (owner
+  // 2026-09-05) — a fresh boot to the menu, or a first-open call.
   startTitleSplash();
 }
