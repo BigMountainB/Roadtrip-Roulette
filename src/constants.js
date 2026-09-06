@@ -419,6 +419,13 @@ export const COMBO = {
   OFFROAD_DECAY_MULT: 2,    // off-road accelerates decay
   SURVIVAL_GRACE_SEC: 0.5,  // +refresh grace per healthy survival condition…
   SURVIVAL_GRACE_CAP: 2.0,  // …capped here (4 conditions × 0.5 = the cap)
+  // +1× to the driving multiplier while BOTH thirst (Drinks/hydration) and
+  // hunger (Food/fullness) sit in the healthy 25–75% band (owner 2026-09-05):
+  // rewards keeping the two consumable bars balanced instead of maxed or
+  // starved.  Additive to the combo level, then clamped to CAP.
+  HEALTHY_BARS_BONUS: 1,
+  HEALTHY_BAND_LO:   25,    // both bars must be strictly ABOVE this…
+  HEALTHY_BAND_HI:   75,    // …and strictly BELOW this to grant the bonus
 };
 export const CHECKPOINTS = _CP_RAW.map(cp => ({
   ...cp,

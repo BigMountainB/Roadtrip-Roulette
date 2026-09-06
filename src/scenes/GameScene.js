@@ -4446,6 +4446,15 @@ export class GameScene extends Phaser.Scene {
     // finished, swap the real texture in the moment it's ready (no fallback —
     // we just wait).  No-op once the car is showing.
     this._ensurePlayerArtReady();
+    // Live car-scale preview (owner 2026-09-05: "didn't notice any size
+    // difference on ?dev=1").  _applyPlayerSpriteDisplaySize only runs on
+    // texture-swap events, so dialing window.__carScale (dev console) never
+    // took effect until the next frame change.  Re-apply the instant the
+    // knob moves — dev-only cost (the value is undefined in normal play).
+    if (typeof globalThis.__carScale === 'number' && globalThis.__carScale !== this._lastCarScale) {
+      this._lastCarScale = globalThis.__carScale;
+      this._applyPlayerSpriteDisplaySize();
+    }
     // Jurisdiction police sets stream in region-by-region (throttled to a
     // check every ~2 s; queues the current + upcoming agencies' frames).
     this._ensurePoliceAssets();
@@ -5733,6 +5742,14 @@ export class GameScene extends Phaser.Scene {
       this._comboCanBuild = !_slowNow && !_offroadNow && !trafficStop
         && !this._exitAuto && !this._endingCine && !this._finishCinematic
         && !this._awaitingStart && !this._awaitingFirstGameTap && !this._paused;
+      // Healthy-bars +1× callout on the 0→1 transition (owner 2026-09-05) so
+      // the player knows WHY the multiplier jumped when both bars enter the
+      // 25–75% band.  Only while actually driving (build-eligible).
+      const _healthyOn = this._survivalMultBonus() > 0;
+      if (_healthyOn && !this._healthyBonusWasOn && this._comboCanBuild) {
+        this._comboCallout(`BALANCED +${COMBO.HEALTHY_BARS_BONUS}×`, '#5FE08A');
+      }
+      this._healthyBonusWasOn = _healthyOn;
     }
     // ── Checkpoint detection ──────────────────────────────────────────
     // HARD mode: passing a checkpoint marker no longer auto-registers
@@ -23777,7 +23794,10 @@ export class GameScene extends Phaser.Scene {
    *    drivingBonusGraceMult → combo grace refresh. */
   _driveMult() {
     if (Difficulty.noScore?.()) return 0;
-    let m = this.combo?.mult ?? 1;
+    // Healthy-bars bonus (owner 2026-09-05): +1× while BOTH thirst and hunger
+    // sit in the 25–75% band — added to the combo level BEFORE genre mults so
+    // it scales with them, then clamped to CAP with everything else.
+    let m = (this.combo?.mult ?? 1) + this._survivalMultBonus();
     m *= this._traitMod('drivingCashMult') * this._traitMod('drivingBonusEarningsMult');
     const _hi = this._traitMod('drivingCashHiSpeedMult');
     if (_hi !== 1 && this._displayMPH() > this._baselineCruiseMph() * 1.15) m *= _hi;
@@ -23800,6 +23820,18 @@ export class GameScene extends Phaser.Scene {
       if (s.bladder   < 25)                     cond++;
     }
     return Math.min(COMBO.SURVIVAL_GRACE_CAP, cond * COMBO.SURVIVAL_GRACE_SEC);
+  }
+
+  /** +1× to the driving multiplier while BOTH thirst (Drinks/hydration) and
+   *  hunger (Food/fullness) sit strictly inside the healthy 25–75% band
+   *  (owner 2026-09-05).  Independent of a combo being active — good bar
+   *  management is its own reward.  Folded into _driveMult() and therefore
+   *  shown in the HUD ×N.N readout. */
+  _survivalMultBonus() {
+    const s = this.survival;
+    if (!s) return 0;
+    const inBand = (v) => v > COMBO.HEALTHY_BAND_LO && v < COMBO.HEALTHY_BAND_HI;
+    return (inBand(s.hydration) && inBand(s.fullness)) ? COMBO.HEALTHY_BARS_BONUS : 0;
   }
 
   /** Eligible-run-earnings accumulator (completion bonus base).  Distance,

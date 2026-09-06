@@ -204,6 +204,25 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 16) — Combo: +1× for balanced thirst/hunger bars; live car-scale knob
+
+- Owner: the driving multiplier is too low — add +1× for keeping BOTH the
+  thirst (Drinks/hydration) and hunger (Food/fullness) bars in the healthy
+  25–75% band.  `COMBO.HEALTHY_BARS_BONUS` (+ `HEALTHY_BAND_LO/HI`);
+  `GameScene._survivalMultBonus()` returns +1 when both bars are strictly
+  in-band, folded into `_driveMult()` (added to the combo level before genre
+  mults, then clamped to CAP), so it shows in the HUD ×N.N readout and pays
+  out on distance income.  Independent of an active combo — good bar
+  management alone is worth ×2.  A one-shot "BALANCED +1×" callout fires on
+  the 0→1 transition so the player sees why the multiplier jumped.  Verified:
+  both bars 50% → ×2, one bar at 90% → ×1.  (Other multiplier levers if this
+  isn't enough: `COMBO.CAP` 15, `PASSES_PER_LEVEL` 3, base $/mi.)
+- Live car-scale dev knob fixed: `window.__carScale` (?dev=1) never re-applied
+  because `_applyPlayerSpriteDisplaySize` only runs on texture-swap events;
+  update() now re-applies the instant the knob changes (dev-only cost).
+  `PLAYER_CAR_SCALE` still 0.088 — owner evaluating a bump (~0.10) via the
+  now-working preview.
+
 ### 2026-09-05 (pt 15) — Vertical title screen is the first thing on every open
 
 - Owner: the vertical title (`title_screen_vertical.png`) must be THE FIRST
