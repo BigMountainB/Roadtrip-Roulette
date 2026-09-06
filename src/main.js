@@ -342,8 +342,13 @@ const _boot = () => {
   try {
     if (new URLSearchParams(window.location.search).get('devtools') === '1') {
       const box = document.createElement('div');
+      // z below the opening-call overlay (1000000) so the ?devtools console
+      // NEVER covers the intro's ANSWER/DECLINE buttons (owner trapped there
+      // 2026-09-05).  Still above the game HUD + phone menu, so it shows over
+      // gameplay for live tuning; the intro overlay simply paints above it and
+      // tears down before the console is needed.
       box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:38vh;overflow:auto;' +
-        'z-index:2147483647;background:rgba(0,0,0,.86);color:#0f8;font:11px/1.35 monospace;' +
+        'z-index:999000;background:rgba(0,0,0,.86);color:#0f8;font:11px/1.35 monospace;' +
         'padding:4px 6px;white-space:pre-wrap;-webkit-overflow-scrolling:touch';
       const bar = document.createElement('div');
       bar.style.cssText = 'position:sticky;top:0;background:#000;color:#ff0;padding:2px 0;' +

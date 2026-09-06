@@ -204,6 +204,25 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 17) — Intro call buttons visible on landscape iPad; dev console no longer traps the intro
+
+- Owner (iPad landscape): couldn't answer the Club Manager call — the
+  ANSWER/DECLINE buttons weren't reachable.  Two causes, both fixed:
+  - The intro stage used `100lvh`, which includes the area behind Safari's
+    chrome / home indicator, so the bottom-anchored buttons fell off the
+    visible screen.  Switched `#opening-call .oc-stage` to `100dvh` (visible
+    viewport; `100vh` fallback) — buttons stay on screen.  Verified in-view
+    AND click-hit-tested on iPad landscape (1180×820, 1024×768) and phone
+    portrait (390×844).
+  - The `?devtools=1` console (which the owner opened to tune car size) is
+    pinned bottom at max z-index and sat on top of the buttons.  Lowered it to
+    z 999000 — below the intro overlay (1000000) so it never covers the call,
+    still above the HUD/menu so it shows over gameplay for tuning.  Verified
+    the Answer button is clickable even with `?devtools=1`.
+- Workflow note for live tuning: play past the intro once, then reload with
+  `?devtools=1` — the run auto-resumes (intro skipped, pt 16 resume guard) and
+  the console is available with the car −/+ buttons.
+
 ### 2026-09-05 (pt 16) — Combo: +1× for balanced thirst/hunger bars; live car-scale knob
 
 - Owner: the driving multiplier is too low — add +1× for keeping BOTH the
