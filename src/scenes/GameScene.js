@@ -126,11 +126,11 @@ const POSE_SIZED_RE = /^codex_beater_(spin_\d+|back_turn_0\d+|front)$/;
 // content = ~66 px of visible car. The player sits nearest the camera, so it
 // should read slightly larger than that.
 // Dev knob: ?dev=1 → window.__carScale (see main.js) to dial it live.
-// Bumped 0.088 → 0.10 (owner 2026-09-05: "the player's car looks a little
-// small").  ~+14% source-pixel scale — more hero-car presence without
-// clipping the pedals.  Dial live from the ?devtools console (car −/+) if
-// retuning; bake the chosen value here.
-const PLAYER_CAR_SCALE = 0.10;
+// Baked default.  Owner tunes the real value live with the ?dev=1 car-size
+// pill (top-center, doesn't cover the car); the chosen value persists in
+// localStorage 'rtr.carScale' and _playerCarScale() reads it.  Once the owner
+// settles on a number, bake it HERE and the per-device override is moot.
+const PLAYER_CAR_SCALE = 0.088;
 
 // The rear-view car is the chase-camera anchor. Its bottom edge stays at this
 // screen-space baseline while the projected road, scenery, and traffic move
@@ -15286,7 +15286,11 @@ export class GameScene extends Phaser.Scene {
    *  rather than guessed, then baked into PLAYER_CAR_SCALE. */
   _playerCarScale() {
     const o = globalThis.__carScale;
-    return (typeof o === 'number' && o > 0) ? o : PLAYER_CAR_SCALE;
+    if (typeof o === 'number' && o > 0) return o;
+    // Persisted dev override (the ?dev=1 car pill writes it) so a chosen size
+    // survives reloads on that device.
+    try { const ls = parseFloat(localStorage.getItem('rtr.carScale')); if (ls > 0) return ls; } catch (_) {}
+    return PLAYER_CAR_SCALE;
   }
 
   _applyPlayerSpriteDisplaySize(targetW = 78, fallbackH = 49) {

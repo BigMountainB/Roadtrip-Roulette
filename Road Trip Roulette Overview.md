@@ -204,6 +204,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 19) — Dev console moved to top so car-size tuning is usable; reverted the baked bump
+
+- Reverted pt 18: `PLAYER_CAR_SCALE` back to 0.088 (owner wants to CHOOSE the
+  size via the tool, not have it picked).  The ?devtools console's `car −/+`
+  now works FOR that: (1) it lives at the TOP (`bottom:0`→`top:0`, 34vh) so it
+  no longer covers the player car at the bottom-centre — you can see the car
+  while dialing; (2) each change persists to `localStorage 'rtr.carScale'`,
+  seeded back into `window.__carScale` on boot, so the dialled size survives a
+  reload; (3) `GameScene._playerCarScale` reads window.__carScale ?? that LS
+  value ?? PLAYER_CAR_SCALE, and update() re-applies the instant the knob
+  moves.  Verified: console at top, car 90→111px over +5 steps, value
+  persisted.  Once the owner settles on a number, bake it into
+  PLAYER_CAR_SCALE.
+
 ### 2026-09-05 (pt 18) — Player car bumped 0.088→0.10 (console can't be used to tune it)
 
 - Owner: the player car looks small, and the ?devtools console covers the
