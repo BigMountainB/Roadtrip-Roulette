@@ -204,6 +204,15 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 18) — Player car bumped 0.088→0.10 (console can't be used to tune it)
+
+- Owner: the player car looks small, and the ?devtools console covers the
+  car (38vh bottom panel; the car sits ~68% down), so it can't be tuned that
+  way on-device.  Abandoned the console-tuning path and baked the size:
+  `PLAYER_CAR_SCALE` 0.088 → 0.10 (~+14%; displayWidth 90→102 at 900×506, car
+  bottom 352/506 — no pedal clipping).  Before/after in tmp/police_validation/
+  41/42.  Retune by changing the one constant.
+
 ### 2026-09-05 (pt 17) — Intro call buttons visible on landscape iPad; dev console no longer traps the intro
 
 - Owner (iPad landscape): couldn't answer the Club Manager call — the

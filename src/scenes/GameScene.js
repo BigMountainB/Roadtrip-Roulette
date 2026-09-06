@@ -126,7 +126,11 @@ const POSE_SIZED_RE = /^codex_beater_(spin_\d+|back_turn_0\d+|front)$/;
 // content = ~66 px of visible car. The player sits nearest the camera, so it
 // should read slightly larger than that.
 // Dev knob: ?dev=1 → window.__carScale (see main.js) to dial it live.
-const PLAYER_CAR_SCALE = 0.088;
+// Bumped 0.088 → 0.10 (owner 2026-09-05: "the player's car looks a little
+// small").  ~+14% source-pixel scale — more hero-car presence without
+// clipping the pedals.  Dial live from the ?devtools console (car −/+) if
+// retuning; bake the chosen value here.
+const PLAYER_CAR_SCALE = 0.10;
 
 // The rear-view car is the chase-camera anchor. Its bottom edge stays at this
 // screen-space baseline while the projected road, scenery, and traffic move
