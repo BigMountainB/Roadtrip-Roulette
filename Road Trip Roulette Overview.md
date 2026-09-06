@@ -204,6 +204,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 21) — Cold Brew hydration +25%
+
+`ITEM_FX.coldbrew.h` 3 → 3.75 in `SurvivalSystem.js`.  The diuretic clawback
+pool is derived from `fx.h` (`diuretic += fx.h * DIURETIC_FRAC`), so the single
+value scales the instant bump AND the net-after-clawback by exactly 25%:
+immediate 3 → 3.75, pool 1.5 → 1.875, net 1.5 → 1.875.  The `diuretic: 2` field
+on the entry is only read for truthiness, so it needed no change.
+
+Scope note: cold brew is the only coffee that moves the Hydration bar.  The
+rest-stop **COFFEE** purchase (`RestStopScene.js` lines 85 and 254) is
+alertness-only — `survivalDelta: { tiredness: -15 }`, zero hydration — so it is
+unaffected.  `quadshot` (h +3, also a coffee drink) was left alone.
+11 test files pass.
+
 ### 2026-09-05 (pt 20) — Touch steering now reads HELD fingers, not the last press/release
 
 Owner report: "press both left and right thumb at the same time and release
