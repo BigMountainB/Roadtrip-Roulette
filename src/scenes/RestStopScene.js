@@ -29,6 +29,7 @@ import { GENRE_VEHICLE_TRAITS, speedForDifficulty } from '../data/genreVehicleTr
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 import * as Metal from '../ui/MetalUI.js';
+import { runStoryQueue } from '../ui/StoryTile.js';
 
 // ── Menu tap gate (owner 2026-08-03) ─────────────────────────────────────
 // One physical tap must never fire on two screens.  These menus mix event
@@ -1567,6 +1568,17 @@ export class RestStopScene extends Phaser.Scene {
     // Shown on whatever card appears (welcome NPC or the job/mission card),
     // so every stop — even ones with no NPC encounter — surfaces a fact.
     this._townFact = nextTownFact(stopId, save);
+    // ── Mandatory featured-story encounters (Ch. 18.5) run FIRST and block
+    // the storefront + ordinary NPCs until resolved; then this method re-runs
+    // for the normal welcome flow.  pendingAt() only lists nodes that are
+    // still current, so a scene re-entry after a committed choice shows
+    // nothing twice (idempotent by construction).
+    if (!this._storyGateDone) {
+      this._storyGateDone = true;
+      const story = this.registry.get('story');
+      const pend  = (story?.pendingAt?.(stopId) ?? []).filter(p => p.mandatory);
+      if (pend.length) { runStoryQueue(this, pend, () => this._maybeShowEncounter()); return; }
+    }
     const visited    = new Set(save?.get?.('stopsVisited', []) ?? []);
     const firstVisit = !visited.has(stopId);
     if (firstVisit) { visited.add(stopId); save?.set?.('stopsVisited', [...visited]); }

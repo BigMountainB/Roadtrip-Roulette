@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { initOpeningCall } from './ui/OpeningCallSequence.js';
+import { mountComicReader } from './ui/ComicReader.js';
 import { BootScene }    from './scenes/BootScene.js';
 import { GameScene }    from './scenes/GameScene.js';
 import { RestStopScene } from './scenes/RestStopScene.js';
@@ -1021,6 +1022,16 @@ const _boot = () => {
 
   // Career stats snapshot for the phone-menu Leaderboard + Stats apps.
   // Returns a plain-object copy so the menu can't mutate live state.
+  // COMIC app (Ch. 18) — the phone tile mounts the reader into the shared
+  // app modal.  Data is the plate's story canon (device-local, never cloud).
+  window.__comic = {
+    volumes: () => game.registry.get('comic')?.volumes?.() ?? [],
+    mount: (el) => {
+      const save = game.registry.get('save');
+      mountComicReader(el, game.registry.get('comic') ?? null, { plate: save?.plateOf?.(save?.data?.activeSlot ?? 0) || '' });
+    },
+  };
+
   window.__stats = {
     // Lifetime/persisted career stats (records, earned/spent, vices, etc.).
     get: () => {

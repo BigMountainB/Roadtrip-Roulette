@@ -173,6 +173,32 @@
       pointer-events: auto;
       border-radius: 18%;
     }
+    /* COMIC tile placeholder cover — see the markup note.  Never intercepts
+       taps (the hit zone beneath it does). */
+    #phone-comic-cover {
+      position: absolute; pointer-events: none; box-sizing: border-box;
+      background: #07080B; border: 0.35cqw solid #E4C21A; border-radius: 12%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3%; color: #F5D223; text-shadow: 0 0 1.2cqw rgba(245,210,35,0.75);
+      font-family: "Impact", "Arial Black", sans-serif;
+    }
+    #phone-comic-cover .ico { font-size: 10cqw; filter: sepia(1) saturate(4) hue-rotate(5deg) brightness(1.1); }
+    #phone-comic-cover .lbl { font-size: 3.3cqw; letter-spacing: 0.06em; }
+    /* COMIC reader (src/ui/ComicReader.js) */
+    #phone-app .cr-tabs { display: flex; gap: 2cqw; flex-wrap: wrap; margin-bottom: 2cqw; }
+    #phone-app .cr-tab.on { background: rgba(57,168,255,0.28); }
+    #phone-app .cr-body { display: flex; flex-direction: column; align-items: center; gap: 3cqw; }
+    #phone-app .cr-page { display: block; box-shadow: 0 0.6cqw 2.2cqw rgba(0,0,0,0.55); border-radius: 0.6cqw; }
+    #phone-app .cr-chapter {
+      align-self: stretch; color: #39A8FF; font-weight: 800; font-size: 3.2cqw; letter-spacing: 0.08em;
+      text-transform: uppercase; margin: 2cqw 0 0; border-bottom: 2px solid rgba(57,168,255,0.4); padding-bottom: 1cqw;
+    }
+    #phone-app .cr-tbc {
+      color: #FFD23D; font-family: "Impact", "Arial Black", sans-serif; font-size: 7cqw;
+      letter-spacing: 0.06em; text-align: center; padding: 6cqw 0 4cqw; text-shadow: 0 0 1.4cqw rgba(255,210,61,0.5);
+    }
+    #phone-app .cr-foot { flex-shrink: 0; padding-top: 2cqw; display: flex; justify-content: flex-end; }
+    #phone-app .cr-export[disabled] { opacity: 0.45; cursor: default; }
     /* First-ever-play nudge — the Tutorial tile pulses a gold glow until the
        player opens it (then `rtr_tutorialSeen` is set and it never flashes
        again).  Applied/removed in JS. */
@@ -1941,7 +1967,12 @@
     <!-- Row 4 (replaces the old steering buttons) -->
     <button class="phone-hit" data-action="leaderboard" data-px="41 1375 241 167"></button>
     <button class="phone-hit" data-action="settings"    data-px="307 1375 241 167"></button>
-    <button class="phone-hit" data-action="addiction"   data-px="573 1375 241 167"></button>
+    <!-- COMIC (Ch. 18) replaces GET HELP.  The tile's icon + label are
+         baked into both phone background PNGs, so until the owner's new
+         tile art lands this cover paints a placeholder over the old tile.
+         Positioned by layoutHitZones like every [data-px] element. -->
+    <div id="phone-comic-cover" data-px="573 1375 241 167" aria-hidden="true"><span class="ico">💬</span><span class="lbl">COMIC</span></div>
+    <button class="phone-hit" data-action="comic"       data-px="573 1375 241 167"></button>
     <!-- Bottom MENU bar REMOVED (2026-06-19): the art there reads "ROTATE
          PHONE TO ENTER GAME PLAY", but the hit zone returned to the title and
          lost the run — confusing/dangerous.  Players rotate to landscape to
@@ -4468,20 +4499,14 @@
         });
       });
 
-      // Addiction Help — sincere, real resources + a donate link.  (DUI is
-      // dark satire; this screen is played straight.)  Verify numbers/links
-      // are current before shipping; US-based — add regional ones if localized.
-      const ADDICTION_HTML = `
-        <p class="pa-lead">Struggling with substance use, or worried about someone? Help is free, confidential, and available 24/7.</p>
-        <div class="pa-row"><span class="k">SAMHSA National Helpline</span><a class="pa-link" href="tel:18006624357">1-800-662-4357</a></div>
-        <div class="pa-row"><span class="k">Suicide &amp; Crisis Lifeline</span><a class="pa-link" href="tel:988">988</a></div>
-        <div class="pa-row"><span class="k">Crisis Text Line</span><span class="v">Text HOME to 741741</span></div>
-        <div class="pa-row"><span class="k">Find treatment</span><a class="pa-link" href="https://findtreatment.gov" target="_blank" rel="noopener">findtreatment.gov</a></div>
-        <p class="pa-lead" style="margin-top:5vmin;">Support recovery &amp; safer roads:</p>
-        <div class="pa-row"><span class="k">❤️ MADD</span><a class="pa-link" href="https://madd.org/donate" target="_blank" rel="noopener">madd.org</a></div>
-        <div class="pa-row"><span class="k">❤️ SAMHSA</span><a class="pa-link" href="https://www.samhsa.gov" target="_blank" rel="noopener">samhsa.gov</a></div>
-        <p class="pa-note">This game is fiction and dark comedy. Never drive impaired. Resources are US-based — confirm current details before relying on them.</p>`;
-      addTap(qhit('addiction'), () => openApp('GET HELP', ADDICTION_HTML));
+      // COMIC (Ch. 18) — the plate's persistent story comic.  Opens inside
+      // the already-paused phone menu (no second pause state); the reader
+      // redraws pages from compact event records, nothing is stored as pixels.
+      addTap(qhit('comic'), () => {
+        openApp('COMIC', '');
+        try { window.__comic?.mount?.(appBody); }
+        catch (e) { appBody.innerHTML = '<p class="pa-note">Comic unavailable: ' + (e?.message || e) + '</p>'; }
+      });
 
       // Contacts — a tappable contact LIST; pick a person to see their
       // info + action.
@@ -4694,7 +4719,7 @@
         { a: 'startover',   q: "Just like it sounds. Take a pause from your game by tilting the phone vertically — save at any point.", noSub: true },
         { a: 'leaderboard', q: "Compare your accomplishments with your friends or world leaders — but probably not Kim Jong Un." },
         { a: 'settings',    q: "There's a sleeper setting in here. You can actually customize your entire game layout by selecting Edit under the Gameplay section!" },
-        { a: 'addiction',   q: "This game used to have a different… tone. That doesn't mean we should remove a good message, though." },
+        { a: 'comic',       q: "Every choice that matters gets drawn. This is your comic — and only your plate can write it." },
         { a: 'music',       q: "We'll start with music. Choosing your genre is choosing your path in life — each genre has its own vehicle and item art. Tap a genre's ☆ to lock it in.", pickGenre: true },
       ];
 

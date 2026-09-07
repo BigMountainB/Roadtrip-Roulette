@@ -89,6 +89,7 @@ export function normalizeStoryCanon(src) {
     for (const [k, e] of Object.entries(src.ledger)) {
       if (!isObj(e) || typeof e.storyId !== 'string' || typeof e.choiceId !== 'string') continue;
       c.ledger[k] = {
+        key: k,
         storyId: e.storyId, nodeId: String(e.nodeId ?? ''), choiceId: e.choiceId,
         attempt: Math.max(0, num(e.attempt) | 0),
         at: Math.max(0, num(e.at) | 0), mile: Math.max(0, num(e.mile)),
@@ -162,6 +163,15 @@ export class StorySystem {
    *  across a save-slot switch or a sandbox toggle. */
   canon() {
     return normalizeStoryCanon(this._save?.get?.('storyCanon', null));
+  }
+
+  /** Read-modify-write the canon in one step (ComicSystem uses this for
+   *  volumes).  `fn(canon)` returning false skips the write. */
+  mutateCanon(fn) {
+    const c = this.canon();
+    if (fn(c) === false) return false;
+    this._writeCanon(c);
+    return true;
   }
 
   _writeCanon(c) {
@@ -315,6 +325,7 @@ export class StorySystem {
     // ── Persist FIRST (18.2: "committed synchronously … before its animation") ──
     const effects = isObj(choice.effects) ? choice.effects : {};
     const entry = {
+      key,
       storyId, nodeId, choiceId, attempt, at, mile,
       runId: this._run.runId,
       // Stable keys + fallback copy so the comic can re-render this beat by

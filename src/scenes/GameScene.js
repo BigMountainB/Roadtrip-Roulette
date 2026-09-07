@@ -47,6 +47,8 @@ import { ViceSystem }    from '../systems/ViceSystem.js';
 import { SurvivalSystem } from '../systems/SurvivalSystem.js';
 import { EffectsSystem } from '../systems/EffectsSystem.js';
 import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
+import { StorySystem } from '../systems/StorySystem.js';
+import { ComicSystem } from '../systems/ComicSystem.js';
 import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
 import { genreArtPath, genreDefaultPath, GENRE_ART } from '../systems/AssetManifest.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
@@ -1093,6 +1095,26 @@ export class GameScene extends Phaser.Scene {
     if (!this._resumeFromStop && this._resumeFromPosition == null
         && !this._resumeLive && !this._titleResumeSnap) {
       this.missions.resetRun();
+    }
+    // ── Featured stories + live comic (Ch. 18) ─────────────────────────
+    // Same registry-singleton shape as missions.  StorySystem's canon lives
+    // on the PLATE save (survives new runs); only its run state (radio
+    // grant, passenger, Nerve, cargo) rides the snapshot.  ComicSystem
+    // subscribes to commits and writes panels into the same canon.
+    this.story = this.registry.get('story');
+    if (!this.story) {
+      this.story = new StorySystem(this.registry.get('save'));
+      this.registry.set('story', this.story);
+    }
+    this.story.attachSave(this.registry.get('save'));
+    this.comic = this.registry.get('comic');
+    if (!this.comic) {
+      this.comic = new ComicSystem(this.story);
+      this.registry.set('comic', this.comic);
+    }
+    if (!this._resumeFromStop && this._resumeFromPosition == null
+        && !this._resumeLive && !this._titleResumeSnap) {
+      this.story.resetRun();
     }
     // Illegal-cargo heat (Ch. 8 'illegal' term): while hauling illegal
     // cargo, every star gain bites one star harder.  Wraps addStar so all
@@ -24083,6 +24105,9 @@ export class GameScene extends Phaser.Scene {
       // MissionSystem.restore, which keeps terminal failures/paid flags
       // authoritative across checkpoint rewinds (Ch. 8).
       missions: this.missions?.serialize?.() ?? null,
+      // Featured-story run state (Ch. 18) — restored via StorySystem.restore,
+      // which re-applies the plate ledger so a rewind can't undo a choice.
+      story: this.story?.serialize?.() ?? null,
       runState: {
         flatTireTimer: Math.max(0, Number(this._flatTireTimer) || 0),
         probationTimer: Math.max(0, Number(this._probationTimer) || 0),
@@ -24223,6 +24248,7 @@ export class GameScene extends Phaser.Scene {
       this._applyRunState(s.runState);
       this._applyMessageState(s.messageState);
       if (s.missions) this.missions?.restore?.(s.missions);
+      if (s.story) this.story?.restore?.(s.story);
       // A resumed CUSTOM run gets its sandbox grants back — the snapshot may
       // have overwritten score/weapons just above, and `_startGameplay` (the
       // only other place they are applied) never runs on a resume path.
@@ -27898,6 +27924,9 @@ export class GameScene extends Phaser.Scene {
       const _mi = this._odometer ?? 0;
       const _t = Math.floor(this.gameTime ?? 0);
       const _completed = (cause === 'finish_on_time' || cause === 'finish_late' || cause === 'demo_complete');
+      // Pullman arrival closes the comic volume (owner 2026-09-06, Ch. 18);
+      // no-op on an empty volume.  Demo runs end at Snoqualmie, not Pullman.
+      if (_completed && cause !== 'demo_complete') { try { this.comic?.closeVolume?.('pullman'); } catch (_) {} }
       // Snapshot the per-trip breakdown (owner 2026-07-29 trip-summary
       // directive) BEFORE tripComplete/tripEnd's flush — GameOverScene reads
       // this rather than reaching into StatsTracker's live session, so a

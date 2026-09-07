@@ -204,6 +204,54 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-06 (pt 2) — Ch. 18 Phase 2: ComicSystem, live story tile, COMIC phone app + reader
+
+Second slice of Chapter 18.  Owner decisions this session: COMIC tile art will be
+SUPPLIED by the owner (placeholder cover until then), Get Help content DELETED,
+a comic volume closes on PULLMAN ARRIVAL.  Verified headless (Playwright probe in
+the session scratchpad, `probe_story.mjs`): Seattle tile draws → tap commits once
+→ ledger/comic/localStorage all agree → tile tears down → reader renders → reload
+keeps everything and Seattle no longer re-prompts.
+- **src/data/comicPanels.js**: DEFAULT_PANEL_META (balloon rects, tail anchors,
+  protect regions, reserved `vehicle` overlay slot per 18.9), PANEL_META overrides
+  (empty until Phase 8), the seven deterministic PAGE_TEMPLATES (wide / two_up /
+  one_wide_two_small / four_grid / climax / meanwhile / ending) + FLOW_CYCLE.
+- **src/systems/ComicSystem.js**: subscribes to StorySystem commits; one compact
+  event per ledger key (idempotent — a rewind/re-entry can't add a second panel);
+  a chapter per TRIP (new runId closes the open chapter + locks its page); flow
+  events fill the open page cycling templates by ordinal, major/climax/ending/
+  meanwhile take their own page; pages lock when full; `closeVolume('pullman')`
+  from GameScene's finish path, no-op on an empty volume; `pagesOf()` resolves
+  dialogue by stable key with saved fallback.  `tests/comic.test.mjs` (37).
+- **src/ui/StoryTile.js** (Phaser, depth 600, above the ordinary card at 500):
+  landscape tile, placeholder art from the speaker's portrait + "STORY ART
+  PENDING", white auto-sizing balloons (18/16/14/13 px, two linked balloons on
+  overflow, tail from the edge facing the anchor), spoken-line buttons with
+  `($cost)` and disabled-when-unaffordable, commit BEFORE animation through
+  `commitChoice` hooks (cash → rest-stop `_score`, unlockGenre → `__genre.own`,
+  contact/passenger/radioGrant/wanted → `_purchases.story*` for GameScene to
+  consume in Phases 3-4), player balloon → NPC reply → slide left with PEEK px of
+  the previous tile showing, drag back, snap on next choice.  A stub / dead-end
+  node shows one plain "TO BE CONTINUED…" exit so the player is never stranded.
+- **RestStopScene**: `_maybeShowEncounter` runs `story.pendingAt(stop)`'s
+  MANDATORY nodes first (18.5), blocking storefront + welcome NPC, then re-enters
+  the normal flow.  `_showEncounterCard` untouched.
+- **GameScene**: `story` + `comic` registry singletons beside `missions`;
+  `story.resetRun()` on fresh runs; `story` in `_collectSaveSnapshot` and
+  `_applyResumeSnapshot` (ledger re-applied on restore); Pullman finish →
+  `comic.closeVolume`.
+- **COMIC app** (index.html + main.js + src/ui/ComicReader.js): hit zone
+  `comic` replaces `addiction`; GET HELP resources + its tutorial line removed;
+  `#phone-comic-cover` placeholder tile positioned by the existing `[data-px]`
+  layout; `window.__comic.mount(el)` builds the reader — volume tabs, CHAPTER n —
+  TRIP n headers, canvas pages redrawn from events (no stored pixels), TO BE
+  CONTINUED / THE END, EXPORT PDF button present but disabled until Phase 7.
+  Tutorial tour copy for the tile: "Every choice that matters gets drawn…".
+- Harness gotcha (for the next probe): the vertical title splash is shown on EVERY
+  open and its tap sends a returning player to the phone menu — dismiss it
+  (`#opening-call` click → `__phoneMenu.close()`) before clicking the canvas, and
+  set `rtr_tutorialSeen` or the forced tutorial hub pauses the scene mid-beat.
+
 ### 2026-09-06 (pt 1) — Ch. 18 Phase 1: story canon save + StorySystem ledger + tests
 
 First slice of Chapter 18 (persistent story comic).  Data + state machine only — no
