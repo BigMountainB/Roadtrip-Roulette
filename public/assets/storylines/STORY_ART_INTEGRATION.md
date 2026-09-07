@@ -1,0 +1,196 @@
+# Road Trip Roulette — Story Art Integration Contract
+
+**Canonical companion to Chapter 18 of `Road Trip Roulette Overview.md`.** Claude should use this
+file when completing Chapter 18, Phase 8. It is the authoritative bridge between story dialogue
+and the supplied artwork. Do not infer a different scene from a filename and do not attach every
+PNG merely because it exists.
+
+## 1. Required code contract
+
+1. Keep dialogue in `src/data/featuredStories.js`; artwork must contain no baked dialogue.
+2. Extend comic-art lookup so a response can override its node's establishing image:
+   - node/establishing: `${storyId}.${nodeId}`
+   - selected response: `${storyId}.${nodeId}.${choiceId}`
+   - code-created beat: `${storyId}.beat.${beatId}`
+   - ending/outcome variant: `${storyId}.${nodeId}.${outcome}`
+3. A selected choice renders the Player's `label` in the Player balloon and the choice's `reply`
+   in the NPC/reaction balloon. A node image renders the node's `line`. Function-valued lines and
+   replies must be evaluated first. Save the same stable dialogue key plus fallback text.
+4. All rectangles below are normalized `{x,y,w,h}` in the full 16:9 image. They are initial safe
+   zones, not permission to cover a face, hand, carried story item, vehicle, or important action.
+5. If text does not fit, use the existing linked second-balloon behavior. Do not shrink below the
+   reader's minimum font size. The art itself must never be modified to make dialogue fit.
+
+## 2. Balloon/protection presets
+
+| Preset | NPC/reaction balloon | Player balloon | Protected regions |
+|---|---|---|---|
+| `LR` | `{x:.54,y:.05,w:.42,h:.30}` | `{x:.04,y:.64,w:.45,h:.30}` | left character `{x:.02,y:.08,w:.40,h:.82}`; right character `{x:.58,y:.08,w:.40,h:.82}` |
+| `RL` | `{x:.04,y:.05,w:.42,h:.30}` | `{x:.52,y:.64,w:.44,h:.30}` | same left/right character regions as `LR` |
+| `TOP` | `{x:.04,y:.04,w:.58,h:.26}` | `{x:.40,y:.69,w:.56,h:.26}` | center action `{x:.20,y:.18,w:.65,h:.66}` |
+| `CAR_LR` | `{x:.03,y:.05,w:.42,h:.27}` | `{x:.56,y:.68,w:.40,h:.26}` | car/driver `{x:.32,y:.30,w:.68,h:.66}`; standing NPC `{x:.02,y:.10,w:.30,h:.82}` |
+| `CAR_RL` | `{x:.55,y:.05,w:.41,h:.27}` | `{x:.04,y:.68,w:.42,h:.26}` | car/driver `{x:.00,y:.28,w:.68,h:.68}`; standing NPC `{x:.55,y:.08,w:.40,h:.86}` |
+| `ACTION` | `{x:.04,y:.04,w:.44,h:.25}` | `{x:.52,y:.70,w:.44,h:.25}` | main action `{x:.12,y:.17,w:.76,h:.70}` |
+| `ENDING` | `{x:.04,y:.04,w:.52,h:.25}` | `{x:.44,y:.71,w:.52,h:.24}` | all faces/hands and central ending action; metadata may split into two linked balloons |
+
+Tail anchors should point to the speaking character's mouth after the image is loaded. They must
+be measured from the actual asset, not guessed from the portrait ID. Protected regions are
+minimums; add tighter face/hand/item boxes during visual QA.
+
+## 3. Brittney wardrobe continuity — locked
+
+- Mercer Island introduction, fork, and every road/need/reaction scene before Vantage: Brittney
+  wears her clean, colorful Gas-N-Sip uniform (cream/red/turquoise fitted polo, turquoise short
+  shorts, red belt, turquoise/red visor, clean complexion).
+- She does **not** change in the car and does **not** wear the white tank/denim road outfit during
+  the drive.
+- At Vantage, immediately before joining her friends, she may change into the road outfit inside
+  the gas station. The change can be shown as a private offscreen transition followed by her
+  emerging in the road outfit; no nudity is shown.
+- Existing road-outfit Mercer/passenger PNGs are currently continuity rejects and must remain
+  **unwired** unless the owner later approves a specific Vantage reuse. Do not delete or redraw
+  them automatically.
+- `hiphop/mercer_island/mercer_01_brittney_double_shift.png` and
+  `hiphop/mercer_island/mercer_02_keep_job_phone_continues.png` are approved work-uniform art.
+
+## 4. Hip-Hop artwork → dialogue mapping
+
+Every path below is relative to `public/`.
+
+| Stable art key | Exact artwork path | Dialogue/reaction rendered | Preset / extra protection |
+|---|---|---|---|
+| `hiphop.seattle_offer` | `assets/storylines/hiphop/seattle/seattle_01_freestyle_circle.png` | `seattle_offer.line` | `TOP`; protect Malik and full freestyle group |
+| `hiphop.seattle_offer.intro` | `assets/storylines/hiphop/seattle/seattle_02_crew_confrontation.png` | transition into Malik's offer; no new permanent choice unless a stable beat is added | `LR` |
+| `hiphop.seattle_offer.carry` | `assets/storylines/hiphop/seattle/seattle_03_phone_handoff.png` | Player `carry.label`; Malik `carry.reply` | `LR`; additionally protect phone and both hands |
+| `hiphop.seattle_offer.carry.radio` | `assets/storylines/hiphop/seattle/seattle_04_radio_explanation.png` | temporary Hip-Hop radio explanation in `carry.reply` | `TOP`; protect phone screen |
+| `hiphop.seattle_offer.pass` | `assets/storylines/hiphop/seattle/seattle_05_refuse_job.png` | Player `pass.label`; Malik `pass.reply` | `LR` |
+| `hiphop.mercer_fork` | `assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png` | `mercer_fork.line` | `LR`; protect Brittney, Player, phone, register |
+| `hiphop.mercer_fork.keepJob` | `assets/storylines/hiphop/mercer_island/mercer_02_keep_job_phone_continues.png` | Player `keepJob.label`; Brittney `keepJob.reply` | `LR`; protect phone/handoff gesture |
+| `hiphop.bellevue_founder` | `assets/storylines/hiphop/bellevue/bellevue_01_founder_bribe_offer.png` | `bellevue_founder.line` | `LR`; protect offered cash/phone |
+| `hiphop.bellevue_founder.sell` | `assets/storylines/hiphop/bellevue/bellevue_02_accept_bribe_ending.png` | Player `sell.label`; founder `sell.reply`; COMPLETE! SORT OF… | `ENDING`; protect exchanged phone/cash |
+| `hiphop.bellevue_founder.refuse` | `assets/storylines/hiphop/bellevue/bellevue_03_reject_bribe.png` | Player `refuse.label`; founder `refuse.reply` | `LR` |
+| `hiphop.issaquah_kyle` | `assets/storylines/hiphop/issaquah/issaquah_01_kyle_hears_track.png` | `issaquah_kyle.line` | `LR`; protect Kyle and audio board |
+| `hiphop.issaquah_kyle.session` | `assets/storylines/hiphop/issaquah/issaquah_02_remaster_session.png` | ten-minute remaster transition | `TOP`; protect Kyle at board and Player over his shoulder; Malik must never appear |
+| `hiphop.issaquah_kyle.handOver` | `assets/storylines/hiphop/issaquah/issaquah_03_thumb_drive_handoff.png` | Player `handOver.label`; Kyle `handOver.reply` | `LR`; protect the single thumb drive and hands |
+| `hiphop.northbend_dom.arrival` | `assets/storylines/hiphop/north_bend/north_bend_00_dominique_hears_arriving_track.png` | Dom'nique hears the arriving song, then `northbend_dom.line` | `CAR_LR`; protect Dom'nique, Player, and car; **car has no exterior speaker** |
+| `hiphop.northbend_dom` | `assets/storylines/hiphop/north_bend/north_bend_01_stolen_beat_confrontation.png` | `northbend_dom.line` and NoiseCloud proof | `LR`; protect Dom'nique's pointing hand, phone/drive, Player |
+| `hiphop.northbend_dom.promise` | `assets/storylines/hiphop/north_bend/north_bend_02_promise_credit.png` | Player `promise.label`; Dom'nique `promise.reply` | `LR`; protect Dom'nique's phone and Player's single drive |
+| `hiphop.northbend_dom.delay` | `assets/storylines/hiphop/north_bend/north_bend_03_defer_until_presser.png` | Player `delay.label`; Dom'nique `delay.reply` | `LR`; exterior only; protect both story items |
+| `hiphop.northbend_dom.bagman` | `assets/storylines/hiphop/north_bend/north_bend_04_chased_out.png` | Player `bagman.label`; Dom'nique `bagman.reply`; no shopping | `CAR_LR`; protect departing car and Dom'nique |
+| `hiphop.pass_tennessee` | `assets/storylines/hiphop/snoqualmie_pass/snoqualmie_01_credit_decision.png` | `pass_tennessee.line` plus selected credit label/reply | `LR`; protect the **one** USB in Player's hand |
+| `hiphop.pass_tennessee.pressing` | `assets/storylines/hiphop/snoqualmie_pass/snoqualmie_02_pressing_100_records.png` | pressing transition and 100-record cargo rule | `ACTION`; protect press, records, hands |
+| `hiphop.pass_tennessee.loaded` | `assets/storylines/hiphop/snoqualmie_pass/snoqualmie_03_player_loads_records_tennessee_stays.png` | selected credit reply after pressing/loading | `CAR_RL`; Tennessee remains at workshop; Player alone transports cargo |
+| `hiphop.cleelum_store.pristine` | `assets/storylines/hiphop/cle_elum/cle_elum_01_pristine_delivery_unlock.png` | evaluated `cleelum_store.line/reply` for `pristine` | `ENDING`; protect female clerk, crates, Player |
+| `hiphop.cleelum_store.damaged` | `assets/storylines/hiphop/cle_elum/cle_elum_02_damaged_cargo_payout.png` | evaluated `cleelum_store.line/reply` for `damaged`, `almost_empty`, or `one_record` until dedicated variants exist | `ENDING`; protect clerk and surviving records |
+| `hiphop.vantage_recovery.locked_phone` | `assets/storylines/hiphop/vantage_ambush/vantage_00_locked_phone_in_car.png` | phone-lock consequence after passing Issaquah | `CAR_RL`; protect Player, steering wheel, and locked phone |
+| `hiphop.vantage_recovery.first_tail` | `assets/storylines/hiphop/vantage_ambush/vantage_02_first_hostile_in_mirror.png` | first ambush warning beat | `ACTION`; protect Player, rearview mirror, hostile-car reflection, and phone |
+| `hiphop.vantage_recovery` | `assets/storylines/hiphop/vantage_ambush/vantage_01_three_car_ambush.png` | `vantage_recovery.line`, then selected recovery label/reply | `ACTION`; protect Player car and all three attackers |
+| `hiphop.vantage_recovery.side_ram` | `assets/storylines/hiphop/vantage_ambush/vantage_03_side_ram.png` | ambush damage escalation | `ACTION`; protect white sedan, Player, and both impact points |
+| `hiphop.vantage_recovery.boxed_in` | `assets/storylines/hiphop/vantage_ambush/vantage_04_boxed_in.png` | Player trapped by all three hostile cars | `ACTION`; protect the readable four-car formation |
+| `hiphop.vantage_recovery.fatal` | `assets/storylines/hiphop/vantage_ambush/vantage_05_fatal_wreck.png` | fatal ambush consequence; no dialogue required | `ENDING`; protect bloodless Player and all four vehicles |
+| `hiphop.vantage_recovery.special_delivery` | `assets/storylines/hiphop/vantage_ambush/vantage_06_special_delivery_ending.png` | MALIK'S REGARDS / Special Delivery ending and recovery-choice setup | `ENDING`; protect Player, locked phone, and three departing cars |
+
+Do not substitute Malik for Kyle in Issaquah, do not put Malik inside Kyle's room, do not put
+Tennessee in Cle Elum, and do not show anyone except Player driving the canonical white sedan.
+
+## 5. Country artwork → dialogue mapping and current gaps
+
+The following existing panels are valid by story action but presently show Brittney's **road
+outfit too early**. They are intentionally not mapped into `PANEL_META` yet:
+
+```text
+assets/storylines/country/passenger_needs/hunger_01_buy_sushi.png
+assets/storylines/country/passenger_needs/hunger_02_offer_pork_burrito.png
+assets/storylines/country/passenger_needs/hunger_03_wait_for_better_food.png
+assets/storylines/country/passenger_needs/bathroom_01_hold_it.png
+assets/storylines/country/passenger_needs/bathroom_02_wait_in_car.png
+assets/storylines/country/passenger_needs/bathroom_03_go_with_her.png
+assets/storylines/country/passenger_needs/thirst_01_buy_slushie.png
+assets/storylines/country/passenger_needs/thirst_02_find_fountain.png
+assets/storylines/country/driving_reactions/smooth_ride_flirtation.png
+assets/storylines/country/driving_reactions/major_collision_nerve_loss.png
+assets/storylines/country/nerve/nerve_zero_roadside_exit.png
+assets/storylines/country/nerve/refuse_exit_five_star_chase.png
+```
+
+If replacement work-uniform panels are later approved, use these exact keys and dialogue:
+
+| Stable art key | Dialogue/reaction | Preset / protection |
+|---|---|---|
+| `country.need_hunger.sushi` | Player `sushi.label`; Brittney `sushi.reply` | `LR`; sushi and purchase handoff |
+| `country.need_hunger.burrito` | Player `burrito.label`; Brittney `burrito.reply` | `LR`; burrito and reaction |
+| `country.need_hunger.wait` | Player `wait.label`; Brittney `wait.reply` | `LR` |
+| `country.need_bathroom.hold` | Player `hold.label`; Brittney `hold.reply` | `LR` |
+| `country.need_bathroom.waitInCar` | Player `waitInCar.label`; Brittney `waitInCar.reply` | `CAR_RL`; only Player in driver seat |
+| `country.need_bathroom.goWith` | Player `goWith.label`; Brittney `goWith.reply` | `LR` |
+| `country.need_thirst.slushie` | Player `slushie.label`; Brittney `slushie.reply` | `LR`; slushie and hands |
+| `country.need_thirst.fountain` | Player `fountain.label`; Brittney `fountain.reply` | `LR`; blank-stare expression |
+| `country.beat.smoothRide` | rotating `FLIRT_LINES`; no choice unless tied to a committed relationship gain | `CAR_RL`; only Player driving |
+| `country.beat.majorCollision` | applicable 5+ HP reaction | `CAR_RL`; only Player driving |
+| `country.beat.roadside_exit` | 0-Nerve exit text | `CAR_LR` |
+| `country.beat.kidnap` | police-warning/kidnapping consequence | `ACTION`; Player driving, Brittney passenger |
+
+The Mercer Country choice still needs an approved **work-uniform** response panel for
+`hiphop.mercer_fork.ride`; until then, use the approved Mercer establishing image rather than a
+wrong-costume panel. The Vantage ending needs three approved beats:
+
+1. Brittney arrives in her Gas-N-Sip uniform and spots her friends.
+2. She changes inside the Vantage gas station and emerges in the road outfit.
+3. `country.vantage_arrival.sendOff`: evaluated ending response (`ride_em`, `standard`, or
+   `barely`) with the correct final outfit.
+
+These existing files are **not** approved for automatic Mercer wiring:
+
+```text
+assets/storylines/country/mercer_island/mercer_03_changed_to_road_clothes.png
+assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png
+```
+
+They may be reviewed for Vantage reuse later; do not move, delete, or regenerate them without an
+explicit owner instruction.
+
+## 6. Classic Rock artwork mapping
+
+The following Vantage, Othello, Hatton, and Pullman panels are complete:
+
+| Stable art key | Exact artwork path | Dialogue/reaction | Preset / protection |
+|---|---|---|---|
+| `classicRock.vantage_diner.shift_end` | `assets/storylines/classic_rock/vantage/vantage_01_waitress_finishing_shift.png` | pre-arrival establishing beat; waitress finishes shift and expected Nan | `ACTION`; protect waitress, tips, travel bag, stage |
+| `classicRock.vantage_diner` | `assets/storylines/classic_rock/vantage/vantage_02_waiting_for_nan.png` | `vantage_diner.line` | `CAR_RL`; protect waitress, phone, travel bag, Player/car |
+| `classicRock.vantage_diner.east` | `assets/storylines/classic_rock/vantage/vantage_03_player_offers_ride.png` | Player `east.label`; waitress `east.reply` | `CAR_LR`; protect open passenger doorway, faces, travel bag |
+| `classicRock.vantage_diner.swipe_reaction` | `assets/storylines/classic_rock/vantage/vantage_04_swipe_right_reaction.png` | approved “Did we just swipe right?” reaction beat | `CAR_LR`; protect faces and open passenger door |
+| `classicRock.vantage_offer` | `assets/storylines/classic_rock/vantage/vantage_05_opening_offer.png` | `vantage_offer.line` | `LR`; protect waitress's correctly oriented pointing hand, Player, guitar, stage |
+| `classicRock.othello_cover.arrival` | `assets/storylines/classic_rock/othello/othello_01_arrival.png` | Othello arrival transition | `CAR_RL`; protect trunk, guitar case, both faces |
+| `classicRock.othello_cover.pay` | `assets/storylines/classic_rock/othello/othello_02_player_pays_cover.png` | Player `pay.label`; waitress `pay.reply` | `LR`; protect cash exchange, guitar case, faces |
+| `classicRock.othello_show.performance` | `assets/storylines/classic_rock/othello/othello_03_unpaid_opening_performance.png` | unpaid performance transition | `ACTION`; protect Player, hands, guitar, microphone, waitress |
+| `classicRock.othello_show.interest` | `assets/storylines/classic_rock/othello/othello_04_waitress_growing_interest.png` | waitress's growing-interest reaction | `ACTION`; protect waitress foreground and Player performing |
+| `classicRock.othello_show` | `assets/storylines/classic_rock/othello/othello_05_rush_and_propositions.png` | `othello_show.line` | `LR`; protect both faces, guitar, hands |
+| `classicRock.othello_show.hearBoth` | `assets/storylines/classic_rock/othello/othello_06_asks_all_propositions.png` | Player `hearBoth.label`; waitress `hearBoth.reply` | `LR`; protect open hands and raised finger |
+| `classicRock.othello_show.payingOnly` | `assets/storylines/classic_rock/othello/othello_07_asks_paying_proposition.png` | Player `payingOnly.label`; waitress `payingOnly.reply` | `LR`; protect money gesture and folded-arm reaction |
+| `classicRock.othello_show.reject` | `assets/storylines/classic_rock/othello/othello_08_rejects_propositions_waitress_leaves.png` | Player `reject.label`; waitress `reject.reply`; LEFT AT OTHELLO | `ENDING`; protect departing waitress, bag, Player, guitar case |
+| `classicRock.othello_show.impromptour` | `assets/storylines/classic_rock/othello/othello_09_impromptour_proposal.png` | ImprompTour portion of `hearBoth.reply` | `TOP`; protect map, both faces and pointing hand |
+| `classicRock.othello_show.continue` | `assets/storylines/classic_rock/othello/othello_10_continue_tour.png` | positive continue-together consequence | `ACTION`; protect both faces, shared loading action, guitar case |
+| `classicRock.othello_show.duetOffer` | `assets/storylines/classic_rock/othello/othello_11_duet_proposal.png` | Washtucna-duet portion of `hearBoth.reply` | `TOP`; protect map, both faces, both pointing hands, two microphones |
+| `classicRock.othello_show.duetYes` | `assets/storylines/classic_rock/othello/othello_12_accepts_duet.png` | positive duet-intent beat if retained by final dialogue tree | `LR`; protect handshake, faces, map |
+| `classicRock.othello_show.soloIntent` | `assets/storylines/classic_rock/othello/othello_13_prefers_solo.png` | solo-intent beat if retained by final dialogue tree | `LR`; protect Player's hand-to-chest gesture and waitress reaction |
+| `classicRock.hatton_nan` | `assets/storylines/classic_rock/hatton/hatton_01_nan_arrives_oldsmobile.png` | opening portion of `hatton_nan.line` | `CAR_LR`; protect Nan/keys, Oldsmobile, waitress, Player and white sedan |
+| `classicRock.pullman_finale.partnership_kiss` | `assets/storylines/classic_rock/pullman/pullman_mutual_kiss_wide.png` | evaluated Pullman partnership ending at >80 relationship | `ENDING`; protect both faces, kiss, microphones, crowd |
+
+The remaining Hatton branches, Washtucna, La Crosse, Colfax, alternate Pullman endings, and all
+approved `MEANWHILE...` strips still require final narrative panels. Shared location and character
+reference sheets are references only and must never be shown as finished comic panels. Keys ending
+in `.duetYes` and `.soloIntent` require explicit nodes/beats if the final tree retains those choices;
+do not attach either to a different decision merely to make the image appear.
+
+## 7. Wiring/QA checklist for Claude
+
+- Fill `PANEL_META` only for approved rows above; do not bulk-import the directory.
+- Add response-level and beat-level key resolution before wiring choice-specific art.
+- Preload each referenced asset and gracefully fall back to the current placeholder if absent.
+- Verify every key by opening the live conversation and selecting every branch once.
+- Confirm NPC and Player balloons use current `line`, `label`, and `reply` values—not copied text
+  inside this guide—so later dialogue edits propagate to old comics through stable keys/fallbacks.
+- Test 16:9 live tiles, every page template, PDF export, reload, checkpoint rewind, and plate reset.
+- Visually inspect that no balloon covers a face, hand, phone, USB, vinyl crate, steering wheel,
+  relationship-changing action, or the Player's car.
+- Keep Player as the sole driver in every car scene.

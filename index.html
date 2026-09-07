@@ -4379,7 +4379,7 @@
           sSec('Data') +
           `<div class="pa-row"><span class="k">♻️ Reset player</span><button id="set-reset" class="pa-toggle" style="border-color:#FF4466;color:#FF7799;background:#2a1118;">RESET</button></div>` +
           `<p class="pa-note">Reset clears money, vehicles, vices &amp; checkpoints. Your lifetime stats, records and trophies are KEPT. Volume + mute apply instantly here on the start menu — no run needed.</p>` +
-          `<p class="pa-note" style="opacity:.55">Game build: b21 · ${(window.__BUILD_ID ?? 'dev')}</p>`);
+          `<p class="pa-note" style="opacity:.55">Game build: b22 · ${(window.__BUILD_ID ?? 'dev')}</p>`);
         const plateBtn = document.getElementById('set-plate');
         addTap(plateBtn, () => {
           // Edit the ACTIVE player's plate from Settings (not just first launch).
@@ -4981,16 +4981,17 @@
       qhit('tutorial')?.appendChild(tutmActive);
 
       let tutmOn = false, tutmCur = null;
-      // Per-VISIT glow (owner 2026-08-31 spec restated: "any time the tutorial
-      // button is pressed... all the buttons light up until each is
-      // individually selected").  The old glow keyed off the PERSISTED read
-      // state, so after one full pass no tile ever threw again on re-entry.
-      // Visited resets every time the mode opens; markRead still feeds the
-      // Road Scholar counts underneath.
-      let tutmVisited = new Set();
+      // PERSISTED glow (owner 2026-09-06, restated for the last time: "if the
+      // tutorial buttons were selected they should only flash the first time
+      // the game is open... if they are not selected, they should flash until
+      // they have been selected").  A tile selected ONCE EVER never flashes
+      // again; unselected tiles flash on every tutorial-mode entry until
+      // selected.  Keyed off the same tutorialRead save state the in-game
+      // tutorial glow uses (GameScene._tutModeUpdate) — one source of truth,
+      // survives reloads.  Do NOT re-introduce a per-visit Set here.
       const tutmEls  = () => T()?.entries('phone') ?? [];
       const tutmGlow = () => {
-        for (const e of tutmEls()) qhit(e.el)?.classList.toggle('tut-flash', !tutmVisited.has(e.id));
+        for (const e of tutmEls()) qhit(e.el)?.classList.toggle('tut-flash', !T()?.isRead(e.id));
       };
       // Sheet geometry from the LIVE tile rects: spans the tile columns, top
       // at the art's top edge (or the notch inset), and capped so its bottom
@@ -5038,7 +5039,7 @@
         tutmSheet.innerHTML = `<div class="tm-title">${e.title}</div><div class="tm-body">${e.desc}</div>
           <div class="tm-nav"><button data-nav="-1" ${i > 0 ? '' : 'disabled'}>‹ PREV</button>
           <button data-nav="x">✕</button><button data-nav="1" ${i < list.length - 1 ? '' : 'disabled'}>NEXT ›</button></div>
-          <div class="tm-build">b20</div>`;
+          <div class="tm-build">b22</div>`;
         // Real buttons through the project's tap helper — iOS was not
         // delivering click events to the old text spans (owner 2026-09-03).
         addTap(tutmSheet.querySelector('[data-nav="-1"]'), () => { if (i > 0) tutmShow(list[i - 1]); });
@@ -5047,13 +5048,11 @@
         tutmFitSheet();
         tutmSheet.classList.add('show');
         tutmBanner.classList.remove('on');       // the sheet occupies the banner's strip
-        tutmVisited.add(e.id);
-        T().markRead(e.id); tutmGlow();
+        T().markRead(e.id); tutmGlow();          // persisted — this tile never flashes again
       };
       const tutmOpen = () => {
         if (tutmOn) return; tutmOn = true;
         tutmFitSheet();            // seat the card + banner before anything shows
-        tutmVisited = new Set();   // fresh visit → every tile throbs again
         tutmCap.classList.add('on'); tutmBanner.classList.add('on'); tutmActive.classList.add('on');
         tutCloseModals(); tutmGlow();
       };
@@ -5091,7 +5090,7 @@
           Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
           or display to learn what it does.</div>
           <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>
-          <div class="tm-build">b20</div>`;
+          <div class="tm-build">b22</div>`;
         // GOT IT drops the card; the mode (already on) stays.
         addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); tutmSheet.classList.remove('show'); if (tutmOn) tutmBanner.classList.add('on'); });
         tutmFitSheet();

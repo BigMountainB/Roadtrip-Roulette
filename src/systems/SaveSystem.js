@@ -38,7 +38,7 @@ const SLOT_COUNT = 3;
 // type keeps everything.  Money was already global.  The per-mode `profiles`
 // buckets are now vestigial (kept only to read + lift legacy saves).
 const GLOBAL_KEYS = new Set([
-  'achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector', 'tutorialRead', 'tutorialIntroSeen', 'tutorialBtnSeen',
+  'achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector', 'tutorialRead', 'tutorialIntroSeen', 'tutorialBtnSeen', 'tutorialBtnSeenBuild',
   'npcMemory', 'missionRep', 'missionStats',
   // ── Progression, moved from per-mode profile to the plate ──
   'money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
@@ -180,6 +180,16 @@ const DEFAULT_GLOBAL = {
   // beeps + flashes a dashboard light approaching a speed trap.  Persists
   // across runs once bought.
   radarDetector:   false,
+  // Tutorial persistence (owner 2026-09-06, after THREE reports of "selected
+  // buttons flash again every open"): the root cause was never the glow
+  // logic — these keys were routed to slot.global by GLOBAL_KEYS but never
+  // copied in _sanitizeGlobal, so EVERY reload wiped them (and with
+  // tutorialBtnSeenBuild gone, every boot read as a "new build" and re-armed
+  // all blinking).  They MUST stay here + in _sanitizeGlobal.
+  tutorialRead:         {},     // { [entryId]: true } — per-item "selected once ever"
+  tutorialIntroSeen:    false,  // GOT IT card dismissed once
+  tutorialBtnSeen:      null,   // { phone?, game_menu?, gameplay? } first-press map
+  tutorialBtnSeenBuild: null,   // __BUILD_ID that last re-armed the blink
   // Recurring-NPC memory for encounter dialogue trees.  Shape:
   //   npcMemory: { [npcId]: { met: true, hadPie: true, … } }
   // Flat flag/value bags written by choice `setMemory`; drives return-visit
@@ -593,6 +603,15 @@ export class SaveSystem {
     g.stats           = isObj(stats) ? stats : {};
     g.leaderboard     = this._sanitizeLeaderboard(src.leaderboard);
     g.radarDetector   = src.radarDetector === true;
+    // Tutorial persistence — see the DEFAULT_GLOBAL comment: dropping these
+    // here is what made every tutorial button flash again on every open.
+    const tutRead     = cleanJson(src.tutorialRead, {});
+    g.tutorialRead    = isObj(tutRead) ? tutRead : {};
+    g.tutorialIntroSeen = src.tutorialIntroSeen === true;
+    const tutBtn      = cleanJson(src.tutorialBtnSeen, null);
+    g.tutorialBtnSeen = isObj(tutBtn) ? tutBtn : null;
+    g.tutorialBtnSeenBuild = (typeof src.tutorialBtnSeenBuild === 'string' || typeof src.tutorialBtnSeenBuild === 'number')
+      ? src.tutorialBtnSeenBuild : null;
     const npcMemory   = cleanJson(src.npcMemory, {});
     g.npcMemory       = isObj(npcMemory) ? npcMemory : {};
     const missionRep   = cleanJson(src.missionRep, {});

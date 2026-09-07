@@ -204,6 +204,29 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-06 (pt 8) — Tutorial flash finally persists: the save layer was wiping it every boot (b22)
+
+Owner, for the third time: "if the tutorial buttons were selected they should only
+flash the first time the game is open… if they are not selected, they should flash
+until they have been selected."  ROOT CAUSE was never the glow logic — it was the
+save layer: `tutorialRead` / `tutorialIntroSeen` / `tutorialBtnSeen` were routed to
+slot.global by GLOBAL_KEYS but never copied in `_sanitizeGlobal`, so EVERY reload
+silently wiped them; and `tutorialBtnSeenBuild` was in no whitelist at all, so every
+boot read as a "new game update" and re-armed all blinking.  Fixes:
+- **SaveSystem**: the four tutorial keys added to DEFAULT_GLOBAL and copied (with
+  structural cleaning) in `_sanitizeGlobal`; `tutorialBtnSeenBuild` added to
+  GLOBAL_KEYS.  Big warning comments at both sites.
+- **Phone menu glow is PERSISTED, not per-visit**: `tutmGlow` now keys off
+  `T().isRead(id)` — the same `tutorialRead` state the in-game tutorial glow
+  already used (GameScene `_tutModeUpdate`).  The per-visit `tutmVisited` Set is
+  DELETED — do not re-introduce it.  A tile selected once EVER never flashes
+  again (until a real game update re-arms via the build stamp); unselected tiles
+  flash on every tutorial-mode entry until selected.
+- Verified by headless probe: select Garage → no flash on mode re-entry AND after
+  a full page reload; the nine unselected tiles keep flashing; the Tutorial tile's
+  own pulse also now stays off across reloads.  Build stamps bumped to **b22**
+  (tutorial sheet ×2 + Settings footer).
+
 ### 2026-09-06 (pt 7) — Ch. 18 Phase 7: local page rendering → PDF export / share / download
 
 Owner decisions this session: **Web Share API + download fallback, no native plugin**;
@@ -12326,6 +12349,12 @@ generic abandon button.
 
 ### 18.3 Live comic presentation
 
+**Final-art wiring contract:** use
+[`public/assets/storylines/STORY_ART_INTEGRATION.md`](public/assets/storylines/STORY_ART_INTEGRATION.md)
+for the exact approved asset paths, story-node/choice/beat keys, dialogue ownership, balloon-safe
+rectangles, protected regions, continuity locks, and the remaining-art list. That file is the
+authoritative Phase 8 handoff; do not bulk-import every PNG in the storylines directory.
+
 During a consequential conversation:
 
 1. Show clean story artwork as the current landscape comic tile.
@@ -12412,8 +12441,9 @@ in Issaquah.
 - Brittney: “My boyfriend can lick someone else’s butt. Take me to StageWagon, babe!”
 
 Hip-Hop leaves Brittney working and sends the phone with the player to Issaquah. Country leaves
-the phone on the counter, ends temporary Hip-Hop access, changes Brittney into road clothes, and
-starts the passenger arc.
+the phone on the counter, ends temporary Hip-Hop access, and starts the passenger arc. Brittney
+keeps wearing her clean Gas-N-Sip work uniform throughout the drive. She changes into her road
+outfit only inside the Vantage gas station as she meets up with her friends.
 
 If Mercer Island is skipped, do not lock the phone yet. Country becomes unavailable for that
 trip, Malik texts the player to take the phone directly to his friend in Issaquah, and Malik Trust
@@ -12466,8 +12496,9 @@ Make the chosen recovery idempotent and prevent an inescapable death loop.
 ### 18.7 Featured Story B — Country: StageWagon or Bust
 
 Brittney is a clearly adult character and the concert is the fictional **StageWagon**. Choosing
-Country at Mercer puts her in the car and leaves Malik's phone behind. She changes in the car in
-the first road panel.
+Country at Mercer puts her in the car and leaves Malik's phone behind. She remains in her clean,
+colorful Gas-N-Sip work uniform for the entire drive. At Vantage, she changes privately inside
+the gas station immediately before joining her friends; no in-car wardrobe change occurs.
 
 Track `relationship` as 0–100 and show five stars. Four stars / 80% is full success. Barely Made
 It awards no cash but still unlocks Country. Ride ’Em requires at least four stars, strong Nerve,
@@ -12616,7 +12647,9 @@ Keep each phase buildable and reviewable:
 5. Classic Rock Relationship/Following/economy branches and Pullman endings.
 6. Meanwhile/attached-side-story support.
 7. Local page rendering, PDF export/share/download fallback.
-8. Replace placeholders with the supplied final panel art and metadata.
+8. Replace placeholders with only the approved final panel art and metadata listed in
+   `public/assets/storylines/STORY_ART_INTEGRATION.md`; preserve placeholders for explicitly
+   listed missing or continuity-rejected panels.
 
 After each phase run the existing build/tests plus focused story tests. Do not deploy partial
 placeholder art as a finished public release. Preserve current economy/combo work and existing
