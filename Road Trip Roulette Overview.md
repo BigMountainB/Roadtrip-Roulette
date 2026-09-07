@@ -204,6 +204,22 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-07 (pt 1) — Voicemail no longer leaks under the ringtone; plays ONLY on ANSWER
+
+Owner: "the voicemail/memo plays while the phone is ringing. It should not play
+until, and only if, ANSWER is selected."  Cause: the iOS audio-unlock "bless"
+(any finger-lift while ringing) called an AUDIBLE `audio.play()` and only paused
+after the play promise settled — on-device that window let the Club Manager's
+voice sound under the ring.  Fix in OpeningCallSequence:
+- The bless now runs **muted** (muted → play → pause/reset → unmute), so the
+  unlock still blesses the element inside a real gesture but can never be heard.
+- `accept()` force-unmutes before its own play() in case a silent bless is still
+  in flight; every promise path restores `muted = false` so the real playback is
+  never accidentally silenced.
+- Headless probe: three stray taps during ringing leave the voicemail paused at
+  0:00 and unmuted-ready; ANSWER starts it from the top.  DECLINE path untouched
+  (never played it).
+
 ### 2026-09-06 (pt 8) — Tutorial flash finally persists: the save layer was wiping it every boot (b22)
 
 Owner, for the third time: "if the tutorial buttons were selected they should only
@@ -12354,6 +12370,13 @@ generic abandon button.
 for the exact approved asset paths, story-node/choice/beat keys, dialogue ownership, balloon-safe
 rectangles, protected regions, continuity locks, and the remaining-art list. That file is the
 authoritative Phase 8 handoff; do not bulk-import every PNG in the storylines directory.
+
+**Visible production checklist:**
+[`public/assets/storylines/STORY_ART_CHECKLIST.md`](public/assets/storylines/STORY_ART_CHECKLIST.md)
+tracks every requested character sheet, location, story panel, relationship frame, and mood
+accent. `[x]` means a physical asset exists; `[ ]` means artwork is still missing. A checked item
+labeled `UNWIRED / REJECTED` exists but must not appear in the game. Consult this checklist before
+creating or wiring any story image.
 
 During a consequential conversation:
 

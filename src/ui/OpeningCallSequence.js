@@ -164,25 +164,25 @@ export function initOpeningCall() {
   // iOS grants media activation on finger-LIFT events (touchend / click /
   // pointerup) — NOT on pointerdown, which is why the first fix didn't take.
   // Any lift anywhere while the phone is ringing blesses the element with a
-  // play-and-pause inside that gesture (including a touch BEFORE the drag —
-  // the owner's own suggestion — and the lift that ends the answer slide,
-  // whose capture listener runs before the button's own handler).  If accept()
-  // has already fired, the bless leaves the playback running.
+  // play-and-pause inside that gesture.  The bless runs MUTED (owner
+  // 2026-09-07: "the voicemail should not play until, and only if, ANSWER is
+  // selected") — the old audible play() leaked the manager's voice under the
+  // ring until the play promise settled.  If accept() has already fired by
+  // the time the promise resolves, the bless unmutes and leaves it running.
   const UNLOCK_EVENTS = ['touchend', 'pointerup', 'click'];
   const unlockAudio = () => {
     try {
       if (!audio || audio._unlocked) return;
-      const pr = audio.play();
-      if (pr?.then) {
-        pr.then(() => {
-          audio._unlocked = true;
-          if (state !== 'speaking') { audio.pause(); audio.currentTime = 0; }
-        }, () => {});
-      } else {
+      if (state !== 'speaking') audio.muted = true;   // silent bless
+      const settle = () => {
         audio._unlocked = true;
         if (state !== 'speaking') { audio.pause(); audio.currentTime = 0; }
-      }
-    } catch (_) {}
+        audio.muted = false;
+      };
+      const pr = audio.play();
+      if (pr?.then) pr.then(settle, () => { try { audio.muted = false; } catch (_) {} });
+      else settle();
+    } catch (_) { try { audio.muted = false; } catch (_) {} }
   };
   const armUnlock = () => {
     for (const ev of UNLOCK_EVENTS)
@@ -272,6 +272,7 @@ export function initOpeningCall() {
     // is only the belt-and-suspenders for a start() whose construction threw.
     try {
       if (!audio) { audio = new Audio(AUDIO_SRC); audio.preload = 'auto'; }
+      audio.muted = false;   // a silent bless may still be in flight — this play is the real one
       audio.addEventListener('ended', finish, { once: true });
       // A 404/decode failure during the ring phase has already fired 'error'
       // (this late listener would miss it) — but that also makes play()

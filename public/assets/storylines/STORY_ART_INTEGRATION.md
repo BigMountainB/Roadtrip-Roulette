@@ -5,6 +5,9 @@ file when completing Chapter 18, Phase 8. It is the authoritative bridge between
 and the supplied artwork. Do not infer a different scene from a filename and do not attach every
 PNG merely because it exists.
 
+Production status is maintained in `STORY_ART_CHECKLIST.md`. Consult that checklist before
+generating any panel; a checked but `UNWIRED / REJECTED` panel exists but is not approved game art.
+
 ## 1. Required code contract
 
 1. Keep dialogue in `src/data/featuredStories.js`; artwork must contain no baked dialogue.
@@ -93,6 +96,50 @@ Every path below is relative to `public/`.
 Do not substitute Malik for Kyle in Issaquah, do not put Malik inside Kyle's room, do not put
 Tennessee in Cle Elum, and do not show anyone except Player driving the canonical white sedan.
 
+
+### 4.1 Hip-Hop speaker-tail anchor audit
+
+These anchors were measured against all **30** actual Hip-Hop PNG files in the asset folder. Every
+file is 1672 pixels wide; their source heights are 940 or 941 pixels. The folder contains 30
+panels, although an earlier count said 28. Coordinates are
+normalized to the full image; parenthetical values are source-image pixels for visual QA.
+`tail` points to the named NPC mouth and `playerTail` points to Player's mouth. Use `null`
+when the relevant person is absent, too small for a credible tail, unconscious, or the panel is a
+silent cinematic action/ending. Do not substitute preset estimates for these values.
+
+| Artwork path (relative to `assets/storylines/hiphop/`) | `tail` speaker | `tail` | `playerTail` |
+|---|---|---|---|
+| `bellevue/bellevue_01_founder_bribe_offer.png` | Founder | `{x:0.520,y:0.260}` (869,245) | `{x:0.330,y:0.250}` (552,235) |
+| `bellevue/bellevue_02_accept_bribe_ending.png` | Founder | `{x:0.758,y:0.270}` (1267,254) | `{x:0.301,y:0.282}` (503,265) |
+| `bellevue/bellevue_03_reject_bribe.png` | Founder | `{x:0.258,y:0.389}` (431,366) | `{x:0.631,y:0.291}` (1055,274) |
+| `cle_elum/cle_elum_01_pristine_delivery_unlock.png` | Record-store clerk | `{x:0.783,y:0.292}` (1309,275) | `{x:0.381,y:0.272}` (637,256) |
+| `cle_elum/cle_elum_02_damaged_cargo_payout.png` | Record-store clerk | `{x:0.721,y:0.351}` (1206,330) | `{x:0.251,y:0.301}` (420,283) |
+| `issaquah/issaquah_01_kyle_hears_track.png` | Kyle | `{x:0.701,y:0.441}` (1172,415) | `{x:0.371,y:0.301}` (620,283) |
+| `issaquah/issaquah_02_remaster_session.png` | Kyle | `{x:0.501,y:0.471}` (838,443) | `{x:0.671,y:0.252}` (1122,237) |
+| `issaquah/issaquah_03_thumb_drive_handoff.png` | Kyle | `{x:0.681,y:0.311}` (1139,293) | `{x:0.331,y:0.262}` (553,247) |
+| `mercer_island/mercer_01_brittney_double_shift.png` | Brittney | `{x:0.731,y:0.321}` (1222,302) | `{x:0.261,y:0.262}` (436,247) |
+| `mercer_island/mercer_02_keep_job_phone_continues.png` | Brittney | `{x:0.821,y:0.341}` (1373,321) | `{x:0.351,y:0.311}` (587,293) |
+| `north_bend/north_bend_00_dominique_hears_arriving_track.png` | Dom’nique | `{x:0.181,y:0.281}` (303,264) | `{x:0.711,y:0.541}` (1189,509) |
+| `north_bend/north_bend_01_stolen_beat_confrontation.png` | Dom’nique | `{x:0.761,y:0.321}` (1272,302) | `{x:0.311,y:0.301}` (520,283) |
+| `north_bend/north_bend_02_promise_credit.png` | Dom’nique | `{x:0.721,y:0.341}` (1206,321) | `{x:0.301,y:0.311}` (503,293) |
+| `north_bend/north_bend_03_defer_until_presser.png` | Dom’nique | `{x:0.771,y:0.262}` (1289,247) | `{x:0.351,y:0.321}` (587,302) |
+| `north_bend/north_bend_04_chased_out.png` | Dom’nique | `{x:0.251,y:0.371}` (420,349) | `null` |
+| `seattle/seattle_01_freestyle_circle.png` | Malik | `{x:0.481,y:0.262}` (804,247) | `{x:0.801,y:0.311}` (1339,293) |
+| `seattle/seattle_02_crew_confrontation.png` | Malik | `{x:0.421,y:0.301}` (704,283) | `{x:0.211,y:0.292}` (353,275) |
+| `seattle/seattle_03_phone_handoff.png` | Malik | `{x:0.761,y:0.311}` (1272,293) | `{x:0.361,y:0.281}` (604,264) |
+| `seattle/seattle_04_radio_explanation.png` | Malik | `{x:0.461,y:0.331}` (771,311) | `{x:0.181,y:0.301}` (303,283) |
+| `seattle/seattle_05_refuse_job.png` | Malik | `{x:0.731,y:0.331}` (1222,311) | `{x:0.391,y:0.311}` (654,293) |
+| `snoqualmie_pass/snoqualmie_01_credit_decision.png` | Tennessee | `{x:0.691,y:0.401}` (1155,377) | `{x:0.391,y:0.291}` (654,274) |
+| `snoqualmie_pass/snoqualmie_02_pressing_100_records.png` | Tennessee | `{x:0.541,y:0.321}` (905,302) | `null` |
+| `snoqualmie_pass/snoqualmie_03_player_loads_records_tennessee_stays.png` | Tennessee | `{x:0.721,y:0.341}` (1206,321) | `{x:0.521,y:0.371}` (871,349) |
+| `vantage_ambush/vantage_00_locked_phone_in_car.png` | none | `null` | `{x:0.291,y:0.281}` (487,264) |
+| `vantage_ambush/vantage_01_three_car_ambush.png` | none | `null` | `{x:0.551,y:0.451}` (921,424) |
+| `vantage_ambush/vantage_02_first_hostile_in_mirror.png` | none | `null` | `{x:0.571,y:0.311}` (955,293) |
+| `vantage_ambush/vantage_03_side_ram.png` | none | `null` | `{x:0.521,y:0.451}` (871,424) |
+| `vantage_ambush/vantage_04_boxed_in.png` | none | `null` | `null` |
+| `vantage_ambush/vantage_05_fatal_wreck.png` | none | `null` | `null` |
+| `vantage_ambush/vantage_06_special_delivery_ending.png` | none | `null` | `null` |
+
 ## 5. Country artwork → dialogue mapping and current gaps
 
 The following existing panels are valid by story action but presently show Brittney's **road
@@ -149,6 +196,37 @@ assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png
 They may be reviewed for Vantage reuse later; do not move, delete, or regenerate them without an
 explicit owner instruction.
 
+### 5.1 Country speaker-tail anchor audit
+
+These anchors were measured against the actual 1672×941 PNG files listed below. `x/y` are
+normalized coordinates in the full image; the parenthetical pixel coordinate is supplied as a QA
+cross-check. `tail` always points to Brittney's mouth and `playerTail` always points to Player's
+mouth. A missing speaker is `null`. These measurements do **not** approve an otherwise rejected
+panel: rows marked `UNWIRED` remain unavailable to `PANEL_META`.
+
+| Artwork path (relative to `assets/storylines/country/`) | Status | `tail` — Brittney | `playerTail` — Player |
+|---|---|---|---|
+| `mercer_island/mercer_04_quits_leaves_phone.png` | approved new Mercer consequence | `{x:.303,y:.252}` (507,237) | `{x:.753,y:.276}` (1259,260) |
+| `vantage/vantage_01_spots_friends_work_uniform.png` | approved establishing beat only | `{x:.530,y:.292}` (886,275) | `{x:.271,y:.332}` (453,312) |
+| `mercer_island/mercer_03_changed_to_road_clothes.png` | `UNWIRED` — wrong location/early outfit | `{x:.402,y:.302}` (672,284) | `{x:.758,y:.361}` (1267,340) |
+| `mercer_island/mercer_03_quit_and_join_player.png` | `UNWIRED` — early outfit | `{x:.700,y:.391}` (1170,368) | `{x:.431,y:.264}` (721,248) |
+| `driving_reactions/major_collision_nerve_loss.png` | `UNWIRED` — early outfit | `{x:.553,y:.348}` (925,327) | `{x:.251,y:.351}` (420,330) |
+| `driving_reactions/smooth_ride_flirtation.png` | `UNWIRED` — early outfit | `{x:.371,y:.302}` (620,284) | `{x:.673,y:.342}` (1125,322) |
+| `nerve/nerve_zero_roadside_exit.png` | `UNWIRED` — early outfit | `{x:.692,y:.323}` (1157,304) | `{x:.194,y:.390}` (324,367) |
+| `nerve/refuse_exit_five_star_chase.png` | `UNWIRED` — early outfit | `{x:.488,y:.496}` (816,467) | `{x:.557,y:.489}` (931,460) |
+| `passenger_needs/bathroom_01_hold_it.png` | `UNWIRED` — early outfit | `{x:.441,y:.351}` (737,330) | `{x:.721,y:.322}` (1206,303) |
+| `passenger_needs/bathroom_02_wait_in_car.png` | `UNWIRED` — early outfit | `{x:.690,y:.402}` (1154,378) | `{x:.361,y:.312}` (604,294) |
+| `passenger_needs/bathroom_03_go_with_her.png` | `UNWIRED` — early outfit | `{x:.612,y:.321}` (1023,302) | `{x:.401,y:.312}` (670,294) |
+| `passenger_needs/hunger_01_buy_sushi.png` | `UNWIRED` — early outfit | `{x:.661,y:.272}` (1105,256) | `{x:.351,y:.312}` (587,294) |
+| `passenger_needs/hunger_02_offer_pork_burrito.png` | `UNWIRED` — early outfit | `{x:.752,y:.331}` (1257,312) | `{x:.391,y:.282}` (654,265) |
+| `passenger_needs/hunger_03_wait_for_better_food.png` | `UNWIRED` — early outfit | `{x:.281,y:.312}` (470,294) | `{x:.681,y:.322}` (1139,303) |
+| `passenger_needs/thirst_01_buy_slushie.png` | `UNWIRED` — early outfit | `{x:.721,y:.361}` (1206,340) | `{x:.391,y:.312}` (654,294) |
+| `passenger_needs/thirst_02_find_fountain.png` | `UNWIRED` — early outfit | `{x:.621,y:.342}` (1038,322) | `{x:.321,y:.322}` (537,303) |
+
+Owner lock (2026-09-07): do not generate, redraw, or edit Brittney again unless the owner
+explicitly asks for Brittney artwork. Continue other story artwork without using her as a newly
+generated subject.
+
 ## 6. Classic Rock artwork mapping
 
 The following Vantage, Othello, Hatton, and Pullman panels are complete:
@@ -174,9 +252,23 @@ The following Vantage, Othello, Hatton, and Pullman panels are complete:
 | `classicRock.othello_show.duetYes` | `assets/storylines/classic_rock/othello/othello_12_accepts_duet.png` | positive duet-intent beat if retained by final dialogue tree | `LR`; protect handshake, faces, map |
 | `classicRock.othello_show.soloIntent` | `assets/storylines/classic_rock/othello/othello_13_prefers_solo.png` | solo-intent beat if retained by final dialogue tree | `LR`; protect Player's hand-to-chest gesture and waitress reaction |
 | `classicRock.hatton_nan` | `assets/storylines/classic_rock/hatton/hatton_01_nan_arrives_oldsmobile.png` | opening portion of `hatton_nan.line` | `CAR_LR`; protect Nan/keys, Oldsmobile, waitress, Player and white sedan |
+| `classicRock.hatton_nan.offer` | `assets/storylines/classic_rock/hatton/hatton_02_nan_mild_fortune_offer.png` | cash-offer portion of `hatton_nan.line` | `LR`; protect cash, Nan, waitress, Player and both cars |
+| `classicRock.hatton_nan.objection` | `assets/storylines/classic_rock/hatton/hatton_03_waitress_objects.png` | waitress's objection before the choice buttons | `LR`; protect both gestures, cash and faces |
+| `classicRock.hatton_nan.take` | `assets/storylines/classic_rock/hatton/hatton_04_take_500_waitress_leaves.png` | Player `take.label`; `take.reply`; NAN'S FIVE HUNDRED ending | `ENDING`; protect cash, departing waitress/Nan and both cars |
+| `classicRock.hatton_nan.herCall.stay` | `assets/storylines/classic_rock/hatton/hatton_05_her_choice_high_stays.png` | evaluated `herCall.reply` at or above stay threshold | `LR`; protect faces, bag, cash and cars |
+| `classicRock.hatton_nan.herCall.leave` | `assets/storylines/classic_rock/hatton/hatton_06_her_choice_low_leaves.png` | evaluated `herCall.reply` below stay threshold; SHE WENT WITH NAN ending | `ENDING`; protect Nan/waitress hug, bag and isolated Player |
+| `classicRock.hatton_nan.refuse` | `assets/storylines/classic_rock/hatton/hatton_07_reject_nan_sploosh.png` | Player `refuse.label`; `refuse.reply` plus approved excited reaction | `LR`; protect rejected cash, Player's open palm, waitress and cars |
+| `classicRock.hatton_nan.demand` | `assets/storylines/classic_rock/hatton/hatton_08_demand_1000.png` | Player `demand.label`; Nan `demand.reply` | `LR`; protect raised finger, purse, cash and waitress's stare |
+| `classicRock.washtucna_show.arrival` | `assets/storylines/classic_rock/washtucna/washtucna_01_venue_arrival.png` | Washtucna venue establishing transition before `washtucna_show.line` | `CAR_RL`; protect Player, waitress, guitar case, sedan and venue crowd |
+| `classicRock.washtucna_show.solo` | `assets/storylines/classic_rock/washtucna/washtucna_02_solo_performance.png` | Player selects the $300 solo performance | `ACTION`; Player mouth `{x:.414,y:.276}`; waitress mouth `{x:.932,y:.299}`; protect guitar, microphones, both faces |
+| `classicRock.washtucna_show.solo_reaction` | `assets/storylines/classic_rock/washtucna/washtucna_03_waitress_unhappy_backstage.png` | waitress watches unhappily after being excluded | `RL`; waitress mouth `{x:.634,y:.223}`; Player mouth `{x:.299,y:.306}`; protect waitress, curtain, unused microphone and distant Player |
+| `classicRock.washtucna_show.duet` | `assets/storylines/classic_rock/washtucna/washtucna_04_equal_duet_performance.png` | equal $150/$150 duet and first clear chemistry beat | `TOP`; waitress mouth `{x:.665,y:.241}`; Player mouth `{x:.318,y:.253}`; protect both faces, microphones, guitar and crowd |
+| `classicRock.washtucna_show.giveAll` | `assets/storylines/classic_rock/washtucna/washtucna_05_player_gives_full_300.png` | Player gives waitress the full $300 | `LR`; waitress mouth `{x:.657,y:.261}`; Player mouth `{x:.310,y:.238}`; protect cash envelope, hands, faces and guitar |
+| `classicRock.washtucna_show.equalPay` | `assets/storylines/classic_rock/washtucna/washtucna_06_equal_150_payout.png` | venue pays both performers $150 | `TOP`; waitress mouth `{x:.787,y:.288}`; Player mouth `{x:.278,y:.269}`; protect both envelopes, all hands and faces |
+| `classicRock.washtucna_show.trioReaction` | `assets/storylines/classic_rock/washtucna/washtucna_07_trio_flirt_response.png` | suggestive trio response following Player's generosity | `LR`; waitress mouth `{x:.461,y:.201}`; Player mouth `{x:.621,y:.252}`; protect faces, microphone, guitar and hands |
 | `classicRock.pullman_finale.partnership_kiss` | `assets/storylines/classic_rock/pullman/pullman_mutual_kiss_wide.png` | evaluated Pullman partnership ending at >80 relationship | `ENDING`; protect both faces, kiss, microphones, crowd |
 
-The remaining Hatton branches, Washtucna, La Crosse, Colfax, alternate Pullman endings, and all
+The remaining Washtucna consequence branches, La Crosse, Colfax, alternate Pullman endings, and all
 approved `MEANWHILE...` strips still require final narrative panels. Shared location and character
 reference sheets are references only and must never be shown as finished comic panels. Keys ending
 in `.duetYes` and `.soloIntent` require explicit nodes/beats if the final tree retains those choices;

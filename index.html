@@ -1125,6 +1125,9 @@
     @media (orientation: portrait) {
       #phone-menu { display: flex; }
     }
+    /* Hide phone menu while opening-call splash is active (owner 2026-09-07:
+       first paint must be the title, not a flashing phone menu). */
+    body.opening-call-active #phone-menu { display: none !important; }
     /* Lock chip override — keep the menu visible regardless of
        orientation while the player has locked the phone. */
     body.menu-locked #phone-menu { display: flex !important; }
