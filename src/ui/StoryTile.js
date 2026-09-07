@@ -25,7 +25,7 @@
 import { SCREEN_W, SCREEN_H } from '../constants.js';
 import { getStoryNode } from '../data/featuredStories.js';
 import { getPortrait } from '../data/npcPortraits.js';
-import { PANEL_ASPECT, panelMeta, panelKeyFor } from '../data/comicPanels.js';
+import { panelMeta, panelKeyFor } from '../data/comicPanels.js';
 
 const D = 600;
 // Comic lettering with a readable fallback (character-specific faces land
@@ -34,15 +34,20 @@ const D = 600;
 export const LETTERING = '"Chalkboard SE", "Comic Sans MS", "Marker Felt", "Trebuchet MS", Arial, sans-serif';
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 
-const ART_H  = 278;
-const ART_W  = Math.round(ART_H * PANEL_ASPECT);   // 494
-const ART_X  = Math.round((SCREEN_W - ART_W) / 2);
-const ART_Y  = 10;
-const PEEK   = 26;      // px of the previous tile left showing
+// Widescreen tile (owner 2026-09-06: "the conversation tiles can be bigger"):
+// 720×324 of the 800×450 screen, 20:9.  Page panels stay 16:9
+// (PANEL_ASPECT); the same art cover-fits both.
+const TILE_ASPECT = 20 / 9;
+const ART_W  = 720;
+const ART_H  = Math.round(ART_W / TILE_ASPECT);    // 324
+const ART_X  = Math.round((SCREEN_W - ART_W) / 2); // 40
+const ART_Y  = 8;
+const PEEK   = 30;      // px of the previous tile left showing
 const GAP    = 8;
 const TILE_W = ART_W - PEEK;
-const BTN_TOP = ART_Y + ART_H + 10;
-const BTN_AREA_H = SCREEN_H - BTN_TOP - 8;
+const BTN_TOP = ART_Y + ART_H + 8;                 // 340
+const BTN_GAP = 4;
+const BTN_AREA_H = SCREEN_H - BTN_TOP - 6;         // 104
 const MIN_FONT = 13;
 
 /** Run every pending story node for this stop in order, then `onDone`. */
@@ -87,9 +92,9 @@ export function showStoryConversation(scene, start, onDone) {
   const maskG = scene.make.graphics(); maskG.fillStyle(0xffffff).fillRect(ART_X, ART_Y, ART_W, ART_H);
   strip.setMask(maskG.createGeometryMask());
   objs.push({ destroy: () => maskG.destroy() });
-  const header = add(scene.add.text(SCREEN_W / 2, SCREEN_H - 4, '', {
-    fontSize: '11px', fontFamily: IMPACT, color: '#8FB7E6',
-  }).setOrigin(0.5, 1).setDepth(D + 3));
+  const header = add(scene.add.text(ART_X + ART_W - 8, ART_Y + 6, '', {
+    fontSize: '11px', fontFamily: IMPACT, color: '#8FB7E6', stroke: '#000', strokeThickness: 3,
+  }).setOrigin(1, 0).setDepth(D + 5));
 
   const tiles = [];          // { c: Container, w }
   let btnObjs = [];
@@ -124,7 +129,7 @@ export function showStoryConversation(scene, start, onDone) {
   function balloon(container, text, box, tail, opts = {}) {
     const out = [];
     const maxW = box.w, maxH = box.h;
-    const sizes = [18, 16, 14, MIN_FONT];
+    const sizes = [20, 18, 16, 14, MIN_FONT];
     let size = sizes[sizes.length - 1], probe = null;
     for (const s of sizes) {
       probe?.destroy();
@@ -222,7 +227,7 @@ export function showStoryConversation(scene, start, onDone) {
     // records nothing (the story stays parked on this node).
     const list = choices.length ? choices : [{ id: '__tbc', label: 'TO BE CONTINUED…', consequential: false, next: null, effects: {}, _exit: true }];
     const n = list.length;
-    const bh = Math.max(26, Math.min(40, Math.floor((BTN_AREA_H - (n - 1) * 6) / n)));
+    const bh = Math.max(24, Math.min(36, Math.floor((BTN_AREA_H - (n - 1) * BTN_GAP) / n)));
     let y = BTN_TOP;
     for (const ch of list) {
       const cost = Math.max(0, ch.cost | 0);
@@ -230,7 +235,7 @@ export function showStoryConversation(scene, start, onDone) {
       const label = cost ? `${ch.label}  ($${cost})` : ch.label;
       const bg = scene.add.rectangle(SCREEN_W / 2, y + bh / 2, ART_W, bh, afford ? 0x143A5A : 0x2A1010)
         .setStrokeStyle(2, afford ? 0x39A8FF : 0x662222).setDepth(D + 3);
-      const fs = Math.max(12, Math.min(17, bh - 14));
+      const fs = Math.max(12, Math.min(17, bh - 12));
       const lbl = scene.add.text(SCREEN_W / 2, y + bh / 2, label, {
         fontSize: `${fs}px`, fontFamily: IMPACT, color: afford ? '#F4F7FF' : '#996666', wordWrap: { width: ART_W - 24 }, align: 'center',
       }).setOrigin(0.5).setDepth(D + 4);
@@ -246,7 +251,7 @@ export function showStoryConversation(scene, start, onDone) {
           pick(tile, ch);
         });
       }
-      y += bh + 6;
+      y += bh + BTN_GAP;
     }
   }
 
@@ -257,7 +262,7 @@ export function showStoryConversation(scene, start, onDone) {
     const { storyId, nodeId } = tile;
     // 18.2: persist + apply BEFORE the animation.  Every world effect goes
     // through these hooks exactly once (duplicate → nothing fires).
-    const r = story.commitChoice({ storyId, nodeId, choiceId: ch.id, mile: scene._odometer ?? 0 }, {
+    const r = story.commitChoice({ storyId, nodeId, choiceId: ch.id, mile: scene._odometer ?? 0, stopId }, {
       cash: (n) => {
         const d = (scene._infiniteMoney?.() && n < 0) ? 0 : n;
         scene._score = Math.max(0, (scene._score ?? 0) + d);

@@ -86,6 +86,45 @@ export const ISSAQUAH_EXIT_MILE = 18;     // REST_STOPS 'I'
 export const ISSAQUAH_WARP_MILE = ISSAQUAH_EXIT_MILE - 0.5;   // recovery warp
 export const VANTAGE_AMBUSH_MILE = 135.5; // 1.5 mi short of the Vantage exit (137)
 
+// ── Country tunables (Ch. 18.7, owner 2026-09-06) ──────────────────────
+export const NERVE_MAX          = 25;
+export const NERVE_REST_REFILL  = 5;
+export const NERVE_THRESHOLDS   = [20, 15, 10, 5];
+export const KIDNAP_WARN_MI     = 1.0;    // "I'm calling the cops"
+export const KIDNAP_REPORT_MI   = 1.5;    // five stars
+export const ROADSIDE_STOP_SEC  = 1.5;    // stopped on the shoulder at 0 Nerve → she's out
+export const GOOD_MOVE_EVERY    = 5;      // flirt every ~5th clean pass
+export const LINE_COOLDOWN_MI   = 0.25;   // she doesn't narrate every move
+export const COUNTRY_PAY_STANDARD = 1500;
+export const COUNTRY_PAY_RIDE_EM  = 2500;
+export const RIDE_EM_REL        = 80;     // raw 0–100 (four stars)
+export const RIDE_EM_NERVE      = 10;
+export const RIDE_EM_PASSES     = 5;
+export const STANDARD_REL       = 40;
+export const NEED_ROTATION      = ['hunger', 'bathroom', 'thirst'];
+export const NEED_STOPS         = ['B', 'I', 'SQ', 'N', 'SP', 'EA', 'C', 'TH', 'E'];   // between Mercer and Vantage
+export const NERVE_LINES = {
+  20: "Okay. Okay. That was closer than I dress for.",
+  15: "You know I have to be alive to see this concert, right?",
+  10: "I'm holding the door handle now. That's where we are.",
+  5:  "One more like that and I'm walking to Vantage.",
+};
+export const FLIRT_LINES = [
+  "Keep threading gaps like that and you're gonna make me spill more than my drink.",
+  "If you can keep the car riding that smooth, I might have another smooth ride for you.",
+];
+/** Continuous scrapes don't cost Nerve — impacts do (18.7 "collision HP"). */
+export function isScrapeSource(source = '') {
+  return source.startsWith('offroad') || source.endsWith('_rail') || source === 'water_shoulder' || source === 'tunnel_wall';
+}
+/** Vantage ending from raw relationship, Nerve at arrival, clean passes. */
+export function countryOutcome(st, run) {
+  const rel = st.relationship ?? 0, nerve = run.nerve ?? 0, passes = run.flags?.cleanPasses ?? 0;
+  if (rel >= RIDE_EM_REL && nerve >= RIDE_EM_NERVE && passes >= RIDE_EM_PASSES) return 'ride_em';
+  if (rel >= STANDARD_REL) return 'standard';
+  return 'barely';
+}
+
 const has = (st, k) => !!st.items?.[k];
 
 /** Surviving records → outcome bucket (Cle Elum, 18.6). */
@@ -401,22 +440,183 @@ export const FEATURED_STORIES = {
   },
 
   // ══ B — Country: StageWagon or Bust (Ch. 18.7) ══════════════════════════
+  //
+  // Brittney boards at Mercer (hiphop.mercer_fork.ride → startStory).  Nerve
+  // is RUN state (25, refilled 5 per rest stop, never on the road), debited
+  // 1:1 by impact HP; relationship is canon (0–100, five stars, start 50).
+  // Needs rotate hunger → bathroom → thirst, one per rest stop, as REPEATABLE
+  // mandatory nodes (a "wait" leaves the need pending for the next stop).
   country: {
-    id: 'country', version: 1,
+    id: 'country', version: 2,
     title: 'StageWagon or Bust',
     genre: STORY_GENRE.country,
-    // Started by the hiphop `mercer_fork` Country choice (effects.startStory),
-    // never from a stop of its own.
-    entry: null,
-    startNode: 'ride_begins',
-    endings: {},
+    entry: null,                    // started by hiphop.mercer_fork.ride
+    startNode: 'vantage_arrival',
+    startRelationship: 50,
+    endings: {
+      ride_em:       { label: "RIDE 'EM",          unlock: true },
+      standard:      { label: 'STAGEWAGON OR BUST', unlock: true },
+      barely:        { label: 'BARELY MADE IT',    unlock: true },
+      roadside_exit: { label: 'ROADSIDE EXIT',     unlock: false },
+      kidnapping:    { label: 'KIDNAPPING REPORT', unlock: false },
+    },
+    // She is in the seat for as long as the story is active.
+    deriveRun: (st, run) => { run.passenger = { id: 'brittney', name: 'Brittney', storyId: 'country' }; run.nerve = Math.max(0, Math.min(NERVE_MAX, run.nerve ?? NERVE_MAX)); },
+    onRestStop: (stopId, api) => {
+      const { run, state: st } = api;
+      run.nerve = Math.min(NERVE_MAX, (run.nerve ?? NERVE_MAX) + NERVE_REST_REFILL);
+      if (stopId === 'V' || stopId === 'M') return;
+      if (!st.flags.pendingNeed) {
+        const n = st.flags.needCount ?? 0;
+        api.flags({ pendingNeed: NEED_ROTATION[n % NEED_ROTATION.length], needCount: n + 1 });
+      }
+    },
+    onRoad: (type, ev, api) => {
+      const { run, state: st } = api;
+      if (!run.passenger) return;
+      const mile = ev.mile ?? 0;
+      const canTalk = () => (mile - (run.flags.lastLineMile ?? -9)) >= LINE_COOLDOWN_MI;
+      const talk = (text) => { run.flags.lastLineMile = mile; api.say(text); };
+      if (type === 'tick') {
+        if (!st.flags.changed) {
+          api.flags({ changed: true });
+          api.beat({ beatId: 'changes', importance: 'consequence', speaker: 'Brittney', portrait: 'biz_gasnsip',
+                     text: 'She kicks off the work shoes, wriggles out of the Gas-N-Sip polo and into road clothes right there in the passenger seat. "Eyes on the road, cowboy."' });
+        }
+        const n0 = run.flags.nerve0Mile;
+        if (n0 != null) {
+          if (!run.flags.copsWarned && mile - n0 >= KIDNAP_WARN_MI) { run.flags.copsWarned = true; talk("If you don't stop, I'm calling the cops."); }
+          if (mile - n0 >= KIDNAP_REPORT_MI) {
+            api.wanted(5);
+            api.beat({ beatId: 'kidnap', importance: 'climax', speaker: 'Brittney', portrait: 'biz_gasnsip',
+                       text: '"911? Yeah. I\'m in a car and the driver won\'t let me out." Five stars light up the mirror. StageWagon was never the point.' });
+            api.fail('kidnapping');
+            api.passenger(null);
+            return;
+          }
+          // Roadside drop: stopped on the shoulder with her at 0 Nerve.
+          if (ev.stopped && ev.onShoulder) {
+            run.flags.shoulderSec = (run.flags.shoulderSec ?? 0) + (ev.dt ?? 0);
+            if (run.flags.shoulderSec >= ROADSIDE_STOP_SEC) {
+              api.beat({ beatId: 'roadside_exit', importance: 'ending', speaker: 'Brittney', portrait: 'biz_gasnsip',
+                         text: 'She\'s out before the car fully stops, boots on gravel, thumb already up for the next truck. "Have a nice life, cowboy."' });
+              api.fail('roadside_exit');
+              api.passenger(null);
+              return;
+            }
+          } else run.flags.shoulderSec = 0;
+        }
+        return;
+      }
+      if (type === 'damage') {
+        const hp = Math.max(0, ev.hp ?? 0);
+        if (!hp || isScrapeSource(ev.source)) return;
+        const before = run.nerve ?? NERVE_MAX;
+        run.nerve = Math.max(0, before - hp);
+        run.flags.nerveFlashAt = mile;
+        // 0 Nerve wins over every other line; then any 5+ HP accident speaks
+        // immediately (two authored flavours); then threshold crossings.
+        if (run.nerve === 0 && before > 0) { run.flags.nerve0Mile = mile; talk("Pull over. Now. I'm getting out."); return; }
+        if (hp >= 5) {
+          talk(/side|corner|swipe/i.test(ev.source ?? '') ? "Easy, cowboy. I said I liked it rough—not attached to another car."
+                                                             : "You saved it. Good. I was halfway between screaming and being impressed.");
+        } else {
+          for (const t of NERVE_THRESHOLDS) if (before > t && run.nerve <= t && t > 0 && canTalk()) { talk(NERVE_LINES[t]); break; }
+        }
+        return;
+      }
+      if (type === 'pass') {
+        run.flags.cleanPasses = (run.flags.cleanPasses ?? 0) + 1;
+        if (run.flags.cleanPasses % GOOD_MOVE_EVERY === 0 && canTalk() && (run.nerve ?? 0) > 0) {
+          const i = (run.flags.flirtIdx ?? 0); run.flags.flirtIdx = i + 1;
+          talk(FLIRT_LINES[i % FLIRT_LINES.length]);
+          api.relationship(+2);
+        }
+      }
+    },
     nodes: {
-      ride_begins: {
-        stopId: 'M', mandatory: false, stub: true,
-        speaker: 'Brittney', portrait: 'biz_gasnsip',
-        importance: 'major',
-        line: "[Phase 4] Brittney changes into road clothes in the first road panel.",
-        choices: [],
+      // ── Needs (repeatable, one per rest stop while pending) ────────────
+      need_hunger: {
+        stopId: null, repeatable: true, stops: NEED_STOPS, mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.pendingNeed === 'hunger',
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
+        line: "🍆 I'm starving. I don't swallow much meat these days, but I'm always down for fish tacos.",
+        choices: [
+          { id: 'sushi', consequential: true, next: null, cost: 14,
+            label: "Are you talking about food or…? I think I can find sushi.",
+            reply: "Both, obviously. And look at you, finding the one decent roll east of the lake.",
+            effects: { flags: { pendingNeed: null }, relationship: 10 } },
+          { id: 'burrito', consequential: true, next: null, cost: 9,
+            label: "This place has great pork burritos. I'll get you one.",
+            reply: "…Pork. Sure. It's food. She eats half of it staring out the window.",
+            effects: { flags: { pendingNeed: null }, relationship: -5 } },
+          { id: 'wait', consequential: true, next: null,
+            label: "You'll survive until a rest stop with better food.",
+            reply: "I'll survive. I'll remember, too.",
+            effects: { relationship: -5 } },
+        ],
+      },
+      need_bathroom: {
+        stopId: null, repeatable: true, stops: NEED_STOPS, mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.pendingNeed === 'bathroom',
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
+        line: "🚻 I need a bathroom. A real one — I am not squatting behind a Les Schwasted.",
+        choices: [
+          { id: 'hold', consequential: true, next: null,
+            label: "You can hold it another few miles, right?",
+            reply: "There are two ways to make me wet, and pissing myself is my second favorite.",
+            effects: {} },
+          { id: 'waitInCar', consequential: true, next: null,
+            label: "I'll wait in the car while you release your demons.",
+            reply: "She gives you a long, blank stare, then goes.",
+            effects: { flags: { pendingNeed: null }, relationship: -2 } },
+          { id: 'goWith', consequential: true, next: null,
+            label: "Do you want to play swords?",
+            reply: "She laughs so hard the clerk looks up. \"Come on, then.\"",
+            effects: { flags: { pendingNeed: null }, relationship: 10 } },
+        ],
+      },
+      need_thirst: {
+        stopId: null, repeatable: true, stops: NEED_STOPS, mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.pendingNeed === 'thirst',
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
+        line: "💧 I'm parched. Something cold before we get back on that road?",
+        choices: [
+          { id: 'slushie', consequential: true, next: null, cost: 4,
+            label: "Can I get you a slushie?",
+            reply: "I was hoping to chug something salty, but sweet works just as well.",
+            effects: { flags: { pendingNeed: null }, relationship: 5 } },
+          { id: 'fountain', consequential: true, next: null,
+            label: "Find a fountain or something. I don't have drinking money.",
+            reply: "She blank-stares. \"What a gentleman.\"",
+            effects: { flags: { pendingNeed: null }, relationship: -8 } },
+        ],
+      },
+
+      // ── Vantage — her friends, her exit, the ending ─────────────────────
+      vantage_arrival: {
+        stopId: 'V', mandatory: true,
+        when: (st, run) => !!run.passenger,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'ending',
+        line: (st, run) => "Those are my babes! I'm gonna go jump in with them. I wish you were coming with us. We would run you dry."
+          + (countryOutcome(st, run) === 'ride_em' ? " Text me on your way back. I'd love to see you again." : ''),
+        choices: [
+          { id: 'sendOff', consequential: true, next: null,
+            label: "Go on. Text me when you're back in Seattle.",
+            reply: (st, run) => {
+              const o = countryOutcome(st, run);
+              return o === 'ride_em' ? "She kisses you like she means it, then she's gone into the crowd. Your phone buzzes: a new contact." :
+                     o === 'standard' ? "A hug, a wink, and she's running for the gas-station door." :
+                                        "A quick hug. She doesn't look back.";
+            },
+            effects: (st, run) => {
+              const o = countryOutcome(st, run);
+              const fx = { flags: { outcome: o, left: true }, passenger: null, ending: o, unlockGenre: STORY_GENRE.country };
+              if (o === 'ride_em') { fx.cash = COUNTRY_PAY_RIDE_EM; fx.contact = { id: 'brittney', name: 'Brittney' }; }
+              else if (o === 'standard') fx.cash = COUNTRY_PAY_STANDARD;
+              return fx;
+            } },
+        ],
       },
     },
   },
@@ -499,7 +699,8 @@ export function validateStories(defs = FEATURED_STORIES) {
     if (!s.nodes?.[s.startNode]) errs.push(`${sid}: startNode '${s.startNode}' missing`);
     if (!STORY_GENRE[sid]) errs.push(`${sid}: no genre mapping`);
     for (const [nid, node] of Object.entries(s.nodes ?? {})) {
-      if (typeof node.stopId !== 'string' || !node.stopId) errs.push(`${sid}.${nid}: no stopId`);
+      if (node.repeatable) { if (node.stops !== '*' && !(Array.isArray(node.stops) && node.stops.length)) errs.push(`${sid}.${nid}: repeatable node needs stops`); }
+      else if (typeof node.stopId !== 'string' || !node.stopId) errs.push(`${sid}.${nid}: no stopId`);
       if (!isText(node.line)) errs.push(`${sid}.${nid}: no line`);
       const choices = node.choices ?? [];
       if (!node.stub && choices.length === 0) errs.push(`${sid}.${nid}: no choices and not a stub`);

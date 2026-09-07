@@ -1304,10 +1304,12 @@ export class GameScene extends Phaser.Scene {
     // Tap-mode's auto-pull-left kicks in from the moment the player
     // takes damage, even if they haven't tapped yet.  Same flags the
     // first-tap path clears.
-    this.damage.on('damage', ({ amount } = {}) => {
+    this.damage.on('damage', ({ amount, source } = {}) => {
       this.stats?.recordDamage(amount);
       // Featured-story cargo (Ch. 18.6): every HP of damage costs two records.
       try { this.story?.onDamage?.(amount); } catch (_) {}
+      // …and a featured passenger loses Nerve 1:1 on impacts (Ch. 18.7).
+      try { this.story?.roadEvent?.('damage', { hp: amount, source, mile: this._odometer ?? 0 }, this._storyHooks()); } catch (_) {}
       // Size of the most recent hit — the 'wreck' handler reads it to tell a
       // single catastrophic collision from death by a thousand scrapes.
       this._lastHitAmount = amount ?? 0;
@@ -2252,6 +2254,7 @@ export class GameScene extends Phaser.Scene {
     this._storyAmbush    = null;
     this._hostileRespawn = 0;
     this._hostileHits    = 0;
+    this._storyHud       = null;   // display list is rebuilt per create; a stale Text throws on setText
     this._trafficTimer   = 0;
     this._prevTown       = 0;   // town-line star cooldown tracker (CHECKPOINTS index)
     this._announcedUnlocks = {};
@@ -7918,6 +7921,7 @@ export class GameScene extends Phaser.Scene {
         if (Math.abs(this.player.x) > 1.0) continue;            // must be ON the roadway
         if (this.player.speed <= (car.speed ?? 0) + 400) continue;  // meaningful closing speed
         car._passAwarded = true;
+        try { this.story?.roadEvent?.('pass', { mile: this._odometer ?? 0 }, this._storyHooks()); } catch (_) {}
         const res = this.combo.overtake({
           graceBonus: this._comboGraceBonus(),
           buildMult:  this._traitMod('drivingBonusBuildMult'),
@@ -24288,10 +24292,28 @@ export class GameScene extends Phaser.Scene {
   /** Per-frame: arm authored ambushes and drive hostile cars.  The Vantage
    *  punishment (18.6): three cars converge from behind, box the player in
    *  and ram until the car is dead.  The crew is never seen. */
+  /** World hooks the stories talk back through (Ch. 18.7): a passenger's
+   *  line as a HUD popup, wanted stars, seat changes. */
+  _storyHooks() {
+    return this._storyHooksObj ??= {
+      say: (text) => this._showPopup?.('💋 ' + text, '#FF9FD0', 3.4),
+      wanted: (n) => { if (this.cops) this.cops.stars = Math.max(this.cops.stars ?? 0, n); },
+      passenger: () => {},
+      text: (cid, from, msg) => this._logBuddyText(cid, from, msg),
+    };
+  }
+
   _updateStoryRun(dt) {
     const story = this.story;
     if (!story || !this.player) return;
     const mile = this._odometer ?? 0;
+    // Passenger tick: Nerve escalation, roadside exit, first-drive beat.
+    if (story.run?.passenger) {
+      const mph = Math.abs(this.player.speed ?? 0) * 120 / MAX_SPEED;
+      const onShoulder = Math.abs(this.player.x ?? 0) >= 1.0;
+      try { story.roadEvent('tick', { mile, dt, stopped: mph < 2, onShoulder }, this._storyHooks()); } catch (_) {}
+    }
+    this._drawStoryHud(story, mile);
     if (!this._storyAmbush) {
       const am = story.ambushesAt?.(mile) ?? [];
       if (am.length) {
@@ -24328,6 +24350,26 @@ export class GameScene extends Phaser.Scene {
       this._hostileRespawn = 0;
       this._spawnHostileCars(3 - alive);
     }
+  }
+
+  /** Gameplay-only passenger cue (Ch. 18.7): name, Nerve, pending need
+   *  icon.  Flashes for three seconds after Nerve changes.  Never drawn
+   *  into the comic. */
+  _drawStoryHud(story, mile) {
+    const p = story.run?.passenger;
+    if (this._storyHud && !this._storyHud.scene) this._storyHud = null;   // destroyed by a scene transition
+    if (!p) { if (this._storyHud) { this._storyHud.destroy(); this._storyHud = null; } return; }
+    const need = story.story?.(p.storyId ?? 'country')?.flags?.pendingNeed;
+    const icon = need === 'hunger' ? '🍆' : need === 'thirst' ? '💧' : need === 'bathroom' ? '🚻' : '';
+    const nerve = Math.round(story.run.nerve ?? 0);
+    const label = `💋 ${p.name.toUpperCase()}  NERVE ${nerve}/25${icon ? '  ' + icon : ''}`;
+    if (!this._storyHud) {
+      this._storyHud = this.add.text(30, 124, label, { fontSize: '12px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif', color: '#FFD0E0', stroke: '#000', strokeThickness: 3 })
+        .setDepth(900).setScrollFactor(0);
+    } else if (this._storyHud.text !== label) this._storyHud.setText(label);
+    const flashAt = story.run.flags?.nerveFlashAt;
+    const flashing = flashAt != null && (mile - flashAt) < 0.06;   // ≈3 s at highway speed
+    this._storyHud.setColor(flashing ? '#FF5A8A' : '#FFD0E0');
   }
 
   /** Three dark sedans behind the player: left, centre, right of their lane. */

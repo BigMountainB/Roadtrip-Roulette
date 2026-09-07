@@ -134,8 +134,8 @@ function genRunId() {
   return 'run-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 }
 
-export function ledgerKey(storyId, attempt, nodeId, choiceId) {
-  return `${storyId}#${attempt}:${nodeId}:${choiceId}`;
+export function ledgerKey(storyId, attempt, nodeId, choiceId, stopId = null) {
+  return `${storyId}#${attempt}:${nodeId}${stopId ? '@' + stopId : ''}:${choiceId}`;
 }
 
 export class StorySystem {
@@ -213,14 +213,18 @@ export class StorySystem {
       const candidates = [];
       if (st.status === STORY_STATUS.ACTIVE) {
         for (const [nid, node] of Object.entries(def.nodes ?? {})) {
-          if (node.stopId === stopId && !node.virtual) candidates.push([nid, node]);
+          if (node.virtual) continue;
+          const here = node.repeatable
+            ? (node.stops === '*' || (Array.isArray(node.stops) && node.stops.includes(stopId)))
+            : node.stopId === stopId;
+          if (here) candidates.push([nid, node]);
         }
       } else if (st.status === STORY_STATUS.AVAILABLE && def.entry?.stopId === stopId) {
         const node = def.nodes?.[def.startNode];
         if (node) candidates.push([def.startNode, node]);
       }
       for (const [nid, node] of candidates) {
-        if (!this._nodeOpen(id, nid, node, st, c)) continue;
+        if (!this._nodeOpen(id, nid, node, st, c, stopId)) continue;
         out.push({ storyId: id, nodeId: nid, mandatory: !!node.mandatory, node });
       }
     }
@@ -228,12 +232,15 @@ export class StorySystem {
     return out;
   }
 
-  _nodeOpen(storyId, nodeId, node, st, c) {
+  _nodeOpen(storyId, nodeId, node, st, c, stopId = null) {
     try { if (typeof node.when === 'function' && !node.when(st, this._run)) return false; } catch (_) { return false; }
     const attempt = st.replayCount ?? 0;
+    // A `repeatable` node (Brittney's needs) can fire at several stops; its
+    // ledger keys carry the stop so each visit is its own beat.
+    const sfx = node.repeatable ? (stopId ?? node.stopId) : null;
     for (const ch of node.choices ?? []) {
       if (ch.consequential === false) continue;
-      if (c.ledger[ledgerKey(storyId, attempt, nodeId, ch.id)]) return false;
+      if (c.ledger[ledgerKey(storyId, attempt, nodeId, ch.id, sfx)]) return false;
     }
     return true;
   }
@@ -352,7 +359,7 @@ export class StorySystem {
    *   radioGrant(culture|null) temporary radio access on/off
    *   panel(entry, node, choice) comic event (ComicSystem, Phase 2)
    */
-  commitChoice({ storyId, nodeId, choiceId, mile = 0, at = Date.now() }, hooks = {}) {
+  commitChoice({ storyId, nodeId, choiceId, mile = 0, at = Date.now(), stopId = null }, hooks = {}) {
     const node   = this._node(storyId, nodeId);
     const choice = this._choice(storyId, nodeId, choiceId);
     if (!node || !choice) return { applied: false, entry: null, reason: 'unknown' };
@@ -361,7 +368,8 @@ export class StorySystem {
     const st = c.stories[storyId] ?? (c.stories[storyId] = emptyStoryState());
     if (TERMINAL.has(st.status)) return { applied: false, entry: null, reason: 'terminal' };
     const attempt = st.replayCount;
-    const key = ledgerKey(storyId, attempt, nodeId, choiceId);
+    if (node.repeatable && !stopId) return { applied: false, entry: null, reason: 'needs_stop' };
+    const key = ledgerKey(storyId, attempt, nodeId, choiceId, node.repeatable ? stopId : null);
     if (c.ledger[key]) return { applied: false, entry: c.ledger[key], reason: 'duplicate', next: choice.next ?? null };
 
     // Casual exposition: navigate only, nothing irreversible.
@@ -380,7 +388,7 @@ export class StorySystem {
     effects = isObj(effects) ? effects : {};
     const entry = {
       key,
-      storyId, nodeId, choiceId, attempt, at, mile,
+      storyId, nodeId, choiceId, attempt, at, mile, stopId: stopId ?? node.stopId ?? null,
       runId: this._run.runId,
       // Stable keys + fallback copy so the comic can re-render this beat by
       // key later and still read if the key is ever renamed away (18.2).
@@ -430,7 +438,10 @@ export class StorySystem {
     }
     if (typeof fx.startStory === 'string' && this._defs[fx.startStory]) {
       const other = c.stories[fx.startStory] ?? (c.stories[fx.startStory] = emptyStoryState());
-      if (other.status === STORY_STATUS.AVAILABLE) { other.status = STORY_STATUS.ACTIVE; other.nodeId = this._defs[fx.startStory].startNode; }
+      if (other.status === STORY_STATUS.AVAILABLE) {
+        other.status = STORY_STATUS.ACTIVE; other.nodeId = this._defs[fx.startStory].startNode;
+        other.relationship = clamp(num(this._defs[fx.startStory].startRelationship, 0), 0, 100);
+      }
     }
     if (typeof fx.endStory === 'string' && c.stories[fx.endStory] && !TERMINAL.has(c.stories[fx.endStory].status)) {
       c.stories[fx.endStory].status = fx.endStoryStatus === 'complete' ? STORY_STATUS.COMPLETE : STORY_STATUS.FAILED;
@@ -452,6 +463,82 @@ export class StorySystem {
     } else if (typeof fx.status === 'string' && Object.values(STORY_STATUS).includes(fx.status)) {
       st.status = fx.status;
     }
+  }
+
+  // ── Choice-less beats + road events ─────────────────────────────────────
+
+  /** A comic beat with no player choice (Brittney changing in the car, the
+   *  kidnapping report, a roadside exit).  Idempotent per attempt + beatId;
+   *  lands in the ledger like a choice so the comic and a rewind treat it
+   *  the same.  Returns the entry, or null when already recorded. */
+  recordBeat(beat) {
+    const c = this.canon();
+    const entry = this._beatInto(c, beat);
+    if (entry) this._writeCanon(c);
+    return entry;
+  }
+
+  /** Same, into a canon the caller is already mutating (roadEvent). */
+  _beatInto(c, { storyId, beatId, importance = 'consequence', speaker = '', portrait = null, text = '', mile = 0, at = Date.now(), effects = null }) {
+    const st = c.stories[storyId] ?? (c.stories[storyId] = emptyStoryState());
+    const key = ledgerKey(storyId, st.replayCount, 'beat', beatId);
+    if (c.ledger[key]) return null;
+    const entry = {
+      key, storyId, nodeId: 'beat', choiceId: beatId, attempt: st.replayCount, at, mile, runId: this._run.runId,
+      dialogueKeys: { line: `${storyId}.beat.${beatId}.line` }, fallbackText: { line: text, label: '', reply: '' },
+      importance, effects: isObj(effects) ? effects : {}, cost: 0, panelKey: `${storyId}.beat.${beatId}`, speaker, portrait,
+    };
+    c.ledger[key] = entry;
+    if (isObj(effects)) this._applyStoryEffects(c, storyId, effects, at);
+    for (const fn of this._listeners) { try { fn(entry, { node: { speaker, portrait, importance }, choice: null }); } catch (_) {} }
+    return entry;
+  }
+
+  /** Something happened on the road ('damage' {hp, source}, 'pass', 'tick'
+   *  {mile, dt, stopped, onShoulder}).  Each active story's `def.onRoad` may
+   *  answer with lines to show / world effects, applied through `hooks`
+   *  (say(text, storyId), wanted(n), passenger(p|null)).  Returns the
+   *  responses. */
+  roadEvent(type, payload = {}, hooks = {}) {
+    const out = [];
+    const c = this.canon();
+    let changed = false;
+    for (const [id, def] of Object.entries(this._defs)) {
+      const st = c.stories[id];
+      if (!st || st.status !== STORY_STATUS.ACTIVE || typeof def.onRoad !== 'function') continue;
+      const api = {
+        state: st, run: this._run,
+        say: (text) => { hooks.say?.(text, id); out.push({ storyId: id, text }); },
+        relationship: (d) => { st.relationship = clamp(st.relationship + num(d), 0, 100); changed = true; },
+        flags: (o) => { Object.assign(st.flags, o); changed = true; },
+        wanted: (n) => hooks.wanted?.(n),
+        passenger: (p) => { this._run.passenger = p ?? null; hooks.passenger?.(this._run.passenger); },
+        beat: (b) => { const e = this._beatInto(c, { storyId: id, mile: payload.mile ?? 0, ...b }); if (e) changed = true; return e; },
+        fail: (endingId) => { if (!TERMINAL.has(st.status)) { st.status = STORY_STATUS.FAILED; st.endingId = endingId ?? null; st.nodeId = null; changed = true; } },
+      };
+      try { def.onRoad(type, payload, api); } catch (_) {}
+    }
+    if (changed) this._writeCanon(c);
+    return out;
+  }
+
+  /** Pulled into a rest stop (`def.onRestStop(stopId, api)`) — Nerve refills,
+   *  a need is assigned.  Once per visit (the scene calls it from create). */
+  restStopVisited(stopId, hooks = {}) {
+    this.mutateCanon((c) => {
+      let changed = false;
+      for (const [id, def] of Object.entries(this._defs)) {
+        const st = c.stories[id];
+        if (!st || st.status !== STORY_STATUS.ACTIVE || typeof def.onRestStop !== 'function') continue;
+        const api = {
+          state: st, run: this._run,
+          flags: (o) => { Object.assign(st.flags, o); changed = true; },
+          say: (text) => hooks.say?.(text, id),
+        };
+        try { def.onRestStop(stopId, api); } catch (_) {}
+      }
+      return changed;
+    });
   }
 
   // ── Run state (snapshot) ────────────────────────────────────────────────

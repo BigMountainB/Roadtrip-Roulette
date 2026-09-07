@@ -1580,6 +1580,8 @@ export class RestStopScene extends Phaser.Scene {
     if (!this._storyGateDone) {
       this._storyGateDone = true;
       const story = this.registry.get('story');
+      // Pulling in: Nerve refills, a passenger need is assigned (Ch. 18.7).
+      try { story?.restStopVisited?.(stopId); } catch (_) {}
       const pend  = (story?.pendingAt?.(stopId) ?? []).filter(p => p.mandatory);
       if (pend.length) { runStoryQueue(this, pend, () => this._maybeShowEncounter()); return; }
     }

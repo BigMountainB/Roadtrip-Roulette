@@ -17,6 +17,7 @@ import {
   FEATURED_STORIES, STORY_IDS, STORY_GENRE, validateStories, resolveDialogue,
   lineKey, labelKey, replyKey, DIALOGUE_INDEX,
   vinylOutcome, vinylPayout, VINYL_RECORDS, VINYL_PAY_PRISTINE, FOUNDER_OFFER, VANTAGE_AMBUSH_MILE,
+  countryOutcome, NERVE_MAX, COUNTRY_PAY_STANDARD, COUNTRY_PAY_RIDE_EM, KIDNAP_REPORT_MI, ROADSIDE_STOP_SEC,
 } from '../src/data/featuredStories.js';
 
 let passed = 0, failed = 0;
@@ -298,7 +299,7 @@ function recorder() {
 }
 
 // ═══ 10. Hip-Hop — Malik's Phone (Ch. 18.6) ══════════════════════════════
-const H = (storyId, nodeId, choiceId, story, hooks = {}, mile = 0) => story.commitChoice({ storyId, nodeId, choiceId, mile }, hooks);
+const H = (storyId, nodeId, choiceId, story, hooks = {}, mile = 0, stopId = null) => story.commitChoice({ storyId, nodeId, choiceId, mile, stopId }, hooks);
 {
   // Happy path: carry → keep job → refuse founder → Kyle → Dom promise → press (Dom credit) → damage → Cle Elum.
   const save = freshSave(); const story = new StorySystem(save); const rec = recorder();
@@ -412,6 +413,128 @@ const H = (storyId, nodeId, choiceId, story, hooks = {}, mile = 0) => story.comm
   H('hiphop', 'cleelum_store', 'deliver', story, rec.hooks, 84);
   check('zero: failed, no pay, no unlock', story.status('hiphop') === STORY_STATUS.FAILED && rec.log.cashCalls === 0 && rec.log.unlocks.length === 0 && story.story('hiphop').endingId === 'zero');
   check('outcome buckets', vinylOutcome(100) === 'pristine' && vinylOutcome(99) === 'damaged' && vinylOutcome(50) === 'damaged' && vinylOutcome(49) === 'almost_empty' && vinylOutcome(2) === 'almost_empty' && vinylOutcome(1) === 'one_record');
+}
+
+// ═══ 11. Country — StageWagon or Bust (Ch. 18.7) ═════════════════════════
+function board() {
+  const save = freshSave(); const story = new StorySystem(save); const rec = recorder();
+  H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
+  H('hiphop', 'mercer_fork', 'ride', story, rec.hooks, 9);
+  return { save, story, rec };
+}
+const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, hooks: { say: (t) => log.said.push(t), wanted: (n) => log.wanted.push(n), passenger: () => {} } }; };
+{
+  const { story } = board();
+  check('boarding: Country active, rel 50, Nerve 25, Brittney seated', story.status('country') === STORY_STATUS.ACTIVE && story.story('country').relationship === 50 && story.run.nerve === NERVE_MAX && story.run.passenger?.id === 'brittney');
+  // Rest stop → need assigned (hunger first), Nerve refill capped.
+  story.restStopVisited('B');
+  check('first stop: hunger pending, Nerve capped at 25', story.story('country').flags.pendingNeed === 'hunger' && story.run.nerve === NERVE_MAX);
+  check('hunger node pending at Bellevue (mandatory), not at Mercer', story.pendingAt('B').some(p => p.nodeId === 'need_hunger' && p.mandatory) && story.pendingAt('M').length === 0);
+  const rec = recorder();
+  check('repeatable node refuses a commit without its stop', H('country', 'need_hunger', 'wait', story, rec.hooks, 12).reason === 'needs_stop');
+  H('country', 'need_hunger', 'wait', story, rec.hooks, 12, 'B');
+  check('wait: no purchase, need persists, rel −5', rec.log.cashCalls === 0 && story.story('country').flags.pendingNeed === 'hunger' && story.story('country').relationship === 45);
+  check('wait: closed at Bellevue, still open at Issaquah (repeatable)', story.pendingAt('B').length === 0 && story.pendingAt('I').some(p => p.nodeId === 'need_hunger'));
+  story.restStopVisited('I');
+  check('second stop: need unchanged while pending', story.story('country').flags.pendingNeed === 'hunger');
+  const r2 = H('country', 'need_hunger', 'sushi', story, rec.hooks, 18, 'I');
+  check('sushi at Issaquah: separate ledger key, $14 once, satisfied, rel +10', r2.applied && r2.entry.key.includes('@I') && rec.log.cash === -14 && rec.log.cashCalls === 1 && story.story('country').flags.pendingNeed == null && story.story('country').relationship === 55);
+  check('sushi double tap: nothing', H('country', 'need_hunger', 'sushi', story, rec.hooks, 18, 'I').applied === false && rec.log.cashCalls === 1);
+  story.restStopVisited('SQ');
+  check('third stop: bathroom next in rotation', story.story('country').flags.pendingNeed === 'bathroom' && story.pendingAt('SQ').some(p => p.nodeId === 'need_bathroom'));
+  H('country', 'need_bathroom', 'hold', story, rec.hooks, 25, 'SQ');
+  check('hold: need persists, rel unchanged', story.story('country').flags.pendingNeed === 'bathroom' && story.story('country').relationship === 55);
+  story.restStopVisited('N');
+  H('country', 'need_bathroom', 'goWith', story, rec.hooks, 32, 'N');
+  check('play swords: satisfied, rel +10', story.story('country').flags.pendingNeed == null && story.story('country').relationship === 65);
+  story.restStopVisited('SP');
+  check('thirst next', story.story('country').flags.pendingNeed === 'thirst');
+  H('country', 'need_thirst', 'fountain', story, rec.hooks, 53, 'SP');
+  check('fountain: free, satisfied, rel −8', rec.log.cashCalls === 1 && story.story('country').flags.pendingNeed == null && story.story('country').relationship === 57);
+  story.restStopVisited('V');
+  check('Vantage assigns no need', story.story('country').flags.pendingNeed == null);
+}
+{
+  // Nerve 1:1 on impacts, not scrapes; thresholds speak; 5+ HP accident speaks immediately; refill 5 per stop.
+  const { story } = board(); const rh = roadHooks();
+  story.roadEvent('damage', { hp: 3, source: 'bridge_rail', mile: 10 }, rh.hooks);
+  check('rail scrape: no Nerve loss', story.run.nerve === 25);
+  story.roadEvent('damage', { hp: 6, source: 'corner', mile: 10.1 }, rh.hooks);
+  check('6 HP corner clip: Nerve 19, immediate authored line', story.run.nerve === 19 && rh.log.said.at(-1).startsWith('Easy, cowboy'));
+  story.roadEvent('damage', { hp: 2, source: 'rear-end', mile: 10.2 }, rh.hooks);
+  check('small hit inside cooldown: Nerve 17, no new line', story.run.nerve === 17 && rh.log.said.length === 1);
+  story.roadEvent('damage', { hp: 3, source: 'rear-end', mile: 11 }, rh.hooks);
+  check('crossing 15: threshold line', story.run.nerve === 14 && rh.log.said.length === 2);
+  story.restStopVisited('B');
+  check('rest stop: +5 Nerve', story.run.nerve === 19);
+  story.roadEvent('damage', { hp: 7, source: 'cop_head_on', mile: 20 }, rh.hooks);
+  check('7 HP head-on-ish: "You saved it" flavour', rh.log.said.at(-1).startsWith('You saved it'));
+  // Resume keeps Nerve.
+  const snap = story.serialize(); const s2 = new StorySystem(reload()); s2.restore(snap);
+  check('exact resume keeps Nerve + passenger', s2.run.nerve === 12 && s2.run.passenger?.id === 'brittney');
+  // New run: Nerve back to 25, she is still aboard (story unfinished).
+  story.resetRun();
+  check('new run: Nerve 25, Brittney still aboard', story.run.nerve === 25 && story.run.passenger?.id === 'brittney');
+}
+{
+  // Good driving: every 5th clean pass flirts (+2 rel), cooldown respected.
+  const { story } = board(); const rh = roadHooks();
+  for (let i = 0; i < 5; i++) story.roadEvent('pass', { mile: 10 + i * 0.5 }, rh.hooks);
+  check('5th clean pass: flirt line + rel 52', rh.log.said.length === 1 && rh.log.said[0].startsWith('Keep threading') && story.story('country').relationship === 52);
+  for (let i = 0; i < 5; i++) story.roadEvent('pass', { mile: 13 + i * 0.5 }, rh.hooks);
+  check('10th: second flirt rotates', rh.log.said.length === 2 && rh.log.said[1].startsWith('If you can keep'));
+  check('clean passes counted', story.run.flags.cleanPasses === 10);
+}
+{
+  // 0 Nerve → pull over; +1.0 mi cops warning; +1.5 mi five stars + kidnapping fail; passenger gone.
+  const { story } = board(); const rh = roadHooks();
+  story.roadEvent('damage', { hp: 30, source: 'head_on', mile: 40 }, rh.hooks);
+  check('0 Nerve: "Pull over" line, nerve0Mile set', story.run.nerve === 0 && rh.log.said.at(-1) === "Pull over. Now. I'm getting out." && story.run.flags.nerve0Mile === 40);
+  story.roadEvent('tick', { mile: 40.5, dt: 0.016, stopped: false, onShoulder: false }, rh.hooks);
+  check('0.5 mi on: nothing yet', rh.log.wanted.length === 0 && rh.log.said.length === 1);
+  story.roadEvent('tick', { mile: 41.05, dt: 0.016, stopped: false, onShoulder: false }, rh.hooks);
+  check('1.0 mi: cops warning', rh.log.said.at(-1) === "If you don't stop, I'm calling the cops.");
+  story.roadEvent('tick', { mile: 41.5 + 0.01, dt: 0.016, stopped: false, onShoulder: false }, rh.hooks);
+  check('1.5 mi: five stars, kidnapping fail, seat empty', rh.log.wanted.at(-1) === 5 && story.status('country') === STORY_STATUS.FAILED && story.story('country').endingId === 'kidnapping' && story.run.passenger === null);
+  check('kidnap beat recorded once (climax)', Object.values(story.canon().ledger).filter(e => e.nodeId === 'beat' && e.choiceId === 'kidnap' && e.importance === 'climax').length === 1);
+  story.roadEvent('tick', { mile: 42, dt: 0.016, stopped: false, onShoulder: false }, rh.hooks);
+  check('after failure: no more stars/lines', rh.log.wanted.length === 1);
+  check('Country failed: no unlock, Vantage arrival not pending', story.pendingAt('V').every(p => p.storyId !== 'country'));
+}
+{
+  // Roadside exit: stopped on the shoulder at 0 Nerve for 1.5 s → she's out, story fails.
+  const { story } = board(); const rh = roadHooks();
+  story.roadEvent('damage', { hp: 30, source: 'head_on', mile: 40 }, rh.hooks);
+  story.roadEvent('tick', { mile: 40.2, dt: 0.5, stopped: true, onShoulder: false }, rh.hooks);
+  check('stopped ON the road: not a drop', story.status('country') === STORY_STATUS.ACTIVE);
+  story.roadEvent('tick', { mile: 40.2, dt: 1.0, stopped: true, onShoulder: true }, rh.hooks);
+  story.roadEvent('tick', { mile: 40.2, dt: 0.6, stopped: true, onShoulder: true }, rh.hooks);
+  check('1.6 s on the shoulder: roadside exit, seat empty, no stars', story.status('country') === STORY_STATUS.FAILED && story.story('country').endingId === 'roadside_exit' && story.run.passenger === null && rh.log.wanted.length === 0);
+  check('first-drive "changes" beat was recorded', Object.values(story.canon().ledger).some(e => e.nodeId === 'beat' && e.choiceId === 'changes'));
+}
+{
+  // Vantage endings.
+  const mk = (rel, nerve, passes) => { const { story } = board(); const rec = recorder();
+    const c = story.canon(); c.stories.country.relationship = rel; story._writeCanon(c);
+    story.run.nerve = nerve; story.run.flags.cleanPasses = passes; return { story, rec }; };
+  check('outcome thresholds use raw 0–100', countryOutcome({ relationship: 80 }, { nerve: 10, flags: { cleanPasses: 5 } }) === 'ride_em'
+    && countryOutcome({ relationship: 79 }, { nerve: 25, flags: { cleanPasses: 50 } }) === 'standard'
+    && countryOutcome({ relationship: 80 }, { nerve: 9, flags: { cleanPasses: 5 } }) === 'standard'
+    && countryOutcome({ relationship: 39 }, { nerve: 25, flags: { cleanPasses: 9 } }) === 'barely');
+  let t = mk(85, 12, 6);
+  check('Vantage pending (mandatory) with her aboard', t.story.pendingAt('V').some(p => p.nodeId === 'vantage_arrival' && p.mandatory));
+  check('Ride \'Em line adds "Text me on your way back"', t.story.resolveLine('country', 'vantage_arrival').includes('Text me on your way back'));
+  let r = H('country', 'vantage_arrival', 'sendOff', t.story, t.rec.hooks, 137);
+  check('Ride \'Em: $2,500 once, Country owned, contact, complete, seat empty', r.applied && t.rec.log.cash === COUNTRY_PAY_RIDE_EM && t.rec.log.unlocks.join() === 'country' && t.rec.log.contacts.join() === 'brittney' && t.story.canon().contacts.brittney?.name === 'Brittney' && t.story.status('country') === STORY_STATUS.COMPLETE && t.story.run.passenger === null);
+  check('Ride \'Em double tap: nothing', H('country', 'vantage_arrival', 'sendOff', t.story, t.rec.hooks, 137).applied === false && t.rec.log.cashCalls === 1);
+  t = mk(60, 3, 0);
+  check('Standard line has no "Text me"', !t.story.resolveLine('country', 'vantage_arrival').includes('Text me'));
+  H('country', 'vantage_arrival', 'sendOff', t.story, t.rec.hooks, 137);
+  check('Standard: $1,500 + Country, no contact', t.rec.log.cash === COUNTRY_PAY_STANDARD && t.rec.log.unlocks.join() === 'country' && t.rec.log.contacts.length === 0 && t.story.story('country').endingId === 'standard');
+  t = mk(20, 25, 20);
+  H('country', 'vantage_arrival', 'sendOff', t.story, t.rec.hooks, 137);
+  check('Barely Made It: $0 but Country still unlocks', t.rec.log.cashCalls === 0 && t.rec.log.unlocks.join() === 'country' && t.story.story('country').endingId === 'barely');
+  check('after she leaves: hiphop is shelved (available) and Country is done', t.story.status('hiphop') === STORY_STATUS.AVAILABLE && t.story.pendingAt('V').every(p => p.storyId !== 'country'));
 }
 
 console.log(`story tests: ${passed} passed, ${failed} failed`);

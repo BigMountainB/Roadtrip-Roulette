@@ -204,6 +204,47 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-06 (pt 4) — Ch. 18 Phase 4: Country "StageWagon or Bust" + widescreen story tile
+
+Owner decisions this session: tile → **720×324 widescreen** ("the conversation tiles can
+be bigger"); Country pays **$1,500 Standard / $2,500 Ride 'Em / $0 Barely Made It** (all
+three unlock Country); **Ride 'Em = relationship ≥ 80 raw, Nerve ≥ 10 at Vantage, ≥ 5 clean
+passes**; Standard ≥ 40; below = Barely.  Verified headless (`probe_country.mjs`): Mercer
+ride → Brittney seated (rel 50, Nerve 25, Hip-Hop shelved) → HUD cue + "changes" beat on
+the first drive frame → 6 HP corner clip = Nerve 19 → Bellevue hunger tile with $14 / $9 /
+wait, Nerve +5 at the stop, sushi debits once → five clean passes flirt (+2) → Vantage: her
+card runs BEFORE the waitress stub and the storefront, Standard pays $1,500 + Country,
+seat empties, HUD cue disappears; fresh plate: two 20-HP hits → 0 Nerve → 1.6 mi on = five
+stars + kidnapping fail + seat empty.
+- **StoryTile**: 720×324 (20:9) art, PEEK 30, buttons 24–36 px under it, speaker label
+  top-right of the tile, balloon tiers 20/18/16/14/13.  Passes the stop id on commit.
+- **StorySystem**: `repeatable` nodes (ledger key carries `@stop`, one beat per visit,
+  `needs_stop` guard), `recordBeat` (choice-less comic beats — idempotent per attempt),
+  `roadEvent(type, payload, hooks)` → `def.onRoad` (say / relationship / flags / wanted /
+  passenger / beat / fail), `restStopVisited` → `def.onRestStop`, `startRelationship` on
+  `startStory`.  Beats raised inside a road event write into that event's canon (a
+  separate write was clobbering them).
+- **featuredStories.js — country**: Nerve = run state, 25, refilled 5 per stop, debited 1:1
+  by IMPACT HP (rail / shoulder / offroad / tunnel scrapes exempt); threshold lines at
+  20/15/10/5, immediate line on any 5+ HP hit (sideswipe/corner vs saved-it flavours),
+  0 Nerve → "Pull over. Now." (wins over every other line); +1.0 mi → cops warning, +1.5
+  mi → five stars + kidnapping fail; stopped on the shoulder 1.5 s at 0 Nerve → roadside
+  exit fail; flirt every 5th clean pass (+2 rel, 0.25-mi cooldown).  Needs rotate hunger
+  → bathroom → thirst as REPEATABLE mandatory tiles at every stop between Mercer and
+  Vantage with the 18.7 lines verbatim (sushi $14 / burrito $9 / wait; hold / wait in
+  car / play swords; slushie $4 / fountain); a "wait" keeps the need for the next stop.
+  Vantage arrival card ("Those are my babes!…", + "Text me on your way back" on Ride
+  'Em) → ending by `countryOutcome()`, cash/unlock/contact once, seat empties.
+- **GameScene**: damage + clean-pass + per-frame tick road events through
+  `_storyHooks()` (say = HUD popup, wanted = stars, text = Messages); gameplay-only
+  passenger cue "💋 BRITTNEY  NERVE n/25 🍆" under the survival bars, flashing ~3 s after
+  Nerve changes, never in the comic; cue reset on create (a stale Text after the
+  rest-stop transition threw every frame and hung the exit).
+- **RestStopScene**: `restStopVisited(stop)` before the story gate.
+- Tests: story 182 (needs rotation + repeat keys, Nerve/threshold/scrape rules, resume
+  + new-run Nerve, flirts, kidnapping timeline, roadside exit, all three endings +
+  raw-threshold outcomes), comic 37; full suite + build green.
+
 ### 2026-09-06 (pt 3) — Ch. 18 Phase 3: Hip-Hop "Malik's Phone" end to end
 
 Owner decisions this session: the Founder runs **TraffApp** (a traffic-monitoring
