@@ -19465,7 +19465,14 @@ export class GameScene extends Phaser.Scene {
     this.hudPopup.setInteractive();
     if (this.hudPopup.input) this.hudPopup.input.enabled = false;
     this.hudPopup.on('pointerdown', (ptr) => {
-      if (!this._popupTextCid || (this.popupTimer ?? 0) <= 0) return;
+      if ((this.popupTimer ?? 0) <= 0) return;
+      if (this._popupComic && !this._popupTextCid) {
+        if ((this.time?.now ?? 0) - (this._popupTextShownAt ?? 0) < 350) return;
+        ptr.event?.stopPropagation?.();
+        try { window.__openComic?.(this._popupComic); } catch (_) {}
+        return;
+      }
+      if (!this._popupTextCid) return;
       // Arm delay (owner rotation-wedge investigation 2026-08-31): the toast
       // appears bottom-center between the touch pedals, so a driving thumb
       // could hit it the same instant it popped and force-open the phone
@@ -23658,14 +23665,17 @@ export class GameScene extends Phaser.Scene {
   _showPopup(text, color = '#FFFFFF', holdSec = 2.2) {
     this.hudPopup.setText(text).setColor(color);
     const isPhoneText = (typeof text === 'string' && text.startsWith('📱'));
+    // MEANWHILE… comic toasts (📖) are tappable the same way (Ch. 18.4).
+    const isComic = (typeof text === 'string' && text.startsWith('📖'));
     // Tap-to-open-thread: callers that log a text set _popupTextCid right
     // before this; any NON-text popup clears it so a stale cid can't make an
     // unrelated toast tappable.  The hit area tracks the new text's size and
     // input is enabled only while a text toast is up, so ordinary toasts
     // never swallow road taps.
     if (!isPhoneText) this._popupTextCid = null;
+    if (!isComic) this._popupComic = null;
     if (this.hudPopup.input) {
-      this.hudPopup.input.enabled = isPhoneText && !!this._popupTextCid;
+      this.hudPopup.input.enabled = (isPhoneText && !!this._popupTextCid) || (isComic && !!this._popupComic);
       this.hudPopup.input.hitArea?.setTo?.(0, 0, this.hudPopup.width, this.hudPopup.height);
       this._popupTextShownAt = this.time?.now ?? 0;   // tap arm-delay reference
     }
@@ -24300,7 +24310,22 @@ export class GameScene extends Phaser.Scene {
       wanted: (n) => { if (this.cops) this.cops.stars = Math.max(this.cops.stars ?? 0, n); },
       passenger: () => {},
       text: (cid, from, msg) => this._logBuddyText(cid, from, msg),
+      // A story handed the aux cord over: switch the radio to that genre.
+      radio: (culture) => {
+        try {
+          const st = (this.audio?.getStations?.() ?? []).find(s => s.culture === culture);
+          if (st) this.audio.setStation(st.index);
+        } catch (_) {}
+      },
     };
+  }
+
+  /** MEANWHILE… notification (18.4): a tappable toast, never an interruption.
+   *  Tapping opens the phone straight into the COMIC app on that strip. */
+  _showMeanwhileToast(item) {
+    const where = this.comic?.pageFor?.(item.key) ?? null;
+    this._popupComic = where ? { ...where, title: item.title } : null;
+    this._showPopup('📖 MEANWHILE… — tap to read', '#FFD23D', 6);
   }
 
   _updateStoryRun(dt) {
@@ -24314,6 +24339,8 @@ export class GameScene extends Phaser.Scene {
       try { story.roadEvent('tick', { mile, dt, stopped: mph < 2, onShoulder }, this._storyHooks()); } catch (_) {}
     }
     this._drawStoryHud(story, mile);
+    // Queued MEANWHILE strips surface one at a time, only while no toast is up.
+    if ((this.popupTimer ?? 0) <= 0 && story.peekMeanwhile?.()) this._showMeanwhileToast(story.pullMeanwhile());
     if (!this._storyAmbush) {
       const am = story.ambushesAt?.(mile) ?? [];
       if (am.length) {

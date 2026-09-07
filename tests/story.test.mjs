@@ -435,7 +435,7 @@ const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, ho
   check('repeatable node refuses a commit without its stop', H('country', 'need_hunger', 'wait', story, rec.hooks, 12).reason === 'needs_stop');
   H('country', 'need_hunger', 'wait', story, rec.hooks, 12, 'B');
   check('wait: no purchase, need persists, rel −5', rec.log.cashCalls === 0 && story.story('country').flags.pendingNeed === 'hunger' && story.story('country').relationship === 45);
-  check('wait: closed at Bellevue, still open at Issaquah (repeatable)', story.pendingAt('B').length === 0 && story.pendingAt('I').some(p => p.nodeId === 'need_hunger'));
+  check('wait: closed at Bellevue, still open at Issaquah (repeatable)', !story.pendingAt('B').some(p => p.nodeId === 'need_hunger') && story.pendingAt('I').some(p => p.nodeId === 'need_hunger'));
   story.restStopVisited('I');
   check('second stop: need unchanged while pending', story.story('country').flags.pendingNeed === 'hunger');
   const r2 = H('country', 'need_hunger', 'sushi', story, rec.hooks, 18, 'I');
@@ -665,6 +665,101 @@ function tour(choices, seed = {}) {
   t = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'demand'], ['washtucna_show', 'solo'], ['lacrosse_show', 'solo']]);   // controlling 3, rel 50+5+5+10-10-10-25 = 25
   check('3 controlling + rel 25 → NOT broken (needs < 25)', !isBrokenVoice(t.story.story('classicRock')));
   check('thresholds use raw relationship, never rounded stars', classicRockOutcome({ relationship: 81, flags: { deal: '5050', l: 'duet' } }) === 'true_ending' && classicRockOutcome({ relationship: 80, flags: { deal: '5050', l: 'duet' } }) === 'equal_partner');
+}
+
+// ═══ 13. Phase 6 — Meanwhile strips, hitchhiker gating, side quests ══════
+{
+  // Meanwhile from a pass hook: once, queued, three captions, comic strip page.
+  const save = freshSave(); const story = new StorySystem(save);
+  const { ComicSystem } = await import('../src/systems/ComicSystem.js');
+  const comic = new ComicSystem(story);
+  H('hiphop', 'seattle_offer', 'carry', story, {}, 4);
+  story.exitPassed('M', 9.7, {}); story.exitPassed('I', 18.3, {});
+  const q = story.peekMeanwhile();
+  check('phone lock raises "Malik dispatches three cars" once, queued', !!q && q.stripId === 'malik_cars' && story.run.meanwhileQueue.length === 1);
+  const entry = Object.values(story.canon().ledger).find(e => e.choiceId === 'mw_malik_cars');
+  check('strip beat: importance meanwhile, three placeholder captions', entry?.importance === 'meanwhile' && entry.strip?.length === 3 && /caption pending/.test(entry.strip[0].text));
+  const where = comic.pageFor(entry.key);
+  const page = comic.pagesOf(where.volId).find(p => p.id === where.pageId);
+  check('comic: strip on its own 3-slot page, captions per slot', page?.templateId === 'meanwhile' && page.panels.every(p => p.event?.strip?.length === 3));
+  check('pull dequeues; second pass raises nothing', story.pullMeanwhile()?.stripId === 'malik_cars' && story.peekMeanwhile() === null && story.exitPassed('I', 18.4, {}).length === 0 && story.run.meanwhileQueue.length === 0);
+  // Survives an exact resume.
+  story.raiseMeanwhile('hiphop', 'stank_legal', 84);
+  const snap = story.serialize(); const s2 = new StorySystem(reload()); s2.restore(snap);
+  check('queue rides the snapshot', s2.peekMeanwhile()?.stripId === 'stank_legal');
+  check('re-raising a shown strip is a no-op', story.raiseMeanwhile('hiphop', 'stank_legal', 85) === null && story.run.meanwhileQueue.length === 1);
+  check('unknown strip ignored', story.raiseMeanwhile('hiphop', 'nope', 1) === null);
+}
+{
+  // Choice-effect strips: Nan refused → wrong town; Ride 'Em → Brittney's friends; Cle Elum credited to Malik → Stank legal.
+  const t = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'refuse']]);
+  check('Nan refused → "Nan visits the wrong town" queued', t.story.peekMeanwhile()?.stripId === 'nan_wrong_town');
+  const b = board(); const c = b.story.canon(); c.stories.country.relationship = 90; b.story._writeCanon(c);
+  b.story.run.nerve = 20; b.story.run.flags.cleanPasses = 9;
+  H('country', 'vantage_arrival', 'sendOff', b.story, b.rec.hooks, 137);
+  check("Ride 'Em → Brittney's friends strip", b.story.peekMeanwhile()?.stripId === 'brittney_friends');
+  const hh = new StorySystem(freshSave());
+  H('hiphop', 'seattle_offer', 'carry', hh, {}, 4); H('hiphop', 'mercer_fork', 'keepJob', hh, {}, 9); H('hiphop', 'issaquah_kyle', 'handOver', hh, {}, 18);
+  H('hiphop', 'northbend_dom', 'delay', hh, {}, 32); H('hiphop', 'pass_tennessee', 'creditMalik', hh, {}, 53); H('hiphop', 'cleelum_store', 'deliver', hh, {}, 84);
+  check('Cle Elum credited to Malik alone → Stank legal strip', hh.peekMeanwhile()?.stripId === 'stank_legal');
+}
+{
+  // Hitchhiker gating.
+  const story = new StorySystem(freshSave());
+  check('no story started: open everywhere except Vantage (the waitress could still board there)', !story.hitchhikerBlocked('M') && story.hitchhikerBlocked('V') && !story.hitchhikerBlocked('B'));
+  H('hiphop', 'seattle_offer', 'carry', story, {}, 4);
+  check('phone live, Mercer fork open: blocked at Mercer only', story.hitchhikerBlocked('M') && !story.hitchhikerBlocked('B'));
+  check('waitress available: blocked at Vantage', story.hitchhikerBlocked('V'));
+  H('hiphop', 'mercer_fork', 'ride', story, {}, 9);
+  check('Brittney aboard: blocked everywhere', story.hitchhikerBlocked('B') && story.hitchhikerBlocked('SQ') && story.hitchhikerBlocked('E'));
+  const c = story.canon(); c.stories.country.relationship = 60; story._writeCanon(c);
+  H('country', 'vantage_arrival', 'sendOff', story, {}, 137);
+  check('after she leaves: Vantage still blocked (waitress could board), later stops open', story.hitchhikerBlocked('V') && !story.hitchhikerBlocked('O'));
+  H('classicRock', 'vantage_diner', 'east', story, {}, 137); H('classicRock', 'vantage_offer', 'accept', story, {}, 137);
+  check('waitress aboard: blocked again', story.hitchhikerBlocked('O'));
+  const t = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'reject']]);
+  check('after she leaves for good: open (arc failed, nobody can board)', !t.story.hitchhikerBlocked('H') && !t.story.hitchhikerBlocked('V'));
+}
+{
+  // Side quest A — Dom's tape: optional at North Bend after a promise, B-side at the press, bonus at Cle Elum.
+  const story = new StorySystem(freshSave()); const rec = recorder();
+  H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4); H('hiphop', 'mercer_fork', 'keepJob', story, rec.hooks, 9); H('hiphop', 'issaquah_kyle', 'handOver', story, rec.hooks, 18);
+  const r = H('hiphop', 'northbend_dom', 'promise', story, rec.hooks, 32);
+  check('promise leads to the tape offer (optional, same stop)', r.next === 'dom_tape' && story.pendingAt('N').some(p => p.nodeId === 'dom_tape' && p.mandatory === false));
+  check('no B-side option without the tape', !story.choicesFor('hiphop', 'pass_tennessee').some(ch => ch.id === 'bside'));
+  H('hiphop', 'dom_tape', 'take', story, rec.hooks, 32);
+  check('tape taken: item, rel +5 (85), Dom node closed', story.story('hiphop').items.domTape === true && story.story('hiphop').relationship === 85 && story.pendingAt('N').length === 0);
+  check('B-side option now offered', story.choicesFor('hiphop', 'pass_tennessee').some(ch => ch.id === 'bside'));
+  H('hiphop', 'pass_tennessee', 'bside', story, rec.hooks, 53);
+  check('B-side pressed: producer credit, tape consumed, records 100', story.story('hiphop').flags.bside === true && story.story('hiphop').flags.creditOut === 'producer' && !story.story('hiphop').items.domTape && story.run.cargo.records === 100);
+  H('hiphop', 'cleelum_store', 'deliver', story, rec.hooks, 84);
+  check('Cle Elum: pristine + $250 B-side bonus, no Stank strip (credit went to Dom)', rec.log.cash === 2750 && story.peekMeanwhile() === null);
+  // Declining is casual and leaves nothing behind.
+  const s2 = new StorySystem(freshSave());
+  H('hiphop', 'seattle_offer', 'carry', s2, {}, 4); H('hiphop', 'mercer_fork', 'keepJob', s2, {}, 9); H('hiphop', 'issaquah_kyle', 'handOver', s2, {}, 18); H('hiphop', 'northbend_dom', 'promise', s2, {}, 32);
+  const d = H('hiphop', 'dom_tape', 'leave', s2, {}, 32);
+  check('declining the tape: no ledger entry, no item', d.applied && d.entry === null && !s2.story('hiphop').items.domTape);
+}
+{
+  // Side quest B — the aux cord: radio hook fires once, payoff line at Vantage.
+  const { story } = board(); const radio = [];
+  check('aux quest optional at Bellevue behind the need', story.pendingAt('B').some(p => p.nodeId === 'brittney_aux' && !p.mandatory) && story.pendingAt('B')[0].mandatory === true || story.pendingAt('B').length === 1);
+  const r = story.commitChoice({ storyId: 'country', nodeId: 'brittney_aux', choiceId: 'give', mile: 12 }, { radio: (c) => radio.push(c) });
+  check('give: radio → country once, rel +5', r.applied && radio.join() === 'country' && story.story('country').relationship === 55);
+  story.commitChoice({ storyId: 'country', nodeId: 'brittney_aux', choiceId: 'give', mile: 12 }, { radio: (c) => radio.push(c) });
+  check('give twice: radio not re-fired', radio.length === 1);
+  const c = story.canon(); c.stories.country.relationship = 60; story._writeCanon(c);
+  const v = H('country', 'vantage_arrival', 'sendOff', story, {}, 137);
+  check('Vantage reply pays off the aux cord', /keeps your aux cord/.test(v.entry.fallbackText.reply));
+}
+{
+  // Side quest C — the set list foreshadows Colfax and changes La Crosse.
+  const t = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'refuse'], ['washtucna_show', 'equal']]);
+  check('set list offered after show two (optional)', t.story.pendingAt('W').some(p => p.nodeId === 'setlist' && !p.mandatory));
+  CR('setlist', 'mine', t.story, t.rec.hooks, 228);
+  check('"mine": controlling +1, solo following +5, La Crosse line changes', t.story.story('classicRock').flags.controlling === 1 && t.story.story('classicRock').flags.soloFollowing === 5 && t.story.resolveLine('classicRock', 'lacrosse_show').startsWith('We open with yours.'));
+  const t2 = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'refuse'], ['washtucna_show', 'equal'], ['setlist', 'hers']]);
+  check('"hers": rel +5, La Crosse opens with hers', t2.story.story('classicRock').relationship === 95 && t2.story.resolveLine('classicRock', 'lacrosse_show').startsWith('We open with mine'));
 }
 
 console.log(`story tests: ${passed} passed, ${failed} failed`);

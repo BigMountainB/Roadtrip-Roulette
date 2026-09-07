@@ -101,6 +101,11 @@ export function normalizeStoryCanon(src) {
         fallbackText: isObj(e.fallbackText) ? { ...e.fallbackText } : {},
         importance: typeof e.importance === 'string' ? e.importance : 'choice',
         cost: Math.max(0, num(e.cost) | 0),
+        stopId: typeof e.stopId === 'string' ? e.stopId : null,
+        speaker: typeof e.speaker === 'string' ? e.speaker : undefined,
+        portrait: typeof e.portrait === 'string' ? e.portrait : undefined,
+        panelKey: typeof e.panelKey === 'string' ? e.panelKey : undefined,
+        strip: Array.isArray(e.strip) ? e.strip.filter(isObj).map(p => ({ speaker: String(p.speaker ?? ''), text: String(p.text ?? '') })) : undefined,
       };
     }
   }
@@ -421,6 +426,8 @@ export class StorySystem {
     if ('radioGrant' in effects) { this._run.radioGrant = effects.radioGrant ?? null; hooks.radioGrant?.(this._run.radioGrant); }
     if (effects.nerve != null) this._run.nerve = clamp(this._run.nerve + num(effects.nerve), 0, 25);
     if (isObj(effects.cargo)) Object.assign(this._run.cargo, effects.cargo);
+    if (typeof effects.radio === 'string') hooks.radio?.(effects.radio);
+    if (typeof effects.meanwhile === 'string') this.mutateCanon((c2) => !!this._raiseMeanwhile(c2, storyId, effects.meanwhile, mile));
     hooks.panel?.(entry, node, choice);
     for (const fn of this._listeners) { try { fn(entry, { node, choice }); } catch (_) {} }
     return { applied: true, entry, effects, next: choice.next ?? null, leaveStop: effects.leaveStop === true };
@@ -488,7 +495,7 @@ export class StorySystem {
   }
 
   /** Same, into a canon the caller is already mutating (roadEvent). */
-  _beatInto(c, { storyId, beatId, importance = 'consequence', speaker = '', portrait = null, text = '', mile = 0, at = Date.now(), effects = null }) {
+  _beatInto(c, { storyId, beatId, importance = 'consequence', speaker = '', portrait = null, text = '', mile = 0, at = Date.now(), effects = null, strip = null }) {
     const st = c.stories[storyId] ?? (c.stories[storyId] = emptyStoryState());
     const key = ledgerKey(storyId, st.replayCount, 'beat', beatId);
     if (c.ledger[key]) return null;
@@ -497,10 +504,43 @@ export class StorySystem {
       dialogueKeys: { line: `${storyId}.beat.${beatId}.line` }, fallbackText: { line: text, label: '', reply: '' },
       importance, effects: isObj(effects) ? effects : {}, cost: 0, panelKey: `${storyId}.beat.${beatId}`, speaker, portrait,
     };
+    if (Array.isArray(strip)) entry.strip = strip.map(p => ({ speaker: String(p.speaker ?? ''), text: String(p.text ?? '') }));
     c.ledger[key] = entry;
     if (isObj(effects)) this._applyStoryEffects(c, storyId, effects, at);
     for (const fn of this._listeners) { try { fn(entry, { node: { speaker, portrait, importance }, choice: null }); } catch (_) {} }
     return entry;
+  }
+
+  /** A MEANWHILE… strip (18.4): a three-panel offscreen consequence from
+   *  `def.meanwhile[stripId]`.  Recorded once per attempt as a beat and queued
+   *  for a non-interrupting notification (GameScene polls pullMeanwhile()).
+   *  Returns the entry, or null when already shown / unknown. */
+  _raiseMeanwhile(c, storyId, stripId, mile) {
+    const def = this._defs[storyId]?.meanwhile?.[stripId];
+    if (!def) return null;
+    const entry = this._beatInto(c, { storyId, beatId: 'mw_' + stripId, importance: 'meanwhile', speaker: def.speaker ?? '', portrait: def.portrait ?? null, text: def.title ?? 'MEANWHILE…', mile, strip: def.panels ?? [] });
+    if (entry) (this._run.meanwhileQueue ??= []).push({ key: entry.key, storyId, stripId, title: def.title ?? 'MEANWHILE…' });
+    return entry;
+  }
+  raiseMeanwhile(storyId, stripId, mile = 0) {
+    let e = null;
+    this.mutateCanon((c) => { e = this._raiseMeanwhile(c, storyId, stripId, mile); return !!e; });
+    return e;
+  }
+  /** Next queued strip notification (FIFO), or null. */
+  pullMeanwhile() { return (this._run.meanwhileQueue ?? []).shift() ?? null; }
+  peekMeanwhile() { return (this._run.meanwhileQueue ?? [])[0] ?? null; }
+
+  /** No generic hitchhiker while a featured passenger is aboard, nor at the
+   *  stop where one could still board (18.4). */
+  hitchhikerBlocked(stopId) {
+    if (this._run.passenger) return true;
+    const c = this.canon();
+    for (const [id, def] of Object.entries(this._defs)) {
+      if (typeof def.passengerJoinStop !== 'function') continue;
+      try { if (def.passengerJoinStop(c.stories[id] ?? emptyStoryState(), this._run, c) === stopId) return true; } catch (_) {}
+    }
+    return false;
   }
 
   /** Something happened on the road ('damage' {hp, source}, 'pass', 'tick'
@@ -523,6 +563,7 @@ export class StorySystem {
         wanted: (n) => hooks.wanted?.(n),
         passenger: (p) => { this._run.passenger = p ?? null; hooks.passenger?.(this._run.passenger); },
         beat: (b) => { const e = this._beatInto(c, { storyId: id, mile: payload.mile ?? 0, ...b }); if (e) changed = true; return e; },
+        meanwhile: (stripId) => { if (this._raiseMeanwhile(c, id, stripId, payload.mile ?? 0)) changed = true; },
         fail: (endingId) => { if (!TERMINAL.has(st.status)) { st.status = STORY_STATUS.FAILED; st.endingId = endingId ?? null; st.nodeId = null; changed = true; } },
       };
       try { def.onRoad(type, payload, api); } catch (_) {}
@@ -564,6 +605,7 @@ export class StorySystem {
       nerve:      25,       // Brittney's Nerve (Phase 4)
       cargo:      {},       // { records: n, recordsMax, hpLost } (Phase 3)
       flags:      {},       // run-scoped story flags (warnings fired, miles at 0 Nerve…)
+      meanwhileQueue: [],   // strips raised but not yet notified (Phase 6)
     };
     this.deriveRun();
   }
@@ -599,6 +641,7 @@ export class StorySystem {
           relationship: (d) => { st.relationship = clamp(st.relationship + num(d), 0, 100); changed = true; },
           radioGrant: (g) => { this._run.radioGrant = g ?? null; hooks.radioGrant?.(this._run.radioGrant); },
           text: (cid, from, msg) => hooks.text?.(cid, from, msg, id),
+          meanwhile: (stripId) => { if (this._raiseMeanwhile(c, id, stripId, mile)) changed = true; },
           fail: (endingId) => { if (!TERMINAL.has(st.status)) { st.status = STORY_STATUS.FAILED; st.endingId = endingId ?? null; st.nodeId = null; changed = true; } },
         };
         let did = false;
@@ -676,6 +719,7 @@ export class StorySystem {
     r.nerve      = clamp(num(snap.nerve, 25), 0, 25);
     r.cargo      = isObj(snap.cargo) ? { ...snap.cargo } : {};
     r.flags      = isObj(snap.flags) ? { ...snap.flags } : {};
+    r.meanwhileQueue = Array.isArray(snap.meanwhileQueue) ? snap.meanwhileQueue.filter(isObj) : [];
     this.reapplyLedger();
     this.deriveRun();
   }

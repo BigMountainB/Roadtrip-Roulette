@@ -1037,9 +1037,9 @@ const _boot = () => {
   // app modal.  Data is the plate's story canon (device-local, never cloud).
   window.__comic = {
     volumes: () => game.registry.get('comic')?.volumes?.() ?? [],
-    mount: (el) => {
+    mount: (el, focus = null) => {
       const save = game.registry.get('save');
-      mountComicReader(el, game.registry.get('comic') ?? null, { plate: save?.plateOf?.(save?.data?.activeSlot ?? 0) || '' });
+      mountComicReader(el, game.registry.get('comic') ?? null, { plate: save?.plateOf?.(save?.data?.activeSlot ?? 0) || '', focus });
     },
   };
 

@@ -204,6 +204,37 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-06 (pt 6) — Ch. 18 Phase 6: MEANWHILE strips, hitchhiker gating, attached side quests
+
+Owner decisions this session: side quests = mechanism + ONE drafted quest per arc (copy is
+mine, rewrite freely by stable key); MEANWHILE strips = mechanism with PLACEHOLDER captions
+("[caption pending — <title>, panel n]") until the owner writes them.  Verified headless
+(`probe_meanwhile.mjs`): hitchhiker open at Seattle, hidden at Mercer while Brittney's fork
+is live and everywhere while she's aboard; Bellevue runs the hunger tile then the optional
+aux quest (plain way out); locking the phone raises "Malik dispatches three cars" → a
+tappable "📖 MEANWHILE… — tap to read" toast (no interruption) → tap opens the phone into
+the COMIC app on that strip's page.
+- **StorySystem**: `def.meanwhile[stripId]` + `_raiseMeanwhile` (a 'meanwhile' beat with
+  three `strip` captions, once per attempt) reachable from a choice effect
+  `meanwhile:'id'`, `api.meanwhile()` in onPass / onRoad; run-state
+  `meanwhileQueue` (serialized) with `peek/pullMeanwhile`; `hitchhikerBlocked(stop)` =
+  passenger aboard OR `def.passengerJoinStop()` names this stop; `radio` effect hook.
+- **Strips authored as triggers** (captions pending): Malik's three cars ← phone locks;
+  Stank legal ← Cle Elum delivery credited to Malik alone; Nan's wrong town ← Nan refused
+  or "her call" keeps her; Brittney's friends ← Ride 'Em send-off.
+- **Side quests** (optional nodes, run after the mandatory tiles, no slots): Hip-Hop
+  "Dom's tape" (North Bend after a credit promise → B-side option at the press → Cle Elum
+  reply + $250); Country "the aux cord" (Bellevue: hand it over → radio switches to Country,
+  +5; keep it −3; payoff line at Vantage); Classic Rock "the set list" (Washtucna: hers +5 /
+  mine controlling+1 & solo following → La Crosse opener line changes; foreshadows Colfax).
+- **ComicSystem** carries `strip`; `pageFor(key)`.  **ComicReader** draws a MEANWHILE… page
+  with per-slot captions and accepts `focus:{volId,pageId}` (scrolls that page into view).
+- **GameScene**: polls the queue while driving; 📖 toasts are tappable like 📱 texts →
+  `window.__openComic(target)` (index.html) opens the phone + COMIC tile with
+  `__comicFocus`.  **RestStopScene**: optional nodes join the arrival queue; campground
+  hitchhiker item filtered/restored per stop from a pristine copy.
+- Tests: story 258, comic 37; full suite + build green.
+
 ### 2026-09-06 (pt 5) — Ch. 18 Phase 5: Classic Rock "ImprompTour" Vantage → Pullman
 
 Owner decisions this session: Pullman final show pays **$10,000 before the Colfax split**

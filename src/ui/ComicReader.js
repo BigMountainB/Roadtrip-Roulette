@@ -112,10 +112,20 @@ export function renderPage(ctx, page, w, h, onArt) {
   ctx.save();
   ctx.fillStyle = PAPER; ctx.fillRect(0, 0, w, h);
   const sx = w / PAGE_W, sy = h / PAGE_H;
-  for (const { slot, event } of page.panels) {
+  if (page.templateId === 'meanwhile') {
+    ctx.fillStyle = INK; ctx.font = `bold ${Math.max(11, w * 0.06)}px Impact, "Arial Black", sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('MEANWHILE…', w * 0.03, h * 0.22);
+    const first = page.panels[0]?.event;
+    if (first?.text?.line) { ctx.font = `${Math.max(8, w * 0.03)}px "Helvetica Neue", Arial, sans-serif`; ctx.fillStyle = '#6E6A60'; ctx.fillText(first.text.line, w * 0.03, h * 0.22 + w * 0.07); }
+  }
+  page.panels.forEach(({ slot, event }, si) => {
     const x = slot.x * sx, y = slot.y * sy, pw = slot.w * sx, ph = slot.h * sy;
-    if (!event) continue;
+    if (!event) return;
     const meta = panelMeta(event.panelKey);
+    // A MEANWHILE strip is one event across three slots: each slot reads
+    // its own sub-panel caption.
+    const sub = page.templateId === 'meanwhile' ? (event.strip?.[si] ?? null) : null;
     // Art or placeholder.
     ctx.save();
     ctx.beginPath(); ctx.rect(x, y, pw, ph); ctx.clip();
@@ -133,22 +143,26 @@ export function renderPage(ctx, page, w, h, onArt) {
       ctx.beginPath(); ctx.ellipse(x + pw * 0.78, y + ph * 0.95, Math.min(pw, ph) * 0.26, Math.min(pw, ph) * 0.22, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#8FB7E6'; ctx.font = `bold ${Math.max(8, ph * 0.07)}px Impact, "Arial Black", sans-serif`;
       ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-      ctx.fillText(`${(event.speaker || '').toUpperCase()}`, x + 8, y + ph - 6);
+      ctx.fillText(`${((sub ? sub.speaker : event.speaker) || '').toUpperCase()}`, x + 8, y + ph - 6);
       ctx.textAlign = 'right';
       ctx.fillText(`MI ${Math.round(event.mile)}`, x + pw - 8, y + ph - 6);
     }
     // Balloons (never baked into art).
     const b = meta.bubble, t = meta.tail, pb = meta.playerBubble, pt = meta.playerTail;
-    const npcText = event.text?.reply || event.text?.line;
-    drawBalloon(ctx, npcText, { x: x + b.x * pw, y: y + b.y * ph, w: b.w * pw, h: b.h * ph }, { x: x + t.x * pw, y: y + t.y * ph });
-    if (event.text?.label) {
-      drawBalloon(ctx, event.text.label, { x: x + pb.x * pw, y: y + pb.y * ph, w: pb.w * pw, h: pb.h * ph }, { x: x + pt.x * pw, y: y + pt.y * ph }, { fill: '#FFF9D6' });
+    if (sub) {
+      drawBalloon(ctx, sub.text, { x: x + 0.05 * pw, y: y + 0.06 * ph, w: 0.9 * pw, h: 0.5 * ph }, null, { maxGrow: 1.6 });
+    } else {
+      const npcText = event.text?.reply || event.text?.line;
+      drawBalloon(ctx, npcText, { x: x + b.x * pw, y: y + b.y * ph, w: b.w * pw, h: b.h * ph }, { x: x + t.x * pw, y: y + t.y * ph });
+      if (event.text?.label) {
+        drawBalloon(ctx, event.text.label, { x: x + pb.x * pw, y: y + pb.y * ph, w: pb.w * pw, h: pb.h * ph }, { x: x + pt.x * pw, y: y + pt.y * ph }, { fill: '#FFF9D6' });
+      }
     }
     ctx.restore();
     // Panel border.
     ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, w * 0.006);
     ctx.strokeRect(x, y, pw, ph);
-  }
+  });
   // Page number.
   ctx.fillStyle = '#6E6A60'; ctx.font = `${Math.max(9, w * 0.028)}px "Helvetica Neue", Arial, sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
@@ -168,7 +182,10 @@ export function mountComicReader(el, comic, opts = {}) {
     return;
   }
   const active = comic.activeVolume();
-  let curId = active?.id ?? vols[vols.length - 1].id;
+  // `opts.focus` = { volId, pageId } (a tapped MEANWHILE notification) —
+  // open that volume and scroll that page into view instead of the newest.
+  const focus = opts.focus ?? null;
+  let curId = focus?.volId ?? active?.id ?? vols[vols.length - 1].id;
 
   const tabs = document.createElement('div'); tabs.className = 'cr-tabs';
   const body = document.createElement('div'); body.className = 'cr-body';
@@ -198,7 +215,7 @@ export function mountComicReader(el, comic, opts = {}) {
       const hPx = Math.round(width * PAGE_H / PAGE_W);
       cv.width = width * dpr; cv.height = hPx * dpr;
       cv.style.width = width + 'px'; cv.style.height = hPx + 'px';
-      cv.className = 'cr-page';
+      cv.className = 'cr-page'; cv.dataset.pageId = page.id;
       const draw = () => { const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); renderPage(ctx, page, width, hPx, draw); };
       draw();
       body.appendChild(cv);
@@ -207,8 +224,12 @@ export function mountComicReader(el, comic, opts = {}) {
     end.className = 'cr-tbc';
     end.textContent = comic.isToBeContinued(vol) ? 'TO BE CONTINUED' : `THE END · VOLUME ${vol.n}`;
     body.appendChild(end);
-    // Newest at the bottom — land there (18.1 "current vertical comic progress").
-    requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
+    // Newest at the bottom — land there (18.1 "current vertical comic progress"),
+    // unless a specific page was asked for.
+    requestAnimationFrame(() => {
+      const target = focus?.pageId && volId === focus.volId ? body.querySelector(`canvas[data-page-id="${focus.pageId}"]`) : null;
+      if (target) target.scrollIntoView({ block: 'start' }); else body.scrollTop = body.scrollHeight;
+    });
   };
 
   for (const v of vols) {

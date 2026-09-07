@@ -60,6 +60,14 @@
 //   syncCargo:   (state, run) => bool              run cargo → canon at save points
 //   ambush:      { mile, when(state, run), cars }  hostile-car trigger (GameScene)
 //   endings:     { endingId: { label, unlock } }
+//   meanwhile:   { stripId: { title, speaker, panels:[{speaker,text}×3] } }  18.4 strips —
+//                raised by a choice effect `meanwhile:'id'` or api.meanwhile('id')
+//   passengerJoinStop: (state, run, canon) => stopId|null   hitchhiker gating (18.4)
+//
+// ATTACHED SIDE QUESTS (18.4) are ordinary optional nodes on the story
+// (`mandatory: false`, run after the mandatory tiles at that stop, always with
+// a plain non-consequential way out) that change a later scene, develop a
+// character, or pay off as comic relief.  They use no mission or story slot.
 //
 // Copy in 18.6–18.8 is the source of truth; everything quoted there is used
 // verbatim.  Connecting lines are ours.
@@ -79,6 +87,7 @@ export const STORY_IDS = Object.keys(STORY_GENRE);
 // ── Hip-Hop tunables (Ch. 18.6, owner 2026-09-06) ──────────────────────
 export const VINYL_RECORDS      = 100;    // pressed at Snoqualmie Pass
 export const VINYL_PAY_PRISTINE = 2500;   // full delivery; scales linearly per record
+export const DOM_TAPE_BONUS     = 250;    // side quest: the B-side sells too
 export const RECORDS_PER_HP     = 2;      // every HP of damage destroys two records…
 export const PAYOUT_PCT_PER_HP  = 2;      // …and docks 2% of the payout (cap 100%)
 export const FOUNDER_OFFER      = 1000;   // TraffApp's price for the phone
@@ -166,6 +175,11 @@ export function countryOutcome(st, run) {
 }
 
 const has = (st, k) => !!st.items?.[k];
+/** Placeholder three-panel strip (owner will write the captions; keys are stable). */
+const pendingStrip = (title, speakers) => ({
+  title, speaker: speakers[0],
+  panels: speakers.map((sp, i) => ({ speaker: sp, text: `[caption pending — ${title}, panel ${i + 1}]` })),
+});
 
 /** Surviving records → outcome bucket (Cle Elum, 18.6). */
 export function vinylOutcome(records) {
@@ -249,8 +263,13 @@ export const FEATURED_STORIES = {
         api.relationship(-30);
         api.radioGrant(null);
         api.text('malik', 'Malik Reed', "You PASSED Issaquah?? That phone just locked itself. One job. You had ONE job, and you're driving away from it. Turn around — or don't bother coming anywhere near Vantage.");
+        api.meanwhile('malik_cars');
         return true;
       },
+    },
+    meanwhile: {
+      malik_cars:  pendingStrip("Malik dispatches three cars", ['Malik Reed', 'The Crew', 'Malik Reed']),
+      stank_legal: pendingStrip("Stank legal notices the NoiseCloud upload", ['Stank Legal', "Dom'nique", 'Stank Legal']),
     },
     // Still carrying the locked phone into Vantage: three cars, no crew in
     // sight, rammed until dead (18.6 "Vantage punishment").
@@ -365,7 +384,7 @@ export const FEATURED_STORIES = {
         line: "That rap song I heard you bumping—that's my beat! Did you get that from Malik Reed? We need to talk… He holds up his phone: the NoiseCloud original, #1, his name on it, the same beat note for note.",
         choices: [
           {
-            id: 'promise', consequential: true, next: null,
+            id: 'promise', consequential: true, next: 'dom_tape',
             label: "That's the same beat. I'll make sure you get credit.",
             reply: "That's all I'm asking. Keep that word and North Bend's got your back the whole way east.",
             effects: { flags: { credit: 'promised', domDone: true }, relationship: 5 },
@@ -382,6 +401,25 @@ export const FEATURED_STORIES = {
             reply: "Piss off, then. If I catch you in North Bend again, it better be for your funeral.",
             effects: { flags: { credit: 'refused', domDone: true, ejectedNorthBend: true }, relationship: -10, leaveStop: true },
           },
+        ],
+      },
+
+      // ── Side quest: Dom's tape (18.4) — develops Dom'nique, changes the
+      // press scene, pays off at Cle Elum.  Optional; a plain way out. ──
+      dom_tape: {
+        stopId: 'N', mandatory: false,
+        when: (st) => st.flags.credit === 'promised' && !st.flags.tapeAsked,
+        speaker: "Dom'nique", portrait: 'biz_parkride', importance: 'minor',
+        line: "If you're really getting me credit — take this too. Ten tracks, my beats, no Malik. Tennessee'll know what a B-side is.",
+        choices: [
+          { id: 'take', consequential: true, next: null,
+            label: "Give it here. If they press yours, it's going on the record.",
+            reply: "Man. Nobody's carried anything of mine past Snoqualmie. Don't scratch it.",
+            effects: { items: { domTape: true }, flags: { tapeAsked: true }, relationship: 5 } },
+          { id: 'leave', consequential: false, next: null,
+            label: "I'm carrying enough of other people's music.",
+            reply: "Fair. Credit's still credit.",
+            effects: {} },
         ],
       },
 
@@ -412,6 +450,13 @@ export const FEATURED_STORIES = {
             reply: "Stank it is — hope they're paying you too. Hundred records, hot off the press — every pothole between here and Cle Elum costs you two of 'em. Drive like they're eggs.",
             effects: { items: { thumbdrive: false, records: VINYL_RECORDS }, flags: { creditOut: 'stank' }, cargo: { records: VINYL_RECORDS, recordsMax: VINYL_RECORDS, hpLost: 0 } },
           },
+          {
+            id: 'bside', consequential: true, next: null,
+            when: (st) => has(st, 'domTape'),
+            label: "Producer credit for Dom'nique — and press his tape as the B-side.",
+            reply: "A B-side! Now THAT'S a record. Producer credit, Dom's ten on the flip. Every pothole between here and Cle Elum still costs you two of 'em.",
+            effects: { items: { thumbdrive: false, domTape: false, records: VINYL_RECORDS }, flags: { creditOut: 'producer', bside: true }, cargo: { records: VINYL_RECORDS, recordsMax: VINYL_RECORDS, hpLost: 0 }, relationship: 5 },
+          },
         ],
       },
 
@@ -436,11 +481,12 @@ export const FEATURED_STORIES = {
             reply: (st, run) => {
               const n = Math.floor(run.cargo.records ?? st.items.records ?? 0);
               const o = vinylOutcome(n);
-              return o === 'pristine'     ? "A hundred clean. That's the whole town's Friday. You just put Hip-Hop on every radio from here to Pullman." :
+              const tail = st.flags.bside ? " And a B-SIDE? The Dom'nique tracks alone would've sold. Extra for the flip." : '';
+              return (o === 'pristine'     ? "A hundred clean. That's the whole town's Friday. You just put Hip-Hop on every radio from here to Pullman." :
                      o === 'damaged'      ? "Half a crate's still a crate. It sells — and so does the story of how it got here." :
                      o === 'almost_empty' ? "Barely enough to fill the window display, but the song's out. That counts." :
                      o === 'one_record'   ? "One record. It'll be a collector's item by Tuesday. The song still gets out — that's the part that matters." :
-                                            "Nothing to sell, nothing to spin. Malik's album died on I-90.";
+                                            "Nothing to sell, nothing to spin. Malik's album died on I-90.") + (o === 'zero' ? '' : tail);
             },
             effects: (st, run) => {
               const n = Math.floor(run.cargo.records ?? st.items.records ?? 0);
@@ -448,6 +494,8 @@ export const FEATURED_STORIES = {
               const pay = vinylPayout(n, run.cargo.hpLost ?? 0);
               const fx = { flags: { deliveredRecords: true, outcome: o }, items: { records: false, recordsHpLost: false }, cargo: { records: null, hpLost: null }, ending: o };
               if (pay > 0) fx.cash = pay;
+              if (st.flags.bside) fx.cash = (fx.cash ?? 0) + DOM_TAPE_BONUS;   // side quest payoff
+              if (n >= 1 && st.flags.creditOut === 'malik') fx.meanwhile = 'stank_legal';
               if (n >= 1) fx.unlockGenre = STORY_GENRE.hiphop; else fx.status = 'failed';
               return fx;
             },
@@ -499,6 +547,14 @@ export const FEATURED_STORIES = {
       barely:        { label: 'BARELY MADE IT',    unlock: true },
       roadside_exit: { label: 'ROADSIDE EXIT',     unlock: false },
       kidnapping:    { label: 'KIDNAPPING REPORT', unlock: false },
+    },
+    meanwhile: {
+      brittney_friends: pendingStrip("Brittney's StageWagon friends read her messages", ['StageWagon Friend', 'StageWagon Friend', 'Brittney']),
+    },
+    // Brittney can only board at Mercer, off the live Hip-Hop fork.
+    passengerJoinStop: (st, run, canon) => {
+      const hh = canon.stories.hiphop;
+      return (hh?.status === 'active' && hh.items?.phone && !hh.items?.phoneLocked && !hh.flags?.mercerDone) ? 'M' : null;
     },
     // She is in the seat for as long as the story is active.
     deriveRun: (st, run) => { run.passenger = { id: 'brittney', name: 'Brittney', storyId: 'country' }; run.nerve = Math.max(0, Math.min(NERVE_MAX, run.nerve ?? NERVE_MAX)); },
@@ -633,6 +689,29 @@ export const FEATURED_STORIES = {
         ],
       },
 
+      // ── Side quest: the aux cord (18.4) — comic relief with a payoff at
+      // Vantage.  Optional, once, at the first need stop after boarding. ──
+      brittney_aux: {
+        stopId: 'B', mandatory: false,
+        when: (st, run) => !!run.passenger && !st.flags.auxAsked,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'minor',
+        line: "Give me the aux. If I hear one more phonk drop before Vantage I'm walking to StageWagon.",
+        choices: [
+          { id: 'give', consequential: true, next: null,
+            label: "Fine. Aux is yours till Vantage. Country it is.",
+            reply: "She has a playlist called ROAD TRIP BABES. It is ninety minutes long. You will hear all of it.",
+            effects: { flags: { auxAsked: true, auxGiven: true }, relationship: 5, radio: 'country' } },
+          { id: 'keep', consequential: true, next: null,
+            label: "Driver picks the music. Passenger picks the snacks.",
+            reply: "She puts one earbud in and stares out the window for eleven miles.",
+            effects: { flags: { auxAsked: true }, relationship: -3 } },
+          { id: 'later', consequential: false, next: null,
+            label: "Ask me again after the pass.",
+            reply: "Uh-huh.",
+            effects: {} },
+        ],
+      },
+
       // ── Vantage — her friends, her exit, the ending ─────────────────────
       vantage_arrival: {
         stopId: 'V', mandatory: true,
@@ -645,14 +724,15 @@ export const FEATURED_STORIES = {
             label: "Go on. Text me when you're back in Seattle.",
             reply: (st, run) => {
               const o = countryOutcome(st, run);
-              return o === 'ride_em' ? "She kisses you like she means it, then she's gone into the crowd. Your phone buzzes: a new contact." :
+              const aux = st.flags.auxGiven ? " She keeps your aux cord. You notice a mile later." : '';
+              return (o === 'ride_em' ? "She kisses you like she means it, then she's gone into the crowd. Your phone buzzes: a new contact." :
                      o === 'standard' ? "A hug, a wink, and she's running for the gas-station door." :
-                                        "A quick hug. She doesn't look back.";
+                                        "A quick hug. She doesn't look back.") + aux;
             },
             effects: (st, run) => {
               const o = countryOutcome(st, run);
               const fx = { flags: { outcome: o, left: true }, passenger: null, ending: o, unlockGenre: STORY_GENRE.country };
-              if (o === 'ride_em') { fx.cash = COUNTRY_PAY_RIDE_EM; fx.contact = { id: 'brittney', name: 'Brittney' }; }
+              if (o === 'ride_em') { fx.cash = COUNTRY_PAY_RIDE_EM; fx.contact = { id: 'brittney', name: 'Brittney' }; fx.meanwhile = 'brittney_friends'; }
               else if (o === 'standard') fx.cash = COUNTRY_PAY_STANDARD;
               return fx;
             } },
@@ -691,6 +771,11 @@ export const FEATURED_STORIES = {
       nan_500:         { label: "NAN'S FIVE HUNDRED",     unlock: false },
       nan_choice:      { label: 'SHE WENT WITH NAN',      unlock: false },
     },
+    meanwhile: {
+      nan_wrong_town: pendingStrip("Nan visits the wrong town", ['Nan', 'A Stranger', 'Nan']),
+    },
+    // The waitress boards at Vantage while the arc is available or offered.
+    passengerJoinStop: (st) => ((st.status === 'available' || (st.status === 'active' && !st.flags.aboard)) ? 'V' : null),
     deriveRun: (st, run) => { if (st.flags.aboard && !st.flags.left) run.passenger = { id: 'waitress', name: 'The Waitress', storyId: 'classicRock' }; },
     nodes: {
       // ── Vantage diner — she's changing out of her uniform ──────────────
@@ -798,12 +883,12 @@ export const FEATURED_STORIES = {
               ? "She looks at Nan, then at you. \"I'm going to Pullman, Nan. Follow the tour if you want.\""
               : "She hugs Nan for a long time. \"Sorry. It was fun.\" And she's gone.",
             effects: (st) => st.relationship >= NAN_STAY_REL
-              ? { flags: { nanDone: true }, relationship: 5 }
+              ? { flags: { nanDone: true }, relationship: 5, meanwhile: 'nan_wrong_town' }
               : { flags: { nanDone: true, left: true }, passenger: null, ending: 'nan_choice', status: 'failed' } },
           { id: 'refuse', consequential: true, next: null,
             label: "No deal. She's got shows to play.",
             reply: "Nan squints. The waitress hides a smile behind her hand.",
-            effects: { flags: { nanDone: true }, relationship: 10 } },
+            effects: { flags: { nanDone: true }, relationship: 10, meanwhile: 'nan_wrong_town' } },
           { id: 'demand', consequential: true, next: null,
             label: "Make it a thousand and we'll talk.",
             reply: "Nan: \"I maxed the ATM at five hundred, sweetheart.\" The waitress stares at you the whole way back to the car.",
@@ -833,12 +918,36 @@ export const FEATURED_STORIES = {
         ],
       },
 
+      // ── Side quest: tomorrow's set list (18.4) — foreshadows the Colfax
+      // title fight; changes the La Crosse line.  Optional, after show two. ──
+      setlist: {
+        stopId: 'W', mandatory: false,
+        when: (st, run) => !!run.passenger && !!st.flags.washtucnaDone && !st.flags.setlistAsked,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'minor',
+        line: "La Crosse wants a set list by midnight. Opener: your song or mine?",
+        choices: [
+          { id: 'hers', consequential: true, next: null,
+            label: "Yours. Open with the one that shut the room up tonight.",
+            reply: "She writes it down before you can change your mind.",
+            effects: { flags: { setlistAsked: true, setlist: 'hers' }, relationship: 5 } },
+          { id: 'mine', consequential: true, next: null,
+            label: "Mine. They should know whose tour this is.",
+            reply: "\"Whose tour.\" She writes that down too, somewhere you can't see.",
+            effects: { flags: { setlistAsked: true, setlist: 'mine' }, controlling: 1, soloFollowing: 5 } },
+          { id: 'later', consequential: false, next: null,
+            label: "Sleep on it. Ask me in the morning.",
+            reply: "Midnight, cowboy. Not morning.",
+            effects: {} },
+        ],
+      },
+
       // ── La Crosse — show three (money must not decide it) ──────────────
       lacrosse_show: {
         stopId: 'L', mandatory: true,
         when: (st, run) => !!run.passenger && !st.flags.lacrosseDone,
         speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'major',
-        line: "La Crosse is the big one. Solo pays you four hundred. Duet pays eight — four each — because they're coming to see both of us.",
+        line: (st) => (st.flags.setlist === 'hers' ? "We open with mine, like you said. " : st.flags.setlist === 'mine' ? "We open with yours. Whose tour, right? " : '')
+          + "La Crosse is the big one. Solo pays you four hundred. Duet pays eight — four each — because they're coming to see both of us.",
         choices: [
           { id: 'solo', consequential: true, next: null,
             label: "Solo. Four hundred, my name on the poster.",

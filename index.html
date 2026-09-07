@@ -4505,9 +4505,25 @@
       // redraws pages from compact event records, nothing is stored as pixels.
       addTap(qhit('comic'), () => {
         openApp('COMIC', '');
-        try { window.__comic?.mount?.(appBody); }
+        const focus = window.__comicFocus ?? null; window.__comicFocus = null;   // a tapped MEANWHILE toast
+        try { window.__comic?.mount?.(appBody, focus); }
         catch (e) { appBody.innerHTML = '<p class="pa-note">Comic unavailable: ' + (e?.message || e) + '</p>'; }
       });
+      // Tap the in-game "📖 MEANWHILE…" toast → the phone opens straight into
+      // the COMIC app on that strip (Ch. 18.4).  Same open path as a text.
+      window.__openComic = (target) => {
+        try {
+          window.__comicFocus = target ?? null;
+          if (window.__isDesktop) {
+            window.__phoneMenu?.open?.();
+          } else {
+            document.body.classList.add('menu-locked');
+            window.__textThreadForced = true;
+            requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+          }
+          qhit('comic')?.dispatchEvent(new Event('click'));
+        } catch (_) {}
+      };
 
       // Contacts — a tappable contact LIST; pick a person to see their
       // info + action.

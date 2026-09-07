@@ -73,6 +73,17 @@ export class ComicSystem {
     }));
   }
 
+  /** Where a recorded beat lives: { volId, pageId, eventId } or null. */
+  pageFor(key) {
+    for (const v of this.volumes()) {
+      const ev = v.events.find(e => e.key === key);
+      if (!ev) continue;
+      const pg = v.pages.find(p => p.slots.includes(ev.id));
+      return { volId: v.id, pageId: pg?.id ?? null, eventId: ev.id };
+    }
+    return null;
+  }
+
   /** An event with its current dialogue text attached. */
   resolveEvent(e) {
     const k = e.dialogueKeys ?? {}, f = e.fallbackText ?? {};
@@ -120,6 +131,7 @@ export class ComicSystem {
         cash: Number(entry.effects?.cash) || 0,
         panels: importance === 'meanwhile' ? 3 : 1,
       };
+      if (Array.isArray(entry.strip)) ev.strip = entry.strip.map(p => ({ speaker: String(p.speaker ?? ''), text: String(p.text ?? '') }));
       vol.events.push(ev);
       ch.eventIds.push(ev.id);
       this._placeEvent(vol, ev);

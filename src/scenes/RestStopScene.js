@@ -369,6 +369,8 @@ const SHOP_BG_PATH = {
 };
 
 const TAB_ORDER = ['gas', 'hunting', 'camp', 'lord', 'suck', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
+// Pristine hitchhiker item (captured at import, before any per-stop filtering).
+const HITCH_ITEM = SECTIONS.camp?.items?.find(it => it.id === 'hitch') ?? null;
 const ALL_SECTIONS = ['gas', 'hunting', 'camp', 'dealer', 'dealer_acc', 'dealer_cars', 'sam_acc', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
 
 // Per-stop brand catalog — west-side gets the cleaner brands (Lord Motors
@@ -649,6 +651,19 @@ export class RestStopScene extends Phaser.Scene {
     // DUPLICATE of the one AOK Camp already carries unconditionally, see
     // SECTIONS.camp's 'hitch' item above. Nothing to relocate: any stop
     // with a Camp tile still offers a rider, same as before CarGo existed.)
+
+    // ── Featured-passenger gating (Ch. 18.4): no generic hitchhiker while a
+    // story passenger is aboard, nor at the stop where one could still
+    // board.  SECTIONS is module-level, so restore the item when allowed. ──
+    {
+      const _blocked = !!this.registry.get('story')?.hitchhikerBlocked?.(this._stop?.id);
+      const _camp = SECTIONS.camp?.items;
+      if (_camp) {
+        const _has = _camp.some(it => it.id === 'hitch');
+        if (_blocked && _has) SECTIONS.camp.items = _camp.filter(it => it.id !== 'hitch');
+        else if (!_blocked && !_has && HITCH_ITEM) SECTIONS.camp.items = [HITCH_ITEM, ..._camp];
+      }
+    }
 
     // ── PARK & RIDE: a free public restroom stop. ──
     SECTIONS.parkride.items = [restroomItem(false, 'Nasty, but free.')];
@@ -1582,7 +1597,9 @@ export class RestStopScene extends Phaser.Scene {
       const story = this.registry.get('story');
       // Pulling in: Nerve refills, a passenger need is assigned (Ch. 18.7).
       try { story?.restStopVisited?.(stopId); } catch (_) {}
-      const pend  = (story?.pendingAt?.(stopId) ?? []).filter(p => p.mandatory);
+      // Mandatory nodes first, then attached side quests (18.4 — optional,
+      // each with a plain way out), then the ordinary stop.
+      const pend  = story?.pendingAt?.(stopId) ?? [];
       if (pend.length) { runStoryQueue(this, pend, () => this._maybeShowEncounter()); return; }
     }
     const visited    = new Set(save?.get?.('stopsVisited', []) ?? []);
