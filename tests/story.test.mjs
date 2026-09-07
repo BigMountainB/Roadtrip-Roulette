@@ -18,6 +18,7 @@ import {
   lineKey, labelKey, replyKey, DIALOGUE_INDEX,
   vinylOutcome, vinylPayout, VINYL_RECORDS, VINYL_PAY_PRISTINE, FOUNDER_OFFER, VANTAGE_AMBUSH_MILE,
   countryOutcome, NERVE_MAX, COUNTRY_PAY_STANDARD, COUNTRY_PAY_RIDE_EM, KIDNAP_REPORT_MI, ROADSIDE_STOP_SEC,
+  classicRockOutcome, isBrokenVoice, PULLMAN_PAY, OTHELLO_COVER, OTHELLO_PROPOSITION, NAN_OFFER, SHOW2_TOTAL, SHOW3_SOLO, SHOW3_DUET,
 } from '../src/data/featuredStories.js';
 
 let passed = 0, failed = 0;
@@ -535,6 +536,135 @@ const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, ho
   H('country', 'vantage_arrival', 'sendOff', t.story, t.rec.hooks, 137);
   check('Barely Made It: $0 but Country still unlocks', t.rec.log.cashCalls === 0 && t.rec.log.unlocks.join() === 'country' && t.story.story('country').endingId === 'barely');
   check('after she leaves: hiphop is shelved (available) and Country is done', t.story.status('hiphop') === STORY_STATUS.AVAILABLE && t.story.pendingAt('V').every(p => p.storyId !== 'country'));
+}
+
+// ═══ 12. Classic Rock — ImprompTour (Ch. 18.8) ═══════════════════════════
+const CR = (node, choice, story, hooks = {}, mile = 137) => story.commitChoice({ storyId: 'classicRock', nodeId: node, choiceId: choice, mile }, hooks);
+function tour(choices, seed = {}) {
+  const story = new StorySystem(freshSave()); const rec = recorder();
+  for (const [node, choice] of choices) CR(node, choice, story, rec.hooks);
+  return { story, rec };
+}
+{
+  // Entry + boarding; she waits behind Brittney.
+  const story = new StorySystem(freshSave()); const rec = recorder();
+  story.run.passenger = { id: 'brittney', name: 'Brittney', storyId: 'country' };
+  check('Vantage: waitress not offered while Brittney is in the seat', story.pendingAt('V').every(p => p.storyId !== 'classicRock'));
+  story.run.passenger = null;
+  check('Vantage: waitress entry once the seat is empty (mandatory)', story.pendingAt('V').some(p => p.storyId === 'classicRock' && p.nodeId === 'vantage_diner' && p.mandatory));
+  const r = CR('vantage_diner', 'east', story, rec.hooks);
+  check('east: rel seeded 50 → 55, continues to the offer at the same stop', r.next === 'vantage_offer' && story.story('classicRock').relationship === 55 && story.pendingAt('V').some(p => p.nodeId === 'vantage_offer'));
+  CR('vantage_offer', 'accept', story, rec.hooks);
+  check('accept: aboard, opener planned, rel 60', story.run.passenger?.id === 'waitress' && story.story('classicRock').flags.show1 === 'opener' && story.story('classicRock').relationship === 60);
+  check('new run: still aboard', (story.resetRun(), story.run.passenger?.id === 'waitress'));
+  check('Othello: cover first, show gated behind it', story.pendingAt('O').map(p => p.nodeId).join() === 'othello_cover');
+  const c1 = CR('othello_cover', 'pay', story, rec.hooks, 184);
+  check('cover: $50 once, leads to the show', rec.log.cash === -OTHELLO_COVER && c1.next === 'othello_show' && story.pendingAt('O').map(p => p.nodeId).join() === 'othello_show');
+  CR('othello_show', 'hearBoth', story, rec.hooks, 184);
+  check('hear both: another $50, tour on, rel 70', rec.log.cash === -(OTHELLO_COVER + OTHELLO_PROPOSITION) && story.story('classicRock').flags.tour === true && story.story('classicRock').relationship === 70);
+  check('Othello closed', story.pendingAt('O').length === 0);
+}
+{
+  // Drive Only: no cover, she performs, jealous line makes Washtucna the audition.
+  const { story, rec } = tour([['vantage_diner', 'reliable'], ['vantage_offer', 'driveOnly']]);
+  check('drive only: aboard, no cover node', story.run.passenger?.id === 'waitress' && story.pendingAt('O').map(p => p.nodeId).join() === 'othello_watch');
+  CR('othello_watch', 'jealous', story, rec.hooks, 184);
+  check('jealous: audition next, no cash', story.story('classicRock').flags.auditionNext === true && rec.log.cashCalls === 0);
+  check('Washtucna line opens with "Audition night."', story.resolveLine('classicRock', 'washtucna_show').startsWith('Audition night.'));
+}
+{
+  // Othello rejection ends it.
+  const { story, rec } = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'reject']]);
+  check('reject: failed, left at Othello, seat empty, only the cover paid', story.status('classicRock') === STORY_STATUS.FAILED && story.story('classicRock').endingId === 'left_at_othello' && story.run.passenger === null && rec.log.cash === -OTHELLO_COVER);
+}
+{
+  // Hatton: four choices, money/relationship exactly once.
+  const base = [['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth']];
+  let t = tour(base); CR('hatton_nan', 'take', t.story, t.rec.hooks, 205);
+  check('take $500: +500 once, failed, seat empty', t.rec.log.cash === -100 + NAN_OFFER && t.story.status('classicRock') === STORY_STATUS.FAILED && t.story.story('classicRock').endingId === 'nan_500' && t.story.run.passenger === null);
+  check('take $500 twice: nothing', CR('hatton_nan', 'take', t.story, t.rec.hooks, 205).applied === false && t.rec.log.cashCalls === 3);
+  t = tour(base); CR('hatton_nan', 'herCall', t.story, t.rec.hooks, 205);
+  check('her call at rel 70 (≥3 stars): she stays, +5', t.story.isActive('classicRock') && t.story.story('classicRock').relationship === 75);
+  t = tour([['vantage_diner', 'better'], ['vantage_offer', 'driveOnly'], ['othello_watch', 'jealous']]);   // rel 50
+  CR('hatton_nan', 'herCall', t.story, t.rec.hooks, 205);
+  check('her call below 3 stars: she leaves with Nan', t.story.status('classicRock') === STORY_STATUS.FAILED && t.story.story('classicRock').endingId === 'nan_choice');
+  t = tour(base); CR('hatton_nan', 'refuse', t.story, t.rec.hooks, 205);
+  check('refuse outright: she likes it (+10)', t.story.story('classicRock').relationship === 80);
+  t = tour(base); CR('hatton_nan', 'demand', t.story, t.rec.hooks, 205);
+  check('demand $1,000: ATM maxed, −10, controlling +1, no cash', t.story.story('classicRock').relationship === 60 && t.story.story('classicRock').flags.controlling === 1 && t.rec.log.cash === -100);
+}
+{
+  // Washtucna + La Crosse economics.
+  const base = [['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'refuse']];
+  let t = tour(base); CR('washtucna_show', 'solo', t.story, t.rec.hooks, 228);
+  check('W solo: +$300, rel −10, no duet Following, solo following 10, controlling', t.rec.log.cash === -100 + SHOW2_TOTAL && t.story.story('classicRock').relationship === 70 && t.story.story('classicRock').following === 0 && t.story.story('classicRock').flags.soloFollowing === 10 && t.story.story('classicRock').flags.controlling === 1);
+  t = tour(base); CR('washtucna_show', 'equal', t.story, t.rec.hooks, 228);
+  check('W equal: +$150, rel +10, Following +10', t.rec.log.cash === -100 + SHOW2_TOTAL / 2 && t.story.story('classicRock').relationship === 90 && t.story.story('classicRock').following === 10);
+  t = tour(base); const g = CR('washtucna_show', 'giveAll', t.story, t.rec.hooks, 228);
+  check('W give all: $0, rel +20, Following +20, trio line', t.rec.log.cash === -100 && t.story.story('classicRock').relationship === 100 && t.story.story('classicRock').following === 20 && g.entry.fallbackText.reply.startsWith('Oh, boy.'));
+  const base2 = [...base, ['washtucna_show', 'equal']];
+  t = tour(base2); CR('lacrosse_show', 'solo', t.story, t.rec.hooks, 253);
+  check('L solo: +$400, rel −25, solo following 15', t.rec.log.cash === -100 + 150 + SHOW3_SOLO && t.story.story('classicRock').relationship === 65 && t.story.story('classicRock').flags.soloFollowing === 15 && t.story.pendingAt('L').length === 0);
+  t = tour(base2); const d = CR('lacrosse_show', 'duet', t.story, t.rec.hooks, 253);
+  check('L duet: +$400 (of $800), rel +15, Following +20, partner beat next', t.rec.log.cash === -100 + 150 + SHOW3_DUET / 2 && t.story.story('classicRock').relationship === 100 && t.story.story('classicRock').following === 30 && d.next === 'lacrosse_after');
+  const a = CR('lacrosse_after', 'partner', t.story, t.rec.hooks, 253);
+  check('partner line → "put that word in writing"', a.entry.fallbackText.reply.includes('in writing'));
+}
+{
+  // Colfax routes + Pullman endings.
+  const happy = [['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'refuse'], ['washtucna_show', 'equal'], ['lacrosse_show', 'duet'], ['lacrosse_after', 'partner']];
+  let t = tour(happy);
+  const f = CR('colfax_deal', 'fifty', t.story, t.rec.hooks, 274);
+  check('50/50: partnership, naming next', t.story.story('classicRock').flags.deal === '5050' && f.next === 'colfax_name' && t.story.pendingAt('CO').map(p => p.nodeId).join() === 'colfax_name');
+  CR('colfax_name', 'together', t.story, t.rec.hooks, 274);
+  check('Pullman pending (mandatory)', t.story.pendingAt('P').some(p => p.nodeId === 'pullman_final' && p.mandatory));
+  check('outcome: true ending (duet + partnership + rel > 80)', classicRockOutcome(t.story.story('classicRock')) === 'true_ending');
+  check('Pullman line mentions the crowd', /30 of them came/.test(t.story.resolveLine('classicRock', 'pullman_final')));
+  const cashBefore = t.rec.log.cash;
+  const p = CR('pullman_final', 'play', t.story, t.rec.hooks, 289);
+  check('true ending: +$5,000 once, Classic Rock owned, complete, seat empty, kiss', t.rec.log.cash - cashBefore === PULLMAN_PAY.true_ending && t.rec.log.unlocks.join() === 'classic_rock' && t.story.status('classicRock') === STORY_STATUS.COMPLETE && t.story.run.passenger === null && /kisses you/.test(p.entry.fallbackText.reply));
+  check('Pullman double tap: nothing', CR('pullman_final', 'play', t.story, t.rec.hooks, 289).applied === false && t.rec.log.unlocks.length === 1);
+  // Her name on the marquee at rel ≤ 80 → marquee.
+  // rel: 45 → 50 → 40 (paying only) → 30 (demand) → 40 (equal) → 55 (duet) → 60 → 70 (50/50) → 80 (hers); controlling 2 → not broken.
+  t = tour([['vantage_diner', 'better'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'payingOnly'], ['hatton_nan', 'demand'], ['washtucna_show', 'equal'], ['lacrosse_show', 'duet'], ['lacrosse_after', 'partner'], ['colfax_deal', 'fifty'], ['colfax_name', 'hers']]);
+  check('marquee route (rel 80 exactly is NOT > 80)', t.story.story('classicRock').relationship === 80 && t.story.story('classicRock').flags.controlling === 2 && classicRockOutcome(t.story.story('classicRock')) === 'marquee');
+  // 60/40 accepted only at rel ≥ 75.
+  t = tour(happy); CR('colfax_deal', 'sixty', t.story, t.rec.hooks, 274);
+  check('60/40 at rel 100: accepted, −5, naming next', t.story.story('classicRock').flags.deal === '6040' && t.story.story('classicRock').relationship === 95 && t.story.pendingAt('CO').map(p => p.nodeId).join() === 'colfax_name');
+  CR('colfax_name', 'mine', t.story, t.rec.hooks, 274);
+  CR('pullman_final', 'play', t.story, t.rec.hooks, 289);
+  check('60/40 true ending pays the 60 share ($6,000)', t.story.story('classicRock').endingId === 'true_ending' && t.rec.log.cash === -100 + 150 + 400 + PULLMAN_PAY.business_6040);
+  t = tour([['vantage_diner', 'better'], ['vantage_offer', 'driveOnly'], ['othello_watch', 'jealous'], ['hatton_nan', 'demand'], ['washtucna_show', 'equal'], ['lacrosse_show', 'duet'], ['lacrosse_after', 'partner']]);   // rel 50-5+5-10+10+15+5 = 70
+  CR('colfax_deal', 'sixty', t.story, t.rec.hooks, 274);
+  check('60/40 at rel 70: she walks — band implosion, no Pullman', t.story.status('classicRock') === STORY_STATUS.FAILED && t.story.story('classicRock').endingId === 'band_implosion' && t.story.run.passenger === null && t.story.pendingAt('P').length === 0);
+  // Flat fee → Hired Voice: reaches Pullman, $7,500, NO unlock.
+  t = tour(happy); CR('colfax_deal', 'flat', t.story, t.rec.hooks, 274);
+  check('flat: hired voice, rel −15, no naming', t.story.story('classicRock').flags.deal === 'flat' && t.story.story('classicRock').relationship === 85 && t.story.pendingAt('CO').length === 0);
+  const before = t.rec.log.cash;
+  CR('pullman_final', 'play', t.story, t.rec.hooks, 289);
+  check('Hired Voice: +$7,500, complete, NO Classic Rock unlock', t.rec.log.cash - before === PULLMAN_PAY.hired_voice && t.story.status('classicRock') === STORY_STATUS.COMPLETE && t.rec.log.unlocks.length === 0);
+  // Refuse ownership (healthy) → implosion.
+  t = tour(happy); CR('colfax_deal', 'refuse', t.story, t.rec.hooks, 274);
+  check('refuse ownership: band implosion', t.story.story('classicRock').endingId === 'band_implosion' && t.story.run.passenger === null);
+  // Solo sellout: partnership but solo at La Crosse.
+  t = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'refuse'], ['washtucna_show', 'equal'], ['lacrosse_show', 'solo'], ['colfax_deal', 'fifty'], ['colfax_name', 'together']]);
+  CR('pullman_final', 'play', t.story, t.rec.hooks, 289);
+  check('solo sellout: $5,000, unlocks', t.story.story('classicRock').endingId === 'solo_sellout' && t.rec.log.cash === -100 + 150 + SHOW3_SOLO + PULLMAN_PAY.solo_sellout && t.rec.log.unlocks.join() === 'classic_rock');
+  // Broken Voice: ≥3 controlling AND rel < 25 → she accepts anything.
+  t = tour([['vantage_diner', 'better'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'payingOnly'], ['hatton_nan', 'demand'], ['washtucna_show', 'solo'], ['lacrosse_show', 'solo']]);
+  const stB = t.story.story('classicRock');
+  check('dark route: rel 50-5+5-10-10-10-25 = −5 → 0, controlling 4 → Broken Voice', stB.relationship === 0 && stB.flags.controlling === 4 && isBrokenVoice(stB));
+  const rr = CR('colfax_deal', 'refuse', t.story, t.rec.hooks, 274);
+  check('Broken Voice: refusing ownership is ACCEPTED, framed dark', t.story.story('classicRock').flags.deal === 'broken' && /stopped arguing/.test(rr.entry.fallbackText.reply) && t.story.isActive('classicRock'));
+  const b0 = t.rec.log.cash;
+  CR('pullman_final', 'play', t.story, t.rec.hooks, 289);
+  check('Broken Voice: +$10,000, unlocks Classic Rock, ending broken_voice', t.rec.log.cash - b0 === PULLMAN_PAY.broken_voice && t.rec.log.unlocks.join() === 'classic_rock' && t.story.story('classicRock').endingId === 'broken_voice' && t.story.endingLabel('classicRock') === 'BROKEN VOICE');
+  // Not broken: 2 controlling + low rel → refuse still implodes.
+  t = tour([['vantage_diner', 'better'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'payingOnly'], ['hatton_nan', 'refuse'], ['washtucna_show', 'solo'], ['lacrosse_show', 'solo']]);   // controlling 3, rel 50-5+5-10+10-10-25 = 15
+  check('3 controlling + rel 15 → broken', isBrokenVoice(t.story.story('classicRock')));
+  t = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'demand'], ['washtucna_show', 'solo'], ['lacrosse_show', 'solo']]);   // controlling 3, rel 50+5+5+10-10-10-25 = 25
+  check('3 controlling + rel 25 → NOT broken (needs < 25)', !isBrokenVoice(t.story.story('classicRock')));
+  check('thresholds use raw relationship, never rounded stars', classicRockOutcome({ relationship: 81, flags: { deal: '5050', l: 'duet' } }) === 'true_ending' && classicRockOutcome({ relationship: 80, flags: { deal: '5050', l: 'duet' } }) === 'equal_partner');
 }
 
 console.log(`story tests: ${passed} passed, ${failed} failed`);

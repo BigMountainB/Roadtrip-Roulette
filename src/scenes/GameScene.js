@@ -24359,16 +24359,25 @@ export class GameScene extends Phaser.Scene {
     const p = story.run?.passenger;
     if (this._storyHud && !this._storyHud.scene) this._storyHud = null;   // destroyed by a scene transition
     if (!p) { if (this._storyHud) { this._storyHud.destroy(); this._storyHud = null; } return; }
-    const need = story.story?.(p.storyId ?? 'country')?.flags?.pendingNeed;
-    const icon = need === 'hunger' ? '🍆' : need === 'thirst' ? '💧' : need === 'bathroom' ? '🚻' : '';
-    const nerve = Math.round(story.run.nerve ?? 0);
-    const label = `💋 ${p.name.toUpperCase()}  NERVE ${nerve}/25${icon ? '  ' + icon : ''}`;
+    const st = story.story?.(p.storyId ?? 'country') ?? {};
+    let label;
+    if (p.storyId === 'classicRock') {
+      // Relationship as five stars from the raw 0–100 (display only — every
+      // threshold in the story reads the raw value), plus the duet Following.
+      const stars = Math.max(0, Math.min(5, Math.round((st.relationship ?? 0) / 20)));
+      label = `🎸 ${p.name.toUpperCase()}  ${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}  FOLLOWING ${Math.round(st.following ?? 0)}`;
+    } else {
+      const need = st.flags?.pendingNeed;
+      const icon = need === 'hunger' ? '🍆' : need === 'thirst' ? '💧' : need === 'bathroom' ? '🚻' : '';
+      const nerve = Math.round(story.run.nerve ?? 0);
+      label = `💋 ${p.name.toUpperCase()}  NERVE ${nerve}/25${icon ? '  ' + icon : ''}`;
+    }
     if (!this._storyHud) {
       this._storyHud = this.add.text(30, 124, label, { fontSize: '12px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif', color: '#FFD0E0', stroke: '#000', strokeThickness: 3 })
         .setDepth(900).setScrollFactor(0);
     } else if (this._storyHud.text !== label) this._storyHud.setText(label);
-    const flashAt = story.run.flags?.nerveFlashAt;
-    const flashing = flashAt != null && (mile - flashAt) < 0.06;   // ≈3 s at highway speed
+    const flashAt = Math.max(story.run.flags?.nerveFlashAt ?? -1, story.run.flags?.relFlashAt ?? -1);
+    const flashing = flashAt >= 0 && (mile - flashAt) < 0.06;   // ≈3 s at highway speed
     this._storyHud.setColor(flashing ? '#FF5A8A' : '#FFD0E0');
   }
 

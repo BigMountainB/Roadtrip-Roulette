@@ -204,6 +204,42 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-06 (pt 5) — Ch. 18 Phase 5: Classic Rock "ImprompTour" Vantage → Pullman
+
+Owner decisions this session: Pullman final show pays **$10,000 before the Colfax split**
+(50/50 → $5,000, 60/40 → $6,000, Hired Voice $7,500, Broken Voice $10,000, solo sellout
+$5,000); **Broken Voice = ≥ 3 controlling choices AND rel < 25**; **60/40 accepted only at
+rel ≥ 75** (below: she walks, band implodes).  Verified headless (`probe_rock.mjs`):
+Vantage diner → offer (slides at the same stop) → aboard, HUD cue "🎸 THE WAITRESS ★★★☆☆
+FOLLOWING 0" → Othello cover ($50) → propositions ($50) → Nan refused → Washtucna equal →
+La Crosse duet + "partner" beat → Colfax 50/50 → naming nested → Pullman true ending
+(+$5,000, Classic Rock owned, onstage kiss); the comic recorded all 11 beats.
+- **featuredStories.js — classicRock**: every town a mandatory arrival tile with the 18.8
+  copy verbatim.  Vantage diner (three openers) → offer (accept / flirt / Drive Only).
+  Othello: cover node ($50) → propositions (hear both $50 / paying only $50 −10 rel
+  controlling / reject → LEFT AT OTHELLO), or Drive Only → she performs → the jealous line
+  makes Washtucna the audition.  Hatton: Nan's $500 (story ends), her call (stays at
+  ≥ 60 = 3 stars), refuse (+10), demand $1,000 (ATM maxed, −10, controlling).
+  Washtucna $300: solo (+300, −10, solo following) / equal ($150, +10, Following +10) /
+  give all ($0, +20, +20, "looking for a trio").  La Crosse: solo $400 (−25, controlling)
+  / duet $800 → $400 each (+15, +20) → "See you onstage… partner" / "put that word in
+  writing".  Colfax: 50/50 (+10) → naming (hers +10 / together +5 / mine −10
+  controlling); 60/40 (−5 at ≥ 75, else implosion); flat fee (Hired Voice, −15); refuse
+  (implosion) — all four ACCEPTED flatly on the Broken Voice route, framed as the bad
+  outcome.  Pullman: `classicRockOutcome()` → true ending (duet + partnership + rel > 80,
+  mutual kiss), her name on the marquee, 60/40 business, equal partners, solo sellout,
+  Hired Voice (NO unlock), Broken Voice (unlocks); pay from `PULLMAN_PAY`; seat empties.
+- **StorySystem**: `startRelationship` seeded when a story goes AVAILABLE → ACTIVE (entry
+  stories too); `controlling` / `soloFollowing` counter effects; `relFlashAt` for the
+  gameplay-only frame flash.
+- **GameScene HUD cue**: passenger row shows five stars from the raw 0–100 + duet
+  Following for the waitress (Nerve + need icon for Brittney); flashes on relationship
+  or Nerve change.  Display only — every threshold reads the raw value.
+- Tests: story 227 (boarding order behind Brittney, cover/propositions, Drive Only,
+  reject, all four Nan outcomes, Washtucna/La Crosse economics, Colfax routes incl.
+  60/40 at 100 vs 70, Hired Voice no-unlock, solo sellout, Broken Voice threshold
+  edges, raw-not-rounded thresholds); full suite + build green.
+
 ### 2026-09-06 (pt 4) — Ch. 18 Phase 4: Country "StageWagon or Bust" + widescreen story tile
 
 Owner decisions this session: tile → **720×324 widescreen** ("the conversation tiles can

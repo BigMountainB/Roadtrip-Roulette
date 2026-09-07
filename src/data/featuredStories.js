@@ -101,6 +101,46 @@ export const RIDE_EM_REL        = 80;     // raw 0–100 (four stars)
 export const RIDE_EM_NERVE      = 10;
 export const RIDE_EM_PASSES     = 5;
 export const STANDARD_REL       = 40;
+// ── Classic Rock tunables (Ch. 18.8, owner 2026-09-06) ─────────────────
+export const OTHELLO_COVER        = 50;
+export const OTHELLO_PROPOSITION  = 50;      // "another $50 expense"
+export const NAN_OFFER            = 500;
+export const NAN_STAY_REL         = 60;      // ≥ 3 stars she stays when it's her call
+export const SHOW2_TOTAL          = 300;     // Washtucna
+export const SHOW3_SOLO           = 400;     // La Crosse
+export const SHOW3_DUET           = 800;
+export const SIXTY_FORTY_REL      = 75;      // she accepts 60/40 only here
+export const BROKEN_VOICE_CONTROLLING = 3;
+export const BROKEN_VOICE_REL     = 25;
+export const TRUE_ENDING_REL      = 80;      // > 80 raw → mutual onstage kiss
+export const PULLMAN_TOTAL        = 10000;   // before the Colfax split
+export const PULLMAN_PAY = {
+  true_ending:   PULLMAN_TOTAL / 2,          // 50/50 (a 60/40 true ending pays 6000 — see classicRockOutcome)
+  equal_partner: PULLMAN_TOTAL / 2,
+  marquee:       PULLMAN_TOTAL / 2,
+  business_6040: PULLMAN_TOTAL * 0.6,
+  hired_voice:   7500,
+  broken_voice:  10000,
+  solo_sellout:  5000,
+};
+export const FEATURED_STORIES_ENDING_UNLOCK = {
+  true_ending: true, equal_partner: true, marquee: true, business_6040: true, solo_sellout: true, broken_voice: true,
+  hired_voice: false, band_implosion: false,
+};
+export function isBrokenVoice(st) {
+  return (st.flags?.controlling ?? 0) >= BROKEN_VOICE_CONTROLLING && (st.relationship ?? 0) < BROKEN_VOICE_REL;
+}
+/** Pullman outcome from the Colfax deal, La Crosse choice, name and raw relationship. */
+export function classicRockOutcome(st) {
+  const f = st.flags ?? {};
+  if (f.deal === 'broken') return 'broken_voice';
+  if (f.deal === 'flat')   return 'hired_voice';
+  if (f.l === 'solo')      return 'solo_sellout';
+  if (f.l === 'duet' && (st.relationship ?? 0) > TRUE_ENDING_REL && (f.deal === '5050' || f.deal === '6040')) return 'true_ending';
+  if (f.name === 'hers')   return 'marquee';
+  if (f.deal === '6040')   return 'business_6040';
+  return 'equal_partner';
+}
 export const NEED_ROTATION      = ['hunger', 'bathroom', 'thirst'];
 export const NEED_STOPS         = ['B', 'I', 'SQ', 'N', 'SP', 'EA', 'C', 'TH', 'E'];   // between Mercer and Vantage
 export const NERVE_LINES = {
@@ -622,20 +662,298 @@ export const FEATURED_STORIES = {
   },
 
   // ══ C — Classic Rock: ImprompTour (Ch. 18.8) ════════════════════════════
+  //
+  // The Vantage diner waitress rides along from Vantage to Pullman.  Every
+  // town is a mandatory arrival tile.  Relationship 0–100 raw (five stars are
+  // display only), duet Following in `following`, an individual following and a
+  // count of CONTROLLING choices in flags.  Routes: Partnership (50/50, or 60/40
+  // accepted at rel ≥ 75), Hired Voice (flat fee — reaches Pullman, no unlock),
+  // Broken Voice (≥ 3 controlling choices AND rel < 25: she accepts anything —
+  // framed as the bad outcome, unlocks), band implosion (refused ownership or a
+  // rejected 60/40 — no Pullman show).
   classicRock: {
-    id: 'classicRock', version: 1,
+    id: 'classicRock', version: 2,
     title: 'ImprompTour',
     genre: STORY_GENRE.classicRock,
     entry: { stopId: 'V' },
     startNode: 'vantage_diner',
-    endings: {},
+    startRelationship: 50,
+    endings: {
+      true_ending:     { label: 'ENCORE',                 unlock: true },
+      equal_partner:   { label: 'EQUAL PARTNERS',         unlock: true },
+      marquee:         { label: 'HER NAME ON THE MARQUEE', unlock: true },
+      business_6040:   { label: 'SIXTY-FORTY',            unlock: true },
+      solo_sellout:    { label: 'SOLO SELLOUT',           unlock: true },
+      hired_voice:     { label: 'HIRED VOICE',            unlock: false },
+      broken_voice:    { label: 'BROKEN VOICE',           unlock: true },
+      band_implosion:  { label: 'BAND IMPLOSION',         unlock: false },
+      left_at_othello: { label: 'LEFT AT OTHELLO',        unlock: false },
+      nan_500:         { label: "NAN'S FIVE HUNDRED",     unlock: false },
+      nan_choice:      { label: 'SHE WENT WITH NAN',      unlock: false },
+    },
+    deriveRun: (st, run) => { if (st.flags.aboard && !st.flags.left) run.passenger = { id: 'waitress', name: 'The Waitress', storyId: 'classicRock' }; },
     nodes: {
+      // ── Vantage diner — she's changing out of her uniform ──────────────
       vantage_diner: {
-        stopId: 'V', mandatory: true, stub: true,
-        speaker: 'Diner Waitress', portrait: 'diner_waitress',
-        importance: 'choice',
+        stopId: 'V', mandatory: true,
+        when: (st, run) => !run.passenger && !st.flags.rideOffered,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'major',
         line: "My nan was going to take me to Othello, but she forgot again. Last time she remembered her car but forgot which granddaughter to grab.",
-        choices: [],
+        choices: [
+          { id: 'east', consequential: true, next: 'vantage_offer',
+            label: "Oof… a lot to unpack there, but I'm headed east and can get you to Othello.",
+            reply: "You're hired. Give me two minutes to stop looking like a menu.",
+            effects: { flags: { rideOffered: true }, relationship: 5 } },
+          { id: 'reliable', consequential: true, next: 'vantage_offer',
+            label: "You don't have friends, coworkers or someone more reliable than a stranger who drives that?",
+            reply: "Friends, sure. Reliable, no. And that car has four wheels, which already beats my nan's memory.",
+            effects: { flags: { rideOffered: true } } },
+          { id: 'better', consequential: true, next: 'vantage_offer',
+            label: "Maybe she grabbed a better granddaughter? Heh…",
+            reply: "…Wow. Okay. Drive me anyway — I've heard worse from family.",
+            effects: { flags: { rideOffered: true }, relationship: -5 } },
+        ],
+      },
+      vantage_offer: {
+        stopId: 'V', mandatory: true,
+        when: (st, run) => !run.passenger && !!st.flags.rideOffered && !st.flags.aboard,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'choice',
+        line: "You sing at all? The Othello bar needs an opener. It's unpaid AND they charge the fifty-dollar cover, but it's surprisingly good exposure out here.",
+        choices: [
+          { id: 'accept', consequential: true, next: null,
+            label: "So I pay them $50 to sing and dance?! …I've actually made worse investments.",
+            reply: "That's the spirit. Worst case you bomb in a town nobody can find on a map.",
+            effects: { flags: { aboard: true, show1: 'opener' }, relationship: 5, passenger: { id: 'waitress', name: 'The Waitress', storyId: 'classicRock' } } },
+          { id: 'flirt', consequential: true, next: null,
+            label: "For fifty bucks I'd sing anything you put in front of me.",
+            reply: "Careful. I might put myself in front of you. Get in.",
+            effects: { flags: { aboard: true, show1: 'opener', flirtAccept: true }, relationship: 10, passenger: { id: 'waitress', name: 'The Waitress', storyId: 'classicRock' } } },
+          { id: 'driveOnly', consequential: true, next: null,
+            label: "I'll drive you. Nobody needs to hear me sing.",
+            reply: "Your loss. You can watch, then.",
+            effects: { flags: { aboard: true, show1: 'drive' }, passenger: { id: 'waitress', name: 'The Waitress', storyId: 'classicRock' } } },
+        ],
+      },
+
+      // ── Othello — show one ─────────────────────────────────────────────
+      othello_cover: {
+        stopId: 'O', mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.show1 === 'opener' && !st.flags.coverPaid,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'minor',
+        line: "Fifty at the door. Told you. The cover's on you — the stage is on me.",
+        choices: [
+          { id: 'pay', consequential: true, next: 'othello_show', cost: OTHELLO_COVER,
+            label: "Here's fifty. Let's see this stage.",
+            reply: "The bar smells like decades. You open. It goes better than fifty dollars had any right to.",
+            effects: { flags: { coverPaid: true } } },
+        ],
+      },
+      othello_show: {
+        stopId: 'O', mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.show1 === 'opener' && !!st.flags.coverPaid && !st.flags.othelloDone,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'climax',
+        line: "Hearing you sing like that sent a rush down my body. I have a list of propositions for you, but here are two for now…",
+        choices: [
+          { id: 'hearBoth', consequential: true, next: null, cost: OTHELLO_PROPOSITION,
+            label: "Both. Right now. And the drinks are on me.",
+            reply: "One: we keep this ImprompTour rolling east. Two: you think about a duet in Washtucna. Don't answer yet.",
+            effects: { flags: { othelloDone: true, tour: true, duetOffered: true }, relationship: 10 } },
+          { id: 'payingOnly', consequential: true, next: null, cost: OTHELLO_PROPOSITION,
+            label: "Just the one that pays. I'm not here for the rest.",
+            reply: "…Just the paying one. Fine. Washtucna pays three hundred. Solo or duet — your call, apparently.",
+            effects: { flags: { othelloDone: true, tour: true }, relationship: -10, controlling: 1 } },
+          { id: 'reject', consequential: true, next: null,
+            label: "No. I'm not spending another fifty dollars to hear a sales pitch.",
+            reply: "Then this is where the tour ends. Thanks for the ride — really.",
+            effects: { flags: { othelloDone: true, left: true }, passenger: null, ending: 'left_at_othello', status: 'failed' } },
+        ],
+      },
+      othello_watch: {
+        stopId: 'O', mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.show1 === 'drive' && !st.flags.othelloDone,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'major',
+        line: "She sings. The bar goes quiet in the good way. Afterwards she finds you by the door, still buzzing.",
+        choices: [
+          { id: 'jealous', consequential: true, next: null,
+            label: "I have to admit, I'm a little jealous I didn't give that show a chance. I'm definitely in on the next one if they'll have me.",
+            reply: "Then Washtucna's your audition. Don't make me regret saying that.",
+            effects: { flags: { othelloDone: true, tour: true, auditionNext: true }, relationship: 5 } },
+        ],
+      },
+
+      // ── Hatton — Nan and the Oldsmobile ────────────────────────────────
+      hatton_nan: {
+        stopId: 'H', mandatory: true,
+        when: (st, run) => !!run.passenger && !st.flags.nanDone,
+        speaker: 'Nan', portrait: 'grandma', importance: 'climax',
+        line: "An Oldsmobile the color of old teeth rolls up and Nan leans out. \"There she is! I'll give you a mild fortune for gas and your time — five hundred dollars — if you give me my granddaughter back.\"",
+        choices: [
+          { id: 'take', consequential: true, next: null,
+            label: "Five hundred? Sold. She's all yours, ma'am.",
+            reply: "Nan counts it out in twenties. The waitress doesn't say a word getting into the Oldsmobile.",
+            effects: { cash: NAN_OFFER, flags: { nanDone: true, left: true }, passenger: null, ending: 'nan_500', status: 'failed' } },
+          { id: 'herCall', consequential: true, next: null,
+            label: "That's her call, not mine.",
+            reply: (st) => st.relationship >= NAN_STAY_REL
+              ? "She looks at Nan, then at you. \"I'm going to Pullman, Nan. Follow the tour if you want.\""
+              : "She hugs Nan for a long time. \"Sorry. It was fun.\" And she's gone.",
+            effects: (st) => st.relationship >= NAN_STAY_REL
+              ? { flags: { nanDone: true }, relationship: 5 }
+              : { flags: { nanDone: true, left: true }, passenger: null, ending: 'nan_choice', status: 'failed' } },
+          { id: 'refuse', consequential: true, next: null,
+            label: "No deal. She's got shows to play.",
+            reply: "Nan squints. The waitress hides a smile behind her hand.",
+            effects: { flags: { nanDone: true }, relationship: 10 } },
+          { id: 'demand', consequential: true, next: null,
+            label: "Make it a thousand and we'll talk.",
+            reply: "Nan: \"I maxed the ATM at five hundred, sweetheart.\" The waitress stares at you the whole way back to the car.",
+            effects: { flags: { nanDone: true }, relationship: -10, controlling: 1 } },
+        ],
+      },
+
+      // ── Washtucna — show two (solo / duet decision) ────────────────────
+      washtucna_show: {
+        stopId: 'W', mandatory: true,
+        when: (st, run) => !!run.passenger && !st.flags.washtucnaDone,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'major',
+        line: (st) => (st.flags.auditionNext ? "Audition night. " : "") + "Washtucna pays three hundred for the set. Solo or duet — it's your stage, partner-to-be.",
+        choices: [
+          { id: 'solo', consequential: true, next: null,
+            label: "Solo. I'll take the three hundred.",
+            reply: "She watches from the bar. Claps. Doesn't come up.",
+            effects: { cash: SHOW2_TOTAL, flags: { washtucnaDone: true, w: 'solo' }, relationship: -10, controlling: 1, soloFollowing: 10 } },
+          { id: 'equal', consequential: true, next: null,
+            label: "Duet, straight down the middle.",
+            reply: "A hundred and fifty each, and the room sings the chorus back at us.",
+            effects: { cash: SHOW2_TOTAL / 2, flags: { washtucnaDone: true, w: 'equal' }, relationship: 10, following: 10 } },
+          { id: 'giveAll', consequential: true, next: null,
+            label: "Take all of it. Your voice carried that room.",
+            reply: "Oh, boy. You must be looking for a trio, talking that sweet.",
+            effects: { flags: { washtucnaDone: true, w: 'gave' }, relationship: 20, following: 20 } },
+        ],
+      },
+
+      // ── La Crosse — show three (money must not decide it) ──────────────
+      lacrosse_show: {
+        stopId: 'L', mandatory: true,
+        when: (st, run) => !!run.passenger && !st.flags.lacrosseDone,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'major',
+        line: "La Crosse is the big one. Solo pays you four hundred. Duet pays eight — four each — because they're coming to see both of us.",
+        choices: [
+          { id: 'solo', consequential: true, next: null,
+            label: "Solo. Four hundred, my name on the poster.",
+            reply: "Four hundred. Your name. She sings backup from the wings and doesn't look at you once.",
+            effects: { cash: SHOW3_SOLO, flags: { lacrosseDone: true, l: 'solo' }, relationship: -25, controlling: 1, soloFollowing: 15 } },
+          { id: 'duet', consequential: true, next: 'lacrosse_after',
+            label: "Duet. Eight hundred, and they came for both of us.",
+            reply: "Eight hundred, four each — and the encore's ours. She won't stop grinning.",
+            effects: { cash: SHOW3_DUET / 2, flags: { lacrosseDone: true, l: 'duet' }, relationship: 15, following: 20 } },
+        ],
+      },
+      lacrosse_after: {
+        stopId: 'L', mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.l === 'duet' && !st.flags.lacrosseAfter,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'choice',
+        line: "Backstage, still sweating, she hands you the last of the water.",
+        choices: [
+          { id: 'partner', consequential: true, next: null,
+            label: "Are we getting good at this or what? See you onstage… partner.",
+            reply: "Careful. I might ask you to put that word in writing.",
+            effects: { flags: { lacrosseAfter: true }, relationship: 5 } },
+        ],
+      },
+
+      // ── Colfax — the title ──────────────────────────────────────────────
+      colfax_deal: {
+        stopId: 'CO', mandatory: true,
+        when: (st, run) => !!run.passenger && !st.flags.deal,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'climax',
+        line: "Othello cost us money. Washtucna tested us. La Crosse paid because people came to see both of us. I'm not walking into Pullman as your passenger or your backup singer. What are we? Because I need a title.",
+        choices: [
+          { id: 'fifty', consequential: true, next: 'colfax_name',
+            label: "Partners. Fifty-fifty, on paper.",
+            reply: (st) => isBrokenVoice(st) ? "\"…Okay.\" She doesn't look up. It isn't agreement; it's what's left of her." : "\"Partners.\" She says it twice, like she's checking it fits.",
+            effects: (st) => ({ flags: { deal: isBrokenVoice(st) ? 'broken' : '5050' }, relationship: isBrokenVoice(st) ? 0 : 10 }) },
+          { id: 'sixty', consequential: true, next: 'colfax_name',
+            label: "Sixty-forty. I drive, I book, I front the gas.",
+            reply: (st) => isBrokenVoice(st) ? "\"Whatever you want.\" She's already looking out the window."
+              : st.relationship >= SIXTY_FORTY_REL ? "\"…Sixty-forty. Fine. But my name's on the door too.\""
+              : "\"Sixty-forty.\" She laughs once, not kindly, and gets her bag out of the back seat.",
+            effects: (st) => isBrokenVoice(st) ? { flags: { deal: 'broken' }, controlling: 1 }
+              : st.relationship >= SIXTY_FORTY_REL ? { flags: { deal: '6040' }, relationship: -5, controlling: 1 }
+              : { flags: { deal: 'implode', left: true }, passenger: null, controlling: 1, ending: 'band_implosion', status: 'failed' } },
+          { id: 'flat', consequential: true, next: null,
+            label: "A flat fee per show. You sing, I pay you.",
+            reply: (st) => isBrokenVoice(st) ? "\"Fine.\" Flat. Nothing behind it." : "\"A fee. Sure. I've had bosses before.\" The word partner doesn't come up again.",
+            effects: (st) => ({ flags: { deal: isBrokenVoice(st) ? 'broken' : 'flat' }, relationship: isBrokenVoice(st) ? 0 : -15, controlling: 1 }) },
+          { id: 'refuse', consequential: true, next: null,
+            label: "You're the singer. It's my car, my tour, my name.",
+            reply: (st) => isBrokenVoice(st) ? "She nods. That's all. Somewhere between Vantage and here she stopped arguing with you."
+              : "\"Then it's your Pullman, too.\" She's out of the car before you finish the sentence.",
+            effects: (st) => isBrokenVoice(st) ? { flags: { deal: 'broken' }, controlling: 1 }
+              : { flags: { deal: 'implode', left: true }, passenger: null, controlling: 1, ending: 'band_implosion', status: 'failed' } },
+        ],
+      },
+      colfax_name: {
+        stopId: 'CO', mandatory: true,
+        when: (st, run) => !!run.passenger && (st.flags.deal === '5050' || st.flags.deal === '6040') && !st.flags.name,
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'choice',
+        line: "Then the name goes on the Pullman marquee. Whose?",
+        choices: [
+          { id: 'hers', consequential: true, next: null,
+            label: "Yours. It was always going to be yours.",
+            reply: "She goes quiet, then: \"Okay. But you're on the poster.\"",
+            effects: { flags: { name: 'hers' }, relationship: 10 } },
+          { id: 'together', consequential: true, next: null,
+            label: "Ours. We'll fight about the font in the van.",
+            reply: "\"Ours.\" She tries it out loud. It holds.",
+            effects: { flags: { name: 'together' }, relationship: 5 } },
+          { id: 'mine', consequential: true, next: null,
+            label: "Mine. I'm the one booking the rooms.",
+            reply: "\"Sure. Yours.\" She doesn't argue, which is worse than arguing.",
+            effects: { flags: { name: 'player' }, relationship: -10, controlling: 1 } },
+        ],
+      },
+
+      // ── Pullman — the final show ────────────────────────────────────────
+      pullman_final: {
+        stopId: 'P', mandatory: true,
+        when: (st, run) => !!run.passenger && !!st.flags.deal && st.flags.deal !== 'implode',
+        speaker: 'Diner Waitress', portrait: 'diner_waitress', importance: 'ending',
+        line: (st) => {
+          const o = classicRockOutcome(st);
+          const crowd = (st.following ?? 0) + (st.flags.soloFollowing ?? 0);
+          return "Pullman. The marquee's lit, the room's full" + (crowd ? " — " + crowd + " of them came for the tour" : '') + ". " + (
+            o === 'true_ending'   ? "She squeezes your hand behind the curtain. \"Whatever happens out there — thank you for the ride.\"" :
+            o === 'marquee'       ? "Her name's up there in letters taller than she is. She can't stop looking at it." :
+            o === 'business_6040' ? "\"Sixty-forty,\" she says, checking the door count. \"Let's earn it.\"" :
+            o === 'hired_voice'   ? "\"Set list's on the amp,\" she says. \"Boss.\"" :
+            o === 'broken_voice'  ? "She's already onstage, waiting, the way she's waited for everything since Colfax." :
+            o === 'solo_sellout'  ? "\"Your name's on the poster,\" she says. \"I'll be at the bar.\"" :
+                                    "\"Partners,\" she says, and means it.");
+        },
+        choices: [
+          { id: 'play', consequential: true, next: null,
+            label: "Let's play the show.",
+            reply: (st) => {
+              const o = classicRockOutcome(st);
+              return o === 'true_ending'   ? "Last chorus, the whole room on its feet — and she kisses you, onstage, in front of all of them. You kiss her back. Classic Rock is yours. So, it turns out, is the tour." :
+                     o === 'marquee'       ? "The encore is hers. She drags you out for it anyway. Classic Rock is yours." :
+                     o === 'business_6040' ? "Sixty-forty of a sold-out room is still a sold-out room. Classic Rock is yours." :
+                     o === 'hired_voice'   ? "She sings every note she's paid for and not one more. Seventy-five hundred, cash. She's gone before the lights come up." :
+                     o === 'broken_voice'  ? "She sings like something's been taken out of her. The room loves it. You take all ten thousand. Nobody says anything on the drive." :
+                     o === 'solo_sellout'  ? "Five thousand, your name on the poster, and a bar stool with her back to the stage." :
+                                             "Fifty-fifty, a full room, and an encore neither of you planned. Classic Rock is yours.";
+            },
+            effects: (st) => {
+              const o = classicRockOutcome(st);
+              const pay = (o === 'true_ending' && st.flags.deal === '6040') ? PULLMAN_PAY.business_6040 : (PULLMAN_PAY[o] ?? 0);
+              const fx = { flags: { outcome: o, left: true }, passenger: null, ending: o };
+              if (pay > 0) fx.cash = pay;
+              if (FEATURED_STORIES_ENDING_UNLOCK[o]) fx.unlockGenre = STORY_GENRE.classicRock;
+              return fx;
+            } },
+        ],
       },
     },
   },

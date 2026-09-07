@@ -289,6 +289,7 @@ export class StorySystem {
     if (TERMINAL.has(st.status)) return false;
     st.status = STORY_STATUS.ACTIVE;
     st.nodeId = nodeId ?? def.startNode;
+    st.relationship = clamp(num(def.startRelationship, st.relationship), 0, 100);
     this._writeCanon(c);
     return true;
   }
@@ -400,8 +401,12 @@ export class StorySystem {
       cost: Math.max(0, num(choice.cost) | 0),
     };
     c.ledger[key] = entry;
-    if (st.status === STORY_STATUS.AVAILABLE) st.status = STORY_STATUS.ACTIVE;
+    if (st.status === STORY_STATUS.AVAILABLE) {
+      st.status = STORY_STATUS.ACTIVE;
+      st.relationship = clamp(num(this._defs[storyId]?.startRelationship, st.relationship), 0, 100);
+    }
     this._applyStoryEffects(c, storyId, effects, at);
+    if (effects.relationship != null) this._run.flags.relFlashAt = mile;   // gameplay-only frame flash
     if (st.status === STORY_STATUS.ACTIVE) st.nodeId = choice.next ?? st.nodeId;
     this._writeCanon(c);
 
@@ -433,6 +438,10 @@ export class StorySystem {
     }
     if (fx.relationship != null) st.relationship = clamp(st.relationship + num(fx.relationship), 0, 100);
     if (fx.following != null)    st.following    = Math.max(0, st.following + num(fx.following));
+    // Counters (Classic Rock): controlling choices steer the Broken Voice
+    // route; solo shows grow an individual following, not the duet's.
+    if (fx.controlling != null)   st.flags.controlling   = Math.max(0, (st.flags.controlling ?? 0) + num(fx.controlling));
+    if (fx.soloFollowing != null) st.flags.soloFollowing = Math.max(0, (st.flags.soloFollowing ?? 0) + num(fx.soloFollowing));
     if (isObj(fx.contact) && fx.contact.id) {
       c.contacts[fx.contact.id] ??= { name: String(fx.contact.name ?? fx.contact.id), addedAt: at, storyId };
     }
