@@ -11,9 +11,12 @@
  *     the level by exactly one (level 1 → CAP).
  *   • An overtake refreshes grace to GRACE_SEC (+ survival bonus, × genre
  *     grace mult), never past GRACE_MAX_SEC.
- *   • Collected roadside sprites extend an ACTIVE (level > 1 or in-progress)
- *     combo's remaining grace by PICKUP_EXT_SEC, capped at GRACE_MAX_SEC.
- *     They never add progress or levels.
+ *   • Collected roadside sprites are worth 1 pass credit each while the combo
+ *     can build (owner 2026-09-05: "3 sprites — or any mix of sprites and
+ *     overtakes — = +1 level"; a sprite can also START a combo).  When the
+ *     combo CAN'T build (slow / off-road / forced stop) a sprite falls back
+ *     to extending an ACTIVE combo's grace by PICKUP_EXT_SEC, capped at
+ *     GRACE_MAX_SEC, never leveling.
  *   • Grace at 0 → partial progress clears once, then one level drops every
  *     DECAY_STEP_SEC until level 1.
  *   • Any ordinary vehicle collision (or a run-state reset) → 1×/0/0.

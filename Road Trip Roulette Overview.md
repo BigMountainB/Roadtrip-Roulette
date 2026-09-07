@@ -204,6 +204,22 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-05 (pt 23) — Sprites BUILD the combo (owner economy tune)
+
+Owner call after reviewing V1 income ("raise base pay or find another way to earn
+combo points, like picking up sprites") — picked the combo route, base stays $3/mi:
+- A collected roadside sprite is now worth **1 pass credit**, identical to a clean
+  overtake: 3 sprites — or any mix of sprites and overtakes — = +1 combo level,
+  and a sprite can START a combo from nothing.  Same grace refresh, same genre
+  build/grace trait mods, same "COMBO ×N" callout + haptic on level.
+- The credit obeys the same build gate as overtakes: while slow / off-road / in a
+  forced stop a sprite can't build and falls back to the V1 behavior (+3 s grace
+  extension of an ACTIVE combo, never leveling).
+- Item effects, no-eating mission clause, vice/daily accounting all unchanged;
+  pickups still award NO direct cash.
+- GameScene pickup handler + DrivingCombo doc header; no class-logic change (the
+  credit routes through the proven `overtake()` path).  Full suite + build green.
+
 ### 2026-09-05 (pt 22) — Brake required to pull over again; stale one-job-per-stop lock
 
 **1. "I got pulled over again without using the brake."**  The 1-2★ pursuit

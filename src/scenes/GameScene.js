@@ -11416,11 +11416,26 @@ export class GameScene extends Phaser.Scene {
       // Meta-unlock accounting (Cold Brew count → Caffeine Pills).
       this._recordViceUnlockProgress?.(itemId);
       // Economy V1 (2026-09-05): roadside pickups award NO cash - the item
-      // effect stands, and a collected sprite extends an ACTIVE combo's
-      // grace by +3 s (never past 12 s, never levels).
-      const _extended = this.combo?.pickupExtend?.() ?? false;
-      const label  = VICE_CONFIG[itemId]?.label ?? itemId;
-      this._showPopup(_extended ? `${label}  ⏱ +${COMBO.PICKUP_EXT_SEC}s` : `${label}`, '#FFFF44');
+      // effect stands, and a sprite is worth 1 combo pass credit (owner:
+      // 3 sprites or any sprite/overtake mix = +1 level; a sprite can START
+      // a combo).  In can't-build states it falls back to the +3 s grace
+      // extension of an active combo.
+      const label = VICE_CONFIG[itemId]?.label ?? itemId;
+      if (this._comboCanBuild && this.combo) {
+        const res = this.combo.overtake({
+          graceBonus: this._comboGraceBonus(),
+          buildMult:  this._traitMod('drivingBonusBuildMult'),
+          graceMult:  this._traitMod('drivingBonusGraceMult'),
+        });
+        this._showPopup(`${label}`, '#FFFF44');
+        if (res.leveled) {
+          this._comboCallout(`COMBO ×${this.combo.mult}`, this.combo.mult >= 10 ? '#FF2244' : this.combo.mult >= 5 ? '#FFAA22' : '#44FF88');
+          this.haptics?.notify?.();
+        }
+      } else {
+        const _extended = this.combo?.pickupExtend?.() ?? false;
+        this._showPopup(_extended ? `${label}  ⏱ +${COMBO.PICKUP_EXT_SEC}s` : `${label}`, '#FFFF44');
+      }
       this.effects.triggerShake(55, 0.002);
       // Special events from the item.
       if (ev.badFish)  this._showPopup('🤢 BAD FISH!\nGotta GO — hit a rest stop!', '#9AE66E');
