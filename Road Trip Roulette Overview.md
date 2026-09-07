@@ -204,6 +204,46 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-06 (pt 1) — Ch. 18 Phase 1: story canon save + StorySystem ledger + tests
+
+First slice of Chapter 18 (persistent story comic).  Data + state machine only — no
+scene, phone-menu or comic UI yet (Phase 2).  Owner decisions taken this session:
+plate reset KEEPS genre ownership + achievements, Custom runs are non-canonical,
+a story genre unlock == a $25k dealership buy (`genresOwned`).
+- **SaveSystem**: new per-plate `storyCanon` bucket (GLOBAL + SANDBOX key; sanitized
+  with a 5000-entry array cap so a whole comic volume survives reload).  Schema stays
+  v3 — additive backfill; a version bump would wipe every save.  `setSandbox` seeds a
+  COPY of the canon so Custom runs see the story but never write it.
+  `resetProgress` now implements the 18.10 contract: story/comic/contacts/mission
+  history/npc memory/money/plate name go; `achievements`, `genre`, `genresOwned` stay.
+  Settings reset confirm copy updated to match (index.html, one line).
+- **src/data/featuredStories.js**: data-driven tree schema (node/choice/effects
+  vocabulary documented in the header), stable dialogue keys
+  (`story.node.line`, `story.node.choice.label|reply`) + `resolveDialogue(key,
+  fallback)`, `validateStories()`.  Three story shells: hiphop (real Seattle offer
+  node with Malik's authored acceptance line), country (forks off hiphop at Mercer,
+  no entry of its own), classicRock (Vantage).  Stub nodes are marked `stub: true`;
+  full trees land in Phases 3–5 from Ch. 18.6–18.8.
+- **src/systems/StorySystem.js**: plate canon (status / nodeId / ending /
+  replayCount / flags / items / relationship / following per story, contacts,
+  volume containers) + irreversible ledger keyed `story#attempt:node:choice`.
+  `commitChoice` persists synchronously BEFORE returning, is idempotent (double
+  tap / re-entry / rewind → `applied:false`, nothing re-fired), applies story-state
+  effects itself and fires world-facing effects (cash, unlockGenre, contact, wanted,
+  passenger, radioGrant, panel) through caller hooks exactly once.  Run state
+  (runId, radio grant, passenger, Nerve, cargo) serializes into the run snapshot;
+  `restore()` re-applies the ledger.  `beginReplay` bumps the attempt so old
+  panels' ledger entries are never touched.  Not yet wired into GameScene's
+  snapshot or the rest stop — Phase 2.
+- **tests/story.test.mjs** (85 checks, in `npm test`): pre-Ch.18 v3 plate loads
+  intact with canon backfilled, garbage canon normalizes, exactly-once across
+  double tap / force-close reload / checkpoint rewind, cost + payout + unlock +
+  contact once, terminal refusal, replay attempts, new run keeps unfinished story,
+  plate isolation, mandatory ordering in `pendingAt`, reset contract, sandbox
+  non-canonical, stable-key resolution + fallback, 600-event volume round-trip.
+- Untracked `public/assets/storylines/shared/characters/` (3 reference sheets)
+  arrived from the owner this evening — Phase 8 input, left out of this commit.
+
 ### 2026-09-05 (pt 23) — Sprites BUILD the combo (owner economy tune)
 
 Owner call after reviewing V1 income ("raise base pay or find another way to earn
@@ -11960,3 +12000,418 @@ Specifically confirm:
 - a chase never changes agency halfway through;
 - missing art falls back without making an entity disappear;
 - gameplay collision, damage, arrest and steering behavior did not regress.
+
+# Chapter 18 — Persistent Story Comic + Featured Genre Stories
+
+## COPY-READY CLAUDE IMPLEMENTATION PROMPT — STORYSYSTEM, LIVE COMIC, AND THREE FEATURED ARCS
+
+Implement the persistent featured-story and live-comic system described below in the existing
+Road Trip Roulette codebase. This is a substantial feature, so first inspect the current
+`SaveSystem`, live-run/checkpoint snapshots, `MissionSystem`, rest-stop encounter renderer,
+phone-menu DOM, route/business data, genre unlocking, Game Over flows, and CloudSave bridge.
+Extend those systems; do not create a duplicate game shell, route, save format, rest-stop scene,
+or phone menu. Preserve unrelated work already present in the working tree.
+
+### 18.1 Product outcome
+
+Each license plate owns a persistent comic-book canon. Consequential dialogue choices create
+comic panels live during the conversation. The comic survives force-closes, crashes, checkpoint
+rewinds, deaths, restarts, and new runs. Starting a new run never erases story dialogue or
+completed chapters. Only resetting that license plate erases story progress.
+
+The plate's comic is one continuing volume divided into trip chapters. When that volume is
+completed, the player may begin a new volume; every completed past volume remains available.
+Featured stories may be replayed for alternate endings after completion, but a replay begins
+with $0 and no upgrades. Purchased/permanent genre ownership and achievements survive a plate
+reset. Story progress, generated page arrangements, relationships, contacts, and mission history
+do not. Exported PDFs outside the app are naturally unaffected.
+
+Replace the phone menu's current addiction-resource/Get Help tile with **COMIC**. Do not replace
+the tutorial system. Comic opens from the already-paused phone menu, so it must not introduce a
+second independent pause state. Comic provides:
+
+- current vertical comic progress;
+- drag/scroll access to earlier panels and pages;
+- every completed past comic volume for the active plate;
+- export of complete or incomplete comics as PDF;
+- unfinished chapters labeled **TO BE CONTINUED**.
+
+Comic/PDF data remains device-local and is not sent through CloudSave. Keep all past volumes;
+save compact event records and stable asset/dialogue keys rather than image blobs.
+
+### 18.2 Architecture
+
+Create a dedicated `StorySystem`; featured stories must not consume or interfere with ordinary
+`MissionSystem` slots, mission types, mission reputation, or business-mission availability.
+Use data-driven story definitions rather than embedding the complete trees in scene code.
+Suggested separation (adapt names to the repository conventions after inspection):
+
+```text
+src/data/featuredStories.js       story nodes, stable dialogue keys, choices, consequences
+src/data/comicPanels.js           panel art keys, importance, speaker/bubble anchor metadata
+src/systems/StorySystem.js        story state machine, irreversible ledger, relationships/items
+src/systems/ComicSystem.js        comic events, page assignment, volume/chapter lifecycle
+src/ui/ComicReader.js             phone-menu reader and PDF/share controls
+```
+
+Do not store only mutable dialogue text. Each committed comic beat should save both a stable
+`dialogueKey` and `fallbackText`. Rendering resolves the current data copy by key so dialogue can
+be edited globally later; `fallbackText` keeps an old comic readable if a key is removed or a
+migration fails. Version story definitions and comic records.
+
+Suggested plate-persistent shape (exact naming may follow `SaveSystem` conventions):
+
+```js
+storyCanon: {
+  schemaVersion: 1,
+  ledger: { [choiceId]: { storyId, nodeId, choiceId, at, mile, runId } },
+  stories: {
+    hiphop: { status, nodeId, endingId, replayCount, flags, items },
+    country: { status, nodeId, endingId, replayCount, flags, relationship },
+    classicRock: { status, nodeId, endingId, replayCount, flags, relationship, following },
+  },
+  contacts: {},
+  activeVolumeId: null,
+  volumes: [],
+}
+```
+
+Every consequential selection must be committed synchronously to the plate save **before** its
+animation begins. Also include current story state in exact live-run/checkpoint snapshots, but
+after any restore reapply the irreversible plate ledger so a checkpoint rewind cannot undo a
+choice, duplicate money, resurrect consumed cargo, restore an abandoned passenger, pay twice,
+or change a recorded comic panel. Follow `MissionSystem`'s terminal-outcome/ledger philosophy
+where useful.
+
+Temporary story inventory (Malik's phone, remaster thumb drive, vinyl shipment, passengers) must
+survive exact crash/reload resumes. A player may abandon a story by breaking their stated promise
+or ignoring the authored objective; encode the resulting authored failure rather than adding a
+generic abandon button.
+
+### 18.3 Live comic presentation
+
+During a consequential conversation:
+
+1. Show clean story artwork as the current landscape comic tile.
+2. Render NPC text in traditional white game-generated speech balloons.
+3. Render character-specific lettering while retaining a readable fallback font.
+4. Show player-spoken response buttons below the art; avoid abstract `Accept`/`Decline` labels.
+5. On selection, immediately persist the choice and its economic/story effect.
+6. Put the selected player line into its balloon, show the response/reaction, then slide the
+   completed tile from right to left into the vertical comic.
+7. Leave part of the previous tile visible. The player may drag backward through prior discussion.
+8. When a new choice is selected, return the strip to the newest tile.
+
+Only choices with gameplay consequences enter the permanent comic: story direction, cash/item
+spend, payout, relationship, Nerve, Following, ownership/credit, passenger status, wanted level,
+genre unlock, contact, mission success/failure, or ending. Casual exposition may use the same UI
+without creating a permanent panel.
+
+Support small/medium/large auto-sizing balloons and two linked balloons for long copy. Never
+shrink text below a readable minimum. Panel metadata supplies preferred bubble rectangles,
+speaker-tail anchors, and protected subject regions. Artwork contains no baked dialogue.
+
+Relationship is stored internally as 0–100 and displayed as five stars. Relationship frames and
+small mood icons are gameplay-only overlays: flash the frame for three seconds after a change and
+do not bake either frames or mood icons into comic/PDF art.
+
+The comic is vertical and uses deterministic comic-book layout templates: wide establishing
+panel; two-up; one-wide-plus-two-small; four-grid; large climax; three-panel `MEANWHILE...` strip;
+and full-width ending. Tag each event `minor`, `choice`, `consequence`, `major`, `climax`,
+`ending`, or `meanwhile`. Page layouts lock once completed. A single-tile ending is added like
+any other conversation tile and slides left when a later tile is created.
+
+Render finished pages locally and package them into a multipage PDF. PDF export is available at
+any time from Comic, not only after a run. Use the platform share sheet where available so the
+PDF can be saved to Files or sent through Messages. There is no text-only export. Provide a
+download fallback when file sharing is unavailable. Avoid retaining generated image blobs in
+the save; regenerate page canvases from compact event data and static assets.
+
+### 18.4 Meanwhile strips and attached side stories
+
+`Meanwhile...` strips are non-playable, three-panel offscreen consequences. They may reveal facts
+the player character does not know. Trigger them from meaningful choices and show a notification
+that opens the new strip when tapped; do not forcibly interrupt driving. Examples include Malik
+dispatching three cars, Stank legal noticing a NoiseCloud upload, Nan visiting the wrong town, or
+Brittney's StageWagon friends reading her messages.
+
+Optional side quests attached to a featured story consume neither ordinary mission slots nor
+featured-story slots. They should develop a main character, change a later scene, foreshadow an
+ending, or deliver comic relief with payoff—not pad the comic. Do not offer a generic hitchhiker
+while a featured passenger is active. After a featured passenger leaves, hitchhikers may appear
+only before the route segment where another featured passenger could join.
+
+### 18.5 Mandatory encounter priority
+
+Mandatory story encounters run before and temporarily block storefronts and ordinary NPCs.
+After the story interaction resolves, reveal the normal rest-stop choices. This includes
+Brittney at Mercer Island and her automatic Vantage departure. Make story acceptance and choice
+handling idempotent against double taps and scene re-entry.
+
+### 18.6 Featured Story A — Hip-Hop: Malik's Phone
+
+This story may be pursued on a later run if Country is chosen first, or Hip-Hop may be purchased
+through the separate genre-purchase system. The permanent unlock remains separate from temporary
+radio access.
+
+**Seattle / Park & Ride.** Malik Reed (the current Park & Ride Courier identity) and his crew are
+freestyling. Malik asks the player to carry his phone to his girlfriend Brittney at the Mercer
+Island Gas-N-Sip. The disputed song is on the phone. On acceptance Malik says:
+
+> “Album’s on the phone. As long as you’re carrying it, you can play Hip-Hop on the radio. Just
+> don’t skip the stop—this thing locks itself when it thinks somebody ran off with it.”
+
+Grant temporary Hip-Hop radio while the player has a valid phone and has not passed Issaquah.
+This access survives exact crash/reload resumes.
+
+**Mercer Island / Gas-N-Sip.** This is the only early-story fork. It must resolve before Bellevue.
+Brittney has been ordered to work a double and was supposed to take Malik's phone to his engineer
+in Issaquah.
+
+- Hip-Hop player line: “You should keep your job. I’ll deliver the phone like I promised.”
+- Brittney: “You right. I’m done doing him favors anyway. You definitely missed out on a fun
+  copilot to keep you awake. 😘”
+- Country player line: “You don’t need this job or that boyfriend. I’ll give you a ride to the
+  concert.”
+- Brittney: “My boyfriend can lick someone else’s butt. Take me to StageWagon, babe!”
+
+Hip-Hop leaves Brittney working and sends the phone with the player to Issaquah. Country leaves
+the phone on the counter, ends temporary Hip-Hop access, changes Brittney into road clothes, and
+starts the passenger arc.
+
+If Mercer Island is skipped, do not lock the phone yet. Country becomes unavailable for that
+trip, Malik texts the player to take the phone directly to his friend in Issaquah, and Malik Trust
+drops. If Issaquah is then passed, lock the phone and end temporary radio access.
+
+**Bellevue.** Only after the Mercer choice, the Startup Founder can recognize the phone at a
+different Bellevue business. Offer $1,000 for the phone to train imitation music. Accepting ends
+the arc as `COMPLETE! SORT OF...`, pays cash, and does not unlock Hip-Hop. Refusal continues.
+
+**Issaquah.** Kyle, a shy, nerdy 35-year-old engineer, backs up/remasters the finished song and
+transfers the master to a thumb drive. This is a transfer/credit story, not a player-selected remix.
+Passing Issaquah with the phone locks it and produces Malik's angry text.
+
+**North Bend.** Dom’nique hears the song as the player arrives and claims the beat. Core copy:
+
+> “That rap song I heard you bumping—that’s my beat! Did you get that from Malik Reed? We need
+> to talk…”
+
+After he shows the matching #1 NoiseCloud original, present exactly three meaningful responses:
+
+1. “That’s the same beat. I’ll make sure you get credit.” — promise credit, friendly/protected path.
+2. “I believe you, but I’m not promising anything until I reach the presser.” — delay decision.
+3. “Malik and Stank can settle this after I finish the delivery.” — Dom’nique ejects/chases the
+   player out; no North Bend shopping.
+
+Earlier refusal dialogue may use: “I’m just the bagman. Take it up with Malik. I’m gonna go stack
+my cheese.” Dom’nique responds: “Piss off, then. If I catch you in North Bend again, it better be
+for your funeral.”
+
+**Snoqualmie Pass.** Tennessee, the eccentric AOK host identity turned vinyl purist, presses the
+thumb-drive master into 100 records. Credit outcome may be producer-credit, Malik-only, or Stank.
+After loading, every point of vehicle HP damage destroys two records and reduces final payout by
+2%, capped at 100%. Rest stops do not repair cargo. One surviving record is sufficient for the
+Hip-Hop unlock on arrival.
+
+**Cle Elum.** Deliver to the vinyl store. Payout scales with surviving records; use distinct
+pristine, damaged, almost-empty, one-record, and zero-record outcomes. At least one record unlocks
+Hip-Hop. Zero records gives no payout/unlock unless a later authored rule explicitly says otherwise.
+
+**Vantage punishment.** If the player still carries Malik's locked phone into Vantage, three
+hostile cars converge, box the player in, and ram until the player dies. The crew is not visible.
+Use the special ending and tip: **“When Malik tells you to make the drop, make the drop.”** On the
+death/recovery screen offer:
+
+- warp to roughly 0.5 mile before the Issaquah exit and return/deliver the phone; or
+- continue from Vantage with this Hip-Hop attempt permanently dead for the current comic path.
+
+Make the chosen recovery idempotent and prevent an inescapable death loop.
+
+### 18.7 Featured Story B — Country: StageWagon or Bust
+
+Brittney is a clearly adult character and the concert is the fictional **StageWagon**. Choosing
+Country at Mercer puts her in the car and leaves Malik's phone behind. She changes in the car in
+the first road panel.
+
+Track `relationship` as 0–100 and show five stars. Four stars / 80% is full success. Barely Made
+It awards no cash but still unlocks Country. Ride ’Em requires at least four stars, strong Nerve,
+and exceptional clean/aggressive driving; it adds Brittney as a Messages contact.
+
+Brittney has 25 Nerve attached one-for-one to vehicle collision HP damage: losing 6 car HP loses
+6 Nerve. Rest-stop visits restore 5 Nerve up to 25; road driving does not regenerate it. React at
+20/15/10/5/0, immediately for 5+ HP accidents, and about every fifth qualifying good maneuver,
+with a cooldown so she does not narrate every move. There is no hard-braking/loss-of-control event:
+use a low-damage sideswipe/corner clip and a glancing front-corner impact that avoided a head-on.
+
+At 0 Nerve she says “Pull over. Now. I’m getting out.” At one mile she warns “If you don’t stop,
+I’m calling the cops.” At 1.5 total miles without a roadside drop, apply five wanted stars for a
+kidnapping report. A roadside exit fails the story.
+
+Needs use gameplay-only 🍆 Hunger, 💧 Thirst, and 🚻 Bathroom cues. Selecting a priced dialogue
+button immediately purchases/consumes the chosen item from player cash; show the price and disable
+it when unaffordable. Brittney never requests an item over $20. Required lines/effects include:
+
+- Brittney: “I don’t swallow much meat these days, but I’m always down for fish tacos.”
+- Sushi player: “Are you talking about food or…? I think I can find sushi.” — buy sushi, satisfy.
+- Burrito player: “This place has great pork burritos. I’ll get you one.” — buy it; poor reaction.
+- Wait player: “You’ll survive until a rest stop with better food.” — no purchase; need persists.
+- Hold bathroom: “You can hold it another few miles, right?” Brittney: “There are two ways to make
+  me wet, and pissing myself is my second favorite.”
+- Wait in car: “I’ll wait in the car while you release your demons.” — blank stare, need satisfied.
+- Go with her: “Do you want to play swords?” — need satisfied, relationship bonus, happy reaction.
+- Slushie: “Can I get you a slushie?” Brittney: “I was hoping to chug something salty, but sweet
+  works just as well.”
+- Fountain: “Find a fountain or something. I don’t have drinking money.” Brittney blank-stares:
+  “What a gentleman.” Free water may satisfy thirst but lowers relationship.
+
+Rotate flirt/reaction copy such as:
+
+- “Keep threading gaps like that and you’re gonna make me spill more than my drink.”
+- “If you can keep the car riding that smooth, I might have another smooth ride for you.”
+- “Easy, cowboy. I said I liked it rough—not attached to another car.”
+- “You saved it. Good. I was halfway between screaming and being impressed.”
+
+**Vantage.** Immediately on taking the exit, before storefronts, pop Brittney's card. She sees her
+friends and exits at the gas station before the player may visit the separate diner/bar:
+
+> “Those are my babes! I’m gonna go jump in with them. I wish you were coming with us. We would
+> run you dry.”
+
+Ride ’Em addition: “Text me on your way back. I’d love to see you again.” Add New Contact.
+
+Endings: Ride ’Em = full/bonus payout + Country + contact; Standard = full payout + Country;
+Barely Made It = no payout + Country; Roadside Exit and kidnapping chase = no payout/unlock.
+
+### 18.8 Featured Story C — Classic Rock: ImprompTour
+
+Classic Rock remains the default second featured arc and runs Vantage → Othello → Hatton →
+Washtucna → La Crosse → Colfax → Pullman. Brittney exits at the Vantage gas station first; the
+waitress is in a separate Vantage diner/bar. Use the existing diner-waitress and Grandma/Nan
+identities.
+
+**Vantage.** The waitress is changing out of her work uniform as the player first sees her. Her
+Nan forgot to take her to Othello:
+
+> “My nan was going to take me to Othello, but she forgot again. Last time she remembered her car
+> but forgot which granddaughter to grab.”
+
+Key player lines include:
+
+- “Oof… a lot to unpack there, but I’m headed east and can get you to Othello.”
+- “You don’t have friends, coworkers or someone more reliable than a stranger who drives that?”
+- “Maybe she grabbed a better granddaughter? Heh…”
+
+She offers the Othello opening: “You sing at all? The Othello bar needs an opener. It’s unpaid AND
+they charge the fifty-dollar cover, but it’s surprisingly good exposure out here.” Acceptance:
+“So I pay them $50 to sing and dance?! …I’ve actually made worse investments.” A flirt acceptance
+is also allowed. Drive Only keeps the story alive but skips the Othello performance bonus.
+
+**Othello Show One.** If accepted, deduct $50 and run the unpaid opener. She says: “Hearing you
+sing like that sent a rush down my body. I have a list of propositions for you, but here are two
+for now…” Player may eagerly hear both, ask only for the paying proposition (relationship loss),
+or reject another $50 expense, causing her to leave. Her proposals are to continue the
+`ImprompTour` and to consider a Washtucna duet. If Drive Only was chosen, after her performance
+the player says: “I have to admit, I’m a little jealous I didn’t give that show a chance. I’m
+definitely in on the next one if they’ll have me.” The next show becomes the audition.
+
+**Hatton.** Nan arrives in an Oldsmobile and offers a “mild fortune” of $500 for gas/time if the
+player gives her granddaughter back. Choices: take $500 (waitress leaves, story ends); let the
+waitress decide (she stays at ≥3 stars, leaves below); refuse outright (she likes it); demand
+$1,000 (Nan says she maxed the ATM at $500). Commit money/relationship exactly once.
+
+**Washtucna Show Two.** First binding solo/duet decision:
+
+- Solo: player gets $300, no duet Following, relationship falls.
+- Equal duet: $300 total, $150 each, relationship/duet Following rise.
+- Give her all proceeds: player $0, waitress $300, double relationship and Following gain; she
+  says “Oh, boy. You must be looking for a trio, talking that sweet.”
+
+**La Crosse Show Three.** Money must not decide the choice. Solo pays player $400 and grows only
+individual Following while sharply reducing relationship. Duet pays $800 total / $400 each and
+grows duet Following/relationship. After duet: player says “Are we getting good at this or what?
+See you onstage… partner.” She warns that she may ask to put that word in writing.
+
+**Colfax.** A Pullman booking arrives. She demands: “Othello cost us money. Washtucna tested us.
+La Crosse paid because people came to see both of us. I’m not walking into Pullman as your
+passenger or your backup singer. What are we? Because I need a title.” Offer 50/50, 60/40, flat
+fee, or refuse ownership. Naming rights are a nested choice only under 50/50 or 60/40: let her
+name it, name it together, or player controls it.
+
+Relationship routes:
+
+- Partnership: healthy relationship, 50/50 or accepted 60/40; Pullman and true ending.
+- Hired Voice: cold but consensual flat-fee deal; may reach Pullman but **does not** unlock
+  Classic Rock.
+- Broken Voice: deliberately dark ending caused by repeated controlling/mistreating choices and
+  very low Trust/Relationship. She accepts the player's terms; visually/narratively frame it as a
+  bad, unhealthy outcome rather than romantic kink. Broken Voice **does** unlock Classic Rock.
+
+**Pullman.** The best ending requires the La Crosse duet, a Colfax partnership, and final-show
+completion. Above 80% relationship, the player and waitress share a mutual onstage kiss. Support
+equal-partner, her-name-on-marquee, 60/40 business, Hired Voice, solo sellout, Broken Voice, and
+band-implosion outcomes with idempotent payouts/unlocks.
+
+### 18.9 Genre vehicle continuity in comic art
+
+The static story panel library will initially use the website's canonical protagonist and
+battered white sedan. Design the comic metadata so a future optional vehicle-overlay layer can
+replace the canonical car with the player's selected genre vehicle without multiplying every
+background/character panel. Do not block v1 on generating every story panel for every genre.
+
+### 18.10 Reset contract
+
+Plate reset must erase featured-story state, active/completed generated comic layouts,
+relationships, contacts, and ordinary mission history for that plate. It must **not** erase
+permanent genre purchases/unlocks or achievements. Confirm current storage ownership before
+changing reset code and add focused migration tests so existing plates load safely.
+
+Reusable layout templates are code/assets and are never deleted; “saved comic layouts” means the
+generated page arrangement records attached to that plate.
+
+### 18.11 Delivery phases
+
+Keep each phase buildable and reviewable:
+
+1. Save migration + `StorySystem` irreversible ledger + tests.
+2. `ComicSystem`, placeholder panels, live sliding dialogue presentation, Comic phone app replacing
+   Get Help, persistent volume/chapter reader.
+3. Hip-Hop story, temporary radio, cargo/credit branches, Vantage death/recovery.
+4. Country passenger Nerve/needs/Satisfaction and Vantage endings.
+5. Classic Rock Relationship/Following/economy branches and Pullman endings.
+6. Meanwhile/attached-side-story support.
+7. Local page rendering, PDF export/share/download fallback.
+8. Replace placeholders with the supplied final panel art and metadata.
+
+After each phase run the existing build/tests plus focused story tests. Do not deploy partial
+placeholder art as a finished public release. Preserve current economy/combo work and existing
+single-step encounters.
+
+### 18.12 Required acceptance matrix
+
+Verify at minimum:
+
+- force-close immediately after every consequential choice, reload, and see the same canonical
+  choice/panel/effect exactly once;
+- checkpoint rewind cannot undo choices or duplicate cash/payout/items;
+- a new run on the same plate preserves unfinished story state and all prior comic chapters;
+- completed story replay begins with $0/no upgrades and creates the next chapter/volume without
+  destroying prior comics;
+- resetting a plate removes story/comic/relationships/contacts/mission history while retaining
+  genres and achievements;
+- Country and Hip-Hop can be pursued on different runs;
+- mandatory story encounters block storefronts until resolved;
+- ordinary missions remain available and independent;
+- featured hitchhiker gating prevents two main passengers;
+- Malik temporary radio survives exact resume, ends at the authored points, and the Vantage
+  recovery never loops;
+- Brittney Nerve is exactly 1:1 with collision HP and the 1.0/1.5-mile warnings work;
+- need purchases debit cash once and unavailable choices are disabled;
+- vinyl damage/payout is exactly 2 records and 2% per damage HP;
+- Washtucna/La Crosse show economics match the specification;
+- relationship thresholds use raw 0–100, not rounded stars;
+- Comic opens from the paused phone menu, scrolls to old/new panels correctly, and its data is
+  isolated by license plate;
+- old dialogue resolves by stable key with fallback copy;
+- PDF export works for complete and TO BE CONTINUED volumes without network access;
+- no regression to audio lifecycle, driving, rest stops, saves, economy, achievements, genre
+  ownership, or existing encounter cards.

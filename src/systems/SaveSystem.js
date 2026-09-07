@@ -48,6 +48,9 @@ const GLOBAL_KEYS = new Set([
   // Genre identity is per-PLATE (one culture pick + the genre cars bought at
   // dealerships), not per steering mode.
   'genre', 'genresOwned',
+  // Featured-story canon + comic (Ch. 18): per-PLATE, device-local, never
+  // sent through CloudSave.  Survives new runs; only a plate reset clears it.
+  'storyCanon',
 ]);
 
 // Custom-mode SANDBOX: these first-segments hold RUN PROGRESS.  While the
@@ -64,6 +67,10 @@ const SANDBOX_KEYS = new Set([
   // must not persist.  setSandbox SEEDS these two from the real plate so the
   // player still drives their own car in Custom.
   'genre', 'genresOwned',
+  // Story canon: a Custom run SEES the plate's story (seeded in setSandbox)
+  // but is non-canonical — its choices / panels die with the run (owner
+  // 2026-09-06).
+  'storyCanon',
 ]);
 
 // Storage-key names for each profile bucket.  Kept as-is for backward
@@ -110,16 +117,16 @@ function cleanString(v, fallback = '') {
   return typeof v === 'string' ? v : fallback;
 }
 
-function cleanJson(v, fallback, depth = 0) {
-  if (depth > 8) return fallback;
+function cleanJson(v, fallback, depth = 0, maxArr = 250, maxDepth = 8) {
+  if (depth > maxDepth) return fallback;
   if (v == null || typeof v === 'string' || typeof v === 'boolean') return v;
   if (typeof v === 'number') return Number.isFinite(v) ? v : fallback;
-  if (Array.isArray(v)) return v.slice(0, 250).map(x => cleanJson(x, null, depth + 1));
+  if (Array.isArray(v)) return v.slice(0, maxArr).map(x => cleanJson(x, null, depth + 1, maxArr, maxDepth));
   if (!isObj(v)) return fallback;
   const out = {};
   for (const [k, val] of Object.entries(v)) {
     if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-    out[k] = cleanJson(val, null, depth + 1);
+    out[k] = cleanJson(val, null, depth + 1, maxArr, maxDepth);
   }
   return out;
 }
@@ -206,6 +213,10 @@ const DEFAULT_GLOBAL = {
   // $25k genre car this plate owns (the tutorial pick seeds the first one).
   genre:           null,
   genresOwned:     [],
+  // Featured-story canon (Ch. 18) — StorySystem owns the canonical shape
+  // (normalizeStoryCanon) and ComicSystem fills volumes.  null = never
+  // started; the sanitizer keeps it null so a fresh plate stays small.
+  storyCanon:      null,
 };
 
 // A single player profile slot — its license-plate handle plus a complete,
@@ -620,7 +631,26 @@ export class SaveSystem {
     g.genresOwned = Array.isArray(src.genresOwned)
       ? [...new Set(src.genresOwned.filter(v => typeof v === 'string' && v.trim()))].slice(0, 20)
       : [];
+    g.storyCanon = this._sanitizeStoryCanon(src.storyCanon);
     return g;
+  }
+
+  /** Featured-story canon (Ch. 18).  Structural clean only — StorySystem
+   *  re-normalizes field-by-field on every read.  Comic volumes hold one
+   *  compact event per committed beat, so the array cap is far above
+   *  cleanJson's default 250 (a whole volume's worth of tiles must survive
+   *  a reload; 18.1 "keep all past volumes"). */
+  _sanitizeStoryCanon(src) {
+    if (!isObj(src)) return null;
+    const out = cleanJson(src, null, 0, 5000, 12);
+    if (!isObj(out)) return null;
+    out.schemaVersion = finiteInt(out.schemaVersion, 1, 1);
+    if (!isObj(out.ledger))   out.ledger   = {};
+    if (!isObj(out.stories))  out.stories  = {};
+    if (!isObj(out.contacts)) out.contacts = {};
+    if (!Array.isArray(out.volumes)) out.volumes = [];
+    if (typeof out.activeVolumeId !== 'string') out.activeVolumeId = null;
+    return out;
   }
 
   _sanitizeProfile(src) {
@@ -880,7 +910,27 @@ export class SaveSystem {
    *  progress — leaving the other two players untouched.  This is the only
    *  path that clears a plate name (per design). */
   resetProgress() {
-    this.resetSlot(this.data.activeSlot | 0);
+    const i = this.data.activeSlot | 0;
+    if (i < 0 || i >= this.data.slots.length) return;
+    // Plate-reset contract (Ch. 18.10, owner 2026-09-06): story canon, comic
+    // layouts, relationships, contacts and ordinary mission history go; the
+    // things the player PAID for or EARNED stay — permanent genre ownership
+    // (the $25k genre cars; the active genre is the car they drive) and
+    // achievements.  Everything else (plate name, stats, records, money,
+    // progression) blanks as before.
+    const old = this.data.slots[i];
+    const fresh = emptySlot();
+    const g = old?.global;
+    if (isObj(g)) {
+      const ach = cleanJson(g.achievements, {});
+      fresh.global.achievements = isObj(ach) ? ach : {};
+      if (typeof g.genre === 'string' && g.genre) fresh.global.genre = g.genre;
+      fresh.global.genresOwned = Array.isArray(g.genresOwned)
+        ? [...new Set(g.genresOwned.filter(v => typeof v === 'string' && v.trim()))].slice(0, 20) : [];
+      if (fresh.global.genre && !fresh.global.genresOwned.includes(fresh.global.genre)) fresh.global.genresOwned.push(fresh.global.genre);
+    }
+    this.data.slots[i] = fresh;
+    this.save();
   }
 
   hasSave() {
@@ -911,6 +961,10 @@ export class SaveSystem {
       const g = this._slot.global;
       this._sandboxStore.genre       = g.genre ?? null;
       this._sandboxStore.genresOwned = Array.isArray(g.genresOwned) ? [...g.genresOwned] : [];
+      // Story canon: a Custom run plays against a COPY of the plate's canon
+      // so the story is where the player left it, but nothing it commits
+      // (choices, panels, relationships) survives the run.
+      this._sandboxStore.storyCanon  = isObj(g.storyCanon) ? structuredClone(g.storyCanon) : null;
     }
   }
 

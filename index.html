@@ -4458,7 +4458,7 @@
         });
         const reset = document.getElementById('set-reset');
         addTap(reset, async () => {
-          const ok = await showConfirm('Reset this player?  Their plate name, lifetime stats, records, trophies, money, vehicles and progress will all be ERASED.  Your other players are untouched.  This frees the plate so it can be renamed.');
+          const ok = await showConfirm('Reset this player?  Their plate name, lifetime stats, records, money, progress, story and comic will all be ERASED.  Trophies and the genre cars they own are kept.  Your other players are untouched.  This frees the plate so it can be renamed.');
           if (!ok) return;
           // Close this Settings modal first — resetProgress soft-restarts the
           // Game scene into a fresh title (no page reload), so the modal would
