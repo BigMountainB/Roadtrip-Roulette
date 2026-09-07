@@ -29,7 +29,7 @@ import { GENRE_VEHICLE_TRAITS, speedForDifficulty } from '../data/genreVehicleTr
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 import * as Metal from '../ui/MetalUI.js';
-import { runStoryQueue } from '../ui/StoryTile.js';
+import { runStoryQueue, showStoryConversation } from '../ui/StoryTile.js';
 
 // ── Menu tap gate (owner 2026-08-03) ─────────────────────────────────────
 // One physical tap must never fire on two screens.  These menus mix event
@@ -477,6 +477,10 @@ export class RestStopScene extends Phaser.Scene {
 
   init(data) {
     this._stop     = data?.stop     ?? { id: '?', name: 'Rest Stop' };
+    // Phaser reuses this scene INSTANCE for every stop, so the story gate
+    // (Ch. 18.5 mandatory-first) must be re-armed per visit or the second
+    // stop of a run never shows its story tile.
+    this._storyGateDone = false;
     this._score    = data?.score    ?? 0;
     this._stars    = data?.stars    ?? 0;
     this._position = data?.position ?? 0;
@@ -1188,6 +1192,16 @@ export class RestStopScene extends Phaser.Scene {
     const visibleTabs = Array.isArray(stopAmenities) && stopAmenities.length
       ? TAB_ORDER.filter(k => stopAmenities.includes(k))
       : TAB_ORDER;
+    // Story-only storefronts (Ch. 18): a featured story can hang a placard
+    // at this stop (TraffApp at Bellevue, Spin Cycle Records at Cle Elum)
+    // while its node is open.  Tapping one runs the story tile and returns
+    // to the landing — there is no shop behind it.
+    const storyPlacards = {};
+    try {
+      for (const pl of (this.registry.get('story')?.placardsAt?.(this._stop?.id) ?? [])) {
+        if (!visibleTabs.includes(pl.key)) { visibleTabs.push(pl.key); storyPlacards[pl.key] = pl; }
+      }
+    } catch (_) {}
 
     // Layout grid sizes to fit visible tile count (1-5 tiles).  Single-
     // tile stops get a big centered placard; multi-tile stays 3×2.
@@ -1203,7 +1217,7 @@ export class RestStopScene extends Phaser.Scene {
       const c = i % cols;
       const cx = this._contentX + c * (cellW + gap);
       const cy = this._contentY + r * (cellH + gap);
-      const brand = stopBrands[key] ?? { name: key, logo: null };
+      const brand = stopBrands[key] ?? (storyPlacards[key] ? { name: storyPlacards[key].name, logo: null } : { name: key, logo: null });
       // White-bordered placard (Olive Garden / Red Lobster style).
       const card = this.add.rectangle(cx, cy, cellW, cellH, 0xFFFFFF, 1)
         .setOrigin(0, 0).setStrokeStyle(3, 0xFFFFFF)
@@ -1225,7 +1239,7 @@ export class RestStopScene extends Phaser.Scene {
         this._landingObjs.push(img);
       } else {
         const accentFor = { gas: 0xFFCC22, hunting: 0x6E3F1A, camp: 0x2E7A35, dealer: 0xCC1122, lord: 0xCC1122, suck: 0x8A5A2B, vices: 0x9A36CC, parkride: 0x1E5BB8, schwasted: 0xC8102E, fap: 0x7A3FA0 };
-        const accent = accentFor[key] ?? 0x888888;
+        const accent = accentFor[key] ?? storyPlacards[key]?.accent ?? 0x888888;
         const strip = this.add.rectangle(logoArea.x, logoArea.y, logoArea.w, logoArea.h, accent, 1)
           .setOrigin(0, 0);
         const t = this.add.text(logoArea.x + logoArea.w / 2, logoArea.y + logoArea.h / 2, brand.name, {
@@ -1237,7 +1251,7 @@ export class RestStopScene extends Phaser.Scene {
 
       // Category label on the lower strip of the placard.
       const catLabel = this.add.text(cx + cellW / 2, cy + cellH - Math.round(cellH * 0.12),
-        SECTIONS[key].label.replace(/^[^A-Za-z]+/, '').trim(), {
+        (SECTIONS[key]?.label ?? storyPlacards[key]?.cat ?? key).replace(/^[^A-Za-z]+/, '').trim(), {
         fontSize: '16px', fontFamily: IMPACT,
         color: '#1E5BB8', stroke: '#FFFFFF', strokeThickness: 2,
       }).setOrigin(0.5);
@@ -1251,7 +1265,10 @@ export class RestStopScene extends Phaser.Scene {
         // Dealers sell CARS again (owner 2026-07-23 — the genre-car showroom),
         // so a dealer tile opens the Cars/Accessories chooser.  Remember which
         // brand was tapped: headers show it.
-        if (key === 'dealer' || key === 'lord' || key === 'suck') {
+        if (storyPlacards[key]) {
+          const pl = storyPlacards[key];
+          showStoryConversation(this, { storyId: pl.storyId, nodeId: pl.nodeId }, () => this._showLanding());
+        } else if (key === 'dealer' || key === 'lord' || key === 'suck') {
           this._activeDealerBrand = stopBrands[key]?.name ?? null;
           this._activeDealerKey   = key;
           this._showShopGreeter(key, () => this._showDealerChooser());

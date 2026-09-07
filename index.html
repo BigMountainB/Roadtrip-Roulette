@@ -3718,7 +3718,8 @@
           const _gLocked = (s) => {
             if (_demoOn) return !!s.culture && !_demoGenres.includes(s.culture);
             return GENRE_LOCK_LIVE && !_firstPick && !!s.culture
-              && !_ownedGenres.includes(s.culture) && s.culture !== _activeGenre;
+              && !_ownedGenres.includes(s.culture) && s.culture !== _activeGenre
+              && !(window.__genre?.canPlay?.(s.culture));   // featured-story temporary grant (Ch. 18)
           };
           musicBody.innerHTML = playlistBar + `<div class="genre-grid">` + stations.map((s) => {
             const tracks      = s.tracks ?? [];
@@ -4531,6 +4532,15 @@
             { id: 'unknown', name: '❓ The Unknown', sub: lastOf('unknown') },
             { id: 'spam',    name: '🚫 The Spam',    sub: lastOf('spam') },
           ];
+          // Featured-story senders (Ch. 18): anyone who has texted this run
+          // or is a saved story contact gets a row — Malik, Brittney, the
+          // waitress — named by the story bridge.
+          const storyIds = new Set([...Object.keys(tx).filter(id => !BUDDY_NAMES[id] && (tx[id]?.length ?? 0) > 0),
+                                    ...Object.keys(window.__story?.contacts?.() ?? {})]);
+          for (const id of storyIds) {
+            if (rows.some(r => r.id === id)) continue;
+            rows.push({ id, name: window.__story?.contactName?.(id) ?? id, sub: lastOf(id) });
+          }
           // Order by most recent message, newest first.  Sorted on `mile`
           // rather than the `time` label: `time` is a formatted clock string
           // that wraps across the day/night cycle, whereas the odometer only
@@ -4616,14 +4626,14 @@
                 return `<div class="pa-row"><span class="k">${sender}${m.text}<br><span class="pa-dim" style="font-size:0.78em">${m.time ? m.time : `~mile ${m.mile}`}</span></span></div>`;
               }).join('')
             : `<div class="pa-row"><span class="k pa-dim">No messages yet — they'll text you on the road.</span></div>`;
-          openApp('CONTACTS', backBtn + sSec(BUDDY_NAMES[cid] ?? cid) + body);
+          openApp('CONTACTS', backBtn + sSec(BUDDY_NAMES[cid] ?? window.__story?.contactName?.(cid) ?? cid) + body);
           addTap(document.getElementById('msg-back'), () => requestAnimationFrame(renderList));
         };
 
         const renderContact = (cid) => {
           window.__notif?.ackMsg?.(cid);   // reading the thread clears its unread dot
           if (cid === 'girl') renderGirl();
-          else if (BUDDY_NAMES[cid]) renderBuddy(cid);
+          else renderBuddy(cid);   // buddies AND featured-story senders share the thread view
         };
         // Deep-link for the in-game "📱 New text" toast (owner 2026-08-29) —
         // the render closures only exist while this handler runs, so publish

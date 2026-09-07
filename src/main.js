@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { initOpeningCall } from './ui/OpeningCallSequence.js';
 import { mountComicReader } from './ui/ComicReader.js';
+// Story senders that text the player before they're a saved contact.
+const STORY_CONTACT_NAMES = { malik: '🎤 Malik Reed', brittney: '💋 Brittney', waitress: '🎸 The Waitress' };
 import { BootScene }    from './scenes/BootScene.js';
 import { GameScene }    from './scenes/GameScene.js';
 import { RestStopScene } from './scenes/RestStopScene.js';
@@ -1022,6 +1024,15 @@ const _boot = () => {
 
   // Career stats snapshot for the phone-menu Leaderboard + Stats apps.
   // Returns a plain-object copy so the menu can't mutate live state.
+  // Featured-story bridge (Ch. 18) — Messages reads story contacts + threads.
+  window.__story = {
+    contacts: () => {
+      try { return game.registry.get('story')?.canon?.().contacts ?? {}; } catch (_) { return {}; }
+    },
+    contactName: (cid) => STORY_CONTACT_NAMES[cid] ?? window.__story.contacts()[cid]?.name ?? null,
+    radioGrant: () => game.registry.get('story')?.run?.radioGrant ?? null,
+  };
+
   // COMIC app (Ch. 18) — the phone tile mounts the reader into the shared
   // app modal.  Data is the plate's story canon (device-local, never cloud).
   window.__comic = {
@@ -1279,6 +1290,9 @@ const _boot = () => {
       const list = window.__genre.owned();
       if (!list.includes(culture)) game.registry.get('save')?.set?.('genresOwned', [...list, culture]);
     },
+    // Playable right now = owned, OR a featured story is granting it
+    // temporarily this run (Malik's phone → Hip-Hop until Issaquah, Ch. 18).
+    canPlay: (culture) => !!culture && (window.__genre.owns(culture) || game.registry.get('story')?.run?.radioGrant === culture),
     set: (culture) => {
       if (!culture) return;
       try { game.registry.get('save')?.set?.('genre', culture); } catch (_) {}  // per-plate

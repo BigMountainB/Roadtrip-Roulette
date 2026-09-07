@@ -67,8 +67,12 @@ export function showStoryConversation(scene, start, onDone) {
   const story = scene.registry.get('story');
   if (!story) { onDone?.(); return; }
   const stopId = scene._stop?.id;
-  let finished = false;
-  const finish = () => { if (finished) return; finished = true; teardown(); onDone?.(); };
+  let finished = false, leaveAfter = false;
+  const finish = () => {
+    if (finished) return; finished = true; teardown();
+    if (leaveAfter && typeof scene._continue === 'function') { scene._continue(); return; }
+    onDone?.();
+  };
 
   // ── Chrome ──────────────────────────────────────────────────────────────
   const objs = [];
@@ -189,7 +193,7 @@ export function showStoryConversation(scene, start, onDone) {
     const b = meta.bubble, t = meta.tail;
     const npcBox = { x: b.x * TILE_W, y: b.y * ART_H, w: b.w * TILE_W, h: b.h * ART_H };
     const npcTail = { x: t.x * TILE_W, y: t.y * ART_H };
-    let npcParts = balloon(c, node.line ?? '', npcBox, npcTail);
+    let npcParts = balloon(c, story.resolveLine(storyId, nodeId), npcBox, npcTail);
     const tile = {
       c, storyId, nodeId, node,
       setReply(text) {
@@ -212,7 +216,7 @@ export function showStoryConversation(scene, start, onDone) {
   function showButtons(tile) {
     clearButtons();
     const { storyId, nodeId, node } = tile;
-    const choices = node.choices ?? [];
+    const choices = story.choicesFor(storyId, nodeId);
     const cash = scene._score ?? 0;
     // A stub / dead-end node can't strand the player: one plain way out that
     // records nothing (the story stays parked on this node).
@@ -271,7 +275,10 @@ export function showStoryConversation(scene, start, onDone) {
     });
     // Player line into its balloon, then the reaction.
     tile.setPlayer(ch.label);
-    const reply = ch.reply ?? '';
+    const reply = story.resolveReply(storyId, nodeId, ch.id);
+    // Authored eject (North Bend's "Piss off"): the stop closes behind the
+    // tile — no storefront, no welcome NPC.
+    if (r.applied && r.leaveStop) leaveAfter = true;
     scene.time.delayedCall(650, () => { if (!finished && reply) tile.setReply(reply); });
     scene.time.delayedCall(reply ? 1700 : 900, () => {
       if (finished) return;

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { SCREEN_W, SCREEN_H, VICE_CONFIG, VICES, HUD_OFFSET_X } from '../constants.js';
+import { SCREEN_W, SCREEN_H, VICE_CONFIG, VICES, HUD_OFFSET_X, TOTAL_ROUTE_MILES, ROUTE_SEGS, SEG_LENGTH } from '../constants.js';
+import { ISSAQUAH_WARP_MILE } from '../data/featuredStories.js';
 import { getInstalled } from '../systems/UpgradeSystem.js';
 import { UPGRADE_SLOTS, getSlotTiers } from '../data/upgrades.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
@@ -93,6 +94,9 @@ export class GameOverScene extends Phaser.Scene {
     // GameScene now passes mileage already converted to miles.
     this.finalMiles     = data?.distanceMi ?? 0;
     this.cause          = data?.cause      ?? 'busted';
+    // Featured-story ending (Ch. 18): { storyId, tip, headline } — replaces
+    // RESTART/CONTINUE with the authored recovery choices.
+    this.storyEnding    = data?.storyEnding ?? null;
     // Net wallet change for the drive that just ended (earnings minus
     // fines/bail/penalties — may be negative).  Null on older call paths.
     this.runEarned      = data?.runEarned  ?? null;
@@ -183,7 +187,8 @@ export class GameOverScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
 
     // ── Subtitle / "why they died" ─────────────────────────────────────
-    let subtitle = meta.subtitle;
+    // Featured-story ending: the authored tip IS the subtitle (Ch. 18.6).
+    let subtitle = this.storyEnding?.tip ? '\u201C' + this.storyEnding.tip + '\u201D' : meta.subtitle;
     if (this.cause === 'passed_out' && this.deathVice) {
       const label = VICE_CONFIG[this.deathVice]?.label ?? this.deathVice;
       subtitle = `${label} got you. ${meta.subtitle}`;
@@ -330,12 +335,13 @@ export class GameOverScene extends Phaser.Scene {
     top.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.7, 0.7, 0, 0);
     top.fillRect(0, 0, SCREEN_W, 96);
 
-    this.add.text(CX, 20, meta.headline, {
+    this.add.text(CX, 20, this.storyEnding?.headline ?? meta.headline, {
       fontSize: '44px', fontFamily: IMPACT,
       color: meta.color, stroke: '#000', strokeThickness: 6,
     }).setOrigin(0.5, 0).setDepth(D);
 
-    let subtitle = meta.subtitle;
+    // Featured-story ending: the authored tip IS the subtitle (Ch. 18.6).
+    let subtitle = this.storyEnding?.tip ? '\u201C' + this.storyEnding.tip + '\u201D' : meta.subtitle;
     if (this.cause === 'passed_out' && this.deathVice) {
       const label = VICE_CONFIG[this.deathVice]?.label ?? this.deathVice;
       subtitle = `${label} got you. ${meta.subtitle}`;
@@ -422,6 +428,8 @@ export class GameOverScene extends Phaser.Scene {
       mk(CX + 150, 230, 'PLAY DEMO AGAIN', 0x2A4A6A, 0xFFFFFF, () => this._startOver());
     } else if (isWin) {
       mk(CX, 240, 'DRIVE IT AGAIN', 0x44AA55, 0xFFFFFF, () => this._startOver());
+    } else if (this.storyEnding?.storyId === 'hiphop') {
+      this._buildVantageRecovery(oc);
     } else if (oc) {
       // ── Outcome buttons — rendered FROM the outcome objects the handlers
       // apply, so what's printed is exactly what the player gets. ──
@@ -1292,6 +1300,41 @@ export class GameOverScene extends Phaser.Scene {
       resumeFromPosition:     this.lastCheckpoint?.position ?? 0,
       checkpointRestartScore: c.cash,
     });
+  }
+
+  /** Vantage punishment recovery (Ch. 18.6).  Both buttons commit through
+   *  the story ledger FIRST (idempotent), then move the run:
+   *    BACK TO ISSAQUAH — warp to ~0.5 mi before the exit with the phone
+   *      unlocked so Kyle can take it; wallet keeps the crash-restart rule.
+   *    CONTINUE FROM VANTAGE — Hip-Hop is dead for this comic path; the
+   *      ordinary CONTINUE outcome applies (or a restart if no checkpoint).
+   *  Neither can loop: 'continue' kills the story so the ambush never
+   *  re-arms, and 'warp' only re-arms if the player locks the phone again. */
+  _buildVantageRecovery(oc) {
+    const story = this.registry.get('story');
+    const bY = SCREEN_H - 31, bH = 56;
+    const warpMi = ISSAQUAH_WARP_MILE;
+    this._makeOutcomeButton(150, bY, 250, bH, {
+      title: 'BACK TO ISSAQUAH', fill: 0xA855F7, txt: 0xFFFFFF,
+      cash:  fmtMoney(this.finalScore),
+      sub:   'Return the phone \u00B7 ' + warpMi.toFixed(1) + ' mi',
+      onClick: () => {
+        try { story?.commitChoice?.({ storyId: 'hiphop', nodeId: 'vantage_recovery', choiceId: 'warp', mile: this.finalMiles }, {}); } catch (_) {}
+        this._restartAtCheckpoint((warpMi / TOTAL_ROUTE_MILES) * ROUTE_SEGS * SEG_LENGTH);
+      },
+    });
+    const c = oc?.cont;
+    this._makeOutcomeButton(410, bY, 250, bH, {
+      title: 'CONTINUE FROM VANTAGE', fill: 0x39A8FF, txt: 0xFFFFFF,
+      cash:  c?.valid ? fmtMoney(c.cash) : fmtMoney(this.finalScore),
+      sub:   'Hip-Hop story ends here',
+      note:  c?.note,
+      onClick: () => {
+        try { story?.commitChoice?.({ storyId: 'hiphop', nodeId: 'vantage_recovery', choiceId: 'continue', mile: this.finalMiles }, {}); } catch (_) {}
+        if (c?.valid) this._applyContinueOutcome(); else this._applyRestartOutcome();
+      },
+    });
+    this._makeButton(640, bY, 140, 40, 'MENU', 0xF4F7FF, 0x000000, () => this._returnToTitle());
   }
 
   _restartAtCheckpoint(position) {

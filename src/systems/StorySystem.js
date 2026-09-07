@@ -196,28 +196,85 @@ export class StorySystem {
     return st.nodeId ? this._node(storyId, st.nodeId) : null;
   }
 
-  /** Featured stories that (a) are active with their current node at this
-   *  stop, or (b) can be entered here and have never been started on this
-   *  attempt.  Mandatory ones come first — these block storefronts (18.5). */
+  /** Story nodes that fire at this stop right now.  A node is OPEN when the
+   *  story is active (or this is its entry stop and it hasn't started), its
+   *  `when(state, run)` predicate passes, and none of its consequential
+   *  choices has been committed on this attempt — so a scene re-entry after
+   *  a commit never re-prompts (18.5 idempotency), and skipping a stop simply
+   *  leaves that stop's node behind.  Mandatory nodes come first — these
+   *  block storefronts.  Nodes flagged `virtual` (ending-screen recoveries)
+   *  and placard-hosted nodes (`business`) are listed but not mandatory. */
   pendingAt(stopId) {
     const c = this.canon();
     const out = [];
     for (const id of Object.keys(this._defs)) {
       const def = this._defs[id];
       const st  = c.stories[id] ?? emptyStoryState();
-      let nodeId = null;
-      if (st.status === STORY_STATUS.ACTIVE && st.nodeId) {
-        if (this._node(id, st.nodeId)?.stopId === stopId) nodeId = st.nodeId;
+      const candidates = [];
+      if (st.status === STORY_STATUS.ACTIVE) {
+        for (const [nid, node] of Object.entries(def.nodes ?? {})) {
+          if (node.stopId === stopId && !node.virtual) candidates.push([nid, node]);
+        }
       } else if (st.status === STORY_STATUS.AVAILABLE && def.entry?.stopId === stopId) {
-        nodeId = def.startNode;
+        const node = def.nodes?.[def.startNode];
+        if (node) candidates.push([def.startNode, node]);
       }
-      if (!nodeId) continue;
-      const node = this._node(id, nodeId);
-      if (!node) continue;
-      out.push({ storyId: id, nodeId, mandatory: !!node.mandatory, node });
+      for (const [nid, node] of candidates) {
+        if (!this._nodeOpen(id, nid, node, st, c)) continue;
+        out.push({ storyId: id, nodeId: nid, mandatory: !!node.mandatory && !node.business, business: node.business ?? null, node });
+      }
     }
     out.sort((a, b) => (b.mandatory ? 1 : 0) - (a.mandatory ? 1 : 0));
     return out;
+  }
+
+  _nodeOpen(storyId, nodeId, node, st, c) {
+    try { if (typeof node.when === 'function' && !node.when(st, this._run)) return false; } catch (_) { return false; }
+    const attempt = st.replayCount ?? 0;
+    for (const ch of node.choices ?? []) {
+      if (ch.consequential === false) continue;
+      if (c.ledger[ledgerKey(storyId, attempt, nodeId, ch.id)]) return false;
+    }
+    return true;
+  }
+
+  /** Story-only storefront placards to add to a stop's landing: one per
+   *  open placard-hosted node.  `def.businesses[key]` supplies the brand. */
+  placardsAt(stopId) {
+    return this.pendingAt(stopId)
+      .filter(p => p.business)
+      .map(p => ({ key: p.business, ...(this._defs[p.storyId]?.businesses?.[p.business] ?? { name: p.business }), storyId: p.storyId, nodeId: p.nodeId }));
+  }
+
+  /** NPC line for a node — static string or `(state, run) => string`. */
+  resolveLine(storyId, nodeId) {
+    const node = this._node(storyId, nodeId);
+    if (!node) return '';
+    if (typeof node.line === 'function') { try { return String(node.line(this.story(storyId), this._run) ?? ''); } catch (_) { return ''; } }
+    return node.line ?? '';
+  }
+
+  /** Reply for a choice — static string or `(state, run) => string`. */
+  resolveReply(storyId, nodeId, choiceId) {
+    const ch = this._choice(storyId, nodeId, choiceId);
+    if (!ch) return '';
+    if (typeof ch.reply === 'function') { try { return String(ch.reply(this.story(storyId), this._run) ?? ''); } catch (_) { return ''; } }
+    return ch.reply ?? '';
+  }
+
+  /** Choices currently offered on a node (`when` on a choice hides it). */
+  choicesFor(storyId, nodeId) {
+    const node = this._node(storyId, nodeId);
+    const st = this.story(storyId);
+    return (node?.choices ?? []).filter(ch => {
+      try { return typeof ch.when !== 'function' || !!ch.when(st, this._run); } catch (_) { return false; }
+    });
+  }
+
+  /** Human label for a story's ending (e.g. "COMPLETE! SORT OF…"). */
+  endingLabel(storyId) {
+    const st = this.story(storyId);
+    return this._defs[storyId]?.endings?.[st.endingId]?.label ?? null;
   }
 
   // ── Lifecycle (all idempotent) ──────────────────────────────────────────
@@ -323,15 +380,21 @@ export class StorySystem {
     }
 
     // ── Persist FIRST (18.2: "committed synchronously … before its animation") ──
-    const effects = isObj(choice.effects) ? choice.effects : {};
+    // Effects may be authored as a function of (state, run) — e.g. a payout
+    // that scales with surviving cargo — resolved ONCE here and stored
+    // resolved, so the ledger records exactly what was applied.
+    let effects = choice.effects;
+    if (typeof effects === 'function') { try { effects = effects(st, this._run); } catch (_) { effects = {}; } }
+    effects = isObj(effects) ? effects : {};
     const entry = {
       key,
       storyId, nodeId, choiceId, attempt, at, mile,
       runId: this._run.runId,
       // Stable keys + fallback copy so the comic can re-render this beat by
       // key later and still read if the key is ever renamed away (18.2).
+      // Dynamic lines resolve to the copy the player actually saw.
       dialogueKeys: { line: lineKey(storyId, nodeId), label: labelKey(storyId, nodeId, choiceId), reply: replyKey(storyId, nodeId, choiceId) },
-      fallbackText: { line: node.line ?? '', label: choice.label ?? '', reply: choice.reply ?? '' },
+      fallbackText: { line: this.resolveLine(storyId, nodeId), label: choice.label ?? '', reply: this.resolveReply(storyId, nodeId, choiceId) },
       importance: node.importance ?? 'choice',
       effects: JSON.parse(JSON.stringify(effects)),
       cost: Math.max(0, num(choice.cost) | 0),
@@ -352,9 +415,10 @@ export class StorySystem {
     if ('passenger' in effects) { this._run.passenger = effects.passenger ?? null; hooks.passenger?.(this._run.passenger); }
     if ('radioGrant' in effects) { this._run.radioGrant = effects.radioGrant ?? null; hooks.radioGrant?.(this._run.radioGrant); }
     if (effects.nerve != null) this._run.nerve = clamp(this._run.nerve + num(effects.nerve), 0, 25);
+    if (isObj(effects.cargo)) Object.assign(this._run.cargo, effects.cargo);
     hooks.panel?.(entry, node, choice);
     for (const fn of this._listeners) { try { fn(entry, { node, choice }); } catch (_) {} }
-    return { applied: true, entry, effects, next: choice.next ?? null };
+    return { applied: true, entry, effects, next: choice.next ?? null, leaveStop: effects.leaveStop === true };
   }
 
   /** Story-state effects (flags / items / relationship / following / ending /
@@ -381,6 +445,14 @@ export class StorySystem {
       c.stories[fx.endStory].endingId = fx.endStoryEnding ?? null;
       c.stories[fx.endStory].nodeId = null;
     }
+    // Hand a story back to "not started" (Mercer's Country pick returns
+    // Hip-Hop to the shelf for a later run).  Bumps the attempt so the
+    // shelved attempt's ledger entries stay put and a fresh start can
+    // re-commit the same nodes.
+    if (typeof fx.resetStory === 'string' && c.stories[fx.resetStory]) {
+      const o = c.stories[fx.resetStory];
+      c.stories[fx.resetStory] = { ...emptyStoryState(), replayCount: (o.replayCount ?? 0) + 1 };
+    }
     if (typeof fx.ending === 'string') {
       st.status = fx.status === 'failed' ? STORY_STATUS.FAILED : fx.status === 'dead' ? STORY_STATUS.DEAD : STORY_STATUS.COMPLETE;
       st.endingId = fx.ending;
@@ -392,17 +464,106 @@ export class StorySystem {
 
   // ── Run state (snapshot) ────────────────────────────────────────────────
 
-  /** Fresh run: new run id, nothing in the seat, no radio grant. */
+  /** Fresh run: new run id, nothing in the seat, no radio grant — then
+   *  whatever the plate canon says the player is still carrying is derived
+   *  back in (the phone still grants radio on a new run; pressed records
+   *  ride along at their last synced count). */
   resetRun(runId = null) {
     this._run = {
       runId: runId ?? genRunId(),
       radioGrant: null,     // culture string while a story grants temporary radio
       passenger:  null,     // { id, name } while a featured passenger is aboard
       nerve:      25,       // Brittney's Nerve (Phase 4)
-      cargo:      {},       // { records: n } (Phase 3)
+      cargo:      {},       // { records: n, recordsMax, hpLost } (Phase 3)
       flags:      {},       // run-scoped story flags (warnings fired, miles at 0 Nerve…)
     };
+    this.deriveRun();
   }
+
+  /** Let each active story project durable canon (items) onto run state.
+   *  Idempotent; safe after resetRun / restore / a slot switch. */
+  deriveRun() {
+    const c = this.canon();
+    for (const [id, def] of Object.entries(this._defs)) {
+      const st = c.stories[id];
+      if (!st || st.status !== STORY_STATUS.ACTIVE || typeof def.deriveRun !== 'function') continue;
+      try { def.deriveRun(st, this._run); } catch (_) {}
+    }
+  }
+
+  /** The player drove PAST a rest-stop exit without taking it.  Stories
+   *  react through `def.onPass[stopId](api)` — the api writes canon flags /
+   *  items / relationship (idempotent by the flags each hook checks) and
+   *  world effects through `hooks` (text, radioGrant).  Returns the story
+   *  ids that reacted. */
+  exitPassed(stopId, mile = 0, hooks = {}) {
+    const reacted = [];
+    this.mutateCanon((c) => {
+      let changed = false;
+      for (const [id, def] of Object.entries(this._defs)) {
+        const st = c.stories[id];
+        const fn = def.onPass?.[stopId];
+        if (!st || st.status !== STORY_STATUS.ACTIVE || typeof fn !== 'function') continue;
+        const api = {
+          state: st, run: this._run, mile,
+          flags: (o) => { Object.assign(st.flags, o); changed = true; },
+          items: (o) => { for (const [k, v] of Object.entries(o)) { if (v === false || v == null) delete st.items[k]; else st.items[k] = v; } changed = true; },
+          relationship: (d) => { st.relationship = clamp(st.relationship + num(d), 0, 100); changed = true; },
+          radioGrant: (g) => { this._run.radioGrant = g ?? null; hooks.radioGrant?.(this._run.radioGrant); },
+          text: (cid, from, msg) => hooks.text?.(cid, from, msg, id),
+          fail: (endingId) => { if (!TERMINAL.has(st.status)) { st.status = STORY_STATUS.FAILED; st.endingId = endingId ?? null; st.nodeId = null; changed = true; } },
+        };
+        let did = false;
+        try { did = fn(api) !== false; } catch (_) { did = false; }
+        if (did) reacted.push(id);
+      }
+      return changed;
+    });
+    return reacted;
+  }
+
+  /** Vehicle HP damage → story cargo rules (`def.onDamage(run, amountHp)`).
+   *  Pure run-state; synced to canon by syncCargo(). */
+  onDamage(amountHp) {
+    const a = Math.max(0, num(amountHp));
+    if (!a) return;
+    const c = this.canon();
+    for (const [id, def] of Object.entries(this._defs)) {
+      const st = c.stories[id];
+      if (!st || st.status !== STORY_STATUS.ACTIVE || typeof def.onDamage !== 'function') continue;
+      try { def.onDamage(st, this._run, a); } catch (_) {}
+    }
+  }
+
+  /** Persist run cargo into canon items (called at save points, not per hit). */
+  syncCargo() {
+    this.mutateCanon((c) => {
+      let changed = false;
+      for (const [id, def] of Object.entries(this._defs)) {
+        const st = c.stories[id];
+        if (!st || st.status !== STORY_STATUS.ACTIVE || typeof def.syncCargo !== 'function') continue;
+        try { if (def.syncCargo(st, this._run) !== false) changed = true; } catch (_) {}
+      }
+      return changed;
+    });
+  }
+
+  /** Authored ambushes that should trigger at this mile on this run
+   *  (`def.ambush = { mile, when(state, run) }`); each fires once per run. */
+  ambushesAt(mile) {
+    const c = this.canon();
+    const out = [];
+    for (const [id, def] of Object.entries(this._defs)) {
+      const st = c.stories[id], am = def.ambush;
+      if (!st || st.status !== STORY_STATUS.ACTIVE || !am) continue;
+      if (this._run.flags['ambush_' + id]) continue;
+      if (mile < am.mile) continue;
+      let ok = false; try { ok = !!am.when(st, this._run); } catch (_) {}
+      if (ok) out.push({ storyId: id, ...am });
+    }
+    return out;
+  }
+  markAmbush(storyId) { this._run.flags['ambush_' + storyId] = true; }
 
   get run() { return this._run; }
   get runId() { return this._run.runId; }
@@ -428,6 +589,7 @@ export class StorySystem {
     r.cargo      = isObj(snap.cargo) ? { ...snap.cargo } : {};
     r.flags      = isObj(snap.flags) ? { ...snap.flags } : {};
     this.reapplyLedger();
+    this.deriveRun();
   }
 
   /** Walk this run's ledger entries in commit order and force the run state

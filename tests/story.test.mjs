@@ -16,6 +16,7 @@ import {
 import {
   FEATURED_STORIES, STORY_IDS, STORY_GENRE, validateStories, resolveDialogue,
   lineKey, labelKey, replyKey, DIALOGUE_INDEX,
+  vinylOutcome, vinylPayout, VINYL_RECORDS, VINYL_PAY_PRISTINE, FOUNDER_OFFER, VANTAGE_AMBUSH_MILE,
 } from '../src/data/featuredStories.js';
 
 let passed = 0, failed = 0;
@@ -101,7 +102,7 @@ function recorder() {
   const r1 = story.commitChoice(sel, rec.hooks);
   check('first commit applies', r1.applied === true && r1.entry != null);
   check('story auto-activates on first consequential choice', story.status('hiphop') === STORY_STATUS.ACTIVE);
-  check('node advanced to next', story.story('hiphop').nodeId === 'mercer_fork');
+  check('Mercer fork opens (predicate) and Seattle closes', story.pendingAt('M').some(p => p.nodeId === 'mercer_fork') && story.pendingAt('S').length === 0);
   check('durable item recorded (phone)', story.story('hiphop').items.phone === true);
   check('radio grant hook fired once', rec.log.radio.length === 1 && rec.log.radio[0] === 'hiphop_phonk');
   check('run state carries the grant', story.run.radioGrant === 'hiphop_phonk');
@@ -119,7 +120,7 @@ function recorder() {
   // Force-close immediately after the commit → relaunch → same canon.
   const story2 = new StorySystem(reload());
   check('after reload: choice is in the ledger', story2.hasCommitted('hiphop', 'seattle_offer', 'carry'));
-  check('after reload: node + item survive', story2.story('hiphop').nodeId === 'mercer_fork' && story2.story('hiphop').items.phone === true);
+  check('after reload: item survives + Mercer still pending', story2.story('hiphop').items.phone === true && story2.pendingAt('M').some(p => p.nodeId === 'mercer_fork'));
   const r3 = story2.commitChoice(sel, rec.hooks);
   check('after reload: re-commit is a no-op', r3.applied === false && rec.log.panels === 1);
 
@@ -128,7 +129,7 @@ function recorder() {
   story2.resetRun(story.runId);
   story2.restore(before);
   check('rewind: ledger re-applied, grant back', story2.run.radioGrant === 'hiphop_phonk');
-  check('rewind: canon untouched', story2.story('hiphop').nodeId === 'mercer_fork');
+  check('rewind: canon untouched', story2.story('hiphop').items.phone === true && story2.hasCommitted('hiphop', 'seattle_offer', 'carry'));
   const r4 = story2.commitChoice(sel, rec.hooks);
   check('rewind: choice still can\'t be re-taken', r4.applied === false);
 
@@ -197,10 +198,10 @@ function recorder() {
   const run1 = story.runId;
   story.resetRun();
   check('new run: fresh run id', story.runId !== run1);
-  check('new run: transient state cleared', story.run.radioGrant === null && story.run.passenger === null);
-  check('new run: unfinished story state preserved', story.status('hiphop') === STORY_STATUS.ACTIVE && story.story('hiphop').nodeId === 'mercer_fork');
+  check('new run: transient state cleared, radio re-derived from the phone', story.run.passenger === null && story.run.radioGrant === 'hiphop_phonk');
+  check('new run: unfinished story state preserved', story.status('hiphop') === STORY_STATUS.ACTIVE && story.story('hiphop').items.phone === true);
   check('new run: ledger preserved', story.hasCommitted('hiphop', 'seattle_offer', 'carry'));
-  check('new run: reapply ignores other runs\' grants', story.reapplyLedger() === 0 && story.run.radioGrant === null);
+  check('new run: reapply ignores other runs\' grants; deriveRun re-grants radio from the phone', story.reapplyLedger() === 0 && story.run.radioGrant === 'hiphop_phonk');
 
   // Second plate sees nothing of the first.
   save.selectSlot(1);
@@ -208,11 +209,12 @@ function recorder() {
   const story2 = new StorySystem(save);
   check('plate 2: canon empty', story2.status('hiphop') === STORY_STATUS.AVAILABLE && Object.keys(story2.canon().ledger).length === 0);
   story2.commitChoice({ storyId: 'hiphop', nodeId: 'seattle_offer', choiceId: 'pass' }, {});
+  check('plate 2: casual pass leaves it available', story2.status('hiphop') === STORY_STATUS.AVAILABLE);
   save.selectSlot(0);
-  check('plate 1: unchanged by plate 2', story.story('hiphop').nodeId === 'mercer_fork');
+  check('plate 1: unchanged by plate 2', story.story('hiphop').items.phone === true && story.status('hiphop') === STORY_STATUS.ACTIVE);
 }
 
-// ═══ 6. pendingAt / mandatory ordering / activate / advance ══════════════
+// ═══ 6. pendingAt / mandatory ordering / activate / kill ════════════════
 {
   const story = new StorySystem(freshSave());
   const atS = story.pendingAt('S');
@@ -221,10 +223,11 @@ function recorder() {
   check('Vantage offers classicRock entry', story.pendingAt('V').some(p => p.storyId === 'classicRock'));
   check('activate() starts at startNode', story.activate('hiphop') === true && story.story('hiphop').nodeId === 'seattle_offer');
   check('activate() idempotent', story.activate('hiphop') === false);
-  check('advance() to a known node', story.advance('hiphop', 'mercer_fork') === true);
+  check('activated-but-uncommitted: Seattle still open (scene re-entry re-prompts until a choice lands)', story.pendingAt('S').some(p => p.nodeId === 'seattle_offer'));
+  story.commitChoice({ storyId: 'hiphop', nodeId: 'seattle_offer', choiceId: 'carry' }, {});
+  check('after commit: Seattle closed, Mercer open', story.pendingAt('S').length === 0 && story.pendingAt('M').some(p => p.nodeId === 'mercer_fork'));
+  check('Bellevue placard not yet (Mercer unresolved)', story.placardsAt('B').length === 0);
   check('advance() rejects unknown node', story.advance('hiphop', 'nope') === false);
-  check('Mercer pending once the story is there', story.pendingAt('M').some(p => p.storyId === 'hiphop' && p.nodeId === 'mercer_fork'));
-  check('Seattle no longer pending', story.pendingAt('S').length === 0);
   check('kill() marks dead + clears node', story.kill('hiphop', 'vantage_ram') === true && story.status('hiphop') === STORY_STATUS.DEAD && story.story('hiphop').nodeId === null);
   check('dead story: no pending anywhere', story.pendingAt('M').length === 0 && story.pendingAt('S').length === 0);
 }
@@ -268,12 +271,11 @@ function recorder() {
   const story = new StorySystem(save);
   story.commitChoice({ storyId: 'hiphop', nodeId: 'seattle_offer', choiceId: 'carry' }, {});
   save.setSandbox(true);
-  check('sandbox: sees the plate canon', story.status('hiphop') === STORY_STATUS.ACTIVE && story.story('hiphop').nodeId === 'mercer_fork');
-  story.advance('hiphop', 'seattle_offer');   // pretend the Custom run moved the story
-  story.kill('hiphop', 'sandbox_death');
+  check('sandbox: sees the plate canon', story.status('hiphop') === STORY_STATUS.ACTIVE && story.story('hiphop').items.phone === true);
+  story.kill('hiphop', 'sandbox_death');      // pretend the Custom run ended the story
   check('sandbox: writes visible inside the run', story.status('hiphop') === STORY_STATUS.DEAD);
   save.setSandbox(false);
-  check('sandbox off: plate canon untouched', story.status('hiphop') === STORY_STATUS.ACTIVE && story.story('hiphop').nodeId === 'mercer_fork');
+  check('sandbox off: plate canon untouched', story.status('hiphop') === STORY_STATUS.ACTIVE && story.story('hiphop').items.phone === true);
   const s2 = reload();
   check('sandbox never persisted', new StorySystem(s2).status('hiphop') === STORY_STATUS.ACTIVE);
 }
@@ -293,6 +295,124 @@ function recorder() {
   const back = reload().get('storyCanon');
   check('600-event volume survives reload intact', back?.volumes?.[0]?.events?.length === 600);
   check('normalizeStoryCanon keeps volumes', normalizeStoryCanon(back).volumes[0].events.length === 600);
+}
+
+// ═══ 10. Hip-Hop — Malik's Phone (Ch. 18.6) ══════════════════════════════
+const H = (storyId, nodeId, choiceId, story, hooks = {}, mile = 0) => story.commitChoice({ storyId, nodeId, choiceId, mile }, hooks);
+{
+  // Happy path: carry → keep job → refuse founder → Kyle → Dom promise → press (Dom credit) → damage → Cle Elum.
+  const save = freshSave(); const story = new StorySystem(save); const rec = recorder();
+  H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
+  check('carry: radio grant + phone + Malik trust 50', story.run.radioGrant === 'hiphop_phonk' && story.story('hiphop').items.phone === true && story.story('hiphop').relationship === 50);
+  H('hiphop', 'mercer_fork', 'keepJob', story, rec.hooks, 9);
+  check('keepJob: Mercer done, still carrying, radio still on', story.story('hiphop').flags.mercerDone === true && story.run.radioGrant === 'hiphop_phonk');
+  check('Bellevue TraffApp placard appears only now', story.placardsAt('B').length === 1 && story.placardsAt('B')[0].key === 'traffapp' && story.placardsAt('B')[0].name === 'TraffApp');
+  check('Bellevue node is placard-hosted, NOT mandatory', story.pendingAt('B').every(p => p.mandatory === false));
+  H('hiphop', 'bellevue_founder', 'refuse', story, rec.hooks, 12);
+  check('refuse: continues, no cash', rec.log.cashCalls === 0 && story.isActive('hiphop') && story.placardsAt('B').length === 0);
+  check('Issaquah pending (mandatory)', story.pendingAt('I').some(p => p.nodeId === 'issaquah_kyle' && p.mandatory));
+  H('hiphop', 'issaquah_kyle', 'handOver', story, rec.hooks, 18);
+  check('Kyle: phone gone, thumb drive in hand, radio grant ends', story.story('hiphop').items.phone == null && story.story('hiphop').items.thumbdrive === true && story.run.radioGrant === null);
+  check('passing Issaquah AFTER delivery does nothing', story.exitPassed('I', 18.2, {}).length === 0);
+  check('North Bend pending', story.pendingAt('N').some(p => p.nodeId === 'northbend_dom'));
+  const r = H('hiphop', 'northbend_dom', 'promise', story, rec.hooks, 32);
+  check('Dom promise: no eject', r.leaveStop === false && story.story('hiphop').flags.credit === 'promised');
+  const pressChoices = story.choicesFor('hiphop', 'pass_tennessee').map(c => c.id);
+  check('press: producer credit offered after a promise', pressChoices.includes('creditDom') && pressChoices.length === 3);
+  H('hiphop', 'pass_tennessee', 'creditDom', story, rec.hooks, 53);
+  check('press: 100 records in cargo + canon', story.run.cargo.records === VINYL_RECORDS && story.story('hiphop').items.records === VINYL_RECORDS);
+  check('press: no radio (drive, not phone)', story.run.radioGrant === null);
+  // Damage: 2 records + 2% per HP, fractional scrapes accumulate, floor 0.
+  story.onDamage(3);
+  check('3 HP → 94 records', story.run.cargo.records === 94);
+  story.onDamage(0.4); story.onDamage(0.6);
+  check('two scrapes summing 1 HP → 92 records', story.run.cargo.records === 92);
+  check('payout math: 92 records, 4 HP lost → linear × (1 − 8%)', vinylPayout(92, 4) === Math.round(VINYL_PAY_PRISTINE * 0.92 * 0.92));
+  check('payout dock capped at 100%', vinylPayout(50, 80) === 0 && vinylPayout(0, 0) === 0 && vinylPayout(100, 0) === VINYL_PAY_PRISTINE);
+  // Exact resume mid-haul keeps the crate.
+  const snap = story.serialize();
+  const s2 = new StorySystem(reload()); s2.restore(snap);
+  check('resume: cargo count + hpLost survive', s2.run.cargo.records === 92 && s2.run.cargo.hpLost === 4);
+  // Sync at a save point, then a NEW run derives the crate from canon.
+  story.syncCargo();
+  const s3 = new StorySystem(reload());
+  check('new run after sync: records + HP dock derived from canon', s3.run.cargo.records === 92 && s3.run.cargo.hpLost === 4);
+  check('Cle Elum line is dynamic and reads the count', s3.resolveLine('hiphop', 'cleelum_store').includes('92 of a hundred'));
+  const rec3 = recorder();
+  const d = H('hiphop', 'cleelum_store', 'deliver', s3, rec3.hooks, 84);
+  const expectPay = vinylPayout(92, 4);
+  check('deliver: pays once, unlocks Hip-Hop once, complete/damaged', rec3.log.cash === expectPay && rec3.log.cashCalls === 1 && rec3.log.unlocks.join() === 'hiphop_phonk' && s3.status('hiphop') === STORY_STATUS.COMPLETE && s3.story('hiphop').endingId === 'damaged');
+  check('deliver: ledger stored the RESOLVED effects', d.entry.effects.cash === expectPay && d.entry.effects.ending === 'damaged');
+  check('deliver: ledger fallback carries the dynamic line', d.entry.fallbackText.line.includes('92 of a hundred'));
+  check('ending label', s3.endingLabel('hiphop') === 'ROUGH DELIVERY');
+  H('hiphop', 'cleelum_store', 'deliver', s3, rec3.hooks, 84);
+  check('deliver: double tap pays nothing', rec3.log.cashCalls === 1);
+}
+{
+  // Mercer Country branch: phone left, radio off, Country starts, Hip-Hop back on the shelf.
+  const story = new StorySystem(freshSave()); const rec = recorder();
+  H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
+  H('hiphop', 'mercer_fork', 'ride', story, rec.hooks, 9);
+  check('ride: Country active, Brittney aboard, radio off', story.status('country') === STORY_STATUS.ACTIVE && story.run.passenger?.id === 'brittney' && story.run.radioGrant === null && rec.log.radio.at(-1) === null);
+  check('ride: Hip-Hop back to AVAILABLE on attempt 1, ledger kept', story.status('hiphop') === STORY_STATUS.AVAILABLE && story.story('hiphop').replayCount === 1 && story.hasCommitted('hiphop', 'mercer_fork', 'ride', 0));
+  check('ride: no phone', !story.story('hiphop').items.phone);
+  story.resetRun();
+  check('later run: Seattle offers Hip-Hop again', story.pendingAt('S').some(p => p.storyId === 'hiphop'));
+  const r2 = H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
+  check('later run: carry commits again under attempt 1', r2.applied === true && story.story('hiphop').items.phone === true);
+}
+{
+  // Skipped Mercer → Malik redirect; Country unavailable; then passed Issaquah → lock + ambush; recovery both ways.
+  const story = new StorySystem(freshSave()); const texts = [];
+  const hooks = { text: (cid, from, msg) => texts.push({ cid, from, msg }), radioGrant: () => {} };
+  H('hiphop', 'seattle_offer', 'carry', story, {}, 4);
+  check('pass Mercer: Malik texts, trust drops, Mercer closed', story.exitPassed('M', 9.7, hooks).join() === 'hiphop' && texts.length === 1 && texts[0].cid === 'malik' && story.story('hiphop').relationship === 35 && story.pendingAt('M').length === 0);
+  check('pass Mercer twice: idempotent', story.exitPassed('M', 9.8, hooks).length === 0 && texts.length === 1);
+  check('phone NOT locked yet, radio still on', !story.story('hiphop').items.phoneLocked && story.run.radioGrant === 'hiphop_phonk');
+  check('Issaquah still deliverable', story.pendingAt('I').some(p => p.nodeId === 'issaquah_kyle'));
+  check('no ambush while unlocked', story.ambushesAt(VANTAGE_AMBUSH_MILE + 1).length === 0);
+  check('pass Issaquah: lock + angry text + radio off', story.exitPassed('I', 18.3, hooks).join() === 'hiphop' && story.story('hiphop').items.phoneLocked === true && story.run.radioGrant === null && texts.length === 2);
+  check('locked: Kyle no longer pending', story.pendingAt('I').length === 0);
+  check('ambush arms at Vantage approach, once per run', story.ambushesAt(VANTAGE_AMBUSH_MILE - 0.1).length === 0 && story.ambushesAt(VANTAGE_AMBUSH_MILE).length === 1);
+  story.markAmbush('hiphop');
+  check('ambush marked → not re-armed this run', story.ambushesAt(140).length === 0);
+  check('new run after a lock: no radio derived', (story.resetRun(), story.run.radioGrant === null));
+  check('new run: ambush re-arms (still carrying the locked phone)', story.ambushesAt(140).length === 1);
+  // Recovery A: warp back — phone unlocks, Kyle deliverable again.
+  const rw = H('hiphop', 'vantage_recovery', 'warp', story, {}, 137);
+  check('recovery warp: phone unlocked, Kyle pending again, ledger once', rw.applied && !story.story('hiphop').items.phoneLocked && story.pendingAt('I').some(p => p.nodeId === 'issaquah_kyle'));
+  check('recovery warp: double tap no-op', H('hiphop', 'vantage_recovery', 'warp', story, {}, 137).applied === false);
+  check('recovery warp: recovery node never listed at Vantage', story.pendingAt('V').every(p => p.nodeId !== 'vantage_recovery'));
+  // Recovery B on a fresh plate: continue → dead for this path, no loop.
+  const st2 = new StorySystem(freshSave());
+  H('hiphop', 'seattle_offer', 'carry', st2, {}, 4); st2.exitPassed('M', 9.7, {}); st2.exitPassed('I', 18.3, {});
+  const rc = H('hiphop', 'vantage_recovery', 'continue', st2, {}, 137);
+  check('recovery continue: story DEAD, no ambush ever again', rc.applied && st2.status('hiphop') === STORY_STATUS.DEAD && st2.ambushesAt(140).length === 0 && st2.pendingAt('S').length === 0);
+}
+{
+  // Founder sellout → COMPLETE! SORT OF…, $1,000, no unlock, nothing further.
+  const story = new StorySystem(freshSave()); const rec = recorder();
+  H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
+  H('hiphop', 'mercer_fork', 'keepJob', story, rec.hooks, 9);
+  H('hiphop', 'bellevue_founder', 'sell', story, rec.hooks, 12);
+  check('sell: $1000 once, no unlock, complete sort-of', rec.log.cash === FOUNDER_OFFER && rec.log.cashCalls === 1 && rec.log.unlocks.length === 0 && story.status('hiphop') === STORY_STATUS.COMPLETE && story.endingLabel('hiphop') === 'COMPLETE! SORT OF…');
+  check('sell: radio off, Issaquah closed', story.run.radioGrant === null && story.pendingAt('I').length === 0);
+}
+{
+  // Dom eject + zero-record delivery = failed, no pay, no unlock.
+  const story = new StorySystem(freshSave()); const rec = recorder();
+  H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
+  H('hiphop', 'mercer_fork', 'keepJob', story, rec.hooks, 9);
+  H('hiphop', 'issaquah_kyle', 'handOver', story, rec.hooks, 18);
+  const e = H('hiphop', 'northbend_dom', 'bagman', story, rec.hooks, 32);
+  check('bagman: leaveStop flagged, credit refused', e.leaveStop === true && story.story('hiphop').flags.credit === 'refused');
+  check('press: no producer-credit option after a refusal', !story.choicesFor('hiphop', 'pass_tennessee').some(c => c.id === 'creditDom'));
+  H('hiphop', 'pass_tennessee', 'creditStank', story, rec.hooks, 53);
+  story.onDamage(60);
+  check('60 HP → zero records (floor)', story.run.cargo.records === 0 && vinylOutcome(0) === 'zero');
+  H('hiphop', 'cleelum_store', 'deliver', story, rec.hooks, 84);
+  check('zero: failed, no pay, no unlock', story.status('hiphop') === STORY_STATUS.FAILED && rec.log.cashCalls === 0 && rec.log.unlocks.length === 0 && story.story('hiphop').endingId === 'zero');
+  check('outcome buckets', vinylOutcome(100) === 'pristine' && vinylOutcome(99) === 'damaged' && vinylOutcome(50) === 'damaged' && vinylOutcome(49) === 'almost_empty' && vinylOutcome(2) === 'almost_empty' && vinylOutcome(1) === 'one_record');
 }
 
 console.log(`story tests: ${passed} passed, ${failed} failed`);

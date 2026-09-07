@@ -204,6 +204,57 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-06 (pt 3) — Ch. 18 Phase 3: Hip-Hop "Malik's Phone" end to end
+
+Owner decisions this session: the Founder's offer lives at **TraffApp** (a story-only
+traffic-app storefront at Bellevue), the vinyl drop at **Spin Cycle Records** (story-only
+placard at Cle Elum), pristine pay **$2,500** linear per record on top of the 2%/HP dock.
+Verified headless (`probe_hiphop.mjs` in the session scratchpad): Seattle → Mercer
+(keep job) → TraffApp refuse → Kyle → North Bend bagman (stop closes, no shopping) →
+Snoqualmie press (no producer-credit option after a refusal) → road damage → Cle Elum
+pays linear × dock and unlocks Hip-Hop; then on a fresh plate: skip Mercer + pass
+Issaquah (two Malik texts, phone locks, radio ends) → Vantage ambush (3 hostile cars
+converge on a stopped car and take HP) → death → MALIK'S REGARDS screen → BACK TO
+ISSAQUAH lands at 17.5 mi with the phone unlocked and Kyle deliverable, no ambush.
+- **StorySystem** is now STOP-DRIVEN: a node fires at its stop when its `when(state,
+  run)` passes and none of its consequential choices is in the ledger for this
+  attempt — skipping a stop just leaves that node behind, scene re-entry never
+  re-prompts.  New: `placardsAt`, `choicesFor` (per-choice `when`), `resolveLine` /
+  `resolveReply` (function copy), function `effects` resolved once and stored resolved
+  in the ledger, `resetStory` (back to not-started, attempt+1), `cargo`, `leaveStop`,
+  `exitPassed(stop)` → `def.onPass`, `onDamage` → `def.onDamage`, `syncCargo` at save
+  points, `deriveRun` (a new run re-derives radio grant + crate from canon),
+  `ambushesAt(mile)` / `markAmbush` (once per run), `endingLabel`.
+- **featuredStories.js**: full Hip-Hop tree with the 18.6 copy verbatim — Seattle
+  offer, Mercer fork (Country pick = phone left, radio off, Brittney seated, Hip-Hop
+  shelved for a later run), TraffApp sellout (`COMPLETE! SORT OF…`, $1,000, no unlock)
+  or refusal, Kyle (phone → thumb drive, radio ends), Dom'nique's three responses
+  (bagman ejects the stop), Tennessee's press (producer / Malik / Stank credit; producer
+  only after a promise or delay), Spin Cycle delivery with five outcomes and a
+  DYNAMIC line that reads the surviving count, the Vantage recovery node (virtual).
+  `onPass.M` (skipped Mercer: trust −15, Malik text) and `onPass.I` (lock, radio off,
+  trust −30, angry text).  Records: 2 per HP fractional, dock 2%/HP capped, the HP
+  dock persists with the crate (`items.recordsHpLost`).
+- **GameScene**: exit-MISSED → `_storyExitPassed`; damage → `story.onDamage`;
+  `_updateStoryRun` arms ambushes and drives hostile cars (formation around the
+  player's lane, ram from behind, shrug off crash spins, respawn to three); ambush
+  state reset on create (Phaser reuses the instance); GameOver payload carries
+  `storyEnding`; story senders (`malik`/`brittney`/`waitress`) ride the message
+  snapshot.
+- **RestStopScene**: story-only placards from `placardsAt` join the landing grid
+  (brand name + category from the story def, accent strip); tapping runs the tile
+  and returns to the landing.  Story gate re-armed per visit in `init` (the scene
+  instance is reused — Mercer's tile was silently skipped).
+- **GameOverScene**: `storyEnding` → headline override, the tip as the subtitle,
+  BACK TO ISSAQUAH (ledger commit → warp 17.5 mi) / CONTINUE FROM VANTAGE (ledger
+  commit → Hip-Hop dead → ordinary CONTINUE outcome) / MENU.
+- **Messages**: story senders appear as rows once they text or become contacts
+  (`window.__story`); `__genre.canPlay` = owned OR temporary story grant, used by the
+  Music app's lock (no visible change while the beta lock is off).
+- Tests: story 138 (Hip-Hop happy path with damage math, Mercer Country branch, skip
+  Mercer + pass Issaquah + ambush arming + both recoveries, sellout, eject + zero
+  records), comic 37; full suite + build green.
+
 ### 2026-09-06 (pt 2) — Ch. 18 Phase 2: ComicSystem, live story tile, COMIC phone app + reader
 
 Second slice of Chapter 18.  Owner decisions this session: COMIC tile art will be

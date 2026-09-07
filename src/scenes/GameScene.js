@@ -1306,6 +1306,8 @@ export class GameScene extends Phaser.Scene {
     // first-tap path clears.
     this.damage.on('damage', ({ amount } = {}) => {
       this.stats?.recordDamage(amount);
+      // Featured-story cargo (Ch. 18.6): every HP of damage costs two records.
+      try { this.story?.onDamage?.(amount); } catch (_) {}
       // Size of the most recent hit — the 'wreck' handler reads it to tell a
       // single catastrophic collision from death by a thousand scrapes.
       this._lastHitAmount = amount ?? 0;
@@ -2243,6 +2245,12 @@ export class GameScene extends Phaser.Scene {
     // up to 60 mph for the remainder of the recovery window.
     this._crashRollStartAt = 0;
     this.traffic         = [];
+    // Featured-story ambush state is per scene LIFE, not per instance —
+    // Phaser reuses this GameScene object across restarts, so a Vantage
+    // ambush that killed the player must not follow the warp back to
+    // Issaquah (it re-arms only through StorySystem.ambushesAt).
+    this._storyAmbush    = null;
+    this._hostileRespawn = 0;
     this._trafficTimer   = 0;
     this._prevTown       = 0;   // town-line star cooldown tracker (CHECKPOINTS index)
     this._announcedUnlocks = {};
@@ -6016,6 +6024,7 @@ export class GameScene extends Phaser.Scene {
     // freeway driving continues.  There is no button — lane choice IS the
     // choice (owner 2026-08-15).
     if (!this._passedRestStops) this._passedRestStops = new Set();
+    this._updateStoryRun(rawDt);
     if (this._updateExitApproach(rawDt)) return;
 
     // ── Town-line crossing (owner 2026-07-23) ─────────────────────────
@@ -24060,7 +24069,7 @@ export class GameScene extends Phaser.Scene {
       })
       .filter(Boolean);
     const buddyThreads = {};
-    for (const id of ['friend', 'ex', 'mom', 'boss', 'unknown', 'spam']) {
+    for (const id of ['friend', 'ex', 'mom', 'boss', 'unknown', 'spam', 'malik', 'brittney', 'waitress']) {
       buddyThreads[id] = cleanThread(this._buddyThreads?.[id]);
     }
     return {
@@ -24107,7 +24116,9 @@ export class GameScene extends Phaser.Scene {
       missions: this.missions?.serialize?.() ?? null,
       // Featured-story run state (Ch. 18) — restored via StorySystem.restore,
       // which re-applies the plate ledger so a rewind can't undo a choice.
-      story: this.story?.serialize?.() ?? null,
+      // Cargo counts are synced to the plate here (not per hit) so a NEW run
+      // carries the crate at its last saved count.
+      story: (this.story?.syncCargo?.(), this.story?.serialize?.() ?? null),
       runState: {
         flatTireTimer: Math.max(0, Number(this._flatTireTimer) || 0),
         probationTimer: Math.max(0, Number(this._probationTimer) || 0),
@@ -24148,7 +24159,7 @@ export class GameScene extends Phaser.Scene {
       })
       .filter(Boolean);
     if (m.buddyThreads && typeof m.buddyThreads === 'object') {
-      const next = { friend: [], ex: [], mom: [], boss: [], unknown: [], spam: [] };
+      const next = { friend: [], ex: [], mom: [], boss: [], unknown: [], spam: [], malik: [], brittney: [], waitress: [] };
       for (const id of Object.keys(next)) next[id] = cleanThread(m.buddyThreads[id]);
       this._buddyThreads = next;
     }
@@ -24256,6 +24267,85 @@ export class GameScene extends Phaser.Scene {
     } catch (e) { console.error('[applyResumeSnapshot]', e); }
   }
 
+  // ── Featured stories on the road (Ch. 18) ─────────────────────────────
+
+  /** Drove past a rest-stop exit: let the stories react (Malik's texts, the
+   *  phone locking itself).  Texts land in the Messages threads like any
+   *  buddy text, with the same notification. */
+  _storyExitPassed(stopId) {
+    try {
+      this.story?.exitPassed?.(stopId, this._odometer ?? 0, {
+        text: (cid, from, msg) => this._logBuddyText(cid, from, msg),
+        radioGrant: () => { /* radio lock is read live via __genre.canPlay */ },
+      });
+    } catch (_) {}
+  }
+
+  /** Per-frame: arm authored ambushes and drive hostile cars.  The Vantage
+   *  punishment (18.6): three cars converge from behind, box the player in
+   *  and ram until the car is dead.  The crew is never seen. */
+  _updateStoryRun(dt) {
+    const story = this.story;
+    if (!story || !this.player) return;
+    const mile = this._odometer ?? 0;
+    if (!this._storyAmbush) {
+      const am = story.ambushesAt?.(mile) ?? [];
+      if (am.length) {
+        const a = am[0];
+        story.markAmbush(a.storyId);
+        this._storyAmbush = { storyId: a.storyId, tip: a.tip, headline: a.headline, since: mile };
+        this._spawnHostileCars(a.cars ?? 3);
+        this._showPopup?.('🚗🚗🚗  THEY FOUND YOU', '#FF3322');
+        this.effects?.triggerShake?.(200, 0.008);
+      }
+    }
+    if (!this._storyAmbush) return;
+    // Hostile AI: hold formation around the player's lane and keep ramming.
+    const p = this.player;
+    let alive = 0;
+    for (const t of this.traffic) {
+      if (!t.hostile) continue;
+      alive++;
+      const wantLane = Math.max(-0.9, Math.min(0.9, (p.x ?? 0) + t.hostileLane));
+      t.targetLaneOffset = wantLane;
+      t.laneOffset += (wantLane - t.laneOffset) * Math.min(1, dt * 2.2);
+      const gap = t.position - p.position;
+      // Behind → close in fast; alongside/ahead → match speed and squeeze.
+      const wantSpeed = gap < -800 ? (p.speed ?? 0) + MAX_SPEED * 0.25
+                      : gap > 1200  ? (p.speed ?? 0) - MAX_SPEED * 0.08
+                      : (p.speed ?? 0) + MAX_SPEED * 0.05;
+      t.speed = Math.max(MAX_SPEED * 0.2, wantSpeed);
+      // They don't wreck: a collision spin is shrugged off within half a second.
+      if (t.crashed) { t.crashRearm = (t.crashRearm ?? 0) + dt; if (t.crashRearm > 0.5) { t.crashed = false; t.crashRearm = 0; } }
+      t.alive = true;
+    }
+    if (alive < 3 && (this._hostileRespawn = (this._hostileRespawn ?? 0) + dt) > 2) {
+      this._hostileRespawn = 0;
+      this._spawnHostileCars(3 - alive);
+    }
+  }
+
+  /** Three dark sedans behind the player: left, centre, right of their lane. */
+  _spawnHostileCars(n = 3) {
+    const p = this.player;
+    if (!p || !this.traffic) return;
+    const lanes = [-0.5, 0, 0.5];
+    for (let i = 0; i < n; i++) {
+      this.traffic.push({
+        id: Math.random(),
+        position: p.position - 2500 - i * 900,
+        laneOffset: Math.max(-0.9, Math.min(0.9, (p.x ?? 0) + lanes[i % 3])),
+        targetLaneOffset: 0,
+        speed: (p.speed ?? 0) + MAX_SPEED * 0.25,
+        color: 0x111111,
+        isCop: false, colorSet: null,
+        vClass: 'car', visualScale: 1,
+        alive: true, hostile: true, hostileLane: lanes[i % 3],
+        followDist: 600, passUntil: Infinity,
+      });
+    }
+  }
+
   /**
    * Exit approach state machine — runs every frame of normal driving
    * (owner spec 2026-08-15).  Reads the SAME ExitPath plan the renderer
@@ -24305,6 +24395,7 @@ export class GameScene extends Phaser.Scene {
       }
       this._passedRestStops.add(plan.stopId);
       this._exitState = 'MISSED';
+      this._storyExitPassed(plan.stopId);
       return false;
     }
 
@@ -27991,6 +28082,9 @@ export class GameScene extends Phaser.Scene {
       // screen's NEXT RUN advice.  Null on a cause nothing classified, which
       // selectTip() resolves to a generic fallback for that cause.
       reason:          this._failReason ?? null,
+      // Featured-story ending (Ch. 18.6 Vantage ambush): the ending screen
+      // swaps its buttons for the authored recovery options.
+      storyEnding:     (cause === 'crash' && this._storyAmbush) ? { ...this._storyAmbush } : null,
       vice:            extra.vice ?? null,
       charge:          extra.charge ?? null,
       losses:          Math.round(extra.losses ?? 0),
