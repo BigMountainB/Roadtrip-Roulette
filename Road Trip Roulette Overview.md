@@ -204,6 +204,33 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-06 (pt 7) — Ch. 18 Phase 7: local page rendering → PDF export / share / download
+
+Owner decisions this session: **Web Share API + download fallback, no native plugin**;
+**A4 by default, with the player's own A4 / US Letter pick** remembered on the device.
+Verified headless (`probe_pdf.mjs`): the reader's EXPORT PDF renders cover + every page +
+closing card, hands a real `%PDF-1.4 … %%EOF` file to a (stubbed) share sheet, falls back
+to a blob download when sharing is unavailable, remembers Letter, and still exports with
+every network request blocked.
+- **src/ui/ComicPdf.js**: dependency-free PDF 1.4 writer — one DCT (JPEG) XObject per
+  page scaled to fit the sheet with an 18-pt margin, Info title/author, a cross-reference
+  table with real byte offsets (`tests/pdf.test.mjs`, 15 checks incl. every xref offset
+  landing on its object, both page sizes, empty document).
+- **ComicReader**: `exportVolumePdf(comic, vol, {pageSize, plate})` renders at 1240 px
+  wide (~150 dpi A4, JPEG q0.86) after preloading any panel art; cover shows title, volume,
+  plate, trip count and TO BE CONTINUED / THE END; `deliverPdf` tries
+  `navigator.share({files})` (iOS Files / Messages / AirDrop) then a `<a download>` blob.
+  Footer: A4 / US Letter toggle (`rtr.comic.pageSize`), live status ("Rendering 3/9…",
+  "Shared ✓", "Downloaded ✓"), EXPORT PDF enabled for complete AND open volumes.
+  `window.__lastComicPdf` is a QA hook.  No image blobs are stored — pages are redrawn
+  from events on every export.
+- What's left of Ch. 18: **Phase 8** — the owner's final panel art + metadata (fill
+  `PANEL_META` in `src/data/comicPanels.js`: art path, balloon rects, tails, protected
+  regions; the reference sheets already in `public/assets/storylines/shared/characters/`),
+  the COMIC tile art for both phone backgrounds, character lettering fonts, and the four
+  MEANWHILE captions (placeholders read "[caption pending — …]").  Everything through
+  Phase 7 is committed LOCALLY on this machine and NOT pushed / deployed.
+
 ### 2026-09-06 (pt 6) — Ch. 18 Phase 6: MEANWHILE strips, hitchhiker gating, attached side quests
 
 Owner decisions this session: side quests = mechanism + ONE drafted quest per arc (copy is

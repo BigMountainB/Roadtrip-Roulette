@@ -19,6 +19,11 @@
 
 import { PAGE_W, PAGE_H, panelMeta } from '../data/comicPanels.js';
 import { LETTERING } from './StoryTile.js';
+import { buildPdf, PAGE_SIZES } from './ComicPdf.js';
+
+// Export page pixel size (A-series aspect); JPEG quality.  ~150 dpi on A4.
+const EXPORT_W = 1240, EXPORT_H = Math.round(EXPORT_W * PAGE_H / PAGE_W), EXPORT_Q = 0.86;
+const SIZE_KEY = 'rtr.comic.pageSize';   // per-device preference (A4 default)
 
 const PAPER = '#F6F1E4';
 const INK   = '#141414';
@@ -33,6 +38,20 @@ function loadArt(path, onReady) {
   img.onerror = () => { artCache.set(path, null); };
   img.src = path;
   return null;
+}
+
+/** Resolve every art file a set of pages needs before an export renders
+ *  them (renderPage loads lazily and redraws — no good for a one-shot). */
+function preloadArt(pages, timeoutMs = 4000) {
+  const paths = new Set();
+  for (const pg of pages) for (const { event } of pg.panels) { const a = event && panelMeta(event.panelKey).art; if (a && !artCache.get(a)) paths.add(a); }
+  if (!paths.size) return Promise.resolve();
+  return new Promise((resolve) => {
+    let left = paths.size; const done = () => { if (--left <= 0) resolve(); };
+    const t = setTimeout(resolve, timeoutMs);
+    for (const p of paths) { const img = new Image(); img.onload = () => { artCache.set(p, img); done(); }; img.onerror = () => { artCache.set(p, null); done(); }; img.src = p; }
+    void t;
+  });
 }
 
 function wrap(ctx, text, maxW) {
@@ -170,6 +189,75 @@ export function renderPage(ctx, page, w, h, onArt) {
   ctx.restore();
 }
 
+/** Cover page for an exported volume. */
+function renderCover(ctx, w, h, { title, plate, vol, chapters, done }) {
+  ctx.fillStyle = '#0A1020'; ctx.fillRect(0, 0, w, h);
+  const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#1B2A44'); g.addColorStop(1, '#0A1020');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#F5D223'; ctx.textBaseline = 'alphabetic';
+  ctx.font = `bold ${Math.round(w * 0.11)}px Impact, "Arial Black", sans-serif`;
+  ctx.fillText('ROAD TRIP', w / 2, h * 0.30);
+  ctx.fillText('ROULETTE', w / 2, h * 0.30 + w * 0.12);
+  ctx.fillStyle = '#FFFFFF'; ctx.font = `bold ${Math.round(w * 0.05)}px Impact, "Arial Black", sans-serif`;
+  ctx.fillText(title, w / 2, h * 0.52);
+  ctx.fillStyle = '#8FB7E6'; ctx.font = `${Math.round(w * 0.032)}px "Helvetica Neue", Arial, sans-serif`;
+  ctx.fillText(`VOLUME ${vol}${plate ? '  ·  PLATE ' + plate : ''}`, w / 2, h * 0.58);
+  ctx.fillText(`${chapters} ${chapters === 1 ? 'TRIP' : 'TRIPS'}`, w / 2, h * 0.62);
+  ctx.fillStyle = '#FFD23D'; ctx.font = `bold ${Math.round(w * 0.045)}px Impact, "Arial Black", sans-serif`;
+  ctx.fillText(done ? 'THE END' : 'TO BE CONTINUED', w / 2, h * 0.86);
+}
+
+/** Render a volume (cover + every page + closing card) to JPEG pages and
+ *  package them as a PDF Blob.  Runs entirely on-device. */
+export async function exportVolumePdf(comic, vol, { pageSize = 'a4', plate = '', onProgress } = {}) {
+  const pages = comic.pagesOf(vol);
+  await preloadArt(pages);
+  const cv = document.createElement('canvas'); cv.width = EXPORT_W; cv.height = EXPORT_H;
+  const ctx = cv.getContext('2d');
+  const toJpeg = () => new Promise((res) => cv.toBlob(async (b) => res(new Uint8Array(await b.arrayBuffer())), 'image/jpeg', EXPORT_Q));
+  const out = [];
+  const done = !comic.isToBeContinued(vol);
+  const push = async () => out.push({ jpeg: await toJpeg(), w: EXPORT_W, h: EXPORT_H });
+  renderCover(ctx, EXPORT_W, EXPORT_H, { title: 'STORY COMIC', plate, vol: vol.n, chapters: vol.chapters.length, done });
+  await push();
+  for (let i = 0; i < pages.length; i++) {
+    onProgress?.(i + 1, pages.length);
+    renderPage(ctx, pages[i], EXPORT_W, EXPORT_H, null);
+    await push();
+  }
+  // Closing card.
+  ctx.fillStyle = PAPER; ctx.fillRect(0, 0, EXPORT_W, EXPORT_H);
+  ctx.fillStyle = '#B8860B'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `bold ${Math.round(EXPORT_W * 0.09)}px Impact, "Arial Black", sans-serif`;
+  ctx.fillText(done ? 'THE END' : 'TO BE CONTINUED', EXPORT_W / 2, EXPORT_H / 2);
+  await push();
+  const title = `Road Trip Roulette Comic — Vol ${vol.n}${plate ? ' — ' + plate : ''}${done ? '' : ' (to be continued)'}`;
+  const bytes = buildPdf(out, { pageSize, title });
+  return { blob: new Blob([bytes], { type: 'application/pdf' }), name: `RTR-Comic-Vol${vol.n}${plate ? '-' + plate.replace(/[^A-Za-z0-9]+/g, '') : ''}.pdf`, pages: out.length };
+}
+
+/** Share sheet where the platform offers one (iOS Files / Messages /
+ *  AirDrop via the Web Share API), else a download.  Returns how it went. */
+export async function deliverPdf({ blob, name }) {
+  try {
+    const file = new File([blob], name, { type: 'application/pdf' });
+    if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] }) && typeof navigator.share === 'function') {
+      await navigator.share({ files: [file], title: name });
+      return 'shared';
+    }
+  } catch (e) {
+    if (e?.name === 'AbortError') return 'cancelled';
+    // fall through to download
+  }
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    return 'downloaded';
+  } catch (_) { return 'failed'; }
+}
+
 /** Build the reader inside `el`.  `comic` = ComicSystem (may be null). */
 export function mountComicReader(el, comic, opts = {}) {
   el.innerHTML = '';
@@ -190,9 +278,32 @@ export function mountComicReader(el, comic, opts = {}) {
   const tabs = document.createElement('div'); tabs.className = 'cr-tabs';
   const body = document.createElement('div'); body.className = 'cr-body';
   const foot = document.createElement('div'); foot.className = 'cr-foot';
+  // Page size: A4 default, the player's pick remembered on this device
+  // (owner 2026-09-06: "default to A4, but ask player what their preference is").
+  let pageSize = 'a4';
+  try { const v = localStorage.getItem(SIZE_KEY); if (PAGE_SIZES[v]) pageSize = v; } catch (_) {}
+  const sizeWrap = document.createElement('div'); sizeWrap.className = 'cr-size';
+  for (const [id, sz] of Object.entries(PAGE_SIZES)) {
+    const b = document.createElement('button'); b.className = 'pa-toggle cr-size-btn' + (id === pageSize ? ' on' : ''); b.dataset.size = id; b.textContent = sz.label;
+    b.addEventListener('click', () => { pageSize = id; try { localStorage.setItem(SIZE_KEY, id); } catch (_) {} for (const x of sizeWrap.children) x.classList.toggle('on', x.dataset.size === id); });
+    sizeWrap.appendChild(b);
+  }
+  const status = document.createElement('span'); status.className = 'cr-status';
   const exp  = document.createElement('button'); exp.className = 'pa-toggle cr-export'; exp.textContent = 'EXPORT PDF';
-  exp.disabled = true; exp.title = 'PDF export arrives with the final comic build';
-  foot.appendChild(exp);
+  exp.addEventListener('click', async () => {
+    if (exp.disabled) return;
+    const vol = comic.volume(curId); if (!vol) return;
+    exp.disabled = true; status.textContent = 'Rendering…';
+    try {
+      const pdf = await exportVolumePdf(comic, vol, { pageSize, plate: opts.plate ?? '', onProgress: (i, n) => { status.textContent = `Rendering ${i}/${n}…`; } });
+      status.textContent = `${pdf.pages} pages · ${(pdf.blob.size / 1048576).toFixed(1)} MB`;
+      const how = await deliverPdf(pdf);
+      status.textContent = how === 'shared' ? 'Shared ✓' : how === 'downloaded' ? 'Downloaded ✓' : how === 'cancelled' ? 'Share cancelled' : 'Export failed';
+      window.__lastComicPdf = { name: pdf.name, size: pdf.blob.size, pages: pdf.pages, how };   // QA hook
+    } catch (e) { status.textContent = 'Export failed'; console.warn('[ComicReader] export', e); }
+    exp.disabled = false;
+  });
+  foot.append(sizeWrap, status, exp);
   el.append(tabs, body, foot);
 
   const drawVolume = (volId) => {

@@ -197,8 +197,11 @@
       color: #FFD23D; font-family: "Impact", "Arial Black", sans-serif; font-size: 7cqw;
       letter-spacing: 0.06em; text-align: center; padding: 6cqw 0 4cqw; text-shadow: 0 0 1.4cqw rgba(255,210,61,0.5);
     }
-    #phone-app .cr-foot { flex-shrink: 0; padding-top: 2cqw; display: flex; justify-content: flex-end; }
+    #phone-app .cr-foot { flex-shrink: 0; padding-top: 2cqw; display: flex; justify-content: flex-end; align-items: center; gap: 2cqw; flex-wrap: wrap; }
     #phone-app .cr-export[disabled] { opacity: 0.45; cursor: default; }
+    #phone-app .cr-size { display: flex; gap: 1cqw; margin-right: auto; }
+    #phone-app .cr-size-btn.on { background: rgba(57,168,255,0.28); }
+    #phone-app .cr-status { color: #9FC2E8; font-size: 3cqw; }
     /* First-ever-play nudge — the Tutorial tile pulses a gold glow until the
        player opens it (then `rtr_tutorialSeen` is set and it never flashes
        again).  Applied/removed in JS. */
