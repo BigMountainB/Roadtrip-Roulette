@@ -206,11 +206,15 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ### 2026-09-06 (pt 3) — Ch. 18 Phase 3: Hip-Hop "Malik's Phone" end to end
 
-Owner decisions this session: the Founder's offer lives at **TraffApp** (a story-only
-traffic-app storefront at Bellevue), the vinyl drop at **Spin Cycle Records** (story-only
-placard at Cle Elum), pristine pay **$2,500** linear per record on top of the 2%/HP dock.
+Owner decisions this session: the Founder runs **TraffApp** (a traffic-monitoring
+startup) and — corrected mid-session — **flags the player down at the Bellevue off-ramp
+immediately on exit**, before any store (mandatory arrival encounter; panel art = the
+Bellevue exterior photo being created).  The vinyl drop is the **Spin Cycle Records**
+clerk greeting the player on arrival at Cle Elum.  Pristine pay **$2,500** linear per
+record on top of the 2%/HP dock.  The story-storefront placard path built earlier in
+the session was REMOVED once no story used it.
 Verified headless (`probe_hiphop.mjs` in the session scratchpad): Seattle → Mercer
-(keep job) → TraffApp refuse → Kyle → North Bend bagman (stop closes, no shopping) →
+(keep job) → Bellevue off-ramp: TraffApp founder, refuse → Kyle → North Bend bagman (stop closes, no shopping) →
 Snoqualmie press (no producer-credit option after a refusal) → road damage → Cle Elum
 pays linear × dock and unlocks Hip-Hop; then on a fresh plate: skip Mercer + pass
 Issaquah (two Malik texts, phone locks, radio ends) → Vantage ambush (3 hostile cars
@@ -241,10 +245,8 @@ ISSAQUAH lands at 17.5 mi with the phone unlocked and Kyle deliverable, no ambus
   state reset on create (Phaser reuses the instance); GameOver payload carries
   `storyEnding`; story senders (`malik`/`brittney`/`waitress`) ride the message
   snapshot.
-- **RestStopScene**: story-only placards from `placardsAt` join the landing grid
-  (brand name + category from the story def, accent strip); tapping runs the tile
-  and returns to the landing.  Story gate re-armed per visit in `init` (the scene
-  instance is reused — Mercer's tile was silently skipped).
+- **RestStopScene**: story gate re-armed per visit in `init` (the scene instance is
+  reused — Mercer's tile was silently skipped).
 - **GameOverScene**: `storyEnding` → headline override, the tip as the subtitle,
   BACK TO ISSAQUAH (ledger commit → warp 17.5 mi) / CONTINUE FROM VANTAGE (ledger
   commit → Hip-Hop dead → ordinary CONTINUE outcome) / MENU.

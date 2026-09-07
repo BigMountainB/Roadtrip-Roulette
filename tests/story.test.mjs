@@ -226,7 +226,7 @@ function recorder() {
   check('activated-but-uncommitted: Seattle still open (scene re-entry re-prompts until a choice lands)', story.pendingAt('S').some(p => p.nodeId === 'seattle_offer'));
   story.commitChoice({ storyId: 'hiphop', nodeId: 'seattle_offer', choiceId: 'carry' }, {});
   check('after commit: Seattle closed, Mercer open', story.pendingAt('S').length === 0 && story.pendingAt('M').some(p => p.nodeId === 'mercer_fork'));
-  check('Bellevue placard not yet (Mercer unresolved)', story.placardsAt('B').length === 0);
+  check('Bellevue founder not yet (Mercer unresolved)', story.pendingAt('B').length === 0);
   check('advance() rejects unknown node', story.advance('hiphop', 'nope') === false);
   check('kill() marks dead + clears node', story.kill('hiphop', 'vantage_ram') === true && story.status('hiphop') === STORY_STATUS.DEAD && story.story('hiphop').nodeId === null);
   check('dead story: no pending anywhere', story.pendingAt('M').length === 0 && story.pendingAt('S').length === 0);
@@ -306,10 +306,9 @@ const H = (storyId, nodeId, choiceId, story, hooks = {}, mile = 0) => story.comm
   check('carry: radio grant + phone + Malik trust 50', story.run.radioGrant === 'hiphop_phonk' && story.story('hiphop').items.phone === true && story.story('hiphop').relationship === 50);
   H('hiphop', 'mercer_fork', 'keepJob', story, rec.hooks, 9);
   check('keepJob: Mercer done, still carrying, radio still on', story.story('hiphop').flags.mercerDone === true && story.run.radioGrant === 'hiphop_phonk');
-  check('Bellevue TraffApp placard appears only now', story.placardsAt('B').length === 1 && story.placardsAt('B')[0].key === 'traffapp' && story.placardsAt('B')[0].name === 'TraffApp');
-  check('Bellevue node is placard-hosted, NOT mandatory', story.pendingAt('B').every(p => p.mandatory === false));
+  check('Bellevue founder flags you down on arrival (mandatory) only after Mercer', story.pendingAt('B').length === 1 && story.pendingAt('B')[0].nodeId === 'bellevue_founder' && story.pendingAt('B')[0].mandatory === true);
   H('hiphop', 'bellevue_founder', 'refuse', story, rec.hooks, 12);
-  check('refuse: continues, no cash', rec.log.cashCalls === 0 && story.isActive('hiphop') && story.placardsAt('B').length === 0);
+  check('refuse: continues, no cash, Bellevue closed', rec.log.cashCalls === 0 && story.isActive('hiphop') && story.pendingAt('B').length === 0);
   check('Issaquah pending (mandatory)', story.pendingAt('I').some(p => p.nodeId === 'issaquah_kyle' && p.mandatory));
   H('hiphop', 'issaquah_kyle', 'handOver', story, rec.hooks, 18);
   check('Kyle: phone gone, thumb drive in hand, radio grant ends', story.story('hiphop').items.phone == null && story.story('hiphop').items.thumbdrive === true && story.run.radioGrant === null);

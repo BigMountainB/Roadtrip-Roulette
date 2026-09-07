@@ -21,7 +21,6 @@
 //   {
 //     stopId:      'M',            // rest stop where this node fires
 //     mandatory:   true,           // runs BEFORE storefronts / ordinary NPCs (18.5)
-//     business:    'traffapp',     // optional: hosted on a story-only placard instead
 //     when:        (state, run) => bool,   // gate on flags / items / run state
 //     virtual:     true,           // never listed at the stop (ending-screen recoveries)
 //     speaker:     'Brittney',     // display name in the balloon
@@ -55,7 +54,6 @@
 //                 radioGrant:'hiphop_phonk' | null, leaveStop:true (close the stop)
 //
 // STORY-LEVEL HOOKS (all optional, all pure data-driven):
-//   businesses:  { key: { name, accent, cat } }   story-only storefront placards
 //   onPass:      { [stopId]: (api) => bool }      player drove PAST that exit
 //   onDamage:    (state, run, hp) => void          cargo rules per HP lost
 //   deriveRun:   (state, run) => void              project canon items onto a fresh run
@@ -118,10 +116,6 @@ export const FEATURED_STORIES = {
     genre: STORY_GENRE.hiphop,
     entry: { stopId: 'S' },
     startNode: 'seattle_offer',
-    businesses: {
-      traffapp: { name: 'TraffApp', cat: 'TRAFFIC APP', accent: 0x4AC3B0 },
-      vinyl:    { name: 'Spin Cycle Records', cat: 'RECORD STORE', accent: 0xA855F7 },
-    },
     endings: {
       sold_out:      { label: 'COMPLETE! SORT OF…', unlock: false },
       pristine:      { label: 'PRISTINE DROP',      unlock: true },
@@ -241,13 +235,15 @@ export const FEATURED_STORIES = {
         ],
       },
 
-      // ── Bellevue / TraffApp — the sellout offer (placard-hosted) ───────
+      // ── Bellevue off-ramp — the TraffApp founder flags you down ────────
+      // Mandatory on arrival (owner 2026-09-06: "approaches you immediately
+      // upon exit of the freeway"); panel art = the Bellevue exterior photo.
       bellevue_founder: {
-        stopId: 'B', mandatory: false, business: 'traffapp',
+        stopId: 'B', mandatory: true,
         when: (st) => has(st, 'phone') && !has(st, 'phoneLocked') && st.flags.mercerDone,
         speaker: 'Startup Founder', portrait: 'biz_founder',
         importance: 'choice',
-        line: "Hold on — that's Malik Reed's phone. I'd know that cracked screen anywhere; his stuff is all over NoiseCloud. TraffApp is training a music model and we need real vocals. A thousand dollars, cash, right now, and the phone walks out with me.",
+        line: "Hey — HEY. Off the ramp, pull in a second. That's Malik Reed's phone, isn't it? I'd know that cracked screen anywhere; his stuff is all over NoiseCloud. I run TraffApp. We're training a music model and we need real vocals. A thousand dollars, cash, right now, and the phone rides with me.",
         choices: [
           {
             id: 'sell', consequential: true, next: null,
@@ -505,8 +501,6 @@ export function validateStories(defs = FEATURED_STORIES) {
     for (const [nid, node] of Object.entries(s.nodes ?? {})) {
       if (typeof node.stopId !== 'string' || !node.stopId) errs.push(`${sid}.${nid}: no stopId`);
       if (!isText(node.line)) errs.push(`${sid}.${nid}: no line`);
-      if (node.business && !s.businesses?.[node.business]) errs.push(`${sid}.${nid}: business '${node.business}' unknown`);
-      if (node.mandatory && node.business) errs.push(`${sid}.${nid}: a placard-hosted node can't be mandatory`);
       const choices = node.choices ?? [];
       if (!node.stub && choices.length === 0) errs.push(`${sid}.${nid}: no choices and not a stub`);
       const seen = new Set();

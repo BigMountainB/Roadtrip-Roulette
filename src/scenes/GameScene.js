@@ -2251,6 +2251,7 @@ export class GameScene extends Phaser.Scene {
     // Issaquah (it re-arms only through StorySystem.ambushesAt).
     this._storyAmbush    = null;
     this._hostileRespawn = 0;
+    this._hostileHits    = 0;
     this._trafficTimer   = 0;
     this._prevTown       = 0;   // town-line star cooldown tracker (CHECKPOINTS index)
     this._announcedUnlocks = {};
@@ -10680,6 +10681,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   _onVehicleCollision(car, _idx, hit) {
+    // Featured-story ambush (Ch. 18.6): count the rams so the ending can tell
+    // "rammed to death" from an unrelated wreck (and QA can assert it).
+    if (car.hostile) this._hostileHits = (this._hostileHits ?? 0) + 1;
     // DRIVING COMBO: an ordinary vehicle collision resets the combo, and the
     // struck car can never count as a clean pass (economy V1 2026-09-05).
     // Rage bulldozing is invincible-by-design and exempt.
@@ -24315,8 +24319,9 @@ export class GameScene extends Phaser.Scene {
                       : gap > 1200  ? (p.speed ?? 0) - MAX_SPEED * 0.08
                       : (p.speed ?? 0) + MAX_SPEED * 0.05;
       t.speed = Math.max(MAX_SPEED * 0.2, wantSpeed);
-      // They don't wreck: a collision spin is shrugged off within half a second.
-      if (t.crashed) { t.crashRearm = (t.crashRearm ?? 0) + dt; if (t.crashRearm > 0.5) { t.crashed = false; t.crashRearm = 0; } }
+      // They don't wreck: a collision never puts a hostile into the spin-out
+      // state (which would also let the despawn sweep cull it mid-ram).
+      if (t.crashed) { t.crashed = false; t.crashTimer = 0; }
       t.alive = true;
     }
     if (alive < 3 && (this._hostileRespawn = (this._hostileRespawn ?? 0) + dt) > 2) {

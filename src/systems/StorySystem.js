@@ -203,7 +203,7 @@ export class StorySystem {
    *  a commit never re-prompts (18.5 idempotency), and skipping a stop simply
    *  leaves that stop's node behind.  Mandatory nodes come first — these
    *  block storefronts.  Nodes flagged `virtual` (ending-screen recoveries)
-   *  and placard-hosted nodes (`business`) are listed but not mandatory. */
+   *  are never listed. */
   pendingAt(stopId) {
     const c = this.canon();
     const out = [];
@@ -221,7 +221,7 @@ export class StorySystem {
       }
       for (const [nid, node] of candidates) {
         if (!this._nodeOpen(id, nid, node, st, c)) continue;
-        out.push({ storyId: id, nodeId: nid, mandatory: !!node.mandatory && !node.business, business: node.business ?? null, node });
+        out.push({ storyId: id, nodeId: nid, mandatory: !!node.mandatory, node });
       }
     }
     out.sort((a, b) => (b.mandatory ? 1 : 0) - (a.mandatory ? 1 : 0));
@@ -236,14 +236,6 @@ export class StorySystem {
       if (c.ledger[ledgerKey(storyId, attempt, nodeId, ch.id)]) return false;
     }
     return true;
-  }
-
-  /** Story-only storefront placards to add to a stop's landing: one per
-   *  open placard-hosted node.  `def.businesses[key]` supplies the brand. */
-  placardsAt(stopId) {
-    return this.pendingAt(stopId)
-      .filter(p => p.business)
-      .map(p => ({ key: p.business, ...(this._defs[p.storyId]?.businesses?.[p.business] ?? { name: p.business }), storyId: p.storyId, nodeId: p.nodeId }));
   }
 
   /** NPC line for a node — static string or `(state, run) => string`. */
