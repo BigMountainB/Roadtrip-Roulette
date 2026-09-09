@@ -211,7 +211,7 @@ panel: rows marked `UNWIRED` remain unavailable to `PANEL_META`.
 | `mercer_island/mercer_04_quits_leaves_phone.png` | approved new Mercer consequence | `{x:.303,y:.252}` (507,237) | `{x:.753,y:.276}` (1259,260) |
 | `vantage/vantage_01_spots_friends_work_uniform.png` | approved establishing beat only | `{x:.530,y:.292}` (886,275) | `{x:.271,y:.332}` (453,312) |
 | `mercer_island/mercer_03_changed_to_road_clothes.png` | `UNWIRED` — wrong location/early outfit | `{x:.402,y:.302}` (672,284) | `{x:.758,y:.361}` (1267,340) |
-| `mercer_island/mercer_03_quit_and_join_player.png` | `country.mercer_departure` / `.board` — temporary: correct front-passenger geometry and Player behind wheel, but Brittney's road outfit still needs a work-uniform replacement; exact line/label/reply visually checked in live tile + saved comic, with Player balloon moved off Brittney and the open door | `{x:.612,y:.254}` (1023,239) | `{x:.407,y:.404}` (681,380) |
+| `mercer_island/mercer_03_quit_and_join_player.png` | `country.mercer_departure` / `.board` — approved work-uniform replacement; anatomically natural rear view, Brittney enters the front passenger seat and Player remains behind the wheel | `{x:.749,y:.242}` (1252,228) | `{x:.454,y:.324}` (759,305) |
 | `driving_reactions/major_collision_nerve_loss.png` | `UNWIRED` — early outfit | `{x:.553,y:.348}` (925,327) | `{x:.251,y:.351}` (420,330) |
 | `driving_reactions/smooth_ride_flirtation.png` | `UNWIRED` — early outfit | `{x:.371,y:.302}` (620,284) | `{x:.673,y:.342}` (1125,322) |
 | `nerve/nerve_zero_roadside_exit.png` | `UNWIRED` — early outfit | `{x:.692,y:.323}` (1157,304) | `{x:.194,y:.390}` (324,367) |

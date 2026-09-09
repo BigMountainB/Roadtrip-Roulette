@@ -67,7 +67,7 @@ Legend:
 - [x] Brittney enters the passenger side while phone remains behind — `country/mercer_island/mercer_03_quit_and_join_player.png`
 - [ ] Player refuses involvement; Brittney stays at work
 - [x] Early road-clothes exit — `country/mercer_island/mercer_03_changed_to_road_clothes.png` — **UNWIRED / REJECTED**
-- [x] **TEMPORARY / NEEDS WARDROBE REPLACEMENT** Mercer departure after shopping; passenger-side geometry is correct, but Brittney must ultimately wear her work uniform — `country/mercer_island/mercer_03_quit_and_join_player.png`
+- [x] **APPROVED REPLACEMENT** Mercer departure after shopping: Brittney wears her clean Gas-N-Sip uniform and enters the front passenger seat while Player remains behind the wheel — `country/mercer_island/mercer_03_quit_and_join_player.png`
 
 ### Skipping Mercer Island — comic archive only
 

@@ -5467,9 +5467,9 @@ export class GameScene extends Phaser.Scene {
         this._trapStopHoldTimer = COP_TRAP_HOLD_SEC;
         this._trapStopHeldX     = this.player.x;             // freeze steering here for the stop
         this._trapCopArrive     = 0;                         // cruiser pull-up animation 0→1
-        // Snapshot the offense NOW (vice bars at the moment of the stop) so the
-        // 30s of metabolizing can't change the charge.  Resolved at hold-end.
-        this._trapTicket        = this._assessTrafficStop();
+        // Outcome decided AND PAID at the moment of pullover (owner
+        // 2026-09-09) — quitting mid-stop can no longer dodge the fine.
+        this._trapTicket        = this._chargeStopAtPullover(false);
         this.cops.parkTrapPursuit?.(this.player.position);   // trooper pulls up behind you
         // "TRAFFIC STOP" + the countdown are shown by the below-mirror trap sign.
       } else if (this._trapComplyTimer <= 0) {
@@ -5599,7 +5599,7 @@ export class GameScene extends Phaser.Scene {
           this._pursuitStopHold = null;
           this._trapLightGfx?.clear();
           this._trapLightWasOn = false;
-          this._resolvePursuitStop(h.mult);
+          this._resolvePursuitStop(h);
         }
       } else {
         const _psStars = this.cops.starDisplay;
@@ -5654,9 +5654,11 @@ export class GameScene extends Phaser.Scene {
               this._pursuitFollowBaseMi = null;
               this._pursuitStopHoldX = this.player.x;   // freeze steering here
               this.combo?.reset?.();   // a civil police stop ends the combo
+              // Outcome decided AND PAID now (owner 2026-09-09): 1★ rolls the
+              // 35% warning; 2★ (two-cop) always pays.  Hold-end just shows it.
               this._pursuitStopHold = _psStars === 1
-                ? { t: PURSUIT_STOP_SEC_1, mult: 1 }
-                : { t: PURSUIT_STOP_SEC_2, mult: 3 };
+                ? { t: PURSUIT_STOP_SEC_1, mult: 1, pay: this._chargeStopAtPullover(false) }
+                : { t: PURSUIT_STOP_SEC_2, mult: 3, pay: this._chargeStopAtPullover(true)  };
             }
           } else {
             this._pursuitStopDwell = 0;
@@ -7992,7 +7994,20 @@ export class GameScene extends Phaser.Scene {
         car._ovPrevRel = rel;
         if (prev === undefined) continue;                       // first frame seen
         if (car._passAwarded || car._comboTainted) continue;
-        if ((car.speed ?? 0) <= 0) continue;                    // oncoming never counts
+        // Head-on NEAR MISS (owner 2026-09-09 — Brittney's nerve): an
+        // ONCOMING car whooshes past within ~2.5 car-widths laterally with
+        // no contact (a touch would have set _comboTainted above).  Fires
+        // the story event once per car; only meaningful with her aboard.
+        if ((car.speed ?? 0) <= 0) {
+          if ((car.speed ?? 0) < 0 && !car._nearMissFired && prev > 0 && rel <= 0
+              && prev - rel <= 4000
+              && Math.abs((this.player.x ?? 0) - (car.laneOffset ?? 0)) < CAR_WIDTH_LANES * 2.5
+              && Math.abs(this.player.x) <= 1.0) {
+            car._nearMissFired = true;
+            try { this.story?.roadEvent?.('nearMiss', { mile: this._odometer ?? 0 }, this._storyHooks()); } catch (_) {}
+          }
+          continue;                                   // oncoming/parked never count as a pass
+        }
         if (!(prev > 0 && rel <= 0)) continue;                  // must cross ahead→behind
         if (prev - rel > 4000) continue;                        // teleport/warp guard
         if (!this._comboCanBuild) continue;                     // slow/off-road/forced states
@@ -19606,20 +19621,35 @@ export class GameScene extends Phaser.Scene {
       fontSize: '18px', fontFamily: IMPACT,
       color: '#FFFF00', stroke: '#000000', strokeThickness: 4, align: 'center',
     }).setOrigin(0.5, 1).setDepth(d + 5);
-    // MEANWHILE… comic toasts (📖) are tappable to open the comic (Ch. 18.4).
-    // (The old tappable "📱 New text" toast is GONE — owner 2026-09-09: "that
-    // doesn't work nor do I think it is the best solution"; incoming texts now
-    // show their BODY in the top-left message box, see _showTextMsgBox.)
+    // Tappable toasts (owner 2026-09-09, round 2): a "📱 New text — <sender>"
+    // toast announces WHO texted; tapping it opens the top-left MESSAGE BOX
+    // with the body — reading is a conscious choice, so spam can be ignored
+    // (the old open-the-Messages-app link is gone; it didn't work).
+    // MEANWHILE… comic toasts (📖) still open the comic (Ch. 18.4).
     this.hudPopup.setInteractive();
     if (this.hudPopup.input) this.hudPopup.input.enabled = false;
     this.hudPopup.on('pointerdown', (ptr) => {
       if ((this.popupTimer ?? 0) <= 0) return;
-      if (!this._popupComic) return;
       // Arm delay (owner rotation-wedge investigation 2026-08-31): the toast
       // appears bottom-center between the touch pedals, so a driving thumb
       // could hit it the same instant it popped.  Taps only count once the
       // toast has been readable a beat.
       if ((this.time?.now ?? 0) - (this._popupTextShownAt ?? 0) < 350) return;
+      const pend = this._pendingTextMsg;
+      if (pend && (this.time?.now ?? 0) <= pend.until) {
+        ptr.event?.stopPropagation?.();
+        this._pendingTextMsg = null;
+        this._showTextMsgBox(pend.from, pend.text, pend.accent);
+        // Consume the toast only if it IS still the text toast — a combo
+        // callout or gas warning that replaced it keeps its own screen time.
+        if (typeof this.hudPopup.text === 'string' && this.hudPopup.text.startsWith('📱')) {
+          this.popupTimer = 0;
+          this.hudPopup.setText('');
+        }
+        if (this.hudPopup.input) this.hudPopup.input.enabled = !!this._popupComic;
+        return;
+      }
+      if (!this._popupComic) return;
       ptr.event?.stopPropagation?.();
       try { window.__openComic?.(this._popupComic); } catch (_) {}
     });
@@ -23861,16 +23891,21 @@ export class GameScene extends Phaser.Scene {
 
   _showPopup(text, color = '#FFFFFF', holdSec = 2.2) {
     this.hudPopup.setText(text).setColor(color);
-    // Incoming phone texts no longer route through this toast (owner
-    // 2026-09-09 — their body shows in the top-left message box instead);
-    // only MEANWHILE… comic toasts (📖) are tappable here (Ch. 18.4).
+    // A "📱 New text — <sender>" toast is tappable → opens the top-left
+    // message box with the body (_pendingTextMsg, set by the text loggers
+    // right before this).  The pending body has its own 6 s validity window
+    // (`until`) and deliberately SURVIVES other popups replacing the toast —
+    // combo callouts fire constantly while driving, and retiring the pending
+    // message on every one made texts effectively unreadable (probe-caught
+    // 2026-09-09).  MEANWHILE… comic toasts (📖) are tappable too (Ch. 18.4).
     const isPhoneText = (typeof text === 'string' && text.startsWith('📱'));
     const isComic = (typeof text === 'string' && text.startsWith('📖'));
+    if (this._pendingTextMsg && (this.time?.now ?? 0) > this._pendingTextMsg.until) this._pendingTextMsg = null;
     if (!isComic) this._popupComic = null;
     if (this.hudPopup.input) {
-      this.hudPopup.input.enabled = isComic && !!this._popupComic;
+      this.hudPopup.input.enabled = !!this._pendingTextMsg || (isComic && !!this._popupComic);
       this.hudPopup.input.hitArea?.setTo?.(0, 0, this.hudPopup.width, this.hudPopup.height);
-      this._popupTextShownAt = this.time?.now ?? 0;   // tap arm-delay reference
+      if (isPhoneText || isComic) this._popupTextShownAt = this.time?.now ?? 0;   // tap arm-delay reference
     }
     // Phone-text notifications (📱) and any caller that passes a longer hold
     // (e.g. CHECKPOINT banners) linger +3 s so they're readable while driving.
@@ -24010,8 +24045,11 @@ export class GameScene extends Phaser.Scene {
     thread.push({ text, from, mile: Math.round(this._odometer ?? 0), time: this._worldClockLabel() });
     if (thread.length > 12) thread.shift();
     try { window.__notif?.bumpMsg?.(cid); } catch (_) {}   // Messages unread dot
+    // Owner 2026-09-09 round 2: announce with a tappable toast — the body
+    // shows ONLY if the player consciously taps it (so spam can be ignored).
     const css = this._buddyDefs?.[cid]?.color;             // contact accent color
-    this._showTextMsgBox(from, text, css ? parseInt(css.slice(1), 16) : 0x5DD4FF);
+    this._pendingTextMsg = { from, text, accent: css ? parseInt(css.slice(1), 16) : 0x5DD4FF, until: (this.time?.now ?? 0) + 6000 };
+    this._showPopup('📱 New text — ' + from + '  (tap to read)', css ?? '#9FE8FF');
   }
 
   // ── The Crush (the Girl) — relationship, not a cash faucet ──────────────
@@ -24046,7 +24084,10 @@ export class GameScene extends Phaser.Scene {
     if (this._girlThread.length > 12) this._girlThread.shift();
     try { window.__notif?.bumpMsg?.('girl'); } catch (_) {}   // Messages unread dot
     if (quiet) this._showPopup('💕 …', '#C9B6D8');
-    else this._showTextMsgBox('The Crush', text, 0xFF9FD0);
+    else {
+      this._pendingTextMsg = { from: 'The Crush', text, accent: 0xFF9FD0, until: (this.time?.now ?? 0) + 6000 };
+      this._showPopup('📱 New text — The Crush  (tap to read)', '#FF9FD0');
+    }
   }
 
   /** Player tapped "Text" in the Messages app.  Free, once per town.  Texting
@@ -24668,7 +24709,7 @@ export class GameScene extends Phaser.Scene {
     if (story.run?.passenger) {
       const mph = Math.abs(this.player.speed ?? 0) * 120 / MAX_SPEED;
       const onShoulder = Math.abs(this.player.x ?? 0) >= 1.0;
-      try { story.roadEvent('tick', { mile, dt, stopped: mph < 2, onShoulder }, this._storyHooks()); } catch (_) {}
+      try { story.roadEvent('tick', { mile, dt, mph, stopped: mph < 2, onShoulder }, this._storyHooks()); } catch (_) {}
     }
     this._drawStoryHud(story, mile);
     // Queued MEANWHILE strips surface one at a time, only while no toast is up.
@@ -28206,63 +28247,55 @@ export class GameScene extends Phaser.Scene {
   /** Speed-trap traffic stop (Stage 3).  This is a road-trip speeding stop —
    *  there's no sobriety/impairment check anymore.  Kept as a hook in case
    *  future offense types are added. */
-  _assessTrafficStop() {
-    return { speeding: true };
-  }
-
-  /** Resolve the held traffic stop (Stage 3): a plain speeding ticket — charge
-   *  the fine, record the stat, and drive off.
-   *  (Money == persisted score, so fines subtract from score.) */
-  /** Resolve a 1-2★ voluntary pull-over: charge the fine, record the stat,
-   *  wipe the wanted slate.  Unlike a speed-trap stop there is no warning
-   *  roll — the cruiser was already in pursuit.
-   *
-   *  `mult` is the caller's star tier (1 at 1★, 3 at 2★).  It now SELECTS a
-   *  flat fine rather than scaling one: the two-cop price is authored
-   *  ($500), not $150x3 (owner 2026-09-09). */
-  _resolvePursuitStop(mult = 1) {
-    const twoCops = mult > 1;
+  /** The stop's outcome is decided AND PAID at the moment of pullover (owner
+   *  2026-09-09: "Money should be taken from the player immediately at
+   *  pullover" — quitting mid-stop used to dodge the fine entirely).  Any
+   *  ≤1★ pullover rolls the 35% warning (policeWarningChance; reggae's
+   *  no-warning trait still zeroes it); the 2★ two-cop stop always pays its
+   *  authored $500 price.  Money == persisted score, so the subtraction here
+   *  rides the next rolling autosave and survives a quit/reload.  The
+   *  hold-end resolvers below only ANNOUNCE the outcome.
+   *  Returns { warned, fine }. */
+  _chargeStopAtPullover(twoCops = false) {
+    const stars = this.cops?.stars ?? 0;
+    if (!twoCops && Math.random() < policeWarningChance(this._activeGenreTrait(), stars)) {
+      this.stats?.recordTrafficStop?.({ dui: false, amountPaid: 0, busted: false, warning: true });
+      return { warned: true, fine: 0 };
+    }
     let fine = twoCops ? COP_TICKET_SPEEDING_2COP : COP_TICKET_SPEEDING;
-    // Genre surcharge is tiered too (reggae +$100 / +$250) — the two-cop stop
-    // costs more on both halves, not just the base fine.
+    // Genre surcharge is tiered too (reggae +$100 / +$250).
     fine += this._traitMod(twoCops ? 'ticketSurcharge2Cop' : 'ticketSurcharge');
     fine = this._cashLoss(fine);   // Custom: wallet never depletes
     this.score = Math.max(0, this.score - fine);
     this.stats?.recordTrafficStop({ dui: false, amountPaid: fine, busted: false });
+    if (fine > 0) this._showPopup(`🎫 −$${fine.toLocaleString()} — cited at the stop`, '#FFDD44');
+    return { warned: false, fine };
+  }
+
+  /** Hold-end for a 1-2★ voluntary pull-over: announce the already-paid
+   *  outcome and wipe the wanted slate. */
+  _resolvePursuitStop(h) {
+    const pay = h?.pay ?? { warned: false, fine: 0 };
     this._showPopup(
-      twoCops ? `🎫 TWO-COP FINE — −$${fine.toLocaleString()}\nSlate clean. Drive safe.`
-              : `🎫 Ticket — −$${fine.toLocaleString()}\nSlate clean. Drive safe.`,
+      pay.warned ? '⚠️ WARNING\nLet you off this time — drive safe.'
+        : h?.mult > 1 ? `🎫 TWO-COP FINE — −$${pay.fine.toLocaleString()}\nSlate clean. Drive safe.`
+                      : `🎫 Ticket — −$${pay.fine.toLocaleString()}\nSlate clean. Drive safe.`,
       '#FFDD44');
     // Complying wipes the slate — stars gone, pursuers despawn, cooldown.
     this.cops.clearArrest?.();
   }
 
+  /** Hold-end for a speed-trap stop: announce the already-paid outcome. */
   _issueTrafficTicket() {
     const t = this._trapTicket;
     this._trapTicket = null;
-    if (!t) { this._showPopup('✅ Ticket issued. Drive safe.', '#88FF88'); return; }
-
-    // 25% of low-level stops (≤1★) end in a WARNING, not a ticket — unless the
-    // vehicle's trait removes warnings entirely (reggae) — owner 2026-07-19.
-    if (Math.random() < policeWarningChance(this._activeGenreTrait(), this.cops?.stars ?? 0)) {
-      this.stats?.recordTrafficStop?.({ dui: false, amountPaid: 0, busted: false, warning: true });
+    if (t?.warned) {
       this._showPopup('⚠️ WARNING\nLet you off this time — drive safe.', '#FFDD44');
-      return;
+    } else if (t?.fine > 0) {
+      this._showPopup(`🎫 Speeding ticket — −$${t.fine.toLocaleString()}\nDrive safe.`, '#FFDD44');
+    } else {
+      this._showPopup('✅ Ticket issued. Drive safe.', '#88FF88');
     }
-
-    // Flat speeding fine.  A speed trap is ONE trooper, so it never uses the
-    // two-cop price — that belongs to the 2★ pursuit pull-over.
-    let fine = COP_TICKET_SPEEDING;
-    // Genre-vehicle ticket surcharge (reggae +$200).
-    fine += this._traitMod('ticketSurcharge');
-    fine = this._cashLoss(fine);   // Custom: wallet never depletes
-
-    this.score = Math.max(0, this.score - fine);
-    this.stats?.recordTrafficStop({ dui: false, amountPaid: fine, busted: false });
-    this._showPopup(
-      fine > 0 ? `🎫 Speeding ticket — −$${fine.toLocaleString()}\nDrive safe.`
-               : '✅ Ticket issued. Drive safe.',
-      fine > 0 ? '#FFDD44' : '#88FF88');
   }
 
   /** Pass-out handler — freezes the last frame and fades into the

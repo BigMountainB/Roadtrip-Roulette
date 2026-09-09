@@ -130,8 +130,8 @@ check('null trait never absorbs', cargoShieldAbsorbs(null, false, 8) === false);
 // ── 8. Police warning chance (reggae no-warning) ─────────────────────────
 const _reg = genreTraitFor('reggae', 'beater');
 const _cnt = genreTraitFor('country', 'beater');
-near('normal vehicle: 25% warning at 1★', policeWarningChance(_cnt, 1), 0.25);
-near('normal vehicle: 25% warning at 0★', policeWarningChance(_cnt, 0), 0.25);
+near('normal vehicle: 35% warning at 1★', policeWarningChance(_cnt, 1), 0.35);
+near('normal vehicle: 35% warning at 0★', policeWarningChance(_cnt, 0), 0.35);
 check('reggae NEVER gets a warning (its trait removes them)', policeWarningChance(_reg, 1) === 0);
 check('no warning above 1★', policeWarningChance(_cnt, 2) === 0);
 near('null trait gets the base warning chance', policeWarningChance(null, 1), POLICE_WARNING_CHANCE);

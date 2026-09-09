@@ -466,13 +466,26 @@ const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, ho
   check('small hit inside cooldown: Nerve 17, no new line', story.run.nerve === 17 && rh.log.said.length === 1);
   story.roadEvent('damage', { hp: 3, source: 'rear-end', mile: 11 }, rh.hooks);
   check('crossing 15: threshold line', story.run.nerve === 14 && rh.log.said.length === 2);
+  // Owner 2026-09-09: NO flat refill for parking — nerve is earned by
+  // meeting her needs (choice effects) and by crash-free crazy driving.
   story.restStopVisited('B');
-  check('rest stop: +5 Nerve', story.run.nerve === 19);
+  check('rest stop alone grants NO nerve', story.run.nerve === 14);
+  // Crash-free crazy driving builds it: 15 cumulative seconds above 115 mph.
+  for (let i = 0; i < 15; i++) story.roadEvent('tick', { mile: 12 + i * 0.03, dt: 1, mph: 120, stopped: false, onShoulder: false }, rh.hooks);
+  check('15 s above 115 mph: +1 nerve', story.run.nerve === 15);
+  story.roadEvent('tick', { mile: 13, dt: 10, mph: 80, stopped: false, onShoulder: false }, rh.hooks);
+  check('slow driving builds nothing', story.run.nerve === 15);
+  // 3 clean overtakes = +1 (flirt cadence still every 5th).
+  for (let i = 0; i < 3; i++) story.roadEvent('pass', { mile: 14 + i * 0.1 }, rh.hooks);
+  check('3 clean passes: +1 nerve', story.run.nerve === 16);
+  // A head-on near miss is an instant +1.
+  story.roadEvent('nearMiss', { mile: 15 }, rh.hooks);
+  check('head-on near miss: +1 nerve', story.run.nerve === 17);
   story.roadEvent('damage', { hp: 7, source: 'cop_head_on', mile: 20 }, rh.hooks);
   check('7 HP head-on-ish: "You saved it" flavour', rh.log.said.at(-1).startsWith('You saved it'));
   // Resume keeps Nerve.
   const snap = story.serialize(); const s2 = new StorySystem(reload()); s2.restore(snap);
-  check('exact resume keeps Nerve + passenger', s2.run.nerve === 12 && s2.run.passenger?.id === 'brittney');
+  check('exact resume keeps Nerve + passenger', s2.run.nerve === 10 && s2.run.passenger?.id === 'brittney');
   // New run: Nerve back to 25, she is still aboard (story unfinished).
   story.resetRun();
   check('new run: Nerve 25, Brittney still aboard', story.run.nerve === 25 && story.run.passenger?.id === 'brittney');

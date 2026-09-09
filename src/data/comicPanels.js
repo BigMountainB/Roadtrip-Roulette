@@ -291,29 +291,26 @@ export const PANEL_META = {
   },
   'country.mercer_departure': {
     art: 'assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png',
-    bubble:       { x: 0.03, y: 0.04, w: 0.40, h: 0.25 },
-    // Keep the player's balloon on the empty rear-quarter/wheel area.  The
-    // previous lower-right placement covered Brittney's legs and the open
-    // passenger door in both the live tile and the saved comic.
-    playerBubble: { x: 0.04, y: 0.68, w: 0.32, h: 0.28 },
-    tail:         { x: 0.612, y: 0.254 },
-    playerTail:   { x: 0.407, y: 0.404 },
+    bubble:       { x: 0.02, y: 0.03, w: 0.42, h: 0.25 },
+    playerBubble: { x: 0.03, y: 0.72, w: 0.36, h: 0.24 },
+    tail:         { x: 0.749, y: 0.242 },
+    playerTail:   { x: 0.454, y: 0.324 },
     protect:      [
-      { x: 0.31, y: 0.20, w: 0.18, h: 0.40 }, // Player + steering wheel
-      { x: 0.54, y: 0.08, w: 0.18, h: 0.80 }, // Brittney
-      { x: 0.58, y: 0.27, w: 0.24, h: 0.62 }, // open passenger door
+      { x: 0.40, y: 0.22, w: 0.13, h: 0.24 }, // Player + steering wheel
+      { x: 0.64, y: 0.12, w: 0.15, h: 0.70 }, // Brittney
+      { x: 0.76, y: 0.18, w: 0.16, h: 0.55 }, // open passenger door
     ],
   },
   'country.mercer_departure.board': {
     art: 'assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png',
-    bubble:       { x: 0.03, y: 0.04, w: 0.40, h: 0.25 },
-    playerBubble: { x: 0.04, y: 0.68, w: 0.32, h: 0.28 },
-    tail:         { x: 0.612, y: 0.254 },
-    playerTail:   { x: 0.407, y: 0.404 },
+    bubble:       { x: 0.02, y: 0.03, w: 0.42, h: 0.25 },
+    playerBubble: { x: 0.03, y: 0.72, w: 0.36, h: 0.24 },
+    tail:         { x: 0.749, y: 0.242 },
+    playerTail:   { x: 0.454, y: 0.324 },
     protect:      [
-      { x: 0.31, y: 0.20, w: 0.18, h: 0.40 },
-      { x: 0.54, y: 0.08, w: 0.18, h: 0.80 },
-      { x: 0.58, y: 0.27, w: 0.24, h: 0.62 },
+      { x: 0.40, y: 0.22, w: 0.13, h: 0.24 },
+      { x: 0.64, y: 0.12, w: 0.15, h: 0.70 },
+      { x: 0.76, y: 0.18, w: 0.16, h: 0.55 },
     ],
   },
   'country.need_hunger.sushi': {

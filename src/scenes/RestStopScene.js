@@ -3558,7 +3558,31 @@ export class RestStopScene extends Phaser.Scene {
   }
 
   _refreshScore() {
-    this._scoreText.setText(`CASH: $${this._score.toLocaleString()}`);
+    this._scoreText?.setText(`CASH: $${this._score.toLocaleString()}`);
+    this._persistScore();
+  }
+
+  /** Owner 2026-09-09 (Snoqualmie duplication bug): money == persisted score,
+   *  but the mid-drive rolling autosave doesn't tick inside the stop — so a
+   *  reset right after shopping restored PRE-STOP cash while the bought parts
+   *  (written to the plate instantly) survived: free money every reload.
+   *  Every rest-stop money change now writes straight through — the wallet
+   *  store AND the score inside BOTH resume snapshots (rolling liveRun and
+   *  the deliberate manualSave), so no reload path can refund spent money.
+   *  Positions in those snapshots are untouched. */
+  _persistScore() {
+    try {
+      if (Difficulty.noScore?.() === true) return;   // Custom: sandboxed wallet
+      const sv = this.registry.get('save');
+      if (!sv) return;
+      const m = Math.round(Math.max(0, this._score ?? 0));
+      if (sv.walletStore) sv.walletStore.money = m;
+      for (const key of ['liveRun', 'manualSave']) {
+        const lr = sv.get?.(key);
+        if (lr?.snap) { lr.snap.score = m; sv.set?.(key, lr); }
+      }
+      sv.save?.();
+    } catch (_) {}
   }
 
   /** Compact survival bars for the landing menu — no labels, just the drive

@@ -390,7 +390,7 @@ export function rollWeaponBonusUse(trait, rng = Math.random) {
 export const CARGO_MINOR_DMG = 12;
 
 /** Base chance a low-level traffic stop (≤1★) is just a WARNING, not a ticket. */
-export const POLICE_WARNING_CHANCE = 0.25;
+export const POLICE_WARNING_CHANCE = 0.35;   // owner 2026-09-09: was 25%, raised — "I have yet to see one"
 
 /** Chance THIS stop is a warning: the 25% base at ≤1★, but ZERO if the vehicle's
  *  trait removes warnings (reggae) or the wanted level is above 1★. Pure/testable. */

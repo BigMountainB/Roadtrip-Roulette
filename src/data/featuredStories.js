@@ -1,3 +1,6 @@
+import { REST_STOPS } from '../constants.js';
+import { BUSINESS_LABELS } from './businessMissions.js';
+
 // ── Featured genre stories — data-driven story definitions (Ch. 18) ─────────
 //
 // Three authored arcs ride ON TOP of the ordinary mission system, never in
@@ -97,7 +100,16 @@ export const VANTAGE_AMBUSH_MILE = 135.5; // 1.5 mi short of the Vantage exit (1
 
 // ── Country tunables (Ch. 18.7, owner 2026-09-06) ──────────────────────
 export const NERVE_MAX          = 25;
-export const NERVE_REST_REFILL  = 5;
+// Nerve refill is EARNED, not granted (owner 2026-09-09): the flat +5 per
+// rest stop is gone — need choices carry their own `nerve` effects instead
+// (best answer +5, half-hearted +3, refusing 0), and crash-free crazy
+// driving builds it on the road (see onRoad below).
+export const NERVE_NEED_FULL    = 5;
+export const NERVE_NEED_HALF    = 3;
+export const NERVE_FAST_MPH     = 115;  // +1 per NERVE_FAST_SEC above this
+export const NERVE_FAST_SEC     = 15;
+export const NERVE_PASSES_PER   = 3;    // +1 per 3 clean overtakes
+
 export const NERVE_THRESHOLDS   = [20, 15, 10, 5];
 export const KIDNAP_WARN_MI     = 1.0;    // "I'm calling the cops"
 export const KIDNAP_REPORT_MI   = 1.5;    // five stars
@@ -567,7 +579,9 @@ export const FEATURED_STORIES = {
     deriveRun: (st, run) => { run.passenger = { id: 'brittney', name: 'Brittney', storyId: 'country' }; run.nerve = Math.max(0, Math.min(NERVE_MAX, run.nerve ?? NERVE_MAX)); },
     onRestStop: (stopId, api) => {
       const { run, state: st } = api;
-      run.nerve = Math.min(NERVE_MAX, (run.nerve ?? NERVE_MAX) + NERVE_REST_REFILL);
+      // No flat refill (owner 2026-09-09) — nerve comes from the need
+      // choices' own effects and from crash-free crazy driving.
+      run.flags.atStop = stopId;   // need lines reference THIS stop's businesses
       if (stopId === 'V' || stopId === 'M') return;
       if (!st.flags.pendingNeed) {
         const n = st.flags.needCount ?? 0;
@@ -580,7 +594,17 @@ export const FEATURED_STORIES = {
       const mile = ev.mile ?? 0;
       const canTalk = () => (mile - (run.flags.lastLineMile ?? -9)) >= LINE_COOLDOWN_MI;
       const talk = (text) => { run.flags.lastLineMile = mile; api.say(text); };
+      // Crash-free crazy driving BUILDS her nerve (owner 2026-09-09):
+      //   +1 per NERVE_FAST_SEC (15 s) of cumulative driving above 115 mph,
+      //   +1 per NERVE_PASSES_PER (3) clean overtakes,
+      //   +1 per head-on near miss (see the 'nearMiss' event below).
+      // Damage still subtracts HP-for-HP, so a crash undoes the thrill.
+      const gainNerve = (n) => { run.nerve = Math.min(NERVE_MAX, (run.nerve ?? NERVE_MAX) + n); };
       if (type === 'tick') {
+        if ((ev.mph ?? 0) > NERVE_FAST_MPH) {
+          run.flags.fastSec = (run.flags.fastSec ?? 0) + (ev.dt ?? 0);
+          if (run.flags.fastSec >= NERVE_FAST_SEC) { run.flags.fastSec -= NERVE_FAST_SEC; gainNerve(1); }
+        }
         if (!st.flags.changed) {
           api.flags({ changed: true });
           api.beat({ beatId: 'changes', importance: 'consequence', speaker: 'Brittney', portrait: 'biz_gasnsip',
@@ -628,8 +652,13 @@ export const FEATURED_STORIES = {
         }
         return;
       }
+      if (type === 'nearMiss') {
+        gainNerve(1);   // a head-on whoosh she survived = instant thrill
+        return;
+      }
       if (type === 'pass') {
         run.flags.cleanPasses = (run.flags.cleanPasses ?? 0) + 1;
+        if (run.flags.cleanPasses % NERVE_PASSES_PER === 0) gainNerve(1);
         if (run.flags.cleanPasses % GOOD_MOVE_EVERY === 0 && canTalk() && (run.nerve ?? 0) > 0) {
           const i = (run.flags.flirtIdx ?? 0); run.flags.flirtIdx = i + 1;
           talk(FLIRT_LINES[i % FLIRT_LINES.length]);
@@ -663,11 +692,11 @@ export const FEATURED_STORIES = {
           { id: 'sushi', consequential: true, next: null, cost: 14,
             label: "Are you talking about food or…? I think I can find sushi.",
             reply: "Both, obviously. And look at you, finding the one decent roll east of the lake.",
-            effects: { flags: { pendingNeed: null }, relationship: 10 } },
+            effects: { flags: { pendingNeed: null }, relationship: 10, nerve: NERVE_NEED_FULL } },
           { id: 'burrito', consequential: true, next: null, cost: 9,
             label: "This place has great pork burritos. I'll get you one.",
             reply: "…Pork. Sure. It's food. She eats half of it staring out the window.",
-            effects: { flags: { pendingNeed: null }, relationship: -5 } },
+            effects: { flags: { pendingNeed: null }, relationship: -5, nerve: NERVE_NEED_HALF } },
           { id: 'wait', consequential: true, next: null,
             label: "You'll survive until a rest stop with better food.",
             reply: "I'll survive. I'll remember, too.",
@@ -678,7 +707,19 @@ export const FEATURED_STORIES = {
         stopId: null, repeatable: true, stops: NEED_STOPS, mandatory: true,
         when: (st, run) => !!run.passenger && st.flags.pendingNeed === 'bathroom',
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
-        line: "🚻 I need a bathroom. A real one — I am not squatting behind a Les Schwasted.",
+        // Owner 2026-09-09: "She should only reference businesses at current
+        // rest stops" — the name comes from THIS stop's amenities (stashed in
+        // run.flags.atStop by onRestStop), picked deterministically so the
+        // line doesn't change between renders of the same visit.
+        line: (st, run) => {
+          const stop = REST_STOPS.find(r => r.id === run?.flags?.atStop);
+          const pool = (stop?.amenities ?? []).filter(a => BUSINESS_LABELS[a]);
+          const biz = pool.length
+            ? BUSINESS_LABELS[pool[(String(run?.flags?.atStop ?? '').charCodeAt(0) + (st?.flags?.needCount ?? 0)) % pool.length]]
+            : 'gas station';
+          const art = /^[AEIOU]/i.test(biz) ? 'an' : 'a';
+          return `🚻 I need a bathroom. A real one — I am not squatting behind ${art} ${biz}.`;
+        },
         choices: [
           { id: 'hold', consequential: true, next: null,
             label: "You can hold it another few miles, right?",
@@ -687,11 +728,11 @@ export const FEATURED_STORIES = {
           { id: 'waitInCar', consequential: true, next: null,
             label: "I'll wait in the car while you release your demons.",
             reply: "She gives you a long, blank stare, then goes.",
-            effects: { flags: { pendingNeed: null }, relationship: -2 } },
+            effects: { flags: { pendingNeed: null }, relationship: -2, nerve: NERVE_NEED_HALF } },
           { id: 'goWith', consequential: true, next: null,
             label: "Do you want to play swords?",
             reply: "She laughs so hard the clerk looks up. \"Come on, then.\"",
-            effects: { flags: { pendingNeed: null }, relationship: 10 } },
+            effects: { flags: { pendingNeed: null }, relationship: 10, nerve: NERVE_NEED_FULL } },
         ],
       },
       need_thirst: {
@@ -703,7 +744,7 @@ export const FEATURED_STORIES = {
           { id: 'slushie', consequential: true, next: null, cost: 4,
             label: "Can I get you a slushie?",
             reply: "I was hoping to chug something salty, but sweet works just as well.",
-            effects: { flags: { pendingNeed: null }, relationship: 5 } },
+            effects: { flags: { pendingNeed: null }, relationship: 5, nerve: NERVE_NEED_FULL } },
           { id: 'fountain', consequential: true, next: null,
             label: "Find a fountain or something. I don't have drinking money.",
             reply: "She blank-stares. \"What a gentleman.\"",

@@ -204,6 +204,39 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 3) — Owner batch: tap-to-read texts, Brittney nerve economy, stop-local dialogue, no-refund money, pay-at-pullover + 35% warnings
+
+Owner directives (all Q&A-confirmed, no liberties):
+- **Texts are announce-then-tap**: the "📱 New text — <sender> (tap to read)"
+  toast is BACK (contact-colored) and tapping it opens the pt-2 top-left
+  message box with the body — reading is a conscious choice, spam ignorable.
+  The pending body has a 6 s tap window that SURVIVES other popups replacing
+  the toast (probe caught combo callouts making texts unreadable otherwise);
+  consuming the tap only clears the toast if it's still the text toast.
+- **Brittney nerve is EARNED** (flat +5-per-stop refill REMOVED): need choices
+  carry it — sushi/go-with-her/slushie +5, burrito/wait-in-car +3, refusals 0
+  — and crash-free crazy driving builds it: +1 per 15 cumulative seconds above
+  115 mph, +1 per 3 clean overtakes (flirts still every 5th), +1 per head-on
+  NEAR MISS (new roadEvent: oncoming car crosses within ~2.5 car-widths, no
+  contact, fired once per car).  Damage still drains HP-for-HP.  story.test
+  extended to cover all three gains + the no-refill stop.
+- **Stop-local dialogue**: her bathroom line now names a business AT the
+  current stop (REST_STOPS amenities × BUSINESS_LABELS, deterministic per
+  visit; onRestStop stashes run.flags.atStop) — no more "Les Schwasted" at
+  stops that don't have one.
+- **Money is never refunded by a reset** (Snoqualmie duplication): rest-stop
+  money changes now write through instantly — walletStore AND the score inside
+  BOTH resume snapshots (liveRun + manualSave) via _persistScore() in
+  _refreshScore().  Probe: spend $650 at SQ → liveRun.snap.score updates to
+  the spent value immediately.  Parts already persisted; now money matches.
+  (The reset itself matches the iOS memory-kill profile — owner was on iPhone
+  Safari before the pt-1 memory fixes; no JS crash reproduces headless.)
+- **Pullovers pay at the STOP, not the release** (quit-exploit closed): new
+  _chargeStopAtPullover rolls the warning and takes the fine the moment the
+  hold begins (trap AND 1-2★ pursuit stops); hold-end popups only announce.
+  Warning chance 25% → **35%**, any ≤1★ pullover (2★ two-cop always pays;
+  reggae's no-warning trait still applies).  genreTraits tests updated.
+
 ### 2026-09-09 (pt 2) — Incoming texts: top-left MESSAGE BOX replaces the tappable toast
 
 Owner: the "📱 New text" toast's tap-to-open-thread link "doesn't work nor do I
