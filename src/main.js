@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { initOpeningCall } from './ui/OpeningCallSequence.js';
 import { mountComicReader, releaseComicArt } from './ui/ComicReader.js';
 // Story senders that text the player before they're a saved contact.
-const STORY_CONTACT_NAMES = { malik: '🎤 Malik Reed', brittney: '💋 Brittney', waitress: '🎸 Mykenzee' };
+const STORY_CONTACT_NAMES = { malik: '🎤 Malik Reed', brittney: '💋 Brittney', waitress: '🎸 Mykenzie' };
 import { BootScene }    from './scenes/BootScene.js';
 import { GameScene }    from './scenes/GameScene.js';
 import { RestStopScene } from './scenes/RestStopScene.js';

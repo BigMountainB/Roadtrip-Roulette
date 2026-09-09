@@ -28,7 +28,7 @@ All current sheets live in `shared/characters/`.
 ### Woman wardrobe lock
 
 - Brittney / Country gas-station attendant: clean cream shirt with red shoulder panels and turquoise stripes, turquoise visor, high-waisted turquoise short shorts with red-and-cream piping, red sneakers. After quitting, the visor may sit on the dashboard, but the colorful shirt and shorts remain until her later road-clothes change is shown.
-- Mykenzee / Classic Rock diner waitress: red diner dress and white apron at work; sleeveless denim road outfit; black leather stage outfit. She is late twenties and approximately the player's age.
+- Mykenzie / Classic Rock diner waitress: red diner dress and white apron at work; sleeveless denim road outfit; black leather stage outfit. She is late twenties and approximately the player's age.
 - Never place Brittney in the waitress's red diner dress or place the waitress in Brittney's turquoise shorts uniform.
 
 ## Completed master artwork

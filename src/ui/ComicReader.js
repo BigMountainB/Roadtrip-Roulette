@@ -120,31 +120,46 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
-/** Balloon that shrinks its type (never below `minPx`) and grows its box to
- *  fit; returns the box drawn. */
+/** Balloon sized from panel scale that grows its box (or splits) to fit;
+ *  returns the box drawn.
+ *  Working-notes lettering rules (owner-approved 2026-09-09): */
+//   • type is sized from PANEL scale (`opts.panelW`), never from balloon
+//     height, and is NEVER shrunk to make a line fit;
+//   • 5–10 words typical, 20–25 absolute max per balloon — an over-long line
+//     is SPLIT into a linked balloon beneath (at a sentence end, else at the
+//     word cap), and a balloon may grow taller to hold its copy;
+//   • copy is elided only as a last resort (the full line stays in the record).
+const BALLOON_WORD_CAP = 25;
 function drawBalloon(ctx, text, box, tail, opts = {}) {
-  const { fill = '#FFFFFF', minPx = 8 } = opts;
+  const { fill = '#FFFFFF' } = opts;
   if (!text) return null;
-  let px = Math.max(minPx, Math.round(box.h * 0.22));
-  let lines;
-  for (;;) {
-    ctx.font = `${px}px ${LETTERING}`;
-    lines = wrap(ctx, text, box.w - 16);
-    if (lines.length * px * 1.25 + 14 <= box.h || px <= minPx) break;
-    px -= 1;
+  const panelW = opts.panelW ?? box.w / 0.5;
+  const px = Math.max(9, Math.min(15, Math.round(panelW * 0.032)));
+  ctx.font = `${px}px ${LETTERING}`;
+  // Split FIRST by the word cap (never by shrinking): prefer a sentence end
+  // inside the cap, else break at the cap itself.
+  const words = String(text).trim().split(/\s+/);
+  if (words.length > BALLOON_WORD_CAP && !opts._linked) {
+    const head = words.slice(0, BALLOON_WORD_CAP).join(' ');
+    const m = head.match(/^(.{20,}[.!?…])\s+(.+)$/s);
+    const a = m ? m[1] : head;
+    const b = m ? (m[2] + ' ' + words.slice(BALLOON_WORD_CAP).join(' ')) : words.slice(BALLOON_WORD_CAP).join(' ');
+    const first = drawBalloon(ctx, a, box, null, { ...opts, _linked: true });
+    const nb = { x: Math.min(box.x + box.w * 0.15, box.x + box.w - 20), y: first.y + first.h - 3, w: box.w * 0.92, h: box.h };
+    return drawBalloon(ctx, b, nb, tail, { ...opts, _linked: true, maxGrow: 2.6 });
   }
-  // Never draw text outside the balloon.  Overflow at the minimum size
-  // links a SECOND balloon beneath (same rule as the live tile); only when
-  // even that overflows is the copy elided — the full line stays in the
-  // record and resolves by key.
-  const maxH = box.h * (opts.maxGrow ?? 1.25);
+  let lines = wrap(ctx, text, box.w - 16);
+  // The balloon may GROW to hold its copy (up to maxGrow × the authored box);
+  // an authored box that still can't hold a capped line splits at a sentence
+  // end; elision is the last resort.
+  const maxH = box.h * (opts.maxGrow ?? 1.6);
   let fit = Math.max(1, Math.floor((maxH - 14) / (px * 1.25)));
   if (lines.length > fit && !opts._linked) {
     const m = String(text).match(/^(.{20,}?[.!?…])\s+(.+)$/s);
     if (m) {
       const first = drawBalloon(ctx, m[1], box, null, { ...opts, _linked: true });
       const nb = { x: Math.min(box.x + box.w * 0.15, box.x + box.w - 20), y: first.y + first.h - 3, w: box.w * 0.92, h: box.h };
-      return drawBalloon(ctx, m[2], nb, tail, { ...opts, _linked: true, maxGrow: 2.2 });
+      return drawBalloon(ctx, m[2], nb, tail, { ...opts, _linked: true, maxGrow: 2.6 });
     }
   }
   if (lines.length > fit) { lines = lines.slice(0, fit); lines[fit - 1] = lines[fit - 1].replace(/\s*\S*$/, '') + '…'; }
@@ -217,12 +232,12 @@ export function renderPage(ctx, page, w, h, onArt) {
     // Balloons (never baked into art).
     const b = meta.bubble, t = meta.tail, pb = meta.playerBubble, pt = meta.playerTail;
     if (sub) {
-      drawBalloon(ctx, sub.text, { x: x + 0.05 * pw, y: y + 0.06 * ph, w: 0.9 * pw, h: 0.5 * ph }, null, { maxGrow: 1.6 });
+      drawBalloon(ctx, sub.text, { x: x + 0.05 * pw, y: y + 0.06 * ph, w: 0.9 * pw, h: 0.5 * ph }, null, { maxGrow: 1.6, panelW: pw });
     } else {
       const npcText = event.text?.reply || event.text?.line;
-      drawBalloon(ctx, npcText, { x: x + b.x * pw, y: y + b.y * ph, w: b.w * pw, h: b.h * ph }, { x: x + t.x * pw, y: y + t.y * ph });
+      drawBalloon(ctx, npcText, { x: x + b.x * pw, y: y + b.y * ph, w: b.w * pw, h: b.h * ph }, { x: x + t.x * pw, y: y + t.y * ph }, { panelW: pw });
       if (event.text?.label) {
-        drawBalloon(ctx, event.text.label, { x: x + pb.x * pw, y: y + pb.y * ph, w: pb.w * pw, h: pb.h * ph }, { x: x + pt.x * pw, y: y + pt.y * ph }, { fill: '#FFF9D6' });
+        drawBalloon(ctx, event.text.label, { x: x + pb.x * pw, y: y + pb.y * ph, w: pb.w * pw, h: pb.h * ph }, { x: x + pt.x * pw, y: y + pt.y * ph }, { fill: '#FFF9D6', panelW: pw });
       }
     }
     ctx.restore();
@@ -386,7 +401,13 @@ export function mountComicReader(el, comic, opts = {}) {
             pageObserver.unobserve(e.target);
             d();
           }
-        }, { root: body, rootMargin: '150% 0px' })
+        // ROOT = the element that actually SCROLLS (.pa-body, the phone-app
+        // body) — not `.cr-body`, which is a non-scrolling flex column as tall
+        // as its content.  With the wrong root every page "intersected" at
+        // once, so a whole volume drew on open and thrashed the six-image LRU
+        // (blank / late pages, needless iPhone memory pressure) — working-notes
+        // comic finding #2, confirmed 2026-09-09.  Falls back to the viewport.
+        }, { root: el.closest('.pa-body') ?? null, rootMargin: '150% 0px' })
       : null;
     const width = Math.max(200, Math.floor(body.clientWidth || el.clientWidth || 300));
     const dpr = Math.min(2, window.devicePixelRatio || 1);

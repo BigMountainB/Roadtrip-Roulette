@@ -674,6 +674,36 @@ Do not keep tuning music in hopes of fixing this restart symptom until the boot 
 
 ---
 
+## Comic reconciliation pass — 2026-09-09 (Claude, after the owner's Q&A on these notes)
+
+Owner decisions taken in the same sitting: **these notes win everywhere** over the V2
+artifact page (the page is now stamped as a discussion aid and its lettering table was
+corrected to match); implementation order = **fix the four diagnosed reader findings first,
+then produce the six-category panel review list** before any metadata is baked; dialogue
+font = **show Patrick Hand and Kalam side by side at phone size first** (done on the V2
+page, decision pending); the Classic Rock passenger is **Mykenzie** (renamed from
+"Mykenzee" in code/data/checklists; the "McKenna" spelling in these notes was a drift).
+
+Findings under "Image loading and existing-comic correctness" — all four CONFIRMED in code
+and fixed (see `git log` 2026-09-09):
+
+1. **Observer root** — `ComicReader` observed pages against `.cr-body` (non-scrolling); now
+   `el.closest('.pa-body')` (the real scroller), viewport fallback.  Only current ±1 pages draw.
+2. **StoryTile loader race** — `drawArt()` now takes a per-call request token; a shared-loader
+   `complete` whose token is stale is ignored, so establishing art can no longer overwrite
+   the chosen-response art after `setPanelKey()`.
+3. **Saved-key migration** — `ComicSystem.resolveEvent()` upgrades ONLY the generic
+   `story.node` default to `story.node.choice` when choice-level art is mapped (render-time,
+   deterministic, save untouched).  An explicit non-default stored key is never replaced.
+4. **Lettering** — `drawBalloon` no longer shrinks type; size = 3.2% of panel width
+   (9–15 px), **25-word cap** with sentence-end split into a linked balloon, box may grow
+   (×1.6 / ×2.6 linked); elision last resort.  The live tile still uses the older
+   `balloon()` path and inherits the notes' rules in the strip rebuild (steps 4–6).
+
+Not started from this section: inclusion flag / storyRole / transition roles, the live
+fixed-height strip, timing state machine, translucent tray, page composition from ordered
+panels, relationship montage, hold-to-zoom.  Next deliverable = the six-category review list.
+
 ## Comic system — OWNER-APPROVED DIRECTION 2026-09-09 (design specification; not yet an implementation claim)
 
 This section supersedes older comic-layout and tile-pacing proposals wherever they conflict. In particular, the older `Tile pacing — player-driven 2026-09-07` note describes the current/previous tap-gated behavior, **not** the approved target below. Do not mark any item in this section done merely because a prototype page demonstrates it. Verify the actual game code and behavior independently.
@@ -810,7 +840,7 @@ The condensed relationship device is not exclusive to Brittney. It should cover 
 Known priorities:
 
 - **Brittney** — long-duration passenger relationship; may recur at meaningful phase changes.
-- **McKenna** — long-duration passenger relationship; may recur at meaningful phase changes.
+- **Mykenzie** — long-duration passenger relationship; may recur at meaningful phase changes.
 - **Malik** — recurring relationship with developing trust/obligation/loyalty.
 - **Dominique** — recurring relationship with developing trust/attitude/loyalty.
 - Audit the complete story roster for other recurring characters whose later behavior, help, opposition, affection, or ending changes because of accumulated interaction. Do not invent importance from mere screen time; verify actual story recurrence and consequences.
@@ -1095,7 +1125,7 @@ Do not assume all 21 deserve unique art, and do not assume unmapped means unimpo
 - Dragging backward reviews earlier panels without committing or advancing anything.
 - Panels enter live play in the same narrative order and ratios used by the finished comic.
 - The finished comic filters live-only maintenance while retaining decisions, consequences, relationship turns, set pieces, and endings.
-- Brittney, McKenna, Malik, Dominique, and any other verified recurring relationship receive appropriate development/payoff treatment without turning every meter interaction into a full panel.
+- Brittney, Mykenzie, Malik, Dominique, and any other verified recurring relationship receive appropriate development/payoff treatment without turning every meter interaction into a full panel.
 - The 75/25 grounded-to-absurd target is perceptible across the complete comic without mechanically inserting cutaways.
 - No more than 1–2 full-page moments appear in the entire comic, and neither requires destructive portrait cropping of existing landscape art.
 - Hold-to-zoom works without stealing ordinary scroll gestures.

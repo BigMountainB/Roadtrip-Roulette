@@ -204,6 +204,27 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 6) — Working-notes review: comic reader's four diagnosed bugs fixed, Mykenzie rename, notes declared authoritative
+
+Owner reviewed CLAUDE_WORKING_NOTES.md with me and ruled: the notes' comic spec wins over
+the Ch. 18.13 / V2 page wherever they differ; fix the reader's diagnosed bugs first, then
+produce the panel review list; show both dialogue fonts before choosing; the Classic Rock
+passenger's canonical name is **Mykenzie**.
+- **ComicReader**: IntersectionObserver root was the non-scrolling `.cr-body` → now the
+  real scroller `.pa-body` (every page used to draw at once and thrash the 6-image LRU).
+  `drawBalloon` re-based on the notes: type from panel width (9–15 px), never shrunk,
+  25-word cap with linked-balloon split, growable box.
+- **StoryTile**: per-call request token on art loads — a stale shared-loader `complete`
+  can no longer paint establishing art over the chosen response.
+- **ComicSystem.resolveEvent**: deterministic legacy-key upgrade (generic node key →
+  choice key only when that art exists; explicit keys never replaced; save untouched).
+- **Mykenzee → Mykenzie** across story data, encounters, portraits, main.js, checklists,
+  notes and this Overview (passenger id `waitress` unchanged, so saves are unaffected).
+- V2 page updated: notes-consistent lettering table, 20–25 word cap, 1–2 full pages per
+  whole comic, Patrick Hand vs Kalam side-by-side at 13 px / 11.5 px on real art.
+- NEXT: the notes' six-category panel review list (balloon placement, speaker anchors,
+  crops, new-art briefs, alternate exports, editorial) for the owner + ChatGPT.
+
 ### 2026-09-09 (pt 5) — Top-row plates finally border-to-border (the gap was INSIDE the PNGs)
 
 Owner: "One last try to get you to decrease the gaps from the top row of buttons… I
@@ -12700,7 +12721,7 @@ Barely Made It = no payout + Country; Roadside Exit and kidnapping chase = no pa
 
 Classic Rock remains the default second featured arc and runs Vantage → Othello → Hatton →
 Washtucna → La Crosse → Colfax → Pullman. Brittney exits at the Vantage gas station first;
-**Mykenzee**, the diner waitress, is in a separate Vantage diner/bar. Use the existing
+**Mykenzie**, the diner waitress, is in a separate Vantage diner/bar. Use the existing
 diner-waitress and Grandma/Nan identities.
 
 **Vantage.** The waitress is changing out of her work uniform as the player first sees her. Her

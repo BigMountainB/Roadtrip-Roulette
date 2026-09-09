@@ -21,7 +21,7 @@ Legend:
 - [x] Dom’nique — `shared/characters/dominique_reference_sheet.png`
 - [x] Kyle — `shared/characters/kyle_reference_sheet.png`
 - [x] Tennessee — `shared/characters/tennessee_reference_sheet.png`
-- [x] Mykenzee / diner waitress — `shared/characters/diner_waitress_reference_sheet.png`
+- [x] Mykenzie / diner waitress — `shared/characters/diner_waitress_reference_sheet.png`
 - [x] Nan — `shared/characters/nan_reference_sheet.png`
 - [x] Startup Founder — `shared/characters/startup_founder_reference_sheet.png`
 

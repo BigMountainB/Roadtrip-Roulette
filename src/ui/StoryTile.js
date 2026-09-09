@@ -284,7 +284,15 @@ export function showStoryConversation(scene, start, onDone) {
     /** Draw the current panel's art, or a placeholder.  NEVER an unrelated
      *  image — no NPC portrait stand-in, which is what made a tired gas-station
      *  attendant appear as Brittney. */
+    // REQUEST TOKEN (working-notes comic finding #3, confirmed 2026-09-09): the
+    // shared scene loader fires ONE `complete` for whatever batch finished, so
+    // an establishing-art load completing after setPanelKey() had already
+    // swapped `meta` could redraw the STALE establishing image over the chosen
+    // response art.  Every drawArt() call takes a fresh token; a completion
+    // whose token is no longer current is ignored.
+    let artReq = 0;
     const drawArt = () => {
+      const myReq = ++artReq;
       for (const o of artObjs) o.destroy();
       artObjs = [];
       const url = meta.art;
@@ -307,12 +315,12 @@ export function showStoryConversation(scene, start, onDone) {
       // panels blank for the rest of the conversation.  Wait for that batch,
       // then retry this panel as its own load.
       if (scene.load.isLoading()) {
-        scene.load.once('complete', () => { if (c.active !== false) drawArt(); });
+        scene.load.once('complete', () => { if (c.active !== false && myReq === artReq) drawArt(); });
         return;
       }
       scene.load.image(url, url);
       loadedArtKeys.add(url);          // released in finish() — see the note there
-      scene.load.once('complete', () => { if (c.active !== false) drawArt(); });
+      scene.load.once('complete', () => { if (c.active !== false && myReq === artReq) drawArt(); });
       scene.load.start();
     };
     drawArt();

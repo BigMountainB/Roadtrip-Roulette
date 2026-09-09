@@ -31,7 +31,7 @@
 //
 // Pure JS, no Phaser — tests/comic.test.mjs.
 
-import { PAGE_TEMPLATES, FLOW_CYCLE, panelKeyFor, resolvePanelKey } from '../data/comicPanels.js';
+import { PAGE_TEMPLATES, FLOW_CYCLE, panelKeyFor, resolvePanelKey, hasPanelArt } from '../data/comicPanels.js';
 import { resolveDialogue } from '../data/featuredStories.js';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -87,8 +87,20 @@ export class ComicSystem {
   /** An event with its current dialogue text attached. */
   resolveEvent(e) {
     const k = e.dialogueKeys ?? {}, f = e.fallbackText ?? {};
+    // Deterministic LEGACY-KEY migration (working-notes comic finding #4,
+    // 2026-09-09): books saved before choice-level mapping carry the generic
+    // node key (`story.node`) even where a choice-level panel now exists.
+    // Upgrade ONLY that generic default to `story.node.choice` when art for it
+    // is mapped — a stored key that is anything else is an authored/explicit
+    // choice and is never replaced.  Render-time only: the save is untouched.
+    let panelKey = e.panelKey;
+    if (e.choiceId && panelKey === panelKeyFor(e.storyId, e.nodeId)) {
+      const choiceKey = `${e.storyId}.${e.nodeId}.${e.choiceId}`;
+      if (hasPanelArt(choiceKey)) panelKey = choiceKey;
+    }
     return {
       ...e,
+      panelKey,
       text: {
         line:  resolveDialogue(k.line,  f.line  ?? ''),
         label: resolveDialogue(k.label, f.label ?? ''),

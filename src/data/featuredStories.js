@@ -839,13 +839,13 @@ export const FEATURED_STORIES = {
     },
     // The waitress boards at Vantage while the arc is available or offered.
     passengerJoinStop: (st) => ((st.status === 'available' || (st.status === 'active' && !st.flags.aboard)) ? 'V' : null),
-    deriveRun: (st, run) => { if (st.flags.aboard && !st.flags.left) run.passenger = { id: 'waitress', name: 'Mykenzee', storyId: 'classicRock' }; },
+    deriveRun: (st, run) => { if (st.flags.aboard && !st.flags.left) run.passenger = { id: 'waitress', name: 'Mykenzie', storyId: 'classicRock' }; },
     nodes: {
       // ── Vantage diner — she's changing out of her uniform ──────────────
       vantage_diner: {
         stopId: 'V', mandatory: true,
         when: (st, run) => !run.passenger && !st.flags.rideOffered,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'major',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'major',
         line: "My nan was going to take me to Othello, but she forgot again. Last time she remembered her car but forgot which granddaughter to grab.",
         choices: [
           { id: 'east', consequential: true, next: 'vantage_offer',
@@ -865,21 +865,21 @@ export const FEATURED_STORIES = {
       vantage_offer: {
         stopId: 'V', mandatory: true,
         when: (st, run) => !run.passenger && !!st.flags.rideOffered && !st.flags.aboard,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'choice',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'choice',
         line: "You sing at all? The Othello bar needs an opener. It's unpaid AND they charge the fifty-dollar cover, but it's surprisingly good exposure out here.",
         choices: [
           { id: 'accept', consequential: true, next: null,
             label: "So I pay them $50 to sing and dance?! …I've actually made worse investments.",
             reply: "That's the spirit. Worst case you bomb in a town nobody can find on a map.",
-            effects: { flags: { aboard: true, show1: 'opener' }, relationship: 5, passenger: { id: 'waitress', name: 'Mykenzee', storyId: 'classicRock' } } },
+            effects: { flags: { aboard: true, show1: 'opener' }, relationship: 5, passenger: { id: 'waitress', name: 'Mykenzie', storyId: 'classicRock' } } },
           { id: 'flirt', consequential: true, next: null,
             label: "For fifty bucks I'd sing anything you put in front of me.",
             reply: "Careful. I might put myself in front of you. Get in.",
-            effects: { flags: { aboard: true, show1: 'opener', flirtAccept: true }, relationship: 10, passenger: { id: 'waitress', name: 'Mykenzee', storyId: 'classicRock' } } },
+            effects: { flags: { aboard: true, show1: 'opener', flirtAccept: true }, relationship: 10, passenger: { id: 'waitress', name: 'Mykenzie', storyId: 'classicRock' } } },
           { id: 'driveOnly', consequential: true, next: null,
             label: "I'll drive you. Nobody needs to hear me sing.",
             reply: "Your loss. You can watch, then.",
-            effects: { flags: { aboard: true, show1: 'drive' }, passenger: { id: 'waitress', name: 'Mykenzee', storyId: 'classicRock' } } },
+            effects: { flags: { aboard: true, show1: 'drive' }, passenger: { id: 'waitress', name: 'Mykenzie', storyId: 'classicRock' } } },
         ],
       },
 
@@ -887,7 +887,7 @@ export const FEATURED_STORIES = {
       othello_cover: {
         stopId: 'O', mandatory: true,
         when: (st, run) => !!run.passenger && st.flags.show1 === 'opener' && !st.flags.coverPaid,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'minor',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'minor',
         line: "Fifty at the door. Told you. The cover's on you — the stage is on me.",
         choices: [
           { id: 'pay', consequential: true, next: 'othello_show', cost: OTHELLO_COVER,
@@ -899,7 +899,7 @@ export const FEATURED_STORIES = {
       othello_show: {
         stopId: 'O', mandatory: true,
         when: (st, run) => !!run.passenger && st.flags.show1 === 'opener' && !!st.flags.coverPaid && !st.flags.othelloDone,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'climax',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'climax',
         line: "Hearing you sing like that sent a rush down my body. I have a list of propositions for you, but here are two for now…",
         choices: [
           { id: 'hearBoth', consequential: true, next: null, cost: OTHELLO_PROPOSITION,
@@ -919,7 +919,7 @@ export const FEATURED_STORIES = {
       othello_watch: {
         stopId: 'O', mandatory: true,
         when: (st, run) => !!run.passenger && st.flags.show1 === 'drive' && !st.flags.othelloDone,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'major',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'major',
         line: "She sings. The bar goes quiet in the good way. Afterwards she finds you by the door, still buzzing.",
         choices: [
           { id: 'jealous', consequential: true, next: null,
@@ -963,7 +963,7 @@ export const FEATURED_STORIES = {
       washtucna_show: {
         stopId: 'W', mandatory: true,
         when: (st, run) => !!run.passenger && !st.flags.washtucnaDone,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'major',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'major',
         line: (st) => (st.flags.auditionNext ? "Audition night. " : "") + "Washtucna pays three hundred for the set. Solo or duet — it's your stage, partner-to-be.",
         choices: [
           { id: 'solo', consequential: true, next: null,
@@ -986,7 +986,7 @@ export const FEATURED_STORIES = {
       setlist: {
         stopId: 'W', mandatory: false,
         when: (st, run) => !!run.passenger && !!st.flags.washtucnaDone && !st.flags.setlistAsked,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'minor',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'minor',
         line: "La Crosse wants a set list by midnight. Opener: your song or mine?",
         choices: [
           { id: 'hers', consequential: true, next: null,
@@ -1008,7 +1008,7 @@ export const FEATURED_STORIES = {
       lacrosse_show: {
         stopId: 'L', mandatory: true,
         when: (st, run) => !!run.passenger && !st.flags.lacrosseDone,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'major',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'major',
         line: (st) => (st.flags.setlist === 'hers' ? "We open with mine, like you said. " : st.flags.setlist === 'mine' ? "We open with yours. Whose tour, right? " : '')
           + "La Crosse is the big one. Solo pays you four hundred. Duet pays eight — four each — because they're coming to see both of us.",
         choices: [
@@ -1025,7 +1025,7 @@ export const FEATURED_STORIES = {
       lacrosse_after: {
         stopId: 'L', mandatory: true,
         when: (st, run) => !!run.passenger && st.flags.l === 'duet' && !st.flags.lacrosseAfter,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'choice',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'choice',
         line: "Backstage, still sweating, she hands you the last of the water.",
         choices: [
           { id: 'partner', consequential: true, next: null,
@@ -1039,7 +1039,7 @@ export const FEATURED_STORIES = {
       colfax_deal: {
         stopId: 'CO', mandatory: true,
         when: (st, run) => !!run.passenger && !st.flags.deal,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'climax',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'climax',
         line: "Othello cost us money. Washtucna tested us. La Crosse paid because people came to see both of us. I'm not walking into Pullman as your passenger or your backup singer. What are we? Because I need a title.",
         choices: [
           { id: 'fifty', consequential: true, next: 'colfax_name',
@@ -1069,7 +1069,7 @@ export const FEATURED_STORIES = {
       colfax_name: {
         stopId: 'CO', mandatory: true,
         when: (st, run) => !!run.passenger && (st.flags.deal === '5050' || st.flags.deal === '6040') && !st.flags.name,
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'choice',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'choice',
         line: "Then the name goes on the Pullman marquee. Whose?",
         choices: [
           { id: 'hers', consequential: true, next: null,
@@ -1091,7 +1091,7 @@ export const FEATURED_STORIES = {
       pullman_final: {
         stopId: 'P', mandatory: true,
         when: (st, run) => !!run.passenger && !!st.flags.deal && st.flags.deal !== 'implode',
-        speaker: 'Mykenzee', portrait: 'diner_waitress', importance: 'ending',
+        speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'ending',
         line: (st) => {
           const o = classicRockOutcome(st);
           const crowd = (st.following ?? 0) + (st.flags.soloFollowing ?? 0);

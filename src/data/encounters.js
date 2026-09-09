@@ -277,7 +277,7 @@ export const REST_STOP_ENCOUNTERS = [
   {
     id: 'ellensburg_diner',
     stopId: 'E', weight: 3,
-    portrait: 'diner_waitress', speaker: 'Mykenzee',
+    portrait: 'diner_waitress', speaker: 'Mykenzie',
     fact: "Ellensburg was the front-runner to be state capital until a fire on the night of July 4, 1889 took out ten blocks of downtown. Investigators called it arson and never named anyone.",
     npcId: 'diner_waitress',
     // She remembers you — return visits open on a different greeting.
