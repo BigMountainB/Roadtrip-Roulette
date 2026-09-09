@@ -1,3 +1,5 @@
+import { STATION_COUNT, DEFAULT_VOLUME } from './AudioSystem.js';
+
 const STORAGE_KEY    = 'rtr.save.v3';
 // Legacy key from the DUI-branded builds — same v3 schema, just the old name.
 // Read once and promoted to STORAGE_KEY on the next save so progress migrates.
@@ -38,7 +40,7 @@ const SLOT_COUNT = 3;
 // type keeps everything.  Money was already global.  The per-mode `profiles`
 // buckets are now vestigial (kept only to read + lift legacy saves).
 const GLOBAL_KEYS = new Set([
-  'achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector', 'tutorialRead', 'tutorialIntroSeen', 'tutorialBtnSeen', 'tutorialBtnSeenBuild',
+  'achievements', 'settings', 'checkpointTiers', 'stats', 'leaderboard', 'radarDetector', 'tutorialRead', 'tutorialIntroSeen', 'tutorialBtnSeen',
   'npcMemory', 'missionRep', 'missionStats',
   // ── Progression, moved from per-mode profile to the plate ──
   'money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
@@ -62,7 +64,16 @@ const GLOBAL_KEYS = new Set([
 const SANDBOX_KEYS = new Set([
   'money', 'ownedCars', 'currentCar', 'viceInventory', 'missionProgress',
   'lastRestStop', 'restStopSaves', 'liveRun', 'manualSave', 'accessories',
-  'upgrades', 'tempUpgrades', 'survivalState', 'activeBuffs', 'radarDetector', 'tutorialRead', 'tutorialIntroSeen', 'tutorialBtnSeen',
+  'upgrades', 'tempUpgrades', 'survivalState', 'activeBuffs', 'radarDetector',
+  // NOTE: tutorialRead / tutorialIntroSeen / tutorialBtnSeen were listed here
+  // and were the real cause of "the Tutorial button lights up again after
+  // restarting" (owner 2026-09-07).  _rootFor() checks the sandbox BEFORE
+  // GLOBAL_KEYS, so during a Custom run every tutorial read and write went to
+  // the throwaway in-memory bucket — which setSandbox() never seeds — so the
+  // button read as unseen inside Custom and the touch that cleared it was
+  // discarded when the sandbox was dropped.  Tutorial state is permanent UI
+  // state, not run progress: it must ALWAYS use durable slot.global storage,
+  // Custom mode included.  Do not re-add them here.
   // Genre cars: a $25k dealership buy (or a genre swap) inside a Custom run
   // must not persist.  setSandbox SEEDS these two from the real plate so the
   // player still drives their own car in Custom.
@@ -168,7 +179,11 @@ const DEFAULT_PROFILE = {
 const DEFAULT_GLOBAL = {
   achievements:    {},
   checkpointTiers: {},          // { [stopId]: 'bronze' | 'silver' | 'gold' }
-  settings:        { muted: false, radio: -1, backgroundRadio: false, bgRadioPolicyV2: false },  // radio -1 = no default station chosen; background radio is OPT-IN (Tier-0 policy 2026-09-05)
+  // radio -1 = no default station chosen; background radio is OPT-IN (Tier-0
+  // policy 2026-09-05).  `volume` seeds from AudioSystem.DEFAULT_VOLUME so the
+  // schema and the runtime default can't drift (owner 2026-09-07: mute/volume
+  // were changed live but never persisted, so both reset on every launch).
+  settings:        { muted: false, volume: DEFAULT_VOLUME, radio: -1, backgroundRadio: false, bgRadioPolicyV2: false },
   // Career stats — full canonical shape is owned by StatsTracker, which
   // deep-merges its defaults over whatever is here on boot.  Empty is fine.
   stats:           {},
@@ -183,13 +198,16 @@ const DEFAULT_GLOBAL = {
   // Tutorial persistence (owner 2026-09-06, after THREE reports of "selected
   // buttons flash again every open"): the root cause was never the glow
   // logic — these keys were routed to slot.global by GLOBAL_KEYS but never
-  // copied in _sanitizeGlobal, so EVERY reload wiped them (and with
-  // tutorialBtnSeenBuild gone, every boot read as a "new build" and re-armed
-  // all blinking).  They MUST stay here + in _sanitizeGlobal.
+  // copied in _sanitizeGlobal, so EVERY reload wiped them.  They MUST stay
+  // here + in _sanitizeGlobal or the highlights come back on every open.
+  //
+  // tutorialBtnSeenBuild is GONE (owner 2026-09-07).  It recorded the build id
+  // that last re-armed the blink, and main.js wiped tutorialBtnSeen whenever it
+  // changed — so every app update re-lit already-used buttons.  Highlighting is
+  // permanent one-shot state now; do not reintroduce a build/timestamp reset.
   tutorialRead:         {},     // { [entryId]: true } — per-item "selected once ever"
   tutorialIntroSeen:    false,  // GOT IT card dismissed once
   tutorialBtnSeen:      null,   // { phone?, game_menu?, gameplay? } first-press map
-  tutorialBtnSeenBuild: null,   // __BUILD_ID that last re-armed the blink
   // Recurring-NPC memory for encounter dialogue trees.  Shape:
   //   npcMemory: { [npcId]: { met: true, hadPie: true, … } }
   // Flat flag/value bags written by choice `setMemory`; drives return-visit
@@ -610,8 +628,6 @@ export class SaveSystem {
     g.tutorialIntroSeen = src.tutorialIntroSeen === true;
     const tutBtn      = cleanJson(src.tutorialBtnSeen, null);
     g.tutorialBtnSeen = isObj(tutBtn) ? tutBtn : null;
-    g.tutorialBtnSeenBuild = (typeof src.tutorialBtnSeenBuild === 'string' || typeof src.tutorialBtnSeenBuild === 'number')
-      ? src.tutorialBtnSeenBuild : null;
     const npcMemory   = cleanJson(src.npcMemory, {});
     g.npcMemory       = isObj(npcMemory) ? npcMemory : {};
     const missionRep   = cleanJson(src.missionRep, {});
@@ -746,13 +762,26 @@ export class SaveSystem {
     const s = { ...DEFAULT_GLOBAL.settings };
     if (!isObj(src)) return s;
     s.muted = src.muted === true;
+    // Volume must SURVIVE sanitization or it resets to the default on every
+    // load.  Only a real finite NUMBER counts — `finiteNum` alone is not enough
+    // here because JSON.stringify writes NaN/Infinity as `null`, and
+    // Number(null) is 0, which is finite: a corrupted value would boot the game
+    // silent and read as "audio is broken".  Anything non-numeric keeps the
+    // default instead.
+    if (typeof src.volume === 'number' && Number.isFinite(src.volume)) {
+      s.volume = Math.max(0, Math.min(1, src.volume));
+    }
     // Default station: only a value the player DELIBERATELY chose survives
     // (radioSet flag, written by the Music app's star).  Legacy saves carry a
     // materialized radio:0 from the old sanitizer default — without the flag
     // that read as "HIP-HOP chosen" for everyone, so unflagged values reset
     // to -1 (unset → weighted-random start).  2026-07-23.
     s.radioSet = src.radioSet === true;
-    s.radio    = s.radioSet ? finiteInt(src.radio, -1, -1, 9) : -1;
+    // Upper bound comes from the REAL station catalogue, never a literal: a
+    // hard-coded 9 was correct at 10 stations but silently rewrote the last one
+    // when an eleventh arrived (POP took index 9, so METAL at 10 clamped down to
+    // POP on every reload).  See STATION_COUNT in AudioSystem.
+    s.radio    = s.radioSet ? finiteInt(src.radio, -1, -1, STATION_COUNT - 1) : -1;
     if (src.backgroundRadio !== undefined) s.backgroundRadio = src.backgroundRadio === true;
     // The one-time Tier-0 migration stamp MUST survive sanitization or the
     // migration re-runs every boot and force-disables a deliberate opt-in

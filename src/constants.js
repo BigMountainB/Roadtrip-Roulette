@@ -426,6 +426,27 @@ export const COMBO = {
   HEALTHY_BARS_BONUS: 1,
   HEALTHY_BAND_LO:   25,    // both bars must be strictly ABOVE this…
   HEALTHY_BAND_HI:   75,    // …and strictly BELOW this to grant the bonus
+
+  // ── REWIND (owner 2026-09-07) ──────────────────────────────────────────
+  // A collected sprite (weapon / food / drink) is now worth a WHOLE level
+  // rather than the 1-of-3 pass credit it was worth on 2026-09-05.  Overtakes
+  // are unchanged at PASSES_PER_LEVEL.  This is the single knob that decides
+  // how fast pickups drive the $/mi ceiling — set it back to 0 to restore the
+  // old "3 sprites = +1 level" behaviour, since the sprite would then fall
+  // through to the ordinary pass-credit path.
+  SPRITE_LEVELS:     1,     // levels granted per collected sprite
+  // Once ×15 has been REACHED, the meter becomes far more forgiving than the
+  // climb: it holds for CAP_GRACE_SEC, then sheds one level every
+  // CAP_DECAY_STEP_SEC all the way down, until another sprite refreshes it
+  // (owner 2026-09-07 — reaching the cap was hard, so losing it shouldn't be
+  // instant).  Ordinary GRACE_SEC / DECAY_STEP_SEC still govern the climb.
+  CAP_GRACE_SEC:     10,    // hold at/after the cap before any decay
+  CAP_DECAY_STEP_SEC: 5,    // one level lost per this many seconds after that
+  // Reaching CAP banks one rewind charge, which the player may spend at once
+  // or hold.  Only the RISING EDGE into CAP banks — sitting at CAP does not
+  // mint charges, and the meter stays at CAP so distance income is unaffected.
+  REWIND_MILES:      3,     // route miles the player is sent back
+  REWIND_MAX_CHARGES: 1,    // charges that can be held at once
 };
 export const CHECKPOINTS = _CP_RAW.map(cp => ({
   ...cp,
@@ -461,7 +482,7 @@ export const DEMO_FINISH_MILE = 25;
 // Default culture/genre when none has been chosen (owner 2026-08-04): the
 // hip-hop/phonk starter IS the default car — a fresh player never sees the
 // base beater art.  Every genre-resolution fallback reads this.
-export const DEFAULT_GENRE = 'hiphop_phonk';
+export const DEFAULT_GENRE = 'pop';
 
 // Playable genres in the demo — the other 8 still SHOW in the music grid (locked,
 // as full-game teasers) but can't be picked, and their heavy car/culture/music

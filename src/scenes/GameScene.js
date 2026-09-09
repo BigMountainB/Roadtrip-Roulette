@@ -50,7 +50,7 @@ import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
 import { StorySystem } from '../systems/StorySystem.js';
 import { ComicSystem } from '../systems/ComicSystem.js';
 import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
-import { genreArtPath, genreDefaultPath, GENRE_ART } from '../systems/AssetManifest.js';
+import { genreArtPath, genreDefaultPath, GENRE_ART, restStopManifest } from '../systems/AssetManifest.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
 import { ensureStopSign } from '../data/shoppingSign.js';
 import { FAIL_REASON, selectTip, tipContext } from '../data/endingTips.js';
@@ -112,6 +112,32 @@ const POSE_LADDER = [
 // the base rear view and the LEGACY single turn frame keep their dedicated
 // sizing rules in _applyPlayerSpriteDisplaySize.
 const POSE_SIZED_RE = /^codex_beater_(spin_\d+|back_turn_0\d+|front)$/;
+
+// ── CORNER READOUT COORDS (owner 2026-09-08) ──────────────────────────────
+// Money / mult / clock and the HP readout, in OWNER SPACE (default
+// left-handed); mx() mirrors them for right-handed play.
+//
+// These used to be typed out TWICE — once in _buildHUD and again in the
+// handedness live-mirror block in update() — with a comment warning to keep
+// the two "in LOCKSTEP or the layout is undone on frame 1".  That block runs on
+// the FIRST frame (its _appliedLeftHanded starts undefined), so editing only
+// the _buildHUD copy silently reverted on frame 1.  Defined once here so the
+// two cannot drift, and so nudging a readout is a one-line change.
+// ── TOP-ROW ART COMPENSATION (owner 2026-09-09) ───────────────────────────
+// Every top-row plate is a 150x150 canvas, but the drawn frame inside it is
+// NOT the same size in every file — most are ~144x127, the tutorial "?" is
+// only 139x115.  Rendered at one displaySize its frame comes out ~10% shorter
+// than its neighbours, which is the "tutorial button looks smaller" report.
+// Scale that plate so the VISIBLE frame matches; the hit box stays on the
+// nominal grid so row spacing is untouched.
+// Re-exporting the art with the same padding as the others is the real fix —
+// delete the entry when that lands.
+const TOP_ROW_ART_SCALE = { tutorial: 127 / 115 };
+
+const READOUT_CASH_X  = 200;   // money / mult / party clock, centre-anchored
+const READOUT_HP_X    = 564;   // HP, left-anchored
+const READOUT_SPEED_X = 634;   // speed + MPH sublabel, left-anchored
+const READOUT_TOP_Y   = 10;    // shared top edge for the corner readouts
 
 // ── PLAYER CAR SCALE (2026-08-22) ────────────────────────────────────────
 // ONE factor, applied to the SOURCE PIXELS of every player frame. Canvas size
@@ -606,14 +632,23 @@ const DEFAULT_HUD_LAYOUT = {
   hpDamage:   { dx: 396,  dy: 275, scale: 1.7629642295565735 },
   mission:    { dx: 5,    dy: -14, scale: 1.151805693372507  },
   radio:      { dx: -75,  dy: -8,  scale: 1.002349011885947  },
-  btn_pause:  { dx: -49,  dy: 1,   scale: 1 },
-  btn_ff:     { dx: -57,  dy: 2,   scale: 1 },
-  btn_genre:  { dx: -66,  dy: 1,   scale: 1 },
+  // ── TOP ROW: ONE DELTA PER GROUP (owner 2026-09-09) ──────────────────────
+  // The base slots already place each group's buttons edge to edge, so the
+  // ONLY way they stay touching is for every button in a group to carry the
+  // SAME dx/dy.  These used to differ per button (-49 / -57 / -66 on the left,
+  // 49 / 59 / 68 on the right), which pulled each one 8-10 px off its
+  // neighbour — the "close but not touching" report.  A shared value slides
+  // the whole group without ever opening a seam.
+  // Change these per GROUP, never per button.
+  btn_rewind: { dx: -57,  dy: 1,   scale: 1 },
+  btn_pause:  { dx: -57,  dy: 1,   scale: 1 },
+  btn_ff:     { dx: -57,  dy: 1,   scale: 1 },
+  btn_genre:  { dx: -57,  dy: 1,   scale: 1 },
   mult:       { dx: 41,   dy: 6,   scale: 1 },
   score:      { dx: 2,    dy: -2,  scale: 1.0853674898138321 },
-  btn_tutorial: { dx: 49, dy: 2,   scale: 1 },   // the slot Garage held until 2026-09-03
+  btn_tutorial: { dx: 59, dy: 3,   scale: 1 },   // the slot Garage held until 2026-09-03
   btn_map:    { dx: 59,   dy: 3,   scale: 1 },
-  btn_mute:   { dx: 68,   dy: 3,   scale: 1 },
+  btn_mute:   { dx: 59,   dy: 3,   scale: 1 },
   wiper:      { dx: -150, dy: 320, scale: 1.033918411681667  },   // shifted left off the accelerator into the location↔pedal gap (owner 2026-07-20)
   engine:     { dx: 114,  dy: -4,  scale: 0.9143488304331294 },
   stars:      { dx: -67,  dy: 12,  scale: 1.7379492932183374 },
@@ -744,17 +779,20 @@ export class GameScene extends Phaser.Scene {
             && (Date.now() - (lr.ts || 0)) < 12 * 3600 * 1000) {
           if (lr.snap.difficulty) Difficulty.set(lr.snap.difficulty, this.registry);
           if (lr.snap.customSub) Difficulty.setCustomSub?.(lr.snap.customSub, this.registry);
-          if (crashed || lr.manual) {
-            // True crash (or a manual exact-spot save) → auto-resume into the
-            // drive.  The crash path also shows the "sorry, we lost you…" modal.
-            this._resumeLive = lr;
-            this._resumeLiveExplicit = !!lr.manual;
-          } else {
-            // Clean quit / background / OOM discard → don't yank the player
-            // back in.  Leave the run saved and surface a RESUME button on the
-            // title (built in _buildHUD from this snapshot).
-            this._titleResumeSnap = lr.snap;
-          }
+          // EVERY cold boot with a resumable run goes to the title and OFFERS
+          // it — the RESUME button built in _buildHUD from this snapshot
+          // (owner 2026-09-07).  Crashes and manual exact-spot saves used to
+          // auto-resume straight into the drive here, which is what forced the
+          // pre-paint guard in index.html to hide the title overlay so it
+          // wouldn't cover a run already moving underneath.  Both are gone: the
+          // title is absolute on a cold launch, and the run waits behind it.
+          // Deliberately NO exception for crashes, autosaves, returning
+          // players, orientation or app updates.
+          //
+          // This does not touch the in-session explicit resume above
+          // (data.resumeLiveSnapshot, from Save -> From Checkpoint), which is a
+          // deliberate mid-session action rather than a cold launch.
+          this._titleResumeSnap = lr.snap;
         }
       } catch (_) {}
     }
@@ -1029,6 +1067,11 @@ export class GameScene extends Phaser.Scene {
     // the save snapshot (rest-stop/checkpoint rewinds start at 1× by rule).
     this.combo = new DrivingCombo(COMBO);
     this._comboCalloutAt = 0;
+    // Banked REWIND charges (owner 2026-09-07).  Earned by REACHING ×15, held
+    // until spent.  Run state, not canon: a fresh scene starts with none, and
+    // they deliberately live here rather than on DrivingCombo so a crash's
+    // collisionReset() wipes the meter WITHOUT taking a charge already earned.
+    this._rewindCharges = 0;
     // Eligible RUN earnings — the completion bonus multiplies THIS, never
     // the lifetime wallet (the old bonus compounded savings).  Registry-
     // backed so rest-stop scene bounces carry it; snapshot-backed so exact
@@ -1266,7 +1309,29 @@ export class GameScene extends Phaser.Scene {
         delete this._hudLayout.btn_garage;
         _save?.set?.('controlsLayout', this._hudLayout);
       }
+      // REWIND joined the top row (owner 2026-09-09).  A layout saved before it
+      // existed has no btn_rewind, so it fell back to dx 0 while Pause carried
+      // its saved offset — a ~49 px gap between the two, with the rest of the
+      // row still correct.  Seed it from Pause: the base slots already place
+      // them adjacent, so an equal delta keeps them touching.  Only fills a
+      // MISSING key, so a rewind position the player has since set by hand is
+      // never overwritten.
+      if (this._hudLayout.btn_pause && !this._hudLayout.btn_rewind) {
+        this._hudLayout.btn_rewind = { ...this._hudLayout.btn_pause };
+        _save?.set?.('controlsLayout', this._hudLayout);
+      }
       this._hudUndoStack = [];
+      // ── ?layout=1 — read the saved HUD deltas off a phone (owner 2026-09-08)
+      // The controls editor saves `controlsLayout` as {id: {dx, dy, scale}}
+      // offsets FROM the baked defaults, into browser storage on whatever
+      // device made them — unreadable from the repo, and a phone has no
+      // console.  This paints them on screen so they can be screenshotted and
+      // folded into the defaults.  Dev-only: no flag, nothing is built.
+      try {
+        if (new URLSearchParams(location.search).has('layout')) {
+          this.time.delayedCall(400, () => this._showLayoutDump());
+        }
+      } catch (_) {}
       // Colorblind mode removed (owner 2026-07-17) — permanently off; the
       // remaining `this._colorblind ? …` branches all resolve to the normal path.
       this._colorblind = false;
@@ -2421,15 +2486,18 @@ export class GameScene extends Phaser.Scene {
     const MIRROR_RIGHT = SCREEN_W / 2 + 130;
     const iconRowY = 2;                       // mirror top
     const iconSize = 56;                      // mirror height
-    // 1-px gap matches the tighter spacing applied to the music
-    // cluster on the left side of the mirror.
-    const iconGap  = 1;
+    // BORDER TO BORDER (owner 2026-09-08): the top row reads as one unbroken
+    // strip of plates, so the buttons butt up pixel-to-pixel with no gap.
+    // Must stay equal to TOP_GAP in the music-cluster code or the two halves
+    // of the row space differently.
+    const iconGap  = 0;
     const makeIconBtn = (px, iconId, onClick) => {
       const bg = this.add.graphics().setDepth(62);
       bg.setInteractive(new Phaser.Geom.Rectangle(px, iconRowY, iconSize, iconSize), Phaser.Geom.Rectangle.Contains);
       bg.input.cursor = 'pointer';
+      const drawSize = iconSize * (TOP_ROW_ART_SCALE[iconId] ?? 1);
       const lbl = this.add.image(px + iconSize / 2, iconRowY + iconSize / 2, this._topRowButtonTexture(iconId))
-        .setDisplaySize(iconSize, iconSize)
+        .setDisplaySize(drawSize, drawSize)
         .setDepth(63);
       bg.on('pointerover', () => lbl.setAlpha(1));
       bg.on('pointerout',  () => lbl.setAlpha(0.96));
@@ -6144,9 +6212,12 @@ export class GameScene extends Phaser.Scene {
       // score at the old centre spot, which made the mult ungrabbable in the
       // controls editor).  Owner-space coords (default left-handed):
       // money/mult/clock centered x200, HP left-aligned x564, MPH x634.
-      const READOUT_CASH_X_  = 200;
-      const READOUT_HP_X_    = 564;
-      const READOUT_SPEED_X_ = 634;
+      // Aliased from the module constants — this block used to carry its own
+      // copies, and because it also runs on the FIRST frame it silently undid
+      // any edit made only in _buildHUD.
+      const READOUT_CASH_X_  = READOUT_CASH_X;
+      const READOUT_HP_X_    = READOUT_HP_X;
+      const READOUT_SPEED_X_ = READOUT_SPEED_X;
       // Money-side cluster: Clock, Mult, Cash (all center-anchored), HP, HPDamage.
       if (this.hudPartyClock) { this.hudPartyClock.x = mx_(READOUT_CASH_X_); this.hudPartyClock.setOrigin(0.5, 0); }
       if (this.hudMult)       { this.hudMult.x       = mx_(READOUT_CASH_X_); this.hudMult.setOrigin(0.5, 0); }
@@ -7933,6 +8004,7 @@ export class GameScene extends Phaser.Scene {
         } else {
           this._comboCallout('CLEAN PASS', '#9FD8FF');
         }
+        if (res.hitCap) this._bankRewindCharge();
       }
     }
   }
@@ -11461,9 +11533,11 @@ export class GameScene extends Phaser.Scene {
       // extension of an active combo.
       const label = VICE_CONFIG[itemId]?.label ?? itemId;
       if (this._comboCanBuild && this.combo) {
-        const res = this.combo.overtake({
+        // A sprite is worth a WHOLE level now (COMBO.SPRITE_LEVELS), not the
+        // 1-of-3 pass credit it was worth before — and reaching CAP is what
+        // banks a REWIND charge.
+        const res = this.combo.pickup({
           graceBonus: this._comboGraceBonus(),
-          buildMult:  this._traitMod('drivingBonusBuildMult'),
           graceMult:  this._traitMod('drivingBonusGraceMult'),
         });
         this._showPopup(`${label}`, '#FFFF44');
@@ -11471,6 +11545,7 @@ export class GameScene extends Phaser.Scene {
           this._comboCallout(`COMBO ×${this.combo.mult}`, this.combo.mult >= 10 ? '#FF2244' : this.combo.mult >= 5 ? '#FFAA22' : '#44FF88');
           this.haptics?.notify?.();
         }
+        if (res.hitCap) this._bankRewindCharge();
       } else {
         const _extended = this.combo?.pickupExtend?.() ?? false;
         this._showPopup(_extended ? `${label}  ⏱ +${COMBO.PICKUP_EXT_SEC}s` : `${label}`, '#FFFF44');
@@ -11893,6 +11968,8 @@ export class GameScene extends Phaser.Scene {
   _topRowButtonTexture(type, lit = false) {
     if (type === 'pause') return lit ? 'ui_top_btn_pause_active' : 'ui_top_btn_pause';
     if (type === 'ff') return lit ? 'ui_top_btn_ff_active' : 'ui_top_btn_ff';
+    // REWIND has no _active plate yet; `lit` (charge held) is conveyed by alpha.
+    if (type === 'rewind') return 'ui_top_btn_rewind';
     if (type === 'genre') return 'ui_top_btn_genre';
     if (type === 'mute') return lit ? 'ui_top_btn_mute' : 'ui_top_btn_unmute';
     if (type === 'map') return 'ui_top_btn_map';
@@ -11910,7 +11987,13 @@ export class GameScene extends Phaser.Scene {
     // way to skip a stale call without exploding inside setTexture.
     if (!img || !img.scene) return;
     img.setTexture(this._topRowButtonTexture(type, lit));
-    img.setDisplaySize(size, size);
+    // ART-CONTENT COMPENSATION — see TOP_ROW_ART_SCALE.  Applied HERE because
+    // _applyTopRowHandedness re-applies the size on every pass (handedness
+    // flip, pause, tutorial mode), which silently overwrote a scale set only
+    // at construction — the button looked right on boot and shrank again the
+    // first time anything touched the row.
+    const k = TOP_ROW_ART_SCALE[type] ?? 1;
+    img.setDisplaySize(size * k, size * k);
   }
 
   /** Small, code-drawn neon symbols stay crisp in the 56 px toolbar cells. */
@@ -15713,6 +15796,41 @@ export class GameScene extends Phaser.Scene {
       };
       img.src = path;
     }
+
+    // ── Eviction (memory audit 2026-09-09, Finding 5) ─────────────────────
+    // _polWanted was a LIFETIME ledger: every streamed region stayed decoded
+    // for the whole session (~121.5 MiB with all 9 agencies).  Evict an
+    // agency once its LAST region band is far behind the player and no live
+    // cop still wears it.  Safe because: (a) the route only moves forward and
+    // REWIND jumps just COMBO.REWIND_MILES back — BEHIND_MI leaves margin,
+    // and a re-entered region simply re-queues through _polQueued; (b) every
+    // cop frame resolves through resolvePoliceSprite with a live has()
+    // check, so a straggler from an evicted agency falls back to generic
+    // police art instead of sampling a destroyed texture.  WSP spans the
+    // whole route and is never evicted; '__extras' (SWAT/heli/generic) are
+    // global sets.
+    const BEHIND_MI = 25;
+    if (t - (this._polEvictT ?? -99) > 10) {
+      this._polEvictT = t;
+      const liveAgencies = new Set();
+      for (const c of (this.cops?.cops ?? [])) if (c?.agencyId) liveAgencies.add(c.agencyId);
+      for (const id of [...this._polQueued]) {
+        if (id === '__extras' || id === 'washington_state_patrol') continue;
+        const a = POLICE_AGENCIES[id];
+        if (!a?.regions?.length) continue;
+        const lastEnd = Math.max(...a.regions.map(rg => rg[1]));
+        if (mile - lastEnd < BEHIND_MI) continue;
+        if (liveAgencies.has(id)) continue;
+        let freed = 0;
+        for (const { key } of agencyTextureList(id)) {
+          this._polWanted.delete(key);
+          this._polTex.delete(key);
+          if (texman.exists(key)) { try { texman.remove(key); freed++; } catch (_) {} }
+        }
+        this._polQueued.delete(id);
+        if (freed) console.log(`[police-tex] evicted ${id}: ${freed} textures, region ended ${Math.round(mile - lastEnd)} mi behind`);
+      }
+    }
   }
 
   /** Decoded-texture accounting for the police art (2026-08-29 pipeline
@@ -19052,10 +19170,9 @@ export class GameScene extends Phaser.Scene {
     // MONEY sits top-center-left (centered x200), MULT directly below it;
     // HP + MPH sit right of the mirror; the hidden party clock parks
     // under the mult.
-    const READOUT_CASH_X  = 200;                       // money/mult center
-    const READOUT_TOP_Y   = 10;
-    const READOUT_HP_X    = 564;                       // right of the mirror
-    const READOUT_SPEED_X = 634;                       // right of HP
+    // Coords come from the module-level constants so this block and the
+    // handedness live-mirror in update() can never disagree — see the note
+    // at READOUT_CASH_X.  Do NOT re-declare them here.
     this.hudPartyClock = this.add.text(mx(READOUT_CASH_X), 68, '⏱  --:--', {
       fontSize: '14px', fontFamily: IMPACT,
       color: '#FFFFFF', stroke: '#000000', strokeThickness: 3,
@@ -19186,11 +19303,36 @@ export class GameScene extends Phaser.Scene {
     const muteTop        = 2;
     const MIRROR_LEFT_X  = SCREEN_W / 2 - 130;
     const MIRROR_RIGHT_X = SCREEN_W / 2 + 130;
-    const TOP_GAP        = 1;
+    // BORDER TO BORDER (owner 2026-09-08) — see iconGap in the map/tutorial
+    // builder; the two MUST match so both halves of the top row space alike.
+    const TOP_GAP        = 0;
     // Reserved column on each side of the mirror for the speed /
     // time / dollars readouts.  Buttons slot OUTSIDE this reservation
     // so they don't overlap the text.
     const READOUT_W      = 95;
+    // ── LEFT GROUP LAYOUT (owner 2026-09-07) ─────────────────────────────
+    // Four buttons: Rewind, Pause, FF, Genre.  Owner kept them at the original
+    // 56 px rather than shrinking to fit, so the group deliberately runs past
+    // the readout reservation on the right — READOUT_W is a text reservation,
+    // not a hard edge, and the owner judged the overlap acceptable on device.
+    //
+    // GROUP_SHIFT slides Pause / FF / Genre right; Rewind is pinned to the
+    // screen edge on the left.  One knob each, so the spacing can be retuned
+    // without recomputing four positions.
+    const leftBtnSize    = 56;
+    // One unbroken strip: Rewind | Pause | FF | Genre, right border touching
+    // left border with NO gap, all the same size, all at the same y.
+    //
+    // Right-anchored at the readout reservation and chained leftward, so the
+    // group ends exactly where the readouts begin.  The left end lands at a
+    // NEGATIVE x — which is on-screen: SCREEN_W is a fixed 800 while WORLD_W
+    // tracks the real device width, and HUD_OFFSET_X is the margin band on
+    // each side (the BRAKE pedal already lives there, spanning -48…22).
+    // Clamped to -off so a desktop build (HUD_OFFSET_X = 0) can't push the
+    // first button off the physical edge.
+    const leftGroupW     = 4 * leftBtnSize;
+    const leftGroupRight = MIRROR_LEFT_X - READOUT_W - TOP_GAP;
+    const leftGroupLeft  = Math.max(leftGroupRight - leftGroupW, -(C.HUD_OFFSET_X ?? 0));
     // _topRowButtons is initialised at the top of create() so the
     // Map / Garage buttons created earlier can also register.
     const registerTopBtn = (entry) => this._topRowButtons.push(entry);
@@ -19217,13 +19359,14 @@ export class GameScene extends Phaser.Scene {
 
     // Music-note button (GENRE — cycle station) — sits past the readout
     // reservation on the mirror's left.
-    const noteRight = MIRROR_LEFT_X - READOUT_W - TOP_GAP;
-    const noteLeft  = noteRight - muteSize;
+    const noteRight = leftGroupRight;
+    // Slot 3 of the strip (Rewind | Pause | FF | Genre) — see leftGroupLeft.
+    const noteLeft  = leftGroupLeft + 3 * leftBtnSize;
     this.hudNoteBtn = this.add.graphics().setDepth(62);
-    this.hudNoteBtn.setInteractive(new Phaser.Geom.Rectangle(noteLeft, muteTop, muteSize, muteSize), Phaser.Geom.Rectangle.Contains);
+    this.hudNoteBtn.setInteractive(new Phaser.Geom.Rectangle(noteLeft, muteTop, leftBtnSize, leftBtnSize), Phaser.Geom.Rectangle.Contains);
     this.hudNoteBtn.input.cursor = 'pointer';
-    this.hudNoteLbl = this.add.image(noteLeft + muteSize / 2, muteTop + muteSize / 2, this._topRowButtonTexture('genre'))
-      .setDisplaySize(muteSize, muteSize)
+    this.hudNoteLbl = this.add.image(noteLeft + leftBtnSize / 2, muteTop + leftBtnSize / 2, this._topRowButtonTexture('genre'))
+      .setDisplaySize(leftBtnSize, leftBtnSize)
       .setDepth(63);
     this.hudNoteBtn.on('pointerover', () => this.hudNoteLbl.setAlpha(1));
     this.hudNoteBtn.on('pointerout',  () => this.hudNoteLbl.setAlpha(0.96));
@@ -19232,36 +19375,36 @@ export class GameScene extends Phaser.Scene {
       this.audio?.nextStation?.();
     });
     this._hudObjects?.push(this.hudNoteBtn, this.hudNoteLbl);
-    registerTopBtn({ id: 'genre', bg: this.hudNoteBtn, lbl: this.hudNoteLbl, artType: 'genre', baseLeft: noteLeft, size: muteSize });
+    registerTopBtn({ id: 'genre', bg: this.hudNoteBtn, lbl: this.hudNoteLbl, artType: 'genre', baseLeft: noteLeft, size: leftBtnSize });
 
     // Skip-track button — same size, immediately LEFT of the note button.
     // Tapping skips to the next song on real-track stations (Country,
     // EDM, Hip-Hop, Heavy Metal, Polka, Reggae, Mariachi, Pop, MK64).
     // No-op on procedural-only stations.
     // Skip / FAST-FORWARD — second from the left, between Pause and Genre.
-    const skipRight = noteRight - muteSize - TOP_GAP;
-    const skipLeft  = skipRight - muteSize;
+    const skipLeft  = leftGroupLeft + 2 * leftBtnSize;   // slot 2
+    const skipRight = skipLeft + leftBtnSize;
     this.hudSkipBtn = this.add.graphics().setDepth(62);
-    this.hudSkipBtn.setInteractive(new Phaser.Geom.Rectangle(skipLeft, muteTop, muteSize, muteSize), Phaser.Geom.Rectangle.Contains);
+    this.hudSkipBtn.setInteractive(new Phaser.Geom.Rectangle(skipLeft, muteTop, leftBtnSize, leftBtnSize), Phaser.Geom.Rectangle.Contains);
     this.hudSkipBtn.input.cursor = 'pointer';
-    this.hudSkipLbl = this.add.image(skipLeft + muteSize / 2, muteTop + muteSize / 2, this._topRowButtonTexture('ff'))
-      .setDisplaySize(muteSize, muteSize)
+    this.hudSkipLbl = this.add.image(skipLeft + leftBtnSize / 2, muteTop + leftBtnSize / 2, this._topRowButtonTexture('ff'))
+      .setDisplaySize(leftBtnSize, leftBtnSize)
       .setDepth(63);
     this.hudSkipBtn.on('pointerover', () => this.hudSkipLbl.setAlpha(1));
     this.hudSkipBtn.on('pointerout',  () => this.hudSkipLbl.setAlpha(0.96));
     this.hudSkipBtn.on('pointerdown', (ptr) => {
       ptr.event?.stopPropagation?.();
-      this._setTopRowButtonTexture(this.hudSkipLbl, 'ff', true, muteSize);
+      this._setTopRowButtonTexture(this.hudSkipLbl, 'ff', true, leftBtnSize);
       // FF only skips the current track — never starts the game.
       // The title screen's START panel is the only path into a run.
       this.audio?.skipTrack?.();
     });
-    const releaseFF = () => this._setTopRowButtonTexture(this.hudSkipLbl, 'ff', false, muteSize);
+    const releaseFF = () => this._setTopRowButtonTexture(this.hudSkipLbl, 'ff', false, leftBtnSize);
     this.hudSkipBtn.on('pointerup', releaseFF);
     this.hudSkipBtn.on('pointerupoutside', releaseFF);
     this.hudSkipBtn.on('pointerout', releaseFF);
     this._hudObjects?.push(this.hudSkipBtn, this.hudSkipLbl);
-    registerTopBtn({ id: 'ff', bg: this.hudSkipBtn, lbl: this.hudSkipLbl, artType: 'ff', baseLeft: skipLeft, size: muteSize });
+    registerTopBtn({ id: 'ff', bg: this.hudSkipBtn, lbl: this.hudSkipLbl, artType: 'ff', baseLeft: skipLeft, size: leftBtnSize });
 
     // Weather / wiper button — right edge, below the top-right button
     // strip.  Fixed (does NOT mirror with handedness, same as the pedals).
@@ -19625,13 +19768,12 @@ export class GameScene extends Phaser.Scene {
     //    phones, also still triggered by SPACE.
     // Pause sits as a separate control at the outer end of the music cluster.
     // Right edge at SCREEN_W-75 leaves ~65 px to the speedometer.
-    const pauseSize = 56;
-    // Pause is now the LEFTMOST top-row button — sits two slots left
-    // of the mirror, with FF + Genre between it and the mirror.
-    const pauseRight = (typeof skipLeft !== 'undefined')
-      ? (skipLeft - TOP_GAP)
-      : (SCREEN_W / 2 - 266);
-    const pauseLeft  = pauseRight - pauseSize;
+    // Sized with the rest of the left group (see leftBtnSize) — four buttons
+    // now share the strip between the screen edge and the readout column.
+    const pauseSize = leftBtnSize;
+    // Slot 1 of the strip — Rewind is now leftmost, then Pause, FF, Genre.
+    const pauseLeft  = leftGroupLeft + 1 * leftBtnSize;
+    const pauseRight = pauseLeft + pauseSize;
     const pauseTop   = 2;
     const pauseBtn = this.add.graphics().setDepth(62);
     // drawPause takes a "lit" flag so the border glows magenta while
@@ -19670,6 +19812,40 @@ export class GameScene extends Phaser.Scene {
     drawPause(1, false);
     this._hudObjects?.push(pauseBtn, pauseLbl);
     registerTopBtn({ id: 'pause', bg: pauseBtn, lbl: pauseLbl, artType: 'pause', baseLeft: pauseLeft, size: pauseSize });
+
+    // ── REWIND — leftmost of the top row (owner 2026-09-07) ───────────────
+    // Charged by reaching the ×15 combo (see _bankRewindCharge); spending it
+    // sends the player back COMBO.REWIND_MILES and shakes the pursuit.
+    // Dimmed while no charge is held, so the button reads as "not ready"
+    // rather than broken — there is no _active art plate for it yet.
+    // Pinned to the screen edge rather than chained off Pause — at 56 px the
+    // four buttons are wider than the strip, so chaining would push Rewind
+    // off-screen.  REWIND_EDGE_X is the knob if it should sit further in.
+    const rwLeft  = leftGroupLeft;                       // slot 0
+    const rewindBtn = this.add.graphics().setDepth(62);
+    rewindBtn.setInteractive(new Phaser.Geom.Rectangle(rwLeft, pauseTop, leftBtnSize, leftBtnSize), Phaser.Geom.Rectangle.Contains);
+    rewindBtn.input.cursor = 'pointer';
+    const rewindLbl = this.add.image(rwLeft + leftBtnSize / 2, pauseTop + leftBtnSize / 2, this._topRowButtonTexture('rewind'))
+      .setDisplaySize(leftBtnSize, leftBtnSize)
+      .setDepth(63);
+    this._rewindBtnRef = rewindBtn;
+    this._rewindLblRef = rewindLbl;
+    /** Charge held → full alpha; empty → dimmed.  Safe to call any time; the
+     *  scene-restart guard mirrors _setTopRowButtonTexture's. */
+    this._refreshRewindBtn = () => {
+      const lbl = this._rewindLblRef;
+      if (!lbl || !lbl.scene) return;
+      lbl.setAlpha((this._rewindCharges ?? 0) > 0 ? 1 : 0.35);
+    };
+    rewindBtn.on('pointerover', () => { if ((this._rewindCharges ?? 0) > 0) rewindLbl.setAlpha(1); });
+    rewindBtn.on('pointerout',  () => this._refreshRewindBtn());
+    rewindBtn.on('pointerdown', (ptr) => {
+      ptr.event?.stopPropagation?.();
+      this._doRewind();
+    });
+    this._refreshRewindBtn();
+    this._hudObjects?.push(rewindBtn, rewindLbl);
+    registerTopBtn({ id: 'rewind', bg: rewindBtn, lbl: rewindLbl, artType: 'rewind', baseLeft: rwLeft, size: leftBtnSize });
 
     // ── PASSENGER indicator — a rider is aboard and hasn't shown their hand
     // yet.  Without this the one-at-a-time rule is invisible: a second
@@ -23960,6 +24136,99 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Crazy-Taxi-style road callout — short, throttled, never a spam stream. */
+  /** Bank one REWIND charge (owner 2026-09-07).
+   *
+   *  Called on the RISING EDGE into COMBO.CAP, from a sprite or an overtake —
+   *  the charge is earned by reaching ×15, however the player got there.  The
+   *  meter STAYS at CAP afterwards, so distance income is untouched and no
+   *  further charge is minted until it falls and climbs back.
+   *
+   *  Charges deliberately live on the SCENE, not on DrivingCombo: a crash calls
+   *  collisionReset() and wipes the meter, but a charge the player already
+   *  earned is theirs to hold ("saved or used immediately"). */
+  _bankRewindCharge() {
+    const max = COMBO.REWIND_MAX_CHARGES ?? 1;
+    const cur = this._rewindCharges ?? 0;
+    if (cur >= max) return false;
+    this._rewindCharges = cur + 1;
+    this._comboCallout('REWIND READY', '#66E0FF');
+    this.haptics?.notify?.();
+    this._refreshRewindBtn?.();
+    return true;
+  }
+
+  /** Spend a charge: send the player back COMBO.REWIND_MILES and shake any
+   *  pursuit.  Position + police only — HP, cash, vices and both clocks are
+   *  deliberately untouched, so this repositions rather than undoing.
+   *
+   *  CRITICAL: `lastSegIdx` is NOT rewound.  Distance income pays on
+   *  `currentSeg - lastSegIdx` only when that is positive, so leaving the
+   *  high-water mark alone means the re-driven miles pay NOTHING — the player
+   *  earns again only past their previous furthest point.  Rewinding it here
+   *  would turn every charge into a repeatable $45/mi farm. */
+  _doRewind() {
+    if ((this._rewindCharges ?? 0) <= 0) return false;
+    if (this._awaitingStart || this._awaitingFirstGameTap || this._paused) return false;
+    this._rewindCharges -= 1;
+
+    const unitsPerMile = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
+    const back = (COMBO.REWIND_MILES ?? 3) * unitsPerMile;
+    this.player.position = Math.max(0, (this.player.position ?? 0) - back);
+    this._odometer = Math.max(0, (this._odometer ?? 0) - (COMBO.REWIND_MILES ?? 3));
+
+    // Shake the pursuit — same teardown the paint-job buy uses.
+    if (this.cops) {
+      this.cops.stars = 0;
+      if ('bumpCount'     in this.cops) this.cops.bumpCount     = 0;
+      if ('rearBumpCount' in this.cops) this.cops.rearBumpCount = 0;
+      if ('headOnCount'   in this.cops) this.cops.headOnCount   = 0;
+      if ('pitCount'      in this.cops) this.cops.pitCount      = 0;
+      this.cops.cops.length = 0;        // in place — never orphan a live iterator
+      this.cops.clearArrest?.();
+    }
+
+    this._comboCallout(`REWIND −${COMBO.REWIND_MILES ?? 3} MI`, '#66E0FF');
+    this.effects?.triggerShake?.(220, 0.006);
+    this.haptics?.notify?.();
+    this._refreshRewindBtn?.();
+    return true;
+  }
+
+  /** ?layout=1 — paint the saved HUD deltas on screen (owner 2026-09-08).
+   *
+   *  `controlsLayout` is {id: {dx, dy, scale}} OFFSETS from the baked defaults,
+   *  and an id is DELETED when its control is dragged back to default — so an
+   *  empty list genuinely means "nothing customised", not "failed to read".
+   *
+   *  Exists because the editor writes to browser storage on whichever device
+   *  made the edits: a layout tuned on a phone can't be read from the repo, and
+   *  a phone has no console.  Screenshot this, fold the numbers into the
+   *  defaults, and bump LAYOUT_VER so the now-redundant deltas don't apply a
+   *  second time on top of the new defaults.  Tap to dismiss. */
+  _showLayoutDump() {
+    const L = this._hudLayout ?? {};
+    const ids = Object.keys(L).sort();
+    const rows = ids.map((id) => {
+      const o = L[id] ?? {};
+      const n = (v) => (typeof v === 'number' ? (Math.round(v * 100) / 100) : '—');
+      return `${id.padEnd(18)} dx ${String(n(o.dx)).padStart(7)}   dy ${String(n(o.dy)).padStart(7)}   scale ${n(o.scale ?? 1)}`;
+    });
+    const body = rows.length
+      ? rows.join('\n')
+      : '(no saved offsets — every control is at its baked default)';
+    const text = `controlsLayout  ·  ${ids.length} customised\n`
+               + `LAYOUT_VER ${(this.registry.get('save')?.get?.('controlsLayoutVer', 1) ?? 1)}\n\n${body}`;
+
+    const D_ = 100000;
+    const bg = this.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x000000, 0.92).setDepth(D_);
+    const t  = this.add.text(8, 8, text, {
+      fontSize: '11px', fontFamily: 'Menlo, Consolas, monospace', color: '#8CFFB0',
+      wordWrap: { width: SCREEN_W - 16 },
+    }).setDepth(D_ + 1);
+    bg.setInteractive();
+    bg.once('pointerdown', () => { t.destroy(); bg.destroy(); });
+  }
+
   _comboCallout(text, color) {
     const now = this.time?.now ?? 0;
     if (now - (this._comboCalloutAt ?? 0) < 900) return;
@@ -24527,6 +24796,18 @@ export class GameScene extends Phaser.Scene {
     p.steerVelocity = 0;
     p.xImpulse = 0;
     this._showPopup?.('➡️ TAKING EXIT', '#FFD23D', 2);
+    // Off-ramp split (memory audit 2026-09-09): warm the HTTP cache for the
+    // deferred rest-stop art DURING the exit cinematic — fetch() keeps only
+    // compressed bytes (no decode, no texture memory); RestStopScene's
+    // preload then decodes from cache almost instantly.  Once per session.
+    if (!this._rsWarmed) {
+      this._rsWarmed = true;
+      try {
+        for (const { key, path } of restStopManifest()) {
+          if (!this.textures.exists(key)) fetch(path, { cache: 'force-cache' }).catch(() => {});
+        }
+      } catch (_) {}
+    }
   }
 
   /** True while the committed exit cinematic owns the car — every damage /
@@ -25627,6 +25908,9 @@ export class GameScene extends Phaser.Scene {
       // Each plate carries its own starting genre — mirror the newly-active
       // plate's genre into rtr.genre and reskin the art (owner 2026-07-17).
       try { window.__genre?.syncActive?.(); } catch (_) {}
+      // Tutorial flags are per-slot, so the phone tile's pulse must be re-read
+      // for the newly-active plate (owner 2026-09-07).
+      try { window.__tutmTileSync?.(); } catch (_) {}
       this._refreshPlateSlots();
     };
     if (save.slotUsed?.(i)) {
@@ -26364,7 +26648,11 @@ export class GameScene extends Phaser.Scene {
         if (!a.ready) a.init(); else a._enablePlayback?.();
         a.playRadioScan?.();
       } else if (a.ready && a._ctx?.state !== 'running') {
-        a._enablePlayback?.(); a.play?.();     // resume after an autoplay block
+        // Resume after an autoplay block — this must NOT jump to another song.
+        // play() would, via _refreshStationPlayback's random pick; resume only
+        // falls back to a deliberate start when nothing was playing at all.
+        a._enablePlayback?.();
+        if (!a.resumePlayback?.()) a.play?.();
       }
       return;
     }
@@ -26390,7 +26678,12 @@ export class GameScene extends Phaser.Scene {
       // left it last session (owner 2026-09-05) — the menu mix never owns
       // the run.  Falls back to the chosen station started by init().
       if (!pend) a.restorePersistedPlayback?.();
-    } else if (a._ctx?.state !== 'running') { a._enablePlayback?.(); a.play?.(); }  // resume after an autoplay block
+    } else if (a._ctx?.state !== 'running') {
+      // Resume after an autoplay block, entering gameplay.  Must keep the
+      // current song rather than re-rolling one (see AudioSystem.resumePlayback).
+      a._enablePlayback?.();
+      if (!a.resumePlayback?.()) a.play?.();
+    }
     else if (_scanWasOn) {
       // The menu mix hands off to gameplay: resume the soundtrack where the
       // player left it last session (owner 2026-09-05); if nothing is
@@ -26417,6 +26710,48 @@ export class GameScene extends Phaser.Scene {
   }
 
   _startGameplay() {
+    // ── Plate gate (owner 2026-09-07) ──────────────────────────────────────
+    // A blank plate is named BEFORE the run exists, not during it.  This used
+    // to prompt further down (just after _awaitingFirstGameTap), which left the
+    // world live behind the modal: Phaser's keyboard binds to `window`, so the
+    // modal's own Enter also fired the keydown-ENTER first-tap listener and
+    // un-froze the run while the player was still typing; on touch the
+    // #plate-modal exemption in main.js `_blockGameTouch` (needed for keyboard
+    // focus) let the tap reach input.once('pointerdown') for the same result.
+    // Returning early leaves no run to leak into — nothing below has run yet,
+    // so no clock, radio or trip counter starts.  DONE re-enters this method
+    // from the top inside its own tap gesture, which is still a legal moment
+    // for _kickRadio()'s audio start.
+    //
+    // NOT during the guided tutorial: it owns plate entry at its own step 0
+    // (the landscape title, which the tour's poll gates on).  A run started
+    // mid-tutorial — e.g. a Calendar test-run tapped during the portrait tour —
+    // would otherwise pop this before the tutorial reached its plate section
+    // (owner 2026-07-19).  Demo builds never reach the modal either:
+    // __plate.needsEntry() is hard-false under DEMO_MODE, and the 'Guest'
+    // assignment below still persists the name for the rear-plate display.
+    let _tutBusy = !!this._titleTut;
+    try {
+      _tutBusy = _tutBusy
+        || !!window.__tutLegacy?.active?.()
+        || !!localStorage.getItem('rtr_tutStage1')
+        || !!localStorage.getItem('rtr_tutStage2');
+    } catch (_) {}
+    if (!_tutBusy && window.__plate?.needsEntry?.()) {
+      window.showPlateModal?.({
+        required: true,
+        // The modal only self-commits when no onDone is given, so this callback
+        // owns the set().  Re-entering runs the gate again: if the name somehow
+        // didn't take, the player is asked again rather than dropped into a run
+        // with a blank plate — each pass needs its own DONE tap, so it can't spin.
+        onDone: (name) => {
+          try { window.__plate?.set?.(name); } catch (_) {}
+          this._startGameplay();
+        },
+      });
+      return;
+    }
+
     this._awaitingStart = false;
     // The title just committed the run's difficulty (incl. Custom) without a
     // scene restart — recalibrate the save sandbox now, before any purchase
@@ -26439,29 +26774,16 @@ export class GameScene extends Phaser.Scene {
     // Space) flips the flag, the world starts scrolling, and gameTime
     // begins counting from that moment.
     this._awaitingFirstGameTap = true;
-    // First-ever run: ask the player to set their license plate (their
-    // name on the leaderboard).  DOM popup so the native keyboard is used;
-    // only shows when no plate is saved yet, so it appears exactly once.
-    // BUT NOT during the guided tutorial: it has its OWN plate step (the
-    // landscape title, step 0, which the tour's poll gates on). A run that
-    // starts mid-tutorial (e.g. a Calendar test-run tapped during the portrait
-    // tour) was auto-popping this modal BEFORE the tutorial reached the plate
-    // section (owner 2026-07-19). Let the tutorial own plate entry; normal
-    // (non-tutorial) first runs still prompt here.
-    let _tutBusy = !!this._titleTut;
-    try {
-      _tutBusy = _tutBusy
-        || !!window.__tutLegacy?.active?.()
-        || !!localStorage.getItem('rtr_tutStage1')
-        || !!localStorage.getItem('rtr_tutStage2');
-    } catch (_) {}
-    // Demo build: every player is "Guest".  Persist it to the save (so the rear
-    // plate + any display reads it) and skip the required plate-name modal.
+    // Plate entry already happened in the gate at the top of this method — by
+    // here a plate is guaranteed (or the tutorial owns it), so the run is free
+    // to start.
+    // Demo build: every player is "Guest".  Persist it to the save so the rear
+    // plate + any display reads it (__plate.needsEntry() is already false here
+    // under DEMO_MODE, so the gate never prompted).
     if (C.DEMO_MODE) {
       const _sv = this.registry.get('save');
       if (_sv && !(_sv.activePlate ?? '').trim()) _sv.setActivePlate?.('Guest');
     }
-    if (!_tutBusy && window.__plate?.needsEntry?.()) window.showPlateModal?.({ required: true });
     // Grace window — the START button's own pointerdown is currently
     // mid-dispatch, so any once-listener attached now would fire for
     // the same event and clear the flag immediately.  Delay listener

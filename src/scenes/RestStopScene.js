@@ -13,6 +13,7 @@ import {
   SHOP_GREETERS,
 } from '../data/encounters.js';
 import { getPortrait } from '../data/npcPortraits.js';
+import { restStopManifest } from '../systems/AssetManifest.js';
 import { nextTownFact } from '../data/townFacts.js';
 import { MISSION_TIERS, tierFor, contactIdFor, contactGreeting } from '../systems/MissionSystem.js';
 import { getInstalled, buyUpgrade, getUpgradeEffects } from '../systems/UpgradeSystem.js';
@@ -183,8 +184,8 @@ const GENRE_CAR_PRICE = 25000;
 const GENRE_LABELS = {
   hiphop_phonk: 'HIP-HOP / PHONK', country: 'COUNTRY', reggaeton: 'REGGAETON',
   k_pop: 'K-POP', metal: 'METAL', classic_rock: 'CLASSIC ROCK',
-  edm_rave: 'EDM / RAVE', reggae: 'REGGAE', pop_punk_emo: 'POP-PUNK / EMO',
-  norteno: 'NORTEÑO',
+  edm_rave: 'EDM / RAVE', reggae: 'REGGAE', punk_emo: 'POP-PUNK / EMO',
+  pop: 'POP', norteno: 'NORTEÑO',
 };
 function genreCarItems() {
   const active = window.__genre?.get?.() ?? null;
@@ -476,6 +477,38 @@ function pickVignette(stopId) {
 
 export class RestStopScene extends Phaser.Scene {
   constructor() { super({ key: 'RestStop' }); }
+
+  /** Off-ramp manifest split (memory audit 2026-09-09, Finding 1): the
+   *  rest-stop-only art (NPC portraits + storefront backdrops, ~200 MiB
+   *  decoded) is NOT in BootScene's manifest anymore.  Whatever is still
+   *  missing loads HERE, behind the off-ramp fade the player already sees —
+   *  usually only on the FIRST stop of a session (textures live on the
+   *  game-level TextureManager afterwards), and near-instantly even then
+   *  because _beginExitCommit warmed the HTTP cache during the exit
+   *  cinematic.  A minimal loading card shows only while something actually
+   *  loads; Phaser skips straight to create() when the queue is empty. */
+  preload() {
+    const missing = restStopManifest().filter(({ key }) => !this.textures.exists(key));
+    if (!missing.length) return;
+    for (const { key, path } of missing) this.load.image(key, path);
+    // ui_loading_screen is a boot asset, so it's available to draw on.
+    const cx = HUD_OFFSET_X + SCREEN_W / 2;
+    const objs = [];
+    try {
+      if (this.textures.exists('ui_loading_screen')) {
+        objs.push(this.add.image(cx, SCREEN_H / 2, 'ui_loading_screen')
+          .setDisplaySize(SCREEN_W, SCREEN_H).setDepth(0));
+      } else {
+        objs.push(this.add.rectangle(cx, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x110A05).setDepth(0));
+      }
+      const barW = 300;
+      objs.push(this.add.rectangle(cx, SCREEN_H - 60, barW, 10, 0x000000, 0.55).setDepth(1));
+      const fill = this.add.rectangle(cx - barW / 2, SCREEN_H - 60, 1, 6, 0xFFD23D).setOrigin(0, 0.5).setDepth(2);
+      objs.push(fill);
+      this.load.on('progress', (v) => { try { fill.width = Math.max(1, barW * v); } catch (_) {} });
+    } catch (_) {}
+    this.load.once('complete', () => { for (const o of objs) { try { o.destroy(); } catch (_) {} } });
+  }
 
   init(data) {
     this._stop     = data?.stop     ?? { id: '?', name: 'Rest Stop' };

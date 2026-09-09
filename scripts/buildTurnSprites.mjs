@@ -33,7 +33,7 @@ import { mkdirSync, copyFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../public/assets/culture/', import.meta.url));
-const GENRES = ['hiphop_phonk','country','reggaeton','k_pop','metal','classic_rock','edm_rave','reggae','pop_punk_emo','norteno'];
+const GENRES = ['hiphop_phonk','country','reggaeton','k_pop','metal','classic_rock','edm_rave','reggae','punk_emo','norteno'];
 const INSTALL = process.argv.includes('--install');
 const OUT = INSTALL ? null : (process.env.SP ?? '/tmp') + '/turn_preview';
 if (OUT) mkdirSync(OUT, { recursive: true });

@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { initOpeningCall } from './ui/OpeningCallSequence.js';
-import { mountComicReader } from './ui/ComicReader.js';
+import { mountComicReader, releaseComicArt } from './ui/ComicReader.js';
 // Story senders that text the player before they're a saved contact.
-const STORY_CONTACT_NAMES = { malik: '🎤 Malik Reed', brittney: '💋 Brittney', waitress: '🎸 The Waitress' };
+const STORY_CONTACT_NAMES = { malik: '🎤 Malik Reed', brittney: '💋 Brittney', waitress: '🎸 Mykenzee' };
 import { BootScene }    from './scenes/BootScene.js';
 import { GameScene }    from './scenes/GameScene.js';
 import { RestStopScene } from './scenes/RestStopScene.js';
@@ -23,7 +23,7 @@ import {
 import {
   UPGRADE_SLOTS, SLOT_LABELS, getSlotTiers, getUpgradeById,
 } from './data/upgrades.js';
-import { AudioSystem }       from './systems/AudioSystem.js';
+import { AudioSystem, DEFAULT_VOLUME } from './systems/AudioSystem.js';
 import { CloudSave }         from './systems/CloudSave.js';
 import { challengeForDate, weekDailies, DAILY_WEEKLY_BONUS, stageConfigFor, challengeById, DAILY_CHALLENGES } from './systems/DailyChallenges.js';
 
@@ -279,6 +279,9 @@ const _boot = () => {
     open: () => {
       // A stale tutorial sheet (fixed overlay) must never greet the menu.
       try { window.__tutmClose?.(); } catch (_) {}
+      // Re-read the Tutorial tile's seen flag now the save is certainly up —
+      // the boot-time read may have run before BootScene registered it.
+      try { window.__tutmTileSync?.(); } catch (_) {}
       const gs = game.scene.getScene('Game');
       // The pause overlay (where the PHONE MENU button lives) is already
       // paused; guard anyway so opening from anywhere leaves us paused.
@@ -577,25 +580,12 @@ const _boot = () => {
   // The phone menu is DOM, the registry and the in-game mode are Phaser. This
   // is the ONE seam between them: read/mark progress by stable id, gate the
   // first-run intro, and hand off to the in-game or title-screen mode.
-  // GAME-UPDATE re-arm (owner 2026-09-05): the tutorial buttons blink until
-  // selected, and NEVER again on later opens — except the first open after a
-  // game update, where every button gets one more blink-until-selected life.
-  // A changed build id wipes the per-button seen flags once.
-  // The save registers in the registry during Boot — poll until it's up so
-  // the reset actually runs (a one-shot read here raced it and silently
-  // no-oped).
-  const _armBlinkReset = () => {
-    const _sv = game.registry.get('save');
-    if (!_sv?.get) return setTimeout(_armBlinkReset, 250);
-    try {
-      const _bid = (typeof __BUILD_ID__ !== 'undefined') ? __BUILD_ID__ : 'dev';
-      if (_sv.get('tutorialBtnSeenBuild', null) !== _bid) {
-        _sv.set(Tut.BTN_SEEN_KEY, null);        // all buttons blink again
-        _sv.set('tutorialBtnSeenBuild', _bid);
-      }
-    } catch (_) {}
-  };
-  _armBlinkReset();
+  // Tutorial-button highlighting is PERMANENT ONE-SHOT state (owner
+  // 2026-09-07).  Once a button is touched its flag is saved and never cleared
+  // or re-armed — not on a new build, not on a reinstall, not on a timer.  The
+  // former _armBlinkReset() wiped tutorialBtnSeen whenever __BUILD_ID__ changed,
+  // so every app update re-lit buttons the player had already used; it and the
+  // tutorialBtnSeenBuild key are deleted.  Do not add any automatic reset here.
   window.__tut = {
     save:     () => game.registry.get('save'),
     ctx:      () => ({ platform: navigator.platform ?? '' }),
@@ -615,7 +605,16 @@ const _boot = () => {
     // Per-button first-selection flags (owner 2026-09-03: "every tutorial
     // button will pulse until each is selected for the first time, each having
     // its own pulse life"). which = 'phone' | 'game_menu' | 'gameplay'.
-    btnSeen:    (which) => !!Tut.btnSeen(game.registry.get('save'), which),
+    // TRI-STATE (owner 2026-09-07): true / false / null, where null means the
+    // SaveSystem isn't in the registry yet.  window.__tut is assigned during
+    // module execution, but the save only lands in BootScene — so a caller that
+    // reads this too early used to get a hard `false` and permanently light the
+    // button.  Callers MUST treat null as "unknown" and leave the highlight
+    // off; never coerce it with `!` (`!null` is true, which re-lights it).
+    btnSeen:    (which) => {
+      const save = game.registry.get('save');
+      return save ? !!Tut.btnSeen(save, which) : null;
+    },
     setBtnSeen: (which) => Tut.setBtnSeen(game.registry.get('save'), which),
     labels:   Tut.CATEGORY_LABEL,
     _scene: () => game.scene.getScene('Game'),   // headless probe / dev hook only
@@ -1041,6 +1040,10 @@ const _boot = () => {
       const save = game.registry.get('save');
       mountComicReader(el, game.registry.get('comic') ?? null, { plate: save?.plateOf?.(save?.data?.activeSlot ?? 0) || '', focus });
     },
+    // Drop every DECODED panel when the reader closes.  Only bitmaps go — the
+    // comic's saved events and the installed art files are untouched, so the
+    // book rebuilds itself from `panelKey` the next time it opens.
+    unmount: () => { try { releaseComicArt(); } catch (_) {} },
   };
 
   window.__stats = {
@@ -1104,6 +1107,44 @@ const _boot = () => {
     },
   };
 
+  // ── Canonical audio-preference setters (owner 2026-09-07) ───────────────
+  // Mute and volume are written from TWO screens — the Settings app and the
+  // Music app — and each had its own copy of the logic, neither of which saved
+  // anything.  So both preferences applied live and then reset on the next
+  // launch, and the two copies had already drifted (both fell back to 0.32
+  // while the real default was 0.50).  Every writer now routes through these,
+  // so the AudioSystem and the durable save cannot disagree.
+  //
+  // Persistence lives HERE, not in AudioSystem: SaveSystem imports AudioSystem
+  // (for STATION_COUNT / DEFAULT_VOLUME), so an AudioSystem -> SaveSystem
+  // dependency would close an import cycle.
+  const _audioPrefs = {
+    setMuted: (v) => {
+      const want  = !!v;
+      const audio = game.registry.get('audio');
+      // toggleMute() FLIPS state — calling it unconditionally would invert a
+      // preference instead of applying it.  Only act on a real difference.
+      if (audio && !!audio.muted !== want) audio.toggleMute?.();
+      game.registry.get('save')?.set?.('settings.muted', want);
+      return want;
+    },
+    setVolume: (v) => {
+      const t     = Math.max(0, Math.min(1, Number(v) || 0));
+      const audio = game.registry.get('audio');
+      if (audio) {
+        audio.volume = t;
+        // While paused, mark this as user-initiated so the resume path doesn't
+        // snap back to the pre-pause level — the player set this deliberately.
+        if (audio.paused) audio._userTouchedVolumeWhilePaused = true;
+        // All gain writes go through the perceptual-curve helper so the slider
+        // feels linear to the ear.
+        audio._applyMasterGain?.();
+      }
+      game.registry.get('save')?.set?.('settings.volume', t);
+      return t;
+    },
+  };
+
   // Settings app — volume / mute / haptics.  Sound routes through the
   // AudioSystem (so it works from the portrait start menu, no pause
   // needed); haptics persists to the save and is pushed to the live
@@ -1114,20 +1155,13 @@ const _boot = () => {
       const save  = game.registry.get('save');
       return {
         muted:   !!audio?.muted,
-        volume:  audio?.volume ?? 0.32,
+        volume:  audio?.volume ?? DEFAULT_VOLUME,
         haptics: save?.get?.('settings.haptics', true) !== false,
       };
     },
-    setMuted: (v) => {
-      const audio = game.registry.get('audio');
-      if (audio && !!audio.muted !== !!v) audio.toggleMute?.();
-    },
-    setVolume: (v) => {
-      const audio = game.registry.get('audio');
-      if (!audio) return;
-      audio.volume = Math.max(0, Math.min(1, Number(v) || 0));
-      audio._applyMasterGain?.();
-    },
+    // Both route through the canonical setters so the change is persisted.
+    setMuted:  (v) => { _audioPrefs.setMuted(v); },
+    setVolume: (v) => { _audioPrefs.setVolume(v); },
     setHaptics: (v) => {
       game.registry.get('save')?.set?.('settings.haptics', !!v);
       game.scene.getScene('Game')?.haptics?.setEnabled?.(!!v);
@@ -1267,7 +1301,7 @@ const _boot = () => {
     get: () => {
       const g = game.registry.get('save')?.get?.('genre', null);
       if (g) return g;
-      // No pick yet → the DEFAULT car (hip-hop/phonk), never the base beater.
+      // No pick yet → the DEFAULT car (see DEFAULT_GENRE), never the base beater.
       try { return localStorage.getItem('rtr.genre') || DEFAULT_GENRE; } catch (_) { return DEFAULT_GENRE; }
     },
     // ── Genre-car ownership (dealership $25k buys; the tutorial pick is the
@@ -1363,27 +1397,17 @@ const _boot = () => {
       sv?.set?.('settings.radioSet', true);   // marks a DELIBERATE choice (survives the sanitizer)
       game.registry.get('audio')?.setStation?.(i);
     },
+    // Routed through the canonical setters so the Music app and the Settings
+    // app can never disagree, and so both changes persist.
     toggleMute: () => {
       const audio = game.registry.get('audio');
-      audio?.toggleMute?.();
+      return _audioPrefs.setMuted(!audio?.muted);
     },
     getVolume: () => {
       const audio = game.registry.get('audio');
-      return audio?.volume ?? 0.32;
+      return audio?.volume ?? DEFAULT_VOLUME;
     },
-    setVolume: (v) => {
-      const audio = game.registry.get('audio');
-      if (!audio) return;
-      const t = Math.max(0, Math.min(1, Number(v) || 0));
-      audio.volume = t;
-      // While paused, mark this as a user-initiated change so the
-      // resume path doesn't snap back to the pre-pause level — the
-      // player explicitly set this volume.
-      if (audio.paused) audio._userTouchedVolumeWhilePaused = true;
-      // All gain writes go through the perceptual-curve helper so
-      // the slider feels linear to the ear.
-      audio._applyMasterGain?.();
-    },
+    setVolume: (v) => { _audioPrefs.setVolume(v); },
     isPaused: () => {
       const audio = game.registry.get('audio');
       return !!audio?.paused;
@@ -1432,6 +1456,9 @@ const _boot = () => {
     },
   };
 
+  // Last applied #game-root box — lets applyOrientation skip redundant
+  // Phaser scale work (memory audit 2026-09-09, Finding 2).
+  let _lastFitW = 0, _lastFitH = 0;
   const applyOrientation = () => {
     const isPortrait = window.innerHeight > window.innerWidth;
     // Locked = the phone-menu CSS override keeps the menu open even in
@@ -1498,21 +1525,32 @@ const _boot = () => {
     if (root && game.scale?.setParentSize) {
       const r = root.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) {
-        // Decoupled width (Task 4): size the CANVAS to the container's aspect
-        // so FIT fills it edge-to-edge (no side/bottom bars) and scenery can
-        // run to the screen edge.  Only in LANDSCAPE — portrait is the
-        // rotate-to-play overlay and would yield a tall (cropped) canvas, so
-        // we keep the last landscape width through a rotation.  setWorldWidth
-        // updates HUD_OFFSET_X *before* setGameSize fires the scene 'resize',
-        // so each scene re-centers its cameras against the fresh value.
-        if (r.width >= r.height) {
-          const targetW = setWorldWidth(SCREEN_H * (r.width / r.height));
-          if (game.scale.gameSize.width !== targetW) {
-            game.scale.setGameSize(targetW, SCREEN_H);
+        // Memory audit 2026-09-09 (Finding 2/3): the settle ladders make this
+        // run MANY times per rotation, and each scale pass is NOT cheap — it
+        // resizes canvas state and emits Phaser RESIZE events.  Skip the whole
+        // scale block when the parent box hasn't actually changed since the
+        // last applied fit; the pause/resume logic above still ran.
+        const fw = Math.round(r.width), fh = Math.round(r.height);
+        if (fw !== _lastFitW || fh !== _lastFitH) {
+          _lastFitW = fw; _lastFitH = fh;
+          // Decoupled width (Task 4): size the CANVAS to the container's aspect
+          // so FIT fills it edge-to-edge (no side/bottom bars) and scenery can
+          // run to the screen edge.  Only in LANDSCAPE — portrait is the
+          // rotate-to-play overlay and would yield a tall (cropped) canvas, so
+          // we keep the last landscape width through a rotation.  setWorldWidth
+          // updates HUD_OFFSET_X *before* setGameSize fires the scene 'resize',
+          // so each scene re-centers its cameras against the fresh value.
+          if (r.width >= r.height) {
+            const targetW = setWorldWidth(SCREEN_H * (r.width / r.height));
+            if (game.scale.gameSize.width !== targetW) {
+              game.scale.setGameSize(targetW, SCREEN_H);
+            }
           }
+          // setParentSize() already calls and returns refresh() internally
+          // (verified in Phaser 3.90 ScaleManager) — the old explicit
+          // refresh() after it doubled every resize event (Finding 3).
+          game.scale.setParentSize(r.width, r.height);
         }
-        game.scale.setParentSize(r.width, r.height);
-        game.scale.refresh();
       }
 
     }
@@ -1532,19 +1570,33 @@ const _boot = () => {
   window.addEventListener('pointerdown', tapResumeHandler, { capture: true });
   window.addEventListener('touchstart',  tapResumeHandler, { capture: true });
 
+  // ── ONE settle sequence per rotation (memory audit 2026-09-09, Finding 2) ─
+  // iOS emits several resize / visualViewport.resize events per physical
+  // rotation, and the old code started a fresh uncancelled four-timer ladder
+  // from EACH of them (from four overlapping sources) — dozens of
+  // applyOrientation passes per turn, a concentrated burst of scale/canvas
+  // work while the process is already near the iOS memory ceiling.  Now every
+  // trigger REPLACES the pending settle sequence instead of stacking another:
+  // at most one rAF + one timer ladder is ever in flight.
+  // (The ladder itself stays — the iOS rotation animation often fires no
+  // final 'resize' once it settles, so a single immediate re-fit lands on a
+  // MID-rotation size: "low, then pops".)
+  let _settleTimers = [];
+  let _settleRaf = 0;
+  const scheduleOrientationSettle = (steps = [120, 300, 550, 900]) => {
+    for (const t of _settleTimers) clearTimeout(t);
+    _settleTimers = [];
+    if (_settleRaf) cancelAnimationFrame(_settleRaf);
+    _settleRaf = requestAnimationFrame(() => { _settleRaf = 0; applyOrientation(); });
+    for (const ms of steps) _settleTimers.push(setTimeout(applyOrientation, ms));
+  };
+
   const onOrientationChange = () => {
     // Close any open rotate-reminder popup on every rotation so it can never
     // linger over the menu/editor (a lingering modal made the iPhone menu
     // unreachable after a Cancel + turn).
     try { window.__activeConfirmClose?.(); } catch (_) {}
-    requestAnimationFrame(applyOrientation);
-    // iOS quirk: the rotation animation updates the viewport WHILE turning but
-    // often fires NO final 'resize' once it settles — so the rAF above re-fit
-    // the canvas to a MID-rotation size, leaving the title/HUD letterboxed low
-    // until the next stray event (a tap) snapped it ("low, then pops").  Re-fit
-    // a few times across the animation's settle window so it lands correctly on
-    // its own.  applyOrientation is idempotent + cheap, so extra calls are free.
-    for (const ms of [120, 300, 550, 900]) setTimeout(applyOrientation, ms);
+    scheduleOrientationSettle();
   };
   // ── iOS GPU-eviction recovery (owner 2026-08-10) ────────────────────────
   // Safari can evict a backgrounded tab's GPU textures WITHOUT firing
@@ -1565,6 +1617,29 @@ const _boot = () => {
     if (away < 30000) return;                      // brief app-switch: nothing to do
     const r = game.renderer;
     if (!r?.gl || r.contextLost) return;           // real loss → Phaser's own handler owns it
+    // Memory audit 2026-09-09 (Finding 4): rebuilding every GL resource on a
+    // HEALTHY context transiently duplicates a huge share of the GPU
+    // allocation (createResource() allocates new handles before the old ones
+    // are collected) — with the current texture set that spike alone can get
+    // the WebKit process killed, and the restart then gets blamed on the next
+    // rotation.  So PROBE first: gl.isTexture() on a sample of live wrappers.
+    // Safari's silent eviction replaces the underlying context state, so dead
+    // handles fail the probe; a healthy context passes and we do NOTHING.
+    const evictionDetected = (() => {
+      try {
+        const gl = r.gl;
+        if (gl.isContextLost?.()) return false;    // real loss → Phaser's handler
+        let checked = 0, dead = 0;
+        for (const w of (r.glTextureWrappers ?? [])) {
+          if (!w?.webGLTexture) continue;
+          checked++;
+          if (!gl.isTexture(w.webGLTexture)) dead++;
+          if (checked >= 8) break;
+        }
+        return checked > 0 && dead > 0;
+      } catch (_) { return true; }                 // can't prove health → old behavior
+    })();
+    if (!evictionDetected) return;                 // healthy GPU: no rebuild, no spike
     try {
       for (const listName of ['glTextureWrappers', 'glBufferWrappers',
         'glFramebufferWrappers', 'glProgramWrappers',
@@ -1585,22 +1660,19 @@ const _boot = () => {
 
   window.addEventListener('resize',            onOrientationChange);
   window.addEventListener('orientationchange', onOrientationChange);
-  requestAnimationFrame(applyOrientation);
   // ── Cold-load settle (owner 2026-08-05: black bar on first landscape load,
   // cured only by rotating away and back).  A ROTATION gets the settle ladder
-  // in onOrientationChange, but a page loaded ALREADY in landscape got just
-  // the single rAF fit above — before iOS resolves the safe-area insets and
-  // collapses the toolbar, and that late settling doesn't reliably fire
-  // `resize`.  The canvas stayed fitted to the stale (shorter) box: an
-  // over-wide world with a letterboxed black bar underneath.  Run the same
-  // ladder on boot, and keep a ResizeObserver on #game-root so ANY later box
-  // change (toolbar show/hide, PWA chrome, split-view) re-fits without
-  // needing a rotation.  applyOrientation is idempotent + cheap.
-  for (const ms of [120, 300, 550, 900, 1600]) setTimeout(applyOrientation, ms);
+  // in onOrientationChange, but a page loaded ALREADY in landscape needs its
+  // own — iOS resolves safe-area insets and collapses the toolbar late, and
+  // that settling doesn't reliably fire `resize`.  Same coalesced scheduler,
+  // longer tail; and a ResizeObserver on #game-root so ANY later box change
+  // (toolbar show/hide, PWA chrome, split-view) re-fits without needing a
+  // rotation — it too replaces the pending sequence rather than stacking.
+  scheduleOrientationSettle([120, 300, 550, 900, 1600]);
   try {
     const _root = document.getElementById('game-root');
     if (_root && 'ResizeObserver' in window) {
-      new ResizeObserver(() => applyOrientation()).observe(_root);
+      new ResizeObserver(() => scheduleOrientationSettle()).observe(_root);
     }
   } catch (_) {}
   try { window.visualViewport?.addEventListener?.('resize', onOrientationChange); } catch (_) {}

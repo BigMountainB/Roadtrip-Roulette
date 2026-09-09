@@ -235,8 +235,10 @@ export function initOpeningCall() {
       // genre (station action) or starts a run (default genre takes over).
       if (a.playRadioScan) { a.playRadioScan(); return; }
       if (a._ctx?.state !== 'running') {
+        // Unblocking the context must not re-roll the song (see
+        // AudioSystem.resumePlayback); only start fresh if nothing is current.
         a._enablePlayback?.();
-        a.play?.();
+        if (!a.resumePlayback?.()) a.play?.();
       }
     } catch (_) {}
   };
@@ -406,6 +408,7 @@ export function initOpeningCall() {
   function teardown() {
     state = 'done';
     disarmUnlock();
+    disarmOrientation();                 // never leave a rotate listener behind
     ring.stop();                         // never leave the ringtone running
     cancelAnimationFrame(raf);
     root.style.display = 'none';
@@ -425,6 +428,60 @@ export function initOpeningCall() {
     else { try { audio.play()?.catch?.(() => {}); } catch (_) {} }
   });
 
+
+  // ── Orientation dismissal, gated on first-launch completion ─────────────
+  // A RETURNING launch dismisses the vertical title when the phone is turned to
+  // landscape, exactly as a tap would.  The FIRST launch after a fresh install
+  // does NOT: the title/call onboarding owns the screen until the player taps,
+  // so rotating can never skip it.
+  //
+  // introDone() (rtr_intro_call_done) is the ONLY input.  Deliberately not
+  // liveRun, crash state, build id or app updates — none of those may influence
+  // whether the title can be dismissed.
+  let orientMQ = null;      // MediaQueryList, while armed
+  let onOrient = null;      // handler ref, so teardown can always detach it
+
+  function isLandscape() {
+    try { return !!window.matchMedia?.('(orientation: landscape)')?.matches; }
+    catch (_) { return false; }
+  }
+
+  /** Detach every orientation listener.  Safe to call repeatedly, and called
+   *  from teardown + the tap path so a listener can never leak or fire twice. */
+  function disarmOrientation() {
+    if (onOrient) {
+      try { orientMQ?.removeEventListener?.('change', onOrient); } catch (_) {}
+      try { orientMQ?.removeListener?.(onOrient); } catch (_) {}   // older WebKit
+      try { window.removeEventListener('orientationchange', onOrient); } catch (_) {}
+    }
+    orientMQ = null;
+    onOrient = null;
+  }
+
+  /** Arm landscape-dismiss for the splash.  No-op on a first install. */
+  function armOrientationDismiss() {
+    disarmOrientation();                  // never two live listeners
+    if (!introDone()) return;             // first install → onboarding owns it
+
+    onOrient = () => {
+      if (state !== 'splash') return disarmOrientation();   // already left
+      if (!introDone() || !isLandscape()) return;
+      disarmOrientation();                // one-shot
+      dismissToMenu();
+    };
+
+    try {
+      orientMQ = window.matchMedia?.('(orientation: landscape)') ?? null;
+      if (orientMQ?.addEventListener) orientMQ.addEventListener('change', onOrient);
+      else orientMQ?.addListener?.(onOrient);                // older WebKit
+    } catch (_) { orientMQ = null; }
+    // orientationchange as a backstop for WebViews that don't fire the MQ.
+    try { window.addEventListener('orientationchange', onOrient); } catch (_) {}
+
+    // Returning launch that is ALREADY landscape: dismiss once the splash has
+    // painted, rather than never firing because no change event ever arrives.
+    if (isLandscape()) setTimeout(() => onOrient?.(), 0);
+  }
 
   // ── Title splash → (first open) ring the call, or (returning) menu ───────
 
@@ -459,11 +516,15 @@ export function initOpeningCall() {
       ev?.preventDefault?.();
       root.removeEventListener('pointerup', onTap);
       root.removeEventListener('click', onTap);
+      disarmOrientation();                // tap wins; rotate must not re-fire
       if (introDone()) dismissToMenu();   // returning open → straight to menu
       else beginCall(ev);                 // first open → ring the manager
     };
     root.addEventListener('pointerup', onTap);
     root.addEventListener('click', onTap);
+    // Returning launches may also dismiss by rotating to landscape; a first
+    // install ignores rotation entirely (see armOrientationDismiss).
+    armOrientationDismiss();
   }
 
   /** Returning open: tap on the title starts the menu music and reveals the
@@ -533,18 +594,10 @@ export function initOpeningCall() {
   let force = false;
   try { force = new URLSearchParams(location.search).has('intro'); } catch (_) {}
   if (force) markIntroDone(false);
-  // A game already in progress (iOS mid-run reload → liveRun auto-resume):
-  // the pre-paint guard in index.html already hid the overlay and set this
-  // flag.  Don't show the intro title over a resuming game — release any
-  // music hold and leave it hidden.  ?intro=1 overrides (force the intro).
-  if (window.__introSkipForResume && !force) {
-    try { root.style.display = 'none'; root.setAttribute('aria-hidden', 'true'); } catch (_) {}
-    document.body.classList.remove('opening-call-active');
-    suppressMusic(false);
-    state = 'done';
-    return;
-  }
-  // Otherwise the title screen is the first thing on this open (owner
-  // 2026-09-05) — a fresh boot to the menu, or a first-open call.
+  // The title screen is the first thing on EVERY cold open (owner 2026-09-07)
+  // — a fresh boot, a first-open call, or a boot with a live run saved.  There
+  // is deliberately no resume bypass here: a resumable run is offered on the
+  // title behind this splash (GameScene sets _titleResumeSnap), so it can no
+  // longer start underneath the overlay.  Do not add an exception.
   startTitleSplash();
 }

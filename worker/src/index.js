@@ -33,7 +33,7 @@ const normPlate = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 // ── Entitlement skus (must match the game's culture keys / schema.sql) ──
 const GENRE_KEYS = [
   'hiphop_phonk', 'country', 'reggaeton', 'k_pop', 'metal',
-  'classic_rock', 'edm_rave', 'reggae', 'pop_punk_emo', 'norteno',
+  'classic_rock', 'edm_rave', 'reggae', 'punk_emo', 'norteno',
 ];
 const ATOMIC_SKUS = new Set([
   'route_full', 'plate_custom', 'plates_states',

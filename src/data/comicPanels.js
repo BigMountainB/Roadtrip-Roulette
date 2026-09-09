@@ -297,6 +297,17 @@ export const PANEL_META = {
     playerTail:   { x: 0.271, y: 0.332 },
     protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
   },
+  // The live node is `vantage_arrival`; `spotted` is the art beat name, not a
+  // story choice id.  Keep both keys so old saved comics remain stable while
+  // new conversations can actually resolve the approved establishing panel.
+  'country.vantage_arrival': {
+    art: 'assets/storylines/country/vantage/vantage_01_spots_friends_work_uniform.png',
+    bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
+    playerBubble: { x: 0.04, y: 0.64, w: 0.45, h: 0.30 },
+    tail:         { x: 0.530, y: 0.292 },
+    playerTail:   { x: 0.271, y: 0.332 },
+    protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
+  },
 
   // ── Classic Rock (22 approved panels with measured tail anchors) ──
   'classicRock.vantage_diner.shift_end': {
@@ -525,7 +536,50 @@ export const PANEL_META = {
   },
 };
 
+/** ESTABLISHING key for a node — the art shown BEFORE a choice is made. */
 export function panelKeyFor(storyId, nodeId) { return `${storyId}.${nodeId}`; }
+
+/** Is there an approved mapping for this key? */
+export function hasPanelArt(panelKey) {
+  return typeof panelKey === 'string' && !!PANEL_META[panelKey]?.art;
+}
+
+/**
+ * Panel key for a COMMITTED CHOICE (Ch.18 mapping contract).
+ *
+ * Art is NEVER inferred from a filename or from the node id alone.  The
+ * resolution order is authored-first, and the winning key is persisted on the
+ * ledger entry so a re-render years later reproduces the same panel even if
+ * these rules change:
+ *
+ *   1. explicit `choice.panelKey`   — authored override, AUTHORITATIVE
+ *   2. `<storyId>.<nodeId>.<choiceId>` if mapped
+ *   3. explicit `node.panelKey`     — authored override, AUTHORITATIVE
+ *   4. `<storyId>.<nodeId>` if mapped
+ *   5. null → placeholder
+ *
+ * Steps 1 and 3 are TERMINAL on purpose: an author who names a key is
+ * declaring which panel this beat is, so if that art is missing the answer is a
+ * placeholder, never a fall-through to a different image.  Substituting a
+ * semantically-nearby panel is exactly the failure this contract forbids.
+ *
+ * The cross-story case this exists for: the Country route begins at Hip-Hop's
+ * `mercer_fork` / `ride`, so the committed key is naturally
+ * `hiphop.mercer_fork.ride` while the approved art is mapped as
+ * `country.mercer_fork.ride`.  That is fixed with `choice.panelKey`, NOT by
+ * rewriting ledger story identity to chase artwork.
+ */
+export function resolvePanelKey({ storyId, nodeId, choiceId = null, node = null, choice = null } = {}) {
+  if (typeof choice?.panelKey === 'string' && choice.panelKey) return choice.panelKey;
+  if (choiceId != null) {
+    const k = `${storyId}.${nodeId}.${choiceId}`;
+    if (PANEL_META[k]) return k;
+  }
+  if (typeof node?.panelKey === 'string' && node.panelKey) return node.panelKey;
+  const nodeKey = panelKeyFor(storyId, nodeId);
+  if (PANEL_META[nodeKey]) return nodeKey;
+  return null;                          // → placeholder, never a substitute
+}
 
 export function panelMeta(panelKey) {
   const m = PANEL_META[panelKey];

@@ -3739,8 +3739,11 @@
             const isDefault   = (window.__music?.getDefaultStation?.() ?? 0) === s.index;
             const locked      = _gLocked(s);
             const culture = s.culture ?? '';
+            // A culture with no overlay art yet (POP) hides the broken <img> and
+            // falls back to the card's own name + song-count text.  Never show
+            // another genre's overlay in its place.
             const cultureArt = culture ? `<div class="genre-art" aria-hidden="true">
-              <img src="assets/ui/music_genres/${culture}.png?v=vehicle-scenes-1" alt="" />
+              <img src="assets/ui/music_genres/${culture}.png?v=vehicle-scenes-1" alt="" onerror="this.style.display='none'" />
             </div>` : '';
             return `<div class="genre ${playing ? 'playing' : ''} ${locked ? 'locked' : ''}" data-idx="${s.index}" data-locked="${locked ? 1 : ''}" style="border-color:${s.color}; box-shadow:inset 0 0 3.5vmin ${s.color}30, 0 0 8px rgba(0,0,0,0.5);">
               ${cultureArt}
@@ -4138,6 +4141,10 @@
       };
       addTap(document.getElementById('phone-app-close'), () => {
         appModal.classList.remove('open', 'tut-mode'); markModalClosing();
+        // Release the comic's DECODED panels (owner 2026-09-07).  Harmless for
+        // every other app.  The book itself is untouched — it re-renders from
+        // its saved events, and the image files stay installed with the game.
+        try { window.__comic?.unmount?.(); } catch (_) {}
       });
       const fmtClock = (s) => (s == null) ? '—'
         : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -4729,11 +4736,29 @@
       // First-selection nudge (owner 2026-09-03): the tile pulses until it is
       // selected once — its OWN pulse life, independent of the title and HUD
       // "?" buttons. Read from the save through the Phaser bridge once it is up.
+      // STARTUP RACE (owner 2026-09-07): this used to wait only for
+      // window.__tut, which main.js assigns during module execution — BEFORE
+      // BootScene puts the SaveSystem in the registry.  So the bridge existed,
+      // the save did not, btnSeen('phone') answered a missing store with false,
+      // the tile got tut-flash, and nothing ever re-read it.  That is why the
+      // phone button kept pulsing when the title and HUD buttons (built inside
+      // GameScene, after the save is up) did not.
+      //
+      // Wait for the SAVE, not the bridge, and never treat unknown as "unseen":
+      // while the answer isn't available the pulse stays OFF and we re-poll.
       const tutmTilePulse = () => {
-        const B = window.__tut; if (!B) return setTimeout(tutmTilePulse, 300);
-        qhit('tutorial')?.classList.toggle('tut-flash', !B.btnSeen('phone'));
+        const B    = window.__tut;
+        const save = B?.save?.();
+        if (!B || !save) { setTimeout(tutmTilePulse, 300); return; }
+        const seen = B.btnSeen('phone');
+        // null/undefined = save still initialising → leave the pulse off.
+        if (seen == null) { setTimeout(tutmTilePulse, 300); return; }
+        qhit('tutorial')?.classList.toggle('tut-flash', !seen);
       };
       tutmTilePulse();
+      // Re-sync on demand: the phone menu opening and an active-slot switch
+      // both call this (each slot has its own tutorial flags).
+      window.__tutmTileSync = tutmTilePulse;
 
       // ── Guided tutorial tour (owner 2026-07-17) — replaces the old slide
       // carousel. Tutorial is forced first; each listed button highlights, the
@@ -5239,39 +5264,15 @@
     </div>
   </div>
 
-  <!-- Pre-paint intro guard (owner 2026-09-05: "the intro image is only
-       shown at the intro, not after a game has been started").  An iOS
-       mid-run tab reload auto-resumes the liveRun autosave; without this the
-       display:block title overlay would cover the resuming game.  This
-       classic (non-module, so it runs synchronously DURING parse, before the
-       first paint) checks the active save slot for an in-progress live run
-       and hides the overlay + flags the skip, so a resume never flashes the
-       intro.  initOpeningCall() reads the same flag and skips the splash.
-       ?intro=1 still forces the intro (handled module-side). -->
-  <script>
-    (function () {
-      try {
-        var raw = localStorage.getItem('rtr.save.v3');
-        if (!raw) return;
-        var d = JSON.parse(raw);
-        var slot = d && d.slots ? d.slots[d.activeSlot] : null;
-        var lr = slot && slot.global ? slot.global.liveRun : null;
-        var live = lr && lr.snap && (lr.snap.position || 0) > 50;
-        if (!live && d && d.slots) {                 // fallback: any slot mid-run
-          var slots = d.slots, keys = Object.keys(slots);
-          for (var i = 0; i < keys.length; i++) {
-            var s = slots[keys[i]], l = s && s.global ? s.global.liveRun : null;
-            if (l && l.snap && (l.snap.position || 0) > 50) { live = true; break; }
-          }
-        }
-        if (live) {
-          window.__introSkipForResume = true;
-          var oc = document.getElementById('opening-call');
-          if (oc) oc.style.display = 'none';
-        }
-      } catch (_) {}
-    })();
-  </script>
+  <!-- The vertical title screen is ABSOLUTE: it shows on every cold launch,
+       including one with a live run saved (owner 2026-09-07).  The pre-paint
+       guard that used to hide #opening-call for a resumable run is gone, and
+       so is the __introSkipForResume flag it set.  A saved run is now OFFERED
+       on the title (the RESUME button) after the player dismisses the splash
+       — never auto-entered underneath it.  Do not reintroduce an exception
+       here for crashes, autosaves, returning players, orientation or app
+       updates; the resume gating lives in GameScene's init(), which routes
+       every cold boot to the title. -->
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

@@ -37,6 +37,7 @@ import {
   FEATURED_STORIES, STORY_IDS, STORY_GENRE, STORY_DEFS_VERSION,
   lineKey, labelKey, replyKey,
 } from '../data/featuredStories.js';
+import { resolvePanelKey, panelKeyFor } from '../data/comicPanels.js';
 
 export const CANON_SCHEMA_VERSION = 1;
 
@@ -400,6 +401,17 @@ export class StorySystem {
       // key later and still read if the key is ever renamed away (18.2).
       // Dynamic lines resolve to the copy the player actually saw.
       dialogueKeys: { line: lineKey(storyId, nodeId), label: labelKey(storyId, nodeId, choiceId), reply: replyKey(storyId, nodeId, choiceId) },
+      // STABLE PANEL KEY (Ch.18 mapping contract).  Resolved once, HERE, and
+      // stored — same discipline as dialogueKeys.  The comic must never
+      // re-derive art from the node id (which silently dropped every
+      // choice-level panel) or from a filename.  Persisting it also means a
+      // later change to the resolution rules cannot repaint an old book.
+      // `?? panelKeyFor(...)` is a stable IDENTIFIER, not a substitute image:
+      // an unmapped key resolves to no art, so the renderers still show a
+      // placeholder.  Recording it means art authored at that exact node key
+      // later is picked up by books already on disk.
+      panelKey: resolvePanelKey({ storyId, nodeId, choiceId, node, choice })
+                ?? panelKeyFor(storyId, nodeId),
       fallbackText: { line: this.resolveLine(storyId, nodeId), label: choice.label ?? '', reply: this.resolveReply(storyId, nodeId, choiceId) },
       importance: node.importance ?? 'choice',
       effects: JSON.parse(JSON.stringify(effects)),

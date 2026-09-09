@@ -1,7 +1,7 @@
 // ── Genre Vehicle Traits — foundation unit tests ─────────────────────────
 // Run: node tests/genreTraits.test.mjs   (also `npm test`)
 //
-// Covers the DATA layer: trait resolution for all 10 culture keys, no trait on
+// Covers the DATA layer: trait resolution for all 11 culture keys, no trait on
 // ordinary purchased vehicles, every top-speed cap, the neutral-default
 // multiplier math, and config integrity. (Integration-behavior tests — reggae
 // tickets, metal bonus-use RNG, cargo shield, classic-rock overheat/leg, and
@@ -23,23 +23,23 @@ function near(name, a, b, eps = 1e-9) { check(`${name} (${a} ≈ ${b})`, Math.ab
 
 const KEYS = [
   'hiphop_phonk', 'country', 'reggaeton', 'k_pop', 'metal',
-  'classic_rock', 'edm_rave', 'reggae', 'pop_punk_emo', 'norteno',
+  'classic_rock', 'edm_rave', 'reggae', 'punk_emo', 'pop', 'norteno',
 ];
 // Owner's 2026-08-31 speed table, REGULAR column (Easy = −5, Hard = ×1.1
 // via speedForDifficulty — asserted below).
 const TOP_SPEEDS = {
   hiphop_phonk: 118, country: 105, reggaeton: 115, k_pop: 120, metal: 100,
-  classic_rock: 122, edm_rave: 125, reggae: 95, pop_punk_emo: 110, norteno: 112,
+  classic_rock: 122, edm_rave: 125, reggae: 95, punk_emo: 110, pop: 105, norteno: 112,
 };
 // Explicit no-pedal cruise per car (same per-car cruise/boost gap as the
 // original 2026-07-19 table).
 const CRUISE_SPEEDS = {
   hiphop_phonk: 95, country: 85, reggaeton: 92, k_pop: 98, metal: 80,
-  classic_rock: 100, edm_rave: 105, reggae: 75, pop_punk_emo: 88, norteno: 90,
+  classic_rock: 100, edm_rave: 105, reggae: 75, punk_emo: 88, pop: 82, norteno: 90,
 };
 
-// ── 1. Resolution for all 10 keys (only on the starter/beater) ────────────
-eq('exactly 10 traits defined', Object.keys(GENRE_VEHICLE_TRAITS).length, 10);
+// ── 1. Resolution for all 11 keys (only on the starter/beater) ────────────
+eq('exactly 11 traits defined', Object.keys(GENRE_VEHICLE_TRAITS).length, 11);
 for (const k of KEYS) {
   const t = genreTraitFor(k, STARTER_VEHICLE_ID);
   check(`resolves ${k} on beater`, !!t && t.key === k);

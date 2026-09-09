@@ -27,30 +27,78 @@ const SIZE_KEY = 'rtr.comic.pageSize';   // per-device preference (A4 default)
 
 const PAPER = '#F6F1E4';
 const INK   = '#141414';
-const artCache = new Map();   // path → HTMLImageElement | null (failed)
+// ── Decoded-art cache: BOUNDED (owner 2026-09-07) ─────────────────────────
+// The comic saves only compact events — story/node/choice ids, panelKey,
+// dialogue keys + fallback copy.  No image data is ever persisted, so the book
+// is rebuilt from `panelKey` → file each time it is opened.  That part was
+// always right; what leaked was the DECODED side.
+//
+// A panel decodes to width x height x 4 regardless of how small its PNG is —
+// ~6.0 MB for a 1672x941 — and this cache used to be an unbounded module-level
+// Map that every page in a volume filled on open, then never released.  A long
+// volume could hold hundreds of MB of decoded images for the life of the page,
+// which is the retention class behind the iPhone terminations.
+//
+// Now: a small LRU, plus explicit release when the reader closes.  Original
+// files stay installed with the game; only decoded bitmaps are evicted.
+const ART_CACHE_MAX = 6;      // ≈36 MB decoded at 1672x941 — current page ± neighbours
+const artCache = new Map();   // path → HTMLImageElement | null (failed).  Insertion order = LRU.
+
+function artTouch(path) {     // mark most-recently-used
+  if (!artCache.has(path)) return;
+  const v = artCache.get(path);
+  artCache.delete(path); artCache.set(path, v);
+}
+
+function artTrim(max = ART_CACHE_MAX) {
+  while (artCache.size > max) {
+    const oldest = artCache.keys().next().value;
+    if (oldest === undefined) break;
+    const img = artCache.get(oldest);
+    artCache.delete(oldest);
+    // Drop the decoder's reference so the bitmap can be collected.
+    try { if (img) img.src = ''; } catch (_) {}
+  }
+}
+
+/** Release every decoded panel.  Call when the reader closes — the comic
+ *  itself is untouched, since it re-renders from the saved events. */
+export function releaseComicArt() {
+  for (const img of artCache.values()) { try { if (img) img.src = ''; } catch (_) {} }
+  artCache.clear();
+}
 
 function loadArt(path, onReady) {
   if (!path) return null;
-  if (artCache.has(path)) return artCache.get(path);
+  if (artCache.has(path)) { artTouch(path); return artCache.get(path); }
   const img = new Image();
   artCache.set(path, null);
-  img.onload = () => { artCache.set(path, img); onReady?.(); };
+  img.onload = () => { artCache.set(path, img); artTouch(path); artTrim(); onReady?.(); };
   img.onerror = () => { artCache.set(path, null); };
   img.src = path;
   return null;
 }
 
-/** Resolve every art file a set of pages needs before an export renders
- *  them (renderPage loads lazily and redraws — no good for a one-shot). */
-function preloadArt(pages, timeoutMs = 4000) {
+/** Load exactly the art ONE page needs, then resolve.  Replaces the old
+ *  whole-volume preload: an export used to decode every page up front, which
+ *  is the single largest spike in the app. */
+function loadPageArt(page, timeoutMs = 4000) {
   const paths = new Set();
-  for (const pg of pages) for (const { event } of pg.panels) { const a = event && panelMeta(event.panelKey).art; if (a && !artCache.get(a)) paths.add(a); }
+  for (const { event } of page?.panels ?? []) {
+    const a = event && panelMeta(event.panelKey).art;
+    if (a && !artCache.get(a)) paths.add(a);
+  }
   if (!paths.size) return Promise.resolve();
   return new Promise((resolve) => {
-    let left = paths.size; const done = () => { if (--left <= 0) resolve(); };
+    let left = paths.size;
+    const done = () => { if (--left <= 0) { clearTimeout(t); resolve(); } };
     const t = setTimeout(resolve, timeoutMs);
-    for (const p of paths) { const img = new Image(); img.onload = () => { artCache.set(p, img); done(); }; img.onerror = () => { artCache.set(p, null); done(); }; img.src = p; }
-    void t;
+    for (const p of paths) {
+      const img = new Image();
+      img.onload  = () => { artCache.set(p, img); artTouch(p); done(); };
+      img.onerror = () => { artCache.set(p, null); done(); };
+      img.src = p;
+    }
   });
 }
 
@@ -211,7 +259,10 @@ function renderCover(ctx, w, h, { title, plate, vol, chapters, done }) {
  *  package them as a PDF Blob.  Runs entirely on-device. */
 export async function exportVolumePdf(comic, vol, { pageSize = 'a4', plate = '', onProgress } = {}) {
   const pages = comic.pagesOf(vol);
-  await preloadArt(pages);
+  // Pages are loaded, rendered and released ONE AT A TIME (see the cache note
+  // above).  This used to preload the whole volume before rendering anything,
+  // which decoded every panel simultaneously — the largest memory spike in the
+  // app, and on a long book easily hundreds of MB.
   const cv = document.createElement('canvas'); cv.width = EXPORT_W; cv.height = EXPORT_H;
   const ctx = cv.getContext('2d');
   const toJpeg = () => new Promise((res) => cv.toBlob(async (b) => res(new Uint8Array(await b.arrayBuffer())), 'image/jpeg', EXPORT_Q));
@@ -222,9 +273,12 @@ export async function exportVolumePdf(comic, vol, { pageSize = 'a4', plate = '',
   await push();
   for (let i = 0; i < pages.length; i++) {
     onProgress?.(i + 1, pages.length);
+    await loadPageArt(pages[i]);        // this page only
     renderPage(ctx, pages[i], EXPORT_W, EXPORT_H, null);
     await push();
+    artTrim(1);                         // release it before the next page decodes
   }
+  artTrim(0);                           // nothing held once the volume is packaged
   // Closing card.
   ctx.fillStyle = PAPER; ctx.fillRect(0, 0, EXPORT_W, EXPORT_H);
   ctx.fillStyle = '#B8860B'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -306,13 +360,34 @@ export function mountComicReader(el, comic, opts = {}) {
   foot.append(sizeWrap, status, exp);
   el.append(tabs, body, foot);
 
+  // One observer per mounted reader; rebuilt whenever a volume is drawn.
+  let pageObserver = null;
+  const pageDraw = new WeakMap();       // canvas → its draw()
+
   const drawVolume = (volId) => {
     curId = volId;
     for (const b of tabs.children) b.classList.toggle('on', b.dataset.id === volId);
+    // Switching volumes drops the previous volume's decoded panels — only the
+    // compact events are kept, and pages redraw from them on demand.
+    try { pageObserver?.disconnect(); } catch (_) {}
+    releaseComicArt();
     body.innerHTML = '';
     const vol = comic.volume(volId);
     const pages = comic.pagesOf(vol);
     let lastCh = null;
+    // rootMargin one page tall ⇒ current page ± 1 are drawn ahead of the scroll.
+    pageObserver = (typeof IntersectionObserver === 'function')
+      ? new IntersectionObserver((entries) => {
+          for (const e of entries) {
+            if (!e.isIntersecting) continue;
+            const d = pageDraw.get(e.target);
+            if (!d) continue;
+            pageDraw.delete(e.target);          // draw once; renderPage self-redraws on art load
+            pageObserver.unobserve(e.target);
+            d();
+          }
+        }, { root: body, rootMargin: '150% 0px' })
+      : null;
     const width = Math.max(200, Math.floor(body.clientWidth || el.clientWidth || 300));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     for (const page of pages) {
@@ -328,7 +403,14 @@ export function mountComicReader(el, comic, opts = {}) {
       cv.style.width = width + 'px'; cv.style.height = hPx + 'px';
       cv.className = 'cr-page'; cv.dataset.pageId = page.id;
       const draw = () => { const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); renderPage(ctx, page, width, hPx, draw); };
-      draw();
+      // WINDOWED (owner 2026-09-07): draw only pages at or near the viewport.
+      // Every page used to draw on open, so opening a volume decoded its entire
+      // art set at once.  The observer's rootMargin is one page tall, so the
+      // current page plus its immediate neighbours are ready before they scroll
+      // in; the LRU above evicts anything further away.  Page LAYOUT is
+      // unaffected — the canvas is already sized, so nothing reflows.
+      if (pageObserver) { pageDraw.set(cv, draw); pageObserver.observe(cv); }
+      else draw();                      // no IntersectionObserver → previous behaviour
       body.appendChild(cv);
     }
     const end = document.createElement('div');

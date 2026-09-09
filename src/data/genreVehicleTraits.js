@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────
-// Genre Vehicle Traits — data-driven gameplay identity for the 10 soundtrack-
+// Genre Vehicle Traits — data-driven gameplay identity for the 11 soundtrack-
 // culture STARTER vehicles (the re-skinned beater). Each genre's starter drives
 // differently: 2–3 strengths, 1–2 weaknesses, a unique top-speed cap, and a
 // player-facing description.
@@ -18,7 +18,7 @@
 //
 // Canonical culture keys (must match AssetManifest / AudioSystem):
 //   hiphop_phonk · country · reggaeton · k_pop · metal
-//   classic_rock · edm_rave · reggae · pop_punk_emo · norteno
+//   classic_rock · edm_rave · reggae · punk_emo · pop · norteno
 // ─────────────────────────────────────────────────────────────────────────
 
 /** The starter/beater vehicle id — the ONLY vehicle a genre trait rides on. */
@@ -275,8 +275,8 @@ export const GENRE_VEHICLE_TRAITS = {
     },
   },
 
-  pop_punk_emo: {
-    key: 'pop_punk_emo',
+  punk_emo: {
+    key: 'punk_emo',
     vehicleName: 'Tour Hatchback',
     topSpeedMph: 110,   // pedal-DOWN max (no caffeine)
     cruiseMph:   88,   // no-pedal cruise
@@ -321,6 +321,21 @@ export const GENRE_VEHICLE_TRAITS = {
       steeringMult:          0.85,
       brakingMult:           0.85,
     },
+  },
+
+  pop: {
+    key: 'pop',
+    vehicleName: 'Beater Hatchback',
+    topSpeedMph: 105,   // pedal-DOWN max (no caffeine)
+    cruiseMph:    82,   // no-pedal cruise
+    strengths: [
+      'Balanced handling and speed',
+      'No special weaknesses or gear restrictions',
+    ],
+    weaknesses: [
+      'No special advantages or bonuses',
+    ],
+    modifiers: {},
   },
 };
 

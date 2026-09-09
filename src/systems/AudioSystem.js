@@ -1,5 +1,5 @@
 /**
- * AudioSystem — 10-station radio.  Stations with a `tracks: []` list play
+ * AudioSystem — 11-station radio.  Stations with a `tracks: []` list play
  * real MP3 files (the user's MIDI library, batch-converted via FluidSynth
  * + GeneralUser GS).  Stations without tracks fall back to the original
  * procedural Web Audio synthesis (chorus, supersaw, plate reverb, etc.).
@@ -30,25 +30,25 @@ const STATION_TRACKS = {
     'assets/music/hiphop_phonk/smoke_sparks.mp3',
     'assets/music/hiphop_phonk/toxic_cadence.mp3',
   ],
-  // POP-PUNK / EMO station — dedicated pop_punk_emo/ folder (owner
+  // POP-PUNK / EMO station — dedicated punk_emo/ folder (owner
   // 2026-07-22: retired the borrowed arcade/ playlist now that the genre
   // has its own tracks).
   'POP-PUNK / EMO': [
-    'assets/music/pop_punk_emo/airplane_mode.mp3',
-    'assets/music/pop_punk_emo/blow_the_speakers.mp3',
-    'assets/music/pop_punk_emo/brand_new_machine.mp3',
-    'assets/music/pop_punk_emo/code_yellow.mp3',
-    'assets/music/pop_punk_emo/five_times.mp3',
-    'assets/music/pop_punk_emo/no_brakes.mp3',
-    'assets/music/pop_punk_emo/number_two.mp3',
-    'assets/music/pop_punk_emo/one_way_track.mp3',
-    'assets/music/pop_punk_emo/red_and_blue.mp3',
-    'assets/music/pop_punk_emo/shoulder_of_the_road.mp3',
-    'assets/music/pop_punk_emo/smoke_and_sparks.mp3',
-    'assets/music/pop_punk_emo/spin.mp3',
-    'assets/music/pop_punk_emo/sugar_crash.mp3',
-    'assets/music/pop_punk_emo/wide_awake.mp3',
-    'assets/music/pop_punk_emo/windows_down.mp3',
+    'assets/music/punk_emo/airplane_mode.mp3',
+    'assets/music/punk_emo/blow_the_speakers.mp3',
+    'assets/music/punk_emo/brand_new_machine.mp3',
+    'assets/music/punk_emo/code_yellow.mp3',
+    'assets/music/punk_emo/five_times.mp3',
+    'assets/music/punk_emo/no_brakes.mp3',
+    'assets/music/punk_emo/number_two.mp3',
+    'assets/music/punk_emo/one_way_track.mp3',
+    'assets/music/punk_emo/red_and_blue.mp3',
+    'assets/music/punk_emo/shoulder_of_the_road.mp3',
+    'assets/music/punk_emo/smoke_and_sparks.mp3',
+    'assets/music/punk_emo/spin.mp3',
+    'assets/music/punk_emo/sugar_crash.mp3',
+    'assets/music/punk_emo/wide_awake.mp3',
+    'assets/music/punk_emo/windows_down.mp3',
   ],
   // NORTEÑO station — dedicated norteno/ folder (owner 2026-07-22: retired
   // the borrowed 80s/ synthwave playlist).
@@ -146,6 +146,21 @@ const STATION_TRACKS = {
     'assets/music/metal/road_queen.mp3',
     'assets/music/metal/sirens_call.mp3',
   ],
+  'POP': [
+    'assets/music/pop/2 AMatures.mp3',
+    'assets/music/pop/All I Do Is Win.mp3',
+    'assets/music/pop/Clear the Air.mp3',
+    'assets/music/pop/Ghost in the Rearview.mp3',
+    'assets/music/pop/High Stakes & Red Lines.mp3',
+    'assets/music/pop/No Strings, Just Speed.mp3',
+    'assets/music/pop/Not a Movie Scene.mp3',
+    'assets/music/pop/Overthinking the Move.mp3',
+    'assets/music/pop/Pass the Paparazzi.mp3',
+    'assets/music/pop/Private Agenda.mp3',
+    'assets/music/pop/Standing on My Own Feet.mp3',
+    'assets/music/pop/Story\'s Other Half.mp3',
+    'assets/music/pop/Wrong Turn, Right Direction.mp3',
+  ],
 };
 
 const STATIONS = [
@@ -163,7 +178,7 @@ const STATIONS = [
 
   // Former ARCADE slot.
   {
-    name: 'POP-PUNK / EMO', culture: 'pop_punk_emo', color: '#FF4D9D', bpm: 132,
+    name: 'POP-PUNK / EMO', culture: 'punk_emo', color: '#FF4D9D', bpm: 132,
     melody: { type: 'triangle', notes: [0,0,0,0], gain: 0.0 },
     bass:   { notes: [0], gain: 0.0 },
     drums:  { kick: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -449,6 +464,18 @@ const STATIONS = [
               hat:  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] },
   },
 
+  // ── POP — real-track only.  Procedural fields silent fallback. ────
+  // Appended so existing station indices (PHONK=0 default, etc.) are
+  // unchanged.
+  {
+    name: 'POP', culture: 'pop', trackKey: 'POP', color: '#FF1493', bpm: 120,
+    melody: { type: 'triangle', notes: [0,0,0,0], gain: 0.0 },
+    bass:   { notes: [0], gain: 0.0 },
+    drums:  { kick: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              snare:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+              hat:  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] },
+  },
+
   // ── METAL — real-track only.  Procedural fields silent fallback. ────
   // Appended last so existing station indices (PHONK=0 default, etc.) are
   // unchanged.
@@ -467,6 +494,25 @@ const STATIONS = [
 for (const st of STATIONS) {
   st.tracks = STATION_TRACKS[st.trackKey ?? st.name] ?? [];
 }
+
+/** Number of radio stations — valid indices are 0 .. STATION_COUNT-1.
+ *
+ *  Exported so persistence validates a saved station against the REAL
+ *  catalogue instead of a hard-coded bound.  SaveSystem._sanitizeSettings()
+ *  clamped `settings.radio` to a literal 9, which was correct at 10 stations
+ *  but silently rewrote the LAST station once an eleventh was added (POP took
+ *  index 9, pushing METAL to 10, so METAL reloaded as POP).  Derive it here and
+ *  a new station can never desync the sanitizer again.
+ *
+ *  This module has no imports, so importing it from SaveSystem introduces no
+ *  cycle, and its module scope is pure data (safe to import headlessly). */
+export const STATION_COUNT = STATIONS.length;
+
+/** Starting music volume (0..1).  Exported as the single source of truth: the
+ *  save schema seeds `settings.volume` from it and the UI bridges fall back to
+ *  it, so the three copies can't drift.  They already had — the Settings and
+ *  Music bridges both fell back to 0.32 while the real default was 0.50. */
+export const DEFAULT_VOLUME = 0.50;
 
 // Radio-scan hold music (owner 2026-08-11): a ~3 min seamless loop of the
 // radio surfing across every genre, played after the intro voicemail until
@@ -503,7 +549,7 @@ export class AudioSystem {
     // track element is held paused — so the music genuinely stops until the
     // user un-pauses from the phone-menu Music app.
     this._musicPaused  = false;
-    this.volume        = 0.50;   // music starts at 50%
+    this.volume        = DEFAULT_VOLUME;
     this.ready         = false;
     // Best-effort web/PWA behavior: keep real MP3 radio playing when the page
     // is hidden.  Browsers can still suspend us, but this avoids voluntarily
@@ -721,6 +767,47 @@ export class AudioSystem {
     this._startScheduler();
     // Auto-start the right path for the current station.
     this._refreshStationPlayback();
+  }
+
+  /** RESUME what is already playing — never selects or replaces a track.
+   *
+   *  `play()` ends in _refreshStationPlayback(), which picks a RANDOM track.
+   *  That is correct for a deliberate start, but several recovery paths called
+   *  it meaning "unblock playback" (their own comments said "resume after an
+   *  autoplay block"), so returning to the app or clearing an autoplay block
+   *  jumped to a different song.  Per the audio-refactor constraints, starting
+   *  and resuming are separate idempotent operations: only an explicit
+   *  station/track choice, natural track end, playlist advance, or deliberate
+   *  initial start may replace what is playing.
+   *
+   *  Returns TRUE if there was something to resume, FALSE if nothing is current
+   *  — the caller then decides whether to make a deliberate start.  Selection
+   *  deliberately stays with the caller so it can never leak in here. */
+  resumePlayback() {
+    if (!this.ready) return false;
+    this._lifecycleHalted = false;      // a real resume lifts the lifecycle halt
+    // Don't resume the context while muted — that would re-grab the audio
+    // session and silence the player's own background music.
+    if (!this.muted && this._ctx?.state === 'suspended') {
+      try { this._ctx.resume(); } catch (_) {}
+    }
+    // The scan hold owns playback until a station action cancels it.
+    if (this._radioScanActive) { this._startRadioScan(); return true; }
+    // Procedural scheduling restarts for any station; real-track stations have
+    // zeroed synth voices so it is inert there.  This schedules, never selects.
+    this._currentStep  = 0;
+    this._nextStepTime = this._ctx.currentTime + 0.08;
+    this._startScheduler();
+    const st = STATIONS[this.currentStation];
+    if (!(st?.tracks && st.tracks.length)) return true;   // procedural station resumed
+    const el = this._trackEl;
+    if (!el) return false;              // nothing current — caller's call
+    // A lifecycleStop may have cleared the watchdog; a resumed track re-arms it.
+    this._startSkipWatchdog();
+    if (!this.paused && !this.muted && !this._musicPaused) {
+      try { el.play().catch(() => {}); } catch (_) {}
+    }
+    return true;
   }
 
   /** Start the post-voicemail radio-scan hold loop (see RADIO_SCAN_URL).
@@ -971,8 +1058,18 @@ export class AudioSystem {
         // Route through the master gain so volume/mute/pause apply.
         const src = this._ctx.createMediaElementSource(el);
         src.connect(this._master);
-        el.addEventListener('ended', () => this._onTrackEnded());
-        el.addEventListener('error', () => this._onTrackEnded());
+        // A replaced element can still deliver a LATE 'ended'/'error' — iOS in
+        // particular fires these after we've moved on.  Unguarded, that stale
+        // event advanced whatever song is current NOW, so a track would skip a
+        // second or two after starting.  Only the element that is still the
+        // current one, from the still-current start generation, may advance.
+        const advanceIfCurrent = () => {
+          if (el !== this._trackEl) return;          // superseded element
+          if (myGen !== this._startGen) return;      // superseded start
+          this._onTrackEnded();
+        };
+        el.addEventListener('ended', advanceIfCurrent);
+        el.addEventListener('error', advanceIfCurrent);
         // Successful playback start clears the consecutive-failure
         // safety brake in _onTrackEnded so a later natural 'ended' isn't
         // mistaken for a cascade.
@@ -1006,8 +1103,13 @@ export class AudioSystem {
           if (myGen !== this._startGen) { try { el.pause(); } catch (_) {} return; }
           el.play().catch(() => {
             if (myGen !== this._startGen) return;
-            if (retries > 0) setTimeout(() => tryPlay(retries - 1), 150);
-            else             this._onTrackEnded();
+            if (retries > 0) return setTimeout(() => tryPlay(retries - 1), 150);
+            // Retries exhausted: same current-element + current-generation
+            // guard as advanceIfCurrent, so an old element giving up cannot
+            // skip the song that replaced it.  (_trackEl is assigned
+            // synchronously below, before this rejection handler can run.)
+            if (el !== this._trackEl) return;
+            this._onTrackEnded();
           });
         };
         tryPlay(1);
@@ -1019,7 +1121,11 @@ export class AudioSystem {
         // next MP3 (the synth fallback is gone) — _onTrackEnded has a
         // consecutive-failure brake so this can't spin.
         console.warn('AudioSystem track start failed:', e);
-        this._onTrackEnded();
+        // Only advance if this start is still the current one — a newer
+        // setStation/track pick may already have superseded us while this one
+        // was failing, and skipping ITS track would be the same stale-advance
+        // bug the 'ended'/'error' handlers guard against.
+        if (myGen === this._startGen) this._onTrackEnded();
       }
     };
     if (this._ctx?.state === 'suspended') {

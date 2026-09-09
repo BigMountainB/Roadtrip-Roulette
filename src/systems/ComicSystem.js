@@ -31,7 +31,7 @@
 //
 // Pure JS, no Phaser — tests/comic.test.mjs.
 
-import { PAGE_TEMPLATES, FLOW_CYCLE, panelKeyFor } from '../data/comicPanels.js';
+import { PAGE_TEMPLATES, FLOW_CYCLE, panelKeyFor, resolvePanelKey } from '../data/comicPanels.js';
 import { resolveDialogue } from '../data/featuredStories.js';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -118,7 +118,15 @@ export class ComicSystem {
         key: entry.key,
         storyId: entry.storyId, nodeId: entry.nodeId, choiceId: entry.choiceId,
         importance,
-        panelKey: entry.panelKey ?? panelKeyFor(entry.storyId, entry.nodeId),
+        // New commits arrive with a resolved panelKey (StorySystem.commitChoice).
+        // LEGACY events predate it, so run the SAME deterministic resolver here
+        // rather than the old node-only fallback — that fallback is what made
+        // every choice-level panel unreachable.  It may resolve to null, which
+        // the renderers treat as "placeholder", never as a substitute image.
+        panelKey: entry.panelKey ?? resolvePanelKey({
+          storyId: entry.storyId, nodeId: entry.nodeId, choiceId: entry.choiceId,
+          node: ctx?.node ?? null, choice: ctx?.choice ?? null,
+        }) ?? panelKeyFor(entry.storyId, entry.nodeId),
         speaker: ctx?.node?.speaker ?? entry.speaker ?? '',
         portrait: ctx?.node?.portrait ?? entry.portrait ?? null,
         dialogueKeys: isObj(entry.dialogueKeys) ? { ...entry.dialogueKeys } : {},

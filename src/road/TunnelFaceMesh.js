@@ -71,14 +71,15 @@ export const PLATES = {
     texture: 'tunnel_face_mt_baker',
     openL: 0.3726, openR: 0.5889,
     openT: 0.5707,
-    aspect: 841 / 5644,     // 5644x841 composite — NOT the 1600x900 face aspect
+    aspect: 357 / 2400,     // 2400x357 composite (downscaled from 5644x841,
+                            // memory audit 2026-09-09) — NOT the 1600x900 face aspect
     naturalFit: true,       // art defines the mouth height, not the projection
   },
   mercer_lid: {
     texture: 'tunnel_face_mercer_lid',
     openL: 0.3453, openR: 0.6150,
     openT: 0.5973,
-    aspect: 807 / 4080,     // 4080x807 composite
+    aspect: 474 / 2400,     // 2400x474 composite (downscaled from 4080x807, memory audit 2026-09-09)
     naturalFit: true,
   },
   // Twin openings with a solid pier between them. The fit uses the COMBINED

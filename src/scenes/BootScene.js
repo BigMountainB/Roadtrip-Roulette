@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { SCREEN_W, SCREEN_H, HUD_OFFSET_X } from '../constants.js';
 import { AudioSystem } from '../systems/AudioSystem.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
-import { flattenManifest, genreArtPath } from '../systems/AssetManifest.js';
+import { bootManifest, genreArtPath } from '../systems/AssetManifest.js';
+import { installTextureProbe, logTextureReport } from '../systems/TextureBudget.js';
 import { DEFAULT_GENRE } from '../constants.js';
 import { Wallet } from '../economy/Wallet.js';
 import { StatsTracker } from '../systems/StatsTracker.js';
@@ -11,7 +12,10 @@ export class BootScene extends Phaser.Scene {
   constructor() { super({ key: 'Boot' }); }
 
   preload() {
-    const manifest = flattenManifest();
+    // Off-ramp split (memory audit 2026-09-09): rest-stop-only art (portraits
+    // + storefronts, ~200 MiB decoded) is NOT loaded here — RestStopScene
+    // preloads it behind the exit fade.  See REST_STOP_GROUPS in AssetManifest.
+    const manifest = bootManifest();
     // _failedKeys tracks ONLY keys that genuinely errored (404, decode
     // failure).  Previously we used _missingKeys = everything-not-yet-
     // -completed, which the safety timer could trip on while real loads
@@ -164,6 +168,37 @@ export class BootScene extends Phaser.Scene {
     this.registry.get('audio')?.setBackgroundRadioEnabled?.(
       save.get('settings.backgroundRadio', false) === true,
     );
+
+    // Apply the saved audio preferences (owner 2026-09-07).  `settings.muted`
+    // existed in the schema but was never applied here, and volume wasn't
+    // persisted at all — so both silently reset on every launch.
+    {
+      const _audio = this.registry.get('audio');
+      if (_audio) {
+        // toggleMute() FLIPS — compare first.  Calling it unconditionally
+        // would invert the saved preference rather than apply it (mute ON
+        // would come back un-muted, and vice-versa, on every boot).
+        const _wantMuted = save.get('settings.muted', false) === true;
+        if (!!_audio.muted !== _wantMuted) _audio.toggleMute?.();
+        // Volume: only a real finite number overrides the runtime default, so
+        // a missing/garbage value can't boot the game silent.
+        const _vol = save.get('settings.volume', null);
+        if (typeof _vol === 'number' && Number.isFinite(_vol)) {
+          _audio.volume = Math.max(0, Math.min(1, _vol));
+          _audio._applyMasterGain?.();
+        }
+      }
+    }
+
+    // Texture-budget probe (owner 2026-09-07).  The iPhone restart symptom is
+    // an OS memory termination, so no JS error handler ever sees it — the only
+    // way to know is to measure.  Installs window.__texReport() / __texTop()
+    // and prints the post-boot total, which is the number the manifest split
+    // has to bring down.
+    try {
+      installTextureProbe(this.game);
+      logTextureReport(this.game, 'after Boot');
+    } catch (_) {}
 
     // Boot straight into GameScene — its own title overlay handles the
     // pre-start intro, so the road style is identical to gameplay (same

@@ -204,6 +204,34 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 1) — iPhone memory-crash fixes: off-ramp asset split, rotation coalescing, GPU-rebuild gate, police eviction, tunnel downscale
+
+Implements the CLAUDE_WORKING_NOTES.md memory audit (owner: "prevent the game from
+crashing due to memory issues"; iOS was killing the WebKit process for memory
+pressure — silent restart, no crash overlay).  Full status table lives at the top
+of CLAUDE_WORKING_NOTES.md; summary:
+- **Off-ramp manifest split**: NPC portraits + business-staff portraits + the 10
+  storefront backdrops (33 entries, ~200 MB decoded) no longer load at boot —
+  RestStopScene preloads what's missing behind the exit fade (loading card, first
+  stop only), and the exit cinematic pre-warms the HTTP cache.  Post-boot measured
+  **617 MB decoded (was ~830 MB)**.  Roadside services signs keep their `biz_*`
+  placards at boot.  launch.test ratchet lowered 348 → 315.
+- **One settle sequence per rotation**: all four viewport-event sources now REPLACE
+  the pending re-fit ladder instead of stacking (was: dozens of scale passes per
+  rotation); redundant `scale.refresh()` removed; the scale block skips entirely
+  when the container box is unchanged.
+- **GPU recovery gated**: returning from >30 s backgrounded only rebuilds GL
+  resources when `gl.isTexture()` proves handles are actually dead — a healthy
+  context no longer gets the full re-upload spike.
+- **Jurisdiction police eviction**: an agency's ~13 textures free once its region is
+  >25 mi behind and no live cop wears it (resolver falls back gracefully; region
+  re-queues if re-entered).  WSP/SWAT/heli never evict.
+- **Tunnel facades downscaled** to 2400 px wide (≈23 MB decoded saved); originals in
+  Archive/tunnel_fullres_2026-09-09/.
+- **Needs on-phone verify** (the audit's device plan): rotation soak, >30 s
+  background+rotate, full-route drive for eviction, first rest-stop load feel.
+  Boot is still over the 250 MB budget — scenery/cars/buildings are the next split.
+
 ### 2026-09-07 (pt 1) — Voicemail no longer leaks under the ringtone; plays ONLY on ANSWER
 
 Owner: "the voicemail/memo plays while the phone is ringing. It should not play
@@ -12575,9 +12603,9 @@ Barely Made It = no payout + Country; Roadside Exit and kidnapping chase = no pa
 ### 18.8 Featured Story C — Classic Rock: ImprompTour
 
 Classic Rock remains the default second featured arc and runs Vantage → Othello → Hatton →
-Washtucna → La Crosse → Colfax → Pullman. Brittney exits at the Vantage gas station first; the
-waitress is in a separate Vantage diner/bar. Use the existing diner-waitress and Grandma/Nan
-identities.
+Washtucna → La Crosse → Colfax → Pullman. Brittney exits at the Vantage gas station first;
+**Mykenzee**, the diner waitress, is in a separate Vantage diner/bar. Use the existing
+diner-waitress and Grandma/Nan identities.
 
 **Vantage.** The waitress is changing out of her work uniform as the player first sees her. Her
 Nan forgot to take her to Othello:

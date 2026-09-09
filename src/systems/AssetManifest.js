@@ -152,7 +152,8 @@ export const ASSET_MANIFEST = {
     { key: 'codex_beater_back',          path: 'assets/cars/codex/codex_beater_back.png' },
     // Rear-three-quarter steering pose for the genre starter (~12-15° off
     // straight, one direction only — the renderer mirrors it for the other).
-    // Default path = the DEFAULT_GENRE art; genreArtPath overrides per plate.
+    // Default path = the hiphop_phonk angle set, which doubles as the base for
+    // any culture that ships an incomplete one; genreArtPath overrides per plate.
     { key: 'codex_beater_back_turn',     path: 'assets/culture/hiphop_phonk/vehicles/starter_back_turn.png' },
     // ── STEERING ANGLE FRAMES (2026-08-27) ───────────────────────────────
     // True 7° / 12° steering poses — the legacy single back_turn above stays
@@ -164,7 +165,7 @@ export const ASSET_MANIFEST = {
     // Played as a short sequence when a cop lands a PIT, so the maneuver reads
     // as YOUR car being spun rather than a damage number appearing.
     // Same convention as codex_beater_back_turn: default path is the
-    // DEFAULT_GENRE art and genreArtPath swaps in the plate's own genre.
+    // hiphop_phonk art and genreArtPath swaps in the plate's own genre.
     { key: 'codex_beater_spin_030',      path: 'assets/culture/hiphop_phonk/vehicles/starter_spin_030.png' },
     { key: 'codex_beater_spin_060',      path: 'assets/culture/hiphop_phonk/vehicles/starter_spin_060.png' },
     { key: 'codex_beater_spin_090',      path: 'assets/culture/hiphop_phonk/vehicles/starter_spin_090.png' },
@@ -437,26 +438,8 @@ export const ASSET_MANIFEST = {
     { key: 'biz_les_schwasted', path: 'assets/businesses/les_schwasted.png' }, // Tyres / brakes / suspension
     { key: 'biz_fap',           path: 'assets/businesses/fap.png' },           // Finesse Autobody & Performance
 
-    // ── Storefront backdrops ─────────────────────────────────────────────
-    // 1672x941 (exactly 16:9, so they map to the 800x450 viewport with no
-    // distortion).  These sat unused in the folder until now — nothing loaded
-    // or drew them.  The shop screen composites its brand's storefront
-    // full-bleed with the menu column over the left third.
-    { key: 'shop_bg_huffs',         path: 'assets/businesses/storefront_huffs.png' },
-    { key: 'shop_bg_cowbellas',     path: 'assets/businesses/storefront_cowbellas.png' },
-    { key: 'shop_bg_aok',           path: 'assets/businesses/storefront_aok.png' },
-    { key: 'shop_bg_lord',          path: 'assets/businesses/storefront_lord.png' },
-    { key: 'shop_bg_suck',          path: 'assets/businesses/storefront_suck.png' },
-    { key: 'shop_bg_gasnsip',       path: 'assets/businesses/storefront_gasnsip.png' },
-    { key: 'shop_bg_am_bm',         path: 'assets/businesses/storefront_am_bm.png' },
-    { key: 'shop_bg_parkride',      path: 'assets/businesses/storefront_park-and-ride.png' },
-    // v2 art (owner-supplied, was sitting unwired in businesses/raw/).
-    // Was pointed at raw/les_schwasted_v2.png — which is the LOGO BADGE
-    // (1918x820), not a storefront, so the shop screen stretched a floating
-    // sign across the whole frame (owner 2026-07-31: "wrong storefront art").
-    // The real 1672x941 building shot had been moved to Archive/; restored.
-    { key: 'shop_bg_les_schwasted', path: 'assets/businesses/storefront_les_schwasted.png' },
-    { key: 'shop_bg_fap',           path: 'assets/businesses/storefront_fap.png' },
+    // shop_bg_* storefront backdrops live in the `shopfronts` group below —
+    // rest-stop-only, deferred behind the off-ramp (memory audit 2026-09-09).
     // Highway shield badges — composited onto green exit signs.
     { key: 'hwy_i90',   path: 'assets/businesses/hwy_i90.svg' },
     { key: 'hwy_us195', path: 'assets/businesses/hwy_us195.png' },
@@ -472,6 +455,25 @@ export const ASSET_MANIFEST = {
     // a while advertising businesses that weren't there.
     { key: 'sign_blank',  path: 'assets/businesses/sign_blank.png'  },
     { key: 'sign_plaque', path: 'assets/businesses/sign_plaque.png' },
+  ],
+  // ── Storefront backdrops (REST-STOP ONLY — deferred, see REST_STOP_GROUPS) ─
+  // 1672x941 (exactly 16:9, so they map to the 800x450 viewport with no
+  // distortion).  The shop screen composites its brand's storefront full-bleed
+  // with the menu column over the left third.
+  // (shop_bg_les_schwasted history: was pointed at raw/les_schwasted_v2.png —
+  // the LOGO BADGE, not a storefront — owner 2026-07-31 "wrong storefront
+  // art"; the real 1672x941 building shot was restored from Archive/.)
+  shopfronts: [
+    { key: 'shop_bg_huffs',         path: 'assets/businesses/storefront_huffs.png' },
+    { key: 'shop_bg_cowbellas',     path: 'assets/businesses/storefront_cowbellas.png' },
+    { key: 'shop_bg_aok',           path: 'assets/businesses/storefront_aok.png' },
+    { key: 'shop_bg_lord',          path: 'assets/businesses/storefront_lord.png' },
+    { key: 'shop_bg_suck',          path: 'assets/businesses/storefront_suck.png' },
+    { key: 'shop_bg_gasnsip',       path: 'assets/businesses/storefront_gasnsip.png' },
+    { key: 'shop_bg_am_bm',         path: 'assets/businesses/storefront_am_bm.png' },
+    { key: 'shop_bg_parkride',      path: 'assets/businesses/storefront_park-and-ride.png' },
+    { key: 'shop_bg_les_schwasted', path: 'assets/businesses/storefront_les_schwasted.png' },
+    { key: 'shop_bg_fap',           path: 'assets/businesses/storefront_fap.png' },
   ],
   trees: [
     // Urban broadleaves — Seattle / Mercer Island / Bellevue street &
@@ -573,6 +575,9 @@ export const ASSET_MANIFEST = {
     { key: 'garage_ico_wipers',     path: 'assets/ui/garage_buttons/wipers_headlights.png' },
     { key: 'ui_top_btn_ff',      path: 'assets/ui/top_btn_ff.png' },
     { key: 'ui_top_btn_ff_active', path: 'assets/ui/top_btn_ff_active.png' },
+    // REWIND (owner 2026-09-07) — the ×15 combo reward.  Same 150x150 plate
+    // convention as the rest of the top row.
+    { key: 'ui_top_btn_rewind',  path: 'assets/ui/top_btn_rewind.png' },
     { key: 'ui_top_btn_pause',   path: 'assets/ui/top_btn_pause.png' },
     { key: 'ui_top_btn_pause_active', path: 'assets/ui/top_btn_pause_active.png' },
     // Tactile driving-control faces. Runtime keeps the existing hit areas,
@@ -599,6 +604,30 @@ export const ASSET_MANIFEST = {
 
 export function flattenManifest() {
   return Object.values(ASSET_MANIFEST).flat();
+}
+
+// ── Off-ramp manifest split (memory audit 2026-09-09, Finding 1) ──────────
+// The full manifest decodes to ~830 MiB — far over any iPhone budget — and
+// iOS was killing the WebKit process for memory pressure ("the game keeps
+// restarting").  These groups are REST-STOP-ONLY art (portraits + storefront
+// backdrops, ~200+ MiB decoded): BootScene skips them, and RestStopScene
+// preloads whichever are missing behind the off-ramp fade — a boundary the
+// player already experiences, so nothing pops in.  Textures live on the
+// game-level TextureManager afterwards, so later stops load nothing.
+// flattenManifest() above stays COMPLETE — tests and the genre path map
+// depend on the full inventory.
+export const REST_STOP_GROUPS = ['npc', 'npcBusinesses', 'shopfronts'];
+
+/** Everything BootScene should load at launch. */
+export function bootManifest() {
+  return Object.entries(ASSET_MANIFEST)
+    .filter(([group]) => !REST_STOP_GROUPS.includes(group))
+    .flatMap(([, entries]) => entries);
+}
+
+/** The deferred rest-stop set (RestStopScene preloads what's missing). */
+export function restStopManifest() {
+  return REST_STOP_GROUPS.flatMap(group => ASSET_MANIFEST[group] ?? []);
 }
 
 // ── Genre / Culture art (owner 2026-07-17) ───────────────────────────────
@@ -634,14 +663,26 @@ export const GENRE_ART = {
   codex_beater_spin_150: 'vehicles/starter_spin_150.png',
 };
 
+// Angle keys a culture does NOT ship art for.  Without this, genreArtPath()
+// would hand back a path for every GENRE_ART key regardless of whether the PNG
+// exists, and the dev server's SPA fallback answers those with 200 text/html —
+// so Phaser decodes an HTML page as a texture instead of failing cleanly.
+// Listing a key here returns null so the caller's default-manifest fallback
+// supplies the canonical angle instead.  Drop a genre's entry once its full
+// angle set lands.
+const GENRE_ART_MISSING = {
+  // POP now ships the complete front/rear/steering/spin set (2026-09-07).
+};
+
 /** Culture-art path for a manifest key under the given genre, or null if this
  *  key has no genre override (falls back to the default manifest path). */
 export function genreArtPath(key, genre) {
   if (!genre || !GENRE_ART[key]) return null;
+  if (GENRE_ART_MISSING[genre]?.has(key)) return null;
   // Vehicle art gets its own revision so an installed/PWA build cannot keep
-  // stale versions after refresh.  angleset-1 = the 2026-08-27 full angle-set
-  // re-export (back/turn/front/spins all replaced in place).
-  const vehicleRev = key.startsWith('codex_beater') ? '&v=angleset-1' : '';
+  // stale versions after refresh.  angleset-2 includes the corrected Pop
+  // 0°/7°/12° steering progression (2026-09-07).
+  const vehicleRev = key.startsWith('codex_beater') ? '&v=angleset-2' : '';
   return `assets/culture/${genre}/${GENRE_ART[key]}?g=${genre}${vehicleRev}`;
 }
 

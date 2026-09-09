@@ -25,7 +25,7 @@ export const NPC_PORTRAITS = {
   biz_founder:     { texture: 'npc_biz_founder',     name: 'Startup Founder',      placeholderTint: 0x4AC3B0 },
   hiker_woman:     { texture: 'npc_hiker_woman',     name: 'Hitchhiker',           placeholderTint: 0x7FA05A },
   park_ranger:     { texture: 'npc_park_ranger',     name: 'Park Ranger',          placeholderTint: 0x3E7D4F },
-  diner_waitress:  { texture: 'npc_diner_waitress',  name: 'Diner Waitress',       placeholderTint: 0xD46A8A },
+  diner_waitress:  { texture: 'npc_diner_waitress',  name: 'Mykenzee',             placeholderTint: 0xD46A8A },
   grandma:         { texture: 'npc_grandma',         name: 'Roadside Grandma',     placeholderTint: 0xB59AC4 },
   tow_driver:      { texture: 'npc_tow_driver',      name: 'Tow Driver',           placeholderTint: 0xC98A3A },
   desert_mechanic: { texture: 'npc_desert_mechanic', name: 'Shade-Tree Mechanic',  placeholderTint: 0x5A7286 },

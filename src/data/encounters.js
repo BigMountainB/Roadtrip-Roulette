@@ -277,7 +277,7 @@ export const REST_STOP_ENCOUNTERS = [
   {
     id: 'ellensburg_diner',
     stopId: 'E', weight: 3,
-    portrait: 'diner_waitress', speaker: 'Diner Waitress',
+    portrait: 'diner_waitress', speaker: 'Mykenzee',
     fact: "Ellensburg was the front-runner to be state capital until a fire on the night of July 4, 1889 took out ten blocks of downtown. Investigators called it arson and never named anyone.",
     npcId: 'diner_waitress',
     // She remembers you — return visits open on a different greeting.
@@ -453,8 +453,17 @@ export const SHOP_GREETERS = {
     "Coolers on the left, regrets on the right — I quit judging people around midnight."),
   ambm:      greeter('ambm',      'biz_am_bm',     'AM/BM Clerk',
     "Whatever you're after, don't say it out loud. Point, pay, and go rejoin the crowd."),
-  parkride:  greeter('parkride',  'biz_parkride',  'Metro Park & Ride Courier',
-    "I move what fits in a trunk and don't ask — point me at yours and name the task."),
+  // NO parkride greeter (owner 2026-09-07).  `biz_parkride` is MALIK REED's
+  // portrait — the hip-hop story also uses it for Kyle and Dom'nique — so a
+  // generic "Metro Park & Ride Courier" doorway put Malik's face in front of
+  // the player at every stop carrying the `parkride` amenity (Seattle, Mercer,
+  // Issaquah, Snoqualmie, North Bend, Colfax, Pullman), asking ordinary shop
+  // questions that have nothing to do with his storyline.
+  //
+  // _pickGreeterStop filters on SHOP_GREETERS[k], so omitting the key simply
+  // means the Park & Ride has no doorway greeter — no other code path changes.
+  // Restoring one requires its OWN portrait art; do not point it back at
+  // biz_parkride.
   schwasted: greeter('schwasted', 'biz_schwasted', 'Les Schwasted Tech',
     "Free beef with every set of tires. Long story. Don't ask about the fires."),
   fap:       greeter('fap',       'biz_fap',       'Finesse Technician',

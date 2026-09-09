@@ -21,7 +21,7 @@ Legend:
 - [x] Dom’nique — `shared/characters/dominique_reference_sheet.png`
 - [x] Kyle — `shared/characters/kyle_reference_sheet.png`
 - [x] Tennessee — `shared/characters/tennessee_reference_sheet.png`
-- [x] Diner waitress — `shared/characters/diner_waitress_reference_sheet.png`
+- [x] Mykenzee / diner waitress — `shared/characters/diner_waitress_reference_sheet.png`
 - [x] Nan — `shared/characters/nan_reference_sheet.png`
 - [x] Startup Founder — `shared/characters/startup_founder_reference_sheet.png`
 
@@ -249,13 +249,13 @@ Legend:
 - [x] Player gives her all $300 — `classic_rock/washtucna/washtucna_05_player_gives_full_300.png`
 - [x] Venue pays each $150 — `classic_rock/washtucna/washtucna_06_equal_150_payout.png`
 - [x] Trio response — `classic_rock/washtucna/washtucna_07_trio_flirt_response.png`
-- [ ] Audience begins following duo
+- [x] Audience begins following duo — `classic_rock/washtucna/washtucna_08_audience_follows_duo.png`
 
 ### La Crosse — Show Three
 
-- [ ] Larger crowd outside venue
-- [ ] Player takes $400 solo
-- [ ] Waitress realizes she is excluded
+- [x] Larger crowd outside venue — `classic_rock/la_crosse/la_crosse_01_larger_crowd_arrival.png`
+- [x] Player takes $400 solo — `classic_rock/la_crosse/la_crosse_02_solo_400_exclusion.png`
+- [x] Waitress realizes she is excluded — included in `classic_rock/la_crosse/la_crosse_02_solo_400_exclusion.png`
 - [ ] $400-each duet
 - [ ] Crowd responds to established band
 - [ ] “See you onstage… partner”

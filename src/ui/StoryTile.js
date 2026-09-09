@@ -24,8 +24,11 @@
 
 import { SCREEN_W, SCREEN_H } from '../constants.js';
 import { getStoryNode } from '../data/featuredStories.js';
-import { getPortrait } from '../data/npcPortraits.js';
-import { panelMeta, panelKeyFor } from '../data/comicPanels.js';
+// NOTE: the NPC portrait import is deliberately gone.  The tile used to draw a
+// rest-stop portrait as stand-in "art", which is how an unrelated character
+// appeared in a Brittney panel.  A panel with no approved art now shows a
+// placeholder instead (Ch.18 missing-art policy).
+import { panelMeta, panelKeyFor, resolvePanelKey } from '../data/comicPanels.js';
 
 const D = 600;
 // Comic lettering with a readable fallback (character-specific faces land
@@ -73,8 +76,21 @@ export function showStoryConversation(scene, start, onDone) {
   if (!story) { onDone?.(); return; }
   const stopId = scene._stop?.id;
   let finished = false, leaveAfter = false;
+  // Panel textures this conversation loaded on demand.  A 1672x941 panel costs
+  // ~6.0 MB DECODED (w x h x 4) no matter how small its PNG is, so leaving them
+  // in Phaser's TextureManager would grow the resident set every stop — the
+  // exact class of retention behind the iPhone restarts.  Released after
+  // teardown, once the tiles using them are destroyed.  ComicReader keeps its
+  // own HTMLImageElement cache, so the book is unaffected.
+  const loadedArtKeys = new Set();
   const finish = () => {
-    if (finished) return; finished = true; teardown();
+    if (finished) return; finished = true;
+    scene._storyTileOpen = false;      // the rest stop owns SPACE again
+    teardown();
+    for (const k of loadedArtKeys) {
+      try { scene.textures.remove(k); } catch (_) {}
+    }
+    loadedArtKeys.clear();
     if (leaveAfter && typeof scene._continue === 'function') { scene._continue(); return; }
     onDone?.();
   };
@@ -83,7 +99,16 @@ export function showStoryConversation(scene, start, onDone) {
   const objs = [];
   const add = (...n) => { objs.push(...n); return n[0]; };
   scene._gateTaps();
-  add(scene._swallowTaps(scene.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.86).setDepth(D)));
+  // Full-screen scrim.  Captured because the tap-to-continue gate has to hook
+  // THIS object (and dragZone) rather than scene.input: _swallowTaps calls
+  // _eatTap → ev.stopPropagation(), and in Phaser that aborts the scene-level
+  // pointer event, so a scene.input listener never sees the tap at all.
+  const scrim = add(scene._swallowTaps(scene.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.86).setDepth(D)));
+  // A story conversation owns the screen: the rest stop's "SPACE = leave"
+  // binding must not fire under it, or the player is thrown back onto the road
+  // and skips the rest-stop menu entirely (owner 2026-09-09 — made the
+  // bathroom unreachable with Brittney aboard).
+  scene._storyTileOpen = true;
   // Viewport frame around the art.
   const frame = scene.add.graphics().setDepth(D + 1);
   frame.fillStyle(0x000000, 1); frame.fillRect(ART_X - 3, ART_Y - 3, ART_W + 6, ART_H + 6);
@@ -121,6 +146,58 @@ export function showStoryConversation(scene, start, onDone) {
   function teardown() {
     for (const b of btnObjs) b?.destroy?.();
     for (const o of objs) o?.destroy?.();
+  }
+
+  /** Hold a finished tile on screen until the player TAPS (owner 2026-09-07).
+   *
+   *  Replaces a fixed auto-advance timer, which cut a beat off mid-read on a
+   *  long reply and rushed short ones.  The player now sets the pace.
+   *
+   *  A DRAG is not a tap: the strip can be scrubbed back through earlier tiles
+   *  (18.3 step 7), and browsing it must never advance the conversation — so a
+   *  pointer that moved more than a few px is ignored. */
+  function awaitTapThen(fn) {
+    if (finished) return;
+    const hint = scene.add.text(SCREEN_W / 2, BTN_TOP + 18, 'TAP TO CONTINUE', {
+      fontSize: '14px', fontFamily: IMPACT, color: '#8FB7E6', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(D + 5);
+    btnObjs.push(hint);
+    const pulse = scene.tweens.add({ targets: hint, alpha: 0.35, duration: 700, yoyo: true, repeat: -1 });
+
+    let down = null, spent = false;
+    // Hook the OBJECTS, not scene.input.  The scrim's _swallowTaps handler and
+    // dragZone both call _eatTap → ev.stopPropagation(), which in Phaser aborts
+    // the scene-level pointer event — so `scene.input.on('pointerup')` never
+    // fired and the prompt was unclickable (owner 2026-09-09).  These two
+    // cover the whole screen between them: dragZone the art, the scrim the rest.
+    const taps = [dragZone, scrim].filter(Boolean);
+    const cleanup = () => {
+      if (spent) return; spent = true;
+      for (const o of taps) {
+        try { o.off('pointerdown', onDown); o.off('pointerup', onUpTap); } catch (_) {}
+      }
+      try { scene.input.keyboard?.off('keydown-SPACE', onKey); } catch (_) {}
+      try { scene.input.keyboard?.off('keydown-ENTER', onKey); } catch (_) {}
+      try { pulse?.remove?.(); } catch (_) {}
+      hint.destroy();
+    };
+    const advance = () => { cleanup(); if (!finished) fn(); };
+    const onDown = (p) => { down = { x: p.x, y: p.y }; };
+    const onUpTap = (p) => {
+      if (!down) return;                       // a stray release, not a tap here
+      const moved = Math.hypot(p.x - down.x, p.y - down.y);
+      down = null;
+      if (moved > 12) return;                  // that was a strip drag
+      advance();
+    };
+    // SPACE/ENTER advance the conversation too.  Without this they fell through
+    // to the rest stop's own "SPACE = leave" binding, which dumped the player
+    // back on the road mid-conversation.
+    const onKey = () => advance();
+    for (const o of taps) { o.on('pointerdown', onDown); o.on('pointerup', onUpTap); }
+    scene.input.keyboard?.on('keydown-SPACE', onKey);
+    scene.input.keyboard?.on('keydown-ENTER', onKey);
+    objs.push({ destroy: cleanup });
   }
 
   // ── Balloons ────────────────────────────────────────────────────────────
@@ -180,34 +257,91 @@ export function showStoryConversation(scene, start, onDone) {
   // ── Tile ────────────────────────────────────────────────────────────────
   function buildTile(storyId, nodeId, node) {
     const c = scene.add.container(tiles.length * (TILE_W + GAP), 0);
-    const meta = panelMeta(panelKeyFor(storyId, nodeId));
-    // Placeholder art: dark panel, speaker silhouette right, scene label.
+    // ESTABLISHING art: the node panel, shown while the player is still
+    // choosing.  pick() swaps in the selected response panel afterwards.
+    let panelKey = panelKeyFor(storyId, nodeId);
+    let meta     = panelMeta(panelKey);
     const bg = scene.add.graphics();
     bg.fillGradientStyle(0x1B2A44, 0x1B2A44, 0x0A1020, 0x0A1020, 1); bg.fillRect(0, 0, TILE_W, ART_H);
     c.add(bg);
-    const port = getPortrait(node.portrait ?? 'grandma');
-    scene._ensureNpcTexture?.(port.texture, port.placeholderTint ?? 0x555555);
-    const tex = scene.textures.get(port.texture)?.source?.[0];
-    const iw = tex?.width || 200, ih = tex?.height || 220;
-    const ph = ART_H * 0.92, pw = ph * (iw / ih);
-    const img = scene.add.image(TILE_W - pw * 0.55, ART_H * 0.56, port.texture).setDisplaySize(pw, ph).setOrigin(0.5);
-    c.add(img);
+
+    // ── Art rect ──────────────────────────────────────────────────────────
+    // PANEL_META rects are authored against the 16:9 PANEL, but this tile is
+    // 20:9.  Mapping them onto the whole tile (the old `b.x * TILE_W`) skews
+    // every balloon sideways, and cover-fitting would crop ~16% vertically —
+    // enough to push a y:0.05 balloon clean off the top.  So the art is
+    // CONTAIN-fitted into a centred 16:9 box and every authored coordinate is
+    // mapped to THAT box, which keeps each anchor exactly where it was
+    // measured.  The gradient shows as side bars.
+    const AW = Math.min(TILE_W, ART_H * (16 / 9));
+    const AH = AW * (9 / 16);
+    const AX = (TILE_W - AW) / 2;
+    const AY = (ART_H - AH) / 2;
+    const rectPx = (r) => ({ x: AX + r.x * AW, y: AY + r.y * AH, w: r.w * AW, h: r.h * AH });
+    const ptPx   = (p) => ({ x: AX + p.x * AW, y: AY + p.y * AH });
+
+    let artObjs = [];
+    /** Draw the current panel's art, or a placeholder.  NEVER an unrelated
+     *  image — no NPC portrait stand-in, which is what made a tired gas-station
+     *  attendant appear as Brittney. */
+    const drawArt = () => {
+      for (const o of artObjs) o.destroy();
+      artObjs = [];
+      const url = meta.art;
+      if (url && scene.textures.exists(url)) {
+        const img = scene.add.image(AX + AW / 2, AY + AH / 2, url)
+          .setDisplaySize(AW, AH).setOrigin(0.5);
+        c.add(img); artObjs.push(img);
+        c.sendToBack?.(img); c.sendToBack?.(bg);
+        return;
+      }
+      // Placeholder — explicit about WHY there's no art.
+      const msg = url ? 'STORY ART LOADING…' : 'STORY ART PENDING';
+      const ph  = scene.add.text(AX + AW / 2, AY + AH / 2, msg,
+        { fontSize: '11px', fontFamily: IMPACT, color: '#3E5A80' }).setOrigin(0.5);
+      c.add(ph); artObjs.push(ph);
+      if (!url) return;
+      // Load once, then redraw this tile in place.  Phaser's shared loader may
+      // already be busy with shop/portrait art when the story tile opens.  The
+      // old code simply gave up in that case, leaving even correctly mapped
+      // panels blank for the rest of the conversation.  Wait for that batch,
+      // then retry this panel as its own load.
+      if (scene.load.isLoading()) {
+        scene.load.once('complete', () => { if (c.active !== false) drawArt(); });
+        return;
+      }
+      scene.load.image(url, url);
+      loadedArtKeys.add(url);          // released in finish() — see the note there
+      scene.load.once('complete', () => { if (c.active !== false) drawArt(); });
+      scene.load.start();
+    };
+    drawArt();
+
     c.add(scene.add.text(10, ART_H - 8, `${scene._stop?.name ?? ''} · MILE ${Math.round(scene._odometer ?? 0)}`, { fontSize: '11px', fontFamily: IMPACT, color: '#8FB7E6' }).setOrigin(0, 1));
-    if (!meta.art) c.add(scene.add.text(TILE_W / 2, ART_H - 8, 'STORY ART PENDING', { fontSize: '10px', fontFamily: IMPACT, color: '#3E5A80' }).setOrigin(0.5, 1));
-    // NPC balloon from panel metadata (0–1 rects → px).
-    const b = meta.bubble, t = meta.tail;
-    const npcBox = { x: b.x * TILE_W, y: b.y * ART_H, w: b.w * TILE_W, h: b.h * ART_H };
-    const npcTail = { x: t.x * TILE_W, y: t.y * ART_H };
+    // NPC balloon from panel metadata, mapped to the ART rect.
+    let npcBox  = rectPx(meta.bubble);
+    let npcTail = ptPx(meta.tail);
     let npcParts = balloon(c, story.resolveLine(storyId, nodeId), npcBox, npcTail);
     const tile = {
       c, storyId, nodeId, node,
+      get panelKey() { return panelKey; },
+      /** Swap to the RESPONSE panel for the committed choice.  Called by pick()
+       *  before the tile slides into the comic, so the live tile and the book
+       *  show the same authored image. */
+      setPanelKey(key) {
+        if (!key || key === panelKey) return;
+        panelKey = key;
+        meta = panelMeta(key);
+        npcBox  = rectPx(meta.bubble);
+        npcTail = ptPx(meta.tail);
+        drawArt();
+      },
       setReply(text) {
         for (const o of npcParts) o.destroy();
         npcParts = text ? balloon(c, text, npcBox, npcTail) : [];
       },
       setPlayer(text) {
-        const pb = meta.playerBubble, pt = meta.playerTail;
-        balloon(c, text, { x: pb.x * TILE_W, y: pb.y * ART_H, w: pb.w * TILE_W, h: pb.h * ART_H }, { x: pt.x * TILE_W, y: pt.y * ART_H }, { fill: 0xFFF9D6 });
+        balloon(c, text, rectPx(meta.playerBubble), ptPx(meta.playerTail), { fill: 0xFFF9D6 });
       },
     };
     strip.add(c);
@@ -278,6 +412,16 @@ export function showStoryConversation(scene, start, onDone) {
       passenger:   (p) => { scene._purchases.storyPassenger = p ?? null; },
       radioGrant:  (g) => { scene._purchases.storyRadioGrant = g ?? null; },
     });
+    // Switch the live tile from the ESTABLISHING panel to the exact panel for
+    // the choice just committed, BEFORE it slides into the comic — so the tile
+    // and the book show the same authored image.  Prefer the key the ledger
+    // actually stored (that is the one the comic will render); fall back to the
+    // same deterministic resolver when nothing was committed (a duplicate or
+    // non-consequential pick).
+    tile.setPanelKey(
+      r?.entry?.panelKey
+      ?? resolvePanelKey({ storyId, nodeId, choiceId: ch.id, node: tile.node, choice: ch }),
+    );
     // Player line into its balloon, then the reaction.
     tile.setPlayer(ch.label);
     const reply = story.resolveReply(storyId, nodeId, ch.id);
@@ -285,16 +429,22 @@ export function showStoryConversation(scene, start, onDone) {
     // tile — no storefront, no welcome NPC.
     if (r.applied && r.leaveStop) leaveAfter = true;
     scene.time.delayedCall(650, () => { if (!finished && reply) tile.setReply(reply); });
-    scene.time.delayedCall(reply ? 1700 : 900, () => {
+    // The reply lands, then the tile HOLDS until the player taps — no timed
+    // hand-off.  The short delay here is only so the prompt doesn't appear on
+    // top of the reply arriving, and so the tap that picked the choice can't
+    // carry through and skip the beat it just created.
+    scene.time.delayedCall(reply ? 1200 : 450, () => {
       if (finished) return;
-      const nextId = r.next ?? null;
-      const nextNode = nextId ? getStoryNode(storyId, nextId) : null;
-      const stillActive = story.isActive(storyId);
-      if (nextNode && stillActive && nextNode.stopId === stopId) {
-        openNode(storyId, nextId, nextNode);
-      } else {
-        finish();
-      }
+      awaitTapThen(() => {
+        const nextId = r.next ?? null;
+        const nextNode = nextId ? getStoryNode(storyId, nextId) : null;
+        const stillActive = story.isActive(storyId);
+        if (nextNode && stillActive && nextNode.stopId === stopId) {
+          openNode(storyId, nextId, nextNode);
+        } else {
+          finish();
+        }
+      });
     });
   }
 

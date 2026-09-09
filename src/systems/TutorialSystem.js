@@ -1,3 +1,5 @@
+import { COMBO } from '../constants.js';
+
 // ── Contextual tutorial registry ──────────────────────────────────────────
 //
 // Replaces the three linear tours (portrait phone tour in index.html, the
@@ -106,6 +108,10 @@ export const TUTORIAL_ENTRIES = [
     desc: "What you've earned driving, grabbing pickups, and clearing missions. Spend it on gas, repairs, upgrades, and rides.", audited: true },
   { id: 'gameplay.mult',       cat: 'gameplay', el: 'mult',       title: 'Multiplier',
     desc: 'Drinks and Food in the sweet spot, staying Alert, and an empty Bladder each add +1, and wanted stars stack on top.', audited: true },
+  // Miles/level numbers come from COMBO so the copy can never drift from the
+  // behaviour (owner 2026-09-09).
+  { id: 'gameplay.btn_rewind', cat: 'gameplay', el: 'btn_rewind', title: 'Rewind',
+    desc: `Collect ${COMBO.CAP} combo points and the Rewind button lights up. Spend it to jump back ${COMBO.REWIND_MILES} miles and shake any police chase — the save when you blow past a freeway exit. Hold it or use it right away; it keeps until you do.`, audited: true },
   { id: 'gameplay.dist',       cat: 'gameplay', el: 'dist',       title: 'Miles',
     desc: "How far you've driven of the 293 to Pullman.", audited: true },
   { id: 'gameplay.region',     cat: 'gameplay', el: 'region',     title: 'Town',

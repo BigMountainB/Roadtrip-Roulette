@@ -45,9 +45,11 @@ export const ENDING_CAR_BBOX = {
   endcar_norteno:                          { x:   0, y:  64, w: 560, h: 336 },
   endcar_norteno_rear3q:                   { x:   9, y:  71, w: 544, h: 248 },
   endcar_norteno_rear3q_crashed:           { x:   9, y:  68, w: 544, h: 250 },
-  endcar_pop_punk_emo:                     { x:  61, y:   0, w: 438, h: 400 },
-  endcar_pop_punk_emo_rear3q:              { x:  39, y:  25, w: 481, h: 352 },
-  endcar_pop_punk_emo_rear3q_crashed:      { x:  38, y:  27, w: 482, h: 349 },
+  endcar_pop_rear3q:                       { x:  15, y:  70, w: 530, h: 269 },
+  endcar_pop_rear3q_crashed:               { x:  11, y:   2, w: 537, h: 366 },
+  endcar_punk_emo:                         { x:  61, y:   0, w: 438, h: 400 },
+  endcar_punk_emo_rear3q:                  { x:  39, y:  25, w: 481, h: 352 },
+  endcar_punk_emo_rear3q_crashed:          { x:  38, y:  27, w: 482, h: 349 },
   endcar_reggae:                           { x:  70, y:   0, w: 419, h: 400 },
   endcar_reggae_rear3q:                    { x:  34, y:  11, w: 492, h: 367 },
   endcar_reggae_rear3q_crashed:            { x:  27, y:  17, w: 509, h: 359 },
@@ -60,7 +62,7 @@ export const ENDING_CAR_BBOX = {
  *  plate alone rather than the wrong car. */
 export const ENDING_CAR_GENRES = [
   'classic_rock', 'country', 'edm_rave', 'hiphop_phonk', 'k_pop',
-  'metal', 'norteno', 'pop_punk_emo', 'reggae', 'reggaeton',
+  'metal', 'norteno', 'pop', 'punk_emo', 'reggae', 'reggaeton',
 ];
 
 /**
