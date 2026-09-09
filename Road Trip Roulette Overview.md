@@ -204,6 +204,23 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 9) — Seattle opening draft v2: Chat's red-pen + owner's fan/artist branch applied; two code-truth corrections
+
+Chat approved the six-beat structure with markup; owner added a "fan / fellow artist"
+response.  v2 (in the working notes) applies all of it: the NoiseCloud/bus couplet as one
+performance utterance; three non-consequential Beat 2 responses (fan-artist sets
+`playerArtist` + trust, neutral, guarded — all continue); Beat 3 reordered risk → tonight →
+why not him → why this player → why the leg is controlled; Beat 5a rewritten in Malik's
+voice; Beat 5b REUSES `seattle_05_refuse_job.png` (eye crop test: clean sky band between
+player and crew) so brief B is withdrawn; Beat 6 carry-only art, pass = caption; artist-flag
+payoff proposals at Issaquah / Cle Elum / Malik strip.  Corrections from code: the phone
+locks when the player passes ISSAQUAH still holding it (skipping Mercer only flags), so
+Malik's line is "Blow past Issaquah with it and it locks itself" — never a Mercer
+"check-in"; and the player art already carries a guitar case, so "artist" can honestly mean
+musician.  Mercer continuity questions pre-answered from existing dialogue (Brittney's
+"Of course he did", the fresh double, the boyfriend line = romantic).  Still nothing in
+code; next = owner approval of v2 copy → Mercer draft → review both as one strip.
+
 ### 2026-09-09 (pt 8) — Story build-out begins: Seattle opening REVIEW DRAFT (in CLAUDE_WORKING_NOTES.md)
 
 Owner, looking at the comic sample: "There's no introduction to who Malik is, no showing

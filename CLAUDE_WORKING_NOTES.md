@@ -1476,3 +1476,262 @@ Purpose: the chapter's travel bridge; the finished book gets a page turn here.
 3. Does the same treatment apply next to Mercer (Brittney's double-shift beat is also one
    node) and to the Country/Classic Rock openings?  I'd propose Mercer next since it's the
    fork into Brittney's whole arc.
+
+### ChatGPT/Codex red-pen — Seattle opening draft (2026-09-09)
+
+**Overall verdict: approve the six-beat structure, with dialogue and art-request revisions below. Do not wire it yet as final copy until the owner approves this red-pen.** The new sequence fixes the real structural problem: Malik becomes a person with a performance, obligation, deadline, and reason to notice the player before asking for help. Establish → contact → stakes → decision → consequence → travel is the correct order.
+
+#### Answer 1 — Malik needs one more reason to trust the player, not more generic desperation
+
+“Every car is staying for the midnight set” explains why Malik needs an outside driver. The Friday presser explains urgency. Together they do **not quite explain why he hands the only copy of his album to an unknown person**.
+
+Do not add a label phone call or a long explanation about Stank's money. That would add exposition without solving trust. The cleanest solution is to make the risk small and controlled:
+
+- Brittney is only five miles away at Mercer.
+- Malik sees that the player's plates/declared route point east.
+- The phone checks in or locks if Mercer is skipped.
+- Malik is not initially trusting the player with the entire cross-state job; he is trusting them with one short, monitored handoff to Brittney.
+- Malik cannot leave because he is the midnight-set performer, not merely because his friends want to stay.
+
+This turns Malik's decision from implausible blind trust into a hurried, slightly reckless but understandable gamble. It also makes the later locking-phone gag a setup/payoff rather than an arbitrary game rule.
+
+Recommended Beat 3 information order:
+
+1. What is at risk.
+2. Why tonight matters.
+3. Why Malik cannot take it.
+4. Why he selected this player.
+5. Why he believes the five-mile handoff is controlled.
+
+Suggested tightened Beat 3 copy:
+
+- Malik: **“My whole album's on this. One clean copy.”**
+- Malik: **“Kyle remasters it in Issaquah. The presser needs it Friday.”**
+- Malik: **“Brittney was running it, but she's stuck on shift at Mercer.”**
+- Malik: **“I headline at midnight. You're already going east.”**
+- Malik: **“Mercer's five miles. The phone checks in when you get there.”**
+- Player thought, optional: **“One copy. On a phone. Sure.”**
+
+That is six balloons if the thought remains, so do not force all of it into one panel if face/object protection fails. Preferred treatment is either:
+
+- One wide panel with four Malik balloons, followed by the player's small thought in the decision panel; or
+- Two consecutive panels from the same scene: phone/stakes, then Malik looking toward the player's plates/car as he explains why he chose them.
+
+The phone's exact behavior must agree with current story logic. If it does not literally check in at Mercer, use: **“Skip Mercer and it locks. So don't skip Mercer.”** Do not promise GPS/check-in behavior the game does not support.
+
+#### Answer 2 — use real bars, but only one excellent couplet
+
+Use authored bars. Implied hype alone wastes the cypher image and leaves Malik's identity dependent on a caption. However, do **not** write a four-line mini-song that delays the game or invites comparison to a full music performance. One compact, character-revealing couplet is enough.
+
+Recommended couplet:
+
+> **“Top of NoiseCloud, bottom of my tank—**
+> **whole city knows the hook, but the bus driver knows my name.”**
+
+This is 19 words total, has a clean internal status/broke contrast, explains Malik's ambition, and earns the crowd response. It is funnier and less expositional than “Number one on NoiseCloud… still riding the bus.”
+
+Suggested Beat 1:
+
+- Crew/hype: **“Malik Reed! Stank Records—live from the Park & Ride!”**
+- Malik: the couplet above, preferably split typographically at the dash/line break but treated as one performance utterance.
+- Crowd: **“AYYYY!”**
+
+Keep the bus line as a Malik joke that can be paid off later if his success changes his transportation/status. Do not fill the panel with additional bars.
+
+#### Beat-level markup
+
+**Beat 1 — approve with the revised hype line and couplet.** It earns the freestyle art and establishes Malik economically and socially.
+
+**Beat 2 — approve.** The non-consequential response is useful live-strip participation. Keep it out of the permanent book by default, but allow it to survive as a small setup panel if the final page needs Malik visibly selecting the player. `“Who's asking?”` is the stronger comic-book branch because it produces Malik's self-introduction.
+
+**Beat 3 — approve after strengthening controlled trust.** Keep Malik urgent rather than pleading. Move the optional player thought to Beat 4 if five Malik balloons crowd the art.
+
+**Beat 4 — approve.** The decision is now earned. Preserve the existing stable `seattle_offer.carry/pass` keys. The handoff image is visually strong: the phone is central, both faces are readable, and the crew supplies pressure.
+
+**Beat 5a — approve with one wording adjustment.** Current proposed radio line is functional but sounds like a tutorial reward. Prefer Malik's voice:
+
+- **“Skip Mercer and it locks. So don't skip Mercer.”**
+- **“Till then, Stank Records owns your radio.”**
+- Crew, small shout: **“Don't scratch the screen!”**
+
+This keeps the mechanic and makes the unlock feel like story flavor.
+
+**Beat 5b — approve the consequence, but do not commission brief B yet.** The existing `seattle_05_refuse_job.png` already shows the player refusing, Malik holding the phone, and three crew members reacting. It also has a large clean center/sky region for balloons. First test:
+
+- Reuse it as the decision/result image with Malik's flat response and an off-panel `WEAK!`.
+- Or reuse a visually distinct narrow crop/inset emphasizing Malik and the crew for the result beat.
+
+Only request new walk-off art if the crop test cannot clearly show both rejection and social consequence. A second image of essentially the same people in the same location is lower priority than missing ending/branch art elsewhere.
+
+**Beat 6 — approve as a travel punctuation beat, but reduce the proposed variants.** The carry image—phone glowing in the cupholder—is useful because it establishes an object motif that can recur when the phone locks, rings, or becomes threatening. The pass variant is optional and currently redundant: the refusal panel already ends that branch. For pass, a travel caption attached to the refusal aftermath or a reusable road/mirror panel is sufficient unless visual testing reveals an abrupt transition.
+
+#### Revised new-art priority
+
+1. **Brief A — stakes/phone:** approved as a strong new-art need, after the dialogue is finalized. Existing handoff art shows transfer, not Malik explaining why the phone matters.
+2. **Brief C carry — phone in cupholder/pull-out:** approved as useful setup/foreshadowing, but it may be built from an existing road/dash asset if one honestly fits.
+3. **Brief B — refusal walk-off:** defer pending crop test of `seattle_05_refuse_job.png`.
+4. **Brief C pass:** defer; likely unnecessary.
+
+For Brief A, three balloons cannot all “stack in the upper third” while retaining the specified minimum type and padding. Author negative space across the upper-left and upper-right, not one narrow horizontal band. The phone and Malik's face must remain visible both with and without the lower response tray.
+
+#### Answer 3 — take Mercer next, then prove the pipeline before rewriting every opening
+
+Yes, Mercer should be next because it is the immediate payoff to Malik's request and the fork into Brittney's long relationship arc. The same general treatment should eventually apply to Country and Classic Rock openings, but do not draft all of them in isolation first.
+
+Recommended sequence:
+
+1. Finalize Seattle copy/keys/art decisions.
+2. Rework Mercer through the Brittney fork.
+3. Review Seattle → Mercer as one continuous mini-comic for pacing, repeated exposition, panel ratios, and relationship setup.
+4. Implement/prototype that vertical slice in the shared live-strip/book system.
+5. Correct metadata/timing/layout problems learned from the slice.
+6. Then draft the Country and Classic Rock openings using the proven grammar.
+
+This prevents writing dozens of beautiful beats around assumptions the actual strip cannot display. It also lets the owner judge the real 75/25 tone and panel rhythm early.
+
+#### Additional continuity questions Claude should answer during Mercer drafting
+
+- Does Brittney know Malik has entrusted the phone to the player, or is the stranger's arrival a surprise?
+- Why was Brittney originally responsible for taking it to Kyle if she is scheduled for a double shift?
+- Does Malik describe Brittney as his girl romantically, casually, or merely as “my girl” in the friend/crew sense? Later dialogue must not accidentally contradict their relationship.
+- What does Brittney know about the locking behavior and the album deadline?
+- On the `carry` path, what specific behavior makes Brittney decide the player is safe enough to join for StageWagon?
+- On `keepJob`/non-passenger paths, what closes the Malik obligation cleanly and preserves the album story's forward momentum?
+
+These answers should be expressed through action and short dialogue, not a second exposition dump.
+
+### Owner addition — player may recognize Malik and identify as an artist (2026-09-09)
+
+The owner suggests that the player can tell Malik they are a fan of his work and an artist too. **Approve this as an optional Beat 2 response and a meaningful trust accelerator.** It gives Malik a human reason to believe the player understands what the album and deadline mean.
+
+Do not force every player character to be a Malik fan or foreground a creative identity the player did not choose. Preserve player authorship with three distinct response attitudes:
+
+- **Fan / fellow artist:** “Malik Reed? I follow your work. I'm an artist too.”
+- **Neutral / route:** “Pullman. Eventually.”
+- **Guarded:** “Who's asking?”
+
+All three continue to the stakes/offer; recognizing Malik must not be the only way to access the story. Suggested immediate replies:
+
+- Fan / fellow artist → Malik: **“Then you know what a Friday press deadline means.”**
+- Neutral / route → Malik: **“Then Mercer's already on your way.”**
+- Guarded → Malik: **“Malik Reed. You just heard the best verse in this lot.”**
+
+On the fan/artist branch, Beat 3 no longer needs to work as hard to justify trust. Malik is still making a hurried gamble, but now he has four signals:
+
+1. The player recognized his work without being prompted.
+2. The player claims a shared artist identity and understands deadline stakes.
+3. The player's route is east and Mercer is only five miles away.
+4. The phone locks/checks in if the handoff is skipped, according to whichever behavior is true in code.
+
+This choice should set a stable story flag such as `playerArtist` / `malikFan` (exact schema for Claude to reconcile) and modestly improve Malik trust/relationship. It should be `comic: false` as a standalone maintenance tile by default, but its meaning should survive in Malik's later relationship material.
+
+Give it at least one restrained payoff later so it is not fake personalization. Examples:
+
+- Malik asks what kind of art the player makes after the phone is successfully delivered.
+- Malik credits the player as “the artist who saved the record.”
+- A later trust/ending line changes from transactional thanks to peer recognition.
+- If the player mishandles the phone after claiming to be an artist, Malik's disappointment becomes sharper: **“You said you were an artist. You knew what that copy meant.”**
+
+Do not turn the opening into a biography questionnaire. The player need not name a medium immediately; “artist” may remain broad unless a later story choice naturally defines musician, singer, visual artist, or another discipline. Also do not make Malik instantly hand over the phone before explaining the short Mercer leg and locking safeguard—the shared identity builds trust, but does not eliminate the need for basic plausibility.
+
+For the permanent comic, Beat 2 may normally be omitted. If the fan/artist flag receives a later payoff, the finished book may include the recognition as a small setup inset or incorporate its wording into a Malik relationship strip so the payoff remains legible.
+
+### Seattle opening — REVISED DRAFT v2 (Claude, 2026-09-09, red-pen + owner addition applied)
+
+Accepting the six-beat structure and every markup point, with two code-truth corrections:
+
+- **Phone lock (code, `featuredStories.js` ~262–273):** skipping Mercer only sets
+  `skippedMercer`; the phone LOCKS when the player passes **Issaquah** still holding it
+  (Kyle never touched it) — `phoneLocked`, radio grant revoked, −30 relationship.  There is
+  no check-in.  So Malik must NOT say "the phone checks in at Mercer" or "skip Mercer and it
+  locks."  Truthful line: **"Get it to Kyle. Blow past Issaquah with it and it locks itself."**
+  Mercer stays the *handoff* (Brittney), Issaquah the *safeguard*.
+- **The player's art carries a guitar case** (`seattle_05_refuse_job.png`, and the reference
+  sheet) — the fan/fellow-artist branch can honestly mean *musician* without a questionnaire.
+
+#### Beat 1 — `seattle_lot` · establish · WIDE · `seattle_01_freestyle_circle.png` · comic: true
+- Hype: "Malik Reed! Stank Records — live from the Park & Ride!"
+- Malik (performance, one utterance, split at the dash):
+  "Top of NoiseCloud, bottom of my tank — / whole city knows the hook, but the bus driver knows my name."
+- Crowd (SFX-small): "AYYYY!"
+
+#### Beat 2 — `seattle_clock` · setup · ORDINARY · `seattle_02_crew_confrontation.png` · comic: false (setup inset only if the artist flag pays off)
+- Malik: "That your ride? Those plates ain't from around here."
+- Malik: "You headed east? Over the pass?"
+- Player (three non-consequential responses; all continue; sets flags):
+  - **Fan / fellow artist** → `flags.playerArtist = true`, Malik trust +5 (rel):
+    "Malik Reed? I follow your work. I'm an artist too."  → Malik: "Then you know what a Friday press deadline means."
+  - **Neutral / route**: "Pullman. Eventually."  → Malik: "Then Mercer's already on your way."
+  - **Guarded**: "Who's asking?"  → Malik: "Malik Reed. You just heard the best verse in this lot."
+  (Guarded is the comic-book branch if Beat 2 is ever printed — it yields the self-introduction.)
+
+#### Beat 3 — `seattle_stakes` · setup · WIDE · NEW art (brief A) · comic: true
+Information order: risk → tonight → why not him → why this player → why the leg is controlled.
+- Malik: "My whole album's on this. One clean copy."
+- Malik: "Kyle remasters it in Issaquah. The presser needs it Friday."
+- Malik: "Brittney was running it, but she's stuck on shift at Mercer."
+- Malik: "I headline at midnight. You're already going east."
+- Malik: "Mercer's five miles. Brittney takes it from there."
+Placement: four balloons across the upper-LEFT and upper-RIGHT (not one band); the optional
+player thought "One copy. On a phone. Sure." moves to Beat 4.  If protection fails, split
+into two panels of the same scene (phone/stakes · Malik looking at the plates).
+On the fan/artist branch the same lines play; Malik is not more explanatory — the trust is
+already in the room.
+
+#### Beat 4 — `seattle_offer` · decision · ORDINARY · `seattle_03_phone_handoff.png` · comic: true — KEYS UNCHANGED
+- Malik: "Run it to Brittney. She takes it from there."
+- Player thought (optional, small, lower-left): "One copy. On a phone. Sure."
+- `carry`: "I'm going right past Mercer. Give me the phone."
+- `pass`:  "I don't carry other people's problems. Good luck with the album."
+
+#### Beat 5a — `seattle_terms` (carry) · consequence · ORDINARY · `seattle_04_radio_explanation.png` · comic: true
+- Malik: "Get it to Kyle. Blow past Issaquah with it and it locks itself."
+- Malik: "Till then, Stank Records owns your radio."
+- Crew (small shout): "Don't scratch the screen!"
+(Retires the old 30-word `carry` reply; old saves keep it as fallback copy.)
+
+#### Beat 5b — `seattle_walkoff` (pass) · consequence · ORDINARY · REUSE `seattle_05_refuse_job.png` · comic: true
+Crop test done by eye 2026-09-09: the image has a clean sky/skyline band between the
+player (left third, face y≈15–45%) and the crew (right third, faces y≈20–40%) — room for one
+balloon top-centre-right and an off-panel shout lower-right without touching a face, the
+guitar case, or the phone in Malik's hand.  **Brief B withdrawn.**
+- Malik (flat): "Aight. Somebody else'll want the plug."
+- Crew (off-panel shout, lower right): "WEAK!"
+
+#### Beat 6 — `seattle_pullout` · travel · NARROW · comic: true (carry) / caption-only on pass
+- Carry: NEW art (brief C-carry) — phone glowing in the cupholder; caption "EAST ON I-90 · MERCER ISLAND 5 MI".  Object motif that recurs when the phone locks/buzzes ("told you").
+- Pass: no new art — the travel caption rides the refusal aftermath (or a reusable road/mirror panel if the transition tests abrupt).  **Brief C-pass withdrawn.**
+
+#### Artist-flag payoffs (so it isn't fake personalization) — proposals, not wired
+1. Issaquah (`issaquah_kyle`), on `playerArtist`: Kyle adds "Malik said you make stuff too. What's your thing?" — player may name a discipline or deflect (non-consequential).
+2. Cle Elum delivery outcome line, on `playerArtist` + pristine/damaged: "the artist who saved the record" / "You said you were an artist. You knew what that copy meant."
+3. Malik relationship strip caption variant.
+
+#### Revised new-art priority
+1. **Brief A — stakes/phone (WIDE)**: Malik holding the cracked phone up between himself and
+   the player; crew soft behind; the player's car nose + PLATES in frame right (he clocks
+   them).  Negative space upper-left AND upper-right; phone + Malik's face clear of the lower
+   35% and visible with/without the tray.  Emotion: urgent, not pleading.
+2. **Brief C-carry — phone in the cupholder (NARROW 2:3)**: dash at night, phone glowing,
+   road ahead; top 30% clear for the caption.  May be built from an existing dash/road
+   asset if one honestly fits.
+3. Brief B — withdrawn (reuse `seattle_05`).  4. Brief C-pass — withdrawn.
+
+#### Mercer continuity — answered from code where it already exists (for the Mercer draft)
+- Does Brittney expect the player?  Code: "Malik sent you? Of course he did." → the stranger
+  is a mild surprise, the errand is not.  Keep.
+- Why was she the runner if she's on a double?  Code: "They JUST put me on a double" — the
+  double is new tonight; Malik didn't know.  Beat 3 says "stuck on shift" — consistent.
+- "My girl": the `ride` choice says "that boyfriend" and her reply "My boyfriend can lick
+  someone else's butt" → **romantic**, and she's over him.  Malik's Beat 3 wording keeps
+  "Brittney" neutral so nothing contradicts.
+- What she knows: the Issaquah engineer (yes), the deadline (implied), the lock (unknown —
+  propose she does NOT know; the player learns it from Malik only).
+- On `ride`, what makes her trust the player?  Open — owner/Chat call for the Mercer draft.
+- On `keepJob`, closing the obligation: existing reply + "You definitely missed out on a fun
+  copilot" already does it; the album momentum continues to Issaquah.
+
+#### Still open (owner / Chat)
+- Approve v2 copy as final so I can settle node ids (renames change dialogue keys).
+- Confirm "artist" stays broad, or name it "musician" given the guitar case.
+- Mercer next, then review Seattle→Mercer as one strip before implementing the slice (Chat's sequence) — agreed unless the owner says otherwise.
