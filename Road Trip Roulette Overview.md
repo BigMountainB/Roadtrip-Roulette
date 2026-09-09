@@ -204,6 +204,28 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 8) — Story build-out begins: Seattle opening REVIEW DRAFT (in CLAUDE_WORKING_NOTES.md)
+
+Owner, looking at the comic sample: "There's no introduction to who Malik is, no showing
+him rapping with his friends… he doesn't mention the phone holds his newest album that
+needs remastering… why do we assume Player even talks to Malik?  We need to build on the
+story more and probably add more images."  Confirmed: the authored Seattle opening is ONE
+node (`seattle_offer`) — the ask + carry/pass — while five Seattle images exist unused.
+Owner decisions: Malik picks the player (plates + heading east); Malik explains the stakes
+himself; 5–6 tiles; Claude drafts, owner + Chat red-pen.  Working convention from here:
+**story DRAFTS live in CLAUDE_WORKING_NOTES.md (shared with Chat); this Overview records
+the work.**
+- Draft delivered: six beats (`seattle_lot` cypher/establish → `seattle_clock` he clocks the
+  plates → `seattle_stakes` album/remaster/Kyle/Friday/Brittney in his words → existing
+  `seattle_offer` carry/pass → `seattle_terms` lock gag + radio unlock / `seattle_walkoff`
+  crew reaction → `seattle_pullout` travel caption), every balloon ≤ 25 words; three art
+  briefs (stakes-phone WIDE, walk-off NARROW, pull-out NARROW ×2) with negative-space and
+  tray-safe notes; wiring notes (non-consequential tiles, `next:` chains, comic tags, old
+  saves keep `seattle_offer.carry/pass` keys + fallback copy).
+- Open questions in the draft: Malik's desperation level; real cypher bars vs implied;
+  do Mercer / Country / Classic Rock openings get the same treatment (proposed Mercer next).
+- Nothing in code until the draft is approved.
+
 ### 2026-09-09 (pt 7) — Owner/ChatGPT answers applied: RTR bundle id, tile holds 3–6 s, audio parked, mockup balloons corrected
 
 - **capacitor.config.json**: `appId` `com.dui.game` → **`com.Games.RoadTriproulette`** (owner's
