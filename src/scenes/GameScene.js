@@ -7994,17 +7994,24 @@ export class GameScene extends Phaser.Scene {
         car._ovPrevRel = rel;
         if (prev === undefined) continue;                       // first frame seen
         if (car._passAwarded || car._comboTainted) continue;
-        // Head-on NEAR MISS (owner 2026-09-09 — Brittney's nerve): an
-        // ONCOMING car whooshes past within ~2.5 car-widths laterally with
-        // no contact (a touch would have set _comboTainted above).  Fires
-        // the story event once per car; only meaningful with her aboard.
+        // Head-on NEAR MISS (owner 2026-09-09, refined): a real DODGE — you
+        // were lined up with an ONCOMING car (0 car-widths of gap: centres
+        // within one full width, CAR_WIDTH_LANES is a HALF width) within the
+        // last 0.5 s, and it then whooshes past with LESS THAN ONE CAR-WIDTH
+        // of clear road between you (centres < 2 widths) and no contact (a
+        // touch sets _comboTainted above).  Fires once per car; only
+        // meaningful with Brittney aboard.
         if ((car.speed ?? 0) <= 0) {
-          if ((car.speed ?? 0) < 0 && !car._nearMissFired && prev > 0 && rel <= 0
-              && prev - rel <= 4000
-              && Math.abs((this.player.x ?? 0) - (car.laneOffset ?? 0)) < CAR_WIDTH_LANES * 2.5
-              && Math.abs(this.player.x) <= 1.0) {
-            car._nearMissFired = true;
-            try { this.story?.roadEvent?.('nearMiss', { mile: this._odometer ?? 0 }, this._storyHooks()); } catch (_) {}
+          if ((car.speed ?? 0) < 0 && !car._nearMissFired) {
+            const _gap = Math.abs((this.player.x ?? 0) - (car.laneOffset ?? 0));
+            if (rel > 0 && _gap < CAR_WIDTH_LANES * 2) car._alignedAt = this.gameTime ?? 0;   // dead ahead
+            if (prev > 0 && rel <= 0 && prev - rel <= 4000
+                && _gap < CAR_WIDTH_LANES * 4
+                && car._alignedAt != null && (this.gameTime ?? 0) - car._alignedAt <= 0.5
+                && Math.abs(this.player.x) <= 1.0) {
+              car._nearMissFired = true;
+              try { this.story?.roadEvent?.('nearMiss', { mile: this._odometer ?? 0 }, this._storyHooks()); } catch (_) {}
+            }
           }
           continue;                                   // oncoming/parked never count as a pass
         }

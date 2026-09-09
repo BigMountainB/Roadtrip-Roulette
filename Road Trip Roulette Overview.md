@@ -12867,6 +12867,21 @@ balloon added to the protect list; escape hatch = hang in the gutter above.
 crops of key panels instead):
 `{ art, focus:{x,y,w,h}, faces:[…], mouth:{npc:{x,y}, player:{x,y}}, tone:'speech', sfx:null }`
 
-**Open decisions put to the owner**: reading direction (scroll vs swipe spreads); font
-family (Comic Neue+Bangers vs hand-lettered Kalam/Patrick Hand+Luckiest Guy); metadata
-route (annotate vs crop variants).  No reader code changes until answered.
+**OWNER DECISIONS (2026-09-09 Q&A) — these override the proposal above where they differ:**
+- Reading: vertical scroll, page by page.  **Balloon order = speech order**: the first line
+  said sits highest on the page and each later line sits lower; the placement scorer ranks
+  vertical position as reading order BEFORE face-safety tie-breaks.
+- Fonts: character DIALOGUE in **Patrick Hand / Kalam** (hand-lettered).  Everything that
+  is not dialogue — captions, page numbers, chapter titles — in **Comic Neue Bold caps**.
+  SFX stays Bangers (not objected to).
+- Shapes: keep the vocabulary but NOT all ovals — boxy rounded-corner balloons and
+  diagonal/angled shapes where the art leans.
+- Density: each rest stop ≈ **4–5 pieces of artwork** (rarely 3); MEANWHILE side stories
+  **1–3 tiles**.
+- Relationship-satisfying tiles (Brittney's needs etc.) are NOT full panels: condense into
+  a **small strip of their own** captioned “…how did they handle the long car ride?”
+- Panel face/focus metadata: the owner is producing it with ChatGPT and will hand it back
+  in the schema above.  **Reader build waits for that file.**
+- Near-miss (Brittney nerve), refined same session: a DODGE — lined up with the oncoming
+  car (centres within one car width) inside the last 0.5 s, then passed with less than one
+  car-width of clear road (centres < 2 widths), no contact.  Implemented in _updateTraffic.
