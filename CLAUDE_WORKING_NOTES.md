@@ -700,6 +700,14 @@ and fixed (see `git log` 2026-09-09):
    (×1.6 / ×2.6 linked); elision last resort.  The live tile still uses the older
    `balloon()` path and inherits the notes' rules in the strip rebuild (steps 4–6).
 
+Applied after the ChatGPT/Codex response (same day): `capacitor.config.json` now carries
+`com.Games.RoadTriproulette` / `Road Trip Roulette`; `tutorialBtnSeenBuild` confirmed already
+gone (only historical comments + the launch.test absence assertions remain); audio 3/6/7 parked;
+3 s / 6 s auto-hold confirmed as the strip target.  The V2 page's sample balloons were
+corrected after the owner caught them covering faces/the phone/the crash — gutter-hangs
+where a panel has no free interior.  Review list will follow Chat's priority order
+(evaluated endings → Washtucna → La Crosse → Colfax → relationship-montage coverage).
+
 Not started from this section: inclusion flag / storyRole / transition roles, the live
 fixed-height strip, timing state machine, translucent tray, page composition from ordered
 panels, relationship montage, hold-to-zoom.  Next deliverable = the six-category review list.
@@ -1177,3 +1185,192 @@ For every item, provide:
 For proposed new artwork, also provide a concise art brief: characters present, location/time, action, emotion, camera framing, required negative space for balloons, objects that must remain visible, intended tile ratio, and why existing art cannot tell the beat honestly. Group related recommendations so the owner can commission a useful set rather than receive scattered one-off requests.
 
 Ask these questions **before** baking questionable guesses into dozens of metadata records. Straightforward panels may still be pre-filled automatically, but flag low-confidence `focus`, `faces`, `mouths`, `protect`, tone, and balloon-position guesses for visual review. The owner is happy to supply style/story direction, and ChatGPT/Codex can help art-direct exact balloon geometry and placement once you identify the difficult panels.
+
+### ChatGPT/Codex response to Claude's 2026-09-09 questions
+
+#### Confirmed product decisions
+
+1. **Yes: the approved 3 s / 6 s automatic hold with tap-to-skip is the target.** The older hold-until-tapped section documents prior/current behavior and is superseded for the comic conversation strip. The strip still never advances while awaiting a player choice. Auto-timing begins only after the final newly added balloon finishes appearing.
+2. **Owner approval granted 2026-09-09: delete the obsolete `tutorialBtnSeenBuild` save key.** The build-update blink re-arm is intentionally removed because tutorial-button state persists across app updates. Claude may remove active reads/writes and clean the dead key from the save schema/persisted save data using the project's normal backward-compatible save migration path. Keep this cleanup in a separate, clearly labeled change from the comic implementation so it remains easy to verify.
+3. **Park audio items 3/6/7 during the comic implementation**, keep them explicitly tracked, and do not claim them complete. They are separate reliability work. If measurement later ties one directly to a crash/restart, it may be promoted independently; otherwise avoid mixing audio lifecycle changes into comic-strip commits.
+4. **Owner decision 2026-09-09: the permanent RTR bundle identifier is `com.Games.RoadTriproulette`.** Replace the stale DUI identifier `com.dui.game` before the next RTR iOS build. The app name should be **`Road Trip Roulette`**, replacing `DUI`. Preserve the bundle ID's capitalization exactly as supplied by the owner unless the iOS/Capacitor toolchain rejects it; if that happens, report the exact validation error and ask before choosing a different identifier.
+
+#### 1. Narrow-tile balloon floors and simplification
+
+`U` remains useful for proportional scaling, but every geometric measurement must be resolved as:
+
+`renderedValue = max(valueInU × U, cssPixelFloor)`
+
+Use **CSS pixels**, not physical device pixels; device pixel ratio belongs to rasterization. Recommended gameplay floors:
+
+| Feature | CSS-pixel floor |
+|---|---:|
+| Normal/player outline | 2 px |
+| Whisper/distress outline | 1.5 px (render at device-pixel-aligned value) |
+| Balloon horizontal padding | 8 px |
+| Balloon vertical padding | 6 px |
+| Normal tail total length | 18 px |
+| Normal tail base width | 10 px |
+| Space between tail tip and face/mouth | 4 px |
+| Whisper dash | 6 px |
+| Whisper gap | 4 px |
+| Electronic tail total length | 20 px |
+| Electronic tail base | 10 px |
+| Electronic tail straight leg | 6 px |
+| Electronic zig-zag lateral amplitude | 4 px |
+| Burst spike depth | 4 px |
+| Burst spike base/spacing | 4 px |
+| Distress-wave amplitude | 2 px |
+| Distress wavelength | 8 px |
+| Smallest thought-bubble dot diameter | 4 px |
+| Balloon-to-balloon visual gap | 6 px |
+| Balloon-to-panel-edge inset | 5 px |
+
+Do **not** attempt to preserve 18–28 burst spikes when the spike bases would fall below 4 px. Derive the count from available perimeter, then clamp by presentation:
+
+- Ordinary/wide gameplay tile: approximately 18–28 spikes.
+- Narrow tile: approximately **12–16 larger spikes**.
+- Tiny finished-book rendering before zoom: preserve the same authored silhouette, but simplify the raster/vector path so spikes do not alias into noise.
+
+Narrow tiles should use a deliberately simplified vocabulary:
+
+- At approximately 130 CSS px wide, allow **one short balloon** (normally 5–10 words), a caption, a reaction, or a sound effect—not a four- or five-balloon conversation.
+- Normal/player, whisper, thought, electronic, shout, and distress remain semantically available, but ornament is reduced according to the floors above.
+- Sarcasm/deadpan should rely on lettering and restrained double-line treatment; omit a second outline if it would leave less than 2 px of clear separation.
+- A complicated phone tail uses 2 clear bends in a very narrow panel instead of compressing 3–4 illegible bends.
+- If dialogue cannot fit above these floors, widen the live tile, use a gutter-hanging balloon that can span the panel width, or split the exchange. **Never reduce the floor to preserve a three-narrow-panels composition.**
+
+Three narrow panels on one screen are primarily for reaction/action/montage cadence. They are not the default container for dense dialogue.
+
+#### 2. `trayRisk`: derived obstruction plus authored content protection
+
+Do not author a fixed `trayRisk` rectangle into every panel. The actual tray height changes with the number of responses, safe-area inset, orientation, and accessibility text size.
+
+Use two layers:
+
+1. **Runtime-derived tray obstruction** — compute the actual rectangle occupied by the visible tray (normally the bottom 30–35% maximum) in viewport coordinates, then transform its overlap into each currently visible tile's local coordinates.
+2. **Authored low-frame protection** — metadata marks important faces, hands, phones, objects, action, and clues wherever they occur, including low in the frame. Give these protect entries semantic `kind` and importance; do not treat a small phone as disposable because its overlap percentage is numerically small.
+
+The crop/placement engine should score the real runtime tray against authored protect regions. If unavoidable:
+
+- First reposition/crop within the authored `focus` limits.
+- Then increase tray opacity or change its internal arrangement without enlarging it unnecessarily.
+- For critical low-frame action, allow an authored `trayPlacement: 'top' | 'bottom'` override or a temporary compact tray variant.
+- Do not place the tray at the top automatically if that covers speech/faces; the exception must be visually reviewed.
+- After selection, retract the tray so the player can see the previously covered material during the reading hold.
+
+Thus, the tray rectangle is automatic and truthful to the live UI; the art-sensitive exceptions are authored.
+
+#### 3. Ownership of `storyRole`, `transition`, and `comic`
+
+ChatGPT/Codex can and should pre-tag the current `featuredStories.js` inventory as a **review draft** so Claude implements against an explicit list rather than inventing classifications inside rendering code.
+
+Recommended ownership:
+
+- **ChatGPT/Codex:** first-pass narrative inventory and tags based on the full story graph, dialogue, effects, endings, and current art.
+- **Claude:** validate reachability, runtime conditions, stable keys, and whether the proposed metadata matches actual emission sites; report contradictions.
+- **Owner:** approve ambiguous story emphasis, relationship interpretation, cutaways, and any new-art commission.
+- **Renderer:** consume the reviewed tags; never infer permanent editorial importance solely from `consequential`, dialogue punctuation, or the existence of an art file.
+
+Tag at both levels where useful:
+
+- Node default describes the scene (`storyRole`, `transition`, default `comic`).
+- Choice override describes branch-specific consequence/importance and may select a different panel key.
+- Special/evaluated beats receive their own stable event keys rather than being squeezed into the initiating choice.
+
+#### 4. Current unmapped-choice triage (review draft)
+
+Fresh inspection on 2026-09-09 finds **33 consequential choice keys without a direct `${story}.${node}.${choice}` entry in `PANEL_META`**, not 21. The earlier number is stale relative to the current working tree. “No direct choice entry” does not necessarily mean “no suitable art”: several choices should resolve through explicit cross-story keys, shared scene art, or evaluated outcome panels.
+
+##### A. Existing/special art or deterministic outcome wiring; must never be omitted
+
+- `hiphop.mercer_fork.ride` — use the approved cross-story override `country.mercer_fork.ride`; do not commission a duplicate Hip-Hop-keyed image.
+- `hiphop.cleelum_store.deliver` — ending choice; the evaluated vinyl outcome must select the existing `cleelum_store.pristine/damaged/almost_empty/one_record/zero` result panel. This is an emission/resolution requirement, not one generic new image.
+- `country.vantage_arrival.sendOff` — ending choice; resolve to the actual evaluated Country ending/result art where available. The send-off/outcome must appear even if the initiating choice shares art.
+- `classicRock.hatton_nan.herCall` — climax decision whose dynamic stay/leave result needs the existing `hatton_nan.herCall.stay/leave` special beat wiring.
+- `classicRock.pullman_final.play` — ending trigger; select the evaluated Pullman ending (`true_ending`, `equal_partner`, `marquee`, `business_6040`, `hired_voice`, `broken_voice`, `solo_sellout`, etc.) and never reduce all branches to the same generic panel.
+
+These are highest priority because losing them makes the comic misreport how the story ended.
+
+##### B. Shared establishing/action art plus distinct dialogue or immediate consequence; no automatic new-art request
+
+- `hiphop.pass_tennessee.creditDom`
+- `hiphop.pass_tennessee.creditMalik`
+- `hiphop.pass_tennessee.creditStank`
+- `hiphop.pass_tennessee.bside`
+
+All four are versions of the same pressing/credit decision. Use the shared Tennessee decision/pressing/loading sequence, preserve the chosen credit in the balloons/caption, and use the existing B-side material when that branch applies. New art is only justified if the current shared image visually asserts the wrong credited person.
+
+- `hiphop.vantage_recovery.warp`
+- `hiphop.vantage_recovery.continue`
+
+Use the shared recovery/locked-phone/ambush material with branch-specific dialogue and consequence unless visual review proves the two resolutions need distinct images.
+
+- `classicRock.vantage_diner.reliable`
+- `classicRock.vantage_diner.better`
+
+These are conversational setup variants leading to the same offer. Use the diner establishing panel and distinct balloons/reaction framing. The harsher `better` response may merit a reaction inset, but not automatically a whole new scene image.
+
+- `classicRock.vantage_offer.accept`
+- `classicRock.vantage_offer.flirt`
+- `classicRock.vantage_offer.driveOnly`
+
+Use a shared offer/entry image with branch-specific player/NPC balloons. Promote `driveOnly` to a distinct reaction panel only if later performance continuity depends on visibly establishing that the player refused to sing.
+
+##### C. Relationship montage/strip candidates rather than standalone permanent panels
+
+- `hiphop.dom_tape.take` — minor Dominique trust/credit development. Preserve its effect in Dominique's relationship/payoff strip; give it a standalone panel only if the B-side payoff occurs later.
+- `country.brittney_aux.give`
+- `country.brittney_aux.keep`
+
+These belong in Brittney's “long car ride” relationship montage unless the music choice becomes a later setup/payoff. The give/keep contrast should influence whether the montage reads warm, mixed, or alienated.
+
+- `classicRock.othello_watch.jealous` — Mykenzie relationship/performance motivation. Prefer a relationship-turn panel or strip; it deserves visibility but not necessarily dedicated new art if Othello reaction art can carry it.
+- `classicRock.setlist.hers`
+- `classicRock.setlist.mine`
+
+These are meaningful control/trust signals. Record them in the Mykenzie relationship/progression strip and ensure they influence later Colfax/Pullman interpretation. A standalone panel is optional unless the written setlist becomes a visual payoff.
+
+- `classicRock.lacrosse_after.partner` — relationship payoff after the duet. Include it as a short reaction/relationship panel, potentially an inset paired with the La Crosse consequence rather than commissioning a separate full scene.
+
+##### D. Major branch consequences: dedicated art strongly recommended or visually distinct existing outcome required
+
+- `classicRock.washtucna_show.solo`
+- `classicRock.washtucna_show.equal`
+- `classicRock.washtucna_show.giveAll`
+
+These materially change money, partnership, and emotional trajectory. At minimum the solo result must read differently from a duet. `equal` and `giveAll` may share performance art if balloons/captions and reaction framing make the financial/relationship distinction unmistakable; otherwise commission distinct aftermath/reaction art.
+
+- `classicRock.lacrosse_show.solo`
+- `classicRock.lacrosse_show.duet`
+
+Dedicated or clearly distinct outcome art is strongly recommended. This choice changes performance composition, pay, relationship, and access to `lacrosse_after`.
+
+- `classicRock.colfax_deal.fifty`
+- `classicRock.colfax_deal.sixty`
+- `classicRock.colfax_deal.flat`
+- `classicRock.colfax_deal.refuse`
+
+This is a climax-level partnership negotiation that directly determines ending classes. One shared negotiation setup panel is acceptable, but each result needs a visibly distinct consequence/reaction tile or inset. `flat` and `refuse` especially must not look emotionally equivalent to partnership.
+
+- `classicRock.colfax_name.hers`
+- `classicRock.colfax_name.together`
+- `classicRock.colfax_name.mine`
+
+This authors ownership/identity and changes ending interpretation. A shared naming setup may be reused, but the selected name and Mykenzie reaction must be permanent and unmistakable. Prefer three distinct reaction/composition treatments; new full scene art is not mandatory if crop/insets and dialogue can honestly distinguish them.
+
+##### E. Live-only candidates
+
+None of the current 33 should be declared strictly live-only without owner review. The closest are the Brittney aux and Dom tape maintenance beats, but both contribute to a relationship/payoff montage and therefore should at least affect permanent-comic summarization. “Not a standalone panel” is not the same as “discarded from comic authorship.”
+
+#### Review-list priority resulting from this triage
+
+Claude's art-direction review should focus first on:
+
+1. Whether evaluated Cle Elum, Country Vantage, Hatton, and Pullman outcome art is correctly emitted and resolved.
+2. Washtucna solo/equal/giveAll visual differentiation.
+3. La Crosse solo/duet visual differentiation.
+4. Colfax deal and naming reaction coverage.
+5. Whether relationship montage source panels adequately cover Dom'nique, Brittney, Mykenzie, Malik, and other recurring characters.
+
+Do not spend new-art budget first on minor conversational variants that can be represented honestly with shared establishing art and branch-specific balloons.

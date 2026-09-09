@@ -1,6 +1,6 @@
 {
-  "appId": "com.dui.game",
-  "appName": "DUI",
+  "appId": "com.Games.RoadTriproulette",
+  "appName": "Road Trip Roulette",
   "webDir": "dist",
   "server": { "androidScheme": "https" },
   "ios": {

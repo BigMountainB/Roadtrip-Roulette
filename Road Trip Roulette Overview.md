@@ -204,6 +204,28 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 7) — Owner/ChatGPT answers applied: RTR bundle id, tile holds 3–6 s, audio parked, mockup balloons corrected
+
+- **capacitor.config.json**: `appId` `com.dui.game` → **`com.Games.RoadTriproulette`** (owner's
+  exact capitalization — if the iOS/Capacitor toolchain rejects it, report the validation
+  error and ask before changing), `appName` `DUI` → **`Road Trip Roulette`**.  No `ios/`
+  project exists yet, so nothing else to sync.
+- **Comic strip timing confirmed**: 3 s (player-last) / 6 s (NPC-after-player) automatic
+  holds, +175 ms/word past 10, 9 s cap, tap skips; the older hold-until-tapped behaviour is
+  superseded (notes updated by ChatGPT).  Not yet implemented — strip rebuild steps 4–6.
+- **`tutorialBtnSeenBuild`** was already removed by the parallel session (schema, main.js,
+  launch.test asserts its absence) — nothing left to delete.
+- **Audio items 3/6/7 parked** until after the comic (tracked in the notes, not claimed).
+- **Mockup corrected** after the owner caught balloons covering faces/the phone/the crash:
+  every balloon on the sample page now sits off the protect boxes — three of the four
+  panels have no free interior, so their balloons hang into the gutters (the spec's
+  escape hatch), all 5–10 words.  Those are precisely the review-list crop cases.
+- ChatGPT's answers (in the notes) set: CSS-px floors for every balloon feature, narrow
+  tiles = one short balloon/caption/SFX only, `trayRisk` derived at runtime + authored
+  low-frame protection, Chat pre-tags storyRole/transition/comic as a review draft, and
+  a 33-key unmapped-choice triage (A must-never-omit … D dedicated-art) that scopes the
+  review list: evaluated endings first, then Washtucna / La Crosse / Colfax differentiation.
+
 ### 2026-09-09 (pt 6) — Working-notes review: comic reader's four diagnosed bugs fixed, Mykenzie rename, notes declared authoritative
 
 Owner reviewed CLAUDE_WORKING_NOTES.md with me and ruled: the notes' comic spec wins over
