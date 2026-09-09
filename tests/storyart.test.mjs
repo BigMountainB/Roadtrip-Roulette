@@ -211,7 +211,30 @@ check('establishing key is node-only', panelKeyFor('hiphop', 'mercer_fork') === 
   check('gate requires a matching pointerdown first', /if \(!down\) return;/.test(tileCode));
   check('player is prompted', tileSrc.includes('TAP TO CONTINUE'));
   check('gate is one-shot', /if \(spent\) return; spent = true;/.test(tileCode));
-  check('gate detaches its listeners', /input\.off\('pointerup', onUpTap\)/.test(tileCode));
+  check('gate detaches its listeners', /off\('pointerup', onUpTap\)/.test(tileCode));
+  // The gate MUST hook the scrim/dragZone objects, not scene.input: both call
+  // _eatTap -> ev.stopPropagation(), which aborts Phaser's scene-level pointer
+  // event, so a scene.input listener never fires and the prompt is dead.
+  check('gate hooks the tap objects, not scene.input',
+    /const taps = \[dragZone, scrim\]/.test(tileCode));
+  check('gate does not listen for pointers on scene.input',
+    !/scene\.input\.on\('pointer(down|up)', on(Down|UpTap)\)/.test(tileCode));
+  // SPACE/ENTER must advance the conversation rather than falling through to
+  // the rest stop's "leave" binding.
+  check('gate consumes SPACE', /keyboard\?\.on\('keydown-SPACE', onKey\)/.test(tileCode));
+  check('gate releases SPACE on cleanup', /keyboard\?\.off\('keydown-SPACE', onKey\)/.test(tileCode));
+  check('conversation flags the scene as owning the screen',
+    tileCode.includes('scene._storyTileOpen = true'));
+  check('flag is cleared when the conversation ends',
+    tileCode.includes('scene._storyTileOpen = false'));
+  // The rest stop's leave shortcut must respect that flag.
+  {
+    const rs = readFileSync(ROOT + 'src/scenes/RestStopScene.js', 'utf8');
+    const guarded = (rs.match(/if \(!this\._storyTileOpen\) this\._continue\(\)/g) || []).length;
+    check('every SPACE/ENTER leave shortcut is guarded', guarded === 4);
+    check('no unguarded leave shortcut remains',
+      !/keydown-(SPACE|ENTER)', \(\) => this\._continue\(\)\)/.test(rs));
+  }
   // The old fixed hand-off must be gone: nothing may advance on a bare timer.
   check('no timed auto-advance to the next node',
     !/delayedCall\([^)]*\)[\s\S]{0,120}openNode\(storyId, nextId/.test(tileCode)

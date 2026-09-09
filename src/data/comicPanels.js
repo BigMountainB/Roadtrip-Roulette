@@ -289,6 +289,73 @@ export const PANEL_META = {
     playerTail:   { x: 0.753, y: 0.276 },
     protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
   },
+  'country.mercer_departure': {
+    art: 'assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png',
+    bubble:       { x: 0.03, y: 0.04, w: 0.40, h: 0.25 },
+    // Keep the player's balloon on the empty rear-quarter/wheel area.  The
+    // previous lower-right placement covered Brittney's legs and the open
+    // passenger door in both the live tile and the saved comic.
+    playerBubble: { x: 0.04, y: 0.68, w: 0.32, h: 0.28 },
+    tail:         { x: 0.612, y: 0.254 },
+    playerTail:   { x: 0.407, y: 0.404 },
+    protect:      [
+      { x: 0.31, y: 0.20, w: 0.18, h: 0.40 }, // Player + steering wheel
+      { x: 0.54, y: 0.08, w: 0.18, h: 0.80 }, // Brittney
+      { x: 0.58, y: 0.27, w: 0.24, h: 0.62 }, // open passenger door
+    ],
+  },
+  'country.mercer_departure.board': {
+    art: 'assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png',
+    bubble:       { x: 0.03, y: 0.04, w: 0.40, h: 0.25 },
+    playerBubble: { x: 0.04, y: 0.68, w: 0.32, h: 0.28 },
+    tail:         { x: 0.612, y: 0.254 },
+    playerTail:   { x: 0.407, y: 0.404 },
+    protect:      [
+      { x: 0.31, y: 0.20, w: 0.18, h: 0.40 },
+      { x: 0.54, y: 0.08, w: 0.18, h: 0.80 },
+      { x: 0.58, y: 0.27, w: 0.24, h: 0.62 },
+    ],
+  },
+  'country.need_hunger.sushi': {
+    art: 'assets/storylines/country/passenger_needs/hunger_01_buy_sushi.png',
+    tail: { x: 0.661, y: 0.272 }, playerTail: { x: 0.351, y: 0.312 },
+  },
+  'country.need_hunger.burrito': {
+    art: 'assets/storylines/country/passenger_needs/hunger_02_offer_pork_burrito.png',
+    tail: { x: 0.752, y: 0.331 }, playerTail: { x: 0.391, y: 0.282 },
+  },
+  'country.need_hunger.wait': {
+    art: 'assets/storylines/country/passenger_needs/hunger_03_wait_for_better_food.png',
+    tail: { x: 0.281, y: 0.312 }, playerTail: { x: 0.681, y: 0.322 },
+  },
+  'country.need_bathroom.hold': {
+    art: 'assets/storylines/country/passenger_needs/bathroom_01_hold_it.png',
+    tail: { x: 0.441, y: 0.351 }, playerTail: { x: 0.721, y: 0.322 },
+  },
+  'country.need_bathroom.waitInCar': {
+    art: 'assets/storylines/country/passenger_needs/bathroom_02_wait_in_car.png',
+    tail: { x: 0.690, y: 0.402 }, playerTail: { x: 0.361, y: 0.312 },
+  },
+  'country.need_bathroom.goWith': {
+    art: 'assets/storylines/country/passenger_needs/bathroom_03_go_with_her.png',
+    tail: { x: 0.612, y: 0.321 }, playerTail: { x: 0.401, y: 0.312 },
+  },
+  'country.need_thirst.slushie': {
+    art: 'assets/storylines/country/passenger_needs/thirst_01_buy_slushie.png',
+    tail: { x: 0.721, y: 0.361 }, playerTail: { x: 0.391, y: 0.312 },
+  },
+  'country.need_thirst.fountain': {
+    art: 'assets/storylines/country/passenger_needs/thirst_02_find_fountain.png',
+    tail: { x: 0.621, y: 0.342 }, playerTail: { x: 0.321, y: 0.322 },
+  },
+  'country.beat.roadside_exit': {
+    art: 'assets/storylines/country/nerve/nerve_zero_roadside_exit.png',
+    tail: { x: 0.692, y: 0.323 }, playerTail: { x: 0.194, y: 0.390 },
+  },
+  'country.beat.kidnap': {
+    art: 'assets/storylines/country/nerve/refuse_exit_five_star_chase.png',
+    tail: { x: 0.488, y: 0.496 }, playerTail: { x: 0.557, y: 0.489 },
+  },
   'country.vantage_arrival.spotted': {
     art: 'assets/storylines/country/vantage/vantage_01_spots_friends_work_uniform.png',
     bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },

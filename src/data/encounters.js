@@ -470,6 +470,27 @@ export const SHOP_GREETERS = {
     "You want it fast, or you want it pretty? Both costs double. That's the city."),
 };
 
+// Mercer Island branch-specific counter conversation.  Brittney finishes the
+// current shop visit on BOTH branches: she either stays employed afterward or
+// clocks out and boards when the player leaves.  Its unique id lets the player
+// meet Brittney here even if the generic Gas-N-Sip greeter was seen earlier.
+export const BRITTNEY_MERCER_GREETER = {
+  id: 'greeter_mercer_brittney', once: true,
+  portrait: 'brittney_gasnsip', speaker: 'Brittney',
+  line: "Before either of us goes anywhere, you might as well let me help. Food, drinks, caffeine, gas — what are you missing?",
+  choices: [
+    {
+      label: '"What should I grab for the road?"',
+      effects: { dialogue: '"Blue keeps you hydrated, orange feeds you, yellow keeps your eyes open, and red is the stuff you save for trouble."' },
+    },
+    {
+      label: '"Anything here you would actually eat?"',
+      effects: { dialogue: '"Cold brew, gummies, maybe the sushi if it was delivered today. If the hot dog is shining back at you, keep walking."' },
+    },
+    { label: '"Thanks. Let me see the shelves."', exit: true, effects: {} },
+  ],
+};
+
 /** Deterministic-ish weighted pick without Math.random (pass an rng()->[0,1)).
  *  Filters by stopId, first-visit intro priority, once-seen, and conditions. */
 export function pickEncounterForStop(stopId, ctx = {}, rng = Math.random) {

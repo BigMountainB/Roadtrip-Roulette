@@ -320,11 +320,15 @@ export const COP_TRAP_HOLD_SEC     = 15;
 // ── Stage 3: the ticket (speeding fine) ──────────────────────────────────
 // When the held stop ends the trooper writes a speeding ticket.  (No sobriety
 // check — this is a road-trip speeding stop.)
-// Fines (subtract from score, since money == persisted score).  A FRACTION of
-// current cash, capped at a dollar ceiling — scales with wealth, never busts a
-// broke early-game player, and can't drain a rich player infinitely.
-export const COP_TICKET_SPEEDING_FRAC   = 0.50;     // speeding = 50% of cash…
-export const COP_TICKET_SPEEDING_CAP    = 300;      // …capped at $300 max
+// Fines (subtract from score, since money == persisted score).  FLAT amounts
+// (owner 2026-09-09) — these were a fraction of current cash (50%, capped at
+// $300), which meant the same offence cost a rich player $300 and a broke one
+// almost nothing.  A fixed price reads as a real penalty and is predictable.
+//
+// The two-cop fine is its own number, NOT a multiple of the base: at 2★ there
+// are two cruisers on you, and the escalation is authored rather than derived.
+export const COP_TICKET_SPEEDING        = 150;      // one cop / speed trap
+export const COP_TICKET_SPEEDING_2COP   = 350;      // 2★ — two cruisers
 
 // ── Finish cinematic (park in front of the Pullman Party House) ───────────
 // On crossing the mile-289 finish, input locks, the car eases to a stop over

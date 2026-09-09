@@ -59,7 +59,8 @@ export const MODIFIER_DEFAULTS = Object.freeze({
   repairUpgradeCostMult:     1,   // repair + basic-upgrade prices
   // ── Police / wanted ──
   wantedDecayMult:           1,   // star-decay RATE (<1 ⇒ slower decay)
-  ticketSurcharge:           0,   // extra $ added to every ticket
+  ticketSurcharge:           0,   // extra $ on a 1-cop ticket (trap / 1★ stop)
+  ticketSurcharge2Cop:       0,   // extra $ on the 2★ two-cruiser fine instead
   noPoliceWarning:           false, // skip the warning, go straight to a stop
   firstViolationInstantStar: false, // first moving violation adds a star immediately
   // ── Survival bars / pickups ──
@@ -269,7 +270,8 @@ export const GENRE_VEHICLE_TRAITS = {
       noSlowDrivePenalty:        true,
       survivalDrainLoSpeedMult:  0.75,
       noPoliceWarning:           true,
-      ticketSurcharge:           200,
+      ticketSurcharge:           100,   // 1 cop  → $150 + 100 = $250
+      ticketSurcharge2Cop:       250,   // 2 cops → $350 + 250 = $600
       overfillGainMult:          0.50,
       drivingBonusEarningsMult:  0.80,
     },

@@ -23,6 +23,10 @@ generating any panel; a checked but `UNWIRED / REJECTED` panel exists but is not
    zones, not permission to cover a face, hand, carried story item, vehicle, or important action.
 5. If text does not fit, use the existing linked second-balloon behavior. Do not shrink below the
    reader's minimum font size. The art itself must never be modified to make dialogue fit.
+6. Tail measurement is not final approval. Render the exact node line, every consequential Player
+   label, and every resulting reply at both the 800×450 live-tile size and the saved-comic page
+   size. Move or resize balloons that cover a face, body, hand, story item, steering wheel, open
+   door, or other scene-defining action—even when the mouth-tail coordinate itself is correct.
 
 ## 2. Balloon/protection presets
 
@@ -142,8 +146,8 @@ silent cinematic action/ending. Do not substitute preset estimates for these val
 
 ## 5. Country artwork → dialogue mapping and current gaps
 
-The following existing panels are valid by story action but presently show Brittney's **road
-outfit too early**. They are intentionally not mapped into `PANEL_META` yet:
+The following existing panels are valid after the newly approved Mercer departure establishes
+Brittney's road outfit. Choice/consequence panels are mapped into `PANEL_META`:
 
 ```text
 assets/storylines/country/passenger_needs/hunger_01_buy_sushi.png
@@ -177,24 +181,22 @@ If replacement work-uniform panels are later approved, use these exact keys and 
 | `country.beat.roadside_exit` | 0-Nerve exit text | `CAR_LR` |
 | `country.beat.kidnap` | police-warning/kidnapping consequence | `ACTION`; Player driving, Brittney passenger |
 
-The Mercer Country choice still needs an approved **work-uniform** response panel for
-`hiphop.mercer_fork.ride`; until then, use the approved Mercer establishing image rather than a
-wrong-costume panel. The Vantage ending needs three approved beats:
+The Mercer Country choice uses the approved work-uniform counter response. Brittney continues
+serving the player through the shop menu on either branch. On HIT THE ROAD,
+`country.mercer_departure` shows her changed and entering the car. The Vantage ending still needs
+dedicated final-response beats:
 
-1. Brittney arrives in her Gas-N-Sip uniform and spots her friends.
-2. She changes inside the Vantage gas station and emerges in the road outfit.
-3. `country.vantage_arrival.sendOff`: evaluated ending response (`ride_em`, `standard`, or
+1. Brittney arrives in her road outfit and spots her friends.
+2. `country.vantage_arrival.sendOff`: evaluated ending response (`ride_em`, `standard`, or
    `barely`) with the correct final outfit.
 
-These existing files are **not** approved for automatic Mercer wiring:
+The unused alternate changing image remains unwired:
 
 ```text
 assets/storylines/country/mercer_island/mercer_03_changed_to_road_clothes.png
-assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png
 ```
 
-They may be reviewed for Vantage reuse later; do not move, delete, or regenerate them without an
-explicit owner instruction.
+Do not move, delete, or regenerate it without an explicit owner instruction.
 
 ### 5.1 Country speaker-tail anchor audit
 
@@ -209,7 +211,7 @@ panel: rows marked `UNWIRED` remain unavailable to `PANEL_META`.
 | `mercer_island/mercer_04_quits_leaves_phone.png` | approved new Mercer consequence | `{x:.303,y:.252}` (507,237) | `{x:.753,y:.276}` (1259,260) |
 | `vantage/vantage_01_spots_friends_work_uniform.png` | approved establishing beat only | `{x:.530,y:.292}` (886,275) | `{x:.271,y:.332}` (453,312) |
 | `mercer_island/mercer_03_changed_to_road_clothes.png` | `UNWIRED` — wrong location/early outfit | `{x:.402,y:.302}` (672,284) | `{x:.758,y:.361}` (1267,340) |
-| `mercer_island/mercer_03_quit_and_join_player.png` | `UNWIRED` — early outfit | `{x:.700,y:.391}` (1170,368) | `{x:.431,y:.264}` (721,248) |
+| `mercer_island/mercer_03_quit_and_join_player.png` | `country.mercer_departure` / `.board` — temporary: correct front-passenger geometry and Player behind wheel, but Brittney's road outfit still needs a work-uniform replacement; exact line/label/reply visually checked in live tile + saved comic, with Player balloon moved off Brittney and the open door | `{x:.612,y:.254}` (1023,239) | `{x:.407,y:.404}` (681,380) |
 | `driving_reactions/major_collision_nerve_loss.png` | `UNWIRED` — early outfit | `{x:.553,y:.348}` (925,327) | `{x:.251,y:.351}` (420,330) |
 | `driving_reactions/smooth_ride_flirtation.png` | `UNWIRED` — early outfit | `{x:.371,y:.302}` (620,284) | `{x:.673,y:.342}` (1125,322) |
 | `nerve/nerve_zero_roadside_exit.png` | `UNWIRED` — early outfit | `{x:.692,y:.323}` (1157,304) | `{x:.194,y:.390}` (324,367) |

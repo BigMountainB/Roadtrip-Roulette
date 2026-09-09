@@ -78,7 +78,14 @@ near('country neutral field defaults to 1', mult(country, 'wantedDecayMult'), 1)
 near('metal damageTakenMult', mult(genreTraitFor('metal', 'beater'), 'damageTakenMult'), 0.70);
 near('hiphop wantedDecayMult (slower)', mult(genreTraitFor('hiphop_phonk', 'beater'), 'wantedDecayMult'), 0.75);
 near('edm boostStrengthMult', mult(genreTraitFor('edm_rave', 'beater'), 'boostStrengthMult'), 1.35);
-eq('reggae ticket surcharge', mult(genreTraitFor('reggae', 'beater'), 'ticketSurcharge'), 200);
+// Tiered since 2026-09-09: the two-cop stop costs more on BOTH halves.
+eq('reggae 1-cop surcharge',  mult(genreTraitFor('reggae', 'beater'), 'ticketSurcharge'),     100);
+eq('reggae 2-cop surcharge',  mult(genreTraitFor('reggae', 'beater'), 'ticketSurcharge2Cop'), 250);
+// Every other genre stays at the neutral 0 on both fields.
+for (const g of KEYS.filter(k => k !== 'reggae')) {
+  eq(`${g} adds no 1-cop surcharge`, mult(genreTraitFor(g, 'beater'), 'ticketSurcharge'),     0);
+  eq(`${g} adds no 2-cop surcharge`, mult(genreTraitFor(g, 'beater'), 'ticketSurcharge2Cop'), 0);
+}
 check('reggae noPoliceWarning flag', mult(genreTraitFor('reggae', 'beater'), 'noPoliceWarning') === true);
 eq('norteno cargo shield count', mult(genreTraitFor('norteno', 'beater'), 'cargoCollisionShield'), 1);
 near('metal weapon bonus-use chance', mult(genreTraitFor('metal', 'beater'), 'weaponBonusUseChance'), 0.20);

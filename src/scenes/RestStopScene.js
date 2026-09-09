@@ -10,7 +10,7 @@ import { Difficulty } from '../systems/Difficulty.js';
 import {
   pickEncounterForStop, resolveChoice, applyEncounterEffects,
   isDialogueTree, getStartNode, getEncounterNode, choiceLocked, isExitChoice,
-  SHOP_GREETERS,
+  SHOP_GREETERS, BRITTNEY_MERCER_GREETER,
 } from '../data/encounters.js';
 import { getPortrait } from '../data/npcPortraits.js';
 import { restStopManifest } from '../systems/AssetManifest.js';
@@ -30,7 +30,7 @@ import { GENRE_VEHICLE_TRAITS, speedForDifficulty } from '../data/genreVehicleTr
 const CX = SCREEN_W / 2;
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 import * as Metal from '../ui/MetalUI.js';
-import { runStoryQueue } from '../ui/StoryTile.js';
+import { runStoryQueue, showStoryConversation } from '../ui/StoryTile.js';
 
 // ── Menu tap gate (owner 2026-08-03) ─────────────────────────────────────
 // One physical tap must never fire on two screens.  These menus mix event
@@ -363,6 +363,7 @@ const SHOP_BG_PATH = {
   shop_bg_lord:          'assets/businesses/storefront_lord.png',
   shop_bg_suck:          'assets/businesses/storefront_suck.png',
   shop_bg_gasnsip:       'assets/businesses/storefront_gasnsip.png',
+  shop_bg_gasnsip_brittney: 'assets/businesses/storefront_gasnsip_mercer_brittney.png',
   shop_bg_am_bm:         'assets/businesses/storefront_am_bm.png',
   shop_bg_parkride:      'assets/businesses/storefront_park-and-ride.png',
   shop_bg_les_schwasted: 'assets/businesses/raw/les_schwasted_v2.png',
@@ -1600,9 +1601,13 @@ export class RestStopScene extends Phaser.Scene {
       align: 'center', wordWrap: { width: SCREEN_W - 60 },
     }).setOrigin(0.5);
 
-    // Keyboard shortcuts
-    this.input.keyboard?.once('keydown-ENTER', () => this._continue());
-    this.input.keyboard?.once('keydown-SPACE', () => this._continue());
+    // Keyboard shortcuts.  Both bail while a story conversation owns the screen
+    // (owner 2026-09-09): SPACE used to fall through to _continue and throw the
+    // player back onto the road mid-comic, skipping the rest-stop menu — which
+    // made the bathroom unreachable with Brittney aboard.  The story tile
+    // consumes SPACE/ENTER itself while open; see StoryTile.awaitTapThen.
+    this.input.keyboard?.once('keydown-ENTER', () => { if (!this._storyTileOpen) this._continue(); });
+    this.input.keyboard?.once('keydown-SPACE', () => { if (!this._storyTileOpen) this._continue(); });
 
     // Roguelite character encounter — pops a portrait card over the shop on
     // arrival (guaranteed intro on first visit; chance thereafter).
@@ -2033,6 +2038,19 @@ export class RestStopScene extends Phaser.Scene {
     const save = this.registry.get('save');
     const seen = new Set(save?.get?.('encountersSeen', []) ?? []);
 
+    // The Mercer story choice is visible in the shop itself: if Brittney kept
+    // the job, she is the person behind this counter.  Show her one-time shop
+    // conversation before the rotating mission contact; the pending mission
+    // remains available if the player enters the shop again.
+    if (shopKey === 'vices' && this._brittneyWorksAtMercer()) {
+      const enc = BRITTNEY_MERCER_GREETER;
+      if (!seen.has(enc.id)) {
+        this._pendingGreeterProceed = proceed;
+        this._showEncounterCard(enc, save, seen);
+        return;
+      }
+    }
+
     if (this._pendingMissionCard && shopKey === this._missionShopKeyFor(this._stop?.id)) {
       const missions = this.registry.get('missions');
       const enc = missions ? this._buildMissionEncounter(missions) : null;
@@ -2050,6 +2068,20 @@ export class RestStopScene extends Phaser.Scene {
     if (!enc || (enc.once && seen.has(enc.id))) { proceed(); return; }
     this._pendingGreeterProceed = proceed;
     this._showEncounterCard(enc, save, seen);
+  }
+
+  /**
+   * Brittney works the Mercer counter for the rest of this visit on BOTH
+   * choices.  `keepJob` leaves the Hip-Hop state marked with that path; `ride`
+   * shelves Hip-Hop and activates Country immediately, but she does not
+   * physically board until the player leaves the store.
+   */
+  _brittneyWorksAtMercer() {
+    if (this._stop?.id !== 'M') return false;
+    const story = this.registry.get('story');
+    const hh = story?.story?.('hiphop');
+    return (!!hh?.flags?.mercerDone && hh.flags.path === 'hiphop')
+      || story?.isActive?.('country') === true;
   }
 
   /** @param convo  Conversation state carried across re-renders of the SAME
@@ -2636,7 +2668,10 @@ export class RestStopScene extends Phaser.Scene {
       ? this._activeDealerKey
       : key;
     this._activeChromeKey = chromeKey ?? null;
-    const bgKey = chromeKey ? SHOP_BG[chromeKey] : null;
+    let bgKey = chromeKey ? SHOP_BG[chromeKey] : null;
+    if (chromeKey === 'vices' && this._brittneyWorksAtMercer()) {
+      bgKey = 'shop_bg_gasnsip_brittney';
+    }
     const on    = !!bgKey && this.textures.exists(bgKey);
     if (bgKey && !on) this._loadMissingShopBg(chromeKey, bgKey);
     if (on) this._shopBg.setTexture(bgKey).setDisplaySize(SCREEN_W, SCREEN_H);
@@ -3669,8 +3704,9 @@ export class RestStopScene extends Phaser.Scene {
       { label: '← GO BACK', color: 0x44AA44, hover: 0x66CC66, act: () => {
           dismiss();
           // Re-arm the leave shortcuts the `once` handlers already consumed.
-          this.input.keyboard?.once('keydown-ENTER', () => this._continue());
-          this.input.keyboard?.once('keydown-SPACE', () => this._continue());
+          // Same story-conversation guard as the original arming above.
+          this.input.keyboard?.once('keydown-ENTER', () => { if (!this._storyTileOpen) this._continue(); });
+          this.input.keyboard?.once('keydown-SPACE', () => { if (!this._storyTileOpen) this._continue(); });
         } },
       { label: 'LEAVE ANYWAY', color: 0xAA3333, hover: 0xCC5555, act: () => {
           dismiss();
@@ -3781,6 +3817,25 @@ export class RestStopScene extends Phaser.Scene {
 
   _continue() {
     if (this._continuing) return;
+    // Country fork: Brittney remains the Mercer clerk while the player shops.
+    // Only HIT THE ROAD makes her a visible passenger.  This virtual story
+    // tile is committed before the fade so it appears once, survives a crash,
+    // and becomes part of the saved comic.
+    const _story = this.registry.get('story');
+    const _country = _story?.story?.('country');
+    if (this._stop?.id === 'M'
+        && _story?.isActive?.('country')
+        && !_country?.flags?.departureShown
+        && !this._brittneyDepartureOpen) {
+      this._brittneyDepartureOpen = true;
+      this._storyTileOpen = true;
+      showStoryConversation(this, { storyId: 'country', nodeId: 'mercer_departure' }, () => {
+        this._storyTileOpen = false;
+        this._brittneyDepartureOpen = false;
+        this._continue();
+      });
+      return;
+    }
     // No exit-mission pitch here anymore (removed 2026-07-30) — HIT THE ROAD
     // is a clean, uninterrupted exit. Missions are only found by walking into
     // this stop's mission shop; see _showShopGreeter / _missionShopKeyFor.

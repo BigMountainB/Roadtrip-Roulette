@@ -204,6 +204,26 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 2) — Incoming texts: top-left MESSAGE BOX replaces the tappable toast
+
+Owner: the "📱 New text" toast's tap-to-open-thread link "doesn't work nor do I
+think it is the best solution" — show the message body instead.
+- New `_showTextMsgBox(from, text, accent)`: a small box in the top-left, just
+  below the radio-button row (top y62), showing "📱 <sender>" + the FULL message
+  body.  Right edge capped at the Alertness/Bladder bars' border (x257) — probe
+  measured hit box 6→257, wrapped text ending x238.  Owner's placement pick: it
+  may overlap those bar rows while visible.
+- Dismissal (owner spec): auto-fades after **30 s** (scene clock, so pauses don't
+  eat the window) + tap dismisses early (350 ms arm delay against driving
+  thumbs).  A new text replaces the current one.  Border/accent strip uses the
+  contact's existing color (Ex pink, Mom gold, Boss red, Crush pink, etc.).
+- The old toast path is REMOVED: `_popupTextCid` plumbing, the hudPopup text-tap
+  branch, and index.html's dead `__openTextThread` (the menu-locked force-open
+  flow stays — 📖 comic toasts still use it).  Quiet Crush "💕 …" bubbles keep
+  their tiny toast.  Messages-app unread dots unchanged.
+- Probe-verified: geometry cap, 30 s timer, replace, tap-dismiss, hides with the
+  HUD on title.  Full suite (17 files) green.
+
 ### 2026-09-09 (pt 1) — iPhone memory-crash fixes: off-ramp asset split, rotation coalescing, GPU-rebuild gate, police eviction, tunnel downscale
 
 Implements the CLAUDE_WORKING_NOTES.md memory audit (owner: "prevent the game from
@@ -12548,7 +12568,8 @@ Make the chosen recovery idempotent and prevent an inescapable death loop.
 
 Brittney is a clearly adult character and the concert is the fictional **StageWagon**. Choosing
 Country at Mercer puts her in the car and leaves Malik's phone behind. She remains in her clean,
-colorful Gas-N-Sip work uniform for the entire drive. At Vantage, she changes privately inside
+colorful Gas-N-Sip work uniform through the Mercer shop visit and while entering the passenger
+seat on departure. The first road beat may establish her later change into road clothes. At Vantage,
 the gas station immediately before joining her friends; no in-car wardrobe change occurs.
 
 Track `relationship` as 0–100 and show five stars. Four stars / 80% is full success. Barely Made

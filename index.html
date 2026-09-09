@@ -4671,31 +4671,9 @@
         renderList();
       });
 
-      // Tap the in-game "📱 New text — X" toast → the phone opens STRAIGHT
-      // into that Messages thread, even in landscape (owner 2026-08-29).
-      // Mobile: force the portrait menu up (menu-locked) + pause the scene;
-      // the player then resumes the normal way — rotate up to portrait
-      // (which clears the force flag) and back down to landscape.  Desktop:
-      // the __phoneMenu bridge already pauses/opens with its own buttons.
-      window.__openTextThread = (cid) => {
-        try {
-          if (window.__isDesktop) {
-            window.__phoneMenu?.open?.();
-          } else {
-            document.body.classList.add('menu-locked');
-            window.__textThreadForced = true;
-            // The resize dispatch re-lays the hit zones AND pauses the scene:
-            // applyOrientation now treats menu-locked as "must pause" (its
-            // old behavior actively RESUMED the scene here — the game drove
-            // on blind under the forced-open menu).
-            requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
-          }
-          // Build the Messages app (its closures live in the tile handler),
-          // then jump to the thread once the DOM has painted.
-          qhit('messages')?.dispatchEvent(new Event('click'));
-          requestAnimationFrame(() => { try { window.__openThread?.(cid); } catch (_) {} });
-        } catch (_) {}
-      };
+      // (__openTextThread removed 2026-09-09 — the in-game text toast is gone;
+      // incoming texts show their body in the HUD's top-left message box.
+      // __openComic below still uses the same menu-locked force-open flow.)
       // Rotating up to portrait completes the tap-open's forced state — from
       // there the ordinary orientation flow owns pause/resume, so rotating
       // back down lands in the usual tap-to-resume hold.  Double-rAF: iOS

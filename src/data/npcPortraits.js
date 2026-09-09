@@ -43,6 +43,7 @@ export const NPC_PORTRAITS = {
   biz_lord:        { texture: 'npc_biz_lord',        name: 'Lord Motors Manager',  placeholderTint: 0xCC1122 },
   biz_suck:        { texture: 'npc_biz_suck',        name: "Sam's Owner",         placeholderTint: 0x8A5A2B },
   biz_gasnsip:     { texture: 'npc_biz_gasnsip',     name: 'Gas-N-Sip Clerk',      placeholderTint: 0x9A36CC },
+  brittney_gasnsip:{ texture: 'npc_brittney_gasnsip',name: 'Brittney',              placeholderTint: 0x16A6B6 },
   biz_am_bm:       { texture: 'npc_biz_am_bm',       name: 'AM/BM Clerk',          placeholderTint: 0x455A7A },
   biz_parkride:    { texture: 'npc_biz_parkride',    name: 'Park & Ride Courier',  placeholderTint: 0x1E5BB8 },
   biz_schwasted:   { texture: 'npc_biz_schwasted',   name: 'Les Schwasted Tech',   placeholderTint: 0xC8102E },

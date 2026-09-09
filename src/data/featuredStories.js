@@ -638,6 +638,21 @@ export const FEATURED_STORIES = {
       }
     },
     nodes: {
+      // Virtual because it appears only when HIT THE ROAD is pressed, after
+      // Brittney has finished serving the player at Mercer Gas-N-Sip.
+      mercer_departure: {
+        stopId: 'M', mandatory: true, virtual: true,
+        when: (st, run) => !!run.passenger && !st.flags.departureShown,
+        speaker: 'Brittney', portrait: 'brittney_gasnsip', importance: 'major',
+        line: 'Brittney clocks out and meets you beside the car, still wearing her Gas-N-Sip uniform.',
+        choices: [
+          { id: 'board', consequential: true, next: null,
+            label: "Passenger seat's yours. Let's hit the road.",
+            reply: 'She slides into the passenger seat. "StageWagon, cowboy. Try to keep all four tires under us."',
+            effects: { flags: { departureShown: true } } },
+        ],
+      },
+
       // ── Needs (repeatable, one per rest stop while pending) ────────────
       need_hunger: {
         stopId: null, repeatable: true, stops: NEED_STOPS, mandatory: true,

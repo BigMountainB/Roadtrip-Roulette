@@ -64,10 +64,10 @@ Legend:
 - [ ] Brittney gives the “missed out on a copilot” response
 - [ ] Player convinces Brittney to quit
 - [x] Brittney removes her name tag and leaves Malik’s phone — `country/mercer_island/mercer_04_quits_leaves_phone.png`
-- [ ] Brittney enters the passenger seat while phone remains behind
+- [x] Brittney enters the passenger side while phone remains behind — `country/mercer_island/mercer_03_quit_and_join_player.png`
 - [ ] Player refuses involvement; Brittney stays at work
 - [x] Early road-clothes exit — `country/mercer_island/mercer_03_changed_to_road_clothes.png` — **UNWIRED / REJECTED**
-- [x] Early road-clothes car entry — `country/mercer_island/mercer_03_quit_and_join_player.png` — **UNWIRED / REJECTED**
+- [x] **TEMPORARY / NEEDS WARDROBE REPLACEMENT** Mercer departure after shopping; passenger-side geometry is correct, but Brittney must ultimately wear her work uniform — `country/mercer_island/mercer_03_quit_and_join_player.png`
 
 ### Skipping Mercer Island — comic archive only
 
@@ -139,7 +139,7 @@ Legend:
 
 - [x] Brittney removes name tag/quits and phone remains — combined in
   `country/mercer_island/mercer_04_quits_leaves_phone.png`
-- [ ] Brittney climbs into passenger seat in approved work uniform
+- [ ] Brittney climbs into the passenger side in her work uniform (temporary correctly seated panel uses the road outfit)
 - [ ] First flirtatious road conversation
 - [ ] Boyfriend calling Brittney’s phone
 - [ ] Brittney ignores call
@@ -150,22 +150,22 @@ Legend:
 ### Hunger
 
 - [ ] Eggplant hunger-request frame
-- [x] Player offers sushi / Brittney accepts — `country/passenger_needs/hunger_01_buy_sushi.png` — **UNWIRED / REJECTED: early road outfit**
-- [x] Player brings burrito / disgust response — `country/passenger_needs/hunger_02_offer_pork_burrito.png` — **UNWIRED / REJECTED: early road outfit**
-- [x] Player says wait / irritated reaction — `country/passenger_needs/hunger_03_wait_for_better_food.png` — **UNWIRED / REJECTED: early road outfit**
+- [x] Player offers sushi / Brittney accepts — `country/passenger_needs/hunger_01_buy_sushi.png` — **WIRED**
+- [x] Player brings burrito / disgust response — `country/passenger_needs/hunger_02_offer_pork_burrito.png` — **WIRED**
+- [x] Player says wait / irritated reaction — `country/passenger_needs/hunger_03_wait_for_better_food.png` — **WIRED**
 
 ### Thirst
 
 - [ ] Water-drop thirst-request frame
-- [x] Slushie offer / suggestive response — `country/passenger_needs/thirst_01_buy_slushie.png` — **UNWIRED / REJECTED: early road outfit**
-- [x] Find-a-fountain / blank stare — `country/passenger_needs/thirst_02_find_fountain.png` — **UNWIRED / REJECTED: early road outfit**
+- [x] Slushie offer / suggestive response — `country/passenger_needs/thirst_01_buy_slushie.png` — **WIRED**
+- [x] Find-a-fountain / blank stare — `country/passenger_needs/thirst_02_find_fountain.png` — **WIRED**
 
 ### Bathroom
 
 - [ ] Bathroom-request frame
-- [x] Hold-it / wet joke — `country/passenger_needs/bathroom_01_hold_it.png` — **UNWIRED / REJECTED: early road outfit**
-- [x] Stop and release demons / blank stare — `country/passenger_needs/bathroom_02_wait_in_car.png` — **UNWIRED / REJECTED: early road outfit**
-- [x] Go with her — `country/passenger_needs/bathroom_03_go_with_her.png` — **UNWIRED / REJECTED: early road outfit**
+- [x] Hold-it / wet joke — `country/passenger_needs/bathroom_01_hold_it.png` — **WIRED**
+- [x] Stop and release demons / blank stare — `country/passenger_needs/bathroom_02_wait_in_car.png` — **WIRED**
+- [x] Go with her — `country/passenger_needs/bathroom_03_go_with_her.png` — **WIRED**
 - [ ] Passenger returning from restroom
 
 ### Driving reactions / Nerve archive frames
@@ -180,16 +180,16 @@ Legend:
 - [ ] 15 Nerve: nervous/irritated
 - [ ] 10 Nerve: frightened/considering exit
 - [ ] 5 Nerve: furious with phone ready
-- [x] 0 Nerve / roadside demand and exit — `country/nerve/nerve_zero_roadside_exit.png` — **UNWIRED / REJECTED: early road outfit**
+- [x] 0 Nerve / roadside demand and exit — `country/nerve/nerve_zero_roadside_exit.png` — **WIRED**
 - [ ] One-mile police warning
 - [ ] Calling police
-- [x] Five-star chase — `country/nerve/refuse_exit_five_star_chase.png` — **UNWIRED / REJECTED: early road outfit**
+- [x] Five-star chase — `country/nerve/refuse_exit_five_star_chase.png` — **WIRED**
 
 ### Vantage ending
 
 - [ ] Getting off the Vantage exit
 - [x] Brittney sees her friends in work uniform — `country/vantage/vantage_01_spots_friends_work_uniform.png`
-- [ ] Brittney changes privately inside the station and emerges in road outfit
+- [x] Brittney already changed after finishing her Mercer shift; no second Vantage change
 - [ ] Brittney jumps out to join friends
 - [ ] Ride ’Em farewell
 - [ ] New Contact message portrait
