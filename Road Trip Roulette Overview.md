@@ -204,6 +204,22 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 5) — Top-row plates finally border-to-border (the gap was INSIDE the PNGs)
+
+Owner: "One last try to get you to decrease the gaps from the top row of buttons… I
+would really like their blue borders to stack on top of each other."  TOP_GAP was
+already 0 — the gap lived in the ART: each 150 px plate is a slanted parallelogram
+with transparent margins (PIL-measured: solid glass x 28→144 on the top row, 3→119 on
+the bottom row), so two cells butted at zero gap still showed a constant
+(150+28−144)/150 ≈ 22.7% visible gap (≈12.7 px at 56 px).  Fix: `TOP_ROW_STEP =
+116/150` — cells now OVERLAP by 34/150 of the size so adjacent slanted borders
+coincide; applied to both chains (Rewind|Pause|FF|Genre and Mute|Map|Tutorial) and
+`leftGroupW`.  Hit areas were already runtime parallelograms (`_setTopRowHitArea`),
+so the overlap is transparent margin only.  Genre's plate is a vertical-left-edge end
+cap and tucks UNDER FF's slanted plate (FF draws later) — no gap, one strip.
+Verified numerically in-scene: every adjacent pair's edges within ±0.5 px.
+Handedness mirroring preserves it (positions mirror, overlap constant is symmetric).
+
 ### 2026-09-09 (pt 4) — Resume-path radio handoff fixed, comic scroll unblocked, <2★ warnings, $400 two-cop fine, Comic V2 proposal
 
 - **Radio mix now hands off on RESUME** (owner: "mix not being interrupted by

@@ -133,6 +133,19 @@ const POSE_SIZED_RE = /^codex_beater_(spin_\d+|back_turn_0\d+|front)$/;
 // Re-exporting the art with the same padding as the others is the real fix —
 // delete the entry when that lands.
 const TOP_ROW_ART_SCALE = { tutorial: 127 / 115 };
+// TOP-ROW PLATE STEP (owner 2026-09-09: "I would really like their blue borders
+// to stack on top of each other").  The 150 px plate PNGs are slanted
+// parallelograms with transparent margins: measured with PIL, the solid glass
+// spans x 28→144 on the plate's top row and 3→119 on its bottom row (every
+// plate but Genre; Genre is a vertical-left-edge END CAP, 0→146 / 0→120).  So
+// two cells butted at ZERO gap still show a constant (150+28−144)/150 = 22.7%
+// visible gap — the "gap" the owner kept seeing.  Adjacent slanted borders
+// coincide exactly when the cell STEP is (144−28)/150 of the size, i.e. cells
+// overlap by 34/150.  Hit areas are the parallelograms (_setTopRowHitArea),
+// so the overlap is transparent margin only.  Genre's straight edge tucks
+// UNDER FF's slanted plate (FF is created later → draws on top) — no gap, one
+// unbroken strip.
+const TOP_ROW_STEP = 116 / 150;
 
 const READOUT_CASH_X  = 200;   // money / mult / party clock, centre-anchored
 const READOUT_HP_X    = 564;   // HP, left-anchored
@@ -2511,10 +2524,10 @@ export class GameScene extends Phaser.Scene {
     // the mirror, then Mute, then Map, then the Tutorial "?" further right.
     // (Wiper, when shown, sits beyond it; see music-cluster code.)
     const READOUT_W = 95;
-    const mapX = MIRROR_RIGHT + READOUT_W + iconGap + iconSize + iconGap;   // past Mute
+    const mapX = MIRROR_RIGHT + READOUT_W + iconGap + iconSize * TOP_ROW_STEP;   // past Mute, borders coinciding
     // TUTORIAL "?" takes the slot Garage held (owner 2026-09-03: "Get rid of the
     // garage button on the HUD"). Garage is reached from the Phone menu only.
-    const tutX = mapX + iconSize + iconGap;
+    const tutX = mapX + iconSize * TOP_ROW_STEP;
     const [mapBg, mapLbl] = makeIconBtn(mapX, 'map', () => this._buildMapModal());
     const [tutBg, tutLbl] = makeIconBtn(tutX, 'tutorial', () => this._tutModeToggle());
     // Tracked via _hudObjects (always-visible HUD pool) instead of
@@ -19359,7 +19372,7 @@ export class GameScene extends Phaser.Scene {
     // each side (the BRAKE pedal already lives there, spanning -48…22).
     // Clamped to -off so a desktop build (HUD_OFFSET_X = 0) can't push the
     // first button off the physical edge.
-    const leftGroupW     = 4 * leftBtnSize;
+    const leftGroupW     = leftBtnSize * (1 + 3 * TOP_ROW_STEP);   // 4 overlapped plates
     const leftGroupRight = MIRROR_LEFT_X - READOUT_W - TOP_GAP;
     const leftGroupLeft  = Math.max(leftGroupRight - leftGroupW, -(C.HUD_OFFSET_X ?? 0));
     // _topRowButtons is initialised at the top of create() so the
@@ -19390,7 +19403,7 @@ export class GameScene extends Phaser.Scene {
     // reservation on the mirror's left.
     const noteRight = leftGroupRight;
     // Slot 3 of the strip (Rewind | Pause | FF | Genre) — see leftGroupLeft.
-    const noteLeft  = leftGroupLeft + 3 * leftBtnSize;
+    const noteLeft  = leftGroupLeft + 3 * leftBtnSize * TOP_ROW_STEP;
     this.hudNoteBtn = this.add.graphics().setDepth(62);
     this.hudNoteBtn.setInteractive(new Phaser.Geom.Rectangle(noteLeft, muteTop, leftBtnSize, leftBtnSize), Phaser.Geom.Rectangle.Contains);
     this.hudNoteBtn.input.cursor = 'pointer';
@@ -19411,7 +19424,7 @@ export class GameScene extends Phaser.Scene {
     // EDM, Hip-Hop, Heavy Metal, Polka, Reggae, Mariachi, Pop, MK64).
     // No-op on procedural-only stations.
     // Skip / FAST-FORWARD — second from the left, between Pause and Genre.
-    const skipLeft  = leftGroupLeft + 2 * leftBtnSize;   // slot 2
+    const skipLeft  = leftGroupLeft + 2 * leftBtnSize * TOP_ROW_STEP;   // slot 2
     const skipRight = skipLeft + leftBtnSize;
     this.hudSkipBtn = this.add.graphics().setDepth(62);
     this.hudSkipBtn.setInteractive(new Phaser.Geom.Rectangle(skipLeft, muteTop, leftBtnSize, leftBtnSize), Phaser.Geom.Rectangle.Contains);
@@ -19830,7 +19843,7 @@ export class GameScene extends Phaser.Scene {
     // now share the strip between the screen edge and the readout column.
     const pauseSize = leftBtnSize;
     // Slot 1 of the strip — Rewind is now leftmost, then Pause, FF, Genre.
-    const pauseLeft  = leftGroupLeft + 1 * leftBtnSize;
+    const pauseLeft  = leftGroupLeft + 1 * leftBtnSize * TOP_ROW_STEP;
     const pauseRight = pauseLeft + pauseSize;
     const pauseTop   = 2;
     const pauseBtn = this.add.graphics().setDepth(62);

@@ -671,3 +671,479 @@ Also still open from the comic work: **exit-time preload of the small set of lik
 ### Important instruction to Claude
 
 Do not keep tuning music in hopes of fixing this restart symptom until the boot texture load is reduced and measured. Also do not solve it by raising the loader timeout: the problem is the quantity and decoded size of retained assets, not simply load duration.
+
+---
+
+## Comic system — OWNER-APPROVED DIRECTION 2026-09-09 (design specification; not yet an implementation claim)
+
+This section supersedes older comic-layout and tile-pacing proposals wherever they conflict. In particular, the older `Tile pacing — player-driven 2026-09-07` note describes the current/previous tap-gated behavior, **not** the approved target below. Do not mark any item in this section done merely because a prototype page demonstrates it. Verify the actual game code and behavior independently.
+
+### Product concept: one panel language, two placements
+
+There are two presentations of the same story panels:
+
+1. **Live conversation strip during gameplay** — a horizontal, left-to-right miniature Sunday-comic strip in which dialogue is revealed as the conversation happens.
+2. **Finished comic book in the phone menu** — the saved, edited account of the run, arranged into rows and pages.
+
+These are not two unrelated layout systems. They must share:
+
+- The same source artwork.
+- The same narrative panel order.
+- The same authored panel aspect ratio.
+- The same face/focus/protect metadata.
+- The same speaker, mouth-anchor, balloon-tone, caption, and sound-effect metadata.
+- The same dialogue and chosen player response.
+- The same border and visual vocabulary unless a presentation-specific override is necessary.
+
+They differ primarily in **placement**. The live version places panels in one horizontally scrollable strip. The finished book composes those same panels, in the same order and at the same ratios, into rows and pages. Do not generate a screenshot of the live UI and use it as the comic page; persist compact event/metadata records and render each presentation from those records.
+
+### Core geometry of the live strip
+
+- Every live tile has the same displayed height.
+- Tile width varies according to the panel's authored aspect ratio.
+- Preserve the aspect ratio that panel will occupy in the finished comic.
+- A wide or exceptionally important panel may occupy approximately one entire iPhone viewport width.
+- Two ordinary panels may be visible within one screen.
+- Three narrow/vertical panels may be visible within one screen.
+- Panels must visually touch the same continuous strip through consistent gutters and baseline alignment; they must not look like disconnected UI cards.
+- The active strip reads left to right. Completed panels remain to the left and can be manually revisited.
+- Manual horizontal scrolling must never commit a response or accidentally advance the story.
+- A drag and a tap are different gestures. Use a movement threshold rather than treating every pointer release as a tap.
+- When advancing automatically, slide only far enough to compose the next active panel sensibly; do not blindly center every tile if doing so destroys the one-, two-, or three-panel rhythm.
+
+The goal is for gameplay to feel like the comic is being authored in front of the player. Panels that will enter the finished book should be introduced in their eventual narrative order and intended aspect ratios from the beginning.
+
+### Live dialogue and advancement sequence
+
+The tile must **not move while the game is waiting for the player to select a response**. The player must be allowed to read the prompt and their possible answers without time pressure.
+
+Approved sequence:
+
+1. The current illustrated tile enters the strip.
+2. Any opening NPC dialogue is revealed in the tile.
+3. The response-choice tray appears over the lower portion of the artwork.
+4. The strip remains stationary until the player chooses.
+5. The selected response becomes the player's balloon inside the current tile.
+6. The unselected responses disappear and the response tray retracts/fades so the completed artwork can be seen.
+7. If the player's balloon is the last dialogue assigned to that tile, hold the completed tile for **3 seconds**.
+8. If one or more NPC responses follow the player's answer in the same tile, reveal them in authored order. After the final NPC response appears, hold the completed tile for **6 seconds**, extended for long final responses as described below.
+9. A deliberate tap during a completed-tile hold skips the remaining pause and advances.
+10. At the end of the hold, slide the strip left and activate the next tile.
+11. The player may scroll backward at any time to review completed panels.
+
+Timing begins only after the newly added balloon has finished appearing. The response-choice tap that created the player balloon must not carry through and skip its reading pause.
+
+#### Reading-time rule
+
+- Final player response with no subsequent line in the tile: **3,000 ms**.
+- Final NPC response after the player's response: **6,000 ms**.
+- If the final newly revealed response exceeds 10 words, add **175 ms per word beyond 10**.
+- Cap the automatic reading hold at **9,000 ms** unless a specifically authored dramatic pause overrides it.
+- A deliberate tap advances immediately.
+- Beginning a horizontal review drag pauses/cancels automatic advancement until the active panel is restored.
+- Accessibility/reduced-motion behavior must not make the story unreadable. VoiceOver or an equivalent accessibility mode should disable automatic advancement and provide an explicit continue action.
+
+Examples:
+
+- An 8-word final player response with no NPC follow-up: 3.0 seconds.
+- A 9-word final NPC follow-up: 6.0 seconds.
+- A 20-word final NPC follow-up: 7.75 seconds.
+- Anything long enough to exceed the cap: 9.0 seconds unless author-overridden.
+
+### Response choices: translucent verbal-response tray
+
+The artwork should use the entire available screen height, top to bottom. Do not reserve a permanent opaque UI band beneath it. Response choices appear in a **translucent tray over the lower portion of the artwork**.
+
+Target behavior and styling:
+
+- Dark smoked-glass background at approximately **75–85% effective opacity**.
+- A restrained background blur where supported; provide a performant non-blur fallback for older iPhones.
+- The tray should normally occupy no more than the lower **30–35%** of the viewport and should shrink when fewer choices are present.
+- Respect the iPhone safe-area inset at the bottom.
+- Choice labels remain real readable controls with sufficiently large touch targets; the comic styling must not reduce usability.
+- Use the comic dialogue typeface, sentence case, dark ink text, warm off-white/cream choice surfaces, and subtly hand-inked borders.
+- The controls should feel like potential spoken sentences, but should not masquerade as balloons already spoken by the character.
+- A small quotation or tail motif may reinforce that these are verbal responses.
+- When chosen, the selected sentence should visually transition or “lift” from its choice control into the player's balloon.
+- Unselected choices fade promptly.
+- The tray then retracts/fades for the reading hold, exposing the complete panel.
+
+The lower tray region is a **temporary obstruction**, not a permanent crop. Panel composition metadata must therefore protect faces, mouths, hands, phones, vehicles, impact areas, clues, and other story-critical objects from being placed exclusively behind it. Prefer crops/compositions that keep essential content above or beside the tray while choices are visible.
+
+Do not rely on blur alone for contrast. The tray/control text needs explicit foreground/background contrast, and very bright or busy art must receive additional scrim strength.
+
+### Dialogue capacity and conversational rhythm
+
+- **Absolute target maximum: 20–25 words per balloon. Never use 28 as the standard.**
+- Most balloons should contain approximately **5–10 words**.
+- Do not shrink lettering to force an overlong line into a balloon. Edit, split, or move dialogue to another balloon/tile.
+- A tile may contain a short exchange of approximately **4–5 balloons** if the artwork and reading order support it.
+- Multi-balloon exchanges should leapfrog down the panel: left, right, left, right, with each later utterance clearly lower than the previous one.
+- Keep approximately **6–10 design units** of vertical separation between successive balloon anchors (see scalable geometry below).
+- Tails must not cross each other, faces, text, or earlier balloons.
+- If five balloons cannot fit without obscuring the story image or becoming ambiguous, split the exchange across consecutive panels. Panel clarity outranks a desire to keep a whole conversation in one image.
+- Dialogue is only required to be comfortably readable at gameplay size. The finished phone-menu comic may display smaller type because it will support hold-to-zoom, but it must remain recognizable enough at rest to invite reading.
+
+### Narrative editorial rule: what belongs in the permanent comic
+
+Do **not** equate `choice.consequential` with “deserves a permanent comic panel.” Consequential is a gameplay/state concept. Comic inclusion is a narrative/editorial decision and needs its own field or derived classification, such as `comic: true/false`, `storyRole`, and `priority`.
+
+A moment belongs in the finished comic when it does one or more of the following:
+
+- Changes the direction or stakes of the trip.
+- Records a meaningful player decision and its consequence.
+- Reveals character rather than merely maintaining a meter.
+- Changes trust, affection, suspicion, rivalry, loyalty, or power in a meaningful relationship.
+- Introduces, escalates, or resolves danger.
+- Establishes or changes passenger, cargo, vehicle, route, performance, ownership, or partnership status.
+- Sets up something that is paid off later.
+- Pays off an earlier decision, joke, threat, promise, or relationship beat.
+- Marks a major set piece, reveal, reversal, climax, or ending.
+- Supplies a purposeful absurd cutaway or reaction that improves comic timing.
+
+Routine hunger, thirst, bathroom, flirt, reassurance, or meter-maintenance exchanges should usually **not** receive standalone permanent panels merely because they changed a stat. They may still appear in the live conversation strip to keep the player active and the relationship alive.
+
+### Relationship strips apply to all important recurring characters
+
+The condensed relationship device is not exclusive to Brittney. It should cover nearly all major storyline NPCs whose relationship with the player develops.
+
+Known priorities:
+
+- **Brittney** — long-duration passenger relationship; may recur at meaningful phase changes.
+- **McKenna** — long-duration passenger relationship; may recur at meaningful phase changes.
+- **Malik** — recurring relationship with developing trust/obligation/loyalty.
+- **Dominique** — recurring relationship with developing trust/attitude/loyalty.
+- Audit the complete story roster for other recurring characters whose later behavior, help, opposition, affection, or ending changes because of accumulated interaction. Do not invent importance from mere screen time; verify actual story recurrence and consequences.
+
+There are two useful forms:
+
+1. **Passenger relationship strip** — may recur when a long car relationship changes phase.
+2. **Recurring-NPC relationship strip** — appears at a meaningful turning point or payoff, not after every encounter.
+
+Condense ordinary relationship maintenance into a short montage strip rather than giving every exchange a full panel. An approved caption model is:
+
+> …HOW DID THEY HANDLE THE LONG CAR RIDE?
+
+The exact content of the montage should be derived from the player's actual saved interactions and relationship result. It can read as broadly good, mixed, deteriorating, awkward, affectionate, or hostile. Do not fabricate a happy montage when the player's choices produced the opposite. Similar character-specific captions may be authored for non-passenger relationships.
+
+### Tone and story progression
+
+Target tone is an **adult animated-sitcom road comedy** with grounded character relationships and strategically absurd cutaways. This is a tonal target, not an instruction to imitate any living creator's exact style.
+
+- Approximately **75% grounded character story**: cause and effect, decisions, travel complications, danger, relationship changes, reactions, and payoffs.
+- Up to **25% absurd cutaway/reaction material**: exaggerated interpretations, fantasy inserts, flashbacks, visual non sequiturs, or side-story beats.
+- A cutaway must launch from a specific line, thought, fear, boast, misunderstanding, or object in the grounded scene.
+- Most cutaways should last **1–3 panels**.
+- Return to the exact conversational beat or visual setup that launched the cutaway.
+- Do not use cutaways merely to reach a percentage. They must sharpen a joke, reveal character, foreshadow a consequence, or create a later payoff.
+- Avoid allowing cutaways to crowd out decisions or consequences. The player should still be able to reconstruct why the trip ended as it did.
+
+### Finished comic pages and chapter rhythm
+
+- Pages normally contain **3–5 panels**.
+- Six-panel pages are allowed for deliberately quick dialogue, montage, or escalating action, but should be exceptional.
+- A major beat normally receives the largest panel on the page; it is not automatically isolated.
+- Use approximately **6–12 pages per chapter** as a flexible editorial range, based on actual story density rather than padding.
+- Chapter transitions should use a location/time/mile caption, a visual travel bridge, a changed passenger/vehicle state, or a purposeful page turn.
+- Do not repeat the same page template mechanically. Layout must express dramatic function: establishment, setup, decision, consequence, chase, cutaway, emotional beat, or ending.
+- Normal gutters remain consistent enough to unify the book. Narrow gutters can accelerate an ambush/chase sequence; wider gutters can create a pause or location transition.
+
+#### Full-page treatment — maximum 1–2 per entire comic
+
+There should be **only one or two full-page moments in the entire completed comic**, not one or two per chapter.
+
+There are currently no dedicated portrait/full-page illustrations. Do not enlarge or crop a landscape source into a compromised portrait image merely to satisfy a “splash page” template. “Full-page moment” may instead be constructed from existing art as:
+
+- A wide cinematic hero panel dominating the page with smaller reaction/caption panels beneath it.
+- A landscape image spanning the page width with a deliberate, non-destructive crop.
+- A composite page using the main landscape image plus one or two face-safe insets.
+
+On a horizontally held iPhone, do not shrink an entire portrait page until the important art and dialogue become tiny. The menu reader may present the dominant wide panel directly, then allow vertical movement to the subordinate panels. Full-page treatment describes narrative emphasis, not a requirement to produce a portrait bitmap.
+
+### Page/panel transitions
+
+Author a transition role rather than choosing layouts randomly:
+
+- `establish` — location, time, vehicle, passengers, and immediate situation.
+- `setup` — creates an expectation, problem, promise, or joke premise.
+- `decision` — presents or records a meaningful player choice.
+- `consequence` — shows what the choice caused; must not be omitted when it changes the story.
+- `reaction` — face/body response that controls emotional or comedic timing.
+- `relationship` — condensed development or a turning point between player and NPC.
+- `cutaway` — brief absurd departure launched by the grounded scene.
+- `return` — re-enters the exact beat that launched the cutaway.
+- `travel` — compresses distance/time and bridges locations.
+- `escalation` — accelerates danger or argument.
+- `climax` — decisive high-stakes action/reveal.
+- `aftermath` — gives the outcome room to land.
+- `ending` — resolves this run's central promise and preserves the player's authored result.
+
+Important choices should normally form at least a decision → consequence pair, even when that pair shares a single tile through multiple balloons. A page turn may separate them when the reveal benefits from suspense or comedy.
+
+### Balloon vocabulary and scalable construction geometry
+
+Use normalized geometry so balloons scale consistently across wide, ordinary, and narrow tiles.
+
+Define:
+
+`U = min(panelWidth, panelHeight) / 100`
+
+All values below are design targets. Enforce practical screen minimums so strokes do not disappear on high-density phones.
+
+#### Normal speech
+
+- White or warm-white organic oval/rounded balloon.
+- Outline: **0.75U**, with a minimum rendered stroke of approximately **2 CSS px** at gameplay size.
+- Horizontal padding: **3.5U**.
+- Vertical padding: **2.5U**.
+- Tail length: **14–22U**, depending on distance to mouth.
+- Tail base width: **6–9U**.
+- Tail should point toward the authored mouth anchor but stop short of touching the face.
+- Avoid perfect computer-generated ellipses; introduce restrained organic asymmetry without harming text fit.
+
+#### Player speech
+
+- Remains visually related to normal speech but must be immediately distinguishable.
+- Use a warm cream fill and subtly boxier rounded silhouette.
+- Do not use color alone as the distinction.
+- The chosen response inserted from the tray uses this treatment consistently.
+
+#### Whisper / quiet aside
+
+- Mixed case or restrained italic lettering; never reduce contrast until it becomes illegible.
+- Outline: **0.65U** with round dash caps.
+- Dash length: **2.5U**.
+- Gap length: **1.75U**.
+- Maintain approximately a **1.4:1 dash-to-gap ratio** as the balloon scales.
+- At a common gameplay scale this will be roughly a 2 px stroke, 8 px dash, and 5.5–6 px gap.
+- Tail may use a small dashed or tapered treatment, but it must still identify the speaker unambiguously.
+
+#### Phone / radio / electronic speech
+
+- Squared or lightly rounded balloon body.
+- Zig-zag/lightning tail total length: **16–24U**.
+- Tail base width: **7–9U**.
+- Use **3 bends**, with 4 only when required by routing.
+- Each straight leg between bends: **4–7U**.
+- Bend angles: approximately **35–55 degrees**.
+- Keep a consistent zig-zag amplitude; do not produce tiny decorative teeth that disappear at phone size.
+- Tail should be filled white/cream and outlined like the balloon, not drawn as a thin lightning icon.
+- A small electronic marker may be used, but the shape/tail must carry the voice treatment without depending on an emoji.
+
+#### Shout / alarm
+
+- Jagged burst with approximately **18–28 spikes**, scaled to balloon size.
+- Spike depth: **2–4U**.
+- Outline: approximately **1U**.
+- Reserve for actual shouting, collision reactions, pursuit, panic, or similarly elevated speech.
+- Do not classify every line ending in an exclamation mark as a shout automatically; allow authored tone overrides.
+
+#### Distress / trembling speech
+
+- Wavy outline amplitude: **0.7–1.2U**.
+- Wavelength: **5–7U**.
+- Use for fear, sickness, crying, or unstable voice, not as a generic decorative alternative.
+
+#### Thought
+
+- Clouded body with two or three diminishing thought bubbles aimed toward the thinker.
+- Protect sufficient whitespace around the trailing bubbles so they cannot be mistaken for ellipsis punctuation.
+
+#### Sarcasm / deadpan
+
+- This is an RTR house convention, not a universal comic rule.
+- Prefer restrained boxiness, a subtle double-line or dry caption-like treatment, and lettering posture rather than exaggerated decoration.
+- Use sparingly; writing and reaction art should carry most of the joke.
+
+#### Captions
+
+- Use for place, mile, time, status change, chapter/travel transition, and occasional narrator-style comedy.
+- Keep separate from speaker balloons.
+- Gold/cream caption boxes may carry RTR identity; dark variants may be used on night/ambush pages when contrast requires them.
+- Do not dump every live game statistic into the permanent comic. Include only numbers that clarify stakes, cause, or payoff.
+
+#### Sound effects
+
+- Free-floating, hand-integrated lettering for meaningful impacts, engines, sirens, crashes, and physical comedy.
+- Typical rotation: approximately **6–10 degrees** in the direction of action.
+- Typical size: **10–16% of panel width**, adjusted for the event.
+- May overlap a border into the gutter when that improves impact, but must not cover faces, essential action, or dialogue.
+- Use selectively. Repeating sound effects on every vehicle action will flatten their impact.
+
+### Balloon placement and reading order
+
+Automatic placement is an assistant, not the final art director. It should generate candidates and score them, but authored overrides must always be possible.
+
+Protect more than faces. Metadata should distinguish:
+
+- `faces`
+- `mouths` / speaker anchors
+- `focus` crop box
+- `protect` objects: hands, phones, vehicles, cargo, weapons, road signs, impact areas, clues, or any story-critical object
+- temporary `trayRisk` region for the lower live-choice overlay
+
+Placement requirements:
+
+- Speech order controls vertical reading order: the first utterance is highest; later utterances descend.
+- For alternating speakers, leapfrog left/right while continuing downward.
+- Never allow tails to cross balloons, text, faces, or other tails.
+- Avoid covering more than a small incidental portion of a protect box. A simple fixed “12% is acceptable” rule is not sufficient for small but critical objects such as a phone.
+- Prefer shorter tails only after reading order and story visibility are satisfied.
+- If no safe position exists, use a gutter-hanging balloon, alter the crop using the authored focus box, select an alternate aspect-ratio export if available, or split the exchange into another tile.
+- Do not silently make type smaller to resolve placement failure.
+- Comedy may require manual overrides for pauses, reaction reveals, withheld information, and visual irony. Preserve explicit authored `balloons[]` positions over automatic guesses.
+
+### Suggested metadata contract
+
+Exact names may adapt to existing code, but the model must support these concepts:
+
+```js
+'hiphop.seattle_offer.intro': {
+  art: 'assets/storylines/hiphop/seattle/seattle_02_crew_confrontation.png',
+  comic: true,
+  storyRole: 'setup',
+  priority: 'major',
+  transition: 'establish',
+  aspect: 'wide',
+  focus: { x: 0.10, y: 0.05, w: 0.80, h: 0.90 },
+  faces: [
+    { id: 'malik', x: 0.06, y: 0.10, w: 0.30, h: 0.38 },
+    { id: 'player', x: 0.62, y: 0.08, w: 0.30, h: 0.40 }
+  ],
+  mouths: {
+    malik: { x: 0.24, y: 0.36 },
+    player: { x: 0.76, y: 0.34 }
+  },
+  protect: [
+    { kind: 'phone', x: 0.45, y: 0.36, w: 0.10, h: 0.18 }
+  ],
+  balloons: [
+    { speaker: 'malik', tone: 'speech', order: 1, placement: 'auto' },
+    { speaker: 'player', tone: 'player', order: 2, placement: 'auto' }
+  ],
+  sfx: null
+}
+```
+
+Additional event-level data should preserve the selected dialogue text/key, any subsequent NPC responses in order, relationship outcome, mile/location/time if narratively useful, and the stable panel key. Old saved events lacking new fields need a deterministic migration/fallback path; do not invalidate existing comic histories.
+
+### Lettering
+
+The earlier V2 artifact contains contradictory font assignments: its table says Comic Neue dialogue + Barlow captions, while its owner-decisions section says Patrick Hand/Kalam dialogue + Comic Neue non-dialogue. Do not implement both. Resolve the actual bundled font choice visually before coding the final mapping.
+
+Functional requirements regardless of face:
+
+- Dialogue face must remain readable at small gameplay scale and have a convincing hand-lettered character.
+- Use sentence case for normal dialogue unless a deliberate shout/style calls for caps.
+- Caption/page/chapter lettering must be clearly distinct from character speech.
+- Never size dialogue from balloon height alone. Base it on tile/panel scale, available measure, and tested phone readability.
+- Gameplay dialogue should target approximately **13 CSS px minimum** under expected display conditions, subject to actual device testing.
+- Finished comic at-rest dialogue may target approximately **11–12 CSS px**, because hold-to-zoom is available, but it must not become an indecipherable texture.
+- Bundle fonts locally so phone rendering and PDF export are stable and do not depend on a network font request.
+
+### Phone-menu comic: hold-to-zoom
+
+Implement a rearview-mirror-like hold interaction adapted so it does not fight scrolling:
+
+- Hold threshold: approximately **280 ms**.
+- Movement greater than **8 px** before activation cancels the hold and preserves normal scrolling.
+- Activated zoom: approximately **2.25×**.
+- Keep the touched point visually under the finger as zoom begins.
+- While held, dragging pans the enlarged page/panel.
+- On release, animate back to 1× over approximately **140 ms**.
+- Optional pinch zoom range: **1×–4×** if it can coexist cleanly with hold-to-zoom.
+- Provide a brief first-use hint such as “Hold a panel to enlarge.” Do not show it permanently.
+- Zoom should operate on the rendered panel/page without forcing the entire volume's images into memory.
+
+### Image loading and existing-comic correctness — diagnosed, not fixed here
+
+The following issues were identified during the 2026-09-09 read-only review and must be checked before blaming missing source art:
+
+1. All **73** currently referenced `PANEL_META` art files were found on disk at audit time, so the observed missing/wrong display is not explained simply by those files being absent.
+2. `ComicReader` uses an `IntersectionObserver` configured with `.cr-body` as its root, while the actual scrolling container appears to be `.pa-body`. If confirmed in the current code, the observer can treat too many pages as visible, draw many canvases together, thrash the six-image LRU, and produce delayed/blank/wrong-looking pages plus unnecessary iPhone memory pressure.
+3. `StoryTile.drawArt` uses the shared Phaser scene loader and waits on a whole-loader `complete` event. Overlapping establishment/choice swaps or unrelated queued loads may race, leaving a loading placeholder or allowing stale establishing art to overwrite the selected-response art. Verify with request/version tokens or another deterministic ownership mechanism before changing behavior.
+4. Existing saved comic records may retain an old `panelKey`. `ComicSystem` currently trusts a saved key, so a book created before choice-level mapping corrections may not self-heal. Migration must be deterministic and must not replace a deliberate explicit key with an unrelated “nearby” image.
+5. The live tile should begin with the establishing/node art when appropriate, then switch to the selected response/consequence art before that event becomes part of the permanent comic. Special beats still require actual emission sites; merely mapping an image does not make the beat occur.
+
+Do not “fix” a missing panel by substituting a semantically nearby file, reference sheet, or rejected/unwired image. A truthful placeholder is preferable to incorrect story history.
+
+### Known editorial coverage gap
+
+At audit time, approximately **60 consequential choices** existed, but only **39** had direct art mappings and approximately **21** did not. Several missing mappings are narratively important, especially in later Classic Rock branches. This is a coverage/curation problem separate from the renderer.
+
+Examples needing editorial review include:
+
+- Hip-hop: `dom_tape.take` (probably minor) and `cleelum_store.deliver` (ending-level importance).
+- Country: `brittney_aux.give/keep`.
+- Classic Rock: `othello_watch.jealous`, `washtucna_show.solo/equal/giveAll`, `setlist.hers/mine`, `lacrosse_show.solo/duet`, `lacrosse_after.partner`, `colfax_deal.fifty/sixty/flat/refuse`, `colfax_name.hers/together/mine`, and `pullman_final.play`.
+
+Do not assume all 21 deserve unique art, and do not assume unmapped means unimportant. Apply the narrative editorial rule above, identify the decisions required to understand the player's run, and distinguish:
+
+- Needs dedicated art.
+- Can share an establishing image plus distinct dialogue/consequence.
+- Belongs in a relationship montage.
+- Live-only maintenance; exclude from permanent comic.
+- Ending/payoff that must never be omitted.
+
+### Acceptance criteria before calling the comic system complete
+
+- A live conversation can contain 4–5 short leapfrogging balloons without ambiguous reading order.
+- The strip never advances while awaiting player input.
+- Player-last tiles hold 3 seconds; NPC-after-player tiles hold 6 seconds plus the long-response extension; tap skips only after the new balloon has landed.
+- The response tray overlays the full-height art, retracts after selection, respects safe areas, and remains readable over bright and dark panels.
+- One, two, and three-panel viewport compositions all look like one continuous comic strip rather than cards.
+- Dragging backward reviews earlier panels without committing or advancing anything.
+- Panels enter live play in the same narrative order and ratios used by the finished comic.
+- The finished comic filters live-only maintenance while retaining decisions, consequences, relationship turns, set pieces, and endings.
+- Brittney, McKenna, Malik, Dominique, and any other verified recurring relationship receive appropriate development/payoff treatment without turning every meter interaction into a full panel.
+- The 75/25 grounded-to-absurd target is perceptible across the complete comic without mechanically inserting cutaways.
+- No more than 1–2 full-page moments appear in the entire comic, and neither requires destructive portrait cropping of existing landscape art.
+- Hold-to-zoom works without stealing ordinary scroll gestures.
+- Old saved comics still open and resolve deterministically.
+- Blank/missing panels are tested on a real iPhone with cache/LRU/observer instrumentation, not judged only in desktop preview.
+- Opening, scrolling, zooming, closing, and reopening the comic does not cause unbounded decoded-image growth or worsen the already documented iPhone restart risk.
+
+### Instruction to Claude: implementation order
+
+Do not attempt a single monolithic rewrite. Recommended order:
+
+1. Reconcile current code with the diagnosed loading, observer-root, saved-key, and tile-race findings; write focused failing tests or instrumentation first.
+2. Separate narrative comic inclusion from gameplay `consequential` state.
+3. Define the shared panel/event metadata contract and deterministic legacy fallbacks.
+4. Implement the live fixed-height/variable-width strip and safe manual review behavior.
+5. Implement balloon sequencing and the approved timing state machine.
+6. Redesign response controls as the translucent overlay tray.
+7. Implement aspect-ratio-preserving finished-page composition from the same ordered panels.
+8. Add relationship montage selection and grounded/cutaway editorial roles.
+9. Add hold-to-zoom and verify touch conflicts.
+10. Validate memory and rendering on a real iPhone before expanding art coverage.
+
+Keep implementation commits separable. Do not claim the design is complete based solely on the V2 artifact page; that page is a useful proposal and visual discussion aid, not proof that the production reader or gameplay strip behaves this way.
+
+### Claude: request design input instead of silently guessing
+
+As you inventory and implement the comic, tell the owner and ChatGPT/Codex when you need additional visual direction. Do not force automatic balloon placement, reuse unsuitable art, or quietly omit an important story beat merely to make the renderer complete.
+
+Please produce a concrete review list containing:
+
+1. **Balloon-placement questions** — panels where the automatic placement cannot preserve reading order while also protecting faces, mouths, hands, phones, cars, impact areas, clues, and the live response-tray region.
+2. **Speaker-anchor questions** — panels where the speaker, mouth location, off-panel voice, thought owner, or order of speech is uncertain.
+3. **Crop/aspect-ratio questions** — panels whose current landscape image cannot safely serve the intended wide, ordinary, or narrow tile without losing essential content.
+4. **Additional-image recommendations** — meaningful decisions, consequences, relationship turns, cutaways, payoffs, climaxes, or endings that do not have suitable art and would materially improve the story if new artwork were created.
+5. **Alternate-export recommendations** — existing images that are narratively correct but would benefit from a separate square, tall, close-up, or wider composition instead of an aggressive crop.
+6. **Editorial questions** — uncertain events that may belong in the permanent comic, a relationship montage, or live gameplay only.
+
+For every item, provide:
+
+- Story, node, choice, or stable panel key.
+- Current art path, if any.
+- The exact dialogue or story beat being represented.
+- Intended panel role and aspect ratio.
+- What specifically conflicts or is missing.
+- Your recommended solution.
+- Whether the issue is blocking, important, or merely polish.
+- A small annotated screenshot/mockup when words alone do not clearly communicate the problem.
+
+For proposed new artwork, also provide a concise art brief: characters present, location/time, action, emotion, camera framing, required negative space for balloons, objects that must remain visible, intended tile ratio, and why existing art cannot tell the beat honestly. Group related recommendations so the owner can commission a useful set rather than receive scattered one-off requests.
+
+Ask these questions **before** baking questionable guesses into dozens of metadata records. Straightforward panels may still be pre-filled automatically, but flag low-confidence `focus`, `faces`, `mouths`, `protect`, tone, and balloon-position guesses for visual review. The owner is happy to supply style/story direction, and ChatGPT/Codex can help art-direct exact balloon geometry and placement once you identify the difficult panels.
