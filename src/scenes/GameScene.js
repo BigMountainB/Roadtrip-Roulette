@@ -26045,7 +26045,7 @@ export class GameScene extends Phaser.Scene {
    *  snapshot first so the next scene boots in the matching mode. */
   _resumeFromSavedSnapshot(snap) {
     // Same resume-path radio kick as _resumeFromLiveSnapshot (see there).
-    this._kickRadio();
+    this._kickRadio({ run: true });
     if (snap?.difficulty) Difficulty.set(snap.difficulty, this.registry);
     this.scene.start('Game', {
       resumeFromStop: snap.id,
@@ -26568,8 +26568,10 @@ export class GameScene extends Phaser.Scene {
     // Kick the radio NOW — we're inside the LOAD SAVE tap's gesture frame,
     // the first legal moment for audio.  Fresh runs kick in _startGameplay,
     // but resume boots skip it, which left resumed runs with NO music
-    // (owner 2026-07-22: "music isn't playing by default").
-    this._kickRadio();
+    // (owner 2026-07-22: "music isn't playing by default").  `run: true`:
+    // we're still in title state here, and the title branch would re-arm the
+    // menu mix instead of handing off to the soundtrack.
+    this._kickRadio({ run: true });
     if (snap.difficulty) Difficulty.set(snap.difficulty, this.registry);
     this.scene.start('Game', { resumeLiveSnapshot: snap });
   }
@@ -26738,7 +26740,7 @@ export class GameScene extends Phaser.Scene {
    *  Inits on first call (which also arms the iOS native-gesture unlock),
    *  resumes the context if an autoplay block suspended it, and never restarts
    *  a song that's already playing.  Respects the mute toggle. */
-  _kickRadio() {
+  _kickRadio({ run = false } = {}) {
     const a = this.audio;
     if (!a) return;
     // TITLE / MENU kick (owner 2026-08-31 + 09-05 refinement): a FRESH open
@@ -26747,7 +26749,11 @@ export class GameScene extends Phaser.Scene {
     // returns this session — a mid-session visit back to the title/menu
     // keeps the player's soundtrack playing as normal, until the game is
     // closed (next page load re-arms the scan in the constructor).
-    if (this._awaitingStart) {
+    // `run: true` = a resume path kicking from INSIDE the title (the scene
+    // hasn't flipped _awaitingStart yet) — it must take the run branch below,
+    // not re-arm the scan (owner 2026-09-09: "radio mix not being
+    // interrupted by the player's default soundtrack when entering the game").
+    if (this._awaitingStart && !run) {
       if (a._radioScanActive) {
         if (!a.ready) a.init(); else a._enablePlayback?.();
         a.playRadioScan?.();

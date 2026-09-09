@@ -293,24 +293,24 @@ export const PANEL_META = {
     art: 'assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png',
     bubble:       { x: 0.02, y: 0.03, w: 0.42, h: 0.25 },
     playerBubble: { x: 0.03, y: 0.72, w: 0.36, h: 0.24 },
-    tail:         { x: 0.749, y: 0.242 },
-    playerTail:   { x: 0.454, y: 0.324 },
+    tail:         { x: 0.850, y: 0.195 },
+    playerTail:   { x: 0.518, y: 0.290 },
     protect:      [
-      { x: 0.40, y: 0.22, w: 0.13, h: 0.24 }, // Player + steering wheel
-      { x: 0.64, y: 0.12, w: 0.15, h: 0.70 }, // Brittney
-      { x: 0.76, y: 0.18, w: 0.16, h: 0.55 }, // open passenger door
+      { x: 0.44, y: 0.20, w: 0.14, h: 0.25 }, // Player + steering wheel
+      { x: 0.68, y: 0.07, w: 0.20, h: 0.80 }, // Brittney
+      { x: 0.80, y: 0.17, w: 0.16, h: 0.58 }, // open passenger door
     ],
   },
   'country.mercer_departure.board': {
     art: 'assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png',
     bubble:       { x: 0.02, y: 0.03, w: 0.42, h: 0.25 },
     playerBubble: { x: 0.03, y: 0.72, w: 0.36, h: 0.24 },
-    tail:         { x: 0.749, y: 0.242 },
-    playerTail:   { x: 0.454, y: 0.324 },
+    tail:         { x: 0.850, y: 0.195 },
+    playerTail:   { x: 0.518, y: 0.290 },
     protect:      [
-      { x: 0.40, y: 0.22, w: 0.13, h: 0.24 },
-      { x: 0.64, y: 0.12, w: 0.15, h: 0.70 },
-      { x: 0.76, y: 0.18, w: 0.16, h: 0.55 },
+      { x: 0.44, y: 0.20, w: 0.14, h: 0.25 },
+      { x: 0.68, y: 0.07, w: 0.20, h: 0.80 },
+      { x: 0.80, y: 0.17, w: 0.16, h: 0.58 },
     ],
   },
   'country.need_hunger.sushi': {

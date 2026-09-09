@@ -328,7 +328,7 @@ export const COP_TRAP_HOLD_SEC     = 15;
 // The two-cop fine is its own number, NOT a multiple of the base: at 2★ there
 // are two cruisers on you, and the escalation is authored rather than derived.
 export const COP_TICKET_SPEEDING        = 150;      // one cop / speed trap
-export const COP_TICKET_SPEEDING_2COP   = 350;      // 2★ — two cruisers
+export const COP_TICKET_SPEEDING_2COP   = 400;      // 2★ — two cruisers (owner 2026-09-09: $400)
 
 // ── Finish cinematic (park in front of the Pullman Party House) ───────────
 // On crossing the mile-289 finish, input locks, the car eases to a stop over

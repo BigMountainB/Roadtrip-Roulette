@@ -395,7 +395,7 @@ export const POLICE_WARNING_CHANCE = 0.35;   // owner 2026-09-09: was 25%, raise
 /** Chance THIS stop is a warning: the 25% base at ≤1★, but ZERO if the vehicle's
  *  trait removes warnings (reggae) or the wanted level is above 1★. Pure/testable. */
 export function policeWarningChance(trait, stars, base = POLICE_WARNING_CHANCE) {
-  if ((stars ?? 0) > 1) return 0;
+  if ((stars ?? 0) >= 2) return 0;   // owner 2026-09-09: any pullover BELOW 2★ can warn (a decaying 1.5★ still does)
   return mult(trait, 'noPoliceWarning') ? 0 : base;
 }
 

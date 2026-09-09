@@ -188,7 +188,11 @@
     #phone-app .cr-tabs { display: flex; gap: 2cqw; flex-wrap: wrap; margin-bottom: 2cqw; }
     #phone-app .cr-tab.on { background: rgba(57,168,255,0.28); }
     #phone-app .cr-body { display: flex; flex-direction: column; align-items: center; gap: 3cqw; }
-    #phone-app .cr-page { display: block; box-shadow: 0 0.6cqw 2.2cqw rgba(0,0,0,0.55); border-radius: 0.6cqw; }
+    /* touch-action: pan-y overrides the global `canvas { touch-action: none }`
+       (the game canvas rule) — comic pages are canvases too, and with `none`
+       iOS never starts a pan gesture on them, so the book could not be
+       scrolled by touch (owner 2026-09-09). */
+    #phone-app .cr-page { display: block; box-shadow: 0 0.6cqw 2.2cqw rgba(0,0,0,0.55); border-radius: 0.6cqw; touch-action: pan-y; }
     #phone-app .cr-chapter {
       align-self: stretch; color: #39A8FF; font-weight: 800; font-size: 3.2cqw; letter-spacing: 0.08em;
       text-transform: uppercase; margin: 2cqw 0 0; border-bottom: 2px solid rgba(57,168,255,0.4); padding-bottom: 1cqw;

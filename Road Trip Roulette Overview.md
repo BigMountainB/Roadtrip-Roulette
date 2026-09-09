@@ -204,6 +204,32 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 4) — Resume-path radio handoff fixed, comic scroll unblocked, <2★ warnings, $400 two-cop fine, Comic V2 proposal
+
+- **Radio mix now hands off on RESUME** (owner: "mix not being interrupted by
+  the player's default soundtrack when entering the game"): `_resumeFromLive
+  Snapshot` / `_resumeFromSavedSnapshot` kick the radio while the scene is
+  still in TITLE state, so `_kickRadio` took the title branch and re-armed the
+  scan.  Fresh runs flip `_awaitingStart` first, which is why START worked and
+  resume didn't.  `_kickRadio({ run: true })` on both resume paths forces the
+  run branch.  Probe: title scan on → resume → `snoqualmie_moon.mp3` playing,
+  scan off.
+- **Comic book scrolls by touch**: the global `canvas { touch-action: none }`
+  (the game-canvas rule) caught the `.cr-page` canvases, so iOS never began a
+  pan.  `#phone-app .cr-page { touch-action: pan-y }`.
+- **Warnings on any pullover BELOW 2★** (a decaying 1.5★ still warns) —
+  `policeWarningChance` gate `> 1` → `>= 2`; **two-cop fine $400** (was $350
+  in code).  Tests updated (+1.5★ case).
+- **Comic Book V2 proposal** published (artifact "RTR Comic Book V2") and
+  summarized as Ch. 18.9 below: page grammar (5 templates, 3–6 panels, no
+  single-panel pages for `major` beats), balloon vocabulary (speech / player /
+  shout / thought / whisper / sarcasm / phone / caption / SFX), lettering spec
+  (Comic Neue + Bangers + Barlow Condensed), face-safe placement scoring, and
+  the per-panel metadata record the owner helps fill.  Awaiting owner answers
+  before any reader code changes.
+- Near-miss lateral window for Brittney: owner asked "< 1 car-width" —
+  units question pending (see the 09-09 Q&A); code unchanged this pass.
+
 ### 2026-09-09 (pt 3) — Owner batch: tap-to-read texts, Brittney nerve economy, stop-local dialogue, no-refund money, pay-at-pullover + 35% warnings
 
 Owner directives (all Q&A-confirmed, no liberties):
@@ -12789,3 +12815,58 @@ Verify at minimum:
 - PDF export works for complete and TO BE CONTINUED volumes without network access;
 - no regression to audio lifecycle, driving, rest stops, saves, economy, achievements, genre
   ownership, or existing encounter cards.
+
+### 18.13 Comic Book V2 — layout, lettering & balloon proposal (2026-09-09, AWAITING OWNER ANSWERS)
+
+Owner brief: "it appears like a page with one image on it… look at a comic book with
+different size frames and text bubbles that don't cover faces… research comic book
+layouts, font, bubble styles… come up with a better layout for dialogue display."
+Full visual proposal (live sample page from real panels, balloon catalog, templates):
+artifact **"RTR Comic Book V2"** — https://claude.ai/code/artifact/0e13b9dd-948d-4ffb-a0b2-816155ccb453
+
+**Diagnosis of the current reader** (`src/ui/ComicReader.js`, `src/data/comicPanels.js`,
+`src/systems/ComicSystem._placeEvent`):
+- `major` / `climax` / `ending` beats each LOCK a page with one panel; `wide` leaves the
+  lower ~55% of the page empty.  18 of the 31 authored beats are those kinds → the book
+  is mostly single-image pages.
+- One balloon shape for everything; type sized from box HEIGHT (22%); no thought /
+  shout / whisper / caption / SFX.
+- Art is center-cropped with balloons at fixed corners; the `protect` (face/body)
+  rectangles already authored in PANEL_META are never read by the renderer.
+- Touch scrolling was blocked by the global `canvas { touch-action: none }` — FIXED pt 4.
+
+**Proposed page grammar** (Western conventions: 4–6 panels typical, splash sparingly —
+sources: Hooded Utilitarian "Analyzing Comics 101", Clip Studio layout guide, Comicory
+panel-layout guide):
+- A major beat takes the BIGGEST panel on the page it belongs to — never its own page.
+  Splash pages only for `climax` / `ending`, max one per chapter.
+- Five templates: Lead+pair+wide · Build→reveal (choice nodes) · Splash+inset
+  (climax/ending) · Six-up+strip (dialogue-heavy stops; strip = MEANWHILE) · Ambush
+  (1.2% gutters, three tall slivers, big impact panel).  Constant 2.4% gutter otherwise.
+- Vertical scroll book retained (matches the PDF stack) unless the owner prefers swipe spreads.
+
+**Balloon vocabulary** (speech · player-cream · shout/jagged red · thought cloud with
+trailing bubbles · whisper dashed grey italic · sarcasm double-outline italic (house rule;
+no formal convention) · phone/radio squared + zig-zag tail · caption gold box · SFX
+Bangers red-over-gold rotated −6…−10°).  Tone picked from the line's own text (`!` /
+CAPS → shout, `…` → whisper/thought) with a per-panel `tone` override.
+
+**Lettering**: Comic Neue Bold caps for dialogue at 3.2% of PANEL WIDTH (min 9 / max
+15 px); whisper 2.9% italic mixed-case; shout 4.0% red; captions Barlow Condensed 700
+caps 2.8%; SFX Bangers 10–16%; ≤ 28 words per balloon, split at first sentence end into a
+linked balloon — never shrink to fit.  Fonts bundled as woff2 so the PDF letters identically.
+
+**Face-safe placement**: crop with `object-position` aimed at a per-panel `focus` box, then
+score nine candidate balloon spots (3×3 + hanging into the gutter): −100 if >12% of a
+protect box covered, −40 per 10% covered, −10 per 100 px of tail, +25 for the empty third
+nearest the speaker's mouth; top-row tie-break; player balloon placed second with the NPC
+balloon added to the protect list; escape hatch = hang in the gutter above.
+
+**Metadata the owner helps fill** (per panel, ~3 min each; I pre-fill `faces` from
+`protect` and guess `mouth`/`focus`, owner corrects by eye — OR owner supplies 1:1 and 2:3
+crops of key panels instead):
+`{ art, focus:{x,y,w,h}, faces:[…], mouth:{npc:{x,y}, player:{x,y}}, tone:'speech', sfx:null }`
+
+**Open decisions put to the owner**: reading direction (scroll vs swipe spreads); font
+family (Comic Neue+Bangers vs hand-lettered Kalam/Patrick Hand+Luckiest Guy); metadata
+route (annotate vs crop variants).  No reader code changes until answered.

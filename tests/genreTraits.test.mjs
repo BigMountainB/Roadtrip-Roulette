@@ -133,7 +133,8 @@ const _cnt = genreTraitFor('country', 'beater');
 near('normal vehicle: 35% warning at 1★', policeWarningChance(_cnt, 1), 0.35);
 near('normal vehicle: 35% warning at 0★', policeWarningChance(_cnt, 0), 0.35);
 check('reggae NEVER gets a warning (its trait removes them)', policeWarningChance(_reg, 1) === 0);
-check('no warning above 1★', policeWarningChance(_cnt, 2) === 0);
+check('no warning at 2★', policeWarningChance(_cnt, 2) === 0);
+near('decaying 1.5★ still rolls the warning', policeWarningChance(_cnt, 1.5), 0.35);
 near('null trait gets the base warning chance', policeWarningChance(null, 1), POLICE_WARNING_CHANCE);
 
 console.log(`\ngenreTraits.test: ${passed} passed, ${failed} failed`);
