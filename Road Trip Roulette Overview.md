@@ -12926,6 +12926,22 @@ balloon added to the protect list; escape hatch = hang in the gutter above.
 crops of key panels instead):
 `{ art, focus:{x,y,w,h}, faces:[…], mouth:{npc:{x,y}, player:{x,y}}, tone:'speech', sfx:null }`
 
+**AUTHORITY (2026-09-09, later that day):** the owner ruled that the comic section of
+`CLAUDE_WORKING_NOTES.md` ("Comic system — OWNER-APPROVED DIRECTION" + the ChatGPT/Codex
+response beneath it) supersedes this chapter and the V2 page wherever they differ.  The V2
+page has been rebuilt to carry Chat's answers as Claude reads them: a live-strip mock
+(fixed height / aspect-driven width, translucent response tray over the lower ~34%, strip
+frozen while choosing, 3 s / 6 s holds +175 ms/word past 10, 9 s cap, tap skips), the
+U-unit balloon geometry with CSS-pixel floors (2 px outlines, 18 px tails, 4 px burst
+spikes, narrow tiles = one short balloon/caption/SFX only), tray obstruction derived at
+runtime against authored low-frame protect entries with `kind`, tag ownership
+(Chat drafts storyRole/transition/comic → Claude validates emission → owner rules →
+renderer never infers), and the 33-key unmapped-choice triage (A must-never-omit,
+B shared art + balloons, C relationship strip, D dedicated art; none live-only without
+review).  The sample page's balloons were re-placed off every protect box after the owner
+caught the first version covering faces — three of four panels hang balloons into the
+gutter, which is the crop-review signal.
+
 **OWNER DECISIONS (2026-09-09 Q&A) — these override the proposal above where they differ:**
 - Reading: vertical scroll, page by page.  **Balloon order = speech order**: the first line
   said sits highest on the page and each later line sits lower; the placement scorer ranks
