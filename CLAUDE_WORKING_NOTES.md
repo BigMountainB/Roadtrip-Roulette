@@ -1374,3 +1374,105 @@ Claude's art-direction review should focus first on:
 5. Whether relationship montage source panels adequately cover Dom'nique, Brittney, Mykenzie, Malik, and other recurring characters.
 
 Do not spend new-art budget first on minor conversational variants that can be represented honestly with shared establishing art and branch-specific balloons.
+
+## Story build-out — Seattle opening REVIEW DRAFT (Claude, 2026-09-09; owner: "I draft, you red-pen")
+
+Owner's brief: "There's no introduction to who Malik is, no showing him rapping with his
+friends to build character, he doesn't mention the phone holds his newest album that needs
+remastering… why do we assume Player even talks to Malik?"  Owner decisions: **Malik picks
+the player**; **Malik explains the stakes himself**; **5–6 tiles**; Claude drafts, owner +
+Chat edit.  Nothing below is in code.  Every balloon ≤ 25 words (most 5–10).  Existing
+art is named; missing art has a brief.  Node ids are proposals — renaming changes dialogue
+keys, so settle names before wiring.
+
+Today's authored opening is ONE node (`seattle_offer`): the ask + carry/pass.  The draft
+replaces it with six beats; the carry/pass choice and its replies survive (existing keys).
+
+### Beat 1 — `seattle_lot` · establish · WIDE · art: `seattle_01_freestyle_circle.png`
+Caption: SEATTLE PARK & RIDE · MILE 4 · 11:40 PM
+- Crew member (speech): "Bars for the whole 90 — Stank Records, live from the Park & Ride!"
+- Malik (speech, cypher): "Number one on NoiseCloud… still riding the bus."
+- Crowd (SFX-style small): "AYYYY!"
+Purpose: who he is (Malik Reed, Stank Records, NoiseCloud #1), that he's broke, that this
+is his crew.  No player line — the player is pulling in.
+
+### Beat 2 — `seattle_clock` · setup · ORDINARY · art: `seattle_02_crew_confrontation.png`
+Malik has stepped out of the circle toward the player's car; crew behind him.
+- Malik (speech): "That your ride? Those plates ain't from around here."
+- Malik (speech, lower): "You headed east? Over the pass?"
+- Player (choice, non-consequential, both continue): "Pullman. Eventually." / "Who's asking?"
+  - reply to "Who's asking?": "Malik Reed. You just heard the best verse in this lot."
+Purpose: HE picks the player — plates + direction.  A light choice so the player is in
+the conversation before the ask, not ambushed by it.
+
+### Beat 3 — `seattle_stakes` · setup → decision lead-in · WIDE · art: NEW (brief A)
+Malik holds up the phone (cracked screen — Bellevue's founder recognizes it later).
+- Malik (speech): "My whole album's on this. One copy. Needs a remaster before it drops."
+- Malik (speech): "Kyle in Issaquah does the mix. Presser's Friday. My girl Brittney was gonna run it — she's on shift at the Gas-N-Sip on Mercer."
+- Malik (speech): "Every car here's staying for the midnight set. You're passing right by."
+- Player (thought, optional): "One copy. On a phone. Sure."
+Purpose: the stakes in his own words (album, remaster, Kyle, Friday, Brittney, why a
+stranger).  Continuity: Brittney's Mercer line ("run that phone out to his engineer in
+Issaquah") now pays off something Malik SAID.
+
+### Beat 4 — `seattle_offer` · decision · ORDINARY · art: `seattle_03_phone_handoff.png` (carry) / `seattle_05_refuse_job.png` (pass)
+- Malik (speech): "Run it to Brittney. She takes it from there."
+- CHOICES (existing keys kept):
+  - `carry` — "I'm going right past Mercer. Give me the phone."
+  - `pass`  — "I don't carry other people's problems. Good luck with the album."
+Purpose: unchanged decision, now earned.
+
+### Beat 5a — `seattle_terms` (after carry) · consequence · ORDINARY · art: `seattle_04_radio_explanation.png`
+- Malik (speech): "It locks itself if it thinks somebody ran off with it. Don't skip the stop."
+- Malik (speech): "While you're carrying it — Stank's whole catalog's on your radio."
+- Crew member (shout, small): "Don't scratch the screen!"
+Purpose: the lock gag + Hip-Hop radio unlock, as separate lines instead of one 30-word reply.
+The existing `carry` reply text is retired into these two balloons (dialogue key change —
+comic fallback text covers old saves).
+
+### Beat 5b — `seattle_walkoff` (after pass) · consequence · NARROW · art: NEW (brief B)
+- Malik (speech, flat): "Aight. Somebody else'll want the plug."
+- Crew (shout, off-panel): "Weak!"
+Purpose: existing reply kept; the crew's reaction makes refusing cost something socially.
+
+### Beat 6 — `seattle_pullout` · travel · NARROW · art: NEW (brief C, two variants)
+Caption only: "EAST ON I-90 · MERCER ISLAND 5 MI" — carry variant shows the phone on the
+dash lighting up (Malik: "told you" foreshadow); pass variant shows the lot in the mirror,
+crew still going.
+Purpose: the chapter's travel bridge; the finished book gets a page turn here.
+
+### Art briefs (new)
+- **A — `seattle_06_stakes_phone`** (WIDE, 16:9): Malik under the lot lights holding the
+  cracked phone up between himself and the player, crew soft-focus behind, the player's
+  car nose in frame right.  Emotion: urgent, not begging.  Negative space: upper third
+  (three balloons stack there); keep the PHONE and Malik's face clear of the lower 35%
+  (live tray).  Objects that must stay visible: the phone, the cracked screen, the plates.
+- **B — `seattle_07_walkoff`** (NARROW, 2:3): the player back at the driver door, Malik
+  already turning away, crew mid-shout.  Negative space: top 30%.
+- **C — `seattle_08_pullout_carry` / `_pass`** (NARROW, 2:3): dash view, phone glowing
+  in the cupholder (carry) — or the mirror with the cypher glowing in the lot (pass).
+  Caption-only panels; keep the dash/mirror clear of the top 30%.
+- Checklist items already planned that this draft uses or retires: "Malik describes
+  Brittney with small counter image" → folded into Beat 3 (no counter image needed);
+  "Player leaves in good standing" → Beat 6 carry; "Player leaves in a rush while the
+  crew shouts" → Beat 5b/6 pass.
+
+### Wiring notes (for when the draft is approved)
+- Beats 1, 3, 5a, 5b, 6 are conversation tiles with no consequential choice — they need
+  the notes' `comic` / `storyRole` / `transition` tags (establish, setup, setup, consequence,
+  consequence, travel) and `next:` chaining; Beat 2's light choice is `consequential: false`.
+- Comic inclusion per the editorial rule: Beats 1, 3, 4, 5a/5b belong in the permanent book
+  (establish → stakes → decision → consequence); Beat 2 is live-strip flavor unless the
+  owner wants the "plates" moment kept; Beat 6 is the travel bridge.
+- Old saves: `seattle_offer.carry/pass` keys survive; the retired reply text stays as
+  fallback copy on already-recorded events.
+
+### Open questions for the owner / Chat
+1. Malik's reason for trusting a stranger: the draft uses "every car here's staying for
+   the midnight set" + Friday deadline.  Enough, or does he need to be more desperate
+   (label call, Stank's money)?
+2. Should the cypher verse be REAL bars (2–4 lines we author) or implied ("AYYY")?
+   Real bars build character but need to be good; happy to draft three options.
+3. Does the same treatment apply next to Mercer (Brittney's double-shift beat is also one
+   node) and to the Country/Classic Rock openings?  I'd propose Mercer next since it's the
+   fork into Brittney's whole arc.
