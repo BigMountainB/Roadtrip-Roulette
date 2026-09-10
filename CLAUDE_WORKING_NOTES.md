@@ -2024,6 +2024,7 @@ Owner will return to Classic Rock later. For now:
 The owner prefers the friend-reconnection idea. Develop it into a real Ellensburg pickup:
 
 - One of Brittney's friends needs to be picked up in Ellensburg on the way to StageWagon.
+- **Owner-fixed identity (2026-09-10): Brittney's Ellensburg friend is named Haylee and is a strawberry blonde.** Preserve the exact spelling **Haylee** and this visual trait in the character profile, reference sheet, NPC portrait, story art, comic panels, dialogue keys, and all later image prompts. Do not silently rename her or change her to blonde, redheaded, brunette, or another design.
 - How the player treats the friend affects how Brittney feels about the player.
 - This is not merely another errand meter. It reveals whether the player respects Brittney's social world when there is no direct cash reward.
 - The friend should observe and react to the player/Brittney dynamic, giving Brittney an outside perspective rather than making her feelings entirely score-driven.
@@ -2482,3 +2483,238 @@ Wiring note: this is a ROAD beat (like the Vantage ambush), not a rest-stop tile
 a road-event emission site (mile trigger + flag guards) and the live strip's phone-call
 presentation; the existing texts/`_showTextMsgBox` HUD could carry the live version until
 the strip exists.
+
+## Seattle V2 dialogue correction — OWNER 2026-09-10
+
+**Canonical Mercer store name confirmed from the production icon and code: 'Gas-N-Sip'.** The actual logo reads 'GAS-N-SIP'; existing business labels, storefront assets, Brittney uniform references, and featured-story data agree. Replace draft uses of 'Sip-N-Go', 'Sip and Co', or other variants with **Gas-N-Sip**.
+
+The player should identify specifically as a **musical artist/songwriter**, not use the broader “I'm an artist too.” This removes ambiguity, agrees with the player's established performer history and guitar-case artwork, and gives Malik a credible personal connection.
+
+Owner-preferred core exchange:
+
+> **Player:** “I don't know you, no offense. I'm sure you haven't heard any of my songs either.”
+>
+> **Malik:** “Fair enough. As an artist, you know how important this phone is to me…”
+
+Recommended final ordering preserves that meaning but makes the logic land in sequence:
+
+1. **Malik:** “Malik Reed. Stank Records. About to be the biggest hip-hop name in this town.”
+2. **Player:** “I don't know you, no offense. I'm sure you haven't heard any of my songs either.”
+3. **Malik:** “Fair enough. Which way you headed?”
+4. **Player:** “Pullman. Eventually.”
+5. **Malik:** “Then Mercer and Issaquah are already on your way.”
+6. Malik explains that his whole album/only clean copy is on the phone, Kyle must remaster it, and the presser needs it Friday.
+7. **Malik:** “Then, artist to artist, you know how important this phone is to me.”
+
+This ordering provides Malik with three reasons to select the player:
+
+- The player writes/performs songs and understands the value of irreplaceable work.
+- The player is already traveling east toward Mercer and Issaquah.
+- The first requested leg is short and the phone locks if the player passes Issaquah.
+
+Do not retain a separate “fan” assumption in this branch. The player explicitly says they do **not** know Malik's work. The connection is peer-to-peer artistic understanding, not fandom.
+
+Set/rename the stable flag accordingly—prefer a concept such as `playerMusician` over generic `playerArtist` if it will not break existing planned references. If `playerArtist` is already the settled compatibility key, its authored meaning here is “musical artist/songwriter,” and dialogue should consistently reflect that.
+
+The earlier V2 guarded reply—“Malik Reed. You just heard the best verse in this lot.”—is superseded by this complete exchange. Also remove the pending question about whether “artist” should remain broad; the owner has now made the player's songs explicit.
+
+## Seattle v3 + Mercer sequence + Haylee profile — Claude, 2026-09-10 (drafts; nothing implemented)
+
+Authority applied: the **2026-09-10 Seattle correction** (musician exchange, Gas-N-Sip) and
+the **2026-09-10 Haylee identity** override everything earlier they touch, including my v2
+and the 09-09 "fan / artist" section.  Branch gates from "Vantage recovery correction" are
+treated as canon (phone delivery ⟂ Brittney passenger; locked phone ⟂ Dom'nique; phone left
+at Mercer ⟂ Vantage ambush).
+
+### A. Seattle v3 — reconciled with the finalized musician exchange
+
+Changes from v2:
+1. **Beat 2 is now the owner's linear exchange, not a three-way response.**  The "fan" branch
+   is gone (the player explicitly does NOT know Malik's work); the guarded reply "…best verse
+   in this lot" is superseded.  The player is canonically a **musical artist / songwriter**
+   (guitar case in the art; Classic Rock canon already says an established performer who
+   couldn't get booked in Seattle).  So `playerMusician` is **canon, not a flag** — no
+   `playerArtist` key is needed (nothing in code references it).  Later callbacks
+   ("artist to artist", "What kind of fan are you?") must use the *musician* wording, never
+   "fan"; Chat's North Bend neutral variant "What kind of delivery is this?" becomes the
+   default and the "fan" variant is retired.
+2. **Store name is `Gas-N-Sip` everywhere** (my v2 already had it; the Mercer tightened
+   draft's "Sip-N-Go" / "Gas-N-Go" are corrected below).
+
+Beat order (v3):
+- **Beat 1 — `seattle_lot`** (unchanged from v2): hype line, the NoiseCloud/bus couplet,
+  crowd "AYYYY!"
+- **Beat 2 — `seattle_clock`** · setup · ORDINARY · `seattle_02_crew_confrontation.png` · comic: true (it now carries the self-introduction and the route)
+  - Malik: "Malik Reed. Stank Records. About to be the biggest hip-hop name in this town."
+  - Player: "I don't know you, no offense. I'm sure you haven't heard any of my songs either."
+  - Malik: "Fair enough. Which way you headed?"
+  - Player: "Pullman. Eventually."
+  - Malik: "Then Mercer and Issaquah are already on your way."
+  (Five balloons, alternating — leapfrog left/right down the panel per the placement rule;
+  if the crew-confrontation art can't hold five, the first two go on a narrow inset of Malik
+  and the route exchange stays on the wide panel.)
+- **Beat 3 — `seattle_stakes`** · setup · WIDE · brief A · comic: true
+  - Malik: "My whole album's on this. One clean copy."
+  - Malik: "Kyle remasters it in Issaquah. The presser needs it Friday."
+  - Malik: "Brittney was running it, but she's stuck on shift at Mercer."
+  - Malik: "I headline at midnight. You're already going east."
+  - Malik: "Then, artist to artist — you know how important this phone is to me."
+  (Three reasons land in order: the player writes songs, is already going east, the first leg
+  is short.  The lock safeguard is stated in 5a, not here.)
+- **Beat 4 — `seattle_offer`** (keys unchanged): Malik "Run it to Brittney. She takes it from
+  there." · optional player thought "One copy. On a phone. Sure." · `carry` / `pass`.
+- **Beat 5a — `seattle_terms`** (carry): "Get it to Kyle. Blow past Issaquah with it and it
+  locks itself." · "Till then, Stank Records owns your radio." · crew: "Don't scratch the screen!"
+- **Beat 5b — `seattle_walkoff`** (pass, reuse `seattle_05`): "Aight. Somebody else'll want
+  the plug." · off-panel "WEAK!"
+- **Beat 6 — `seattle_pullout`**: carry = brief C-carry (phone in the cupholder); pass = caption.
+
+Retired from v2: the `playerArtist` flag and its three payoff proposals as *flag-gated*
+lines — the same lines survive as **canon** callbacks (Kyle: "Malik said you write. What's
+your thing?"; Cle Elum: "You write songs. You knew what that copy meant.").  The v2 open
+question about "artist vs musician" is closed.
+
+### B. Mercer sequence — complete draft (Hip-Hop fork → Country departure)
+
+Sources: owner canon (attraction, Malik = boyfriend who bailed on StageWagon, she's not into
+hip-hop, +5/+3/+0), the tightened counter draft, existing keys `mercer_fork.keepJob` /
+`mercer_fork.ride` and `country.mercer_departure.board`, wardrobe lock (uniform until
+Vantage), branch gates, the Malik check-in call.
+
+#### M1 — `mercer_counter` · establish · ORDINARY · art: `shared/locations/mercer_gasnsip_interior.png` + Brittney at the register (NEW brief E unless `mercer_01_brittney_double_shift.png` reads as "at the counter" — test) · comic: true
+Caption: MERCER ISLAND GAS-N-SIP · MILE 9 · 11:58 PM
+- Brittney: "Welcome to Gas-N-Sip, hon! What can I do to — uh — for you?"
+- Player: "You Brittney? Malik asked me to bring you one of his phones."
+- Brittney: "Ugh. Even when Malik isn't here, it's still about Malik."
+(Visual acting note: she clocks the player between lines 1 and 3 — the attraction is in the
+art, not announced.)
+
+#### M2 — `mercer_hook` · setup · ORDINARY · art: `mercer_01_brittney_double_shift.png` · comic: true
+- Player: "Sorry. I'm not trying to get between you two."
+- Brittney: "Maybe I wish you would. I'm not even into hip-hop."
+- Brittney: "Malik and I had StageWagon plans. He blew me off for his album."
+- Brittney: "Wait — you should come with me. You can use Malik's ticket."
+(Four balloons — if the art can't protect her face with four, M2 splits: the "not into
+hip-hop" pair on a narrow inset, the invitation on the ordinary panel.)
+
+#### M3 — `mercer_fork` · decision · ORDINARY · art per choice · comic: true — EXISTING NODE, new copy, two existing keys kept + one new
+- `ride` (full support, **+5 Brittney**) — "That sounds incredible. I'm in. I'll meet you at my car when I'm done shopping."
+  - Brittney: "Yes! Finish up. I'm clocking out the second you're done."
+  - Effects as today: phone left on the counter (`phone:false`, `phoneLeft`), Country starts,
+    Hip-Hop resets for this run, radio grant ends.  Art: `country/mercer_island/mercer_04_quits_leaves_phone.png` (cross-story key already sanctioned).
+- `both` (conditional, **+3 Brittney**, NEW key) — "I'm in — but I promised to drop this phone in Issaquah. It's on the way."
+  - Brittney: "No. I'm done letting his album hijack my plans. Me or the phone."
+  - → goes to **M3b**.
+- `keepJob` (promise, **+0 Brittney**, existing key, new copy) — "Sorry. I gave Malik my word. I have to finish the delivery."
+  - Brittney: "Whatever, dude. We would've had a feral-ass time. Need anything else?"
+  - Effects as today (`mercerDone`, path hiphop).  Art: `mercer_02_keep_job_phone_continues.png`.
+  - Then the Gas-N-Sip storefront opens (shop continues on every branch — unchanged).
+  ("Artist to artist, I can't ditch his album" is available as the label wording since the
+  player is canonically a musician; owner's call which wording — see Q3.)
+
+#### M3b — `mercer_ultimatum` · decision · ORDINARY · art: NEW brief F (Brittney, arms folded, phone on the counter between them) · comic: true
+- Brittney: "Me or the phone."
+- `chooseBrittney` — "Leave the phone. I'm choosing the ride."
+  - Brittney: "Good answer." (+ she pockets the name tag)
+  - Effects: same as `ride` (phone left, Country starts, Hip-Hop resets) **plus** the owner's
+    "real album consequence" — recommended: Malik relationship −10 stored on the Hip-Hop
+    story record so his later texts/anger are sharper than on plain `ride`; the album
+    consequence itself is already inherent (Hip-Hop ends for this run).  Score: **+3 (M3) +2
+    here = +5 total** so a player who wavered and then chose her lands where `ride` lands,
+    with Malik angrier — RECOMMENDED, owner to approve (Q4).
+- `keepPromise` — "I can't. I gave him my word."
+  - Brittney: "Then take his phone and go."
+  - Effects: same as `keepJob` (she stays; delivery continues) but **+0 for M3b** and
+    relationship −2 (she asked directly and was refused) — RECOMMENDED, owner to approve (Q4).
+    She does NOT join with reduced trust: the branch gate "phone delivery ⟂ Brittney
+    passenger" forbids it, and it keeps Encounter A's "phone AND my girl" accusation true only
+    on the ride paths.
+
+#### M4 — `mercer_departure` (Country, existing) · consequence · ORDINARY · `country/mercer_island/mercer_03_quit_and_join_player.png` · comic: true
+Fires on `ride` / `chooseBrittney` after HIT THE ROAD.  Existing copy kept; wardrobe = uniform.
+- Narration: Brittney clocks out and meets you beside the car, still in her Gas-N-Sip uniform.
+- `board`: "Passenger seat's yours. Let's hit the road."
+- Brittney: "StageWagon, cowboy. Try to keep all four tires under us."
+
+#### M5 — `mercer_malik_call` · consequence · road beat ≈ mile 11 · comic: true — fires on `keepJob` / `keepPromise` (phone in the car, Brittney stayed)
+As drafted 09-09 (Malik expects Brittney, hears the player), one wording change for v3:
+- Malik: "Britt? You in the car?"
+- Player: "It's the driver. She kept her job."
+- Malik: "…Aight. Then it's on you now."
+- Malik: "Kyle. Issaquah. You write songs — you know what that copy is."
+Also fires with the first line "Britt says you never showed." when `skippedMercer` (replacing
+the current text-message version of that beat, or alongside it — Q6).
+Does NOT fire on `ride` / `chooseBrittney` (she's in the car; optional live-only: she declines
+his call — "Not tonight, Malik.").
+
+#### Mercer art status
+- Existing, usable: `mercer_gasnsip_interior` (location), `mercer_01_brittney_double_shift`,
+  `mercer_02_keep_job_phone_continues`, `country/…/mercer_04_quits_leaves_phone`,
+  `country/…/mercer_03_quit_and_join_player`.
+- **Brief E — `mercer_00_counter_welcome`** (ORDINARY 16:9): Brittney at the register in the
+  locked uniform, mid-"welcome," first glance at the player; the counter, a lottery display,
+  the phone NOT yet on the counter.  Negative space: upper-left for the caption + her first
+  balloon; her face upper-right third.  Only if `mercer_01` can't serve as M1 — test first.
+- **Brief F — `mercer_05_ultimatum`** (ORDINARY 16:9): the cracked phone on the counter between
+  them, Brittney arms folded, name tag half-unpinned; the player's hand near the phone.  The
+  PHONE gets its own protect box (`kind: 'phone'`).  Upper half clear for two balloons.
+- Checklist items this draft covers: "Player introduces himself and explains the delivery" (M1),
+  "missed out on a copilot" response (retired — replaced by "feral-ass time"), "Player
+  convinces Brittney to quit" (M3 `ride` / M3b), "Player refuses involvement; Brittney stays"
+  (M3 `keepJob` / M3b `keepPromise`).
+
+### C. Haylee — character profile (owner-fixed: **Haylee**, strawberry blonde)
+
+Fixed by owner: name spelling **Haylee**; **strawberry blonde** — never blonde/red/brunette in
+any prompt, sheet, portrait, panel, or dialogue key.  Everything below is PROPOSED.
+
+- **Who:** Brittney's best friend from the group chat — the one whose messages Brittney reads
+  aloud ("If they move campsites again my FOMO is going to become a medical condition").
+  Proposed age **23** (legal drinking age for the supply-run beat; peers with Brittney).
+- **Why Ellensburg:** she's the friend who lives closest to Vantage — proposed: finishing a
+  degree at the state college in town, working the summer at a feed store / rodeo grounds
+  (fictional names only); her ride to StageWagon fell through when the group's carpool
+  "moved campsites again," so she's waiting with a cooler and a duffel at the Ellensburg exit.
+- **Look (for the reference sheet):** strawberry-blonde hair in a loose braid under a sun-faded
+  cap, freckles, sunburnt shoulders, cutoffs and a thrifted band tee, boots; a big soft cooler
+  and a duffel — she arrives *stocked* (contrast with Brittney who fled a shift with nothing).
+- **Personality:** dry, observant, the friend who says the quiet part — Brittney's opposite in
+  tempo (Brittney rushes, Haylee watches).  Not a second flirt; she's the outside eye.  She
+  likes the player only if the player is good to Brittney.
+- **Knowledge of Malik:** knows him, never liked him — he bailed on StageWagon; she is the one
+  who tells Brittney "you deserved a ride, not a delivery."  She does NOT know about the phone.
+- **Seat / cargo:** back seat; the cooler + duffel need trunk/cargo space — proposed: if the
+  cargo bay is full (records, tape, weapons), the pickup forces a real choice (make room /
+  strap it in / leave the cooler) that reads as the +5/+3/+0 conduct test.
+- **Conduct → Brittney relationship (proposed):**
+  - **+5** — welcome her by name, help load the cooler/duffel, make room, drive calm for the first mile.
+  - **+3** — take her but complain about time/space, or make Brittney do the loading.
+  - **+0** — refuse the pickup, treat her as an inconvenience, flirt with her, or drive recklessly with her aboard (each remembered as a specific flag, not just points).
+  - Haylee's own read on the player is a **separate small meter** that feeds Brittney's Vantage outcome ("she's good / she's sketchy") — proposed, not scored yet.
+- **Where she appears:** Ellensburg pickup (mile ≈107) → road banter → Vantage arrival with
+  Brittney (she's one of "my babes").  Per the branch chronology she is aboard **only on the
+  Brittney path**, after North Bend and before Vantage — so she cannot witness Malik's North
+  Bend chase (mile ≈30) and the three-car Vantage ambush never occurs on her path.  See Q8.
+- **Comic:** her pickup is a `relationship` beat (comic: true, one panel); her road lines are
+  live-strip; she gets a face in Brittney's "…long car ride?" montage.  Needs: reference sheet,
+  NPC portrait, pickup panel (brief G), Vantage-arrival variant showing her with the group.
+- **Brief G — `ellensburg_01_haylee_pickup`** (ORDINARY 16:9): Ellensburg exit at golden hour,
+  Haylee on the shoulder with the cooler, hand up, braid and cap unmistakable; Brittney
+  leaning out the passenger window.  Faces upper-left (Haylee) and upper-right (Brittney);
+  cooler protected (`kind: 'cargo'`); lower third free for the tray.
+
+### D. Remaining questions — not decided
+1. **Beat 2 participation:** the owner's exchange is linear (fixed player lines).  Keep it
+   linear, or offer a non-consequential *attitude* choice with identical outcome so the live
+   strip still asks for a tap?  (Recommend linear; the strip's tap-to-continue is enough.)
+2. **Malik's "Which way you headed?"** presumes he hasn't seen the plates.  Keep his plate line
+   ("Those plates ain't from around here") before it, or drop plates now that he asks?
+3. **M3 `keepJob` label:** "Sorry. I gave Malik my word…" or "Artist to artist, I can't ditch his album" (both valid now that the player is canonically a musician).
+4. **M3b scoring:** approve `chooseBrittney` = +3 (M3) +2 (M3b) + Malik −10, and `keepPromise` = +0 / −2 with Brittney staying.  Or a different table.
+5. **`both` as a new stable key** adds a node/choice — fine for old saves (never recorded), but confirm the owner wants three top-level choices rather than folding "both" into a follow-up line under `ride`.
+6. **Skipped-Mercer:** the phone-call beat replaces the existing Malik TEXT ("you blew right past Brittney??") or plays in addition (text first, call at mile 11)?
+7. **Brittney at the counter — art:** does `mercer_01_brittney_double_shift.png` read as the welcome moment, or is brief E needed?
+8. **Haylee and danger:** the friend note says her presence should charge Malik's anger/chase, but on the chronology she boards after North Bend and the Vantage ambush never runs on her path.  Options: (a) accept she never sees a chase; (b) move Encounter A after Ellensburg (then it also needs snow/rain at Vantage-side elevation); (c) add a smaller Ellensburg→Vantage hazard.  Owner call.
+9. **Haylee proposals to confirm or change:** age 23, college-town reason, cooler/duffel cargo mechanic, the "separate small meter," the +5/+3/+0 conduct list, and whether she knows Malik.
+10. **Haylee dialogue keys / node ids:** `ellensburg_haylee` (pickup), `haylee_road_*` (live), plus her `meanwhile` strip id — settle before art prompts so keys never rename.
+11. **Country reward threshold** (base album for every arrival vs treated-well only) and the Malik 1-star "fill the tank" rounding remain open from the 09-09 list — unchanged.

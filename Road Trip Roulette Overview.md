@@ -204,6 +204,28 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 1) — Seattle v3 (musician exchange), full Mercer sequence draft, Haylee profile — drafts only
+
+Working from the notes with the newest owner-dated corrections as authority (2026-09-10:
+player is a musical artist/songwriter — linear exchange, no "fan" branch; store name
+Gas-N-Sip; Brittney's Ellensburg friend is **Haylee**, strawberry blonde).  Delivered in the
+notes, nothing implemented:
+- **Seattle v3**: Beat 2 = the owner's five-line exchange (Malik intro → "I don't know you, no
+  offense…" → "Which way?" → "Pullman. Eventually." → "Mercer and Issaquah are on your way");
+  Beat 3 ends "artist to artist"; `playerArtist` retired — musician is canon, callbacks use
+  musician wording; lock safeguard stays in 5a.
+- **Mercer M1–M5**: counter welcome → hook ("Maybe I wish you would… He blew me off for his
+  album… use Malik's ticket") → fork with existing `ride` (+5) / `keepJob` (+0) keys plus new
+  `both` (+3) → `mercer_ultimatum` ("Me or the phone": chooseBrittney / keepPromise, scoring
+  table proposed) → existing Country departure → Malik check-in call on the stayed paths.
+  Branch gates respected (Brittney never rides with the phone).  Two new briefs (E counter,
+  F ultimatum), four checklist gaps covered.
+- **Haylee profile**: fixed identity + proposed age/reason/look/personality/cargo/conduct
+  scoring/appearance window (Ellensburg → Vantage, Brittney path only) + brief G.
+- **11 open questions** listed instead of decided — notably Beat-2 linear vs tap-choice, the
+  ultimatum scoring, skipped-Mercer text-vs-call, and Haylee never being aboard for a chase
+  under the current chronology.
+
 ### 2026-09-09 (pt 10) — Owner beat: Malik CALLS the phone when Brittney stays (notes draft)
 
 Owner: the safeguard is Malik, not software — if Brittney doesn't get in the car he calls
