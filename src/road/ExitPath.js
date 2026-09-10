@@ -171,11 +171,10 @@ export function buildExitPlan(segments, rs) {
 
   // Right-turn arrows: world-anchored inside lane 5 — two through the
   // parallel section plus one final arrow just before the gore nose.
-  const arrowZs = [
-    zParallel + P * 0.18,
-    zParallel + P * 0.55,
-    zParallel + P * 0.88,
-  ];
+  // Owner 2026-09-10: "more and larger white arrows, almost like hash marks,
+  // pointing right" — six evenly spaced chevrons through the parallel lane
+  // (was three), drawn 1.5× larger in Road._drawExitArrows.
+  const arrowZs = [0.10, 0.25, 0.40, 0.55, 0.70, 0.85].map(f => zParallel + P * f);
 
   // Lock-in Z: 500 ft into the parallel lane, clamped to the gore for the
   // rare wet-span fallback where the lane shrank below LOCK_FEET.

@@ -204,6 +204,38 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 5) — Special story beats emitted; Malik's album auto-plays; rewind re-opens exits; exit signs at ½/¼ mi; hash-mark exit arrows
+
+- **Ch.18 special beats (the 31 "unreachable" panels)**: StorySystem now records
+  authored beats with EXPLICIT panel keys — `node.intro` (when a node is first shown, via
+  StoryTile → `noteNodeShown`), `choice.beatsBefore` (before the choice entry, e.g. Kyle's
+  session), `choice.beats` + `node.beats` (after it: pressing → loaded, the Othello
+  ImprompTour/duet/continue panels, Nan's offer/objection, evaluated Cle Elum
+  pristine/damaged, Hatton stay/leave, the Pullman kiss on `true_ending`); the phone lock
+  emits from onPass.I; the ambush emits first_tail / side_ram / boxed_in / fatal /
+  special_delivery from GameScene.  **71 of 73 PANEL_META keys now reachable**; the two
+  Othello duetYes/soloIntent keys are labeled FUTURE (no such choices in the tree).
+  storyart.test §6 enforces reachability; story.test covers ordering + idempotence.
+- **Malik's album**: the four new m4a tracks (Two Lives, Rain City Roll Call, King of this
+  County, Rain City Code) registered on the Hip-Hop/Phonk station; when the Hip-Hop radio
+  grant lands (Seattle `carry`), `_applyRadioGrant` switches the radio once per grant and
+  opens on "Two Lives" (probe-verified station switch; idempotent).
+- **Rewind → the exit is always takeable** (owner report: rewound to before Issaquah,
+  couldn't exit): a missed exit had put its stop in `_passedRestStops`, which makes the exit
+  logic report NONE for the rest of the run.  `_doRewind` now re-opens every exit whose taper
+  is ahead of the car, re-arms its heads-up, and calls the new `StorySystem.exitUnpassed` —
+  stories reverse what passing did (`onUnpass`: Mercer flags +15 rel; Issaquah unlocks the
+  phone, +30 rel, radio grant restored).  Probe: pass Issaquah (locked) → rewind → mile
+  15.4, exit re-armed, phone unlocked.
+- **Exit signs moved**: green exit sign ½ mi before the stop (was 1 mi), amenities placard
+  ¼ mi (was ¾); scenery clearing + `getLastSignTown` follow.  Pass-through city signs
+  unchanged at 1 mi.
+- **Exit-lane arrows**: six evenly spaced chevrons through the parallel lane (were three),
+  drawn 1.5× larger (51 ft footprint) — reads as a hash-mark run pointing right.
+- Read the notes' "Comic image storage and decoded-memory recommendation": no action yet
+  — it's the two-tier (1672×941 master + 1024×576 live derivative) asset pipeline for the
+  comic build, to be done with the strip implementation, never as a bulk resize.
+
 ### 2026-09-10 (pt 4) — OUT OF GAS: money and parts carry over; $200 tow + $50 gas to the previous town, or Seattle with $0
 
 Owner (after the $1,309 → $1,149 question): "I want the out-of-gas money to carry over to the

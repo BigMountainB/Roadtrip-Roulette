@@ -5518,8 +5518,10 @@ export class Road {
         // foreshortening, and the pseudo-3D projection compresses depth
         // hard, so the long footprint is what keeps the mark legible as it
         // approaches through the near field.
-        const z0 = az, zm = az + 20 * FT, z1 = az + 34 * FT;
-        const us = 0.075, uh = 0.16, tipShift = 0.12;   // x-unit widths
+        // 1.5× the real 34 ft footprint (owner 2026-09-10: bigger, hash-mark
+        // dense) — 51 ft total, head from 30 ft.
+        const z0 = az, zm = az + 30 * FT, z1 = az + 51 * FT;
+        const us = 0.11, uh = 0.24, tipShift = 0.18;   // x-unit widths
         const c0 = sampleExitPlan(plan, z0)?.centerX;
         const cm = sampleExitPlan(plan, zm)?.centerX;
         const ct = sampleExitPlan(plan, z1)?.centerX;

@@ -512,11 +512,12 @@ export function getLocationName(progress) {
  *  Returns null if no sign has been passed yet; HUD falls back to
  *  getLocationName() in that case. */
 export function getLastSignTown(currentMile) {
-  // Both arrays carry mileage in miles; their signs spawn at mileage−1.
+  // Rest-stop exit signs spawn at mileage−0.5 (owner 2026-09-10); pass-through
+  // city signs still at mileage−1.
   let bestMile = -Infinity;
   let bestName = null;
   for (const rs of REST_STOPS) {
-    const signMi = rs.mileage - 1;
+    const signMi = rs.mileage - 0.5;
     if (signMi <= currentMile && signMi > bestMile) {
       bestMile = signMi;
       bestName = rs.name.split(',')[0];   // strip ", WA"

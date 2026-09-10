@@ -29,6 +29,13 @@ const STATION_TRACKS = {
     'assets/music/hiphop_phonk/pull_up_pull_out.mp3',
     'assets/music/hiphop_phonk/smoke_sparks.mp3',
     'assets/music/hiphop_phonk/toxic_cadence.mp3',
+    // Malik's album — the four tracks the phone carries (owner 2026-09-10).
+    // Auto-start when the Hip-Hop grant lands after the Seattle handoff
+    // (GameScene._applyRadioGrant).  m4a/AAC plays natively on iOS + Chrome.
+    'assets/music/hiphop_phonk/Two Lives.m4a',
+    'assets/music/hiphop_phonk/Rain City Roll Call.m4a',
+    'assets/music/hiphop_phonk/King of this County.m4a',
+    'assets/music/hiphop_phonk/Rain City Code.m4a',
   ],
   // POP-PUNK / EMO station — dedicated punk_emo/ folder (owner
   // 2026-07-22: retired the borrowed arcade/ playlist now that the genre
@@ -1187,6 +1194,16 @@ export class AudioSystem {
   /** Play an EXACT track of an exact station, optionally seeking into it.
    *  Used by the LOAD path (next-song-in-order) and the app-reopen restore
    *  (exact position).  trackIdx wraps, so idx+1 past the end is safe. */
+  /** Index of the first track on a station whose URL contains `needle`
+   *  (case-insensitive), or -1.  Lets a story start a SPECIFIC song — Malik's
+   *  album opens on "Two Lives" when his radio grant lands. */
+  trackIndexOf(stationIdx, needle) {
+    const list = STATIONS[stationIdx]?.tracks ?? [];
+    const n = String(needle ?? '').toLowerCase();
+    if (!n) return -1;
+    return list.findIndex(u => String(u).toLowerCase().includes(n));
+  }
+
   playStationTrack(stationIdx, trackIdx, seekSec = 0) {
     if (!(stationIdx >= 0 && stationIdx < STATIONS.length)) return false;
     const st = STATIONS[stationIdx];

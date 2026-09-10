@@ -280,6 +280,28 @@ export const FEATURED_STORIES = {
         return true;
       },
     },
+    // REWIND reversal (owner 2026-09-10: the exit must always be takeable after
+    // a rewind).  Undo exactly what onPass did so the stop's tiles show again.
+    // Malik's texts already sent stay in Messages — he tracks the phone, and
+    // turning around is what he asked for.
+    onUnpass: {
+      M: (api) => {
+        const st = api.state;
+        if (!st.flags.skippedMercer) return false;
+        api.flags({ skippedMercer: false, mercerDone: false, path: undefined });
+        api.relationship(+15);
+        return true;
+      },
+      I: (api) => {
+        const st = api.state;
+        if (!st.flags.passedIssaquah) return false;
+        api.flags({ passedIssaquah: false });
+        api.items({ phoneLocked: false });
+        api.relationship(+30);
+        if (has(st, 'phone')) api.radioGrant(STORY_GENRE.hiphop);
+        return true;
+      },
+    },
     meanwhile: {
       malik_cars:  pendingStrip("Malik dispatches three cars", ['Malik Reed', 'The Crew', 'Malik Reed']),
       stank_legal: pendingStrip("Stank legal notices the NoiseCloud upload", ['Stank Legal', "Dom'nique", 'Stank Legal']),

@@ -24284,6 +24284,23 @@ export class GameScene extends Phaser.Scene {
     const back = (COMBO.REWIND_MILES ?? 3) * unitsPerMile;
     this.player.position = Math.max(0, (this.player.position ?? 0) - back);
     this._odometer = Math.max(0, (this._odometer ?? 0) - (COMBO.REWIND_MILES ?? 3));
+    // "You should always be able to take the exit, now that we can rewind"
+    // (owner 2026-09-10).  A missed exit had put its stop into
+    // _passedRestStops, which makes _updateExitApproach report NONE for the
+    // rest of the run — so a rewind to just before Issaquah found the exit
+    // dead.  Re-open every exit whose taper is now AHEAD of the car, re-arm
+    // its heads-up, and let the story reverse what passing it did (Malik's
+    // phone lock / skipped-Mercer flags) so the stop's tiles can still show.
+    {
+      const mileNow = this._odometer ?? 0;
+      for (const rs of REST_STOPS) {
+        if (rs.mileage - 1.0 <= mileNow) continue;                 // taper already behind us
+        if (this._passedRestStops?.delete?.(rs.id)) {
+          this._exitAnnounced?.delete?.(rs.id);
+          try { this.story?.exitUnpassed?.(rs.id, mileNow); } catch (_) {}
+        }
+      }
+    }
 
     // Shake the pursuit — same teardown the paint-job buy uses.
     if (this.cops) {
@@ -26768,6 +26785,30 @@ export class GameScene extends Phaser.Scene {
    *  Inits on first call (which also arms the iOS native-gesture unlock),
    *  resumes the context if an autoplay block suspended it, and never restarts
    *  a song that's already playing.  Respects the mute toggle. */
+  /** A story just granted a genre (Malik's phone → Hip-Hop): switch the radio
+   *  to that station ONCE per grant so the album plays the moment the player
+   *  drives off (owner 2026-09-10: "auto-start playing after the Malik
+   *  interaction, when player starts driving again").  Idempotent per
+   *  grant+run; a player who then changes station is not overridden. */
+  _applyRadioGrant() {
+    const a = this.audio, grant = this.story?.run?.radioGrant ?? null;
+    if (!a?.ready || !grant) return false;
+    const key = `${grant}:${this.story?.run?.runId ?? ''}`;
+    if (this.registry.get('radioGrantPlayed') === key) return false;
+    const idx = a.stationIndexForCulture?.(grant) ?? -1;
+    if (idx < 0) return false;
+    this.registry.set('radioGrantPlayed', key);
+    try {
+      a._enablePlayback?.();
+      // Malik's album opens on its first track ("Two Lives"); any other grant
+      // just switches to the station.
+      const first = grant === 'hiphop_phonk' ? (a.trackIndexOf?.(idx, 'Two Lives') ?? -1) : -1;
+      if (first >= 0 && a.playStationTrack) { a.setStation?.(idx); a.playStationTrack(idx, first); }
+      else a.setStation?.(idx);
+    } catch (_) {}
+    return true;
+  }
+
   _kickRadio({ run = false } = {}) {
     const a = this.audio;
     if (!a) return;
@@ -26831,6 +26872,9 @@ export class GameScene extends Phaser.Scene {
         a.setStation?.(station >= 0 ? station : a.currentStation);
       }
     }
+
+    // A fresh story radio grant (Malik's album) takes the station once.
+    if (this._applyRadioGrant()) return;
 
     // Resuming a SAVE → default genre, one song PAST the saved one.  A genre
     // switch (saved in a different genre than the current default) just starts

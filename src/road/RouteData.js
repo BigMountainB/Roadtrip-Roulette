@@ -2767,10 +2767,13 @@ export function buildRoute(count = ROUTE_SEGS) {
     // band; the −5mi advance sign and the new −1mi green exit sign +
     // −0.75mi amenities preview both sit outside it.
     clearRightSceneryAround(segAt(rs.mileage - 5));
-    clearRightSceneryAround(segAt(rs.mileage - 1));      // green sign lives here
-    clearRightSceneryAround(segAt(rs.mileage - 0.75));   // amenities placard
+    // Owner 2026-09-10: exit signs moved closer — green exit sign ½ mi out,
+    // amenities placard ¼ mi out (were 1 mi / ¾ mi).
+    clearRightSceneryAround(segAt(rs.mileage - 0.5));    // green sign lives here
+    clearRightSceneryAround(segAt(rs.mileage - 0.25));   // amenities placard
 
-    // Big green I-90-style overhead exit sign 1 mi before the stop. The
+    // Big green I-90-style overhead exit sign ½ mi before the stop (owner
+    // 2026-09-10; was 1 mi). The
     // sign reads EXIT <label> + town and now carries the highway shield
     // badge in the top-left corner (composited by GameScene).  Single-
     // segment placement (multiple copies stacked = ghost effect).
@@ -2796,7 +2799,7 @@ export function buildRoute(count = ROUTE_SEGS) {
       }
       return startSegIdx;
     };
-    const greenSegIdx = findDrySeg(((segAt(Math.max(0, rs.mileage - 1)) % count) + count) % count);
+    const greenSegIdx = findDrySeg(((segAt(Math.max(0, rs.mileage - 0.5)) % count) + count) % count);
     segments[greenSegIdx].sprites.push({
       type:      'exit_sign_green',
       sub:       'green',
@@ -2820,8 +2823,8 @@ export function buildRoute(count = ROUTE_SEGS) {
       collected: false,
     });
 
-    // Amenities preview placard 0.75 mi before the stop (¼ mi after the
-    // exit sign).  Sized to match exit_sign_green so the placard is held
+    // Amenities preview placard ¼ mi before the stop (¼ mi after the
+    // ½-mi exit sign; owner 2026-09-10).  Sized to match exit_sign_green so the placard is held
     // up off the ground by tall steel legs (face occupies the upper ~62 %
     // of the sprite area, legs reach down to the road surface).  The
     // composed sign is overlaid by GameScene._renderSignDecals at its
@@ -2831,7 +2834,7 @@ export function buildRoute(count = ROUTE_SEGS) {
     // Every stop gets a placard: the sign is composed in-engine from the stop's
     // own amenities (src/data/shoppingSign.js), so there's no longer any such
     // thing as a stop whose art hasn't been baked yet.
-    const amenSegIdx = findDrySeg(((segAt(Math.max(0, rs.mileage - 0.75)) % count) + count) % count);
+    const amenSegIdx = findDrySeg(((segAt(Math.max(0, rs.mileage - 0.25)) % count) + count) % count);
     segments[amenSegIdx].sprites.push({
       type:       'amenities_sign',
       stopId:     rs.id,

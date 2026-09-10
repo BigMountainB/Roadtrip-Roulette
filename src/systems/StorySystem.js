@@ -720,6 +720,33 @@ export class StorySystem {
     return reacted;
   }
 
+  /** The player REWOUND to before an exit they had passed (GameScene
+   *  _doRewind): let each story reverse what its onPass did, via
+   *  `def.onUnpass?.[stopId]`.  Mirrors exitPassed's api. */
+  exitUnpassed(stopId, mile = 0, hooks = {}) {
+    const reacted = [];
+    this.mutateCanon((c) => {
+      let changed = false;
+      for (const [id, def] of Object.entries(this._defs)) {
+        const st = c.stories[id];
+        const fn = def.onUnpass?.[stopId];
+        if (!st || st.status !== STORY_STATUS.ACTIVE || typeof fn !== 'function') continue;
+        const api = {
+          state: st, run: this._run, mile,
+          flags: (o) => { Object.assign(st.flags, o); changed = true; },
+          items: (o) => { for (const [k, v] of Object.entries(o)) { if (v === false || v == null) delete st.items[k]; else st.items[k] = v; } changed = true; },
+          relationship: (d) => { st.relationship = clamp(st.relationship + num(d), 0, 100); changed = true; },
+          radioGrant: (g) => { this._run.radioGrant = g ?? null; hooks.radioGrant?.(this._run.radioGrant); },
+        };
+        let did = false;
+        try { did = fn(api) !== false; } catch (_) { did = false; }
+        if (did) reacted.push(id);
+      }
+      return changed;
+    });
+    return reacted;
+  }
+
   /** Vehicle HP damage → story cargo rules (`def.onDamage(run, amountHp)`).
    *  Pure run-state; synced to canon by syncCargo(). */
   onDamage(amountHp) {
