@@ -21383,7 +21383,7 @@ export class GameScene extends Phaser.Scene {
     // the same state the handlers below apply (never a separate estimate).
     const _gasUsd   = Math.max(0, Math.min(TOW_GAS_USD, cash - TOW_COST_USD));
     const _towTotal = this._cashLoss(TOW_COST_USD + _gasUsd);
-    const _towMi    = Math.round(_gasUsd / GAS_USD_PER_MI);
+    const _towMi    = Math.round(Math.min(_gasUsd / GAS_USD_PER_MI, VEHICLES[this.player.vehicleId]?.rangeMi ?? Infinity));   // capped at a full tank
     if (canTow) {
       mkBtn(SCREEN_W / 2 - 130, 300,
             `TOW TO ${stopName.toUpperCase()} — $${(TOW_COST_USD + _gasUsd).toLocaleString()}`,
