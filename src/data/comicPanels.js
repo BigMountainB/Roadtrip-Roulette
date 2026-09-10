@@ -38,6 +38,51 @@ export const DEFAULT_PANEL_META = Object.freeze({
 
 /** Per-panel overrides — filled in Phase 8.  Key: `${storyId}.${nodeId}`. */
 export const PANEL_META = {
+  // ── Art created by ChatGPT 2026-09-10, wired on owner instruction (protect /
+  //    mouth boxes measured by eye on the 1672×941 frames; balloons sit in the
+  //    sky/negative space each brief reserved).  Keys whose emission site
+  //    doesn't exist yet are labeled FUTURE in tests/storyart.test.mjs. ──
+  'hiphop.seattle_stakes': {                        // Seattle v3 Beat 3 (node not wired yet)
+    art: 'assets/storylines/hiphop/seattle/seattle_06_stakes_phone.png',
+    bubble:       { x: 0.73, y: 0.02, w: 0.26, h: 0.30 },   // Malik, upper-right sky
+    playerBubble: { x: 0.34, y: 0.02, w: 0.22, h: 0.20 },   // player thought, between the heads
+    tail:         { x: 0.64, y: 0.32 },                     // Malik's mouth
+    playerTail:   { x: 0.31, y: 0.30 },                     // player's mouth
+    protect:      [{ x: 0.05, y: 0.12, w: 0.31, h: 0.86 },  // player + guitar case
+                   { x: 0.55, y: 0.12, w: 0.26, h: 0.86 },  // Malik
+                   { x: 0.42, y: 0.39, w: 0.07, h: 0.17, kind: 'phone' },
+                   { x: 0.82, y: 0.55, w: 0.18, h: 0.42, kind: 'car' }],
+  },
+  'hiphop.vantage_hospital.wake': {                 // Ellensburg hospital (skipped-Issaquah path; emission not wired yet)
+    art: 'assets/storylines/hiphop/vantage_ambush/ellensburg_hospital_01_player_wakes_with_bill.png',
+    bubble:       { x: 0.64, y: 0.02, w: 0.34, h: 0.22 },   // the one reaction line, over the window
+    playerBubble: { x: 0.64, y: 0.02, w: 0.34, h: 0.22 },
+    tail:         { x: 0.37, y: 0.31 },
+    playerTail:   { x: 0.37, y: 0.31 },
+    protect:      [{ x: 0.27, y: 0.05, w: 0.16, h: 0.30, kind: 'face' },
+                   { x: 0.42, y: 0.16, w: 0.44, h: 0.80, kind: 'bill' },
+                   { x: 0.36, y: 0.45, w: 0.14, h: 0.18, kind: 'hands' }],
+  },
+  'country.ellensburg_haylee': {                    // Haylee pickup (Ellensburg node not wired yet)
+    art: 'assets/storylines/country/ellensburg/ellensburg_01_haylee_pickup.png',
+    bubble:       { x: 0.32, y: 0.03, w: 0.30, h: 0.22 },   // Haylee, sky over the valley
+    playerBubble: { x: 0.66, y: 0.02, w: 0.32, h: 0.20 },   // Brittney / player, over the car roof
+    tail:         { x: 0.26, y: 0.15 },                     // Haylee's mouth
+    playerTail:   { x: 0.76, y: 0.38 },                     // Brittney's mouth
+    protect:      [{ x: 0.10, y: 0.04, w: 0.22, h: 0.90, kind: 'face' },   // Haylee (braid, cap, raised hand)
+                   { x: 0.68, y: 0.26, w: 0.16, h: 0.26, kind: 'face' },   // Brittney in the window
+                   { x: 0.33, y: 0.69, w: 0.34, h: 0.27, kind: 'cargo' }], // cooler + duffel
+  },
+  'country.vantage_arrival.reunion': {              // Haylee with the group at Vantage (beat not wired yet)
+    art: 'assets/storylines/country/vantage/vantage_02_haylee_reunion.png',
+    bubble:       { x: 0.30, y: 0.03, w: 0.30, h: 0.20 },   // Brittney, sky over the canyon
+    playerBubble: { x: 0.62, y: 0.02, w: 0.36, h: 0.20 },   // the friends, over the canopy
+    tail:         { x: 0.46, y: 0.33 },                     // Brittney's mouth
+    playerTail:   { x: 0.82, y: 0.38 },                     // Haylee's mouth
+    protect:      [{ x: 0.16, y: 0.19, w: 0.15, h: 0.75, kind: 'face' },   // player at the car
+                   { x: 0.40, y: 0.20, w: 0.16, h: 0.75, kind: 'face' },   // Brittney
+                   { x: 0.66, y: 0.26, w: 0.28, h: 0.60, kind: 'face' }],  // the three friends (Haylee centre)
+  },
   // ── Hip-Hop (28 approved panels) ──
   'hiphop.seattle_offer': {
     art: 'assets/storylines/hiphop/seattle/seattle_01_freestyle_circle.png',

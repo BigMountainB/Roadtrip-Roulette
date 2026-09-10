@@ -2815,20 +2815,20 @@ pending for Seattle v3 / Mercer / Haylee — commission in the order below.
 | # | key / file | ratio | pri | type | brief |
 |---|---|---|---|---|---|
 | 1 | `hiphop.seattle_stakes` → `seattle_06_stakes_phone.png` | WIDE 16:9 | done 2026-09-10 | NEW CREATED | Malik under the lot lights holding the cracked phone up between himself and the player; crew soft-focus behind; the player's car nose + PLATES in frame right. Urgent, not pleading. 1672×941 RGB PNG master. |
-| 2 | `hiphop.seattle_pullout` → `seattle_07_pullout_phone_cupholder.png` | NARROW 2:3 | important | AUDITED; NEW still required, candidate not saved | Repository audit found only `vantage_00_locked_phone_in_car.png`; its shattered windshield, damaged cabin, and locked red screen falsely foreshadow the later ambush and cannot honestly serve the clean Seattle departure. A first new candidate was generated 2026-09-10 but the phone landed inside the lower response-tray zone, so it was deliberately **not saved**. Do not regenerate until composition/tray placement is corrected in the prompt or layout. |
+| 2 | `hiphop.seattle_pullout` → `seattle_07_phone_cupholder_pullout.png` | NARROW 2:3 | created 2026-09-10; owner visual approval still required | NEW CREATED; REUSE FOR LATER MALIK CALL | Clean pre-crash rainy Seattle interior; cracked phone upright in forward cupholder above the tray zone, lower 35% deliberately nonessential. One portrait image serves both pull-out/music-start and later Malik-call beats through different overlay content. Do not commission a second near-duplicate phone panel. |
 | — | Beats 1, 2, 4, 5a use existing `seattle_01/02/03/04`; Beat 5b reuses `seattle_05` (crop-tested by eye — sky band free). | | | | |
 
 ### Group 2 — Mercer Island — 1 new, 1 crop-test, 1 conditional
 | # | key / file | ratio | pri | type | brief |
 |---|---|---|---|---|---|
 | 3 | `hiphop.mercer_ultimatum` | ORD 16:9 | done / reuse decision 2026-09-10 | REUSE `country/mercer_island/mercer_04_quits_leaves_phone.png` | Owner correctly identified that the existing frame already carries the ultimatum: Brittney removing her name tag, cracked phone between them, Player waiting, attraction/tension in both faces. Runtime balloon sequence supplies “Me or the phone” and the selected response. Do **not** generate another near-duplicate Mercer counter image. |
-| 4 | `hiphop.mercer_counter` (M1 welcome) | ORD 16:9 | important | CROP-TEST `mercer_01_brittney_double_shift.png` first | If it reads as "at the register, first glance," no new art.  Else brief E: Brittney mid-"welcome," lottery display, phone NOT yet on the counter; caption + her balloon upper-left, her face upper-right third. |
+| 4 | `hiphop.mercer_counter` (M1 welcome) | ORD 16:9 | done / reuse decision 2026-09-10 | REUSE `mercer_01_brittney_double_shift.png` | Crop-tested by eye: clearly reads as Brittney at the register during the first exchange. No new art. |
 | 5 | Country `mercer_departure` | ORD | done | existing `country/mercer_island/mercer_03_quit_and_join_player.png` | — |
 
 ### Group 3 — Road beats after Mercer — 1 crop-test
 | # | key / file | ratio | pri | type | brief |
 |---|---|---|---|---|---|
-| 6 | `hiphop.mercer_malik_call` | ORD 16:9 | important | CROP-TEST `vantage_ambush/vantage_00_locked_phone_in_car.png` (same object motif) | If the crop doesn't read as "MALIK calling on the bridge," brief D: interior at night on the East Channel Bridge, phone lit in the cupholder, the player's hand hovering, skyline in the mirror.  Upper half clear for three phone balloons (upper-right) + the player's line (upper-left). |
+| 6 | `hiphop.mercer_malik_call` | NARROW 2:3 | done / shared-art decision 2026-09-10 | REUSE `hiphop/seattle/seattle_07_phone_cupholder_pullout.png` | The same phone motif provides continuity; change only the runtime balloons/call overlay. The damaged Vantage image remains reserved for the post-ambush state. |
 
 ### Group 4 — Haylee (Country) — 3 new
 | # | key / file | ratio | pri | type | brief |
@@ -2836,7 +2836,7 @@ pending for Seattle v3 / Mercer / Haylee — commission in the order below.
 | 7 | `shared/characters/haylee_reference_sheet.png` | sheet | created 2026-09-10; owner visual approval still required | NEW CREATED | Canonical strawberry-blonde Haylee sheet: 24, loose braid, sun-faded cap, freckles, cutoffs, thrifted mountain-art tee, boots, expressions, seated pose, cooler and duffel. |
 | 8 | `npc/haylee_portrait.png` (rest-stop portrait spec) | portrait | created 2026-09-10; owner visual approval still required | NEW CREATED | Derived from the new sheet, dry half-smile, cap on, duffel strap. |
 | 9 | `country.ellensburg_haylee` → `country/ellensburg/ellensburg_01_haylee_pickup.png` | ORD 16:9 | created 2026-09-10; owner visual approval still required | NEW CREATED | Ellensburg roadside at golden hour; same Haylee with cooler + duffel; Brittney in Gas-N-Sip uniform leaning from the older white sedan. |
-| 10 | Vantage arrival with Haylee in the group | ORD/WIDE | polish (later) | CROP-TEST `vantage_01_spots_friends_work_uniform.png` — can one friend be read as Haylee? | If not, a variant with a strawberry-blonde friend in the group.  Depends on the Vantage-ending beats below. |
+| 10 | Vantage arrival with Haylee in the group → `country/vantage/vantage_02_haylee_reunion.png` | ORD/WIDE | created 2026-09-10; owner visual approval still required | NEW CONTINUITY VARIANT | Audit showed all three existing friends were brunette. The new variant preserves the scene but makes the middle friend the established strawberry-blonde Haylee. Original remains untouched. |
 
 ### Group 5 — Ellensburg hospital (skipped-Issaquah path ONLY; never with Brittney aboard) — 1 new
 | # | key / file | ratio | pri | type | brief |
@@ -2846,10 +2846,10 @@ pending for Seattle v3 / Mercer / Haylee — commission in the order below.
 ### Group 6 — Classic Rock differentiation (Chat's triage D) — needs the owner's Classic Rock pass first
 | # | key | pri | type | note |
 |---|---|---|---|---|
-| 12 | `classicRock.washtucna_show.solo` vs `equal`/`giveAll` | important | CROP-TEST existing `washtucna_02/04/05/06` first | Solo must read unlike a duet; equal/giveAll may share performance art if reaction insets differ. |
-| 13 | `classicRock.lacrosse_show.solo` / `duet` | important | NEW likely | Duet result panel is missing (`la_crosse_02_solo_400_exclusion` exists for solo). |
-| 14 | `classicRock.colfax_deal.fifty/sixty/flat/refuse` | **blocking for endings** | NEW reaction insets ×4 (one shared setup) | `flat`/`refuse` must not look like partnership. |
-| 15 | `classicRock.colfax_name.hers/together/mine` | important | NEW reaction ×3 (shared setup) | The chosen name + Mykenzie's reaction must be unmistakable. |
+| 12 | `classicRock.washtucna_show.solo` vs `equal`/`giveAll` | done / reuse decision 2026-09-10 | REUSE `washtucna_02/04/05/06` | Audited visually: solo, duet, full-$300 handoff, and equal-envelope payout are already distinct. No new art. |
+| 13 | `classicRock.lacrosse_show.solo` / `duet` | complete unified replacement set 2026-09-10; owner visual approval still required | `la_crosse_01_larger_crowd_arrival`, `la_crosse_02_solo_400_exclusion`, `la_crosse_03_duet_encore` | After the new duet exposed a style mismatch, `01` and `02` were rebuilt in the duet's same cinematic realism, venue, character models, wardrobe, lighting, and 1672×941 format. Arrival reads as crowd realization; solo visibly isolates Mykenzie in the wing; duet makes them equal co-headliners. These three are the canonical La Crosse set. The duet can also carry the short backstage `partner` payoff as an inset/crop rather than another commissioned scene. |
+| 14 | `classicRock.colfax_deal.fifty/sixty/flat/refuse` | created 2026-09-10; owner visual approval still required | ONE SETUP + THREE ACTUAL OUTCOME STATES | `colfax_01_partnership_negotiation`; `02_partnership_agreed` for 50/50 or accepted 60/40; `03_flat_fee_cold` for employer/broken acceptance; `04_band_implosion_walkout` for rejected 60/40/refusal. Exact terms remain in balloons/captions. The first handshake candidate had an anatomically reversed wrist and was rejected/replaced; never use it. |
+| 15 | `classicRock.colfax_name.hers/together/mine` | created 2026-09-10; owner visual approval still required | THREE DISTINCT REACTIONS | `colfax_05_name_hers`, `06_name_together`, `07_name_player`. Chosen name remains overlay text; artwork supplies the unmistakable emotional consequence. |
 
 ### Group 7 — Country checklist gaps the drafts now touch (from STORY_ART_CHECKLIST)
 - "Brittney climbs into the passenger side in her work uniform" — covered by `mercer_03_quit_and_join_player` (already uniform).
@@ -3038,3 +3038,228 @@ rounded UP to the dollar, capped at a full tank; shown on the button before paym
   50 → skip Mercer −15, bagman −10, pass Issaquah −30 = **−5 → 0★**.  The draft's contact
   replies (±2–5 each, ignores −3/−5) and the mediation choices widen both ends, so the
   proposed bands (<20/20/40/60/75/90) are reachable without grinding.
+
+## AUTHORITATIVE DIALOGUE HANDOFF — Seattle → Mercer → first road contact (owner + Chat, consolidated 2026-09-10)
+
+**Claude: use this section as the current dialogue source of truth. It supersedes every
+earlier Seattle/Mercer draft where the wording, knowledge, route, choice labels, crew
+warnings, or trigger timing conflicts. This is a writing handoff, not a claim that the code
+has already been changed. Preserve existing stable save keys wherever possible.**
+
+### Non-negotiable continuity
+
+- The canonical store is **Gas-N-Sip**. Retire `Sip-N-Go`, `Sip and Co`, and other names.
+- Malik **does not know Brittney is stuck at work**. He believes she will receive the phone
+  at Mercer and drive it to Kyle. Her double shift is something Player discovers on arrival.
+- Malik asks Player to deliver the phone to **Brittney at Mercer Island only**. Player does
+  not promise Malik a trip to Issaquah, a StageWagon decision, or anything beyond that handoff.
+- Malik may explain that Kyle is the intended producer, but he does not initially hire or
+  route Player to Kyle. Issaquah becomes Player's job only if Brittney stays at work and
+  hands the errand forward.
+- Player is already a songwriter/performer. He was unable to book Seattle shows. His guitar
+  case is **in the car**, not carried into the Gas-N-Sip.
+- Player explicitly says he does not know Malik's work. Do not call Player a fan in later
+  callbacks unless the owner deliberately changes this exchange.
+- If Player chooses Brittney, Malik's phone remains on the Mercer counter. That ends/resets
+  the Hip-Hop delivery path for that run. Brittney and Haylee cannot coexist with the
+  Issaquah/Vantage phone-delivery ambush.
+- If Brittney stays, Player takes the phone toward Kyle. Kyle returns both phone and thumb
+  drive after the remaster.
+- Malik texts if Player skips Mercer. Malik calls if Player stopped at Mercer but left
+  Brittney there. The call fires immediately after **HIT THE ROAD**, before driving resumes;
+  there is no Bellevue check-in text.
+- The drive after the Seattle interaction begins with a **random one of Rain City Roll Call /
+  King of this County / Rain City Code** (never Two Lives — owner reconfirmed 2026-09-10 after
+  this section was written), then the Hip-Hop/Phonk playlist continues.
+- Malik tracks the phone's location closely. The later North Bend chase on the Brittney
+  branch is Malik alone in the Hip-Hop/Phonk vehicle, not the three-car Vantage ambush.
+  Because the phone stayed at Mercer, his North Bend accusation may concern Brittney, not
+  taking both “my phone and my girl.” Exact final accusation wording still needs owner review.
+
+### Seattle opening — approved dialogue spine
+
+The cypher/hype beat may introduce Malik before this exchange, but do not repeat his
+biography afterward. The conversation should proceed:
+
+1. **Malik:** “Malik Reed. Stank Records. About to be the biggest hip-hop name in this town.”
+2. **Player:** “I don't know you, no offense. I'm sure you haven't heard any of my songs either.”
+3. **Malik:** “Fair enough. Which way you headed?”
+4. **Player:** “Pullman. Eventually.”
+5. **Malik:** “Then Mercer's on your way.”
+6. **Malik:** “I put some of my best tracks on this phone. I just need to get it to my girl
+   at the Gas-N-Sip on Mercer Island.”
+7. **Malik:** “She's gonna take it to my homie Kyle. He produces some fire.”
+8. **Malik:** “I know if I get that phone in his hands, I'll be Seattle's next big thing.”
+9. **Malik:** “As an artist, you know how important this phone is to me—and how badly I want
+   the tracks on it remastered.”
+
+Line-editing rule: retain the meaning and Malik's voice, but balloons should normally stay
+at 5–10 words and never exceed 20–25. Lines 6–9 may therefore be distributed across the
+stakes panel rather than forced into oversized balloons. “These tracks” is acceptable where
+a shorter callback is needed.
+
+The carry/pass decision remains the existing consequential choice. On acceptance, replace
+all prior “scratch the screen” or cosmetic-condition warnings with:
+
+- **Crew:** “It's in your best interest to protect that phone.”
+- **Crew:** “And don't touch the girl.”
+
+The cracked screen is already established; the danger is the music/data, not scratching the
+device. On refusal, the approved walk-off remains:
+
+- **Malik:** “Aight. Somebody else'll want the plug.”
+- **Crew, off-panel:** “Weak!”
+
+Seattle pull-out: show the cracked phone in the cupholder, start “Rain City Roll Call,” then
+continue the Hip-Hop/Phonk playlist.
+
+### Mercer counter — current dialogue
+
+**Brittney:** “Welcome to Gas-N-Sip, hon! What can I do to—uh—for you?”
+
+**Player:** “Hey, are you Brittney? I have one of Malik's phones he wanted me to get to you.”
+
+**Brittney:** “Ugh. Even when Malik's not here, it's about him.”
+
+**Player:** “Oh, sorry. I don't want to get between you two.”
+
+**Brittney:** “But I wish you would. I don't even like hip-hop.”
+
+**Brittney:** “Malik and I had plans to go to StageWagon. He blew them off for his album.”
+
+**Brittney:** “Hey—why don't you come to StageWagon with me? You can use Malik's ticket.”
+
+Acting direction: Brittney is immediately physically attracted to Player because he is much
+closer to her type than Malik. Show that in her look and delivery; do not make her announce
+the attraction as exposition.
+
+### Mercer response choices and relationship result
+
+1. **Full support, +5 Brittney**
+   - **Player:** “That sounds incredible! I'm game. I'll meet you at my car when I'm done shopping.”
+   - Brittney clocks out. The phone stays on the counter. Country/StageWagon path begins.
+
+2. **Conditional support, +3 Brittney before ultimatum**
+   - **Player:** “Sure! We just have to drop this phone off in Issaquah on our way.”
+   - **Brittney:** “No. I'm done letting his album hijack my plans. Me or the phone.”
+   - Choosing Brittney brings the total to +5; phone stays at Mercer.
+   - Choosing the phone leaves Brittney at work and continues the Hip-Hop delivery path.
+
+3. **No support, +0 Brittney**
+   - **Player:** “It's probably best if you keep your job. I can deliver the album.”
+   - **Brittney:** “Whatever, dude. We would've had a sloppy-ass time. Do you need anything else?”
+   - The Gas-N-Sip shop opens and Player continues with the phone.
+
+Retire these older choice lines:
+
+- “Sorry, I gave Malik my word.”
+- “Artist to artist, I can't ditch his album.”
+- Any claim that Player promised to drive the phone to Issaquah.
+
+The approved warning/route handoff when Brittney stays is:
+
+- **Brittney:** “Don't miss the exit. Malik watches that phone's location like it's the RedZone.”
+- **Brittney:** “He's had people beaten up for less.”
+
+This warning is the current reason Player can cite for caution; it does not mean Player
+promised Malik to reject StageWagon. Claude should workshop any additional “keep your job”
+persuasion around Malik's jealousy/danger without converting it into a nonexistent promise.
+
+### Malik's post-Mercer call — exact approved exchange
+
+Trigger: Player stopped at Mercer, Brittney remained at work, Player took the phone, and the
+player presses **HIT THE ROAD**. Play the call before driving resumes.
+
+- **Malik:** “Britt? You headed to Kyle?”
+- **Player:** “She had to work a double, so I'm doing you a solid.”
+- **Malik:** “…Damn. She told you where to go?”
+- **Player:** “Yeah. Kyle's spot in Issaquah.”
+- **Malik:** “Good. I can see the phone moving. Don't get creative.”
+
+This replaces the older draft beginning “Britt? You in the car?” / “It's the driver. She
+kept her job.” Do not add a Bellevue follow-up.
+
+### Dialogue presentation rules that apply to these beats
+
+- Most balloons: 5–10 words. Hard ceiling: 20–25 words.
+- NPC replies continue in the same tile before it advances.
+- The tile waits indefinitely for Player input. After Player chooses, their balloon appears.
+- If Player's balloon is the final text on the tile, hold 3 seconds; if an NPC speaks after
+  it, hold about 6 seconds after the sequence, extending for unusually long replies. Tap skips
+  the hold. The strip remains horizontally scrollable so prior tiles can be reread.
+- Response choices sit in a translucent tray over the full-height artwork; essential faces,
+  hands, phones, and actions must remain above the tray-risk area.
+- Permanent comic: consequential story/relationship turns survive. Routine needs-management
+  conversations are condensed into a small relationship strip captioned approximately
+  **“…how did they handle the long car ride?”** rather than promoted to equal story beats.
+
+## OWNER CORRECTION — restore Dom'nique's financial leverage (2026-09-10)
+
+**This supersedes every earlier note saying the Dom'nique “leverage” option was dropped.**
+
+The earlier draft incorrectly conflated two different objects:
+
+- Dom'nique's optional tape/B-side is music cargo and is **not** the leverage.
+- The original NoiseCloud upload—with Dom'nique's name/date attached to the beat—is evidence
+  that gives Dom'nique leverage over Malik.
+
+Dom'nique must have an authored route where he uses that evidence to hold **money** over
+Malik for using the beat. This is intentionally more aggressive than merely requesting
+producer credit.
+
+Restore a financial-demand choice in the Malik ↔ Dom'nique pull/pull:
+
+- **Player to Malik:** “Dom's got the original upload. Credit isn't the only thing he wants.”
+- **Malik:** “He wants money for my record?”
+- Player must then be able to support one of three positions:
+  1. **Back Dom'nique:** Malik pays Dom for the beat, with credit also preserved.
+  2. **Mediate:** negotiate credit plus a smaller fee/cut that Malik can accept without losing
+     ownership of his song.
+  3. **Back Malik:** refuse Dom's money demand and preserve Malik's payout/ownership position,
+     damaging the Dom'nique relationship.
+
+The NoiseCloud evidence is what makes this demand credible. Do not rewrite this as extortion
+with the tape, and do not imply that Dom owns Malik's lyrics, performance, or entire track.
+His claim is specifically tied to the beat.
+
+Exact economics remain for owner workshop: fixed fee, percentage/royalty, or a player-selected
+choice between them. Claude should preserve the branch and flags now, but ask before hardcoding
+an amount. The “Demand a split: credit and a cut” option in the earlier C5 matrix may serve as
+the starting implementation, but it must be framed as **Dom'nique holding legitimate financial
+leverage over Malik**, not Player independently inventing a threat.
+
+## Dom'nique holds the tape over Malik for money — SCENARIO DRAFT (Claude, 2026-09-10; owner asked for this role)
+
+Owner: "there should be a role where Dom tries to hold the tape over Malik for money."  Read as
+DOM-initiated leverage, with the player as the messenger — not the player squeezing Malik.
+Fits between `dom_tape` (North Bend) and `pass_tennessee`; dialogue for red-pen, scores proposed.
+
+### `dom_terms` · North Bend, right after the player accepts or declines the tape · Dom'nique
+- Dom: "One more thing. That tape don't ride free."
+- Dom: "Tell Malik: my ten tracks press as the B-side, or NoiseCloud gets the whole story."
+- Dom: "Every stream he's had off my beat — I want a cut. Five hundred, up front, at the record store."
+- Player choices (consequential):
+  1. **Carry the demand** — "I'll tell him word for word." → dom +5, `domDemand: true`.  Malik's post-North Bend call gains a branch (below).
+  2. **Refuse to be the messenger** — "I'm a driver, not your collections guy." → dom −3, no demand carried; Dom's tape still rides if accepted (credit-only ask stands).
+  3. **Warn Malik privately** — "I'll get you credit. The shakedown I'm keeping out of it." → dom −2 now, `toldMalikTruth`; Malik +2 later when he learns the player killed the extortion (mediation path stays open).
+  4. **Take a cut for carrying it** (owner may reject — it makes the player complicit) — "Half of whatever he pays you." → dom +2, `playerCut: true`; if Malik pays, +$250 to the player; if the label later exposes it, Malik −10.
+
+### Malik's post-North Bend call (`malik_cut_call`) — added branch when `domDemand`
+- Malik: "Five hundred? For a beat he put on NoiseCloud for free?"
+- Player choices:
+  - **Back Dom's price** — "It's his beat. Pay him or press it as the B-side." → dom +5, malik −5 now; if malikRel ≥ 40 he agrees at the pressing (`bSidePressed`, Dom paid at Cle Elum) → malik +3 back at C6.
+  - **Broker it down** — "Credit and the B-side. Forget the cash." → malik +5, dom +3 (half win); `finalCredit: dom_producer_bside` becomes available at Tennessee.
+  - **Sell Dom out** — "He's bluffing. Press it your way." → malik +5 now, dom −10; Dom leaks the NoiseCloud story → `stank_legal` MEANWHILE strip fires; Malik −10 at C6 when the label ships without credit.
+- The NoiseCloud page stays the player's only evidence move (owner): any branch where Malik denies the beat → player shows the page → Malik: "You calling me a thief, or calling the record wrong?"
+
+### Payoffs
+- Cle Elum reunion: if Dom was paid (`domPaid`), the collaborative edition includes his ten
+  tracks AND Dom shows up at Spin Cycle (new panel) — his non-cash help is unlocked.
+- If the player took a cut and it surfaces, the comic caption reads it plainly ("You kept
+  half.") — no hidden penalty, just a colder Malik ending.
+
+### Questions for the owner
+1. Is choice 4 (the player taking a cut) wanted, or does that cross into "player extorts Malik"?
+2. Dom's number: $500 up front, or tied to Malik's star payout (e.g. 20% of what Malik pays the player)?
+3. Does Dom appear at the Cle Elum reunion when paid (needs one new panel), or is the payment off-screen?
+4. Should "Sell Dom out" also cost the player Dom's North Bend safety (the "funeral" threat) on a later run?

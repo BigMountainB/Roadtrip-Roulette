@@ -20,6 +20,7 @@ export const NPC_PORTRAITS = {
   chip_seller:     { texture: 'npc_chip_seller',     name: 'Chip Guy',             placeholderTint: 0xFFB52E },
   hiker_one_boot:  { texture: 'npc_hiker_one_boot',  name: 'Hiker (One Boot)',     placeholderTint: 0x6E8B3D },
   farm_worker:     { texture: 'npc_farm_worker',     name: 'Farm Worker',          placeholderTint: 0x9A6B2E },
+  haylee:          { texture: 'npc_haylee',          name: 'Haylee',               placeholderTint: 0xE8A87C },   // Brittney's Ellensburg friend (strawberry blonde, 24, Central University grad student)
   desert_oddball:  { texture: 'npc_desert_oddball',  name: 'Desert Oddball',       placeholderTint: 0xB5462E },
   // Women of the road.
   biz_founder:     { texture: 'npc_biz_founder',     name: 'Startup Founder',      placeholderTint: 0x4AC3B0 },

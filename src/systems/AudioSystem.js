@@ -598,20 +598,23 @@ export class AudioSystem {
   _armCtxUnlock() {
     if (this._ctxUnlockArmed) return;
     this._ctxUnlockArmed = true;
+    // Audit #3 (2026-09-10): ONE capture target (document), one attempt per
+    // physical gesture (250 ms debounce across touchstart/pointerdown/
+    // mousedown that all fire for one tap), nothing at all while the context
+    // is already running, and a SHORT warm-up buffer.  The old code listened
+    // on window AND document for four events — six callbacks per tap, each
+    // allocating a full second of silence.  The buffer stays longer than one
+    // sample on purpose: a 1-sample buffer let iOS snap the context back to
+    // suspended before resume() settled (field finding kept from the original).
     const tryResume = () => {
       if (!this._ctx) return;
+      if (this._ctx.state === 'running') return;
+      const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      if (now - (this._ctxUnlockLastAt ?? -1e9) < 250) return;
+      this._ctxUnlockLastAt = now;
       try {
-        // Canonical iOS Safari / Chrome iOS unlock: a real BufferSource
-        // started inside the gesture frame, plus ctx.resume().  The
-        // sample rate matches ctx.sampleRate; the buffer is one second
-        // of silence so the context stays "warm" while resume() settles
-        // — a 1-sample buffer can let iOS snap the ctx back to
-        // suspended before resume's promise resolves.  Listener stays
-        // armed permanently because iOS can suspend the context again
-        // mid-session; re-attempting on every gesture is the only
-        // reliable behavior.
         const sr  = this._ctx.sampleRate || 22050;
-        const buf = this._ctx.createBuffer(1, sr, sr);
+        const buf = this._ctx.createBuffer(1, Math.max(1, Math.round(sr * 0.1)), sr);   // 100 ms, not 1 s
         const src = this._ctx.createBufferSource();
         src.buffer = buf;
         src.connect(this._ctx.destination);
@@ -620,15 +623,18 @@ export class AudioSystem {
         this._ctx.resume().catch(() => {});
       } catch (_) {}
     };
-    // Listen on BOTH window and document, capture phase, so a tap on
-    // any element (Phaser canvas, HTML phone-menu, even the body) fires
-    // this before any other handler can preventDefault away the gesture.
-    for (const tgt of [window, document]) {
-      tgt.addEventListener('touchstart',  tryResume, { capture: true, passive: true });
-      tgt.addEventListener('pointerdown', tryResume, { capture: true, passive: true });
-      tgt.addEventListener('mousedown',   tryResume, { capture: true, passive: true });
-      tgt.addEventListener('keydown',     tryResume, { capture: true, passive: true });
-    }
+    this._ctxUnlockHandler = tryResume;
+    for (const ev of ['touchstart', 'pointerdown', 'mousedown', 'keydown'])
+      document.addEventListener(ev, tryResume, { capture: true, passive: true });
+  }
+
+  /** Remove the unlock listeners (init failure cleanup / teardown). */
+  _disarmCtxUnlock() {
+    const h = this._ctxUnlockHandler;
+    if (h) for (const ev of ['touchstart', 'pointerdown', 'mousedown', 'keydown'])
+      document.removeEventListener(ev, h, { capture: true });
+    this._ctxUnlockHandler = null;
+    this._ctxUnlockArmed = false;
   }
 
   init() {
@@ -705,6 +711,15 @@ export class AudioSystem {
       this.play();
     } catch (e) {
       console.warn('AudioSystem init failed:', e);
+      // Audit #6 (2026-09-10): a half-built context leaked its nodes, timers
+      // and listeners across retries.  Tear down everything init created so
+      // the next init() starts clean.
+      this._disarmCtxUnlock();
+      if (this._skipWatchdog) { try { clearInterval(this._skipWatchdog); } catch (_) {} this._skipWatchdog = null; }
+      try { this._ctx?.close?.(); } catch (_) {}
+      this._ctx = null; this._master = null; this._bus = null; this._lowpass = null; this._highpass = null;
+      this._reverb = null; this._reverbWet = null; this._trackEl = null; this._trackSource = null;
+      this.ready = false;
     }
   }
 
@@ -1910,6 +1925,9 @@ export class AudioSystem {
       if (this._trackEl && !this._musicPaused) {
         try { this._trackEl.play().catch(() => {}); } catch (_) {}
       }
+      // Audit #7 (2026-09-10): lifecycleStop can clear the watchdog; an
+      // opt-in background track coming back must get its stall protection back.
+      this._startSkipWatchdog();
     }
     this._bgContinuing = false;
     this._emitNativeAudioState('foreground');

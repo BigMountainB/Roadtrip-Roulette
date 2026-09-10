@@ -295,6 +295,7 @@ export const ASSET_MANIFEST = {
     { key: 'npc_grandma',        path: 'assets/npc/grandma.png' },
     { key: 'npc_tow_driver',     path: 'assets/npc/tow_driver.png' },
     { key: 'npc_swimsuit_girl',  path: 'assets/npc/swimsuit_girl.png' },
+    { key: 'npc_haylee',         path: 'assets/storylines/npc/haylee_portrait.png' },   // 2026-09-10 (deferred with the npc group)
   ],
   // Shop-staff portraits — one per business brand, same 1086x1448 spec as the
   // npc: array above.  Each is a close-up of the SAME character already

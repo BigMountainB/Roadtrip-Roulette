@@ -328,7 +328,7 @@ export const FEATURED_STORIES = {
             beats: [{ id: 'seattle_radio', panelKey: 'hiphop.seattle_offer.carry.radio', importance: 'minor', speaker: 'Malik Reed', text: 'Stank Records owns the radio till the phone is delivered.' }],
             label: "I'm going right past Mercer. Give me the phone.",
             reply: "Album's on the phone. As long as you're carrying it, you can play Hip-Hop on the radio. Just don't skip the stop—this thing locks itself when it thinks somebody ran off with it.",
-            effects: { items: { phone: true }, flags: { carrying: true }, relationship: 50, radioGrant: STORY_GENRE.hiphop },
+            effects: { items: { phone: true }, flags: { carrying: true }, relationship: 60, radioGrant: STORY_GENRE.hiphop },
           },
           {
             id: 'pass', consequential: false, next: null,

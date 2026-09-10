@@ -342,5 +342,20 @@ check('muted=false survives a restart', roundTripSetting('muted', false) === fal
     !/^\s*_audio\.toggleMute\?\.\(\);\s*$/m.test(bootSrc));
 }
 
+
+// ── Audit #3 / #6 / #7 (2026-09-10) — source-pinned ──────────────────────
+{
+  const unlock = audioSrc.slice(audioSrc.indexOf('_armCtxUnlock() {'), audioSrc.indexOf('_disarmCtxUnlock() {'));
+  check('#3 unlock listens on ONE target (document), not window+document', !unlock.includes('[window, document]') && unlock.includes("document.addEventListener(ev, tryResume"));
+  check('#3 unlock is a no-op while the context is running', unlock.includes("this._ctx.state === 'running') return"));
+  check('#3 unlock is debounced per physical gesture', /_ctxUnlockLastAt[^\n]*< 250/.test(unlock));
+  check('#3 warm-up buffer is short (100 ms), not one second', unlock.includes('sr * 0.1') && !unlock.includes('createBuffer(1, sr, sr)'));
+  const init = audioSrc.slice(audioSrc.indexOf('  init() {'), audioSrc.indexOf('_startSkipWatchdog() {'));
+  check('#6 init failure disarms the unlock listeners', init.includes('this._disarmCtxUnlock()'));
+  check('#6 init failure closes the half-built context and resets ready', init.includes('this._ctx?.close?.()') && init.includes('this.ready = false'));
+  const vis = audioSrc.slice(audioSrc.indexOf('_handleVisibilityChange() {'), audioSrc.indexOf('lifecycleStop() {'));
+  check('#7 foreground resume of a background track re-arms the stall watchdog', vis.includes('this._startSkipWatchdog()'));
+}
+
 console.log(`\naudio tests: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

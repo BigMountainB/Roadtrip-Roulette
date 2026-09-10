@@ -305,7 +305,7 @@ const H = (storyId, nodeId, choiceId, story, hooks = {}, mile = 0, stopId = null
   // Happy path: carry → keep job → refuse founder → Kyle → Dom promise → press (Dom credit) → damage → Cle Elum.
   const save = freshSave(); const story = new StorySystem(save); const rec = recorder();
   H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
-  check('carry: radio grant + phone + Malik trust 50', story.run.radioGrant === 'hiphop_phonk' && story.story('hiphop').items.phone === true && story.story('hiphop').relationship === 50);
+  check('carry: radio grant + phone + Malik trust 60 (owner 2026-09-10)', story.run.radioGrant === 'hiphop_phonk' && story.story('hiphop').items.phone === true && story.story('hiphop').relationship === 60);
   H('hiphop', 'mercer_fork', 'keepJob', story, rec.hooks, 9);
   check('keepJob: Mercer done, still carrying, radio still on', story.story('hiphop').flags.mercerDone === true && story.run.radioGrant === 'hiphop_phonk');
   check('Bellevue founder flags you down on arrival (mandatory) only after Mercer', story.pendingAt('B').length === 1 && story.pendingAt('B')[0].nodeId === 'bellevue_founder' && story.pendingAt('B')[0].mandatory === true);
@@ -367,7 +367,7 @@ const H = (storyId, nodeId, choiceId, story, hooks = {}, mile = 0, stopId = null
   const story = new StorySystem(freshSave()); const texts = [];
   const hooks = { text: (cid, from, msg) => texts.push({ cid, from, msg }), radioGrant: () => {} };
   H('hiphop', 'seattle_offer', 'carry', story, {}, 4);
-  check('pass Mercer: Malik texts, trust drops, Mercer closed', story.exitPassed('M', 9.7, hooks).join() === 'hiphop' && texts.length === 1 && texts[0].cid === 'malik' && story.story('hiphop').relationship === 35 && story.pendingAt('M').length === 0);
+  check('pass Mercer: Malik texts, trust drops, Mercer closed', story.exitPassed('M', 9.7, hooks).join() === 'hiphop' && texts.length === 1 && texts[0].cid === 'malik' && story.story('hiphop').relationship === 45 && story.pendingAt('M').length === 0);
   check('pass Mercer twice: idempotent', story.exitPassed('M', 9.8, hooks).length === 0 && texts.length === 1);
   check('phone NOT locked yet, radio still on', !story.story('hiphop').items.phoneLocked && story.run.radioGrant === 'hiphop_phonk');
   check('Issaquah still deliverable', story.pendingAt('I').some(p => p.nodeId === 'issaquah_kyle'));
@@ -741,7 +741,7 @@ function tour(choices, seed = {}) {
   check('promise leads to the tape offer (optional, same stop)', r.next === 'dom_tape' && story.pendingAt('N').some(p => p.nodeId === 'dom_tape' && p.mandatory === false));
   check('no B-side option without the tape', !story.choicesFor('hiphop', 'pass_tennessee').some(ch => ch.id === 'bside'));
   H('hiphop', 'dom_tape', 'take', story, rec.hooks, 32);
-  check('tape taken: item, rel +5 (85), Dom node closed', story.story('hiphop').items.domTape === true && story.story('hiphop').relationship === 85 && story.pendingAt('N').length === 0);
+  check('tape taken: item, rel +5 (95), Dom node closed', story.story('hiphop').items.domTape === true && story.story('hiphop').relationship === 95 && story.pendingAt('N').length === 0);
   check('B-side option now offered', story.choicesFor('hiphop', 'pass_tennessee').some(ch => ch.id === 'bside'));
   H('hiphop', 'pass_tennessee', 'bside', story, rec.hooks, 53);
   check('B-side pressed: producer credit, tape consumed, records 100', story.story('hiphop').flags.bside === true && story.story('hiphop').flags.creditOut === 'producer' && !story.story('hiphop').items.domTape && story.run.cargo.records === 100);
