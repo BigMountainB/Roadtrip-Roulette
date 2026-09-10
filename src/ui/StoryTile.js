@@ -327,6 +327,8 @@ export function showStoryConversation(scene, start, onDone) {
 
     c.add(scene.add.text(10, ART_H - 8, `${scene._stop?.name ?? ''} · MILE ${Math.round(scene._odometer ?? 0)}`, { fontSize: '11px', fontFamily: IMPACT, color: '#8FB7E6' }).setOrigin(0, 1));
     // NPC balloon from panel metadata, mapped to the ART rect.
+    // Establishing/intro panels precede the dialogue in the book (Ch.18 special beats).
+    try { story.noteNodeShown?.(storyId, nodeId, scene._odometer ?? 0); } catch (_) {}
     let npcBox  = rectPx(meta.bubble);
     let npcTail = ptPx(meta.tail);
     let npcParts = balloon(c, story.resolveLine(storyId, nodeId), npcBox, npcTail);

@@ -2865,6 +2865,73 @@ pending for Seattle v3 / Mercer / Haylee — commission in the order below.
 ### Commission order (recommended)
 1 → 3 → 7 → 8 → 9 → 11 → 2 → 14 → 15 → 13 → 6/4/10/12 crop-tests → Group 7 Vantage set.
 
+## Comic image storage and decoded-memory recommendation — OWNER REQUEST 2026-09-10
+
+The owner asked whether making the other panels like the La Crosse images would materially
+reduce storage or iPhone memory. Measurements from the current asset tree show that La Crosse
+is already representative of the current story-panel standard, not a uniquely low-detail
+format:
+
+- `la_crosse_01_larger_crowd_arrival.png`: 1672×941 RGB PNG, 2,506,586 bytes (2.39 MiB).
+- `la_crosse_02_solo_400_exclusion.png`: 1672×941 RGB PNG, 2,250,561 bytes (2.15 MiB).
+- ChatGPT's newly generated Seattle stakes panel: 1672×941 RGB PNG, 2,325,782 bytes
+  (2.22 MiB). It falls between the two La Crosse files despite its rain and fine detail.
+
+PNG file complexity changes installation/download storage, but it does **not** materially
+change the decoded texture cost. Each 1672×941 panel expands to approximately **6.0 MiB** as
+RGBA (`width × height × 4`) when decoded for canvas/WebGL. Converting PNG to WebP or AVIF may
+reduce bytes on disk and over the network, but ordinarily does not reduce this decoded-memory
+cost once the image is displayed.
+
+### Measured scope
+
+- Current storylines tree: 108 PNGs, 232.8 MiB on disk and approximately 647.1 MiB decoded.
+- Only 10 of those 108 panels exceed 1672×941.
+- Resizing only those oversized story panels to fit within 1672×941 is estimated to save just
+  **3.4 MiB on disk** and **8.5 MiB decoded**. Standardizing dimensions alone is therefore not
+  the main restart fix.
+- Across all 424 landscape PNGs in `public/assets`, a blind 1672×941 maximum would theoretically
+  save approximately 28.4 MiB on disk and 119.7 MiB decoded, but do **not** apply that globally:
+  tunnels, roads, panoramas, UI, and other assets have different display requirements and must
+  be audited individually.
+
+### Recommended two-tier comic assets
+
+Keep a high-quality 1672×941 source/master for finished-comic zoom and export, but serve a
+smaller derivative during live gameplay:
+
+| Live dimensions | Approx. decoded RGBA | Saving versus 1672×941 |
+|---|---:|---:|
+| 1280×720 | 3.5 MiB | 42% |
+| 1024×576 | 2.25 MiB | 63% |
+| 960×540 | 2.0 MiB | 67% |
+| 836×471 | 1.5 MiB | 75% |
+
+Recommended starting point:
+
+1. Generate/retain the 1672×941 master artwork.
+2. Produce a **1024×576 live derivative** for ordinary and wide gameplay panels. Validate
+   legibility on the oldest supported physical iPhone before settling this globally.
+3. A narrow panel shown two or three at a time may use 836×471 or another measured smaller
+   derivative; do not upscale a smaller generated source merely to satisfy a nominal standard.
+4. Load the 1672×941 master only when the finished reader or hold-to-zoom actually needs it.
+5. Keep only the active live panel and a small neighbor window decoded. Evict retired live
+   textures after their sprites/effects release them; a saved comic record should retain the
+   asset key, not force the texture to remain resident.
+6. The finished comic must likewise keep only the visible page plus a small neighbor window;
+   zoom may temporarily promote one panel to its master and must release it when zoom closes.
+7. PDF/export should process high-resolution panels sequentially and release each after use.
+
+At 1024×576, every simultaneously resident live panel saves about **3.75 MiB** compared with
+the 1672×941 master: roughly 22.5 MiB saved for six panels or 75 MiB for twenty. With disciplined
+windowing, the comic subsystem should target roughly **7–15 MiB of active panel textures**, not
+hundreds of MiB. Claude should verify the real peak with iPhone instrumentation because browser
+image objects, canvases, Phaser textures, and GPU copies can overlap temporarily.
+
+This is an asset-delivery and lifetime recommendation, not authorization to bulk-resize or
+overwrite source art. Keep masters non-destructively, generate derivatives, and validate the
+actual maximum display size and device-pixel requirements before implementing the pipeline.
+
 ## Story canon batch — DRAFT 1 of N: Malik contact arc + Malik ↔ Dom'nique choice matrix (Claude, 2026-09-10)
 
 Owner: "go ahead and start writing on the story canon batch."  This draft covers Chat's

@@ -777,3 +777,34 @@ function tour(choices, seed = {}) {
 
 console.log(`story tests: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
+
+// ── Special beats (2026-09-10): intro / beatsBefore / beats emission ─────
+{
+  const save = freshSave(); const story = new StorySystem(save); const rec = recorder();
+  const beats = () => Object.values(story.canon().ledger).filter(e => e.nodeId === 'beat');
+  const n1 = story.noteNodeShown('hiphop', 'seattle_offer', 4);
+  const n2 = story.noteNodeShown('hiphop', 'seattle_offer', 4);
+  check('intro beat recorded once when the node is shown', n1 === 1 && n2 === 0);
+  check('intro beat carries the AUTHORED panel key', beats().some(e => e.panelKey === 'hiphop.seattle_offer.intro'));
+  H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
+  const order = Object.values(story.canon().ledger).map(e => e.panelKey);
+  const iIntro = order.indexOf('hiphop.seattle_offer.intro'), iCarry = order.indexOf('hiphop.seattle_offer.carry'), iRadio = order.indexOf('hiphop.seattle_offer.carry.radio');
+  check('follow-up beat recorded AFTER the choice (intro → choice → radio)', iIntro >= 0 && iCarry > iIntro && iRadio > iCarry);
+  // beatsBefore: Kyle's session lands BEFORE the hand-over entry
+  H('hiphop', 'mercer_fork', 'keepJob', story, rec.hooks, 9);
+  H('hiphop', 'issaquah_kyle', 'handOver', story, rec.hooks, 18);
+  const o2 = Object.values(story.canon().ledger).map(e => e.panelKey);
+  check('beatsBefore lands before its choice (session → handOver)', o2.indexOf('hiphop.issaquah_kyle.session') >= 0 && o2.indexOf('hiphop.issaquah_kyle.session') < o2.indexOf('hiphop.issaquah_kyle.handOver'));
+  // node-level beats after ANY choice at the node (pressing → loaded), and idempotent on replay of the same commit
+  H('hiphop', 'northbend_dom', 'delay', story, rec.hooks, 30);
+  H('hiphop', 'pass_tennessee', 'creditMalik', story, rec.hooks, 52);
+  const o3 = Object.values(story.canon().ledger).map(e => e.panelKey);
+  check('node beats follow the choice in authored order (pressing then loaded)', o3.indexOf('hiphop.pass_tennessee.pressing') > o3.indexOf('hiphop.pass_tennessee.creditMalik') && o3.indexOf('hiphop.pass_tennessee.loaded') > o3.indexOf('hiphop.pass_tennessee.pressing'));
+  const before = beats().length; H('hiphop', 'pass_tennessee', 'creditMalik', story, rec.hooks, 52);
+  check('replaying a commit adds no duplicate beats', beats().length === before);
+  // explicit panelKey on api.beat / recordBeat
+  story.recordBeat({ storyId: 'hiphop', beatId: 'first_tail', panelKey: 'hiphop.vantage_recovery.first_tail', text: 'x', mile: 130 });
+  check('recordBeat honours an explicit panelKey', beats().some(e => e.panelKey === 'hiphop.vantage_recovery.first_tail'));
+  story.recordBeat({ storyId: 'country', beatId: 'roadside_exit', text: 'y', mile: 40 });
+  check('recordBeat without panelKey keeps the generic beat key', beats().some(e => e.panelKey === 'country.beat.roadside_exit'));
+}

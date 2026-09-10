@@ -274,6 +274,7 @@ export const FEATURED_STORIES = {
         api.flags({ passedIssaquah: true });
         api.relationship(-30);
         api.radioGrant(null);
+        api.beat({ beatId: 'locked_phone', panelKey: 'hiphop.vantage_recovery.locked_phone', importance: 'consequence', text: 'The phone locks itself. The radio goes dark.' });
         api.text('malik', 'Malik Reed', "You PASSED Issaquah?? That phone just locked itself. One job. You had ONE job, and you're driving away from it. Turn around — or don't bother coming anywhere near Vantage.");
         api.meanwhile('malik_cars');
         return true;
@@ -294,6 +295,7 @@ export const FEATURED_STORIES = {
     nodes: {
       // ── Seattle / Park & Ride ──────────────────────────────────────────
       seattle_offer: {
+        intro: [{ id: 'seattle_intro', panelKey: 'hiphop.seattle_offer.intro', importance: 'minor', text: 'Malik steps out of the circle. His crew follows.' }],
         stopId: 'S', mandatory: true,
         speaker: 'Malik Reed', portrait: 'biz_parkride',
         importance: 'major',
@@ -301,6 +303,7 @@ export const FEATURED_STORIES = {
         choices: [
           {
             id: 'carry', consequential: true, next: null,
+            beats: [{ id: 'seattle_radio', panelKey: 'hiphop.seattle_offer.carry.radio', importance: 'minor', speaker: 'Malik Reed', text: 'Stank Records owns the radio till the phone is delivered.' }],
             label: "I'm going right past Mercer. Give me the phone.",
             reply: "Album's on the phone. As long as you're carrying it, you can play Hip-Hop on the radio. Just don't skip the stop—this thing locks itself when it thinks somebody ran off with it.",
             effects: { items: { phone: true }, flags: { carrying: true }, relationship: 50, radioGrant: STORY_GENRE.hiphop },
@@ -387,6 +390,7 @@ export const FEATURED_STORIES = {
         choices: [
           {
             id: 'handOver', consequential: true, next: null,
+            beatsBefore: [{ id: 'kyle_session', panelKey: 'hiphop.issaquah_kyle.session', importance: 'minor', text: "Ten minutes. Kyle doesn't look up once." }],
             label: "Take your ten minutes. I'll wait right here.",
             reply: "Done. The phone stays with me — Malik wants it back. That drive IS the album now. Guard it like it owes you money.",
             effects: { items: { phone: false, thumbdrive: true }, flags: { delivered: true }, relationship: 15, radioGrant: null },
@@ -396,6 +400,7 @@ export const FEATURED_STORIES = {
 
       // ── North Bend — Dom'nique claims the beat ─────────────────────────
       northbend_dom: {
+        intro: [{ id: 'dom_arrival', panelKey: 'hiphop.northbend_dom.arrival', importance: 'minor', text: "Dom'nique hears the track before he sees the car." }],
         stopId: 'N', mandatory: true,
         when: (st) => has(st, 'thumbdrive') && !st.flags.domDone,
         speaker: "Dom'nique", portrait: 'biz_parkride',
@@ -444,6 +449,10 @@ export const FEATURED_STORIES = {
 
       // ── Snoqualmie Pass / AOK Camp — Tennessee presses the vinyl ───────
       pass_tennessee: {
+        beats: [
+          { id: 'press_pressing', panelKey: 'hiphop.pass_tennessee.pressing', importance: 'consequence', text: 'A hundred records, hot off the press.' },
+          { id: 'press_loaded',   panelKey: 'hiphop.pass_tennessee.loaded',   importance: 'consequence', text: 'Loaded. Tennessee stays with the press.' },
+        ],
         stopId: 'SP', mandatory: true,
         when: (st) => has(st, 'thumbdrive') && st.items.records == null,
         speaker: 'Tennessee', portrait: 'biz_aok',
@@ -496,6 +505,11 @@ export const FEATURED_STORIES = {
         choices: [
           {
             id: 'deliver', consequential: true, next: null,
+            // Evaluated outcome panel (pristine art / damaged art covers damaged,
+            // almost_empty and one_record until dedicated variants exist; zero = none).
+            beats: [{ id: 'cleelum_result', importance: 'ending', keys: ['hiphop.cleelum_store.pristine', 'hiphop.cleelum_store.damaged'],
+              panelKey: (st) => ({ pristine: 'hiphop.cleelum_store.pristine', damaged: 'hiphop.cleelum_store.damaged', almost_empty: 'hiphop.cleelum_store.damaged', one_record: 'hiphop.cleelum_store.damaged' })[st.flags.outcome] ?? null,
+              text: (st) => st.flags.outcome === 'pristine' ? 'A hundred clean. Spin Cycle takes the crate.' : 'What survived the road goes on the shelf.' }],
             label: "Delivery for Spin Cycle. Count 'em.",
             reply: (st, run) => {
               const n = Math.floor(run.cargo.records ?? st.items.records ?? 0);
@@ -777,6 +791,7 @@ export const FEATURED_STORIES = {
 
       // ── Vantage — her friends, her exit, the ending ─────────────────────
       vantage_arrival: {
+        intro: [{ id: 'vantage_spotted', panelKey: 'country.vantage_arrival.spotted', importance: 'minor', text: 'She sees her friends before the car stops.' }],
         stopId: 'V', mandatory: true,
         when: (st, run) => !!run.passenger,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'ending',
@@ -843,6 +858,8 @@ export const FEATURED_STORIES = {
     nodes: {
       // ── Vantage diner — she's changing out of her uniform ──────────────
       vantage_diner: {
+        intro: [{ id: 'diner_shift_end', panelKey: 'classicRock.vantage_diner.shift_end', importance: 'minor', text: "Shift's over. Her ride isn't here." }],
+        beats: [{ id: 'diner_swipe', panelKey: 'classicRock.vantage_diner.swipe_reaction', importance: 'minor', speaker: 'Mykenzie', text: 'Did we just swipe right?' }],
         stopId: 'V', mandatory: true,
         when: (st, run) => !run.passenger && !st.flags.rideOffered,
         speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'major',
@@ -885,6 +902,7 @@ export const FEATURED_STORIES = {
 
       // ── Othello — show one ─────────────────────────────────────────────
       othello_cover: {
+        intro: [{ id: 'othello_arrival', panelKey: 'classicRock.othello_cover.arrival', importance: 'minor', text: 'Othello. Guitar case in the trunk, cover at the door.' }],
         stopId: 'O', mandatory: true,
         when: (st, run) => !!run.passenger && st.flags.show1 === 'opener' && !st.flags.coverPaid,
         speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'minor',
@@ -897,16 +915,26 @@ export const FEATURED_STORIES = {
         ],
       },
       othello_show: {
+        intro: [
+          { id: 'othello_performance', panelKey: 'classicRock.othello_show.performance', importance: 'minor', text: 'The unpaid set. The room turns.' },
+          { id: 'othello_interest',    panelKey: 'classicRock.othello_show.interest',    importance: 'minor', text: "She's watching now." },
+        ],
         stopId: 'O', mandatory: true,
         when: (st, run) => !!run.passenger && st.flags.show1 === 'opener' && !!st.flags.coverPaid && !st.flags.othelloDone,
         speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'climax',
         line: "Hearing you sing like that sent a rush down my body. I have a list of propositions for you, but here are two for now…",
         choices: [
           { id: 'hearBoth', consequential: true, next: null, cost: OTHELLO_PROPOSITION,
+            beats: [
+              { id: 'othello_impromptour', panelKey: 'classicRock.othello_show.impromptour', importance: 'minor', speaker: 'Mykenzie', text: 'The ImprompTour, drawn on a napkin.' },
+              { id: 'othello_duetOffer',   panelKey: 'classicRock.othello_show.duetOffer',   importance: 'minor', speaker: 'Mykenzie', text: 'A duet at Washtucna — if you want it.' },
+              { id: 'othello_continue',    panelKey: 'classicRock.othello_show.continue',    importance: 'minor', text: 'Loading out together.' },
+            ],
             label: "Both. Right now. And the drinks are on me.",
             reply: "One: we keep this ImprompTour rolling east. Two: you think about a duet in Washtucna. Don't answer yet.",
             effects: { flags: { othelloDone: true, tour: true, duetOffered: true }, relationship: 10 } },
           { id: 'payingOnly', consequential: true, next: null, cost: OTHELLO_PROPOSITION,
+            beats: [{ id: 'othello_continue', panelKey: 'classicRock.othello_show.continue', importance: 'minor', text: 'Loading out together.' }],
             label: "Just the one that pays. I'm not here for the rest.",
             reply: "…Just the paying one. Fine. Washtucna pays three hundred. Solo or duet — your call, apparently.",
             effects: { flags: { othelloDone: true, tour: true }, relationship: -10, controlling: 1 } },
@@ -931,6 +959,10 @@ export const FEATURED_STORIES = {
 
       // ── Hatton — Nan and the Oldsmobile ────────────────────────────────
       hatton_nan: {
+        intro: [
+          { id: 'nan_offer',     panelKey: 'classicRock.hatton_nan.offer',     importance: 'minor', speaker: 'Nan', text: "Nan's cash. Mild fortune, no strings." },
+          { id: 'nan_objection', panelKey: 'classicRock.hatton_nan.objection', importance: 'minor', speaker: 'Mykenzie', text: 'Mykenzie objects before you can answer.' },
+        ],
         stopId: 'H', mandatory: true,
         when: (st, run) => !!run.passenger && !st.flags.nanDone,
         speaker: 'Nan', portrait: 'grandma', importance: 'climax',
@@ -941,6 +973,9 @@ export const FEATURED_STORIES = {
             reply: "Nan counts it out in twenties. The waitress doesn't say a word getting into the Oldsmobile.",
             effects: { cash: NAN_OFFER, flags: { nanDone: true, left: true }, passenger: null, ending: 'nan_500', status: 'failed' } },
           { id: 'herCall', consequential: true, next: null,
+            beats: [{ id: 'hercall_result', importance: 'ending', keys: ['classicRock.hatton_nan.herCall.stay', 'classicRock.hatton_nan.herCall.leave'],
+              panelKey: (st) => st.flags.left ? 'classicRock.hatton_nan.herCall.leave' : 'classicRock.hatton_nan.herCall.stay',
+              text: (st) => st.flags.left ? 'She went with Nan.' : 'She stays. Pullman it is.' }],
             label: "That's her call, not mine.",
             reply: (st) => st.relationship >= NAN_STAY_REL
               ? "She looks at Nan, then at you. \"I'm going to Pullman, Nan. Follow the tour if you want.\""
@@ -961,6 +996,7 @@ export const FEATURED_STORIES = {
 
       // ── Washtucna — show two (solo / duet decision) ────────────────────
       washtucna_show: {
+        intro: [{ id: 'washtucna_arrival', panelKey: 'classicRock.washtucna_show.arrival', importance: 'minor', text: 'Washtucna. A bigger room, a smaller stage.' }],
         stopId: 'W', mandatory: true,
         when: (st, run) => !!run.passenger && !st.flags.washtucnaDone,
         speaker: 'Mykenzie', portrait: 'diner_waitress', importance: 'major',
@@ -1106,6 +1142,9 @@ export const FEATURED_STORIES = {
         },
         choices: [
           { id: 'play', consequential: true, next: null,
+            beats: [{ id: 'pullman_kiss', importance: 'ending', keys: ['classicRock.pullman_finale.partnership_kiss'],
+              panelKey: (st) => classicRockOutcome(st) === 'true_ending' ? 'classicRock.pullman_finale.partnership_kiss' : null,
+              text: 'Partners.' }],
             label: "Let's play the show.",
             reply: (st) => {
               const o = classicRockOutcome(st);

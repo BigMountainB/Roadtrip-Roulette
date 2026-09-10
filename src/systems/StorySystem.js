@@ -386,6 +386,10 @@ export class StorySystem {
       return { applied: true, entry: null, effects: {}, next: choice.next ?? null };
     }
 
+    // Authored beats that PRECEDE the choice in the book (e.g. Kyle's session
+    // before the hand-over) — same canon, recorded before the choice entry.
+    if (choice.beatsBefore?.length) this._emitAuthoredBeats(c, storyId, choice.beatsBefore, mile, at);
+
     // ── Persist FIRST (18.2: "committed synchronously … before its animation") ──
     // Effects may be authored as a function of (state, run) — e.g. a payout
     // that scales with surviving cargo — resolved ONCE here and stored
@@ -442,6 +446,13 @@ export class StorySystem {
     if (typeof effects.meanwhile === 'string') this.mutateCanon((c2) => !!this._raiseMeanwhile(c2, storyId, effects.meanwhile, mile));
     hooks.panel?.(entry, node, choice);
     for (const fn of this._listeners) { try { fn(entry, { node, choice }); } catch (_) {} }
+    // Authored FOLLOW-UP beats (special panels: pressing/loaded, evaluated
+    // outcomes, reactions) — recorded AFTER the choice so the book reads
+    // choice → consequence.  Choice-level first, then node-level.
+    if (choice.beats?.length || node.beats?.length) {
+      this.mutateCanon((c2) => (this._emitAuthoredBeats(c2, storyId, choice.beats, mile, at)
+                              + this._emitAuthoredBeats(c2, storyId, node.beats, mile, at)) > 0);
+    }
     return { applied: true, entry, effects, next: choice.next ?? null, leaveStop: effects.leaveStop === true };
   }
 
@@ -495,6 +506,44 @@ export class StorySystem {
 
   // ── Choice-less beats + road events ─────────────────────────────────────
 
+  /** AUTHORED special beats (Ch.18 special-beat emission, 2026-09-10).
+   *  A spec: { id, panelKey (string | (st, run) => string|null), text
+   *  (string | fn), importance?, speaker?, portrait?, when?(st, run) }.
+   *  Idempotent per attempt through the ledger (beat key); an evaluated
+   *  panelKey that returns null skips the beat for this playthrough.
+   *  Used by node.intro (recorded when the node is first SHOWN),
+   *  choice.beatsBefore (recorded just before the choice entry),
+   *  choice.beats + node.beats (recorded after it). */
+  _emitAuthoredBeats(c, storyId, specs, mile = 0, at = Date.now()) {
+    if (!Array.isArray(specs) || !specs.length) return 0;
+    const st = c.stories[storyId] ?? (c.stories[storyId] = emptyStoryState());
+    let n = 0;
+    for (const b of specs) {
+      if (!b?.id) continue;
+      try {
+        if (typeof b.when === 'function' && !b.when(st, this._run)) continue;
+        const pk = typeof b.panelKey === 'function' ? b.panelKey(st, this._run) : (b.panelKey ?? null);
+        if (b.panelKey != null && pk == null) continue;
+        const text = typeof b.text === 'function' ? String(b.text(st, this._run) ?? '') : String(b.text ?? '');
+        if (this._beatInto(c, { storyId, beatId: b.id, panelKey: pk ?? null, importance: b.importance ?? 'consequence',
+                                speaker: b.speaker ?? '', portrait: b.portrait ?? null, text, mile, at })) n++;
+      } catch (_) {}
+    }
+    return n;
+  }
+
+  /** The scene is about to PRESENT this node (live tile built).  Records the
+   *  node's authored `intro` beat(s) — establishing panels that precede the
+   *  dialogue (the crew closing in, Dom'nique hearing the track…).  Idempotent. */
+  noteNodeShown(storyId, nodeId, mile = 0) {
+    const node = this._node(storyId, nodeId);
+    const specs = node?.intro ? (Array.isArray(node.intro) ? node.intro : [node.intro]) : null;
+    if (!specs) return 0;
+    let n = 0;
+    this.mutateCanon((c) => { n = this._emitAuthoredBeats(c, storyId, specs, mile); return n > 0; });
+    return n;
+  }
+
   /** A comic beat with no player choice (Brittney changing in the car, the
    *  kidnapping report, a roadside exit).  Idempotent per attempt + beatId;
    *  lands in the ledger like a choice so the comic and a rewind treat it
@@ -507,14 +556,17 @@ export class StorySystem {
   }
 
   /** Same, into a canon the caller is already mutating (roadEvent). */
-  _beatInto(c, { storyId, beatId, importance = 'consequence', speaker = '', portrait = null, text = '', mile = 0, at = Date.now(), effects = null, strip = null }) {
+  _beatInto(c, { storyId, beatId, importance = 'consequence', speaker = '', portrait = null, text = '', mile = 0, at = Date.now(), effects = null, strip = null, panelKey = null }) {
     const st = c.stories[storyId] ?? (c.stories[storyId] = emptyStoryState());
     const key = ledgerKey(storyId, st.replayCount, 'beat', beatId);
     if (c.ledger[key]) return null;
     const entry = {
       key, storyId, nodeId: 'beat', choiceId: beatId, attempt: st.replayCount, at, mile, runId: this._run.runId,
       dialogueKeys: { line: `${storyId}.beat.${beatId}.line` }, fallbackText: { line: text, label: '', reply: '' },
-      importance, effects: isObj(effects) ? effects : {}, cost: 0, panelKey: `${storyId}.beat.${beatId}`, speaker, portrait,
+      // Explicit panelKey = an AUTHORED special panel (Ch.18 special beats:
+      // `.intro`, `.arrival`, `.pressing`, evaluated outcomes…); default =
+      // the generic beat key the road events use.
+      importance, effects: isObj(effects) ? effects : {}, cost: 0, panelKey: panelKey ?? `${storyId}.beat.${beatId}`, speaker, portrait,
     };
     if (Array.isArray(strip)) entry.strip = strip.map(p => ({ speaker: String(p.speaker ?? ''), text: String(p.text ?? '') }));
     c.ledger[key] = entry;
@@ -654,6 +706,9 @@ export class StorySystem {
           radioGrant: (g) => { this._run.radioGrant = g ?? null; hooks.radioGrant?.(this._run.radioGrant); },
           text: (cid, from, msg) => hooks.text?.(cid, from, msg, id),
           meanwhile: (stripId) => { if (this._raiseMeanwhile(c, id, stripId, mile)) changed = true; },
+          // Authored special panel from a pass event (e.g. the phone locking
+          // past Issaquah) — same canon, explicit panelKey honoured.
+          beat: (b) => { const e = this._beatInto(c, { storyId: id, mile, ...b }); if (e) changed = true; return e; },
           fail: (endingId) => { if (!TERMINAL.has(st.status)) { st.status = STORY_STATUS.FAILED; st.endingId = endingId ?? null; st.nodeId = null; changed = true; } },
         };
         let did = false;

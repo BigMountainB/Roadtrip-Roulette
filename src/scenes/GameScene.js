@@ -10801,7 +10801,7 @@ export class GameScene extends Phaser.Scene {
   _onVehicleCollision(car, _idx, hit) {
     // Featured-story ambush (Ch. 18.6): count the rams so the ending can tell
     // "rammed to death" from an unrelated wreck (and QA can assert it).
-    if (car.hostile) this._hostileHits = (this._hostileHits ?? 0) + 1;
+    if (car.hostile) { this._hostileHits = (this._hostileHits ?? 0) + 1; this._ambushBeat('side_ram', 'The sedan slams your door.'); }
     // DRIVING COMBO: an ordinary vehicle collision resets the combo, and the
     // struck car can never count as a clean pass (economy V1 2026-09-05).
     // Rage bulldozing is invincible-by-design and exempt.
@@ -24726,6 +24726,8 @@ export class GameScene extends Phaser.Scene {
         story.markAmbush(a.storyId);
         this._storyAmbush = { storyId: a.storyId, tip: a.tip, headline: a.headline, since: mile };
         this._spawnHostileCars(a.cars ?? 3);
+        this._ambushBeatsDone = new Set();
+        this._ambushBeat('first_tail', 'Three sets of headlights in the mirror.');
         this._showPopup?.('🚗🚗🚗  THEY FOUND YOU', '#FF3322');
         this.effects?.triggerShake?.(200, 0.008);
       }
@@ -24733,10 +24735,11 @@ export class GameScene extends Phaser.Scene {
     if (!this._storyAmbush) return;
     // Hostile AI: hold formation around the player's lane and keep ramming.
     const p = this.player;
-    let alive = 0;
+    let alive = 0, near = 0;
     for (const t of this.traffic) {
       if (!t.hostile) continue;
       alive++;
+      if (Math.abs(t.position - p.position) < 900) near++;   // alongside
       const wantLane = Math.max(-0.9, Math.min(0.9, (p.x ?? 0) + t.hostileLane));
       t.targetLaneOffset = wantLane;
       t.laneOffset += (wantLane - t.laneOffset) * Math.min(1, dt * 2.2);
@@ -24755,6 +24758,26 @@ export class GameScene extends Phaser.Scene {
       this._hostileRespawn = 0;
       this._spawnHostileCars(3 - alive);
     }
+    // BOXED IN — all three alongside for a full second (special panel).
+    if (near >= 3) { if ((this._boxedT = (this._boxedT ?? 0) + dt) > 1) this._ambushBeat('boxed_in', 'Boxed in. Nowhere to go.'); }
+    else this._boxedT = 0;
+  }
+
+  /** Ch.18 special-beat emission for the authored ambush panels (first_tail /
+   *  side_ram / boxed_in / fatal / special_delivery): once per ambush,
+   *  recorded straight into the story canon with the explicit panel key
+   *  `<story>.vantage_recovery.<id>`.  Never a placeholder substitute — an
+   *  unmapped key just renders as one. */
+  _ambushBeat(id, text) {
+    const a = this._storyAmbush;
+    if (!a || !this.story?.recordBeat) return;
+    const done = (this._ambushBeatsDone ??= new Set());
+    if (done.has(id)) return;
+    done.add(id);
+    try {
+      this.story.recordBeat({ storyId: a.storyId, beatId: id, panelKey: `${a.storyId}.vantage_recovery.${id}`,
+                              importance: 'consequence', text, mile: this._odometer ?? 0 });
+    } catch (_) {}
   }
 
   /** Gameplay-only passenger cue (Ch. 18.7): name, Nerve, pending need
@@ -28447,6 +28470,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   _endGame(cause, extra = {}) {
+    // Ambush death → the two authored ending panels (fatal + the note).
+    if (cause === 'crash' && this._storyAmbush) {
+      this._ambushBeat('fatal', 'The last hit.');
+      this._ambushBeat('special_delivery', "A note under the wiper: DON'T STEAL FROM MALIK.");
+    }
     // Run-ending events terminally fail every active mission — no payout,
     // rep untouched (Ch. 8).  Recorded in the outcome ledger so a
     // busted_late checkpoint restart can't resurrect them.  A Pullman

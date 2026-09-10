@@ -261,5 +261,44 @@ check('establishing key is node-only', panelKeyFor('hiphop', 'mercer_fork') === 
   check('reachable key count beats the old node-only 11', reachable.size > 11);
 }
 
+// ── 6. Special beats: every PANEL_META key is now REACHABLE (2026-09-10) ──
+// Authored `intro` / `beatsBefore` / `beats` (node or choice) carry explicit
+// panel keys; evaluated ones declare their candidate `keys`.  A handful are
+// emitted from code (the ambush + phone-lock road beats).  Only keys listed
+// in FUTURE may stay unreachable, and each must be labeled here.
+{
+  const CODE_EMITTED = new Set([
+    'hiphop.vantage_recovery.first_tail', 'hiphop.vantage_recovery.side_ram', 'hiphop.vantage_recovery.boxed_in',
+    'hiphop.vantage_recovery.fatal', 'hiphop.vantage_recovery.special_delivery',   // GameScene._ambushBeat
+    'hiphop.vantage_recovery.locked_phone',                                          // onPass.I api.beat
+    'country.beat.roadside_exit', 'country.beat.kidnap',                             // onRoad api.beat
+  ]);
+  const FUTURE = new Set([
+    'classicRock.othello_show.duetYes',   // no duet-yes choice in the final Othello tree (folded into Washtucna)
+    'classicRock.othello_show.soloIntent',
+  ]);
+  const reach = new Set(CODE_EMITTED);
+  const addSpecs = (specs) => { for (const b of (Array.isArray(specs) ? specs : specs ? [specs] : [])) {
+    if (typeof b.panelKey === 'string') reach.add(b.panelKey);
+    for (const k of (b.keys ?? [])) reach.add(k);
+  } };
+  for (const [storyId, def] of Object.entries(FEATURED_STORIES)) {
+    for (const [nodeId, node] of Object.entries(def.nodes ?? {})) {
+      reach.add(`${storyId}.${nodeId}`); if (node.panelKey) reach.add(node.panelKey);
+      addSpecs(node.intro); addSpecs(node.beats);
+      for (const ch of node.choices ?? []) {
+        reach.add(`${storyId}.${nodeId}.${ch.id}`); if (ch.panelKey) reach.add(ch.panelKey);
+        addSpecs(ch.beatsBefore); addSpecs(ch.beats);
+      }
+    }
+  }
+  const keys = Object.keys(PANEL_META);
+  const unreachable = keys.filter(k => !reach.has(k) && !FUTURE.has(k));
+  for (const k of unreachable) console.log(`      unreachable: ${k}`);
+  check('every PANEL_META key is reachable or labeled FUTURE', unreachable.length === 0);
+  check('FUTURE labels only real keys', [...FUTURE].every(k => keys.includes(k)));
+  console.log(`      → ${keys.length - FUTURE.size} of ${keys.length} PANEL_META keys reachable (${FUTURE.size} labeled future)`);
+}
+
 console.log(`\nstory-art tests: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
