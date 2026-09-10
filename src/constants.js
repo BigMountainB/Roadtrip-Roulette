@@ -691,7 +691,8 @@ export const GAS_ROBBERY_FRAC       = 0.20;        // loses 20% of cash if robbe
 // 2026-08-04).  Replaced the old 50%-of-cash charge, which punished a rich run
 // far harder than a broke one for the same mistake.  Can't afford it → the
 // OUT OF GAS card's only remaining choices are START OVER / LOAD SAVE.
-export const TOW_COST_USD           = 1500;
+export const TOW_COST_USD           = 200;   // owner 2026-09-10: $200 tow back to the previous town…
+export const TOW_GAS_USD            = 50;    // …plus $50 of gas (≈ TOW_GAS_USD / GAS_USD_PER_MI miles of range)
 
 // Party-clock HUD readout — mechanics (rush deadlines, rest-stop time buys,
 // arrival timing) always run; this flag only controls the ⏱ readout draw +

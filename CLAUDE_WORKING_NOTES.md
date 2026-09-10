@@ -2864,3 +2864,87 @@ pending for Seattle v3 / Mercer / Haylee — commission in the order below.
 
 ### Commission order (recommended)
 1 → 3 → 7 → 8 → 9 → 11 → 2 → 14 → 15 → 13 → 6/4/10/12 crop-tests → Group 7 Vantage set.
+
+## Story canon batch — DRAFT 1 of N: Malik contact arc + Malik ↔ Dom'nique choice matrix (Claude, 2026-09-10)
+
+Owner: "go ahead and start writing on the story canon batch."  This draft covers Chat's
+§"Malik relationship arc" and §"Malik ↔ Dom'nique relationship pull/pull" reconciled
+against the ACTUAL story graph (`featuredStories.js` hiphop nodes) and the owner canon in
+memory (Malik routes the player to Mercer only; Malik tracks the phone; text if Mercer is
+skipped, call if Brittney is left behind; Kyle returns phone AND drive).  Dialogue is
+red-pen copy; scoring is a proposal.  Nothing wired.
+
+### 0. Canon constraints this draft obeys
+- On the DELIVERY path (Brittney stayed) the player carries the PHONE to Kyle; after Issaquah
+  the player carries the phone **and** the drive (owner: Kyle returns both).  The phone is
+  returned to Malik at the record-store reunion.
+- Dom'nique only exists on the delivery path (hip-hop radio playing).
+- Two independent meters: `malikRel` (already the hiphop story `relationship`, 0–100 →
+  stars for the payout table) and `dominiqueRel` (NEW, 0–100).  Flags: `promisedDomCredit`,
+  `toldMalikTruth`, `acceptedDomTape`, `finalCredit` (malik | stank | dom_producer |
+  dom_producer_bside), `bSidePressed`, `liedToMalik`, `liedToDom`.
+
+### 1. Malik contact sequence (texts/calls — the "Malik keeps watch on the phone" spine)
+Each contact offers 2–3 authored replies + an explicit IGNORE (a real choice, never a
+timeout).  Reply effects are on `malikRel`.  Wording is Malik's — short, watching the map.
+
+| # | trigger (code) | Malik | replies → effect |
+|---|---|---|---|
+| C1 | `skippedMercer` (existing text) | "Yo, you blew right past Brittney?? Fine. Take it STRAIGHT to my boy Kyle at the Issaquah Park & Ride." (existing) | "On it." +2 · "She wasn't there." (lie: `liedToMalik`) +3 now, −8 when Brittney's shift is mentioned later · IGNORE −5 |
+| C2 | `keepJob`/`keepPromise` (the CALL, mile ≈11) | "Britt? You in the car?" … "Kyle. Issaquah. Brittney told you the rest." (as drafted) | "I've got it." +3 · "You should've asked her yourself." −2 (honest) · IGNORE (decline the call) −5 |
+| C3 | Bellevue exit, phone still held (`mercerDone` & !`phoneLocked`) — TEXT | "I can see you sitting at Bellevue. That founder still out there buying phones?" | "Not selling it." +5 · "He offered a thousand." (truth, if founder seen) +2 · IGNORE 0 (he's watching anyway) |
+| C4 | leaving Issaquah with drive (`issaquahDone`) — TEXT | "Kyle says it's clean. That drive IS the record now. Get it to Tennessee at the pass — I'll pay you when it's pressed." | "How much?" → "Depends how it sounds when I hear it." +0 · "Consider it done." +3 · IGNORE −3 |
+| C5 | after North Bend (`domHeard`), CALL | "Dom'nique called you? …That beat's mine on the record. Cut him out of it." | see §2 Scenario 2 (the matrix) |
+| C6 | Snoqualmie pressing done (`pressed`) — TEXT | reads the ACTUAL label: "Label says [finalCredit]. [line by outcome]" — malik: "That's the one." +3 · dom_producer: "…Producer. Fine. He better not want money." +0 · bside: "A B-SIDE?" −3 unless `toldMalikTruth` (then +2: "You told me. Respect.") · stank: "Stank's name and not mine?" −5 |
+| C7 | Cle Elum delivery → record-store reunion (`cleelum_store` outcome) | in person; see §3 payout |
+
+Ignore rule (Chat): IGNORE is a button; closing the phone UI by accident is NOT an ignore.
+The unanswered contact re-surfaces at the next stop with the same buttons.
+
+### 2. Malik ↔ Dom'nique matrix — mapped to real nodes
+**Scenario 1 — `northbend_dom` (existing node, 3 choices) + 1 new choice**
+- `promise` (existing: "That's the same beat. I'll make sure you get credit.") → dom +5, `promisedDomCredit`; malik −3 when told (C5).
+- `defer` (existing: "…not promising anything until I reach the presser.") → dom +3, malik 0.
+- `bagman` (existing: "Malik and Stank can settle this after I finish the delivery.") → dom −5, malik +3; `dismissedDom` — locks out clean mediation at C5 (only Obey/Confront remain).
+- NEW `settle` — "Settle it with Malik. I'm just the driver." → dom −2, malik 0, `avoidedDom` — a live-only dodge with a cost: Dom's North Bend help (Encounter A) is off.
+
+**Scenario 2 — C5 Malik's call (NEW node `malik_cut_call`, road beat after North Bend)**
+- Obey: "Your record, your call." → malik +5, dom −5, `finalCredit` default malik.
+- Confront: "It's his beat. His name goes on it." → dom +5, malik −3; recovers +3 at C6 if the record succeeds (pristine/damaged).
+- Mediate: "Your song stays yours. Dom gets producer credit. Nobody takes your money." → malik +5 (Malik's concern is payment/ownership — owner's favorable outcome), dom +3 (half win); sets `toldMalikTruth`.
+- Demand a split: "Credit and a cut, or I don't deliver it." → dom +5, malik −5 now; if Malik accepts (needs malikRel ≥ 40 before the call) → best collaborative ending unlocked (`splitAccepted`), else he hangs up and C6 reads the label cold.
+- Lie: "Dom's out. Forget him." while `promisedDomCredit` → malik +3, dom unchanged now; `liedToMalik` → at C6 the label contradicts him: malik −10, dom −5 if the label ALSO betrays Dom.
+- Malik's line when the player's Seattle claim matters (musician canon): "You write songs. So tell me — whose name belongs on my record?"  (replaces Chat's "You said you were an artist…")
+
+**Scenario 3 — `dom_tape` (existing node: take / decline) + 1 new**
+- `take` (existing) → dom +3, `acceptedDomTape`, cargo slot used (the tape rides with the drive; potholes can scratch it — reuse the records damage rule at 50% rate).
+- NEW `takeOpenly` — "I'll carry it — and I'm telling Malik it's in the car." → dom +5, malik +1 (annoyed but respects it), `toldMalikTruth`.
+- `decline` (existing) → dom +1 if `promisedDomCredit`, else 0.
+- (Leverage variant dropped — no honest place for it in the graph; flag for owner if wanted.)
+
+**Scenario 4 — `pass_tennessee` (existing 4 choices) writes the truth onto the object**
+- creditMalik → `finalCredit: malik` · creditStank → `stank` · creditDom → `dom_producer` · bside (requires `acceptedDomTape`) → `dom_producer_bside`, `bSidePressed`.
+- The pressed label is SHOWN in the comic (close-up inset; Chat's "show the printed label").
+- A Dom-dominant credit is NOT offered (owner: don't erase Malik's authorship).
+
+**Scenario 5 — record-store reunion (`cleelum_store` outcome → NEW `malik_reunion` node)**
+Cash = Malik star table (owner canon): 0★ $0 · 1★ fill-the-tank · 2★ $500 · 3★ $1,000 · 4★
+$1,500 · 5★ $2,500 — ALL outcomes grant the Hip-Hop/Phonk collection.  Stars = malikRel
+bands (proposed: <20 → 0★, 20–39 → 1★, 40–59 → 2★, 60–74 → 3★, 75–89 → 4★, ≥90 → 5★).
+Album edition by both meters:
+- malik high / dom low → full collection + cash; Malik-only pressing; Dom offers nothing later.
+- malik low / dom high → base collection, little cash; **Dom's B-side/underground set added** if `bSidePressed` or `acceptedDomTape`.
+- both medium/high via honest mediation (`toldMalikTruth` & `finalCredit` ∈ {dom_producer, dom_producer_bside}) → **collaborative edition** (inspirations + remaster + correct producer credit + B-side if carried).  Cash still by Malik's stars.
+- both high via a lie (`liedToMalik`) → cannot be the collaborative edition; −10 malik applied at C6 already drops him a band.
+- both low → base collection, minimal cash, cold comic ending.
+Dom's non-cash help (if dominiqueRel ≥ 60): a guaranteed weapon pickup before Encounter A,
+a North Bend safe-stop contact, a liner-note/epilogue panel.
+Malik's 1★ "fill the tank": `missingMi × GAS_USD_PER_MI` at the stop's per-gal drift,
+rounded UP to the dollar, capped at a full tank; shown on the button before payment.
+
+### 3. What this draft needs from the owner (not decided)
+1. Star bands for `malikRel` (proposed above) — or map stars 1:1 to the existing relationship display if one exists.
+2. Should C3 (Bellevue) fire even if the founder wasn't met (he's on the exit regardless)?  Proposed yes.
+3. The "leverage" tape variant — wanted or dropped?
+4. Where the PHONE is handed back: at the reunion (proposed) or mailed/dropped at Cle Elum?
+5. Encounter A (Malik's chase) is on the BRITTNEY path, so none of the above fires there — confirm Dom's "help during the chase" is therefore moot (Dom is never met on that path).

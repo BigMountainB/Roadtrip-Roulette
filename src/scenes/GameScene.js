@@ -8,7 +8,7 @@ import {
   getLastSignTown,
   CAR_LEN_Z, CAR_WIDTH_LANES, PLAYER_VIRTUAL_Z,
   VEHICLES,
-  FUEL_BURN_BASE, FUEL_BURN_CLIMB, FUEL_BURN_BOOST, FUEL_BURN_HOT, TOW_COST_USD,
+  FUEL_BURN_BASE, FUEL_BURN_CLIMB, FUEL_BURN_BOOST, FUEL_BURN_HOT, TOW_COST_USD, TOW_GAS_USD, GAS_USD_PER_MI,
   ENGINE_TEMP_START, ENGINE_WARN_TEMP, ENGINE_LIMP_TEMP, ENGINE_LIMP_CLEAR,
   ENGINE_LIMP_MULT, ENGINE_HP_DPS,
   setCameraMode, CAM, COP_TRAP_SPEED_MPH,
@@ -21232,13 +21232,20 @@ export class GameScene extends Phaser.Scene {
    *  driven only by the OUT OF GAS card's TOW button (owner 2026-08-04); the
    *  old rule — 50% of cash, repo'ing a non-Beater when broke, free tow for a
    *  broke Beater — is gone, replaced by that card's three choices. */
+  /** OUT OF GAS → tow (owner 2026-09-10): $200 tow back to the previous town
+   *  plus $50 of gas (or whatever is left past the $200 if the wallet is
+   *  thinner).  Money and purchases CARRY OVER — the run continues from the
+   *  previous stop with a partial tank, not a full one. */
   _runTow() {
     const prevStop = this._prevRestStop();
-    this.score = Math.max(0, this.score - this._cashLoss(TOW_COST_USD));
-    this._showPopup?.(`🚚 TOWED — $${TOW_COST_USD.toLocaleString()}`, '#FFCC44');
+    const cash    = Math.max(0, Math.round(this.score ?? 0));
+    const gasUsd  = Math.max(0, Math.min(TOW_GAS_USD, cash - TOW_COST_USD));
+    const gasMi   = gasUsd / GAS_USD_PER_MI;
+    this.score = Math.max(0, this.score - this._cashLoss(TOW_COST_USD + gasUsd));
+    this._showPopup?.(`🚚 TOWED — $${TOW_COST_USD} + $${gasUsd} gas`, '#FFCC44');
     const _veh = VEHICLES[this.player.vehicleId];
     this.player.gasMaxMi = _veh.rangeMi;
-    this.player.gasMi    = _veh.rangeMi;
+    this.player.gasMi    = Math.min(_veh.rangeMi, gasMi);
     if (prevStop) {
       this.player.position = prevStop.t * (ROUTE_SEGS * SEG_LENGTH);
       this.lastSegIdx      = Math.floor(this.player.position / SEG_LENGTH);
@@ -21253,13 +21260,15 @@ export class GameScene extends Phaser.Scene {
    * decision point on the same photographic plate, with the player's genre car
    * parked on the shoulder.
    *
-   *   TOW ($1,500)  → back to the last rest stop, tank full, run continues
-   *   START OVER    → fresh run from mile 0, same vehicle
-   *   LOAD SAVE     → newest save (local or server), via the title-screen path
+   *   TOW ($200 + $50 gas) → back to the previous town with a partial tank;
+   *                          money and purchases carry over (owner 2026-09-10)
+   *   BACK TO SEATTLE — $0 → shown INSTEAD of the tow when the wallet is under
+   *                          $200: fresh run from mile 0 with $0, purchases kept
+   *   LOAD SAVE            → newest save (local or server), via the title path
    *
-   * Broke players can't tow — the button greys out with the shortfall shown,
-   * which is the whole fail state: no cash on an empty tank means the run is
-   * over one way or another.
+   * The old START OVER (rewind to the drive-start snapshot, which silently
+   * un-earned the leg's cash) is gone — owner 2026-09-10: "I want the
+   * out-of-gas money to carry over to the new run. Same with items purchased.
    */
   _showOutOfGasCard() {
     if (this._outOfGasCard) return;
@@ -21310,8 +21319,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(D + 4));
 
     const cash  = Math.max(0, Math.round(this.score ?? 0));
-    const short = Math.max(0, TOW_COST_USD - cash);
-    const canTow = short === 0;
+    const canTow = cash >= TOW_COST_USD;
     add(this.add.text(SCREEN_W / 2, 312, `WALLET  $${cash.toLocaleString()}`, {
       fontSize: '22px', fontFamily: IMPACT, color: canTow ? '#FFCC44' : '#FF7766',
       stroke: '#000', strokeThickness: 3,
@@ -21373,58 +21381,35 @@ export class GameScene extends Phaser.Scene {
 
     // Outcome sub-lines — the exact post-choice cash + place, computed from
     // the same state the handlers below apply (never a separate estimate).
-    const _towFee    = this._cashLoss(TOW_COST_USD);
-    const _towSub    = canTow
-      ? `→ ${fmtMoney(cash - _towFee)} · ${stopName}`
-      : null;
-    const _snap      = this._driveStartSnap;
-    const _snapMi    = _snap
-      ? ((_snap.position ?? 0) / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES
-      : 0;
-    const _startSub  = _snap
-      ? `→ ${fmtMoney(_snap.cash)} · ${_snap.locName ?? ''} ${_snapMi.toFixed(2)} mi`
-      : null;
-    mkBtn(SCREEN_W / 2 - 250, 220,
-          canTow ? `TOW — $${TOW_COST_USD.toLocaleString()}` : `NEED $${short.toLocaleString()} MORE`,
-          0xFFCC44, canTow, () => {
-            close();
-            this._runTow();
-            this._paused = false;
-            this.audio?.setPaused?.(false);
-          }, _towSub);
-    mkBtn(SCREEN_W / 2, 220, 'START OVER', 0xFF39AF, true, () => {
-      close();
-      // Deliberate restart — drop the live-run autosave so the fresh run
-      // doesn't immediately auto-resume the dead one (mirrors __startOver).
-      try { this.registry.get('save')?.set?.('liveRun', null); } catch (_) {}
-      this.audio?.setPaused?.(false);
-      // RESTART DRIVE semantics (owner 2026-08-27): restore the run-start
-      // snapshot — cash, position, HP, fuel, stars, vices, weapons, and the
-      // save's upgrade maps — instead of a plain restart that silently kept
-      // the dead run's wallet and purchases.
-      if (_snap) {
+    const _gasUsd   = Math.max(0, Math.min(TOW_GAS_USD, cash - TOW_COST_USD));
+    const _towTotal = this._cashLoss(TOW_COST_USD + _gasUsd);
+    const _towMi    = Math.round(_gasUsd / GAS_USD_PER_MI);
+    if (canTow) {
+      mkBtn(SCREEN_W / 2 - 130, 300,
+            `TOW TO ${stopName.toUpperCase()} — $${(TOW_COST_USD + _gasUsd).toLocaleString()}`,
+            0xFFCC44, true, () => {
+              close();
+              this._runTow();
+              this._paused = false;
+              this.audio?.setPaused?.(false);
+            }, `→ ${fmtMoney(cash - _towTotal)} · ${stopName} · +${_towMi} mi of gas`);
+    } else {
+      // Can't cover the $200 tow: back to Seattle with nothing in the wallet.
+      // Purchases stay on the plate; only the cash is gone.
+      mkBtn(SCREEN_W / 2 - 130, 300, 'BACK TO SEATTLE — $0', 0xFF39AF, true, () => {
+        close();
         try {
           const _sv = this.registry.get('save');
-          if (_snap.upgrades)     _sv?.set?.('upgrades',     JSON.parse(JSON.stringify(_snap.upgrades)));
-          if (_snap.tempUpgrades) _sv?.set?.('tempUpgrades', JSON.parse(JSON.stringify(_snap.tempUpgrades)));
-          if (_snap.accessories)  _sv?.set?.('accessories',  JSON.parse(JSON.stringify(_snap.accessories)));
-          if (_snap.vehicleId)    this.registry?.set?.('vehicleId', _snap.vehicleId);
+          _sv?.set?.('liveRun', null);
+          if (_sv?.walletStore) _sv.walletStore.money = 0;
           _sv?.save?.();
         } catch (_) {}
-        this.scene.restart({
-          resumeFromPosition:     _snap.position,
-          checkpointRestartScore: _snap.cash,
-          restartSnapExtras: {
-            hp: _snap.hp, fuelMi: _snap.fuelMi, stars: _snap.stars,
-            viceLevels: _snap.viceLevels, f12Tokens: _snap.f12Tokens,
-            coalAmmo: _snap.coalAmmo,
-          },
-        });
-      } else {
+        this.registry?.set?.('runEligibleEarnings', 0);
+        this.audio?.setPaused?.(false);
         this.scene.restart();
-      }
-    }, _startSub);
-    mkBtn(SCREEN_W / 2 + 250, 220, 'LOAD SAVE', 0x39A8FF, true, () => {
+      }, `→ $0 · Seattle · parts & upgrades kept`);
+    }
+    mkBtn(SCREEN_W / 2 + 130, 200, 'LOAD SAVE', 0x39A8FF, true, () => {
       close();
       this.audio?.setPaused?.(false);
       this._titleLoadSave();

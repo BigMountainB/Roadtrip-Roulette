@@ -204,6 +204,23 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 4) — OUT OF GAS: money and parts carry over; $200 tow + $50 gas to the previous town, or Seattle with $0
+
+Owner (after the $1,309 → $1,149 question): "I want the out-of-gas money to carry over to the
+new run. Same with items purchased. You just have to go back to the previous town and pay
+$200 towing and $50 worth of gas. If you don't have $200 for towing, you go back to Seattle
+with $0."  Applied:
+- `TOW_COST_USD` 1500 → **200**, new `TOW_GAS_USD` = 50.  `_runTow()` charges $200 + gas
+  (gas = min($50, cash − $200)), resumes at the previous rest stop with **$50 ÷ $0.50/mi =
+  100 miles** of range (partial tank, not full), money and purchases untouched.
+- The out-of-gas card now shows ONE outcome + LOAD SAVE: **TOW TO <town> — $250** when cash
+  ≥ $200 (sub-line: resulting cash · town · +100 mi of gas); otherwise **BACK TO SEATTLE —
+  $0** (wallet zeroed, live-run autosave dropped, eligible-earnings reset, fresh run from
+  mile 0; upgrades/accessories/vehicle stay on the plate).
+- The old START OVER (rewind to the drive-start snapshot — which is what silently
+  un-earned the $160) is REMOVED from this card.  The crash/bust ending screens keep their
+  own rule (owner 2026-08-29: restart keeps money, purchases revert) — unchanged.
+
 ### 2026-09-10 (pt 3) — Owner answers: Beat 2 linear, ultimatum scoring approved, text-vs-call rule, chase = Brittney's, Haylee 24 / Central University
 
 Applied in the notes + memory: Beat 2 stays linear (owner deferred to the recommendation);
