@@ -26800,9 +26800,11 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('radioGrantPlayed', key);
     try {
       a._enablePlayback?.();
-      // Malik's album opens on its first track ("Two Lives"); any other grant
-      // just switches to the station.
-      const first = grant === 'hiphop_phonk' ? (a.trackIndexOf?.(idx, 'Two Lives') ?? -1) : -1;
+      // Malik's album opens on one of three tracks at random — never "Two
+      // Lives" (owner 2026-09-10); any other grant just switches station.
+      const openers = ['Rain City Roll Call', 'King of this County', 'Rain City Code'];
+      const pick = openers[Math.floor(Math.random() * openers.length)];
+      const first = grant === 'hiphop_phonk' ? (a.trackIndexOf?.(idx, pick) ?? -1) : -1;
       if (first >= 0 && a.playStationTrack) { a.setStation?.(idx); a.playStationTrack(idx, first); }
       else a.setStation?.(idx);
     } catch (_) {}

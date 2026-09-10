@@ -2814,14 +2814,14 @@ pending for Seattle v3 / Mercer / Haylee — commission in the order below.
 ### Group 1 — Seattle opening (Hip-Hop) — 2 new, 0 crops
 | # | key / file | ratio | pri | type | brief |
 |---|---|---|---|---|---|
-| 1 | `hiphop.seattle_stakes` → `seattle_06_stakes_phone.png` | WIDE 16:9 | **blocking** | NEW | Malik under the lot lights holding the cracked phone up between himself and the player; crew soft-focus behind; the player's car nose + PLATES in frame right.  Urgent, not pleading.  Negative space upper-LEFT and upper-RIGHT (two balloon stacks); phone + Malik's face visible with and without the lower 35% tray. |
-| 2 | `hiphop.seattle_pullout` → `seattle_07_pullout_phone_cupholder.png` | NARROW 2:3 | important | NEW (or crop of an existing dash asset if one honestly fits) | Night dash, the phone glowing in the cupholder, road ahead; Seattle in the mirror.  Top 30% clear for the caption.  Object motif that recurs when Malik calls. |
+| 1 | `hiphop.seattle_stakes` → `seattle_06_stakes_phone.png` | WIDE 16:9 | done 2026-09-10 | NEW CREATED | Malik under the lot lights holding the cracked phone up between himself and the player; crew soft-focus behind; the player's car nose + PLATES in frame right. Urgent, not pleading. 1672×941 RGB PNG master. |
+| 2 | `hiphop.seattle_pullout` → `seattle_07_pullout_phone_cupholder.png` | NARROW 2:3 | important | AUDITED; NEW still required, candidate not saved | Repository audit found only `vantage_00_locked_phone_in_car.png`; its shattered windshield, damaged cabin, and locked red screen falsely foreshadow the later ambush and cannot honestly serve the clean Seattle departure. A first new candidate was generated 2026-09-10 but the phone landed inside the lower response-tray zone, so it was deliberately **not saved**. Do not regenerate until composition/tray placement is corrected in the prompt or layout. |
 | — | Beats 1, 2, 4, 5a use existing `seattle_01/02/03/04`; Beat 5b reuses `seattle_05` (crop-tested by eye — sky band free). | | | | |
 
 ### Group 2 — Mercer Island — 1 new, 1 crop-test, 1 conditional
 | # | key / file | ratio | pri | type | brief |
 |---|---|---|---|---|---|
-| 3 | `hiphop.mercer_ultimatum` → `mercer_05_ultimatum.png` | ORD 16:9 | **blocking** (new fork) | NEW | Counter view: the cracked phone on the counter between them, Brittney arms folded, name tag half-unpinned, the player's hand near the phone.  Phone = its own high-priority protect box.  Upper half clear for two balloons. |
+| 3 | `hiphop.mercer_ultimatum` | ORD 16:9 | done / reuse decision 2026-09-10 | REUSE `country/mercer_island/mercer_04_quits_leaves_phone.png` | Owner correctly identified that the existing frame already carries the ultimatum: Brittney removing her name tag, cracked phone between them, Player waiting, attraction/tension in both faces. Runtime balloon sequence supplies “Me or the phone” and the selected response. Do **not** generate another near-duplicate Mercer counter image. |
 | 4 | `hiphop.mercer_counter` (M1 welcome) | ORD 16:9 | important | CROP-TEST `mercer_01_brittney_double_shift.png` first | If it reads as "at the register, first glance," no new art.  Else brief E: Brittney mid-"welcome," lottery display, phone NOT yet on the counter; caption + her balloon upper-left, her face upper-right third. |
 | 5 | Country `mercer_departure` | ORD | done | existing `country/mercer_island/mercer_03_quit_and_join_player.png` | — |
 
@@ -2833,15 +2833,15 @@ pending for Seattle v3 / Mercer / Haylee — commission in the order below.
 ### Group 4 — Haylee (Country) — 3 new
 | # | key / file | ratio | pri | type | brief |
 |---|---|---|---|---|---|
-| 7 | `shared/characters/haylee_reference_sheet.png` | sheet | **blocking** for all Haylee art | NEW | 24, graduate student at Central University.  **Strawberry-blonde** hair in a loose braid under a sun-faded cap, freckles, sunburnt shoulders, cutoffs + thrifted band tee, boots.  Front / three-quarter / seated-in-back-seat poses; with and without cap. |
-| 8 | `npc/haylee_portrait.png` (rest-stop portrait spec, 1086×1448) | portrait | important | NEW | Close-up from the sheet, dry half-smile, cap on. |
-| 9 | `country.ellensburg_haylee` → `ellensburg_01_haylee_pickup.png` | ORD 16:9 | important | NEW | Ellensburg exit at golden hour; Haylee on the shoulder with a big soft cooler + duffel, hand up; Brittney (uniform) leaning out the passenger window.  Faces upper-left (Haylee) / upper-right (Brittney); cooler protected (`kind: 'cargo'`); lower third free for the tray. |
+| 7 | `shared/characters/haylee_reference_sheet.png` | sheet | created 2026-09-10; owner visual approval still required | NEW CREATED | Canonical strawberry-blonde Haylee sheet: 24, loose braid, sun-faded cap, freckles, cutoffs, thrifted mountain-art tee, boots, expressions, seated pose, cooler and duffel. |
+| 8 | `npc/haylee_portrait.png` (rest-stop portrait spec) | portrait | created 2026-09-10; owner visual approval still required | NEW CREATED | Derived from the new sheet, dry half-smile, cap on, duffel strap. |
+| 9 | `country.ellensburg_haylee` → `country/ellensburg/ellensburg_01_haylee_pickup.png` | ORD 16:9 | created 2026-09-10; owner visual approval still required | NEW CREATED | Ellensburg roadside at golden hour; same Haylee with cooler + duffel; Brittney in Gas-N-Sip uniform leaning from the older white sedan. |
 | 10 | Vantage arrival with Haylee in the group | ORD/WIDE | polish (later) | CROP-TEST `vantage_01_spots_friends_work_uniform.png` — can one friend be read as Haylee? | If not, a variant with a strawberry-blonde friend in the group.  Depends on the Vantage-ending beats below. |
 
 ### Group 5 — Ellensburg hospital (skipped-Issaquah path ONLY; never with Brittney aboard) — 1 new
 | # | key / file | ratio | pri | type | brief |
 |---|---|---|---|---|---|
-| 11 | `hiphop.vantage_hospital.wake` → `ellensburg_hospital_01_player_wakes_with_bill.png` | WIDE 16:9 | important | NEW | Chat's brief stands verbatim (notes §"REQUIRED NEW ART — Ellensburg hospital recovery"): battered player in bed holding an absurdly heavy accordion-fold bill; no Malik/Brittney/Haylee/Dom'nique; face, hands, bill protected; negative space upper-left or upper-right. |
+| 11 | `hiphop.vantage_hospital.wake` → `hiphop/vantage_ambush/ellensburg_hospital_01_player_wakes_with_bill.png` | WIDE 16:9 | created 2026-09-10; owner visual approval still required | NEW CREATED | Battered Player in an Ellensburg hospital bed holding an absurdly long accordion-fold bill; no other story characters, no readable amounts, face/hands/top of bill protected. 1672×941 RGB PNG master. |
 
 ### Group 6 — Classic Rock differentiation (Chat's triage D) — needs the owner's Classic Rock pass first
 | # | key | pri | type | note |
@@ -2910,8 +2910,11 @@ smaller derivative during live gameplay:
 Recommended starting point:
 
 1. Generate/retain the 1672×941 master artwork.
-2. Produce a **1024×576 live derivative** for ordinary and wide gameplay panels. Validate
-   legibility on the oldest supported physical iPhone before settling this globally.
+2. Do **not** assume 1024×576 is sufficient for ordinary/full-width gameplay. RTR's 720-logical-
+   pixel tile is displayed through a device-pixel-ratio-scaled canvas and can approach 2160
+   physical pixels on a 3× iPhone. Start full-width and important panels at the existing
+   **1672×941 master**; test 1280×720 and 1024×576 derivatives side by side on the oldest and
+   highest-density supported physical iPhones before adopting either.
 3. A narrow panel shown two or three at a time may use 836×471 or another measured smaller
    derivative; do not upscale a smaller generated source merely to satisfy a nominal standard.
 4. Load the 1672×941 master only when the finished reader or hold-to-zoom actually needs it.
@@ -2922,10 +2925,10 @@ Recommended starting point:
    zoom may temporarily promote one panel to its master and must release it when zoom closes.
 7. PDF/export should process high-resolution panels sequentially and release each after use.
 
-At 1024×576, every simultaneously resident live panel saves about **3.75 MiB** compared with
-the 1672×941 master: roughly 22.5 MiB saved for six panels or 75 MiB for twenty. With disciplined
-windowing, the comic subsystem should target roughly **7–15 MiB of active panel textures**, not
-hundreds of MiB. Claude should verify the real peak with iPhone instrumentation because browser
+At 1024×576, every simultaneously resident live panel would save about **3.75 MiB** compared
+with the 1672×941 master, but that derivative is appropriate by default only for narrow panels
+after visual validation. Full-width artwork quality takes priority; disciplined windowing and
+eviction are the main memory controls. Claude should verify the real peak with iPhone instrumentation because browser
 image objects, canvases, Phaser textures, and GPU copies can overlap temporarily.
 
 This is an asset-delivery and lifetime recommendation, not authorization to bulk-resize or
@@ -3015,3 +3018,23 @@ rounded UP to the dollar, capped at a full tank; shown on the button before paym
 3. The "leverage" tape variant — wanted or dropped?
 4. Where the PHONE is handed back: at the reunion (proposed) or mailed/dropped at Cle Elum?
 5. Encounter A (Malik's chase) is on the BRITTNEY path, so none of the above fires there — confirm Dom's "help during the chase" is therefore moot (Dom is never met on that path).
+
+## OWNER ANSWERS 2026-09-10 (third batch) — Malik draft corrections, applied
+
+- **Album opener**: never "Two Lives"; opens on a random one of Rain City Roll Call / King
+  of this County / Rain City Code (coded).
+- **Malik's first contact on the delivery path fires as the player LEAVES the Mercer rest
+  stop (HIT THE ROAD), just before driving** — not at mile 11 on the bridge.  C2 moves
+  there.  **C3 (Bellevue text) is DROPPED** — Malik has no reason to text at Bellevue.
+- **"Leverage" clarified**: if Malik ever doubts Dom'nique's ownership of the beat, the
+  player brings up the **NoiseCloud page** (the original, #1, Dom's name on it) — that is
+  the evidence move in Scenario 2 (confront/mediate), not a tape-for-money play.  The
+  "tape as leverage" branch stays dropped.
+- **The phone is returned to Malik at the Cle Elum record store** (Spin Cycle reunion).
+- Exclusivity confirmed: Dom'nique only on the delivery path (phone in car); Malik's chase
+  only with Brittney aboard; never both.
+- **Can one game reach 0★ or 5★?** Yes, from the CURRENT graph alone: start 50 (carry) →
+  keepJob +10, refuse founder +5, Kyle +15, Dom promise +5, tape +5 = **90 → 5★**; downside
+  50 → skip Mercer −15, bagman −10, pass Issaquah −30 = **−5 → 0★**.  The draft's contact
+  replies (±2–5 each, ignores −3/−5) and the mediation choices widen both ends, so the
+  proposed bands (<20/20/40/60/75/90) are reachable without grinding.
