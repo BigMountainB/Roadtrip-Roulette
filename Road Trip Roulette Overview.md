@@ -204,6 +204,15 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-09 (pt 10) — Owner beat: Malik CALLS the phone when Brittney stays (notes draft)
+
+Owner: the safeguard is Malik, not software — if Brittney doesn't get in the car he calls
+the phone expecting her and is surprised to hear the player.  Drafted in the working notes
+as `mercer_malik_call` (road beat ≈ mile 11, phone/radio balloon's first appearance, fires
+on `keepJob` and `skippedMercer` with different first lines, not on `ride`/`pass`; artist-flag
+line variant; brief D or a crop of the existing locked-phone-in-car art).  Clarified for the
+owner: story drafts are in CLAUDE_WORKING_NOTES.md, not on the artifact page.
+
 ### 2026-09-09 (pt 9) — Seattle opening draft v2: Chat's red-pen + owner's fan/artist branch applied; two code-truth corrections
 
 Chat approved the six-beat structure with markup; owner added a "fan / fellow artist"

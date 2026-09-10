@@ -1636,6 +1636,602 @@ Do not turn the opening into a biography questionnaire. The player need not name
 
 For the permanent comic, Beat 2 may normally be omitted. If the fan/artist flag receives a later payoff, the finished book may include the recognition as a small setup inset or incorporate its wording into a Malik relationship strip so the payoff remains legible.
 
+## Mercer / Brittney story direction — OWNER CANON + REVIEW DRAFT 2026-09-09
+
+### Owner-established character and relationship canon
+
+- Brittney is immediately physically attracted to the player.
+- The player is more her genre/type; Brittney is not really into Hip-Hop/Phonk.
+- Malik is Brittney's boyfriend at this point, but he is more attentive to his music career than to Brittney, her needs, or her desires.
+- Malik and Brittney had plans to attend StageWagon together. Malik abandoned those plans to focus on the album.
+- Brittney's central goal is still **getting to StageWagon to meet her friends and party**. Missing it would produce extreme FOMO; use contemporary twenty-something language naturally and sparingly rather than making every sentence slang.
+- The player is simultaneously managing the album promise, transporting Brittney, and responding to her practical/emotional needs.
+- Brittney relationship scoring remains: full support **+5**, partial/half support **+3**, refusal/no support **+0**. Her later trust, affection, fear, and ending must visibly reflect the accumulated pattern plus the player's behavior in Malik-related conflicts.
+- Brittney began as a hitchhiker/passenger to care for and keep happy. The expanded story should preserve that accessible premise while giving her desires and decisions beyond being a meter.
+
+### Malik confrontation and chase — owner-approved direction to develop
+
+Malik catches up with the player and Brittney at the North Bend freeway exit. His core accusation is:
+
+> **“You took my phone and my girl? What kind of fan are you?”**
+
+This is an excellent payoff to the player's Seattle fan/artist response. Provide alternate wording when the player never claimed to be a fan; do not let Malik reference a choice the player did not make. Suggested neutral variant:
+
+> **“You took my phone and my girl? What kind of delivery is this?”**
+
+Malik drives the Hip-Hop/Phonk genre vehicle. The confrontation becomes a freeway chase. The player must land three successful weapon hits on Malik before his vehicle spins out in the snow and stops pursuing.
+
+Claude must resolve before implementation:
+
+- Whether “use 3 weapons” means three **successful weapon hits** or three **distinct weapon types**. Recommended default is three successful hits so the sequence cannot become unwinnable when the player's inventory lacks three distinct weapons.
+- Guarantee the player has adequate chase resources through temporary pickups, authored loadout, or another fair mechanism.
+- Define failure behavior: Brittney fear/nerve change, album/phone consequence, retry, alternate story branch, or ordinary crash rules.
+- Malik must survive the snow spinout unless the owner explicitly changes the story tone. Show defeat/embarrassment, not implied death.
+- Brittney needs reactions during the confrontation. Her response should depend on whether the player protects her, escalates recklessly, attempts to surrender her/phone, or previously prioritized Malik's album over her.
+- The chase must not erase the Dominique/album branch logic. Clarify whether the phone is still with the player at North Bend, whether Kyle/Issaquah has already been visited, and what Malik is actually trying to recover on each route.
+
+### Mercer opening — tightened conversation draft
+
+Owner draft, lightly edited for rhythm and natural speech while preserving intent:
+
+**Brittney:** “Welcome to Sip-N-Go, hon! What can I do to—uh—for you?”
+
+**Player:** “You Brittney? Malik asked me to bring you one of his phones.”
+
+**Brittney:** “Ugh. Even when Malik isn't here, it's still about Malik.”
+
+**Player:** “Sorry. I'm not trying to get between you two.”
+
+**Brittney:** “Maybe I wish you would. I'm not even into hip-hop.”
+
+**Brittney:** “Malik and I had StageWagon plans. He blew me off for his album.”
+
+**Brittney:** “Wait—you should come with me. You can use Malik's ticket.”
+
+This intentionally moves fast because immediate attraction is owner canon. The scene still needs visual acting—Brittney clocks the player, changes tone, and decides to invite them—so it reads as impulsive attraction rather than missing dialogue.
+
+#### Player choice 1 — full support (+5)
+
+**Player:** “That sounds incredible. I'm in. I'll meet you at my car when I'm done shopping.”
+
+This is enthusiastic support for Brittney's goal and clearly deserves +5.
+
+#### Player choice 2 — conditional support (+3), then a real fork
+
+**Player:** “I'm in—but I promised to drop this phone in Issaquah. It's on the way.”
+
+Brittney should not merely dislike the wording; she should identify the emotional problem:
+
+**Brittney:** “No. I'm done letting his album hijack my plans. Me or the phone.”
+
+Then give the player the meaningful follow-up:
+
+- Choose Brittney / abandon or reroute the phone: earns additional Brittney support, intensifies Malik's later anger, and must carry a real album consequence.
+- Keep the promise to Malik: Brittney may refuse to join, join with reduced trust, or require another persuasion beat. Do not award the same relationship outcome as choosing her.
+
+Claude should not assume the point total for the second-stage choice; present a recommended score/effect table for owner approval because it changes both the Country and Hip-Hop arcs.
+
+#### Player choice 3 — choose the artist promise (+0 Brittney)
+
+**Player:** “Sorry. I promised Malik. Artist to artist, I can't ditch his album.”
+
+This wording is valid only if the player previously identified as an artist. Otherwise use a promise-based variant without invented history:
+
+**Player:** “Sorry. I gave Malik my word. I have to finish the delivery.”
+
+**Brittney:** “Whatever, dude. We would've had a feral-ass time. Need anything else?”
+
+Then the Sip-N-Go storefront opens. “Feral-ass time” is recommended over “sloppy-ass time”: it sounds more like contemporary party/FOMO language and is less likely to imply only intoxication or sex. If the owner prefers the original phrase, preserve it.
+
+### Three additional StageWagon objectives for Brittney
+
+These are the three best additions because each creates action, reveals character, and can pay off at the concert. They should supplement—not replace—the driving-care requests.
+
+#### 1. The pre-concert supply run: drinks, ice, and responsibility
+
+Brittney wants beer/party supplies before reaching Vantage because her friends expect her to arrive stocked. This creates a practical stop with relationship choices:
+
+- Full support (+5): help her assemble a sensible concert kit—drinks, water, ice, food—and protect the schedule.
+- Partial support (+3): buy only part of it or insist on a strict time/budget limit.
+- No support (+0): refuse, moralize, or make her friends solve it.
+
+Avoid making alcohol acquisition depend on illegal behavior. Establish that both characters are of legal drinking age if beer is explicitly purchased. The better joke is not “can we get away with buying beer?” but Brittney treating the cooler like a military logistics operation while forgetting water, ice, or a bottle opener.
+
+Payoff at StageWagon: the prepared supplies help Brittney enter her friend group confidently; poor preparation creates an awkward but comic arrival and changes how she describes the trip.
+
+#### 2. Reconnect with her friends and secure the meetup/campsite
+
+Brittney needs to locate her friends before service deteriorates, gates close, or the group relocates. Her phone may be dying, damaged, out of data, or full of contradictory group-chat messages. The player helps her choose where/when to rendezvous.
+
+- Full support (+5): stop safely, help charge/contact/navigate, and protect the agreed meetup.
+- Partial support (+3): lend power/navigation while continuing to drive, accepting some risk of missing them.
+- No support (+0): dismiss it as her problem or keep driving past the rendezvous.
+
+This gives Brittney a social world beyond Malik and makes StageWagon concrete. Her friends can later validate or question the relationship she formed with the player. It also creates a clean source for contemporary language: **“If they move campsites again, my FOMO is going to become a medical condition.”**
+
+#### 3. Shed the Gas-N-Go version of herself before arrival
+
+Brittney left work impulsively in her uniform. She needs clothes, makeup/toiletries, or a safe place/time to change before meeting her friends and entering the concert. Treat this as identity and dignity, not a makeover imposed by the player.
+
+- Full support (+5): protect her privacy/time and help recover or buy the one thing she says she needs.
+- Partial support (+3): allow a rushed change but complain about the delay or budget.
+- No support (+0): dismiss the need and force her to arrive visibly in work mode.
+
+Payoff: her StageWagon arrival art changes subtly—confident and self-directed, improvised/mixed, or still wearing evidence of the shift she fled. This is a strong relationship panel because it shows whether the player treated her as a person rather than cargo.
+
+### How these objectives form a real Brittney arc
+
+The three objectives produce a clean emotional progression:
+
+1. **Supplies:** does the player support what Brittney wants to do?
+2. **Friends/meetup:** does the player respect the relationships and destination that matter to her?
+3. **Change/decompress:** does the player respect Brittney herself when there is no gameplay reward for doing so?
+
+Malik's North Bend confrontation then tests the accumulated pattern under pressure. Brittney's concert outcome should use both the numeric relationship score and specific remembered behaviors. A high score produced only by sexual/flirt answers should not be treated identically to a high score produced by reliability, protection, and respect.
+
+### Additional dialogue-quality rule for Brittney requests
+
+Current need dialogue leans too heavily on immediate sexual innuendo. Brittney can be openly flirtatious—that is owner canon—but every request should also reveal mood, history, taste, fear, humor, or changing trust. Use innuendo as seasoning, not the only personality signal.
+
+Each request should contain:
+
+- A concrete need.
+- A line that sounds specifically like Brittney.
+- A clue about how the ride is affecting her.
+- Three responses that represent full support, partial support, and no support without making the “correct” button cartoonishly obvious.
+- A later callback or montage effect when the request meaningfully shapes the relationship.
+
+## Restart observation update — 2026-09-09, evidence only
+
+Owner reports restarting is **much better**, but observed one restart after leaving the game inactive for more than 30 minutes and then resuming/playing briefly.
+
+This pattern increases suspicion around the already-audited visibility-return path: after a sufficiently long hidden interval, current code manually calls `createResource()` for WebGL resource wrappers even when the context appears healthy. Recreating many large resources immediately after foregrounding could create a transient allocation spike and delayed OS termination/relaunch. The timing is consistent with that hypothesis, but one observation does **not** prove causality.
+
+Before changing it, instrument one session to record:
+
+- Hidden duration.
+- Visibility/focus/pageshow events on resume.
+- Whether the manual WebGL recreation branch ran and how many resources it touched.
+- Texture count and estimated decoded bytes before background, immediately after resume, and 30–120 seconds later.
+- `webglcontextlost/restored` events.
+- A persisted resume marker so an unexplained next launch can be correlated with the previous foreground event.
+
+Do not reintroduce broad reload-on-resume behavior. Do not assume the restart is fixed merely because frequency improved. This remains diagnosis/evidence unless the owner separately authorizes a code fix.
+
+## Story canon update — Classic Rock, Malik/Dom'nique, and Country payoff (OWNER 2026-09-09)
+
+### Classic Rock corrections and clarified direction
+
+- The character's canonical name is **Mykenzie**. Replace/avoid “McKenna” in new story discussion, metadata, dialogue, and art briefs unless an old stable key requires compatibility handling.
+- Mykenzie needs to reach her scheduled show and her expected ride has failed to appear. This urgency explains why she accepts help from a stranger and why she may tolerate a rude player response; she has heard worse and needs the ride.
+- The player is already an established performer in game canon. The problem was not ability—the player could not book shows in Seattle. Therefore the ImprompTour offer is both transportation adventure and the player's first path into booked live performances. Dialogue should remind the player of that existing setup rather than treating singing as a sudden talent reveal.
+- More Mykenzie/player dialogue should occur at rest stops, similar in frequency/function to Brittney's relationship interactions. Each exchange should build or damage the relationship and repeatedly force a choice between supporting Mykenzie and maximizing money/control.
+
+#### Clarification of the prior “not enough variation” comment
+
+The problem is not that solo/duet appears twice. Repetition can be excellent when the same question evolves. The current written choices at Washtucna and La Crosse are close to asking the same mechanical question twice without sufficiently different dramatic framing.
+
+Keep both decisions, but make their functions distinct:
+
+- **Washtucna: trust and generosity.** This is the first real proof of whether the player will share a stage and small payout with Mykenzie. The room is modest, the money is only $300, and the decision establishes the working dynamic.
+- **La Crosse: identity and recognition.** By now audiences came for the act. The $400 solo / $800 duet decision asks whether the player publicly recognizes a partnership or uses growing success to reclaim the spotlight.
+
+The later choice should explicitly remember the first. Examples:
+
+- Solo twice: Mykenzie recognizes a pattern of being used as transport/backup.
+- Duet twice: partnership feels earned and Colfax can refer to two shared stages.
+- Solo then duet: a redemption/growth path.
+- Duet then solo: a sharper betrayal because the player withdrew recognition once the money/audience grew.
+
+This creates variation through changing stakes and memory, not by inventing a different button shape.
+
+#### Partnership negotiation: what the earlier concern meant
+
+The Colfax negotiation is **supposed** to carry enormous emotional weight; that is not itself a problem. It defines whether Mykenzie is a partner, marquee artist, hired voice, backup, or someone the player is exploiting. The weakness was that too much of the relationship leading to it occurred through performance choices and hidden score rather than enough private dialogue.
+
+The owner-approved solution is additional rest-stop conversation. These scenes should explore:
+
+- Whether the player values Mykenzie's voice or merely its earning power.
+- Who selects songs, books rooms, pays costs, and gets credited.
+- Mykenzie's frustration with Nan and unreliable people.
+- The player's Seattle history: talented performer who could not get booked.
+- Whether flirtation represents genuine affection, playful survival, or manipulation.
+- How each character defines “our tour” before legal/payment language appears.
+
+#### Does the negotiated partnership need another external test?
+
+Not necessarily. The negotiation may itself be the culmination if the expanded rest-stop scenes and remembered Washtucna/La Crosse choices have already tested the relationship. Do not add a contrived betrayal simply because a structural checklist says “test the partnership.”
+
+A short Pullman payoff is still needed so the agreement becomes visible:
+
+- Who is named first on the marquee.
+- Who speaks to the promoter.
+- How the money is divided.
+- Whether they enter the stage together.
+- Whether Mykenzie corrects someone who calls her the player's backup singer.
+
+That is payoff/confirmation, not necessarily a new crisis.
+
+### Nan: make her stranger, less lucid, and clearly unsafe to drive
+
+Owner direction: Nan is losing her mind, is not consistently lucid, and **should not be driving**. Her dialogue should be substantially more erratic and surprising. Comedy should come from confident discontinuity and Mykenzie's exhausted familiarity, while still allowing moments of affection or recognition so Nan is a character rather than only a diagnosis joke.
+
+Potential dialogue behavior:
+
+- Nan confuses the player with a former bandmate, mechanic, pastor, or granddaughter, then briefly becomes perfectly lucid.
+- She offers contradictory directions while parked.
+- She negotiates in obsolete prices or counts the same twenty twice.
+- She remembers a song lyric or Mykenzie performance detail with startling accuracy while forgetting why she came.
+- Mykenzie prevents Nan from resuming the drive, takes/confiscates the keys, or arranges a safe alternative. Do not let the story casually send an impaired Nan back onto the highway.
+
+#### Medication-cookie event
+
+Owner likes Nan giving them cookies into which she accidentally put her medication, causing the driver to experience the acid-like visual treatment formerly used in DUI.
+
+Develop this as fictional slapstick and a gameplay hazard without naming or inaccurately depicting a real medication. Requirements:
+
+- Nan offers homemade cookies during the Hatton scene.
+- Seed one visible clue that something is wrong: odd pill-bottle rattle, Mykenzie questioning the recipe, Nan calling them “morning cookies,” etc.
+- Give the player an actual choice to eat, save, share, or refuse; do not force an unknowable impairment as punishment without any tell.
+- If eaten, the effect begins after returning to the road and uses the former DUI psychedelic/acid-like visual system if it can be restored without reintroducing unrelated DUI branding or broken code.
+- The altered visuals need a finite, communicated duration and must remain playable/accessibility-safe. Reduced-motion mode needs a non-warping alternative.
+- Mykenzie's reaction should depend on relationship: concern/help, irritation, teasing, or recognition that Nan mixed something into the batch.
+- The event should confirm that Nan cannot safely drive and advance Mykenzie's family story, not exist solely as a random drug gag.
+- Do not use the cookies as a full relationship test unless the player knowingly ignores a warning; accidental consumption should not itself make the player morally bad.
+
+### Malik relationship arc — texts, record-store reunion, payout, and album reward
+
+Malik remains active after Seattle through text/call checkpoints. Replying thoughtfully helps the relationship; ignoring him hurts it. “Reply” should not automatically mean the best outcome—the actual reply may reassure, challenge, lie, or inflame him.
+
+Proposed contact sequence based on owner direction:
+
+1. **Bellevue exit:** Malik asks whether the phone reached Brittney.
+2. **After Issaquah:** Malik asks whether Kyle remastered the tracks.
+3. **Issaquah favor/payment offer:** Malik asks the player to deliver the thumb drive and promises payment on completion.
+4. **After North Bend / Dom'nique:** Malik calls after hearing from Dom'nique and asks the player to cut Dom out.
+5. **Record-store reunion:** Malik meets the player, resolves payment, and gives the player his formative collection plus his new tracks. This becomes the player's Hip-Hop/Phonk genre album gain.
+
+The contact UI should offer authored replies plus an explicit ignore/dismiss behavior. Ignoring must be distinguishable from temporarily closing the phone UI accidentally; do not penalize a missed input caused by an app close, interruption, or timeout without a clear choice.
+
+#### Malik payout table — owner canon
+
+All completed album-delivery outcomes give the player the Hip-Hop/Phonk album/collection reward. Cash depends on Malik relationship:
+
+| Malik rating | Cash payout | Album reward |
+|---:|---:|---|
+| 0 stars | $0 | Yes |
+| 1 star | Exactly enough to fill the player's current gas tank | Yes |
+| 2 stars | $500 | Yes |
+| 3 stars | $1,000 | Yes |
+| 4 stars | $1,500 | Yes |
+| Over 4 / 5 stars | $2,500 | Yes |
+
+For 1 star, calculate “fill current tank” from current fuel missing × current fuel price and define rounding/cap behavior. Display the dynamic amount before/with payment so it does not look arbitrary.
+
+The collection should feel personal: records/tracks that inspired Malik plus his newly remastered work. It is more emotionally effective than treating the genre unlock as a generic inventory grant.
+
+### Malik ↔ Dom'nique relationship pull/pull
+
+The core conflict is authorship, credit, loyalty, and money. Avoid a simplistic meter where every Dom gain automatically subtracts the same amount from Malik. Some choices should be genuinely zero-sum; harder truthful mediation should allow partial or full gains with both.
+
+Use two independent relationships plus remembered flags:
+
+- `malikRelationship`
+- `dominiqueRelationship`
+- `promisedDomCredit`
+- `toldMalikTruth`
+- `acceptedDomTape`
+- `finalCredit`
+- `bSidePressed`
+- `liedToEither` / contradiction tracking
+
+#### Scenario 1 — North Bend: hear Dom'nique out or dismiss him
+
+Dom'nique presents evidence that Malik used his beat.
+
+- **Back Malik without listening:** Malik +3, Dom'nique −5; quickest path, but locks out clean mediation and may make later evidence embarrassing.
+- **Promise Dom credit immediately:** Dom'nique +5, Malik initially −3 when told; establishes an ethical commitment.
+- **Listen without promising:** Dom'nique +3, Malik unchanged initially; preserves flexibility but risks looking evasive.
+- **Tell them to settle it themselves:** 0 or negative with both; live-only avoidance should have a real later cost.
+
+The evidence must be visually understandable so the player is not making an ethics choice based only on accusation text.
+
+#### Scenario 2 — Malik's post–North Bend call: cut Dom out, confront Malik, or mediate
+
+Malik asks the player to exclude Dom'nique. Recommended branches:
+
+- **Obey Malik:** “Your record, your call.” Malik +5, Dom'nique −5, maximum immediate Malik loyalty but worse authorship outcome.
+- **Confront Malik:** “It's his beat. His name goes on it.” Dom'nique +5, Malik −3 initially; may recover Malik points if the final record succeeds.
+- **Mediate:** “Your song stays yours. Dom gets producer credit. Nobody takes your money.” Malik +5 if his key concern is payment/ownership; Dom'nique +3 (“half win”) because he gets credit but no producer payment or ownership share.
+- **Demand a real split:** “Credit and a cut, or I don't deliver it.” Dom'nique +5, Malik −5 initially, but unlock a best ethical/collaborative ending if Malik later accepts.
+- **Lie:** tell Malik Dom was dropped while promising Dom credit. Short-term gains with both, severe penalty when the pressed label exposes the contradiction.
+
+This encodes the owner's proposed favorable Malik outcome: he keeps his payment/ownership, ultimately accepts Dom'nique's producer credit, gains +5, while Dom receives a partial relationship win rather than everything requested.
+
+#### Scenario 3 — Dom'nique's tape: cargo, courtesy, or leverage
+
+When Dom offers his ten-track tape:
+
+- **Carry it openly and tell Malik:** Dom +5, Malik may respect honesty (+1/+3) even if annoyed; unlocks legitimate B-side discussion.
+- **Carry it secretly:** Dom +3 initially; Malik −5 if discovered; creates contradiction payoff.
+- **Decline but keep the credit promise:** Dom relationship unchanged or +1; preserves main delivery safety.
+- **Use it as leverage against Malik:** potential cash/control gain, relationship loss with both.
+
+The tape should add cargo risk or another real responsibility so accepting every item is not an automatic optimal choice.
+
+#### Scenario 4 — Snoqualmie pressing: write the truth onto the object
+
+The label/B-side decision is the irreversible proof of what the player chose:
+
+- Malik-only credit: high Malik short-term outcome, Dom betrayal.
+- Stank Records ownership credit: institutional loyalty, potentially weaker personal outcomes.
+- Malik artist + Dom'nique producer: mediation outcome.
+- Malik artist + Dom producer + Dom B-side: strongest collaborative/expanded album outcome if the tape survived.
+- Dom-dominant or altered credit: only if story evidence and owner direction support it; do not silently erase Malik's authorship while correcting beat credit.
+
+Show the printed label clearly in the comic. Later dialogue must read the actual pressed credit, not merely the earlier promise.
+
+#### Scenario 5 — record-store resolution matrix
+
+At the final reunion, cash follows Malik's star table, while the album version and relationship payoff reflect both characters:
+
+- **High Malik / low Dom:** full Malik collection and cash, but a morally compromised or Malik-only pressing; Dom offers no future support.
+- **Low Malik / high Dom:** little/no Malik cash, base Hip-Hop/Phonk album still granted per owner rule, plus Dom's underground/B-side material if earned.
+- **Medium/high both through honest mediation:** best collaborative edition—Malik's inspirations, remastered album, correct producer credit, and Dom B-side if carried. Cash still follows Malik's rating rather than receiving an arbitrary bonus.
+- **High both through a lie:** cannot remain a best ending once the printed label reveals the contradiction; apply delayed relationship loss.
+- **Low both:** base album reward, minimal cash, no personal endorsement/support, and a colder comic ending.
+
+Dom'nique's relationship may also control non-cash help so the two meters are not both merely payout sliders:
+
+- North Bend warning/support during Malik's chase.
+- One or more guaranteed weapon pickups or tactical advice, if narratively justified.
+- B-side/underground tracks added to the album.
+- A later safe stop/contact in North Bend.
+- Producer liner note or comic epilogue acknowledgement.
+
+Do not let relationship grinding through texts erase a major betrayal at the label. Use milestone flags as gates/modifiers alongside star totals.
+
+### Brittney Country reward and checkpoint
+
+If treated well, Brittney buys/gives the player a Country mix/album made from her favorite music. This is the Country genre-album gain and should feel personal, paralleling Malik's collection reward.
+
+Recommended timing: **at or immediately after successful StageWagon arrival**, once her friends/party goal has visibly paid off. Giving it before the outcome weakens its meaning. A very high relationship can turn it into a hand-picked mix with a personal title/note; a merely successful ride can grant a more casual compilation.
+
+Use fictional artists/tracks unless the project has licensed music rights. The reward art can show a mixtape/playlist/album object without naming real contemporary songs.
+
+StageWagon is also a strong **mid-game celebration and checkpoint**:
+
+- Commit story/relationship/genre progress before entering the celebration.
+- Show Brittney reunited with friends and the consequences of the supply/meetup/clothing objectives.
+- Give the player a clear celebratory beat rather than immediately returning to driving UI.
+- Checkpoint restoration must return to a stable post-arrival state, not replay the reward or duplicate relationship/cash effects.
+- Whether low-relationship completion still grants a basic Country album or only high treatment grants it remains an owner decision; Claude should present a reward table before implementation.
+
+### Next writing priority
+
+Owner will return to Classic Rock later. For now:
+
+1. Preserve these Classic Rock corrections; do not continue treating the existing structure as invalid.
+2. Develop the Malik/Dom'nique choice matrix and ensure actual graph order supports it.
+3. Rework Brittney request dialogue and StageWagon objectives.
+4. Draft the StageWagon celebration/checkpoint and Country reward tiers for owner review.
+5. Do not implement Nan's cookie effect until the old DUI visual system is audited for branding, accessibility, and current compatibility.
+
+## Hip-Hop continuity + Brittney Ellensburg friend — OWNER CLARIFICATIONS 2026-09-09
+
+### Brittney objective selected: find/pick up her friend
+
+The owner prefers the friend-reconnection idea. Develop it into a real Ellensburg pickup:
+
+- One of Brittney's friends needs to be picked up in Ellensburg on the way to StageWagon.
+- How the player treats the friend affects how Brittney feels about the player.
+- This is not merely another errand meter. It reveals whether the player respects Brittney's social world when there is no direct cash reward.
+- The friend should observe and react to the player/Brittney dynamic, giving Brittney an outside perspective rather than making her feelings entirely score-driven.
+- Relationship outcomes should remember specific conduct: welcoming the friend, helping with belongings, flirting inappropriately, complaining about time, refusing the pickup, reckless driving, or treating the friend as an inconvenience.
+- The friend's presence can make Malik's later anger/chase funnier and more socially charged, but the friend needs dialogue/reaction during danger rather than disappearing.
+
+Before drafting, Claude should ask/propose: the friend's name, age, personality, visual identity, reason for being in Ellensburg, seat/cargo needs, knowledge of Malik, whether she witnesses the ambush, and the exact +5/+3/+0 behaviors.
+
+### Kyle returns both phone and thumb drive
+
+Owner correction: Kyle does **not** keep Malik's phone. At Issaquah he remasters/backups the tracks, gives the phone back, and also gives the player the thumb drive.
+
+- Malik's original phone remains narratively meaningful and must eventually be returned.
+- The remastered thumb drive becomes the important production/delivery object.
+- Revise any dialogue claiming “the phone stays with me.”
+- The phone is not important to Kyle after the remaster is complete.
+
+### Vantage ambush trigger and authorship
+
+Owner canon:
+
+- The Vantage ambush occurs only when the player **skipped Issaquah and did not give the phone to Kyle**.
+- Immediately before it, the phone lights up with Malik's name and a threatening text.
+- Malik sent the three Hip-Hop/Phonk cars—his “dogs”—in revenge for the apparent theft.
+- Afterward, a note communicates **DON'T STEAL FROM MALIK**.
+- Malik knows about the attack because he arranged it. Do not preserve ambiguity suggesting coincidence.
+- The story need not state whether Malik previously knew the beat was Dom'nique's. Leave that unconfirmed; what matters is how he responds when confronted.
+
+Owner's proposed pre-ambush text:
+
+> **“I just sent the dogs after you. Woof.”**
+
+This explicitly identifies Malik as the organizer. If the goal is for the player to connect the text and note, a less literal alternative is:
+
+> **“You missed Issaquah. My dogs are already on the road. Woof.”**
+
+Use either direct attribution or clue-based attribution. Do not use both plus explanatory narration, which would repeat the same fact three times.
+
+### Return-to-Issaquah recovery: recommended model and required clarification
+
+The post-ambush return to Issaquah allows recovery of the failed Hip-Hop mission. Owner language says to rewind that mission until Issaquah and erase choices made past Issaquah.
+
+A global rollback would also erase Dom'nique at North Bend, Snoqualmie credit/pressing, Cle Elum cargo/delivery, the Ellensburg friend pickup, relationships, purchases, cash, damage, inventory, and other unrelated world events. It could create time-travel logic and repeat-reward exploits.
+
+Recommended interpretation:
+
+1. Player physically turns/warps back to Issaquah after surviving the Vantage ambush.
+2. Preserve that the ambush occurred in story/comic history with an 'ambushSurvived' flag. Characters do not forget it.
+3. Reset only the **failed Hip-Hop delivery branch** to the Issaquah opportunity.
+4. Preserve unrelated Country/relationship/world choices unless logically impossible.
+5. Kyle remasters the tracks and returns phone + drive.
+6. Mark the skip/theft ambush resolved so it cannot repeat.
+7. On the second Vantage pass, use a small callback such as snow tracks or “QUIETER THIS TIME,” rather than replaying the chase or pretending it never occurred.
+
+If the owner truly wants all post-Issaquah choices erased, Claude must first inventory reversal of cash, items, cargo, relationships, purchases, damage, comic panels, checkpoints, and one-time rewards.
+
+**Owner decision still needed:** does “choices past Issaquah are erased” mean Hip-Hop mission choices only (recommended), or the entire world/run timeline?
+
+### Calling Malik out over Dom'nique's beat
+
+Owner canon: the player calls Malik out. **How** he does it determines the relationship result. Once evidence is established, “ignore forever” should not count as a complete ethical resolution.
+
+#### Constructive/private
+
+**Player:** “Dom played me the original. It's his beat. Credit him and keep your song.”
+
+- Gives Malik a face-saving path.
+- Malik can accept producer credit without surrendering artist ownership/payment.
+- Malik +5 if he accepts; Dom +3 if credit comes without money, or +5 if a later fair cut is included.
+
+#### Firm ultimatum
+
+**Player:** “His name goes on the record, or the drive doesn't reach the presser.”
+
+- Dom +5.
+- Malik drops initially because the player uses delivery as leverage.
+- Some Malik trust can recover if the record succeeds and the player remains honest.
+
+#### Accusatory/public
+
+**Player:** “You stole Dom's beat and called yourself number one. Fix it.”
+
+- Truth delivered badly; Malik loses more because humiliation is added.
+- Dom may appreciate defense but dislike becoming a public spectacle.
+
+#### Transactional / Malik-favorable mediation
+
+**Player:** “Give Dom producer credit. You keep the song and the money.”
+
+- This matches the owner-described favorable Malik outcome.
+- Malik +5 on acceptance.
+- Dom +3/half win: public credit, but no payment/ownership share.
+
+#### Deceptive
+
+Player tells each man what he wants to hear. Temporary gains collapse when the pressed label exposes the contradiction. This must not remain the best ending merely because the player accumulated text-message points.
+
+Possible Malik response without declaring what he knew:
+
+> **“You calling me a thief now, or you calling the record wrong?”**
+
+Artist/fan callback:
+
+> **“You said you were an artist. So tell me—whose name belongs on my record?”**
+
+The player can distinguish ownership of the song/performance from authorship of the beat. Malik need not have known originally, but becomes responsible for what he does after learning.
+
+### Remaining information that would materially help
+
+1. **Rollback scope:** Hip-Hop-only mission reset or literal whole-run rollback.
+2. **Phone/drive destination:** after Kyle returns both, who receives each and at which stop?
+3. **Ambush failure:** what happens if the player cannot land three hits or is destroyed?
+4. **Malik/Brittney status:** explicitly exclusive, effectively breaking up, or already considered over by Brittney?
+5. **Brittney's friend:** identity, Malik connection, seat needs, and whether she witnesses the ambush.
+6. **Dom'nique's desired remedy:** credit, royalties, ownership share, B-side, apology, or a combination?
+7. **Malik's desired final credit:** artist name, Stank label, exclusive beat credit, or payment/control?
+8. **Final record store:** is it Spin Cycle, who owns it, and why is Malik there after sending attackers?
+9. **Reconciliation ceiling:** can Malik return to five stars after ordering the ambush?
+10. **Country reward threshold:** base album for every successful arrival, or only when Brittney is treated well?
+
+Claude should propose defaults rather than blocking all drafting, but flag defaults that change endings, rewards, or cross-story continuity.
+
+## Vantage recovery correction — OWNER TIMELINE + CURRENT-CODE FINDING 2026-09-09
+
+This section corrects the earlier rollback concern.
+
+### Correct branch chronology
+
+If the player chooses Brittney at Mercer, Malik's phone is left on Mercer Island and the Hip-Hop mission resets/ends for that run. The player can then carry Brittney and later pick up her Ellensburg friend.
+
+If the player keeps Malik's delivery:
+
+- Brittney remains at Mercer; neither Brittney nor her friend is in the car.
+- Passing Issaquah locks Malik's phone and removes the temporary Hip-Hop/Phonk radio access.
+- Because the music no longer plays, Dom'nique does not hear Malik's track at North Bend.
+- Therefore the skip-Issaquah ambush branch has no Dom'nique, Snoqualmie credit, Cle Elum record, Brittney, or Ellensburg-friend choices to erase.
+
+The owner's mission rewind is consequently much narrower and safer than previously inferred. It restores the player to the missed Issaquah opportunity on the phone-delivery path; it does not need to reverse Country or Dom'nique history because those branches never occurred.
+
+Claude must encode these gates explicitly and test that mutually exclusive branches cannot leak into one another:
+
+- Locked phone → no granted Hip-Hop playback.
+- No playback → no Dom'nique recognition encounter.
+- Phone left at Mercer → no Vantage theft ambush.
+- Brittney passenger path → no simultaneous Malik-phone delivery inventory.
+- Issaquah completed → no skip ambush.
+
+### What the current “U-turn” actually does
+
+Current production code does **not** render a U-turn:
+
+- The old ambush kills the player and opens 'GameOverScene'.
+- A 'BACK TO ISSAQUAH' button commits 'vantage_recovery.warp'.
+- It teleports the run to 'ISSAQUAH_WARP_MILE', currently 17.5 miles / approximately half a mile before the exit.
+- 'GameOverScene._restartAtCheckpoint()' passes 'crashRestartScore', so the normal wreck/pass-out retry rule halves cash.
+- The player then drives east again.
+- The old code unlocks the phone as soon as the warp choice is committed.
+
+That behavior was designed for “rammed until dead.” It conflicts with the newer owner direction where the player lands three weapon hits, Malik's final car spins into the snow, and the player survives.
+
+### Recommended new presentation: cinematic turnaround, not simulated westbound driving
+
+The road game is authored as eastbound progression. Do not attempt to make the player steer west for roughly 120 miles through reversed traffic/scenery merely to literalize a U-turn.
+
+After the player defeats the three cars:
+
+1. Hold on Malik's final car spinning harmlessly into the snow.
+2. Show the locked phone and the 'DON'T STEAL FROM MALIK' note/aftermath.
+3. Present a choice:
+   - **TURN BACK TO ISSAQUAH — Finish what you promised**
+   - **KEEP GOING — End Malik's mission**
+4. If TURN BACK is selected, show a short three-panel travel transition:
+   - Player/car at the snowy roadside, looking west.
+   - A clean map line animating from Vantage back toward Issaquah.
+   - Caption: **120 MILES WEST · ONE VERY QUIET DRIVE**
+5. Fade through the horizontal loading screen.
+6. Resume approximately 0.5 mile before the Issaquah exit with the phone still locked.
+7. The phone unlocks only when the player takes/reaches the correct Issaquah handoff, not merely because a menu button was pressed.
+8. After Kyle remasters and returns phone + drive, mark the ambush resolved. It must not repeat on the next eastbound pass.
+
+Preserve the ambush in comic history. The mission state rewinds; the character/player memory does not.
+
+### Recommended penalty
+
+The return already imposes a substantial natural penalty: the player must replay the eastbound route from Issaquah to Vantage and has delayed the delivery. Do not stack the old arbitrary half-cash crash penalty on top when the player actually won the chase.
+
+Recommended consequences:
+
+- Preserve damage sustained during the ambush.
+- Preserve weapons/ammunition consumed during the ambush.
+- Preserve Malik's relationship loss for skipping Issaquah; returning permits recovery but does not erase the betrayal.
+- Add an in-world time penalty for the westbound return montage, approximately the route's believable travel time. Claude should reconcile the exact minutes with the game's compressed clock and ending schedule.
+- Resume with the player's existing cash—**no automatic 50% cash loss**.
+- Do not simulate invisible westbound fuel consumption if it would strand the player immediately on arrival. The re-driven eastbound distance already consumes fuel and player time. If a fuel penalty is desired, show and cap it explicitly, with a guaranteed reachable fuel stop.
+- Reduce the best possible Malik cash outcome only if the relationship system naturally produces that result; do not add a second hidden payout punishment.
+
+If balancing shows that replaying Issaquah → Vantage is excessively long, use a shorter authored recovery segment/checkpoint after Kyle rather than deleting the ambush from memory. Never replay the three-car attack after the phone was properly remastered.
+
+### Answer to “should the player start again from Vantage and forget the cars?”
+
+No. Starting at Vantage and pretending the attack never happened makes “return to Issaquah” meaningless and breaks the comic's cause/effect. Better:
+
+- The player remembers and the comic retains the attack.
+- The failed Hip-Hop delivery resumes at Issaquah.
+- The player repeats only the necessary eastbound route.
+- The resolved ambush does not fire a second time.
+- A small second-pass Vantage callback may acknowledge the prior fight without another chase.
+
 ### Seattle opening — REVISED DRAFT v2 (Claude, 2026-09-09, red-pen + owner addition applied)
 
 Accepting the six-beat structure and every markup point, with two code-truth corrections:
@@ -1735,3 +2331,154 @@ guitar case, or the phone in Malik's hand.  **Brief B withdrawn.**
 - Approve v2 copy as final so I can settle node ids (renames change dialogue keys).
 - Confirm "artist" stays broad, or name it "musician" given the guitar case.
 - Mercer next, then review Seattle→Mercer as one strip before implementing the slice (Chat's sequence) — agreed unless the owner says otherwise.
+
+## Chase correction — OWNER 2026-09-09 (supersedes the prior U-turn recommendation)
+
+ChatGPT/Codex incorrectly conflated two separate encounters. **Discard the “cinematic turnaround after Malik spins out” recommendation.**
+
+### Encounter A — Malik personally chases the player after North Bend
+
+- This chase is Malik alone, driving the Hip-Hop/Phonk vehicle.
+- It occurs after North Bend in snow or rain.
+- It is separate from the later three-car Vantage punishment.
+- The player lands three successful weapon hits on Malik.
+- Malik's vehicle spins out/crashes in the snow and stops pursuing.
+- The player continues east. There is no reason to return to Issaquah merely because Malik crashed.
+- Do not show the 'BACK TO ISSAQUAH' recovery choice after this encounter.
+
+### Encounter B — Malik's three cars attack near Vantage
+
+- This is the skip-Issaquah punishment branch.
+- Malik is not personally one of these three cars.
+- It occurs only when the player kept Malik's phone, skipped Issaquah, allowed it to lock, and continued toward Vantage.
+- This branch has no Brittney passenger, Ellensburg friend, or Dom'nique encounter, as documented above.
+
+### Hospital consequence replaces the U-turn recommendation
+
+After the relevant player car accident, the owner wants the player to wake in the **Ellensburg hospital** with:
+
+- **50% health**.
+- A sizable hospital bill that takes **all current money**.
+
+This is a strong visible penalty and is preferable to an unexplained U-turn plus a generic 50% cash reduction. The hospital provides a concrete consequence, a comic transition, and a believable recovery point west of Vantage.
+
+Suggested presentation:
+
+1. Impact/blackout panel.
+2. Black or white transition with muffled medical dialogue.
+3. Hospital panel: player wakes in Ellensburg.
+4. Status caption: 'HEALTH 50% · CASH $0'.
+5. Bill/receipt gag establishing where the money went.
+6. Player resumes from an Ellensburg-area checkpoint with the ambush marked as already experienced so it cannot immediately repeat.
+
+Do not silently reuse the old 'BACK TO ISSAQUAH' button, warp explanation, or crash-retry half-cash rule. The owner has replaced that concept with a hospital recovery that removes all current cash.
+
+**One continuity point remains to confirm:** this note currently assumes the hospital follows the three-car Vantage ambush/player wreck, while Malik's personal North Bend chase ends with Malik crashing and the player continuing. If the owner instead intends the North Bend chase to wreck both cars and send the player to the hospital, update the trigger explicitly before implementation.
+
+### REQUIRED NEW ART — Ellensburg hospital recovery
+
+Owner decision: create new artwork showing the player waking in the Ellensburg hospital while holding a **heavy hospital bill**.
+
+#### Narrative purpose
+
+- Makes the all-cash penalty visible and understandable rather than silently changing the HUD.
+- Confirms that the player survived the wreck but paid a severe price.
+- Establishes Ellensburg as the recovery location.
+- Creates a darkly comic breath after the violent Vantage ambush.
+- Provides the permanent comic with a clear consequence panel.
+
+#### Primary art brief
+
+- **Proposed key:** 'hiphop.vantage_hospital.wake'
+- **Filename proposal:** 'ellensburg_hospital_01_player_wakes_with_bill.png'
+- **Story role:** aftermath / consequence.
+- **Comic inclusion:** required.
+- **Priority:** major.
+- **Preferred composition:** WIDE 16:9 source, composed so it can also tolerate an ordinary crop.
+- **Location:** modest Ellensburg hospital room, morning or washed-out daylight after the nighttime/poor-weather wreck.
+- **Player:** awake but battered in a hospital bed, visibly confused and sore; bandage, bruising, or medical monitoring may communicate 50% health without making injuries graphic.
+- **Main action:** player holds an absurdly substantial itemized hospital bill. It should look physically heavy—a thick accordion-fold statement, long cascading printout, or dense stack of pages pulling the player's hands downward.
+- **Expression:** first disbelief, then exhausted recognition that the bill has taken everything.
+- **Comedy:** grounded visual exaggeration. The bill may continue over the bedrail or pool onto the floor, but the scene should still feel like a real consequence rather than a pure fantasy cutaway.
+- **Continuity objects:** damaged personal effects/clothing from the wreck may sit nearby. Do not show Malik, Brittney, her friend, or Dom'nique; this locked-phone ambush branch does not include them.
+- **No baked dialogue, dollar figure, logo, hospital name, or UI text in the art.** Render bill wording/status as comic/UI overlays so the actual cash amount and localization remain dynamic.
+
+#### Composition and protected regions
+
+- Keep the player's face, both hands, and the recognizable mass of the bill visible.
+- The bill is a story-critical object and receives its own high-priority 'protect' box, not merely part of the player's body box.
+- Preserve recognizable hospital context: bedrail, monitor/IV or wall fixture, and daylight/window or room signage without using real institutional branding.
+- Leave usable negative space in the upper-left or upper-right for a location/time caption and one short balloon.
+- The lower 30–35% may be covered temporarily by the live response tray. Do not place the player's face or the only readable portion of the bill exclusively in that region.
+- Prefer the player in the middle-left or middle-right third rather than dead center, allowing balloon placement opposite the face.
+- Avoid cropping the end of the bill so tightly that it looks like an ordinary single sheet.
+
+#### Suggested overlay copy
+
+Location caption:
+
+> **ELLENSBURG GENERAL · SOME TIME LATER**
+
+Status caption:
+
+> **HEALTH 50% · CASH $0**
+
+Player options for a short reaction balloon:
+
+- **“Do I own the hospital now?”**
+- **“This bill has chapters.”**
+- **“Malik could've just asked for the phone back.”**
+
+Use only one reaction in the final panel. The third line connects cause and consequence most clearly; the first two are broader visual jokes.
+
+#### Optional second panel — only if pacing needs it
+
+A narrow follow-up may show the bill unrolling past the bed and a discharge nurse waiting with a clipboard. Do not commission it automatically. First test whether the single wide panel plus captions lands the consequence; one strong panel is preferable to redundant hospital art.
+
+#### Runtime consequence attached to this beat
+
+- Set health to exactly 50% of the applicable maximum.
+- Set current cash to $0 and display the loss as a hospital charge.
+- Preserve other inventory/state unless separately damaged/lost by an authored ambush rule.
+- Mark the Vantage three-car ambush as experienced/resolved so hospital resume cannot loop directly back into it.
+- Resume from the intended Ellensburg-area checkpoint only after the hospital beat and status consequence are committed idempotently.
+- Reopening an old save or comic must not charge the hospital bill a second time.
+
+### Owner addition — Malik checks in by PHONE when Brittney doesn't get in the car (2026-09-09)
+
+Owner: "The phone might not check in, but Malik checks in on the phone if Brittney doesn't
+get in the car. He thinks he's calling Brittney, but is a little surprised to hear Player."
+
+So the safeguard is Malik, not software: on the `keepJob` path (Brittney stays on her double)
+the phone RINGS in the car after Mercer.  Malik expects Brittney's voice and gets the
+player's.  This is a new post-Mercer road beat, it belongs in the permanent comic
+(it's a decision→consequence pair with `keepJob`), and it uses the **phone/radio balloon**
+(squared body, zig-zag tail) — first appearance of that balloon type in the book.
+
+Draft (red-pen please) — `mercer_malik_call` · consequence · ORDINARY · road beat ≈ mile 11
+(East Channel Bridge, just after the Mercer exit) · art: NEW brief D · comic: true
+- Caption: "EAST CHANNEL BRIDGE · MILE 11 — the phone in the cupholder lights up: MALIK"
+- Malik (phone balloon): "Britt? You in the car?"
+- Player: "It's the driver. She kept her job."
+- Malik (phone balloon, beat): "…Aight. Then it's on you now."
+- Malik (phone balloon): "Kyle. Issaquah. Don't make me call twice."
+On the `playerArtist` flag, swap the last line for: "You said you were an artist. Act like it."
+
+Does NOT fire on the `ride` path (Brittney is in the car and answers herself — optional
+tiny live-only beat: she declines the call: "Not tonight, Malik.").  Does NOT fire on
+`pass` (no phone).  If the player skips Mercer entirely with the phone (`skippedMercer`),
+the same call fires with a different first line — "Britt says you never showed." — and
+this is where the Issaquah lock warning is repeated, so the code's real lock trigger
+(passing Issaquah) is set up by a voice, not a rule.
+
+Brief D — `mercer_05_malik_call` (ORDINARY 16:9): interior at night on the bridge, the phone
+lit in the cupholder with MALIK on screen, the player's hand hovering, Seattle skyline
+falling away in the mirror.  Upper half clear for three phone balloons (upper-right stack)
++ the player's line upper-left; phone must stay visible below the balloons and above the
+tray band.  Alternative if no new art: reuse `vantage_00_locked_phone_in_car.png` cropped to
+the phone (it is the same object motif) — test before commissioning.
+
+Wiring note: this is a ROAD beat (like the Vantage ambush), not a rest-stop tile — it needs
+a road-event emission site (mile trigger + flag guards) and the live strip's phone-call
+presentation; the existing texts/`_showTextMsgBox` HUD could carry the live version until
+the strip exists.
