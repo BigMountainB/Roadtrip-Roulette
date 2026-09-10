@@ -204,6 +204,19 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 2) — Owner corrections: Malik sends the player to MERCER only; hospital never with Brittney aboard — committed to memory
+
+Owner: "Malik just says then Mercer is on your way. He is not planning to send player to
+Kyle's house… The only reason player goes to Kyle's house instead of Brittney is because
+Brittney needs to work a double shift.  Also there is no hospital scene when Brittney is in
+the car… you should be committing all of this to your memory."  Applied in the notes: Beat 2
+line 5 = "Then Mercer's on your way."; Beat 3 no longer routes the player to Kyle (Brittney
+runs it to "my engineer"); Beat 5a terms = "Don't skip Mercer. Brittney knows the rest."; the
+Issaquah lock rule is first spoken by BRITTNEY at Mercer (keepJob/keepPromise) and echoed
+in Malik's call; skipped-Mercer keeps the existing redirect text.  Hospital = skipped-
+Issaquah-with-phone path only.  Persistent memory file `project_rtr_story_canon` created
+with the full owner canon + chronology gates so these details survive sessions.
+
 ### 2026-09-10 (pt 1) — Seattle v3 (musician exchange), full Mercer sequence draft, Haylee profile — drafts only
 
 Working from the notes with the newest owner-dated corrections as authority (2026-09-10:

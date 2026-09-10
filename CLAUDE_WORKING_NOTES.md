@@ -2718,3 +2718,41 @@ any prompt, sheet, portrait, panel, or dialogue key.  Everything below is PROPOS
 9. **Haylee proposals to confirm or change:** age 23, college-town reason, cooler/duffel cargo mechanic, the "separate small meter," the +5/+3/+0 conduct list, and whether she knows Malik.
 10. **Haylee dialogue keys / node ids:** `ellensburg_haylee` (pickup), `haylee_road_*` (live), plus her `meanwhile` strip id — settle before art prompts so keys never rename.
 11. **Country reward threshold** (base album for every arrival vs treated-well only) and the Malik 1-star "fill the tank" rounding remain open from the 09-09 list — unchanged.
+
+## OWNER CORRECTIONS 2026-09-10 (later) — authoritative over Seattle v3 / Mercer draft above
+
+1. **Malik only says "Then Mercer is on your way."**  He is NOT planning to send the player to
+   Kyle.  The player's job from Malik is the Mercer handoff to Brittney, full stop.  The ONLY
+   reason the player ever goes to Kyle's in Issaquah is that Brittney was put on a double
+   shift and can't run it herself.
+2. **No hospital scene when Brittney is in the car.**  The Ellensburg hospital happens only
+   when the player skipped Issaquah with Malik's phone (three-car ambush path).  With
+   Brittney aboard the phone was left at Mercer, so the player can't even be on that path.
+
+### Corrections applied to the drafts (Claude, same day)
+- **Seattle v3 Beat 2, line 5:** "Then Mercer's on your way." (drop "and Issaquah").
+- **Seattle v3 Beat 3:** Kyle/Issaquah leave Malik's mouth as the player's task.  Revised:
+  - "My whole album's on this. One clean copy."
+  - "Needs a remaster before it drops Friday."
+  - "Brittney's running it to my engineer — she's stuck on shift at Mercer."
+  - "I headline at midnight. You're already going east."
+  - "Then, artist to artist — you know how important this phone is to me."
+  (He can name the engineer's existence; he does not route the player past Mercer.)
+- **Seattle v3 Beat 5a (carry terms):** replace "Get it to Kyle. Blow past Issaquah…" with:
+  - "Don't skip Mercer. Brittney knows the rest."
+  - "Till then, Stank Records owns your radio."
+  - crew: "Don't scratch the screen!"
+  The lock rule is now learned at MERCER, not Seattle:
+  - **M3 `keepJob` / M3b `keepPromise`** — Brittney adds one line as she hands the errand
+    over: "Kyle's in Issaquah. Don't drive past him with it — Malik set it to lock if it thinks
+    it's stolen."
+  - **M5 Malik call** (keepJob/keepPromise): "Kyle. Issaquah. Brittney told you the rest."
+  - **Skipped-Mercer** (`skippedMercer`): the existing Malik text already redirects to Kyle —
+    it is the first time the player hears "Issaquah"; the call variant keeps "Britt says you
+    never showed."
+- **Hospital:** nothing in the Mercer/Haylee drafts referenced it; noted here so no future
+  Brittney-path draft ever does.  Q8 stands (Haylee never sees a chase on her path) — the
+  hospital is not an answer to it.
+- Q2 ("plates line vs 'Which way you headed?'") is unchanged; Q1–Q11 otherwise unchanged.
+- Committed to Claude's persistent memory (`project_rtr_story_canon`) so these do not drift
+  across sessions.
