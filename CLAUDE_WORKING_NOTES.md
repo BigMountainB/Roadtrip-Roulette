@@ -2800,3 +2800,67 @@ any prompt, sheet, portrait, panel, or dialogue key.  Everything below is PROPOS
 - Q11: Country album reward threshold; Malik 1-star "fill the tank" rounding.
 - Does Brittney know Malik tracks the phone?  (Affects her Mercer lines and whether she
   warns the player.)
+
+## ART REQUESTS FOR CHATGPT — consolidated list, 2026-09-10 (Claude)
+
+One place for every image the current drafts need.  Format per Chat's review-list protocol:
+key · tile ratio · priority · NEW vs CROP-TEST · brief (or pointer).  Source frame for all
+new art stays 1672×941 (16:9) unless a tall/square export is called for.  All balloons are
+overlaid at runtime — **no baked text, logos, dollar figures or UI in any image.**  Brittney
+is in the Gas-N-Sip uniform everywhere before Vantage (wardrobe lock).  Haylee is
+**strawberry blonde** in every frame.  Owner approval of the underlying dialogue is still
+pending for Seattle v3 / Mercer / Haylee — commission in the order below.
+
+### Group 1 — Seattle opening (Hip-Hop) — 2 new, 0 crops
+| # | key / file | ratio | pri | type | brief |
+|---|---|---|---|---|---|
+| 1 | `hiphop.seattle_stakes` → `seattle_06_stakes_phone.png` | WIDE 16:9 | **blocking** | NEW | Malik under the lot lights holding the cracked phone up between himself and the player; crew soft-focus behind; the player's car nose + PLATES in frame right.  Urgent, not pleading.  Negative space upper-LEFT and upper-RIGHT (two balloon stacks); phone + Malik's face visible with and without the lower 35% tray. |
+| 2 | `hiphop.seattle_pullout` → `seattle_07_pullout_phone_cupholder.png` | NARROW 2:3 | important | NEW (or crop of an existing dash asset if one honestly fits) | Night dash, the phone glowing in the cupholder, road ahead; Seattle in the mirror.  Top 30% clear for the caption.  Object motif that recurs when Malik calls. |
+| — | Beats 1, 2, 4, 5a use existing `seattle_01/02/03/04`; Beat 5b reuses `seattle_05` (crop-tested by eye — sky band free). | | | | |
+
+### Group 2 — Mercer Island — 1 new, 1 crop-test, 1 conditional
+| # | key / file | ratio | pri | type | brief |
+|---|---|---|---|---|---|
+| 3 | `hiphop.mercer_ultimatum` → `mercer_05_ultimatum.png` | ORD 16:9 | **blocking** (new fork) | NEW | Counter view: the cracked phone on the counter between them, Brittney arms folded, name tag half-unpinned, the player's hand near the phone.  Phone = its own high-priority protect box.  Upper half clear for two balloons. |
+| 4 | `hiphop.mercer_counter` (M1 welcome) | ORD 16:9 | important | CROP-TEST `mercer_01_brittney_double_shift.png` first | If it reads as "at the register, first glance," no new art.  Else brief E: Brittney mid-"welcome," lottery display, phone NOT yet on the counter; caption + her balloon upper-left, her face upper-right third. |
+| 5 | Country `mercer_departure` | ORD | done | existing `country/mercer_island/mercer_03_quit_and_join_player.png` | — |
+
+### Group 3 — Road beats after Mercer — 1 crop-test
+| # | key / file | ratio | pri | type | brief |
+|---|---|---|---|---|---|
+| 6 | `hiphop.mercer_malik_call` | ORD 16:9 | important | CROP-TEST `vantage_ambush/vantage_00_locked_phone_in_car.png` (same object motif) | If the crop doesn't read as "MALIK calling on the bridge," brief D: interior at night on the East Channel Bridge, phone lit in the cupholder, the player's hand hovering, skyline in the mirror.  Upper half clear for three phone balloons (upper-right) + the player's line (upper-left). |
+
+### Group 4 — Haylee (Country) — 3 new
+| # | key / file | ratio | pri | type | brief |
+|---|---|---|---|---|---|
+| 7 | `shared/characters/haylee_reference_sheet.png` | sheet | **blocking** for all Haylee art | NEW | 24, graduate student at Central University.  **Strawberry-blonde** hair in a loose braid under a sun-faded cap, freckles, sunburnt shoulders, cutoffs + thrifted band tee, boots.  Front / three-quarter / seated-in-back-seat poses; with and without cap. |
+| 8 | `npc/haylee_portrait.png` (rest-stop portrait spec, 1086×1448) | portrait | important | NEW | Close-up from the sheet, dry half-smile, cap on. |
+| 9 | `country.ellensburg_haylee` → `ellensburg_01_haylee_pickup.png` | ORD 16:9 | important | NEW | Ellensburg exit at golden hour; Haylee on the shoulder with a big soft cooler + duffel, hand up; Brittney (uniform) leaning out the passenger window.  Faces upper-left (Haylee) / upper-right (Brittney); cooler protected (`kind: 'cargo'`); lower third free for the tray. |
+| 10 | Vantage arrival with Haylee in the group | ORD/WIDE | polish (later) | CROP-TEST `vantage_01_spots_friends_work_uniform.png` — can one friend be read as Haylee? | If not, a variant with a strawberry-blonde friend in the group.  Depends on the Vantage-ending beats below. |
+
+### Group 5 — Ellensburg hospital (skipped-Issaquah path ONLY; never with Brittney aboard) — 1 new
+| # | key / file | ratio | pri | type | brief |
+|---|---|---|---|---|---|
+| 11 | `hiphop.vantage_hospital.wake` → `ellensburg_hospital_01_player_wakes_with_bill.png` | WIDE 16:9 | important | NEW | Chat's brief stands verbatim (notes §"REQUIRED NEW ART — Ellensburg hospital recovery"): battered player in bed holding an absurdly heavy accordion-fold bill; no Malik/Brittney/Haylee/Dom'nique; face, hands, bill protected; negative space upper-left or upper-right. |
+
+### Group 6 — Classic Rock differentiation (Chat's triage D) — needs the owner's Classic Rock pass first
+| # | key | pri | type | note |
+|---|---|---|---|---|
+| 12 | `classicRock.washtucna_show.solo` vs `equal`/`giveAll` | important | CROP-TEST existing `washtucna_02/04/05/06` first | Solo must read unlike a duet; equal/giveAll may share performance art if reaction insets differ. |
+| 13 | `classicRock.lacrosse_show.solo` / `duet` | important | NEW likely | Duet result panel is missing (`la_crosse_02_solo_400_exclusion` exists for solo). |
+| 14 | `classicRock.colfax_deal.fifty/sixty/flat/refuse` | **blocking for endings** | NEW reaction insets ×4 (one shared setup) | `flat`/`refuse` must not look like partnership. |
+| 15 | `classicRock.colfax_name.hers/together/mine` | important | NEW reaction ×3 (shared setup) | The chosen name + Mykenzie's reaction must be unmistakable. |
+
+### Group 7 — Country checklist gaps the drafts now touch (from STORY_ART_CHECKLIST)
+- "Brittney climbs into the passenger side in her work uniform" — covered by `mercer_03_quit_and_join_player` (already uniform).
+- "Boyfriend calling Brittney's phone / ignores / answers angrily" — becomes Malik's call declined ("Not tonight, Malik.") on the ride path: one ORD panel, Brittney thumbing the phone off, player driving — **polish, after Group 4**.
+- Vantage ending beats: "Getting off the Vantage exit", "Brittney jumps out to join friends", "Ride 'Em farewell", "Standard goodbye", "Barely Made It goodbye", "New Contact portrait" — **6 NEW, important**; briefs after the StageWagon celebration/checkpoint draft is approved.
+
+### Not requested yet (needs owner/Chat decisions first)
+- Encounter A (Malik's North Bend chase) panels — mechanics unsettled.
+- StageWagon celebration + Country reward object art — reward tiers unsettled.
+- Nan cookie event — blocked on the DUI visual-system audit.
+- Dom'nique/Malik matrix consequence panels (label close-ups: pressed credit must be readable) — after the matrix is approved.
+
+### Commission order (recommended)
+1 → 3 → 7 → 8 → 9 → 11 → 2 → 14 → 15 → 13 → 6/4/10/12 crop-tests → Group 7 Vantage set.
