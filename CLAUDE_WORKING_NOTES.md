@@ -2756,3 +2756,47 @@ any prompt, sheet, portrait, panel, or dialogue key.  Everything below is PROPOS
 - Q2 ("plates line vs 'Which way you headed?'") is unchanged; Q1–Q11 otherwise unchanged.
 - Committed to Claude's persistent memory (`project_rtr_story_canon`) so these do not drift
   across sessions.
+
+## OWNER ANSWERS 2026-09-10 (second batch) — applied to the drafts
+
+1. **Beat 2** — owner: "A no-effect attitude tap sounds interesting, but whatever you
+   recommend."  Recommendation stands: **linear** (the strip's tap-to-continue already asks
+   for participation; an attitude tap with no effect would read as a fake choice).  Can be
+   revisited once the live strip exists.
+2. **Ultimatum scoring (Q4)** — read as **approved**: `chooseBrittney` = +3 (M3) +2 (M3b)
+   = +5 total, Malik −10; `keepPromise` = +0, Brittney −2, Brittney stays.  (Owner wrote
+   "Approved?" — if that was a question rather than approval, say so and it reverts to open.)
+3. **Text vs call (Q6) — owner canon:** Malik's TEXT is NOT replaced.  **Malik texts only if
+   the player doesn't stop at Mercer Island.  Malik CALLS if the player goes to Mercer but
+   does not pick up Brittney.**  Malik is keeping very good watch on the phone's LOCATION —
+   that is why both happen.  Applied: M5 `mercer_malik_call` fires on `keepJob`/`keepPromise`
+   ONLY; the `skippedMercer` variant of the call is REMOVED (the existing text stands there).
+   Design note: Malik tracking the phone is now an explicit story fact — his later lines may
+   reference "I can see where my phone is."
+4. **Haylee and the chase (Q8) — owner canon:** Brittney is aboard from Mercer; Haylee boards
+   at Ellensburg.  **Malik's chase happens because Brittney is his girlfriend/ex — he is upset
+   with Brittney AND the player and chases them down.  Keep the chase at North Bend.  Haylee
+   has nothing to do with it** (she boards later and never sees it).  Applied to the Haylee
+   profile ("appearance window" unchanged; the "her presence charges the chase" note is
+   retired).
+5. **Haylee — owner-fixed:** **24 years old, a graduate student at Central University**
+   (exact name).  Applied; my "finishing a degree at the state college / feed store / rodeo
+   grounds" proposals are withdrawn.  Her cooler/duffel, dry-observer personality, dislike of
+   Malik, cargo mechanic and conduct scoring remain PROPOSALS.
+
+### New continuity question raised by answer 4
+- On the Brittney path the phone is **left on the Mercer counter** (`phoneLeft`), and Malik
+  can see its location.  So at North Bend Malik knows the player does NOT have the phone.
+  His accusation should be about **Brittney only** — proposed: "You took my girl? What kind
+  of delivery is this?" — not "my phone and my girl."  Confirm, or tell me Brittney takes
+  the phone with her (which would change the Mercer art and the branch gates).
+
+### Questions still open after this batch
+- Q2 plates line before "Which way you headed?" — keep or drop.
+- Q3 `keepJob` label: "I gave Malik my word" vs "Artist to artist, I can't ditch his album."
+- Q5 `both` as a third top-level Mercer choice (recommended) vs folded under `ride`.
+- Q9 remainder: Haylee's cooler/duffel cargo mechanic, her own small read-on-the-player
+  meter, the +5/+3/+0 conduct list, and that she knows/dislikes Malik.
+- Q11: Country album reward threshold; Malik 1-star "fill the tank" rounding.
+- Does Brittney know Malik tracks the phone?  (Affects her Mercer lines and whether she
+  warns the player.)

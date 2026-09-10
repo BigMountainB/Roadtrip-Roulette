@@ -204,6 +204,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 3) — Owner answers: Beat 2 linear, ultimatum scoring approved, text-vs-call rule, chase = Brittney's, Haylee 24 / Central University
+
+Applied in the notes + memory: Beat 2 stays linear (owner deferred to the recommendation);
+ultimatum scoring taken as approved (+3/+2 & Malik −10 · +0/−2 & she stays); **Malik TEXTS
+only if the player never stops at Mercer, CALLS if the player stops but leaves without
+Brittney — because he tracks the phone's location** (call no longer has a skipped-Mercer
+variant); **Malik's North Bend chase is about Brittney (his girlfriend/ex) and the player —
+stays at North Bend; Haylee has nothing to do with it**; **Haylee is 24, a graduate student
+at Central University**.  New question raised: on Brittney's path the phone is on the
+Mercer counter and Malik can see that, so his accusation should be "my girl", not "my phone
+and my girl" — confirm.  Remaining: plates line, keepJob wording, `both` as top-level,
+Haylee's cargo/meter/conduct proposals, Country reward threshold, tank rounding, whether
+Brittney knows the phone is tracked.
+
 ### 2026-09-10 (pt 2) — Owner corrections: Malik sends the player to MERCER only; hospital never with Brittney aboard — committed to memory
 
 Owner: "Malik just says then Mercer is on your way. He is not planning to send player to
