@@ -18,7 +18,9 @@
  */
 
 import { PAGE_W, PAGE_H, panelMeta } from '../data/comicPanels.js';
-import { LETTERING } from './StoryTile.js';
+import { LETTERING, splitByCap } from './StoryTile.js';
+import { layoutBalloon } from './balloonLayout.js';
+import { unit, padding, strokeFor, bodyShape, tailShape, dashOutline } from './balloonShapes.js';
 import { buildPdf, PAGE_SIZES } from './ComicPdf.js';
 
 // Export page pixel size (A-series aspect); JPEG quality.  ~150 dpi on A4.
@@ -120,92 +122,51 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
-/** Balloon sized from panel scale that grows its box (or splits) to fit;
- *  returns the box drawn.
- *  Working-notes lettering rules (owner-approved 2026-09-09): */
-//   • type is sized from PANEL scale (`opts.panelW`), never from balloon
-//     height, and is NEVER shrunk to make a line fit;
-//   • 5–10 words typical, 20–25 absolute max per balloon — an over-long line
-//     is SPLIT into a linked balloon beneath (at a sentence end, else at the
-//     word cap), and a balloon may grow taller to hold its copy;
-//   • copy is elided only as a last resort (the full line stays in the record).
-const BALLOON_WORD_CAP = 25;
-function drawBalloon(ctx, text, box, tail, opts = {}) {
-  const { fill = '#FFFFFF' } = opts;
-  if (!text) return null;
-  const panelW = opts.panelW ?? box.w / 0.5;
-  const px = Math.max(9, Math.min(15, Math.round(panelW * 0.032)));
-  ctx.font = `${px}px ${LETTERING}`;
-  // Split FIRST by the word cap (never by shrinking): prefer a sentence end
-  // inside the cap, else break at the cap itself.
-  const words = String(text).trim().split(/\s+/);
-  if (words.length > BALLOON_WORD_CAP && !opts._linked) {
-    const head = words.slice(0, BALLOON_WORD_CAP).join(' ');
-    const m = head.match(/^(.{20,}[.!?…])\s+(.+)$/s);
-    const a = m ? m[1] : head;
-    const b = m ? (m[2] + ' ' + words.slice(BALLOON_WORD_CAP).join(' ')) : words.slice(BALLOON_WORD_CAP).join(' ');
-    const first = drawBalloon(ctx, a, box, null, { ...opts, _linked: true });
-    const nb = { x: Math.min(box.x + box.w * 0.15, box.x + box.w - 20), y: first.y + first.h - 3, w: box.w * 0.92, h: box.h };
-    return drawBalloon(ctx, b, nb, tail, { ...opts, _linked: true, maxGrow: 2.6 });
-  }
-  let lines = wrap(ctx, text, box.w - 16);
-  // The balloon may GROW to hold its copy (up to maxGrow × the authored box);
-  // an authored box that still can't hold a capped line splits at a sentence
-  // end; elision is the last resort.
-  const maxH = box.h * (opts.maxGrow ?? 1.6);
-  let fit = Math.max(1, Math.floor((maxH - 14) / (px * 1.25)));
-  if (lines.length > fit && !opts._linked) {
-    const m = String(text).match(/^(.{20,}?[.!?…])\s+(.+)$/s);
-    if (m) {
-      const first = drawBalloon(ctx, m[1], box, null, { ...opts, _linked: true });
-      const nb = { x: Math.min(box.x + box.w * 0.15, box.x + box.w - 20), y: first.y + first.h - 3, w: box.w * 0.92, h: box.h };
-      return drawBalloon(ctx, m[2], nb, tail, { ...opts, _linked: true, maxGrow: 2.6 });
-    }
-  }
-  if (lines.length > fit) { lines = lines.slice(0, fit); lines[fit - 1] = lines[fit - 1].replace(/\s*\S*$/, '') + '…'; }
-  const h = lines.length * px * 1.25 + 14;
-  const w = Math.min(box.w, Math.max(...lines.map(l => ctx.measureText(l).width)) + 18);
-  ctx.save();
-  ctx.fillStyle = fill; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, px * 0.12);
-  roundRect(ctx, box.x, box.y, w, h, Math.min(12, h / 3)); ctx.fill(); ctx.stroke();
-  if (tail) {
-    // Tail from the edge facing the anchor, never across the text.
-    const bx = box.x, by = box.y, tx = tail.x, ty = tail.y;
-    let ax, ay, bx2, by2;
-    if (tx > bx + w && ty < by + h + 4) { ax = bx + w - 0.5; ay = Math.max(by + 6, Math.min(by + h - 14, ty - 4)); bx2 = ax; by2 = ay + 9; }
-    else if (tx < bx && ty < by + h + 4) { ax = bx + 0.5; ay = Math.max(by + 6, Math.min(by + h - 14, ty - 4)); bx2 = ax; by2 = ay + 9; }
-    else { const cx = Math.max(bx + 12, Math.min(bx + w - 12, tx)); ax = cx - 5; ay = by + h - 0.5; bx2 = cx + 5; by2 = ay; }
-    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(tx, ty); ctx.lineTo(bx2, by2); ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    // Re-cover the tail base so the balloon outline reads as open into the tail.
-    ctx.fillStyle = fill; roundRect(ctx, box.x, box.y, w, h, Math.min(12, h / 3)); ctx.fill();
-    ctx.fillStyle = INK;
-  }
-  ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  lines.forEach((l, i) => ctx.fillText(l, box.x + w / 2, box.y + 7 + i * px * 1.25));
-  ctx.restore();
-  return { x: box.x, y: box.y, w, h };
-}
-
-/** Caption box: narration in a square, tail-less box with its own paper
- *  colour and typeface, uppercase (workshop §C). */
-const CAPTION_FACE = '"Comic Neue", "Trebuchet MS", "Helvetica Neue", Arial, sans-serif';
-function drawCaption(ctx, text, box, opts = {}) {
-  if (!text) return null;
-  const panelW = opts.panelW ?? box.w / 0.42;
-  const px = Math.max(8, Math.min(13, Math.round(panelW * 0.026)));
-  ctx.save();
-  ctx.font = `bold ${px}px ${CAPTION_FACE}`;
-  const lines = wrap(ctx, String(text).toUpperCase(), box.w - 14);
-  const h = lines.length * px * 1.3 + 12;
-  const w = Math.min(box.w, Math.max(...lines.map(l => ctx.measureText(l).width)) + 14);
-  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(box.x + 2, box.y + 2, w, h);
-  ctx.fillStyle = '#FFF1B8'; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, px * 0.1);
-  ctx.fillRect(box.x, box.y, w, h); ctx.strokeRect(box.x, box.y, w, h);
-  ctx.fillStyle = '#222'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  lines.forEach((l, i) => ctx.fillText(l, box.x + 7, box.y + 6 + i * px * 1.3));
-  ctx.restore();
-  return { x: box.x, y: box.y, w, h };
+/** One balloon of `kind` on a panel, placed with the SAME rules as the live
+ *  tile (balloonLayout: protect rects, earlier balloons, reading order) and
+ *  drawn with the same vocabulary (balloonShapes).  Type is sized from PANEL
+ *  scale, never shrunk to fit; copy over the word cap is split at sentence
+ *  ends and each part placed after the previous.  Returns the rects drawn. */
+const WORD_CAP = 25;
+function placeBalloon(ctx, text, kind, box, anchor, P) {
+  if (!text) return [];
+  const { panelW, panelH, px, protect, avoid, after, art } = P;
+  const U = unit(panelW, panelH);
+  const pad = padding(kind, U);
+  const parts = splitByCap(text, WORD_CAP);
+  const rects = [];
+  let prev = null;
+  const face = kind === 'caption' ? '"Comic Neue", "Trebuchet MS", "Helvetica Neue", Arial, sans-serif' : LETTERING;
+  ctx.font = `${kind === 'caption' ? 'bold ' : kind === 'whisper' ? 'italic ' : ''}${px}px ${face}`;
+  parts.forEach((part, i) => {
+    const shown = kind === 'caption' ? String(part).toUpperCase() : part;
+    const lines = wrap(ctx, shown, Math.max(40, box.w - pad.x * 2));
+    const w = Math.min(box.w, Math.max(...lines.map(l => ctx.measureText(l).width)) + pad.x * 2);
+    const h = lines.length * px * 1.25 + pad.y * 2;
+    const want = prev ? { x: Math.min(art.x + art.w - w - 2, prev.x + 12), y: prev.y + prev.h + 3, w, h } : { x: box.x, y: box.y, w, h };
+    const last = i === parts.length - 1;
+    const L = layoutBalloon({ size: { w, h }, box: want, anchor: last && kind !== 'caption' && kind !== 'offpanel' ? anchor : null, protect, art, bounds: art, avoid: [...avoid, ...rects], scale: px / 16, after: i === 0 ? after : prev });
+    const body = bodyShape(kind, L.rect, U, (L.rect.x * 7 + L.rect.y) | 0);
+    const tl = tailShape(kind, L.tail, U);
+    const fill = kind === 'player' ? '#FFF9D6' : kind === 'caption' ? '#FFF1B8' : '#FFFFFF';
+    ctx.save();
+    ctx.fillStyle = fill; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, strokeFor(kind, U, 1.2));
+    const path = (pts) => { ctx.beginPath(); pts.forEach((q, k) => k ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); };
+    if (tl?.polygon) { path(tl.polygon); ctx.fill(); ctx.stroke(); }
+    if (tl?.bubbles) for (const b of tl.bubbles) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    if (kind === 'caption') { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(L.rect.x + 2, L.rect.y + 2, w, h); ctx.fillStyle = fill; }
+    path(body.outline); ctx.fill();
+    if (body.dash) { for (const [a, b] of dashOutline(body.outline, body.dash.dash, body.dash.gap)) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
+    else ctx.stroke();
+    if (body.inner) { ctx.lineWidth = Math.max(0.8, ctx.lineWidth * 0.6); path(body.inner); ctx.stroke(); }
+    if (tl?.polygon) { path(body.outline); ctx.fill(); }          // re-cover the tail base
+    ctx.fillStyle = kind === 'caption' ? '#222' : INK; ctx.textBaseline = 'top';
+    ctx.textAlign = kind === 'caption' ? 'left' : 'center';
+    lines.forEach((l, k) => ctx.fillText(l, kind === 'caption' ? L.rect.x + pad.x : L.rect.x + w / 2, L.rect.y + pad.y + k * px * 1.25));
+    ctx.restore();
+    rects.push(L.rect); prev = L.rect;
+  });
+  return rects;
 }
 
 /** Draw one resolved page (from ComicSystem.pagesOf) onto a 2D context of
@@ -250,22 +211,22 @@ export function renderPage(ctx, page, w, h, onArt) {
       ctx.textAlign = 'right';
       ctx.fillText(`MI ${Math.round(event.mile)}`, x + pw - 8, y + ph - 6);
     }
-    // Balloons (never baked into art).
-    const b = meta.bubble, t = meta.tail, pb = meta.playerBubble, pt = meta.playerTail;
+    // Balloons (never baked into art) — same placement + vocabulary as the tile.
+    const px = Math.max(9, Math.min(15, Math.round(pw * 0.032)));
+    const P = { panelW: pw, panelH: ph, px, protect: (meta.protect ?? []).map(r => ({ x: x + r.x * pw, y: y + r.y * ph, w: r.w * pw, h: r.h * ph, kind: r.kind })), avoid: [], after: null, art: { x, y, w: pw, h: ph } };
+    const R = (r) => ({ x: x + r.x * pw, y: y + r.y * ph, w: r.w * pw, h: r.h * ph });
+    const Pt = (p) => ({ x: x + p.x * pw, y: y + p.y * ph });
     if (sub) {
-      drawBalloon(ctx, sub.text, { x: x + 0.05 * pw, y: y + 0.06 * ph, w: 0.9 * pw, h: 0.5 * ph }, null, { maxGrow: 1.6, panelW: pw });
+      placeBalloon(ctx, sub.text, 'speech', { x: x + 0.05 * pw, y: y + 0.06 * ph, w: 0.9 * pw, h: 0.5 * ph }, null, P);
     } else {
-      // CAPTION (narration) is its own content type (workshop §C): a square
-      // box, no tail, never inside a speaker's balloon.
-      if (event.text?.caption) {
-        const cb = meta.caption ?? { x: 0.03, y: 0.03, w: 0.42, h: 0.22 };
-        drawCaption(ctx, event.text.caption, { x: x + cb.x * pw, y: y + cb.y * ph, w: cb.w * pw, h: cb.h * ph }, { panelW: pw });
-      }
-      const npcText = event.text?.reply || event.text?.line;
-      if (npcText) drawBalloon(ctx, npcText, { x: x + b.x * pw, y: y + b.y * ph, w: b.w * pw, h: b.h * ph }, { x: x + t.x * pw, y: y + t.y * ph }, { panelW: pw });
-      if (event.text?.label) {
-        drawBalloon(ctx, event.text.label, { x: x + pb.x * pw, y: y + pb.y * ph, w: pb.w * pw, h: pb.h * ph }, { x: x + pt.x * pw, y: y + pt.y * ph }, { fill: '#FFF9D6', panelW: pw });
-      }
+      if (event.text?.caption) P.avoid.push(...placeBalloon(ctx, event.text.caption, 'caption', meta.caption ? R(meta.caption) : { x: x + 0.03 * pw, y: y + 0.03 * ph, w: 0.42 * pw, h: 0.22 * ph }, null, P));
+      // Reading order: the NPC line (if it is what the panel shows), the
+      // player's chosen sentence, then the NPC reply AFTER it.
+      const hasReply = !!event.text?.reply;
+      if (!hasReply && event.text?.line) P.avoid.push(...placeBalloon(ctx, event.text.line, 'speech', R(meta.bubble), Pt(meta.tail), P));
+      let playerRect = null;
+      if (event.text?.label) { const rs = placeBalloon(ctx, event.text.label, 'player', R(meta.playerBubble), Pt(meta.playerTail), P); P.avoid.push(...rs); playerRect = rs[0] ?? null; }
+      if (hasReply) { P.after = playerRect; placeBalloon(ctx, event.text.reply, 'speech', meta.replyBubble ? R(meta.replyBubble) : R(meta.bubble), Pt(meta.tail), P); }
     }
     ctx.restore();
     // Panel border.

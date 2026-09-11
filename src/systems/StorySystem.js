@@ -175,7 +175,10 @@ export class StorySystem {
    *  volumes).  `fn(canon)` returning false skips the write. */
   mutateCanon(fn) {
     const c = this.canon();
-    if (fn(c) === false) return false;
+    this._mutDepth = (this._mutDepth ?? 0) + 1;
+    let r;
+    try { r = fn(c); } finally { this._mutDepth--; }
+    if (r === false) { if (!this._mutDepth) this._flushNotify(); return false; }
     this._writeCanon(c);
     return true;
   }
@@ -184,6 +187,18 @@ export class StorySystem {
     c.schemaVersion = CANON_SCHEMA_VERSION;
     c.defsVersion   = STORY_DEFS_VERSION;
     this._save?.set?.('storyCanon', c);   // SaveSystem.set persists synchronously
+    if (!this._mutDepth) this._flushNotify();
+  }
+
+  /** Beat notifications are DEFERRED until the outermost canon write has
+   *  landed (2026-09-10): the comic records an event by mutating the canon
+   *  itself, and a nested write from inside a mutation was overwritten by the
+   *  outer one — the Seattle cypher intro never reached the book. */
+  _flushNotify() {
+    const q = this._pendingNotify ?? [];
+    if (!q.length) return;
+    this._pendingNotify = [];
+    for (const [entry, ctx] of q) for (const fn of this._listeners) { try { fn(entry, ctx); } catch (_) {} }
   }
 
   story(storyId) { return this.canon().stories[storyId] ?? emptyStoryState(); }
@@ -267,6 +282,38 @@ export class StorySystem {
     if (!node || node.caption == null) return '';
     if (typeof node.caption === 'function') { try { return String(node.caption(this.story(storyId), this._run) ?? ''); } catch (_) { return ''; } }
     return String(node.caption ?? '');
+  }
+
+  /** Opening LINES of a node — an authored sequence of balloons shown before
+   *  the main `line` (workshop: multi-balloon exchanges leapfrog down the
+   *  panel).  Each `{ speaker, text, kind }`; text may be a function. */
+  resolveLines(storyId, nodeId) {
+    const node = this._node(storyId, nodeId);
+    const raw = typeof node?.lines === 'function' ? (() => { try { return node.lines(this.story(storyId), this._run); } catch (_) { return []; } })() : node?.lines;
+    if (!Array.isArray(raw)) return [];
+    return raw.map(l => ({ speaker: String(l?.speaker ?? node.speaker ?? ''), kind: l?.kind ?? 'speech',
+      text: typeof l?.text === 'function' ? (() => { try { return String(l.text(this.story(storyId), this._run) ?? ''); } catch (_) { return ''; } })() : String(l?.text ?? '') }))
+      .filter(l => l.text);
+  }
+
+  /** Lines that FOLLOW a choice's reply in the same tile (e.g. the crew's
+   *  off-panel "Weak!"). */
+  resolveAfter(storyId, nodeId, choiceId) {
+    const ch = this._choice(storyId, nodeId, choiceId);
+    if (!Array.isArray(ch?.after)) return [];
+    return ch.after.map(l => ({ speaker: String(l?.speaker ?? ''), kind: l?.kind ?? 'speech', text: String(l?.text ?? '') })).filter(l => l.text);
+  }
+
+  /** A choice-less beat advanced by tap: move the active story's cursor.
+   *  Nothing is recorded (there was nothing to choose). */
+  advance(storyId, nextId) {
+    if (!nextId || !this._node(storyId, nextId)) return false;
+    return this.mutateCanon((c) => {
+      const st = c.stories[storyId];
+      if (!st || st.status !== STORY_STATUS.ACTIVE) return false;
+      st.nodeId = nextId;
+      return true;
+    });
   }
 
   /** Was `storyId` STARTED (a choice with `startStory` committed) during the
@@ -541,7 +588,7 @@ export class StorySystem {
    *  Used by node.intro (recorded when the node is first SHOWN),
    *  choice.beatsBefore (recorded just before the choice entry),
    *  choice.beats + node.beats (recorded after it). */
-  _emitAuthoredBeats(c, storyId, specs, mile = 0, at = Date.now()) {
+  _emitAuthoredBeats(c, storyId, specs, mile = 0, at = Date.now(), opts = {}) {
     if (!Array.isArray(specs) || !specs.length) return 0;
     const st = c.stories[storyId] ?? (c.stories[storyId] = emptyStoryState());
     let n = 0;
@@ -553,7 +600,7 @@ export class StorySystem {
         if (b.panelKey != null && pk == null) continue;
         const text = typeof b.text === 'function' ? String(b.text(st, this._run) ?? '') : String(b.text ?? '');
         if (this._beatInto(c, { storyId, beatId: b.id, panelKey: pk ?? null, importance: b.importance ?? 'consequence',
-                                speaker: b.speaker ?? '', portrait: b.portrait ?? null, text, mile, at })) n++;
+                                speaker: b.speaker ?? '', portrait: b.portrait ?? null, text, mile, at, caption: b.caption ?? opts.caption ?? false })) n++;
       } catch (_) {}
     }
     return n;
@@ -567,7 +614,9 @@ export class StorySystem {
     const specs = node?.intro ? (Array.isArray(node.intro) ? node.intro : [node.intro]) : null;
     if (!specs) return 0;
     let n = 0;
-    this.mutateCanon((c) => { n = this._emitAuthoredBeats(c, storyId, specs, mile); return n > 0; });
+    // An INTRO beat is an establishing panel: its text is narration (a
+    // caption box in the book), never a balloon in someone's mouth.
+    this.mutateCanon((c) => { n = this._emitAuthoredBeats(c, storyId, specs, mile, Date.now(), { caption: true }); return n > 0; });
     return n;
   }
 
@@ -583,13 +632,14 @@ export class StorySystem {
   }
 
   /** Same, into a canon the caller is already mutating (roadEvent). */
-  _beatInto(c, { storyId, beatId, importance = 'consequence', speaker = '', portrait = null, text = '', mile = 0, at = Date.now(), effects = null, strip = null, panelKey = null }) {
+  _beatInto(c, { storyId, beatId, importance = 'consequence', speaker = '', portrait = null, text = '', mile = 0, at = Date.now(), effects = null, strip = null, panelKey = null, caption = false }) {
     const st = c.stories[storyId] ?? (c.stories[storyId] = emptyStoryState());
     const key = ledgerKey(storyId, st.replayCount, 'beat', beatId);
     if (c.ledger[key]) return null;
     const entry = {
       key, storyId, nodeId: 'beat', choiceId: beatId, attempt: st.replayCount, at, mile, runId: this._run.runId,
-      dialogueKeys: { line: `${storyId}.beat.${beatId}.line` }, fallbackText: { line: text, label: '', reply: '' },
+      dialogueKeys: caption ? { caption: `${storyId}.beat.${beatId}.caption` } : { line: `${storyId}.beat.${beatId}.line` },
+      fallbackText: caption ? { line: '', label: '', reply: '', caption: text } : { line: text, label: '', reply: '' },
       // Explicit panelKey = an AUTHORED special panel (Ch.18 special beats:
       // `.intro`, `.arrival`, `.pressing`, evaluated outcomes…); default =
       // the generic beat key the road events use.
@@ -598,7 +648,7 @@ export class StorySystem {
     if (Array.isArray(strip)) entry.strip = strip.map(p => ({ speaker: String(p.speaker ?? ''), text: String(p.text ?? '') }));
     c.ledger[key] = entry;
     if (isObj(effects)) this._applyStoryEffects(c, storyId, effects, at);
-    for (const fn of this._listeners) { try { fn(entry, { node: { speaker, portrait, importance }, choice: null }); } catch (_) {} }
+    (this._pendingNotify ??= []).push([entry, { node: { speaker, portrait, importance }, choice: null }]);
     return entry;
   }
 

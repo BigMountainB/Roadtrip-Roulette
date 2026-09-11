@@ -355,50 +355,75 @@ export const FEATURED_STORIES = {
       headline: "MALIK'S REGARDS",
     },
     nodes: {
-      // ── Seattle / Park & Ride ──────────────────────────────────────────
-      // ── Seattle / Park & Ride — AUTHORITATIVE DIALOGUE HANDOFF (owner + Chat,
-      //    2026-09-10).  A chain of short tiles (non-consequential, live-only)
-      //    leading to the SAME decision node + keys (`seattle_offer.carry/pass`).
-      //    Malik does NOT know Brittney is on a double; he routes the player to
-      //    Mercer only.  The cypher intro panel is the only book entry before
-      //    the decision. ──
-      // OWNER 2026-09-10 ("are you making all of this dialogue up? … the order
-      // of some of it is wrong"): the invented crew hype exchange ("Malik
-      // Reed! Stank Records — live from the Park & Ride!" / "Not bad." / "Top
-      // of NoiseCloud…") and Chat's cocky/dismissive alternates are GONE.  The
-      // chain is the handoff spine, in the handoff's order, the owner's words
-      // only: Malik 1 → Player 2 → Malik 3 → Player 4 → Malik 5 → stakes.  The
-      // cypher art carries a caption (not a spoken line) so Malik's biography
-      // is never repeated.  The player's line is authored (one item) and
-      // plays as a balloon, never as a button.
-      seattle_lot: {
-        stopId: 'S', mandatory: true,
+      // ── Seattle / Park & Ride — SIX-BEAT OPENING (owner 2026-09-10: "scan the
+      //    notes… there should be a choice where player says they know him and
+      //    am a fan; there's a lot more conversation").  Every line below is
+      //    quoted from the working notes; sources per line:
+      //      [H]  AUTHORITATIVE DIALOGUE HANDOFF (owner + Chat, notes ~3079)
+      //      [V3] Seattle v3 draft = Chat's red-penned six-beat structure the
+      //           owner approved ("I draft, you red-pen"; notes ~1480, ~2249, ~2529)
+      //      [OA] Owner addition — fan / fellow-artist response (notes ~1603),
+      //           wording corrected by the owner to "musical artist/songwriter"
+      //           (notes ~2491) — the one line adjusted for that: "I'm a
+      //           songwriter too." (was "I'm an artist too.")
+      //    Order: cypher → intro + response → route → stakes → decision.  Malik
+      //    routes the player to MERCER only.  Balloons ≤ 25 words (owner rule);
+      //    the handoff's lines 6–9 are split at their sentence ends only. ──
+      seattle_lot: {                                          // Beat 1 · establish · cypher art
+        stopId: 'S', mandatory: true, next: 'seattle_clock',
         when: (st) => !has(st, 'phone') && !st.flags.carrying,
         speaker: 'Malik Reed', portrait: 'biz_parkride', importance: 'minor',
         intro: [{ id: 'seattle_cypher', panelKey: 'hiphop.seattle_lot', importance: 'minor', text: 'Stank Records, live from the Park & Ride.' }],
         caption: 'Stank Records, live from the Park & Ride.',
-        line: "Malik Reed. Stank Records. About to be the biggest hip-hop name in this town.",
-        choices: [
-          { id: 'know', consequential: false, next: 'seattle_route',
-            label: "I don't know you, no offense. I'm sure you haven't heard any of my songs either.",
-            reply: "Fair enough." },
+        lines: [
+          { speaker: 'The Crew', kind: 'offpanel', text: "Malik Reed! Stank Records — live from the Park & Ride!" },        // [V3] hype
+          { speaker: 'Malik Reed', kind: 'speech', text: "Top of NoiseCloud, bottom of my tank — whole city knows the hook, but the bus driver knows my name." },  // [V3] the couplet
+          { speaker: 'Crowd', kind: 'sfx', text: 'AYYYY!' },                                                              // [V3]
         ],
+        line: '',
+        choices: [],
       },
-      seattle_route: {
+      seattle_clock: {                                        // Beat 2 · setup · crew-confrontation art
         stopId: 'S', virtual: true,
         speaker: 'Malik Reed', portrait: 'biz_parkride', importance: 'minor',
-        line: "Which way you headed?",
+        line: "Malik Reed. Stank Records. About to be the biggest hip-hop name in this town.",   // [H] 1
         choices: [
-          { id: 'pullman', consequential: false, next: 'seattle_offer',
-            label: "Pullman. Eventually.",
-            reply: "Then Mercer's on your way." },
+          { id: 'know', consequential: false, next: 'seattle_route',
+            label: "I don't know you, no offense. I'm sure you haven't heard any of my songs either.",   // [H] 2
+            reply: "Fair enough." },                                                                       // [H] 3 (first half)
+          { id: 'fan', consequential: true, next: 'seattle_route',
+            label: "Malik Reed? I follow your work. I'm a songwriter too.",                                // [OA], owner-corrected wording
+            reply: "Then you know what a Friday press deadline means.",                                    // [OA]
+            effects: { flags: { malikFan: true }, relationship: 5 } },
         ],
+      },
+      seattle_route: {                                        // Beat 2b · the route
+        stopId: 'S', virtual: true,
+        speaker: 'Malik Reed', portrait: 'biz_parkride', importance: 'minor',
+        line: "Which way you headed?",                                                                     // [H] 3 (second half)
+        choices: [
+          { id: 'pullman', consequential: false, next: 'seattle_stakes',
+            label: "Pullman. Eventually.",                                                                 // [H] 4
+            reply: "Then Mercer's on your way." },                                                         // [H] 5
+        ],
+      },
+      seattle_stakes: {                                       // Beat 3 · stakes · stakes-phone art
+        stopId: 'S', virtual: true, next: 'seattle_offer',
+        speaker: 'Malik Reed', portrait: 'biz_parkride', importance: 'minor',
+        lines: [
+          { speaker: 'Malik Reed', text: "I put some of my best tracks on this phone." },                                    // [H] 6a
+          { speaker: 'Malik Reed', text: "I just need to get it to my girl at the Gas-N-Sip on Mercer Island." },            // [H] 6b
+          { speaker: 'Malik Reed', text: "She's gonna take it to my homie Kyle. He produces some fire." },                    // [H] 7
+        ],
+        line: "I know if I get that phone in his hands, I'll be Seattle's next big thing.",                                  // [H] 8
+        choices: [],
       },
       seattle_offer: {
         stopId: 'S', virtual: true,
         speaker: 'Malik Reed', portrait: 'biz_parkride',
         importance: 'major',
-        line: "I put some of my best tracks on this phone. I just need to get it to my girl at the Gas-N-Sip on Mercer Island. She's gonna take it to my homie Kyle. He produces some fire. I know if I get that phone in his hands, I'll be Seattle's next big thing. As an artist, you know how important this phone is to me—and how badly I want the tracks on it remastered.",
+        lines: [{ speaker: 'Malik Reed', text: "As an artist, you know how important this phone is to me—" }],              // [H] 9 (split at the dash)
+        line: "and how badly I want the tracks on it remastered.",                                                          // [H] 9
         choices: [
           {
             id: 'carry', consequential: true, next: null,
@@ -411,7 +436,8 @@ export const FEATURED_STORIES = {
           {
             id: 'pass', consequential: false, next: null,
             label: "I don't carry other people's problems. Good luck with the album.",
-            reply: "Aight. Somebody else'll want the plug.",
+            reply: "Aight. Somebody else'll want the plug.",                                                // [H]
+            after: [{ speaker: 'The Crew', kind: 'offpanel', text: 'Weak!' }],                              // [H] "Crew, off-panel: Weak!"
             effects: {},
           },
         ],
@@ -1497,6 +1523,7 @@ export const DIALOGUE_INDEX = (() => {
     for (const [nid, node] of Object.entries(s.nodes ?? {})) {
       if (typeof node.line === 'string') out[lineKey(s.id, nid)] = node.line;
       if (typeof node.caption === 'string') out[captionKey(s.id, nid)] = node.caption;
+      (node.lines ?? []).forEach((l, i) => { if (typeof l?.text === 'string') out[`${s.id}.${nid}.lines.${i}`] = l.text; });
       for (const c of node.choices ?? []) {
         if (typeof c.label === 'string') out[labelKey(s.id, nid, c.id)] = c.label;
         if (typeof c.reply === 'string') out[replyKey(s.id, nid, c.id)] = c.reply;
@@ -1529,10 +1556,13 @@ export function validateStories(defs = FEATURED_STORIES) {
       else if (typeof node.stopId !== 'string' || !node.stopId) errs.push(`${sid}.${nid}: no stopId`);
       // A node speaks (`line`) and/or narrates (`caption`) — never neither.
       // Narration inside a speech balloon is a defect (workshop §C).
-      if (!isText(node.line) && !isText(node.caption)) errs.push(`${sid}.${nid}: no line or caption`);
+      const hasLines = Array.isArray(node.lines) && node.lines.length > 0;
+      if (!isText(node.line) && !isText(node.caption) && !hasLines) errs.push(`${sid}.${nid}: no line, caption or lines`);
+      for (const l of (hasLines ? node.lines : [])) if (typeof l?.text !== 'string' || !l.text) errs.push(`${sid}.${nid}: lines[] entry without text`);
+      if (node.next != null && !s.nodes[node.next]) errs.push(`${sid}.${nid}: next '${node.next}' missing`);
       if (typeof node.line === 'string' && /^(She|He|They|Brittney|Malik|Haylee) (slides|clocks|sees|gets|comes|walks|leans|kicks)\b/.test(node.line)) errs.push(`${sid}.${nid}: narration authored as a spoken line`);
       const choices = node.choices ?? [];
-      if (!node.stub && choices.length === 0) errs.push(`${sid}.${nid}: no choices and not a stub`);
+      if (!node.stub && choices.length === 0 && node.next == null) errs.push(`${sid}.${nid}: no choices, no next, not a stub`);
       const seen = new Set();
       for (const c of choices) {
         if (!c.id) { errs.push(`${sid}.${nid}: choice without id`); continue; }

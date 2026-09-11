@@ -1,0 +1,861 @@
+{
+ "frames": [
+  {
+   "name": "f1_01_cypher_beat",
+   "note": "Beat 1: caption + crew hype + Malik couplet + crowd, revealed 2 s apart; holds, then advances on its own"
+  },
+  {
+   "name": "f1_02_intro_tray",
+   "note": "Beat 2: Malik's intro + the verbal-response tray (know / fan)"
+  },
+  {
+   "name": "f1_03_fan_reply",
+   "note": "Beat 2: chosen sentence lifted into the player balloon, Malik's reply after it"
+  },
+  {
+   "name": "f1_04_stakes_and_offer",
+   "note": "Beat 3/4: stakes lines 6–9 across the panel(s), then the one real decision (carry / pass)"
+  },
+  {
+   "name": "f1_05_carry",
+   "note": "carry: player line above his head, Malik's reply low right; crew warning beat recorded"
+  },
+  {
+   "name": "f2_01_counter_gates_shop",
+   "note": "mercer_counter over the storefront; the player's authored line plays as a balloon"
+  },
+  {
+   "name": "f2_02_fork_tray",
+   "note": "mercer_fork: the invite + three verbal responses"
+  },
+  {
+   "name": "f2_03_both_reply",
+   "note": "both → \"No. I'm done letting his album hijack my plans. Me or the phone.\""
+  },
+  {
+   "name": "f2_04_ultimatum_tray",
+   "note": "\"Me or the phone.\" — a genuine decision"
+  },
+  {
+   "name": "f2_05_chose_brittney",
+   "note": "chooseBrittney → \"Good answer.\""
+  },
+  {
+   "name": "f2_06_shop_after",
+   "note": "the storefront, reachable only after the full sequence"
+  },
+  {
+   "name": "f3_01_departure",
+   "note": "mercer_departure: square caption, player balloon, Brittney balloon"
+  }
+ ],
+ "flows": {
+  "seattle": {
+   "tileOpenAt": "5.9s",
+   "trayAppeared": true,
+   "trayAt": "22.4s",
+   "tray": [
+    "I don't know you, no offense. I'm sure you haven't heard any of my songs either.",
+    "Malik Reed? I follow your work. I'm a songwriter too."
+   ],
+   "offerTrayAppeared": true,
+   "offerAt": "72.9s",
+   "offerTray": [
+    "I'm going right past Mercer. Give me the phone.",
+    "I don't carry other people's problems. Good luck with the album."
+   ],
+   "closedAt": "86.5s"
+  },
+  "mercer": {
+   "tileOpenOnArrival": true,
+   "at": "88.3s",
+   "forkTray": [
+    "That sounds incredible! I'm game. I'll meet you at my car when I'm done shopping.",
+    "Sure! We just have to drop this phone off in Issaquah on our way.",
+    "It's probably best if you keep your job. I can deliver the album."
+   ],
+   "ultimatumTray": [
+    "You look a lot more enjoyable to ride with than this cracked phone.",
+    "I think you should keep your job, and I've got to get this phone to Issaquah."
+   ],
+   "closedAt": "149.3s"
+  },
+  "departure": {
+   "closedAt": "168.0s"
+  }
+ },
+ "book": {
+  "pages": 6,
+  "list": [
+   {
+    "n": 1,
+    "template": "two_up",
+    "events": [
+     "hiphop.beat.seattle_cypher",
+     "hiphop.seattle_clock.fan"
+    ]
+   },
+   {
+    "n": 2,
+    "template": "wide",
+    "events": [
+     "hiphop.seattle_offer.carry"
+    ]
+   },
+   {
+    "n": 3,
+    "template": "four_grid",
+    "events": [
+     "hiphop.beat.seattle_crew_warning"
+    ]
+   },
+   {
+    "n": 4,
+    "template": "climax",
+    "events": [
+     "hiphop.mercer_fork.both"
+    ]
+   },
+   {
+    "n": 5,
+    "template": "climax",
+    "events": [
+     "hiphop.mercer_ultimatum.chooseBrittney"
+    ]
+   },
+   {
+    "n": 6,
+    "template": "wide",
+    "events": [
+     "country.mercer_departure.board"
+    ]
+   }
+  ]
+ },
+ "qa": {
+  "placements": 33,
+  "wordCapViolations": [],
+  "unattributed": [],
+  "clipped": [],
+  "underTray": [],
+  "forced": [
+   "seattle_lot: Top of NoiseCloud, bottom of my tank — whole cit",
+   "seattle_lot: AYYYY!",
+   "seattle_clock: Malik Reed? I follow your work. I'm a songwriter",
+   "seattle_stakes: She's gonna take it to my homie Kyle. He produce",
+   "seattle_stakes: I know if I get that phone in his hands, I'll be",
+   "seattle_offer: As an artist, you know how important this phone ",
+   "mercer_hook: But I wish you would. I don't even like hip-hop.",
+   "mercer_fork: You can use Malik's ticket.",
+   "mercer_fork: No. I'm done letting his album hijack my plans. ",
+   "mercer_departure: StageWagon, cowboy. Try to keep all four tires u"
+  ],
+  "slots": {
+   "authored": 17,
+   "tl": 1,
+   "forced": 10,
+   "tr": 1,
+   "below": 1,
+   "right": 1,
+   "br": 1,
+   "bl": 1
+  },
+  "pass": false
+ },
+ "pageErrors": [],
+ "layout": [
+  {
+   "stop": "S",
+   "node": "seattle_lot",
+   "kind": "caption",
+   "text": "Stank Records, live from the Park & Ride.",
+   "words": 8,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": false,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 480,
+    "y": 9,
+    "w": 269.8,
+    "h": 49.275
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_lot",
+   "kind": "offpanel",
+   "text": "Malik Reed! Stank Records — live from the Park &",
+   "words": 11,
+   "slot": "tl",
+   "clean": true,
+   "tailClipped": false,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 8,
+    "y": 8,
+    "w": 439.5,
+    "h": 41.134254455566406
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_lot",
+   "kind": "speech",
+   "text": "Top of NoiseCloud, bottom of my tank — whole cit",
+   "words": 20,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 320,
+    "y": 63.00000000000001,
+    "w": 215.5,
+    "h": 115.67127227783203
+   },
+   "pass": false
+  },
+  {
+   "stop": "S",
+   "node": "seattle_lot",
+   "kind": "sfx",
+   "text": "AYYYY!",
+   "words": 1,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": false,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 16,
+    "y": 199.5,
+    "w": 180,
+    "h": 82.5
+   },
+   "pass": false
+  },
+  {
+   "stop": "S",
+   "node": "seattle_clock",
+   "kind": "speech",
+   "text": "Malik Reed. Stank Records. About to be the bigge",
+   "words": 14,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 400,
+    "y": 13.5,
+    "w": 358.5,
+    "h": 59.76850891113281
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_clock",
+   "kind": "player",
+   "text": "Malik Reed? I follow your work. I'm a songwriter",
+   "words": 10,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 16,
+    "y": 203.59723663330078,
+    "w": 187.5,
+    "h": 78.40276336669922
+   },
+   "pass": false
+  },
+  {
+   "stop": "S",
+   "node": "seattle_clock",
+   "kind": "speech",
+   "text": "Then you know what a Friday press deadline means",
+   "words": 9,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 416,
+    "y": 222.2314910888672,
+    "w": 253.5,
+    "h": 59.76850891113281
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_route",
+   "kind": "speech",
+   "text": "Which way you headed?",
+   "words": 4,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 400,
+    "y": 13.5,
+    "w": 229.5,
+    "h": 43.46353721618652
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_route",
+   "kind": "player",
+   "text": "Pullman. Eventually.",
+   "words": 2,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 16,
+    "y": 238.5,
+    "w": 193.5,
+    "h": 43.46353721618652
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_route",
+   "kind": "speech",
+   "text": "Then Mercer's on your way.",
+   "words": 5,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 416,
+    "y": 225,
+    "w": 233.5,
+    "h": 41.134254455566406
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_stakes",
+   "kind": "speech",
+   "text": "I put some of my best tracks on this phone.",
+   "words": 10,
+   "slot": "tr",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 616.5,
+    "y": 8,
+    "w": 175.5,
+    "h": 78.40276336669922
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_stakes",
+   "kind": "speech",
+   "text": "I just need to get it to my girl at the Gas-N-Si",
+   "words": 15,
+   "slot": "below",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": true,
+   "underTray": false,
+   "rect": {
+    "x": 608.5,
+    "y": 92.40276336669922,
+    "w": 191.5,
+    "h": 97.03701782226562
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_stakes",
+   "kind": "speech",
+   "text": "She's gonna take it to my homie Kyle. He produce",
+   "words": 12,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 576,
+    "y": 9,
+    "w": 196.5,
+    "h": 78.40276336669922
+   },
+   "pass": false
+  },
+  {
+   "stop": "S",
+   "node": "seattle_stakes",
+   "kind": "speech",
+   "text": "I know if I get that phone in his hands, I'll be",
+   "words": 16,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 576,
+    "y": 90,
+    "w": 201.5,
+    "h": 97.03701782226562
+   },
+   "pass": false
+  },
+  {
+   "stop": "S",
+   "node": "seattle_offer",
+   "kind": "speech",
+   "text": "As an artist, you know how important this phone ",
+   "words": 12,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 16,
+    "y": 9,
+    "w": 234.5,
+    "h": 78.40276336669922
+   },
+   "pass": false
+  },
+  {
+   "stop": "S",
+   "node": "seattle_offer",
+   "kind": "speech",
+   "text": "and how badly I want the tracks on it remastered",
+   "words": 10,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 296,
+    "y": 9,
+    "w": 176.5,
+    "h": 78.40276336669922
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_offer",
+   "kind": "player",
+   "text": "I'm going right past Mercer. Give me the phone.",
+   "words": 9,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 16,
+    "y": 9,
+    "w": 233.5,
+    "h": 59.76850891113281
+   },
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_offer",
+   "kind": "speech",
+   "text": "Album's on the phone. While you're carrying it, ",
+   "words": 15,
+   "slot": "right",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 255.5,
+    "y": 9,
+    "w": 262.5,
+    "h": 78.40276336669922
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_counter",
+   "kind": "speech",
+   "text": "Welcome to Gas-N-Sip, hon! What can I do to—uh—f",
+   "words": 10,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 400,
+    "y": 13.5,
+    "w": 350.5,
+    "h": 59.76850891113281
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_counter",
+   "kind": "player",
+   "text": "Hey, are you Brittney? I have one of Malik's pho",
+   "words": 17,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 16,
+    "y": 202.5,
+    "w": 240,
+    "h": 78.40276336669922
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_hook",
+   "kind": "speech",
+   "text": "Ugh. Even when Malik's not here, it's about him.",
+   "words": 9,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 400,
+    "y": 13.5,
+    "w": 351.5,
+    "h": 59.76850891113281
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_hook",
+   "kind": "player",
+   "text": "Oh, sorry. I don't want to get between you two.",
+   "words": 10,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 16,
+    "y": 202.5,
+    "w": 226.5,
+    "h": 59.76850891113281
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_hook",
+   "kind": "speech",
+   "text": "But I wish you would. I don't even like hip-hop.",
+   "words": 10,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 264,
+    "y": 203.59723663330078,
+    "w": 196.5,
+    "h": 78.40276336669922
+   },
+   "pass": false
+  },
+  {
+   "stop": "M",
+   "node": "mercer_fork",
+   "kind": "speech",
+   "text": "Malik and I had plans to go to StageWagon. He bl",
+   "words": 24,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": false,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 400,
+    "y": 13.5,
+    "w": 359.5,
+    "h": 78.40276336669922
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_fork",
+   "kind": "speech",
+   "text": "You can use Malik's ticket.",
+   "words": 5,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 430,
+    "y": 95.90276336669922,
+    "w": 222.5,
+    "h": 41.134254455566406
+   },
+   "pass": false
+  },
+  {
+   "stop": "M",
+   "node": "mercer_fork",
+   "kind": "player",
+   "text": "Sure! We just have to drop this phone off in Iss",
+   "words": 14,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 16,
+    "y": 202.5,
+    "w": 236.5,
+    "h": 78.40276336669922
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_fork",
+   "kind": "speech",
+   "text": "No. I'm done letting his album hijack my plans. ",
+   "words": 13,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 264,
+    "y": 203.59723663330078,
+    "w": 205.5,
+    "h": 78.40276336669922
+   },
+   "pass": false
+  },
+  {
+   "stop": "M",
+   "node": "mercer_ultimatum",
+   "kind": "speech",
+   "text": "Me or the phone.",
+   "words": 4,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 288,
+    "y": 13.5,
+    "w": 173.5,
+    "h": 43.46353721618652
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_ultimatum",
+   "kind": "player",
+   "text": "You look a lot more enjoyable to ride with than ",
+   "words": 13,
+   "slot": "br",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 534.5,
+    "y": 195.59723663330078,
+    "w": 257.5,
+    "h": 78.40276336669922
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_ultimatum",
+   "kind": "speech",
+   "text": "Good answer.",
+   "words": 2,
+   "slot": "bl",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 8,
+    "y": 230.53646278381348,
+    "w": 139.5,
+    "h": 43.46353721618652
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_departure",
+   "kind": "caption",
+   "text": "Brittney clocks out and meets you beside the car",
+   "words": 9,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": false,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 16,
+    "y": 13.5,
+    "w": 182.8,
+    "h": 66.7125
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_departure",
+   "kind": "player",
+   "text": "Passenger seat's yours. Let's hit the road.",
+   "words": 7,
+   "slot": "authored",
+   "clean": true,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 216,
+    "y": 9,
+    "w": 300.5,
+    "h": 59.76850891113281
+   },
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_departure",
+   "kind": "speech",
+   "text": "StageWagon, cowboy. Try to keep all four tires u",
+   "words": 10,
+   "slot": "forced",
+   "clean": false,
+   "tailClipped": true,
+   "attributed": true,
+   "clipped": false,
+   "flush": false,
+   "underTray": false,
+   "rect": {
+    "x": 288,
+    "y": 203.59723663330078,
+    "w": 240,
+    "h": 78.40276336669922
+   },
+   "pass": false
+  }
+ ]
+}

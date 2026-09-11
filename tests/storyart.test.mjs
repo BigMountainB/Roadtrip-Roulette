@@ -199,14 +199,17 @@ check('establishing key is node-only', panelKeyFor('hiphop', 'mercer_fork') === 
     .replace(/([^:])\/\/[^\n]*/g, '$1');
   check('balloons map to the art rect, not the whole tile',
     tileCode.includes('rectPx(meta.bubble)') && !/b\.x \* TILE_W/.test(tileCode));
-  check('art is contain-fitted to a 16:9 box', /ART_H \* \(16 \/ 9\)/.test(tileSrc));
+  check('art fills the 16:9 screen', /ART_H \* \(16 \/ 9\)/.test(tileSrc) && /const ART_W  = SCREEN_W;/.test(tileSrc));
 
-  // ── Tile persists until the player taps (owner 2026-09-07) ──
-  check('tap gate exists', /function awaitTapThen\(fn\)/.test(tileCode));
-  check('advance is routed through the tap gate',
-    /awaitTapThen\(\(\) => \{[\s\S]{0,400}openNode\(storyId, nextId, nextNode\)/.test(tileCode));
-  check('the tap gate can end the conversation too',
-    /awaitTapThen\(\(\) => \{[\s\S]{0,500}finish\(\);/.test(tileCode));
+  // ── Completed-tile HOLD (owner-approved direction 2026-09-09, supersedes the
+  //    09-07 tap-only rule): 3 s when the player spoke last, 6 s + 175 ms/word
+  //    past 10 when an NPC follows, cap 9 s; a deliberate tap skips; a review
+  //    drag pauses.  The hold is the ONLY path to the next node / the end. ──
+  check('hold gate exists', /function holdThen\(ms, fn\)/.test(tileCode));
+  check('reading-time rule constants', /HOLD_PLAYER_LAST_MS = 3000/.test(tileCode) && /HOLD_NPC_LAST_MS\s+= 6000/.test(tileCode) && /HOLD_EXTRA_PER_WORD = 175/.test(tileCode) && /HOLD_CAP_MS\s+= 9000/.test(tileCode));
+  check('advance is routed through the hold gate', /holdThen\(holdMs\([^)]*\), \(\) => advanceTo\(/.test(tileCode));
+  check('the hold gate can end the conversation too', /function advanceTo[\s\S]{0,400}finish\(\);/.test(tileCode));
+  check('a review drag pauses the hold', /browsingBack\(\)\) \{ arm\(500\)/.test(tileCode));
   check('a drag is not a tap (movement threshold)', /moved > 12/.test(tileCode));
   check('gate requires a matching pointerdown first', /if \(!down\) return;/.test(tileCode));
   check('player is prompted', tileSrc.includes('TAP TO CONTINUE'));
@@ -235,15 +238,10 @@ check('establishing key is node-only', panelKeyFor('hiphop', 'mercer_fork') === 
     check('no unguarded leave shortcut remains',
       !/keydown-(SPACE|ENTER)', \(\) => this\._continue\(\)\)/.test(rs));
   }
-  // The old fixed hand-off must be gone: nothing may advance on a bare timer.
-  check('no timed auto-advance to the next node',
-    !/delayedCall\([^)]*\)[\s\S]{0,120}openNode\(storyId, nextId/.test(tileCode)
-    || /awaitTapThen/.test(tileCode));
-  // Three timers: the reply beat, the prompt arm, and the AUTHORED PLAYER
-  // LINE auto-play (a one-item choice list is a balloon, not a button —
-  // workshop §A).  None of them advances to the next node.
-  check('only the reply beat, the prompt arm and the authored-line play are timed',
-    (tileCode.match(/scene\.time\.delayedCall\(/g) || []).length === 3);
+  // Balloons ≤ 25 words, split at sentence ends, never shrunk below 13 px.
+  check('word cap is 25 and copy is split, not shrunk', /WORD_CAP = 25/.test(tileCode) && /function splitByCap/.test(tileCode) && /MIN_FONT = 13/.test(tileCode));
+  check('placement + vocabulary come from the shared modules', /from '\.\/balloonLayout\.js'/.test(tileCode) && /from '\.\/balloonShapes\.js'/.test(tileCode));
+  check('the tray is the verbal-response tray (dialogue face, sentence case, ≤ 35% height)', /TRAY_MAX_H = Math\.round\(SCREEN_H \* 0\.35\)/.test(tileCode) && /fontFamily: LETTERING, color: afford/.test(tileCode));
   check('a one-item choice list plays as a balloon, never a button',
     /list\.length === 1 && !list\[0\]\._exit/.test(tileCode));
 }

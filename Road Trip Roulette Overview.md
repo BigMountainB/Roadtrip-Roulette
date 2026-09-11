@@ -204,6 +204,28 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 11) — Comic presentation SYSTEM: six-beat Seattle from the notes, balloon vocabulary, owner-approved timing, verbal tray, book parity, flow recording
+
+Owner: "scan the whole working notes… you can find the things you need" + Chat's course
+correction (owner = creative director; pilots are FLOWS; automatic QA; one demo). Built:
+- **Seattle** = the notes' approved six beats with every line quoted (handoff spine + Chat's
+  red-penned cypher/stakes + the owner's fan/fellow-artist response with his "songwriter"
+  correction): cypher → intro + 2 responses → route → stakes → decision (+ crew "Weak!" on pass).
+  New story fields: `node.lines[]`, `node.next`, `choice.after[]`.
+- **Balloon vocabulary** `src/ui/balloonShapes.js` (speech / player / whisper / phone / shout /
+  distress / thought / sarcasm / caption / sfx / offpanel, all in U = min(w,h)/100 per the notes)
+  shared by the tile and the book.
+- **Timing** = owner-approved: 2 s reveal gaps, wait for choice, hold 3 s / 6 s + 175 ms/word
+  past 10 (cap 9 s), tap skips, drag pauses, auto-slide; choice-less beats advance the same way.
+- **Tray** = translucent verbal-response tray (≤ 35%, dialogue face, sentence case, cream tabs).
+- **Book** renders with the same placement + shapes; beat notifications deferred past the
+  outer canon write so intro panels finally land in the book.
+- **QA gates** logged per placement (≤ 25 words, attribution, clipping, tray, slot). Three flows
+  recorded headless at iPhone CSS size: `review/comic_pilot_2026-09-10/flow/pilot_flows.mp4`
+  (+ key frames, `book_p1–6.png`, `report.json`; `debug/` overlays). 33 placements: 0 word-cap,
+  0 unattributed, 0 clipped, 0 under-tray, 10 forced (exception list for Chat in the notes).
+- Tests: storyart re-pinned to the hold contract; 18 files green; build green.
+
 ### 2026-09-10 (pt 10) — Comic dialogue workshop: Mercer-skip diagnosed + gated, full-screen tiles, captions, face-protected placement, three-panel pilot; Seattle back to the owner's lines
 
 Worked through the notes' "COMIC DIALOGUE WORKSHOP HANDOFF" (full report in the notes §"PILOT

@@ -143,33 +143,71 @@ export const PANEL_META = {
   'hiphop.seattle_lot': {
     art: 'assets/storylines/hiphop/seattle/seattle_01_freestyle_circle.png',
     caption:      { x: 0.60, y: 0.02, w: 0.38, h: 0.12 },   // narration, top-right sky above the player's head
-    bubble:       { x: 0.04, y: 0.03, w: 0.50, h: 0.24 },   // 1 Malik, over the underpass
-    playerBubble: { x: 0.50, y: 0.38, w: 0.24, h: 0.24 },   // 2 player, the empty lot between the crew and him
-    replyBubble:  { x: 0.10, y: 0.55, w: 0.24, h: 0.18 },   // 3 Malik's reply, low left (below 2; its tail clears the crew's hands)
-    tail:         { x: 0.32, y: 0.18 },                     // centre crew member's hood (Malik, face hidden)
+    // Beat 1 opening lines, in order (node.lines[i] → extra[i]): the crew's
+    // hype from off-panel (no tail), Malik's couplet over the skyline with a
+    // tail to his hood, the crowd's "AYYYY!" low-left as an SFX.
+    extra:        [{ x: 0.02, y: 0.02, w: 0.56, h: 0.09 },
+                   { x: 0.40, y: 0.14, w: 0.28, h: 0.20 },
+                   { x: 0.02, y: 0.60, w: 0.18, h: 0.10 }],
+    bubble:       { x: 0.04, y: 0.03, w: 0.50, h: 0.24 },   // (unused — Beat 1 has no main line)
+    playerBubble: { x: 0.50, y: 0.38, w: 0.24, h: 0.24 },
+    replyBubble:  { x: 0.10, y: 0.55, w: 0.24, h: 0.18 },
+    tail:         { x: 0.32, y: 0.18 },                     // Malik = the hooded centre performer (back of head)
     playerTail:   { x: 0.755, y: 0.31 },                    // player's mouth
     protect:      [{ x: 0.72, y: 0.15, w: 0.11, h: 0.20, kind: 'face' },    // player (the only visible face)
+                   { x: 0.28, y: 0.12, w: 0.10, h: 0.15, kind: 'head' },    // Malik's hood — tails may END here, balloons keep off it
                    { x: 0.74, y: 0.50, w: 0.07, h: 0.11, kind: 'hands' },
                    { x: 0.21, y: 0.35, w: 0.07, h: 0.10, kind: 'hands' },
                    { x: 0.38, y: 0.35, w: 0.06, h: 0.11, kind: 'phone' },
                    { x: 0.84, y: 0.20, w: 0.13, h: 0.62, kind: 'object' }], // guitar case
+  },  'hiphop.seattle_clock': {                           // Beat 2: Malik's intro + the player's response
+    art: 'assets/storylines/hiphop/seattle/seattle_02_crew_confrontation.png',
+    bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },   // 1 Malik
+    playerBubble: { x: 0.02, y: 0.53, w: 0.25, h: 0.20 },   // 2 player
+    replyBubble:  { x: 0.52, y: 0.50, w: 0.34, h: 0.22 },   // 3 Malik's reply, low right over his jacket
+    tail:         { x: 0.545, y: 0.41 },
+    playerTail:   { x: 0.30, y: 0.42 },
+    protect:      [{ x: 0.17, y: 0.20, w: 0.14, h: 0.32, kind: 'head' },    // player (back of head)
+                   { x: 0.40, y: 0.29, w: 0.06, h: 0.15, kind: 'face' },
+                   { x: 0.51, y: 0.27, w: 0.07, h: 0.16, kind: 'face' },
+                   { x: 0.73, y: 0.30, w: 0.07, h: 0.17, kind: 'face' },
+                   { x: 0.27, y: 0.58, w: 0.12, h: 0.23, kind: 'hands' },
+                   { x: 0.40, y: 0.53, w: 0.06, h: 0.13, kind: 'hands' }],
   },  'hiphop.seattle_route': {
     art: 'assets/storylines/hiphop/seattle/seattle_02_crew_confrontation.png',
     bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },   // 1 Malik
     playerBubble: { x: 0.02, y: 0.53, w: 0.25, h: 0.20 },   // 2 player
     replyBubble:  { x: 0.52, y: 0.50, w: 0.34, h: 0.22 },   // 3 Malik's reply, low right over his jacket
     tail:         { x: 0.545, y: 0.41 },
-    playerTail:   { x: 0.31, y: 0.42 },
-    protect:      [{ x: 0.17, y: 0.20, w: 0.14, h: 0.32, kind: 'face' },
+    playerTail:   { x: 0.30, y: 0.42 },
+    protect:      [{ x: 0.17, y: 0.20, w: 0.14, h: 0.32, kind: 'head' },
                    { x: 0.40, y: 0.29, w: 0.06, h: 0.15, kind: 'face' },
                    { x: 0.51, y: 0.27, w: 0.07, h: 0.16, kind: 'face' },
                    { x: 0.73, y: 0.30, w: 0.07, h: 0.17, kind: 'face' },
                    { x: 0.27, y: 0.58, w: 0.12, h: 0.23, kind: 'hands' },
                    { x: 0.40, y: 0.53, w: 0.06, h: 0.13, kind: 'hands' }],
+  },  'hiphop.seattle_stakes': {                          // Beat 3: lines 6a/6b/7 (extra) + line 8 (bubble), all Malik
+    art: 'assets/storylines/hiphop/seattle/seattle_06_stakes_phone.png',
+    extra:        [{ x: 0.02, y: 0.02, w: 0.24, h: 0.16 },   // 6a top-left sky
+                   { x: 0.37, y: 0.02, w: 0.24, h: 0.16 },   // 6b top-centre, between the heads
+                   { x: 0.72, y: 0.02, w: 0.26, h: 0.16 }],  // 7  top-right
+    bubble:       { x: 0.72, y: 0.20, w: 0.26, h: 0.30 },   // 8  right, over the pillar
+    playerBubble: { x: 0.02, y: 0.02, w: 0.24, h: 0.14 },
+    tail:         { x: 0.655, y: 0.34 },
+    playerTail:   { x: 0.335, y: 0.30 },
+    protect:      [{ x: 0.27, y: 0.17, w: 0.09, h: 0.17, kind: 'face' },
+                   { x: 0.61, y: 0.17, w: 0.10, h: 0.21, kind: 'face' },
+                   { x: 0.40, y: 0.35, w: 0.05, h: 0.08, kind: 'face' },
+                   { x: 0.50, y: 0.35, w: 0.05, h: 0.08, kind: 'face' },
+                   { x: 0.45, y: 0.42, w: 0.06, h: 0.15, kind: 'phone' },
+                   { x: 0.68, y: 0.58, w: 0.07, h: 0.15, kind: 'hands' },
+                   { x: 0.02, y: 0.22, w: 0.16, h: 0.60, kind: 'object' },
+                   { x: 0.86, y: 0.55, w: 0.14, h: 0.45, kind: 'car' }],
   },  'hiphop.seattle_offer': {                         // the stakes + decision (handoff 2026-09-10)
     art: 'assets/storylines/hiphop/seattle/seattle_06_stakes_phone.png',
-    bubble:       { x: 0.37, y: 0.02, w: 0.24, h: 0.30 },   // Malik, the sky between the heads (lines 6–9 split/stack here)
-    playerBubble: { x: 0.02, y: 0.02, w: 0.24, h: 0.14 },   // player, top-left sky
+    extra:        [{ x: 0.02, y: 0.02, w: 0.30, h: 0.14 }], // 9a top-left sky
+    bubble:       { x: 0.37, y: 0.02, w: 0.24, h: 0.16 },   // 9b top-centre, between the heads
+    playerBubble: { x: 0.19, y: 0.42, w: 0.20, h: 0.26 },   // (only if no choice art swaps in)
     tail:         { x: 0.655, y: 0.34 },                    // Malik's mouth
     playerTail:   { x: 0.335, y: 0.30 },                    // player's mouth
     protect:      [{ x: 0.27, y: 0.17, w: 0.09, h: 0.17, kind: 'face' },    // player
@@ -188,8 +226,8 @@ export const PANEL_META = {
     playerBubble: { x: 0.02, y: 0.02, w: 0.30, h: 0.20 },   // 1 player, right above his head (owner)
     replyBubble:  { x: 0.56, y: 0.50, w: 0.34, h: 0.22 },   // 2 Malik's reply, low right "by his crotch" (owner)
     tail:         { x: 0.63, y: 0.40 },                     // Malik's mouth
-    playerTail:   { x: 0.31, y: 0.37 },                     // player's mouth
-    protect:      [{ x: 0.10, y: 0.24, w: 0.13, h: 0.18, kind: 'face' },    // player
+    playerTail:   { x: 0.21, y: 0.38 },                     // player's mouth (profile)
+    protect:      [{ x: 0.10, y: 0.24, w: 0.14, h: 0.18, kind: 'face' },    // player
                    { x: 0.60, y: 0.26, w: 0.10, h: 0.17, kind: 'face' },    // Malik
                    { x: 0.78, y: 0.37, w: 0.05, h: 0.09, kind: 'face' },    // crew ×3
                    { x: 0.86, y: 0.37, w: 0.05, h: 0.09, kind: 'face' },
@@ -474,12 +512,14 @@ export const PANEL_META = {
     bubble:       { x: 0.27, y: 0.02, w: 0.40, h: 0.16 },   // (no spoken opening line on this node)
     playerBubble: { x: 0.27, y: 0.02, w: 0.40, h: 0.16 },   // 2 player, top-centre over the sky
     replyBubble:  { x: 0.36, y: 0.50, w: 0.30, h: 0.22 },   // 3 Brittney, over the trunk, tail up to her
-    tail:         { x: 0.850, y: 0.195 },
-    playerTail:   { x: 0.518, y: 0.290 },
+    tail:         { x: 0.78, y: 0.18 },                     // side of Brittney's head
+    playerTail:   { x: 0.49, y: 0.31 },                     // player's mouth
     protect:      [
-      { x: 0.44, y: 0.20, w: 0.14, h: 0.25 }, // Player + steering wheel
-      { x: 0.68, y: 0.07, w: 0.20, h: 0.80 }, // Brittney
-      { x: 0.80, y: 0.17, w: 0.16, h: 0.58 }, // open passenger door
+      { x: 0.45, y: 0.25, w: 0.08, h: 0.13, kind: 'face' },   // player's face through the rear window
+      { x: 0.73, y: 0.10, w: 0.08, h: 0.13, kind: 'head' },   // Brittney's head (turned away)
+      { x: 0.44, y: 0.20, w: 0.14, h: 0.25, kind: 'object' }, // steering wheel / cabin
+      { x: 0.68, y: 0.07, w: 0.20, h: 0.80, kind: 'body' },   // Brittney
+      { x: 0.80, y: 0.17, w: 0.16, h: 0.58, kind: 'object' }, // open passenger door
     ],
   },
   'country.mercer_departure.board': {
@@ -488,12 +528,14 @@ export const PANEL_META = {
     bubble:       { x: 0.27, y: 0.02, w: 0.40, h: 0.16 },   // (no spoken opening line on this node)
     playerBubble: { x: 0.27, y: 0.02, w: 0.40, h: 0.16 },   // 2 player, top-centre over the sky
     replyBubble:  { x: 0.36, y: 0.50, w: 0.30, h: 0.22 },   // 3 Brittney, over the trunk, tail up to her
-    tail:         { x: 0.850, y: 0.195 },
-    playerTail:   { x: 0.518, y: 0.290 },
+    tail:         { x: 0.78, y: 0.18 },                     // side of Brittney's head
+    playerTail:   { x: 0.49, y: 0.31 },                     // player's mouth
     protect:      [
-      { x: 0.44, y: 0.20, w: 0.14, h: 0.25 },
-      { x: 0.68, y: 0.07, w: 0.20, h: 0.80 },
-      { x: 0.80, y: 0.17, w: 0.16, h: 0.58 },
+      { x: 0.45, y: 0.25, w: 0.08, h: 0.13, kind: 'face' },   // player's face through the rear window
+      { x: 0.73, y: 0.10, w: 0.08, h: 0.13, kind: 'head' },   // Brittney's head (turned away)
+      { x: 0.44, y: 0.20, w: 0.14, h: 0.25, kind: 'object' }, // steering wheel / cabin
+      { x: 0.68, y: 0.07, w: 0.20, h: 0.80, kind: 'body' },   // Brittney
+      { x: 0.80, y: 0.17, w: 0.16, h: 0.58, kind: 'object' }, // open passenger door
     ],
   },
   'country.need_hunger.sushi': {

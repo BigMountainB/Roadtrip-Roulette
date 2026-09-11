@@ -3813,6 +3813,217 @@ Audit RestStop/Game scene shutdown handlers, loader listeners, delayed calls, ge
 
 Before calling the problem improved, run the same route on the oldest supported iPhone and record texture totals at cold boot, after Mercer, after multiple later stops, after opening/closing the comic repeatedly, after 30+ minutes backgrounded, and after repeated portrait↔landscape rotations. Memory should plateau inside the approved budget rather than climb toward ~825 MiB. A restart without a JS-error marker, especially after backgrounding or rotation, should continue to be treated as probable WebKit memory termination.
 
+## OWNER COURSE CORRECTION — COMIC PILOT WORKFLOW (2026-09-10)
+
+**This section overrides any interpretation of the earlier workshop that turns the owner into a panel-by-panel bubble-position tester.** Claude's technical directions remain useful, but the owner's direction sits on top of them and wins whenever they conflict. If a Claude-authored instruction appears to negate, weaken, or reinterpret an owner instruction, stop and ask the owner rather than choosing Claude's interpretation.
+
+### The train that must be put back on the tracks
+
+The owner did **not** agree to an open-ended loop where Claude displays one screenshot, the owner explains why an individual text box is wrong, Claude nudges it, and the cycle repeats. The agreed objective was:
+
+1. Build a **reusable comic presentation system**, not hand-place the entire book with the owner.
+2. Prove the system on a **small representative pilot** before rollout.
+3. Have Claude and ChatGPT/Codex perform the technical and visual QA through the shared notes/review folder.
+4. Bring the owner one coherent gameplay demonstration for high-level approval, or ask a genuinely creative/story question that cannot be resolved from existing canon.
+5. Once the pilot passes, apply the rules systematically and surface only exceptional panels that truly require owner judgment.
+
+The owner is the creative director, not the production placement operator. Do not ask the owner to specify pixel coordinates, tail angles, individual bubble widths, or repeated micro-adjustments.
+
+### Current pilot review — NOT ready for owner approval
+
+Chat/Codex reviewed the normal and debug images in `review/comic_pilot_2026-09-10/`. The package proves that the underlying sequence can be captured, but it does not yet prove the promised comic system.
+
+Observed system-level defects:
+
+- `03_seattle_offer_tray.png`: Malik's second balloon is a large wall of text pushed against/off the right side. It violates the intended 5–10-word norm and 20–25-word hard ceiling per balloon. Long dialogue must become several timed, leapfrogging balloons or another tile; it must not be solved by one oversized box or smaller lettering.
+- Several tails technically avoid a protected rectangle but point at a visor, roof, door, or empty area rather than clearly identifying the speaker's mouth. Collision avoidance alone is insufficient; speaker attribution must also read correctly.
+- The response tray still reads as two or three full-width game-menu bars in condensed display type. The owner asked for responses that feel like spoken dialogue: mixed-case, readable comic lettering, softer/translucent balloon or dialogue-tab treatment, and clear separation without overwhelming the artwork.
+- The screenshots emphasize final static placement. They do not demonstrate the central interaction contract: wait indefinitely for Player choice; add the selected Player balloon; add any following NPC balloons in the same tile; hold 3 seconds when Player is last or 6 seconds/long-text extension when an NPC follows; tap to skip the hold; then slide; allow scroll-back.
+- The normal screenshots do not show that the same ordered/ratio-authored tiles translate coherently into the permanent menu comic, where placement changes but tile heights, ratios, reading order, captions, and dialogue identity remain compatible.
+- The caption in `11_mercer_departure_caption.png` is the correct **content type**, but the tails still do not convincingly identify Player and Brittney. This should be solved through validated speaker anchors/fallbacks, not by asking the owner to move them by eye.
+- Eleven normal plus eleven debug screenshots are useful engineering evidence, but they are too granular as an owner-facing approval flow. They belong in Claude↔Chat/Codex QA.
+
+### Required workflow from this point
+
+#### Phase 1 — Freeze owner-facing iteration
+
+- Stop presenting individual bubble placements to the owner for correction.
+- Do not roll the current placement logic across the rest of the comic.
+- Do not generate or alter story artwork to conceal layout failures.
+- Do not rewrite approved dialogue merely to make a weak layout algorithm fit, except to split the exact dialogue into approved ≤25-word balloons without changing its wording or meaning.
+
+#### Phase 2 — Claude completes the three representative SYSTEM pilots
+
+The original three pilot subjects remain correct, but each is a **flow**, not merely a screenshot:
+
+1. Seattle introduction/offer: real multi-option response tray, selected Player balloon, Malik continuation, long-dialogue splitting, and tile advance timing.
+2. Mercer counter→hook→fork: full introduction gates the storefront, alternating dialogue is sequenced, and “Me or the phone” behaves as a genuine decision.
+3. Mercer departure: square caption plus Player and Brittney speech balloons with unmistakable speaker attribution and no protected-region collision.
+
+For each flow, validate both:
+
+- live gameplay strip behavior; and
+- the resulting permanent comic rendering.
+
+Claude should use scripted/dev controls to exercise every state without asking the owner to replay and narrate each failure.
+
+#### Phase 3 — Automatic QA must reject bad layouts
+
+A candidate is not a pass merely because its rectangle is green in the current debug overlay. Add/check these gates:
+
+- No speech balloon above 25 words; target 5–10.
+- Minimum readable font and padding floors remain intact.
+- Balloon body, text, tail base, and complete tail path avoid protected faces, hands, phones, clues, and tray-risk regions.
+- Tail endpoint/route unmistakably attributes the correct visible speaker. If a mouth is obscured or off-panel, use an authored safe edge direction, off-panel speaker convention, or no-tail caption—not a tail aimed at a random object.
+- Reading order is obvious without debug numbers.
+- No balloon is clipped, flush against the viewport, or hanging outside its intended gutter.
+- Response tray never covers required art and reads as speech choices rather than settings/menu buttons.
+- If no legal placement exists, the engine must split the dialogue/tile or flag the panel for Claude↔Chat review. It must not silently shrink, overlap, or ask the owner to place it.
+- The tile must pass at the phone's actual CSS size, not only in a large desktop capture.
+
+#### Phase 4 — Claude↔Chat/Codex review loop
+
+Claude owns code execution and capture. Chat/Codex owns the visual/comic-design critique. Use this shared handoff:
+
+1. Claude updates the pilot and saves a concise set of normal + debug evidence in the review folder.
+2. Claude writes one short note identifying what changed, which automated gates pass, and any unresolved exceptions.
+3. The owner can tell Chat/Codex “review Claude's comic pilot.” Chat/Codex reviews the package and writes actionable system-level feedback here.
+4. Repeat between Claude and Chat/Codex until the pilot is coherent. Do not route ordinary spacing/placement decisions through the owner.
+
+This does not mean Claude should blindly obey Chat/Codex over the owner. Owner canon and explicit owner directions remain authoritative. Any genuine conflict goes to the owner as a concise question before implementation.
+
+#### Phase 5 — What the owner should finally receive
+
+Present one short, coherent demonstration of the three flows at actual iPhone scale, preferably as a brief screen recording or a minimal sequence—not 22 diagnostic images. Include only:
+
+- how the live conversation reads and advances;
+- how choices feel as verbal responses;
+- how the same beats appear in the menu comic; and
+- a short list of any remaining **creative** decisions.
+
+Owner approval is about overall feel, pacing, readability, humor, and story—not correcting each tail by hand.
+
+### Rollout boundary
+
+Do not bulk-author coordinates for the remaining panels until the pilot passes the rules above. After it passes, automatically process straightforward panels and create an exception list only for panels where safe placement, speaker identity, or story emphasis remains genuinely ambiguous. Group those exceptions for one owner/Chat review rather than interrupting the owner one image at a time.
+
+## OWNER DIRECTIVE — RANKED PLACEMENT ZONES, LINKED BALLOONS, AND VISUAL VARIETY (2026-09-10)
+
+This directive refines and overrides the pilot's earlier binary `protect` interpretation. A panel does not consist only of “protected” and “available” pixels. Author and score **multiple semantic levels** so the placement engine knows what it may cover first and what it may never cover.
+
+### Zone hierarchy
+
+The owner’s hierarchy, from most protected to least protected:
+
+1. **Level 1 — faces: absolute exclusion.** Nothing may cover a face: not a balloon body, caption, text, tail base, connecting tail, speaker tail, response tray, label, or sound effect. A tail may point toward a mouth but must stop before entering the face boundary. Give the face boundary a small safety margin so strokes do not visually touch it.
+2. **Level 2 — essential bodies and story objects: strongly protected.** This includes the body/gesture needed to read the acting, plus objects necessary to understand the beat: phone, handoff, hospital bill, cooler, instrument, car damage, weapon, name tag, relevant clothing state, and similar story evidence. Avoid these whenever possible. Partial overlap is permitted only after all placements that use empty space or Level 3 have failed, and the overlap must leave the action/object understandable.
+3. **Level 3 — ordinary scene detail: preferred overlap zone.** Background architecture, sky texture, shelves, pavement, foliage, nonessential car surfaces, and other atmosphere may be covered before Level 2. The engine should still prefer clean negative space, but this is the first semantic material it is allowed to sacrifice.
+
+In addition, treat **unmarked negative space** as Level 0/preferred placement: try to place the complete balloon/caption outside every marked level before covering anything.
+
+Required fallback order:
+
+1. Entire box/tail in unmarked negative space.
+2. Entire box/tail using only Level 3 scene detail.
+3. Box/tail spanning negative space plus Level 3.
+4. If still impossible, allow the smallest useful overlap with Level 2 while using Level 3/negative space for the rest.
+5. Try an alternate shape, attachment edge, linked-balloon arrangement, gutter position, or approved crop.
+6. Split the dialogue into another linked balloon or another tile.
+7. **Never fall through into Level 1. Faces remain forbidden even when every other candidate fails.** Return a layout exception instead.
+
+This is a weighted layout problem: Level 1 overlap has infinite/reject cost; Level 2 has a very high cost; Level 3 has a modest cost; negative space has zero cost. Score the complete visible geometry, not only the balloon's rectangular bounding box.
+
+### Metadata model
+
+Field names may differ, but the data must preserve the hierarchy explicitly rather than flattening everything into `protect`:
+
+```js
+zones: [
+  { level: 1, kind: 'face', speaker: 'brittney', shape: /* rect/polygon */ },
+  { level: 2, kind: 'body', speaker: 'brittney', shape: /* rect/polygon */ },
+  { level: 2, kind: 'phone', storyObject: true, shape: /* rect/polygon */ },
+  { level: 3, kind: 'sceneDetail', shape: /* rect/polygon */ }
+]
+```
+
+Existing `protect` records should be migrated/classified rather than automatically treated as equal. Rectangles are acceptable for the pilot, but polygons/masks may be useful where a large rectangular body box would unnecessarily forbid clean space around an arm or silhouette.
+
+The debug view must color each level differently and report how much of each candidate overlaps Levels 2 and 3. A “green” candidate means **zero face overlap and the best available semantic score**, not merely that it stayed inside the panel bounds.
+
+### Reading order — upper-left first
+
+The balloon closest to the panel's **upper-left** is the first balloon in reading order. Later balloons progress naturally rightward and/or downward. Placement must make the authored sequence visually obvious without numbered debug labels.
+
+- Do not place balloon 2 above or meaningfully farther left than balloon 1.
+- Do not create a zig-zag that asks the reader to jump backward toward the upper-left.
+- When balloons occupy roughly the same horizontal band, read left to right.
+- When moving to a new band, read top to bottom and begin again at its leftmost balloon.
+- The debug overlay should number the resolved order and fail layouts whose geometric reading order contradicts the authored dialogue order.
+
+This rule governs visible balloons on a completed tile. Live sequencing still reveals them in authored order, but the final accumulated tile must also read correctly when revisited or placed in the permanent comic.
+
+### Linked/attached balloons
+
+Text balloons may use tails or bridges that **attach one balloon to another**, allowing short pieces of dialogue to form a designed chain instead of one oversized rectangle.
+
+- A continuation from the same speaker may use a short connecting tail/bridge from balloon 1 to balloon 2; the balloon nearest or last connected to the visible speaker carries the speaker-pointing tail when that gives the clearest attribution.
+- Connected balloons inherit one clear reading chain from the upper-left outward/downward.
+- A connector is part of the collision geometry. It may cross Level 3 first, Level 2 only as a last resort, and never a face or another balloon's text.
+- Alternating speakers should normally remain visually distinct and point to their own speakers. Do not connect unlike speakers in a way that makes attribution ambiguous.
+- Linked balloons are a preferred solution for Malik's long Seattle explanation: preserve several short rhythmic statements rather than one giant text wall.
+
+### OWNER CORRECTION — tail length is unrestricted; tail width is constrained (2026-09-10)
+
+Do **not** impose a maximum tail length. A long tail is valid when the balloon must sit in safe negative space far from its speaker. The defect in the current pilot is not length by itself; it is that several tails widen into enormous white wedges that dominate the artwork and cover too much Level 2/3 material.
+
+- Tail width must **not scale up with tail length**. Long tails remain narrow.
+- Prefer a slender tapered ribbon, curved pointer, or narrow multi-segment route over a broad triangle.
+- Starting implementation target: speaker-tail base no wider than about `1.25 ×` the rendered text line-height; hard ceiling `1.75 ×` line-height. A balloon-to-balloon connector should normally be no wider than `0.75 ×` line-height. These are responsive limits, not source-image pixels.
+- The speaker tip should resolve to a narrow point/stroke; it may approach the mouth anchor but must stop outside the Level 1 face boundary.
+- If a straight narrow tail would cross a face or essential object, route it with a gentle bend or controlled zig/zag through negative space or Level 3. Do not solve routing by broadening the tail.
+- Measure collision using the actual narrow tail polygon/stroke, not the large triangle between balloon and speaker.
+- QA should report tail base width and connector width and fail any tail over the width ceiling. **Do not fail a tail merely because it is long.**
+
+This correction supersedes any review language that calls for limiting tail length. Review long tails for routing, attribution, protected-zone overlap, and width only.
+
+### Different and unique text-box shapes
+
+The owner wants **creative, unique text containers that do not default to rectangles**. “Text box” is only shorthand for the region holding readable text; it does not prescribe a four-sided silhouette. Rectangles and rounded rectangles are members of the system, not its default answer. Shape should support voice, delivery, medium, character, and dramatic beat while remaining readable:
+
+- ordinary speech: organic oval, egg, bean, capsule, gently lobed, or controlled asymmetrical balloon rather than a rounded rectangle;
+- playful/flirtatious speech: buoyant asymmetric curves, a subtle tilt, or an offset lobe without sacrificing text fit;
+- awkward/hesitant speech: uneven contour, pinched shape, staggered linked bubbles, or deliberately interrupted outline;
+- quiet/whispered speech: soft cloud/scalloped silhouette or clearly designed dashed/dotted outline;
+- shouting/anger/alarm: angular burst, compressed starburst, or tense zigzag contour;
+- worried/threatened speech: taut irregular contour or subtly trembling/wavy edge;
+- phone/radio/electronic voice: clipped-corner, stepped, waveform, or compact mechanical silhouette with an electrical/stepped tail;
+- thought: cloud form with diminishing thought bubbles;
+- narration/action/context: rectangular, notched, ribbon, tab, torn-paper, ticket, road-sign, or location-card caption with no speaker tail;
+- Player responses: visually related to speech, but allowed their own recurring silhouette/color family so choices feel spoken instead of like menu buttons;
+- linked dialogue: two or more different-size organic balloons joined by a narrow bridge or tail, with the combined outer silhouette composed intentionally;
+- absurd cutaway/SFX: custom lettering container or no enclosing shape when legibility permits, rather than an ordinary dialogue balloon.
+
+Do not randomly select a shape from a library. Use authored tone metadata plus character/medium to select an appropriate family, then allow controlled variation in contour, aspect ratio, lobe placement, tilt, tail attachment, and linked arrangement. Consecutive balloons should not look mechanically cloned, but recurring visual grammar must remain recognizable.
+
+The interior text area does not need to mimic the outer contour. Keep a safe, simple inset text region inside expressive silhouettes so words remain comfortably readable. Do not shrink type, crowd lettering against a decorative edge, or make the silhouette so elaborate that it competes with the artwork.
+
+Variety must be **authored by tone/category and constrained by a coherent visual family**, not random decoration. Repeated lines from one speaker may vary subtly, but the reader must be able to recognize speech, thought, phone, narration, whisper, and shout immediately. Shape variation never overrides the face rule, reading order, minimum font, or word ceiling.
+
+### Pilot acceptance additions
+
+The three-system pilot is not ready until it demonstrates:
+
+- all three semantic levels in the debug overlay;
+- at least one layout that occupies negative space only;
+- at least one layout that deliberately covers Level 3 while preserving Levels 1–2;
+- at least one constrained layout that uses a small Level 2 overlap without hiding the essential action;
+- a linked-balloon chain whose first balloon is nearest the upper-left;
+- at least three clearly different, story-appropriate balloon shapes;
+- automatic rejection of every candidate that touches a face;
+- identical understandable reading order in the live completed tile and permanent comic.
+
+Claude and ChatGPT/Codex should resolve the ordinary geometry and visual QA under these rules. Ask the owner only if the **classification itself** is ambiguous—for example, whether an object or gesture is essential to understanding the story—not where to move an individual balloon.
+
 ## COMIC DIALOGUE WORKSHOP — PILOT REPORT (Claude, 2026-09-10, later)
 
 Owner: "Work through the handoff. Diagnose the Mercer skip and build the three-panel review
@@ -3932,3 +4143,76 @@ errors. Chat/Codex: review these before any placement is applied to the rest of 
 ### Chat's iPhone restart-stability audit (this file, previous section)
 Read in full. No change made: it says "ask the owner before implementation". Ready to start
 P0 (per-stop rest-stop working set) on the owner's word.
+
+## COMIC PILOT — SYSTEM BUILD + FLOW EVIDENCE (Claude, 2026-09-10, late) — for Chat/Codex review
+
+Per §"OWNER COURSE CORRECTION — COMIC PILOT WORKFLOW": one note, what changed, which gates
+pass, what is unresolved.  Owner-facing deliverable = `review/comic_pilot_2026-09-10/flow/pilot_flows.mp4`
+(the three flows at iPhone CSS size, engine-timed; only the choices are tapped).
+
+### What changed (all in code, commit follows this note)
+- **Seattle is the six-beat opening from these notes**, every line quoted (sources in the code
+  comments): Beat 1 cypher (`seattle_lot`: caption + crew hype [V3] + the NoiseCloud couplet [V3] +
+  crowd SFX), Beat 2 `seattle_clock` (Malik line 1 [H] + TWO responses: the owner's "I don't know
+  you…" [H] and the owner-added fan/fellow-artist response [OA] with his "songwriter" correction:
+  "Malik Reed? I follow your work. I'm a songwriter too." → "Then you know what a Friday press
+  deadline means." sets `flags.malikFan`, Malik +5), `seattle_route` [H 3–5], `seattle_stakes`
+  [H 6–8 split at sentence ends], `seattle_offer` [H 9 split at the dash] → carry / pass [H];
+  pass now has the crew's off-panel "Weak!" [H].  Guarded "Who's asking?" left out (superseded
+  by the owner's correction; Malik has already introduced himself in Beat 2).
+- **Data model**: `node.lines[]` (opening sequence, each `{speaker, text, kind}`), `node.next`
+  (choice-less beat), `choice.after[]` (lines that follow the reply).  Validator updated.
+- **Balloon vocabulary** (`src/ui/balloonShapes.js`, pure): U = min(w,h)/100; speech (organic
+  oval, outline 0.75U ≥ 2 px, padding 3.5U/2.5U, tail 14–22U, base 6–9U), player (cream, boxier),
+  whisper (dashed 2.5U/1.75U), phone (squared + filled 3-bend zig-zag), shout (18–28 spikes,
+  depth 2–4U), distress (wavy 0.7–1.2U / 5–7U), thought (cloud + 2–3 bubbles), sarcasm
+  (double line), caption (square, gold/cream), sfx (free lettering, 6–10°, 10–16% panel width),
+  offpanel (no tail).  Shared by the live tile (Phaser) and the book (canvas).
+- **Placement** (`balloonLayout.js`): protect rects with kinds; tails stop 3 px short of the
+  face they point at and are rejected if they would cross a face/hands/phone (may cross
+  body/object/car); 4 px clearance; reading-order slots (`bubble` → `extra[i]` → `playerBubble`
+  → `replyBubble`; a reply goes below/right of what it answers, low corners first); every
+  placement logged with gates.
+- **Timing** = the owner-approved sequence: reveal 2 s apart (+90 ms/word past 8); strip waits
+  indefinitely for the choice; player balloon; NPC reply / `after` lines; HOLD 3 s (player
+  last) or 6 s + 175 ms/word past 10 (NPC last), cap 9 s; a tap skips; a review drag pauses;
+  then slide.  Choice-less beats hold the same way.
+- **Tray**: smoked glass ≤ 35% height, shrinks with fewer choices; cream sentence-case choice
+  tabs in the dialogue face with a quote-tail motif; unselected fade, tray retracts.
+- **Book** (`ComicReader.renderPage`): same placement + vocabulary; captions; reply after the
+  player's balloon; ≤ 25-word splitting.  Beat notifications are now deferred until the outer
+  canon write lands (the cypher intro panel never reached the book before — nested write was
+  clobbered).
+- Mercer skip gate (`startedThisRun`) and `?storyreset` unchanged from the earlier report.
+
+### Automated gates (report.json in `flow/`): 33 placements across the three flows
+| Gate | Result |
+|---|---|
+| ≤ 25 words per balloon | 0 violations |
+| Tail attributes a visible face/head of the speaker (or no-tail convention) | 0 unattributed |
+| Nothing clipped / outside the panel | 0 |
+| Nothing under the tray band | 0 |
+| Placement used an alternate slot | 5 (tl 1, tr 1, below 1, right 1, br 1, bl 1) |
+| Placement FORCED to its authored slot after every alternate collided | **10 — the open exception list** |
+| Page errors | 0 |
+
+The forced ten read correctly on screen (they are the authored slot; the collision is a tail
+path or clearance rule, not a face) — but per Phase 3 they are flagged, not passed: the couplet
+and the crowd SFX on the cypher; the fan response on Beat 2; stakes lines 7 and 8; line 9a;
+Brittney's `mercer_hook` reply, "You can use Malik's ticket." (the fork line's second balloon),
+the `both` reply; and Brittney's departure line.  Chat/Codex: please review these ten in
+`flow/f1_01…f3_01` + `debug/` (green = clean, red = forced) and say whether the rule or the
+authored slot should move.  I will not touch them by eye.
+
+### Book check
+Six pages: [cypher intro + fan] · [carry] · [crew warning] · [both] · [chooseBrittney] ·
+[departure] (`flow/book_p1…p6.png`).  Reading order and identity match the live tiles.  Known
+gap: the book records only line/label/reply per event — the opening `lines[]` (couplet, stakes
+6–8) are live-strip only for now; Chat to say whether Beat 1 and Beat 3 need their own book
+events (editorial `comic:` flag still unbuilt).
+
+### Still open (creative, for the owner)
+- Approve the fan response wording ("I'm a songwriter too.") and whether it should also earn a
+  later payoff line (notes ~1628 proposals — none written).
+- The persistence policy (unfinished passenger story on a new run).
+- Placeholder dialogue list (previous section) still stands.
