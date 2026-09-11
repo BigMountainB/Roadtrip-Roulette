@@ -451,7 +451,7 @@ export const FEATURED_STORIES = {
           {
             id: 'chooseBrittney', consequential: true, next: null,
             panelKey: 'country.mercer_fork.ride',
-            label: "You. Leave the phone.",
+            label: "You look a lot more enjoyable to ride with than this cracked phone.",
             reply: "Good answer.",
             // +3 (both) +2 here = +5 Brittney total; Malik −10 for wavering.
             effects: {
@@ -463,7 +463,7 @@ export const FEATURED_STORIES = {
           },
           {
             id: 'keepPromise', consequential: true, next: null,
-            label: "I have to take the phone.",
+            label: "I think you should keep your job, and I've got to get this phone to Issaquah.",
             reply: "Then take his phone and go. Don't miss the exit. Malik watches that phone's location like it's the RedZone. He's had people beaten up for less.",
             effects: { flags: { mercerDone: true, path: 'hiphop', brittneyRefused: true }, relationship: 10 },
           },

@@ -3308,3 +3308,7 @@ Fits between `dom_tape` (North Bend) and `pass_tennessee`; dialogue for red-pen,
 | 7 | Dom tape-leverage beats (`dom_terms`, the Malik call branch) | ORD | after the scenario is approved | 1–2 NEW at most: Dom naming his price at North Bend (reuse `north_bend_01` crop-test first). |
 | 8 | Classic Rock differentiation (Washtucna / La Crosse duet / Colfax deal ×4 / Colfax name ×3) | ORD | blocking for endings, after the owner's Classic Rock pass | unchanged from the earlier list. |
 Withdrawn: brief B (walk-off — reuses `seattle_05`), brief E (counter welcome — reuses `mercer_01`), brief F (ultimatum — reuses `mercer_04`), C-pass.
+
+### Ultimatum player lines — OWNER 2026-09-10 (replace Claude's placeholders; now in code)
+- `mercer_ultimatum.chooseBrittney`: "You look a lot more enjoyable to ride with than this cracked phone."
+- `mercer_ultimatum.keepPromise`: "I think you should keep your job, and I've got to get this phone to Issaquah."
