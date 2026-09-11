@@ -3285,3 +3285,26 @@ Fits between `dom_tape` (North Bend) and `pass_tennessee`; dialogue for red-pen,
 2. Dom's number: $500 up front, or tied to Malik's star payout (e.g. 20% of what Malik pays the player)?
 3. Does Dom appear at the Cle Elum reunion when paid (needs one new panel), or is the payment off-screen?
 4. Should "Sell Dom out" also cost the player Dom's North Bend safety (the "funeral" threat) on a later run?
+
+## OWNER ANSWERS 2026-09-10 (fourth batch) — applied
+- **North Bend accusation stays "You took my phone and my girl?"** — owner: nobody will care
+  that the player doesn't currently have the phone; he did take it from Malik originally.
+  (Closes the open item in the handoff §"Non-negotiable continuity".)
+- **Dom does NOT show up at Cle Elum when paid** (payment is off-screen / by message).
+- **The player taking a cut of Dom's money IS allowed** (Dom tape-leverage draft, choice 4).
+- The ultimatum's two player buttons are Claude's words ("You. Leave the phone." / "I have
+  to take the phone.") — the owner may replace them; everything else in Seattle/Mercer is the
+  handoff verbatim.
+
+## ART NEEDED — status after the handoff implementation (2026-09-10, supersedes the earlier list where they overlap)
+| # | key | ratio | pri | status / brief |
+|---|---|---|---|---|
+| 1 | `hiphop.mercer_malik_call` | ORD 16:9 | **blocking** (beat is LIVE, renders a placeholder in the book) | NEW — brief D: night interior at the Mercer lot exit / on the way to the bridge, the cracked phone lit in the cupholder with MALIK on screen, the player's hand hovering, skyline in the mirror.  Upper half clear for three phone balloons (upper-right) + the player's two lines (upper-left).  Phone protected; nothing story-critical in the lower 35%.  (Crop-test `vantage_00_locked_phone_in_car.png` first — same object motif.) |
+| 2 | `hiphop.seattle_pullout` | NARROW 2:3 | important | NEW — brief C-carry: night dash, phone glowing in the cupholder, road ahead, Seattle in the mirror; top 30% clear for the caption.  Beat not wired until the art exists. |
+| 3 | `hiphop.seattle_offer` (stakes) · `hiphop.vantage_hospital.wake` · `country.ellensburg_haylee` · `country.vantage_arrival.reunion` · Haylee sheet + portrait | — | **owner visual approval** | All wired and will show; owner to eyeball on device. |
+| 4 | `hiphop.seattle_clock` / `hiphop.seattle_route` | ORD | polish | Both reuse `seattle_02_crew_confrontation.png` (live-only tiles, not in the book) — fine unless the owner wants the route exchange on its own frame. |
+| 5 | `hiphop.mercer_counter` / `hiphop.mercer_hook` | ORD | polish | Reuse `mercer_01_brittney_double_shift.png` (live-only). |
+| 6 | Vantage ending set (exit, jumps out, Ride 'Em / Standard / Barely goodbyes, New Contact portrait) | ORD/WIDE | important, after the StageWagon celebration draft | 6 NEW — briefs to follow the celebration/reward draft. |
+| 7 | Dom tape-leverage beats (`dom_terms`, the Malik call branch) | ORD | after the scenario is approved | 1–2 NEW at most: Dom naming his price at North Bend (reuse `north_bend_01` crop-test first). |
+| 8 | Classic Rock differentiation (Washtucna / La Crosse duet / Colfax deal ×4 / Colfax name ×3) | ORD | blocking for endings, after the owner's Classic Rock pass | unchanged from the earlier list. |
+Withdrawn: brief B (walk-off — reuses `seattle_05`), brief E (counter welcome — reuses `mercer_01`), brief F (ultimatum — reuses `mercer_04`), C-pass.
