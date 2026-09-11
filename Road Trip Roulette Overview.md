@@ -204,6 +204,30 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 7) — OUT OF GAS card never appeared when a run ENTERED gameplay already at 0 gas
+
+Owner: "when I'm out of gas, the out of gas ending doesn't pop up." Root cause in `GameScene`: the
+stranded check (popup + 1.4 s later the OUT OF GAS card) lived INSIDE the fuel-burn block, which only
+runs while the car is moving AND `gasMi > 0`. Any run that arrived in gameplay with the tank already at
+exactly zero never entered that block, the car was speed-locked to 0 (`gasMi <= 0 → targetSpeed 0`),
+and nothing ever showed — a silent dead end. Ways to get there, all real:
+- the live snapshot rounds the tank to whole miles (`gas: Math.round(gasMi)`), so any autosave
+  (every 3 s, plus the pagehide flush) taken with under half a mile left restores at 0;
+- LOAD SAVE from the card itself when the newest save is that near-empty autosave;
+- a checkpoint forward-warp that drains the tank (`gasMi − rs.mileage`);
+- a tow with exactly $200 in the wallet ($0 of gas → 0 mi → dropped at the previous town on empty).
+
+Fix: the stranded check now runs on its own, every frame, whenever `gasMi <= 0` in live gameplay
+(not custom mode, not title/intro, no ending cinematic or finish in flight, no card already up).
+Probe-verified headless: (1) car stationary with the tank set to exactly 0 → popup, card at ~1.4 s
+with TOW / LOAD SAVE; (2) TOW with exactly $200 → lands at the previous town with 0 gas → the card
+comes straight back reading WALLET $0 with BACK TO SEATTLE — $0. The natural run-dry path (tank
+burned to zero while driving) unchanged and re-verified. 17 test files green, build green.
+
+Open question for the owner: the $200-even tow is a wasted tap (tow → $0 → Seattle anyway).
+Options: require $201+ to offer the tow, or let the tow drop the car AT the rest stop so the
+player can at least shop. Left as-is pending the call.
+
 ### 2026-09-10 (pt 6) — AUTHORITATIVE DIALOGUE HANDOFF implemented: Seattle chain, Mercer fork + ultimatum, Malik's call; audio 3/6/7; new art wired; Malik starts at 60
 
 Story graph changed for the first time (`featuredStories.js`), per the owner+Chat handoff

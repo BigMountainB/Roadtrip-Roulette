@@ -5847,14 +5847,24 @@ export class GameScene extends Phaser.Scene {
       // Genre-vehicle fuel: burn × (owner 2026-07-19); +range reads as less burn.
       const _fuelMul = this._traitMod('fuelBurnMult') / Math.max(0.1, this._traitMod('fuelRangeMult'));
       this.player.gasMi = Math.max(0, this.player.gasMi - _odoDelta * burnMul * _fuelMul);
-      if (this.player.gasMi <= 0 && !this._strandedShown) {
-        this._strandedShown = true;
-        this._showPopup?.('⛽ OUT OF GAS', '#FF4444');
-        // Running dry is a DECISION now (owner 2026-08-04), not an automatic
-        // tow: the ending-plate card asks whether to pay for the tow, start
-        // over, or load a save.
-        this.time.delayedCall(1400, () => this._showOutOfGasCard());
-      }
+    }
+    // Stranded check — deliberately OUTSIDE the burn block (owner bug
+    // 2026-09-10: "when I'm out of gas, the out of gas ending doesn't pop
+    // up").  The burn only runs while gasMi > 0 and the car is moving, but a
+    // run can ENTER gameplay already at 0: the live snapshot rounds the tank
+    // to whole miles (an autosave at 0.4 mi restores as 0), a forward warp
+    // can drain it, a save loaded from the card itself, or a $200-even tow
+    // that buys $0 of gas.  In all of those the car sat speed-locked at 0
+    // with no card, forever.  Now: 0 gas in live gameplay → the card, period.
+    if (!_isCustom && this.player.gasMi <= 0 && !this._strandedShown
+        && !this._awaitingStart && this._introDone && !this._outOfGasCard
+        && !this._endingCine && !this._gameFinished && !this._finishCinematic
+        && !this._bustingToStart && !this._odEnding) {
+      this._strandedShown = true;
+      this._showPopup?.('⛽ OUT OF GAS', '#FF4444');
+      // Running dry is a DECISION (owner 2026-08-04), not an automatic tow:
+      // the ending-plate card asks whether to pay for the tow or load a save.
+      this.time.delayedCall(1400, () => this._showOutOfGasCard());
     }
 
     // ── Score ─────────────────────────────────────────────────────────
