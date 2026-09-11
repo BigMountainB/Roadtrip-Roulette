@@ -239,8 +239,13 @@ check('establishing key is node-only', panelKeyFor('hiphop', 'mercer_fork') === 
   check('no timed auto-advance to the next node',
     !/delayedCall\([^)]*\)[\s\S]{0,120}openNode\(storyId, nextId/.test(tileCode)
     || /awaitTapThen/.test(tileCode));
-  check('only the reply beat and the prompt arm are timed',
-    (tileCode.match(/scene\.time\.delayedCall\(/g) || []).length === 2);
+  // Three timers: the reply beat, the prompt arm, and the AUTHORED PLAYER
+  // LINE auto-play (a one-item choice list is a balloon, not a button —
+  // workshop §A).  None of them advances to the next node.
+  check('only the reply beat, the prompt arm and the authored-line play are timed',
+    (tileCode.match(/scene\.time\.delayedCall\(/g) || []).length === 3);
+  check('a one-item choice list plays as a balloon, never a button',
+    /list\.length === 1 && !list\[0\]\._exit/.test(tileCode));
 }
 
 // ── 9. Reachability report (informational, plus a floor) ─────────────────

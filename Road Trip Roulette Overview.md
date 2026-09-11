@@ -204,6 +204,41 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 10) — Comic dialogue workshop: Mercer-skip diagnosed + gated, full-screen tiles, captions, face-protected placement, three-panel pilot; Seattle back to the owner's lines
+
+Worked through the notes' "COMIC DIALOGUE WORKSHOP HANDOFF" (full report in the notes §"PILOT
+REPORT"). In code:
+- **Mercer skip (§B)**: reproduced headless. Plate canon persists across runs by design, so a
+  Country story from an EARLIER run is active at the next run's Mercer (Brittney silently in
+  the seat from mile 0) while Hip-Hop is back on the shelf; with `departureShown` unset the
+  boarding tile fired at HIT THE ROAD — the owner's screenshot. Fix: the departure gate now
+  requires Country to have been STARTED in this run (`StorySystem.startedThisRun`). New
+  `?storyreset` URL flag clears only the plate's story canon (test-reset route). Open policy
+  question logged: reset unfinished passenger stories on a new run?
+- **Fake choice (§A)**: a one-item choice list plays as the player's balloon (tap to
+  continue), never a button. Seattle is now EXACTLY the owner's handoff spine in its order;
+  my invented crew exchange and Chat's cocky/dismissive alternates are removed; `seattle_clock`
+  is gone. Standing rule recorded: Claude never writes dialogue.
+- **Captions (§C)**: `caption` node field, recorded in the ledger, drawn as a square tail-less
+  box in the tile and the book; validator rejects narration-as-speech. Mercer departure =
+  caption + player balloon + Brittney balloon.
+- **Face protection (§D)**: new `src/ui/balloonLayout.js` (pure; `tests/balloon.test.mjs`,
+  14 checks) — bodies never overlap protect rects or other balloons (4 px clearance), tails
+  stop short of the face and never cross a face/hands/phone, alternate slots then forced +
+  logged. Pilot panels' metadata re-measured as faces/hands/objects with reading-order slots
+  (`bubble` → `playerBubble` → `replyBubble`). Debug overlays via `?comicdebug=1`.
+- **Owner asks mid-pilot**: tile is FULL SCREEN (800×450, translucent tray band over the
+  bottom); the opening line stays and the reply lands after the player's balloon (below /
+  right, low corners first); balloons appear 2 s apart + 90 ms per word past eight.
+- **Pilot (§E)**: `review/comic_pilot_2026-09-10/{normal,debug}/01…11*.png` — Seattle
+  authored-line tiles + the carry/pass tray, Mercer counter→hook→fork→ultimatum gating the
+  shop, the departure caption panel. 25 placements: 20 authored, 3 alternates, 2 forced (read
+  correctly), no page errors.
+- Tests: 18 files green (story 283, story-art 63, balloon 14, comic 37); build green.
+Awaiting the owner: the "I know him / I'm a fan" Seattle choice and the extra conversation he
+expects (lines needed — none of mine); the persistence policy; approval of the placeholder
+dialogue list for the Brittney objectives.
+
 ### 2026-09-10 (pt 9) — Brittney's three StageWagon objectives IN CODE; tow = $200 + a quarter tank
 
 Owner answered the pt 8 questions (answers table in the notes §"OWNER ANSWERS on the objectives
@@ -9119,6 +9154,30 @@ The release deploy is scheduled for **July 21, 2026**. These dev/testing conveni
 - **DEV WARP** — the digit 1–9 mile-warp cheat in [GameScene.js](src/scenes/GameScene.js). (Search: `DEV WARP`.)
 - **TEST SPEED TRAP** — the planted test speed-trap near mile ~2.3. (Search: `TEST SPEED TRAP`.)
 - **Other dev hotkeys** — camera-mode / cockpit-calibration toggles and any other debug key handlers. (Search: `Cockpit calib`, `Camera:`.)
+
+### Dormant code to strip (not dev aids — abandoned features left inert)
+
+- **Car:road size coupling** — built and REJECTED 2026-09-10, left in place at
+  `CAR_ROAD_COUPLING = 0` (inert; the per-frame measurement is also gated off, so it costs nothing).
+  Attempted to hold the player car at a constant proportion of the road through a grade.
+  Remove: `roadWidthAtScreenY()` in [Road.js](src/road/Road.js); `_carRoadRatioRaw()`,
+  `_playerCarScale()`'s coupling branch, the `_carRoadRatio` easing block in the per-frame
+  update, the `CAR_ROAD_*` constants, and the `window.__carRoadCoupling` override in
+  [GameScene.js](src/scenes/GameScene.js). (Search: `CAR_ROAD_COUPLING`, `_carRoadRatio`.)
+
+  **Why it failed, so nobody re-enables it blind:** the reference denominator was wrong. It
+  compared the road width at the car's screen row against the width at `PLAYER_VIRTUAL_Z`, but
+  that depth is not what lands on `PLAYER_CAR_BASELINE_Y` on flat ground — the car's row sits well
+  below the horizon and so maps to a nearer, wider segment. The ratio therefore read > 1 almost
+  everywhere and inflated the car across the whole route instead of only compensating the grade.
+  The measurement itself is sound; salvaging it needs the reference calibrated to the real
+  flat-ground width at that row.
+
+  **DO NOT strip alongside it:** the `VEHICLE_ROAD_FRACTION` change in `getVehicleProjection()`
+  ([Road.js](src/road/Road.js)) is separate, live, and wanted. It makes TRAFFIC scale with
+  `seg.roadScale` instead of a frozen `825` constant, so cars hold their proportion across region
+  width changes (Seattle steps 0.95 → 0.92 → 1.05). It is a no-op where `roadScale = 1` and has
+  nothing to do with grade.
 
 Do a sweep for these — plus any new dev-only affordance added during a build — right before the release build.
 

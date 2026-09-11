@@ -187,6 +187,27 @@ function drawBalloon(ctx, text, box, tail, opts = {}) {
   return { x: box.x, y: box.y, w, h };
 }
 
+/** Caption box: narration in a square, tail-less box with its own paper
+ *  colour and typeface, uppercase (workshop §C). */
+const CAPTION_FACE = '"Comic Neue", "Trebuchet MS", "Helvetica Neue", Arial, sans-serif';
+function drawCaption(ctx, text, box, opts = {}) {
+  if (!text) return null;
+  const panelW = opts.panelW ?? box.w / 0.42;
+  const px = Math.max(8, Math.min(13, Math.round(panelW * 0.026)));
+  ctx.save();
+  ctx.font = `bold ${px}px ${CAPTION_FACE}`;
+  const lines = wrap(ctx, String(text).toUpperCase(), box.w - 14);
+  const h = lines.length * px * 1.3 + 12;
+  const w = Math.min(box.w, Math.max(...lines.map(l => ctx.measureText(l).width)) + 14);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(box.x + 2, box.y + 2, w, h);
+  ctx.fillStyle = '#FFF1B8'; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, px * 0.1);
+  ctx.fillRect(box.x, box.y, w, h); ctx.strokeRect(box.x, box.y, w, h);
+  ctx.fillStyle = '#222'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  lines.forEach((l, i) => ctx.fillText(l, box.x + 7, box.y + 6 + i * px * 1.3));
+  ctx.restore();
+  return { x: box.x, y: box.y, w, h };
+}
+
 /** Draw one resolved page (from ComicSystem.pagesOf) onto a 2D context of
  *  size w × h.  `onArt` is called when a lazily-loaded art file arrives so
  *  the caller can redraw. */
@@ -234,8 +255,14 @@ export function renderPage(ctx, page, w, h, onArt) {
     if (sub) {
       drawBalloon(ctx, sub.text, { x: x + 0.05 * pw, y: y + 0.06 * ph, w: 0.9 * pw, h: 0.5 * ph }, null, { maxGrow: 1.6, panelW: pw });
     } else {
+      // CAPTION (narration) is its own content type (workshop §C): a square
+      // box, no tail, never inside a speaker's balloon.
+      if (event.text?.caption) {
+        const cb = meta.caption ?? { x: 0.03, y: 0.03, w: 0.42, h: 0.22 };
+        drawCaption(ctx, event.text.caption, { x: x + cb.x * pw, y: y + cb.y * ph, w: cb.w * pw, h: cb.h * ph }, { panelW: pw });
+      }
       const npcText = event.text?.reply || event.text?.line;
-      drawBalloon(ctx, npcText, { x: x + b.x * pw, y: y + b.y * ph, w: b.w * pw, h: b.h * ph }, { x: x + t.x * pw, y: y + t.y * ph }, { panelW: pw });
+      if (npcText) drawBalloon(ctx, npcText, { x: x + b.x * pw, y: y + b.y * ph, w: b.w * pw, h: b.h * ph }, { x: x + t.x * pw, y: y + t.y * ph }, { panelW: pw });
       if (event.text?.label) {
         drawBalloon(ctx, event.text.label, { x: x + pb.x * pw, y: y + pb.y * ph, w: pb.w * pw, h: pb.h * ph }, { x: x + pt.x * pw, y: y + pt.y * ph }, { fill: '#FFF9D6', panelW: pw });
       }

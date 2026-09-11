@@ -3847,9 +3847,15 @@ export class RestStopScene extends Phaser.Scene {
     // and becomes part of the saved comic.
     const _story = this.registry.get('story');
     const _country = _story?.story?.('country');
+    // Workshop §B (2026-09-10): the boarding tile belongs to the trip on
+    // which she got in — Country must have been STARTED in THIS run.  A
+    // Country story still active from an earlier run (plate canon persists
+    // across runs by design) must not replay her boarding at a Mercer visit
+    // where the counter sequence never ran.
     if (this._stop?.id === 'M'
         && _story?.isActive?.('country')
         && !_country?.flags?.departureShown
+        && (_story?.startedThisRun?.('country') ?? true)
         && !this._brittneyDepartureOpen) {
       this._brittneyDepartureOpen = true;
       this._storyTileOpen = true;

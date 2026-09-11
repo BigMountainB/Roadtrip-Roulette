@@ -338,6 +338,10 @@ const _boot = () => {
   // read here and by the inline Calendar script in index.html.
   try { window.__DEV = new URLSearchParams(window.location.search).get('dev') === '1'; }
   catch (_) { window.__DEV = false; }
+  // `?comicdebug=1` — story-tile placement overlays (protected rects, mouth
+  // points, balloon bounds, tail paths, reading order, tray-risk area).
+  try { window.__comicDebug = new URLSearchParams(window.location.search).get('comicdebug') === '1'; }
+  catch (_) { window.__comicDebug = false; }
 
   // ── ?devtools=1 — an on-screen console ─────────────────────────────────
   // The game is played on a phone over the LAN, where there is no inspector,

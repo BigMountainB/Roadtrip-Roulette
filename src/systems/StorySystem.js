@@ -35,7 +35,7 @@
 
 import {
   FEATURED_STORIES, STORY_IDS, STORY_GENRE, STORY_DEFS_VERSION,
-  lineKey, labelKey, replyKey,
+  lineKey, labelKey, replyKey, captionKey,
 } from '../data/featuredStories.js';
 import { resolvePanelKey, panelKeyFor } from '../data/comicPanels.js';
 
@@ -259,6 +259,24 @@ export class StorySystem {
     return node.line ?? '';
   }
 
+  /** CAPTION (narration) for a node — a separate content type from the
+   *  spoken line (workshop §C).  Static string or `(state, run) => string`;
+   *  '' when the node has none. */
+  resolveCaption(storyId, nodeId) {
+    const node = this._node(storyId, nodeId);
+    if (!node || node.caption == null) return '';
+    if (typeof node.caption === 'function') { try { return String(node.caption(this.story(storyId), this._run) ?? ''); } catch (_) { return ''; } }
+    return String(node.caption ?? '');
+  }
+
+  /** Was `storyId` STARTED (a choice with `startStory` committed) during the
+   *  current run?  Distinguishes "she got in the car on this trip" from a
+   *  passenger story still active from an earlier run (workshop §B). */
+  startedThisRun(storyId) {
+    const c = this.canon();
+    return Object.values(c.ledger).some(e => e.runId === this._run.runId && e.effects?.startStory === storyId);
+  }
+
   /** Reply for a choice — static string or `(state, run) => string`. */
   resolveReply(storyId, nodeId, choiceId) {
     const ch = this._choice(storyId, nodeId, choiceId);
@@ -404,7 +422,7 @@ export class StorySystem {
       // Stable keys + fallback copy so the comic can re-render this beat by
       // key later and still read if the key is ever renamed away (18.2).
       // Dynamic lines resolve to the copy the player actually saw.
-      dialogueKeys: { line: lineKey(storyId, nodeId), label: labelKey(storyId, nodeId, choiceId), reply: replyKey(storyId, nodeId, choiceId) },
+      dialogueKeys: { line: lineKey(storyId, nodeId), label: labelKey(storyId, nodeId, choiceId), reply: replyKey(storyId, nodeId, choiceId), caption: captionKey(storyId, nodeId) },
       // STABLE PANEL KEY (Ch.18 mapping contract).  Resolved once, HERE, and
       // stored — same discipline as dialogueKeys.  The comic must never
       // re-derive art from the node id (which silently dropped every
@@ -416,7 +434,7 @@ export class StorySystem {
       // later is picked up by books already on disk.
       panelKey: resolvePanelKey({ storyId, nodeId, choiceId, node, choice })
                 ?? panelKeyFor(storyId, nodeId),
-      fallbackText: { line: this.resolveLine(storyId, nodeId), label: choice.label ?? '', reply: this.resolveReply(storyId, nodeId, choiceId) },
+      fallbackText: { line: this.resolveLine(storyId, nodeId), label: choice.label ?? '', reply: this.resolveReply(storyId, nodeId, choiceId), caption: this.resolveCaption(storyId, nodeId) },
       importance: node.importance ?? 'choice',
       effects: JSON.parse(JSON.stringify(effects)),
       cost: Math.max(0, num(choice.cost) | 0),

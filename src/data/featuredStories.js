@@ -362,21 +362,21 @@ export const FEATURED_STORIES = {
       //    Malik does NOT know Brittney is on a double; he routes the player to
       //    Mercer only.  The cypher intro panel is the only book entry before
       //    the decision. ──
+      // OWNER 2026-09-10 ("are you making all of this dialogue up? … the order
+      // of some of it is wrong"): the invented crew hype exchange ("Malik
+      // Reed! Stank Records — live from the Park & Ride!" / "Not bad." / "Top
+      // of NoiseCloud…") and Chat's cocky/dismissive alternates are GONE.  The
+      // chain is the handoff spine, in the handoff's order, the owner's words
+      // only: Malik 1 → Player 2 → Malik 3 → Player 4 → Malik 5 → stakes.  The
+      // cypher art carries a caption (not a spoken line) so Malik's biography
+      // is never repeated.  The player's line is authored (one item) and
+      // plays as a balloon, never as a button.
       seattle_lot: {
         stopId: 'S', mandatory: true,
         when: (st) => !has(st, 'phone') && !st.flags.carrying,
-        speaker: 'The Crew', portrait: 'biz_parkride', importance: 'minor',
-        intro: [{ id: 'seattle_cypher', panelKey: 'hiphop.seattle_lot', importance: 'minor', text: 'Stank Records, live from the Park & Ride.' }],
-        line: "Malik Reed! Stank Records — live from the Park & Ride!",
-        choices: [
-          { id: 'watch', consequential: false, next: 'seattle_clock',
-            label: "Not bad.",
-            reply: "Top of NoiseCloud, bottom of my tank — whole city knows the hook, but the bus driver knows my name." },
-        ],
-      },
-      seattle_clock: {
-        stopId: 'S', virtual: true,
         speaker: 'Malik Reed', portrait: 'biz_parkride', importance: 'minor',
+        intro: [{ id: 'seattle_cypher', panelKey: 'hiphop.seattle_lot', importance: 'minor', text: 'Stank Records, live from the Park & Ride.' }],
+        caption: 'Stank Records, live from the Park & Ride.',
         line: "Malik Reed. Stank Records. About to be the biggest hip-hop name in this town.",
         choices: [
           { id: 'know', consequential: false, next: 'seattle_route',
@@ -888,11 +888,16 @@ export const FEATURED_STORIES = {
         stopId: 'M', mandatory: true, virtual: true,
         when: (st, run) => !!run.passenger && !st.flags.departureShown,
         speaker: 'Brittney', portrait: 'brittney_gasnsip', importance: 'major',
-        line: 'Brittney clocks out and meets you beside the car, still wearing her Gas-N-Sip uniform.',
+        // Structured content (workshop §C): the narration is a CAPTION box,
+        // the player's line is a speech balloon, Brittney's reply is a speech
+        // balloon.  "She slides into the passenger seat" is visible in the art
+        // and is omitted rather than put in her mouth.
+        caption: 'Brittney clocks out and meets you beside the car.',
+        line: '',
         choices: [
           { id: 'board', consequential: true, next: null,
             label: "Passenger seat's yours. Let's hit the road.",
-            reply: 'She slides into the passenger seat. "StageWagon, cowboy. Try to keep all four tires under us."',
+            reply: 'StageWagon, cowboy. Try to keep all four tires under us.',
             effects: { flags: { departureShown: true } } },
         ],
       },
@@ -1480,6 +1485,7 @@ export function getStoryChoice(storyId, nodeId, choiceId) {
 export function lineKey(storyId, nodeId)             { return `${storyId}.${nodeId}.line`; }
 export function labelKey(storyId, nodeId, choiceId)  { return `${storyId}.${nodeId}.${choiceId}.label`; }
 export function replyKey(storyId, nodeId, choiceId)  { return `${storyId}.${nodeId}.${choiceId}.reply`; }
+export function captionKey(storyId, nodeId)          { return `${storyId}.${nodeId}.caption`; }
 
 /** Flat key → current copy, built once from the trees.  The comic renders by
  *  looking the key up here first and only falls back to its saved text when
@@ -1490,6 +1496,7 @@ export const DIALOGUE_INDEX = (() => {
   for (const s of Object.values(FEATURED_STORIES)) {
     for (const [nid, node] of Object.entries(s.nodes ?? {})) {
       if (typeof node.line === 'string') out[lineKey(s.id, nid)] = node.line;
+      if (typeof node.caption === 'string') out[captionKey(s.id, nid)] = node.caption;
       for (const c of node.choices ?? []) {
         if (typeof c.label === 'string') out[labelKey(s.id, nid, c.id)] = c.label;
         if (typeof c.reply === 'string') out[replyKey(s.id, nid, c.id)] = c.reply;
@@ -1520,7 +1527,10 @@ export function validateStories(defs = FEATURED_STORIES) {
     for (const [nid, node] of Object.entries(s.nodes ?? {})) {
       if (node.repeatable) { if (node.stops !== '*' && !(Array.isArray(node.stops) && node.stops.length)) errs.push(`${sid}.${nid}: repeatable node needs stops`); }
       else if (typeof node.stopId !== 'string' || !node.stopId) errs.push(`${sid}.${nid}: no stopId`);
-      if (!isText(node.line)) errs.push(`${sid}.${nid}: no line`);
+      // A node speaks (`line`) and/or narrates (`caption`) — never neither.
+      // Narration inside a speech balloon is a defect (workshop §C).
+      if (!isText(node.line) && !isText(node.caption)) errs.push(`${sid}.${nid}: no line or caption`);
+      if (typeof node.line === 'string' && /^(She|He|They|Brittney|Malik|Haylee) (slides|clocks|sees|gets|comes|walks|leans|kicks)\b/.test(node.line)) errs.push(`${sid}.${nid}: narration authored as a spoken line`);
       const choices = node.choices ?? [];
       if (!node.stub && choices.length === 0) errs.push(`${sid}.${nid}: no choices and not a stub`);
       const seen = new Set();

@@ -172,6 +172,68 @@ const READOUT_TOP_Y   = 10;    // shared top edge for the corner readouts
 // needed, but the baked value is the single source of truth.
 const PLAYER_CAR_SCALE = 0.097;
 
+// ── CAR : ROAD COUPLING (owner 2026-09-10) ───────────────────────────────
+// The player car is pinned to a fixed screen row, so on a grade the road
+// slides down and out from under it — the near, wide segments drop below the
+// viewport and a farther, narrower one takes the car's row.  Nothing resizes,
+// but the car occupies more of the road, which reads as the car growing.  The
+// West Seattle descent peaks at ~400 ft/mi around mile 1.3, then falls to
+// ~22 ft/mi: car appears to grow 0-1 mi, shrink 1-2 mi.
+//
+// The owner wants the REAL grade kept and the CAR compensated, so the sprite
+// is scaled by how wide the road actually is beneath it.
+//
+//   CAR_ROAD_COUPLING  0 = off (fixed size, pre-2026-09-10 behaviour)
+//                      1 = hold the ratio fully
+//                      in between = track partway
+// Live override while driving: window.__carRoadCoupling (?dev=1).
+// OFF (owner 2026-09-10): tried at 1 and it made the car too big EVERYWHERE,
+// not just on the grade.  The reference denominator is why — see
+// _carRoadRatioRaw: PLAYER_VIRTUAL_Z is NOT the depth that lands on the car's
+// screen row on flat ground.  The car's row sits well below the horizon, so it
+// corresponds to a NEARER (wider) segment, making the raw ratio > 1 almost
+// everywhere and inflating the car globally instead of only compensating the
+// grade.  Salvaging this needs the reference calibrated to the actual
+// flat-ground width at PLAYER_CAR_BASELINE_Y, not a fixed-Z sample.
+const CAR_ROAD_COUPLING   = 0;
+// Ratio guards.  A crest can put the car's row on a near-vertical stretch of
+// road where the lerp spikes; these keep a bad sample from ballooning or
+// vanishing the car.
+const CAR_ROAD_RATIO_MIN  = 0.55;
+const CAR_ROAD_RATIO_MAX  = 1.60;
+// Per-frame easing toward the raw ratio, and the change needed before the
+// sprite is re-sized.  The sizing pass does cached alpha-scan lookups and the
+// raw ratio moves every frame on rolling terrain, so re-applying unconditionally
+// would both cost more and visibly pulse the car.
+const CAR_ROAD_RATIO_EASE = 0.08;
+const CAR_ROAD_RATIO_EPS  = 0.004;
+
+// ── CAR SURFACE FOLLOW (owner 2026-09-10) ────────────────────────────────
+// The replacement for the resize approach above: instead of scaling the car to
+// match a road that slid out from under it, put the car where the road is.
+// Physically the right fix — when the road ahead drops, the car IS lower.
+//
+// Starts PARTIAL because a full 1:1 follow was tried once before and rejected
+// (it drifted the car vertically, "including a visible drop near the start of
+// the run" — this same West Seattle descent).  0.5 holds most of the
+// proportion while keeping the car near where the eye expects it.
+//   0 = pinned to PLAYER_CAR_BASELINE_Y (pre-2026-09-10 behaviour)
+//   1 = full surface follow (what was rejected before)
+// 2026-09-10 (2nd pass): 0.5 under-moved the car.  The two limiters MULTIPLY —
+// a half-strength follow inside a +/-26 px clamp could only ever shift it 13 px,
+// so the descent barely registered.  Now full strength, i.e. the car sits where
+// the road actually is.  Dial DOWN from here if it reads as detached.
+const CAR_SURFACE_FOLLOW  = 1;
+// Safety cap only — a guard against a pathological sample on a crest, not a
+// style control.  Raised so it does not quietly bind on a real grade: the West
+// Seattle descent is the steepest opening stretch on the route and should move
+// the car freely.  If the car is pinning at exactly this value on ordinary
+// terrain, the cap is too tight rather than the follow being too strong.
+// Live override: window.__carSurfaceMaxDev (?dev=1).
+const CAR_SURFACE_MAX_DEV = 70;
+// Per-frame easing toward the target row.
+const CAR_SURFACE_EASE    = 0.12;
+
 // The rear-view car is the chase-camera anchor. Its bottom edge stays at this
 // screen-space baseline while the projected road, scenery, and traffic move
 // around it. Intentional cinematics (exit ramp and water sinking) may override
@@ -1159,6 +1221,17 @@ export class GameScene extends Phaser.Scene {
     // grant, passenger, Nerve, cargo) rides the snapshot.  ComicSystem
     // subscribes to commits and writes panels into the same canon.
     this.story = this.registry.get('story');
+    // `?storyreset` — safe TEST-RESET route (workshop §B): clears only the
+    // plate's story canon (stories, ledger, comic volumes), never the wallet,
+    // garage or plates.  Once per page load.
+    try {
+      if (!window.__storyResetDone && /[?&]storyreset\b/.test(window.location.search)) {
+        window.__storyResetDone = true;
+        this.registry.get('save')?.set?.('storyCanon', null);
+        this.registry.set('story', null); this.registry.set('comic', null); this.story = null;
+        console.warn('[story] ?storyreset — story canon cleared for this plate');
+      }
+    } catch (_) {}
     if (!this.story) {
       this.story = new StorySystem(this.registry.get('save'));
       this.registry.set('story', this.story);
@@ -4616,6 +4689,35 @@ export class GameScene extends Phaser.Scene {
     if (typeof globalThis.__carScale === 'number' && globalThis.__carScale !== this._lastCarScale) {
       this._lastCarScale = globalThis.__carScale;
       this._applyPlayerSpriteDisplaySize();
+    }
+    // Car:road ratio (owner 2026-09-10).  _playerCarScale() now multiplies by
+    // the segment's roadScale, but the note above is the catch: the sizing pass
+    // only runs on TEXTURE-SWAP events, so without this the new ratio would
+    // land at arbitrary moments (a steering-pose change) instead of when the
+    // road actually changes width.  Re-apply on the transition itself, same
+    // last-value pattern as the dev knob.  roadScale is constant for whole
+    // regions, so this fires a handful of times per run, not per frame.
+    {
+      // Skip the whole measurement when the coupling is off — otherwise this
+      // samples the road every frame to feed a value nothing reads.
+      const _k = (typeof globalThis.__carRoadCoupling === 'number')
+        ? globalThis.__carRoadCoupling : CAR_ROAD_COUPLING;
+      const _raw = (_k > 0) ? this._carRoadRatioRaw() : null;
+      // null = road not sampled yet (title / first frame).  HOLD the last
+      // value rather than snapping to 1, or the car pops on the first frame
+      // of a grade.
+      if (_raw != null) {
+        const _prev = this._carRoadRatio ?? _raw;   // seed on the first read
+        const _next = lerp(_prev, _raw, CAR_ROAD_RATIO_EASE);
+        this._carRoadRatio = _next;
+        // Re-size only on a real move.  _applyPlayerSpriteDisplaySize does
+        // cached alpha-scan lookups and normally runs on texture swaps only,
+        // so this is the trigger that lets the ratio reach the sprite at all.
+        if (Math.abs(_next - (this._lastAppliedCarRatio ?? -1)) > CAR_ROAD_RATIO_EPS) {
+          this._lastAppliedCarRatio = _next;
+          this._applyPlayerSpriteDisplaySize();
+        }
+      }
     }
     // Jurisdiction police sets stream in region-by-region (throttled to a
     // check every ~2 s; queues the current + upcoming agencies' frames).
@@ -15521,9 +15623,50 @@ export class GameScene extends Phaser.Scene {
   /** Shared source-pixel scale for every player frame. Live-tunable from the
    *  ?dev=1 console (window.__carScale) so the size can be judged on the road
    *  rather than guessed, then baked into PLAYER_CAR_SCALE. */
+  /** RAW car:road ratio — how wide the road is UNDER the car right now,
+   *  against how wide it would be with no grade.
+   *
+   *  Numerator: the road at the car's own screen row.  The car is pinned to
+   *  PLAYER_CAR_BASELINE_Y in normal play, so when a grade pushes the near
+   *  (wide) road below the viewport, a farther/narrower segment takes that
+   *  row and this shrinks.
+   *
+   *  Denominator: the road at the car's fixed Z.  Width is
+   *  `scale * ROAD_WIDTH * roadScale` with `scale = CAM.depth / cz`, i.e.
+   *  distance only — GRADE-INVARIANT.  That makes it a clean "no-grade"
+   *  reference that still carries roadScale, so region width changes cancel
+   *  out of the ratio instead of double-counting.
+   *
+   *  Flat road → both are the same segment → 1.  Returns null when the road
+   *  isn't sampled yet (title, first frame) so callers can hold the last value
+   *  rather than snapping to 1. */
+  _carRoadRatioRaw() {
+    const r = this.road;
+    if (!r?.roadWidthAtScreenY) return null;
+    const wRow = r.roadWidthAtScreenY(PLAYER_CAR_BASELINE_Y);
+    const surf = r.sampleSurface?.(PLAYER_VIRTUAL_Z, this.player?.x ?? 0, { allowClipped: true });
+    const wRef = surf?.roadHalfW;
+    if (!(wRow > 0) || !(wRef > 0)) return null;
+    return clamp(wRow / wRef, CAR_ROAD_RATIO_MIN, CAR_ROAD_RATIO_MAX);
+  }
+
+  /** Shared source-pixel scale for every player frame.
+   *
+   *  Multiplied by the SMOOTHED car:road ratio so the car holds a constant
+   *  proportion to the road through a grade (owner 2026-09-10 — "I want the
+   *  real grade to be there, adjust the size of the car based on the road").
+   *  The grade itself is untouched; only the car compensates.
+   *
+   *  CAR_ROAD_COUPLING is the dial: 0 restores the old fixed-size behaviour
+   *  exactly, 1 holds the ratio fully, values between track partway. */
   _playerCarScale() {
     const o = globalThis.__carScale;
-    return (typeof o === 'number' && o > 0) ? o : PLAYER_CAR_SCALE;
+    const base = (typeof o === 'number' && o > 0) ? o : PLAYER_CAR_SCALE;
+    const k = (typeof globalThis.__carRoadCoupling === 'number')
+      ? globalThis.__carRoadCoupling : CAR_ROAD_COUPLING;
+    if (!(k > 0)) return base;
+    const ratio = this._carRoadRatio ?? 1;
+    return base * (1 + (ratio - 1) * k);
   }
 
   _applyPlayerSpriteDisplaySize(targetW = 78, fallbackH = 49) {
@@ -16570,7 +16713,48 @@ export class GameScene extends Phaser.Scene {
           if (Number.isFinite(surf.sx)) this.playerSprite.x = surf.sx;
         }
       } else {
-        this.playerSprite.y = PLAYER_CAR_BASELINE_Y;
+        // ── PARTIAL SURFACE FOLLOW (owner 2026-09-10) ────────────────────
+        // The car used to be hard-pinned here, which is what made it look
+        // like it grew: on a grade the near, wide road slides below the
+        // viewport and a farther, narrower segment takes the car's fixed row,
+        // so the car occupies more of the road without changing size.
+        // Moving the car to where the road actually IS fixes the cause rather
+        // than compensating for it — when the road ahead drops, the car is
+        // genuinely lower on screen.
+        //
+        // Kept PARTIAL and CLAMPED on purpose.  A 1:1 unclamped follow was
+        // tried before and rejected (see the note above this block: "made the
+        // whole car drift vertically ... including a visible drop near the
+        // start of the run" — that drop is this same West Seattle descent).
+        // On a 400 ft/mi grade a full follow walks the car far from where the
+        // eye expects it while the pedals and HUD stay put, so it reads as
+        // detached rather than descending.
+        //
+        //   CAR_SURFACE_FOLLOW  0 = pinned (old behaviour), 1 = full follow
+        //   CAR_SURFACE_MAX_DEV caps the travel either way, in px
+        // Live override while driving: window.__carSurfaceFollow (?dev=1).
+        const _fk = (typeof globalThis.__carSurfaceFollow === 'number')
+          ? globalThis.__carSurfaceFollow : CAR_SURFACE_FOLLOW;
+        let _targetY = PLAYER_CAR_BASELINE_Y;
+        if (_fk > 0) {
+          const _surf = this.road?.sampleSurface?.(PLAYER_VIRTUAL_Z, this.player.x, { allowClipped: true });
+          if (_surf && Number.isFinite(_surf.sy)) {
+            // Same +17 contact nudge the exit path uses — the sample hits the
+            // road plane a little above where the art's tire line sits.
+            const _cap = (typeof globalThis.__carSurfaceMaxDev === 'number')
+              ? globalThis.__carSurfaceMaxDev : CAR_SURFACE_MAX_DEV;
+            const _rawDev = (_surf.sy + 17) - PLAYER_CAR_BASELINE_Y;
+            const _dev = clamp(_rawDev, -_cap, _cap);
+            // Dev readout: if this keeps printing a value equal to the cap, the
+            // CLAMP is what is limiting the car, not the follow strength.
+            if (globalThis.__carSurfaceDebug) this._carSurfaceRawDev = _rawDev;
+            _targetY = PLAYER_CAR_BASELINE_Y + _dev * _fk;
+          }
+        }
+        // Ease so crests and dips don't snap.  Seeds on the first frame so the
+        // car doesn't slide in from the baseline at run start.
+        this._carFollowY = lerp(this._carFollowY ?? _targetY, _targetY, CAR_SURFACE_EASE);
+        this.playerSprite.y = this._carFollowY;
       }
     }
     // Glue the rear license plate to the (now-positioned) player car.

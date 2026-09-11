@@ -3438,8 +3438,8 @@ Fits between `dom_tape` (North Bend) and `pass_tennessee`; dialogue for red-pen,
 ## ART NEEDED — status after the handoff implementation (2026-09-10, supersedes the earlier list where they overlap)
 | # | key | ratio | pri | status / brief |
 |---|---|---|---|---|
-| 1 | `hiphop.mercer_malik_call` | ORD 16:9 | **blocking** (beat is LIVE, renders a placeholder in the book) | NEW — brief D: night interior at the Mercer lot exit / on the way to the bridge, the cracked phone lit in the cupholder with MALIK on screen, the player's hand hovering, skyline in the mirror.  Upper half clear for three phone balloons (upper-right) + the player's two lines (upper-left).  Phone protected; nothing story-critical in the lower 35%.  (Crop-test `vantage_00_locked_phone_in_car.png` first — same object motif.) |
-| 2 | `hiphop.seattle_pullout` | NARROW 2:3 | important | NEW — brief C-carry: night dash, phone glowing in the cupholder, road ahead, Seattle in the mirror; top 30% clear for the caption.  Beat not wired until the art exists. |
+| 1 | `hiphop.mercer_malik_call` | NARROW 2:3 | **DONE BY SHARED-ART DECISION** | REUSE `hiphop/seattle/seattle_07_phone_cupholder_pullout.png` with different runtime balloons/call overlay. Do not commission a second phone/cupholder image. This supersedes the earlier blocking brief D. |
+| 2 | `hiphop.seattle_pullout` | NARROW 2:3 | **DONE** | `hiphop/seattle/seattle_07_phone_cupholder_pullout.png` exists. The same clean pre-crash phone image intentionally serves both beats. |
 | 3 | `hiphop.seattle_offer` (stakes) · `hiphop.vantage_hospital.wake` · `country.ellensburg_haylee` · `country.vantage_arrival.reunion` · Haylee sheet + portrait | — | **owner visual approval** | All wired and will show; owner to eyeball on device. |
 | 4 | `hiphop.seattle_clock` / `hiphop.seattle_route` | ORD | polish | Both reuse `seattle_02_crew_confrontation.png` (live-only tiles, not in the book) — fine unless the owner wants the route exchange on its own frame. |
 | 5 | `hiphop.mercer_counter` / `hiphop.mercer_hook` | ORD | polish | Reuse `mercer_01_brittney_double_shift.png` (live-only). |
@@ -3497,8 +3497,10 @@ Read this before proposing further dialogue: the AUTHORITATIVE DIALOGUE HANDOFF 
 - **Malik's call**: `GameScene._maybeMalikCall()` fires 400 ms after resuming from stop 'M'
   when hiphop is active, phone held & unlocked, `path==='hiphop'`, `mercerDone`,
   `!skippedMercer`, `!malikCalled` — the exact five-line exchange as a tap-to-dismiss card,
-  recorded once as beat `hiphop.mercer_malik_call` (sets `malikCalled`).  **Its panel art is
-  still missing** (see ART NEEDED #1).  Skipped Mercer keeps the existing text; no Bellevue.
+  recorded once as beat `hiphop.mercer_malik_call` (sets `malikCalled`). Its panel art is the
+  approved shared `hiphop/seattle/seattle_07_phone_cupholder_pullout.png`; wire that existing
+  file to the panel key rather than generating another phone panel. Skipped Mercer keeps the
+  existing text; no Bellevue.
 - **Radio grant**: `_applyRadioGrant()` — when the Hip-Hop grant lands it switches the
   station once per run and opens on a RANDOM one of Rain City Roll Call / King of this
   County / Rain City Code (never Two Lives); the four m4a tracks are on the PHONK station.
@@ -3702,11 +3704,231 @@ Also in code from the same batch:
   cold "Do NOT get in that car"), or Haylee-left / Haylee-skipped lines.
 - Out-of-gas tow (unrelated, same batch): $200 flat and the tow puts a QUARTER TANK in the car.
 
-### ART NEEDED — additions from this batch (for Chat)
+### ART COMPLETED — additions from this batch (Chat, 2026-09-10)
 
-| Key | File | Shape | Brief |
-|-----|------|-------|-------|
-| `country.ellensburg_supply` (+ `.fullRun` / `.quickRun` / `.noRun`) | `country/ellensburg/ellensburg_02_supply_run.png` | ORD 16:9 | Huff's Gas, Ellensburg, dusk. Brittney in the Gas-N-Sip uniform (name tag on) at the open beer-cave door with a bag of ice on her hip; Haylee (strawberry-blonde braid, cap) loading the cooler by the car; the player at the pump. Faces upper-left/centre; lower third free for the tray. Until it exists the node uses the generic tile. |
-| `country.vantage_arrival.reunion_improvised` | `country/vantage/vantage_02b_reunion_improvised.png` | ORD 16:9 | Same composition as `vantage_02_haylee_reunion.png`: Brittney in the white tank top but still in the Gas-N-Sip work shorts, no name tag. |
-| `country.vantage_arrival.reunion_uniform` | `country/vantage/vantage_02c_reunion_uniform.png` | ORD 16:9 | Same composition: Brittney still fully in uniform, name tag on, friends' faces reading it. |
-| `country.vantage_change` (optional) | `country/vantage/vantage_01b_change.png` | ORD 16:9 | Boat launch, golden hour; the player leaning on the hood facing the river, back to the car; Brittney's silhouette behind the open rear door, name tag on the roof. Currently the establishing panel reuses `vantage_01_spots_friends_work_uniform.png`. |
+All four distinct panels are now present at 1672×941. Do not regenerate them unless the owner rejects a specific file. Wire the paths below and preserve the outfit mapping exactly.
+
+| Key | File | Status / locked visual |
+|-----|------|------------------------|
+| `country.ellensburg_supply` (+ `.fullRun` / `.quickRun` / `.noRun`) | `country/ellensburg/ellensburg_02_supply_run.png` | **DONE.** Huff's Gas at dusk: Player pumping gas, Brittney in full Gas-N-Sip uniform carrying ice, strawberry-blonde Haylee loading the cooler. One shared panel serves all three supply outcomes; do not make three duplicate images. |
+| `country.vantage_change` | `country/vantage/vantage_01b_change.png` | **DONE.** Columbia River boat launch at golden hour: Player faces the river and gives Brittney privacy behind the open rear door; her folded uniform, visor, and name tag are on the roof. Replace the reunion-image fallback with this file. |
+| `country.vantage_arrival.reunion` | `country/vantage/vantage_02_haylee_reunion.png` | **DONE — FULL CHANGE.** Brittney wears the white tank, denim cutoffs, and plaid shirt tied at her waist. Haylee remains strawberry blonde. This is the canonical/base reunion file. |
+| `country.vantage_arrival.reunion_improvised` | `country/vantage/vantage_02b_reunion_improvised.png` | **DONE — PARTIAL CHANGE.** Same reunion staging; Brittney wears the white tank with her red Gas-N-Sip work shorts, no visor or name tag. |
+| `country.vantage_arrival.reunion_uniform` | `country/vantage/vantage_02c_reunion_uniform.png` | **DONE — NO CHANGE.** Same reunion staging; Brittney remains in the complete Gas-N-Sip uniform with visor/name tag. This was the former content of the base reunion file and was preserved before the base was corrected. |
+
+## iPHONE / LOCAL-HOST RESTART STABILITY — READ-ONLY AUDIT AND RECOMMENDED CHANGES (Chat, 2026-09-10)
+
+**Owner request:** record what could be changed to make the game more stable. This section is a diagnosis and proposed work order, **not authorization to implement it. Ask the owner before changing the loading architecture, eviction rules, orientation recovery, or asset quality.** The owner has reported that restarting is much better overall, but has begun occurring a little more often again; one observed restart followed 30+ minutes with the game not being played and occurred shortly after returning.
+
+### What the audit confirmed
+
+- This still looks primarily like **iOS/WebKit memory termination**, not a deterministic JavaScript exception. The complete automated suite currently passes (2,100+ assertions/checks across launch, audio, story, comic, police, etc.).
+- Vite HMR is already disabled in `vite.config.js`, so Claude/Codex saving a source or art file should not automatically reload the phone's localhost page.
+- Actual asset-dimension measurement of the current manifests:
+  - Boot manifest: **315 entries; 312 measurable image files; approximately 609.3 MiB decoded RGBA**.
+  - Deferred rest-stop manifest: **36 entries; approximately 216.0 MiB decoded RGBA**.
+  - After the first rest stop, the code retains those rest-stop textures in Phaser's game-level TextureManager, producing an estimated **825.3 MiB of decoded textures** before browser, canvas, framebuffer, audio, JavaScript heap, and temporary resize/re-upload overhead.
+  - The project's own `TextureBudget.js` target is **250 MiB**, so boot alone is about 2.4× the target and the post-stop state is about 3.3× it.
+- Largest manifest groups by decoded size:
+  - `biomes`: ~135.0 MiB
+  - `cars`: ~117.8 MiB
+  - `buildings`: ~92.8 MiB
+  - `ui`: ~79.3 MiB
+  - deferred `npc`: ~78.0 MiB
+  - deferred `npcBusinesses`: ~72.0 MiB
+  - deferred `shopfronts`: ~66.0 MiB
+  - `groundTextures`: ~48.0 MiB
+- The September 9 manifest split improved startup by deferring the three rest-stop groups, but `RestStopScene.preload()` currently loads **all 36 deferred textures at the first stop** and intentionally keeps them for every later stop. It postpones approximately 216 MiB rather than removing or bounding it.
+- Three persistent rest-stop assets were added after the split: Brittney's business portrait, Brittney's Mercer storefront, and Haylee's portrait. Together they add approximately **18 MiB decoded** to the post-stop resident set. That is not the root cause, but it can plausibly make an already marginal process restart somewhat more frequently.
+- Live story-panel handling is comparatively bounded: `StoryTile` tracks panel textures loaded by a conversation and removes them on teardown; `ComicReader` caps its decoded HTML-image cache at six panels (~36 MiB at 1672×941) and releases it when closed. New story files that are not opened do not consume decoded memory merely because they exist on disk.
+- Rotation coalescing and the unchanged-size guard remain sensible. Rotation is more likely the **trigger at the memory cliff** than the source of hundreds of retained megabytes.
+- After a page has been hidden for 30 seconds, `main.js` probes WebGL texture handles. If any sampled wrapper is invalid—or if the probe throws—it rebuilds every wrapped GPU resource. A legitimate recovery can therefore produce a large transient re-upload/allocation spike. The owner's long-background restart fits either iOS discarding the already-heavy WebKit process while hidden or this recovery spike on return.
+
+### Recommended change order — ask owner before implementation
+
+#### P0 — Stop loading every rest-stop asset at the first stop
+
+Replace `restStopManifest()` as an all-or-nothing preload with a **per-stop working set**:
+
+1. Load only the storefronts/business portraits actually offered at the current stop.
+2. Load only the encounter/story portraits needed by the current stop and current active storyline.
+3. On leaving the stop, remove textures that are not required by gameplay, the next stop, or an explicitly small cache.
+4. If a small cache is desirable, make it a measured LRU with a decoded-byte ceiling—not “everything visited stays forever.”
+5. Do not preload alternate character/outcome images. Load the one resolved panel only.
+
+This is the most direct high-value change: it prevents the first stop from adding the full 216 MiB resident set.
+
+#### P0 — Reduce the 609 MiB boot working set
+
+The boot split is still far above the 250 MiB budget. Convert more global groups into route/scene working sets:
+
+- Biomes/ground: keep the current region plus a small look-ahead/look-behind window; evict regions safely behind the player.
+- Buildings/business signs: load only those reachable in the current/nearby route section.
+- Cars: avoid keeping every vehicle/angle/culture set decoded. Keep the selected player set plus bounded traffic/chase sets required near the current mile.
+- UI: separate title/menu, driving, rest-stop, garage, and ending art so mutually exclusive screens do not all need to remain decoded.
+- Preserve source quality on disk; this recommendation is about **when decoded textures are resident**, not indiscriminate image degradation.
+
+Set measurable ceilings for each phase (cold boot, driving, rest stop, comic, rotation/resume), with the total remaining below the agreed mobile budget.
+
+#### P1 — Make background GPU recovery bounded and fail closed
+
+Review `main.js`'s >30-second visibility recovery:
+
+- A failed/throwing probe currently returns `true` and triggers the expensive full rebuild. Failure to prove health should be logged and handled conservatively rather than automatically allocating every resource again.
+- Rebuild only invalid/currently required texture and rendering resources where Phaser permits it; avoid recreating unrelated deferred assets.
+- Ensure old GPU handles/resources are explicitly released before or during replacement where safe.
+- Add a cooldown/one-shot guard so repeated visibility or orientation events cannot initiate overlapping recovery.
+- Test four separate cases on the oldest supported iPhone: brief app switch, 30+ second background, Safari tab eviction, and rotate immediately after resume.
+
+#### P1 — Instrument the exact restart boundary
+
+Use the existing `window.__texReport(label)` / `window.__texTop()` support and add lightweight persistent breadcrumbs—without retaining screenshots or large arrays—at:
+
+- Boot complete
+- Immediately before and after first rest-stop preload
+- Rest-stop exit after eviction
+- Story tile open/close
+- Comic open/close
+- `visibilitychange` hide/show
+- Immediately before and after GPU recovery
+- Orientation/resize settle
+
+Persist only the latest small record in localStorage: time, lifecycle event, scene, mile, texture count/estimated MiB, visibility state, orientation, whether WebGL recovery ran, and whether a JS error marker was set. On next launch, show or log whether the previous session ended after a JS error, while backgrounded, during rotation, during a rest-stop load, or during GPU rebuild. This distinguishes memory termination from code-triggered scene restarts.
+
+#### P1 — Add enforceable memory regression tests
+
+Current launch tests enforce entry counts, but count is a weak proxy because one 1086×1448 portrait costs about 6 MiB decoded. Add tests that read real image dimensions and fail when:
+
+- boot decoded total exceeds the approved ceiling;
+- any scene/stop working set exceeds its ceiling;
+- a new manifest asset is added without an owning scene/group and eviction policy;
+- all rest-stop or all story assets become reachable from one preload path;
+- mutually exclusive culture/car sets are simultaneously included in a mobile working set.
+
+#### P2 — Verify lifecycle cleanup; do not start here
+
+Audit RestStop/Game scene shutdown handlers, loader listeners, delayed calls, generated textures, render textures, and DOM listeners for accumulation across repeated visits/restarts. Nothing in the quick audit points to a leak here as large as the manifest problem, and the tests pass, so do this after P0/P1 rather than treating it as the primary theory.
+
+### Acceptance test for a stability change
+
+Before calling the problem improved, run the same route on the oldest supported iPhone and record texture totals at cold boot, after Mercer, after multiple later stops, after opening/closing the comic repeatedly, after 30+ minutes backgrounded, and after repeated portrait↔landscape rotations. Memory should plateau inside the approved budget rather than climb toward ~825 MiB. A restart without a JS-error marker, especially after backgrounding or rotation, should continue to be treated as probable WebKit memory termination.
+
+## COMIC DIALOGUE WORKSHOP — PILOT REPORT (Claude, 2026-09-10, later)
+
+Owner: "Work through the handoff. Diagnose the Mercer skip and build the three-panel review
+pilot before changing the rest of the comic." Everything below is in code; nothing beyond
+the three pilot panels (plus the Seattle tiles they lead through) has had placement applied.
+
+### B — Mercer skip: reproduced, exact state transitions (headless, `mercer_probe.mjs`)
+
+| Scenario | Hip-Hop | Country | `pendingAt('M')` | Storefront | HIT THE ROAD |
+|---|---|---|---|---|---|
+| 1. Fresh run carrying the phone | active, `items.phone`, `mercerDone:false`, ledger `hiphop#0:seattle_offer:carry@<this run>` | available | `[hiphop.mercer_counter!]` | gated by the tile | n/a |
+| 2. Old save: a PREVIOUS run chose `mercer_fork.ride` and saw the departure (`departureShown:true`); new run, Seattle skipped | available, replayCount 1 (`resetStory`) | **active**, nodeId `vantage_arrival`, rel 55; `run.passenger = brittney` from mile 0 (`deriveRun`) | `[]` | opens | nothing |
+| 3. Same as 2 but `departureShown` never set (save predates the departure tile, or the run ended at the Mercer stop) | as 2 | as 2, `departureShown: null` | `[]` | opens | **boarding tile fires** (`_brittneyDepartureOpen: true`) — the owner's screenshot |
+| 4. Hot reload of 3 | flags/status/ledger survive `_sanitizeStoryCanon` (it only strips prototypes) | same | — | — | same as 3 |
+
+Root cause: the plate canon persists across runs BY DESIGN (18.1; tested as "new run: Brittney
+still aboard"), so Country from an earlier run is active at the next run's Mercer while
+Hip-Hop is back on the shelf. The departure gate keyed only on `isActive('country') &&
+!departureShown`, not on WHICH run started Country.
+
+Fixed / provided:
+- `RestStopScene._continue` departure gate now also requires `story.startedThisRun('country')`
+  (a `startStory:'country'` ledger entry with this run's `runId`). Scenario 3 no longer fires
+  the boarding tile; scenario 1 unchanged.
+- `?storyreset` URL flag = safe TEST-RESET route: clears only `storyCanon` for the plate
+  (stories, ledger, comic volumes). Wallet, garage, plates untouched. (`?wipe` still nukes all.)
+- Acceptance "storefront cannot become interactive until the mandatory Brittney sequence
+  resolves" holds on the fresh run: `_storyGateDone` runs first, the tile's full-screen scrim
+  swallows every tap, SPACE/ENTER are guarded (pilot screenshot 04).
+- **Policy question for the owner (not decided):** should an unfinished passenger story
+  (Country / Classic Rock ACTIVE from an earlier run) reset to AVAILABLE when a NEW run starts
+  from Seattle? Today she is silently in the seat at mile 0 of the next run. I recommend
+  yes (reset, keep the ledger for the book); it flips the "still aboard" test.
+
+### A — Fake choice button
+- A one-item choice list is no longer a button: the player's authored line plays as a
+  balloon after the reading gap, then tap-to-continue. Seattle `seattle_lot.know`,
+  `seattle_route.pullman`, Mercer `mercer_counter.ask`, `mercer_hook.sorry` and the
+  departure's `board` all play this way.
+- The invented crew exchange ("Malik Reed! Stank Records — live from the Park & Ride!" /
+  "Not bad." / "Top of NoiseCloud…") and Chat's cocky/dismissive alternates are REMOVED
+  (owner: "are you making all of this dialogue up?… the order is wrong"; then "you should not
+  be making up any dialogue"). Seattle is the handoff spine in the handoff order, owner's
+  words only: `seattle_lot` (cypher art, CAPTION "Stank Records, live from the Park & Ride.",
+  Malik line 1, player line 2, "Fair enough.") → `seattle_route` ("Which way you headed?" /
+  "Pullman. Eventually." / "Then Mercer's on your way.") → `seattle_offer` (lines 6–9, the
+  carry/pass decision). `seattle_clock` and its panel key are gone.
+- **Owner (latest): "There should be a choice where player says that they know him and am
+  a fan. There's a lot more conversation and choices I don't see."** I will not write those
+  lines. The only candidate copy in these notes is Chat's Beat-2 proposal (lines ~1607–1615:
+  "Malik Reed? I follow your work. I'm an artist too." → "Then you know what a Friday press
+  deadline means.", plus the neutral and dismissive attitudes) which the later handoff
+  retired. Owner: approve/rewrite those, or point me at the section with the extra
+  conversation, and I wire it verbatim.
+
+### C — Captions are a content type
+- Nodes may carry `caption` (narration) beside `line` (speech). Recorded in the ledger
+  (`dialogueKeys.caption` / `fallbackText.caption`), indexed in `DIALOGUE_INDEX`, rendered as a
+  square tail-less box (its own paper colour, uppercase Comic Neue/Trebuchet) in the live tile
+  AND in the book (`ComicReader.drawCaption`). Validator: a node needs a line or a caption, and
+  a `line` that reads as narration ("She slides…") fails validation.
+- `country.mercer_departure`: caption "Brittney clocks out and meets you beside the car.",
+  player speech "Passenger seat's yours. Let's hit the road.", Brittney speech "StageWagon,
+  cowboy. Try to keep all four tires under us." ("She slides into the passenger seat" is in
+  the art and was dropped, per the handoff.)
+
+### D — Face protection now enforced (`src/ui/balloonLayout.js`, pure, 14 tests)
+- Every balloon and caption is placed through `layoutBalloon()`: body rect (+4 px clearance)
+  vs every `protect` rect and every balloon already on the tile; the tail is built from the
+  balloon edge facing the mouth (now including a TOP edge when the speaker is above), clipped
+  to stop 3 px outside the protected face it points at, and REJECTED if it would cross a
+  `face` / `hands` / `phone` rect on the way (it may cross `body` / `object` / `car`).
+- Slot order: authored → (for replies) directly below / right of the balloon it answers →
+  art corners (replies try the LOW corners first) → gutter → forced (flagged `clean:false`,
+  logged). Reading order rule from the owner: a reply is never above/left of what it answers.
+- Placement is checked against the panel the tile actually shows: on a choice-level art swap
+  the opening balloon (placed on the old art) is removed and the player/reply balloons use the
+  new panel's protect rects and mouth points.
+- Metadata re-measured as faces/hands/objects for the pilot panels (`hiphop.seattle_lot`,
+  `seattle_route`, `seattle_offer`, `seattle_offer.carry`, `mercer_counter/hook/fork`,
+  `mercer_ultimatum`, `country.mercer_fork.ride`, `country.mercer_departure(.board)`), each
+  with `bubble` / `playerBubble` / `replyBubble` (/ `caption`) slots in reading order. The
+  old whole-figure boxes (80% of the panel) made every placement "forced".
+- Debug overlays: `?comicdebug=1` — red protect rects, magenta mouth points, green balloon
+  bounds (red when forced), yellow tail paths, reading-order numbers, orange tray-risk band.
+- Placement log for probes: `window.__comicLayoutLog` (kind, slot, clean, tailClipped, rect).
+
+### Tile / pacing changes the owner asked for mid-pilot
+- Tile is FULL SCREEN (800×450 = 16:9, no side bars, no crop); the response tray is a
+  translucent band over the bottom 104 px, and balloons are kept above it.
+- The opening line STAYS on the tile; the reply lands after the player's balloon.
+- Pace: `readMs(text)` = 2000 ms + 90 ms per word past eight between balloon appearances
+  (opening → player line → reply → TAP TO CONTINUE at +800 ms).
+
+### E — Review folder (normal + debug overlays)
+`review/comic_pilot_2026-09-10/normal/` and `review/comic_pilot_2026-09-10/debug/`:
+`01_seattle_lot_authored_line`, `02_seattle_route_authored_line`, `03_seattle_offer_tray`,
+`03b_seattle_offer_carry_reply`, `04_mercer_counter_gates_shop`, `05_mercer_hook`,
+`06_mercer_fork_tray`, `07_mercer_fork_both_reply`, `08_mercer_ultimatum_tray`,
+`09_mercer_ultimatum_reply`, `10_mercer_shop_after_sequence`, `11_mercer_departure_caption`
+(.png each). Probe: scratchpad `pilot_probe.mjs [0|1]`. Last run: 25 placements — 20 authored,
+3 alternates, 2 forced (both read correctly on screen; logged for the metadata pass), no page
+errors. Chat/Codex: review these before any placement is applied to the rest of the comic.
+
+### PLACEHOLDER DIALOGUE — owner to rewrite (lines I wrote; in code only because the
+### structure needed words — every one is yours to replace, `src/data/featuredStories.js`)
+- Country `ellensburg_haylee`: line + `welcome` / `squeeze` / `noRoom` labels and replies.
+- Country `ellensburg_supply`: line (two variants) + `fullRun` / `quickRun` / `noRun` labels and replies.
+- Country `vantage_change`: line + `guard` / `timed` / `asIs` labels and replies.
+- Country `onRoad` set-up lines (mi 92 "moved campsites AGAIN…", mi 104 "Haylee's ride bailed…"),
+  Haylee's two road lines (mi 118 / 128), Brittney's "That was my best friend." on passing Exit 109.
+- Country reunion beat captions on `vantage_arrival.sendOff` (cooler / Haylee lines).
+- Country `mercer_departure` caption "Brittney clocks out and meets you beside the car." (from
+  the old node line) and the caption "Stank Records, live from the Park & Ride." on `seattle_lot`.
+- The needs' `nerve`/relationship lines predate today and are also mine unless the owner wrote them.
+
+### Chat's iPhone restart-stability audit (this file, previous section)
+Read in full. No change made: it says "ask the owner before implementation". Ready to start
+P0 (per-stop rest-stop working set) on the owner's word.

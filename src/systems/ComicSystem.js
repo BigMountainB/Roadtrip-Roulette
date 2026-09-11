@@ -102,6 +102,7 @@ export class ComicSystem {
       ...e,
       panelKey,
       text: {
+        caption: resolveDialogue(k.caption, f.caption ?? ''),
         line:  resolveDialogue(k.line,  f.line  ?? ''),
         label: resolveDialogue(k.label, f.label ?? ''),
         reply: resolveDialogue(k.reply, f.reply ?? ''),

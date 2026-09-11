@@ -12,6 +12,20 @@ import { getPaletteAtProgress, REGION_ORDER, REGION_PALETTES, lerpColor } from '
 import { buildRoute } from './RouteData.js';
 import { sampleExitPlan } from './ExitPath.js';
 import { TunnelFaceMesh } from './TunnelFaceMesh.js';
+
+/** On-road sprite width as a fraction of the road's own projected width.
+ *
+ *  sampleSurface() reports `sw` from a frozen `scale * 825 * SCREEN_W / 2`,
+ *  while the road surface itself projects at
+ *  `scale * (ROAD_WIDTH * seg.roadScale) * SCREEN_W / 2`.  The two only agree
+ *  where `roadScale` is 1, so every region that sets another value widened the
+ *  road and left the traffic behind.
+ *
+ *  825 / ROAD_WIDTH is the ratio those two expressions had at roadScale 1, so
+ *  vehicles keep their exact current size on a default-scale road and only
+ *  change where they were already out of step.  Used by
+ *  getVehicleProjection(); roadside scenery keeps the constant. */
+const VEHICLE_ROAD_FRACTION = 825 / ROAD_WIDTH;
 import { TimeOfDay } from '../world/TimeOfDay.js';
 import { Weather }   from '../world/Weather.js';
 import {
@@ -5593,6 +5607,46 @@ export class Road {
     };
   }
 
+  /**
+   * Projected road width at a SCREEN ROW (px, same units as sample.screenW),
+   * or null when the road doesn't cross that row.
+   *
+   * This is deliberately different from sampling at a fixed Z.  Segment width
+   * is `scale * ROAD_WIDTH * roadScale` with `scale = CAM.depth / cz` — purely
+   * distance, so a fixed-Z sample is GRADE-INVARIANT.  But the grade moves
+   * `screenY` (the pitch term), which changes WHICH segment lands on a given
+   * row: on a descent the near, wide segments are pushed below the viewport
+   * and a farther, narrower one takes their place.
+   *
+   * The player car is pinned to a fixed screen row (PLAYER_CAR_BASELINE_Y), so
+   * this is the only measurement that answers "how wide is the road actually
+   * under the car right now".
+   *
+   * Samples run near (n=0, largest screenY) to far (smallest), so we walk out
+   * until the row is bracketed and lerp between the pair.
+   */
+  roadWidthAtScreenY(targetY) {
+    const samples = this._surfaceSamples;
+    if (!samples?.length || !Number.isFinite(targetY)) return null;
+    let prev = null;
+    for (let n = 0; n <= DRAW_DIST; n++) {
+      const s = samples[n];
+      if (!s || !s.valid) continue;
+      if (prev) {
+        const yA = prev.screenY, yB = s.screenY;
+        // Bracketed either way round (screenY normally decreases with n, but
+        // a crest can briefly reverse it).
+        if ((targetY <= yA && targetY >= yB) || (targetY >= yA && targetY <= yB)) {
+          const span = yA - yB;
+          const t = Math.abs(span) < 1e-6 ? 0 : (yA - targetY) / span;
+          return prev.screenW + (s.screenW - prev.screenW) * t;
+        }
+      }
+      prev = s;
+    }
+    return null;
+  }
+
   /** Back-compat NPC projection — same shape as before (sx/sy/sw, no
    *  visible/scale).  Returns null on clipped segments so callers that
    *  currently `if (!proj) return` cull cleanly. */
@@ -5641,7 +5695,27 @@ export class Road {
   getVehicleProjection(relativeZ, laneOffset /* playerLatX not needed */) {
     const s = this.sampleSurface(relativeZ, laneOffset);
     if (!s) return null;
-    return { sx: s.sx, sy: s.sy, sw: s.sw };
+    // ── Cars scale WITH THE ROAD (owner 2026-09-10) ──────────────────────
+    // sampleSurface's `sw` is `scale * 825 * SCREEN_W / 2` — a frozen
+    // constant.  The road surface beside it draws at
+    // `scale * (ROAD_WIDTH * seg.roadScale) * SCREEN_W / 2`, so anywhere
+    // `roadScale` is not 1 the road changed width and the vehicles did not:
+    // through Seattle it steps 0.95 -> 0.92 -> 1.05 (a 14% swing), which is
+    // the reported "road grows but the cars stay the same size".
+    //
+    // `roadHalfW` IS that real projected width (Road.js sets
+    // `s.screenW = projW`), so deriving from it re-couples the two.  The
+    // ratio is the original constant over ROAD_WIDTH, which means at
+    // roadScale 1 this is EXACTLY the old value — only the regions that
+    // currently desync move.
+    //
+    // Deliberately scoped to this method: it is the on-road path (traffic,
+    // cops, pickups).  Roadside scenery and buildings call sampleSurface
+    // directly and keep the constant, so their footing is untouched.
+    const sw = (typeof s.roadHalfW === 'number' && s.roadHalfW > 0)
+      ? s.roadHalfW * VEHICLE_ROAD_FRACTION
+      : s.sw;
+    return { sx: s.sx, sy: s.sy, sw };
   }
 
   /** Screen-Y of the nearest hill-crest silhouette in FRONT of `relativeZ`

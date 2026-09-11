@@ -29,28 +29,48 @@ import { getStoryNode } from '../data/featuredStories.js';
 // appeared in a Brittney panel.  A panel with no approved art now shows a
 // placeholder instead (Ch.18 missing-art policy).
 import { panelMeta, panelKeyFor, resolvePanelKey } from '../data/comicPanels.js';
+import { layoutBalloon } from './balloonLayout.js';
 
 const D = 600;
+// Caption boxes (narration) are a different content type from speech
+// (workshop §C): square-ish, no tail, its own paper colour and typeface.
+const CAPTION_FACE = '"Comic Neue", "Trebuchet MS", "Helvetica Neue", Arial, sans-serif';
+const CAPTION_FILL = 0xFFF1B8;
+/** Debug overlays (workshop §D): protected rects, mouth points, balloon
+ *  bounds, tail paths, reading order, tray-risk area.  `?comicdebug=1` or
+ *  `window.__comicDebug = true`. */
+const comicDebug = () => { try { return !!window.__comicDebug; } catch (_) { return false; } };
+/** Reading pace (owner 2026-09-10: "bubble appearances should be 2 sec apart
+ *  unless really long"): 2 s between balloons, plus 90 ms for every word past
+ *  eight so a long line gets its time before the next balloon lands. */
+export const BALLOON_GAP_MS = 2000;
+export const BALLOON_MS_PER_EXTRA_WORD = 90;
+export function readMs(text) {
+  const words = String(text ?? '').trim().split(/\s+/).filter(Boolean).length;
+  return BALLOON_GAP_MS + Math.max(0, words - 8) * BALLOON_MS_PER_EXTRA_WORD;
+}
 // Comic lettering with a readable fallback (character-specific faces land
 // with the Phase-8 art; iOS ships Chalkboard SE / Marker Felt, macOS Comic
 // Sans MS, everything else falls to a humanist sans).
 export const LETTERING = '"Chalkboard SE", "Comic Sans MS", "Marker Felt", "Trebuchet MS", Arial, sans-serif';
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 
-// Widescreen tile (owner 2026-09-06: "the conversation tiles can be bigger"):
-// 720×324 of the 800×450 screen, 20:9.  Page panels stay 16:9
-// (PANEL_ASPECT); the same art cover-fits both.
-const TILE_ASPECT = 20 / 9;
-const ART_W  = 720;
-const ART_H  = Math.round(ART_W / TILE_ASPECT);    // 324
-const ART_X  = Math.round((SCREEN_W - ART_W) / 2); // 40
-const ART_Y  = 8;
-const PEEK   = 30;      // px of the previous tile left showing
+// FULL-SCREEN tile (owner 2026-09-10: "the comic tiles are still not taking
+// up the full screen").  The screen is 800×450 = exactly 16:9, the same
+// aspect as every page panel (PANEL_ASPECT), so the art fills it edge to
+// edge with no side bars and no crop.  The response tray is TRANSLUCENT over
+// the bottom band of the art (workshop: "translucent response tray"); that
+// band is the tray-risk area and balloons are kept out of it.
+const ART_W  = SCREEN_W;                            // 800
+const ART_H  = SCREEN_H;                            // 450
+const ART_X  = 0;
+const ART_Y  = 0;
+const PEEK   = 0;       // the newest tile owns the screen; drag right to browse back
 const GAP    = 8;
 const TILE_W = ART_W - PEEK;
-const BTN_TOP = ART_Y + ART_H + 8;                 // 340
+const BTN_AREA_H = 104;
+const BTN_TOP = SCREEN_H - BTN_AREA_H - 6;          // 340
 const BTN_GAP = 4;
-const BTN_AREA_H = SCREEN_H - BTN_TOP - 6;         // 104
 const MIN_FONT = 13;
 
 /** Run every pending story node for this stop in order, then `onDone`. */
@@ -120,6 +140,12 @@ export function showStoryConversation(scene, start, onDone) {
   const header = add(scene.add.text(ART_X + ART_W - 8, ART_Y + 6, '', {
     fontSize: '11px', fontFamily: IMPACT, color: '#8FB7E6', stroke: '#000', strokeThickness: 3,
   }).setOrigin(1, 0).setDepth(D + 5));
+  if (comicDebug()) {
+    // Tray-risk area: where the response tray sits.  Nothing that must stay
+    // readable may be placed here (workshop §D).
+    add(scene.add.rectangle(SCREEN_W / 2, BTN_TOP + BTN_AREA_H / 2, ART_W, BTN_AREA_H, 0xFF9020, 0.14).setDepth(D + 6));
+    add(scene.add.text(ART_X + 4, BTN_TOP + 2, 'TRAY RISK', { fontSize: '9px', fontFamily: IMPACT, color: '#FF9020' }).setDepth(D + 6));
+  }
 
   const tiles = [];          // { c: Container, w }
   let btnObjs = [];
@@ -158,7 +184,7 @@ export function showStoryConversation(scene, start, onDone) {
    *  pointer that moved more than a few px is ignored. */
   function awaitTapThen(fn) {
     if (finished) return;
-    const hint = scene.add.text(SCREEN_W / 2, BTN_TOP + 18, 'TAP TO CONTINUE', {
+    const hint = scene.add.text(SCREEN_W / 2, SCREEN_H - 22, 'TAP TO CONTINUE', {
       fontSize: '14px', fontFamily: IMPACT, color: '#8FB7E6', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(D + 5);
     btnObjs.push(hint);
@@ -202,9 +228,18 @@ export function showStoryConversation(scene, start, onDone) {
 
   // ── Balloons ────────────────────────────────────────────────────────────
   /** White speech balloon with a tail; auto-sizes small/medium/large, splits
-   *  into two linked balloons when even the smallest readable size overflows. */
+   *  into two linked balloons when even the smallest readable size overflows.
+   *
+   *  FACE PROTECTION (workshop §D): the measured balloon is placed through
+   *  layoutBalloon() against the panel's `protect` rects, the balloons already
+   *  on this tile (`opts.avoid`) and the art/tile bounds — authored slot first,
+   *  then the art corners, then the gutter.  The tail is clipped so it stops
+   *  short of the protected face it points at and never crosses another.
+   *  `opts.placed` (an array) receives the final rects; `opts.debug` (a
+   *  Graphics) gets the overlays. */
   function balloon(container, text, box, tail, opts = {}) {
     const out = [];
+    if (!text) return out;
     const maxW = box.w, maxH = box.h;
     const sizes = [20, 18, 16, 14, MIN_FONT];
     let size = sizes[sizes.length - 1], probe = null;
@@ -221,26 +256,24 @@ export function showStoryConversation(scene, start, onDone) {
       if (m) parts = [m[1], m[2]];
     }
     probe.destroy();
-    let x = box.x, y = box.y;
+    const fill = opts.fill ?? 0xFFFFFF;
+    const protect = opts.protect ?? [];
+    const avoid = [...(opts.avoid ?? [])];
+    let prev = null;
     parts.forEach((part, i) => {
       const t = scene.add.text(0, 0, part, { fontSize: `${size}px`, fontFamily: LETTERING, color: '#111', wordWrap: { width: maxW - 24 }, align: 'center' });
       const w = Math.min(maxW, t.width + 24), h = t.height + 18;
-      const bx = i === 0 ? x : Math.min(TILE_W - w - 6, x + 40), by = i === 0 ? y : y + h - 6;
+      const last = i === parts.length - 1;
+      // A linked second balloon hangs under the first; only the last carries the tail.
+      const want = prev ? { x: Math.min(TILE_W - w - 6, prev.x + 40), y: prev.y + prev.h - 6, w, h } : { x: box.x, y: box.y, w, h };
+      const L = layoutBalloon({ size: { w, h }, box: want, anchor: last ? tail : null, protect, art: opts.art ?? null, bounds: opts.bounds ?? null, avoid, after: i === 0 ? (opts.after ?? null) : null });
+      const { x: bx, y: by } = L.rect;
       const g = scene.add.graphics();
-      const fill = opts.fill ?? 0xFFFFFF;
-      if (i === parts.length - 1 && tail) {
+      if (L.tail) {
         // Tail leaves from the balloon EDGE that faces the speaker anchor
         // (never across the text), drawn first so the balloon body sits on
-        // top of its base.
-        const tx = tail.x, ty = tail.y;
-        let ax, ay, bx2, by2;
-        if (tx > bx + w && ty < by + h + 8) {            // anchor to the right
-          ax = bx + w - 1; ay = Math.max(by + 12, Math.min(by + h - 26, ty - 8)); bx2 = ax; by2 = ay + 18;
-        } else if (tx < bx && ty < by + h + 8) {         // anchor to the left
-          ax = bx + 1; ay = Math.max(by + 12, Math.min(by + h - 26, ty - 8)); bx2 = ax; by2 = ay + 18;
-        } else {                                          // anchor below
-          const cx = Math.max(bx + 24, Math.min(bx + w - 24, tx)); ax = cx - 10; ay = by + h - 1; bx2 = cx + 10; by2 = ay;
-        }
+        // top of its base.  Its tip stops OUTSIDE the protected face.
+        const { ax, ay, bx: bx2, by: by2, tx, ty } = L.tail;
         g.fillStyle(fill, 1); g.lineStyle(2.5, 0x111111, 1);
         g.fillTriangle(ax, ay, bx2, by2, tx, ty);
         g.lineBetween(ax, ay, tx, ty); g.lineBetween(bx2, by2, tx, ty);
@@ -249,9 +282,52 @@ export function showStoryConversation(scene, start, onDone) {
       g.fillRoundedRect(bx, by, w, h, 14); g.strokeRoundedRect(bx, by, w, h, 14);
       t.setPosition(bx + w / 2, by + h / 2).setOrigin(0.5);
       container.add([g, t]); out.push(g, t);
-      y = by;
+      avoid.push(L.rect); opts.placed?.push(L.rect); prev = L.rect;
+      if (opts.debug) debugMark(opts.debug, L, opts.order ?? 0, !L.clean);
+      logLayout({ kind: 'speech', text: part.slice(0, 40), slot: L.slot, clean: L.clean, tailClipped: !!L.tail?.clipped, rect: L.rect });
     });
     return out;
+  }
+
+  /** CAPTION box — narration, never a speaker's words (workshop §C).  Square
+   *  corners, no tail, its own paper and typeface, uppercase. */
+  function caption(container, text, box, opts = {}) {
+    const out = [];
+    if (!text) return out;
+    const t = scene.add.text(0, 0, String(text).toUpperCase(), { fontSize: '13px', fontFamily: CAPTION_FACE, fontStyle: 'bold', color: '#222', wordWrap: { width: box.w - 20 }, align: 'left' });
+    const w = Math.min(box.w, t.width + 20), h = t.height + 16;
+    const L = layoutBalloon({ size: { w, h }, box: { x: box.x, y: box.y, w, h }, anchor: null, protect: opts.protect ?? [], art: opts.art ?? null, bounds: opts.bounds ?? null, avoid: opts.avoid ?? [] });
+    const g = scene.add.graphics();
+    g.fillStyle(0x000000, 0.35); g.fillRect(L.rect.x + 3, L.rect.y + 3, w, h);          // drop shadow
+    g.fillStyle(CAPTION_FILL, 1); g.lineStyle(2, 0x111111, 1);
+    g.fillRect(L.rect.x, L.rect.y, w, h); g.strokeRect(L.rect.x, L.rect.y, w, h);
+    t.setPosition(L.rect.x + 10, L.rect.y + 8).setOrigin(0);
+    container.add([g, t]); out.push(g, t);
+    opts.placed?.push(L.rect);
+    if (opts.debug) debugMark(opts.debug, L, opts.order ?? 0, !L.clean);
+    logLayout({ kind: 'caption', text: String(text).slice(0, 40), slot: L.slot, clean: L.clean, rect: L.rect });
+    return out;
+  }
+
+  /** Placement log for review probes (`window.__comicLayoutLog`) — every
+   *  balloon/caption with the slot it landed in and whether it was clean. */
+  function logLayout(rec) {
+    try { (window.__comicLayoutLog ??= []).push({ stop: scene._stop?.id ?? null, ...rec }); } catch (_) {}
+  }
+
+  /** Debug overlay for one placed box: green bounds (red when forced), the
+   *  tail path in yellow, and the reading-order number. */
+  function debugMark(gfx, L, order, forced) {
+    gfx.lineStyle(2, forced ? 0xFF3030 : 0x30FF60, 1);
+    gfx.strokeRect(L.rect.x, L.rect.y, L.rect.w, L.rect.h);
+    if (L.tail) {
+      gfx.lineStyle(2, 0xFFE030, 1);
+      gfx.lineBetween((L.tail.ax + L.tail.bx) / 2, (L.tail.ay + L.tail.by) / 2, L.tail.tx, L.tail.ty);
+      gfx.fillStyle(0xFFE030, 1); gfx.fillCircle(L.tail.tx, L.tail.ty, 3);
+    }
+    const n = scene.add.text(L.rect.x - 2, L.rect.y - 2, String(order), { fontSize: '12px', fontFamily: IMPACT, color: '#FFF', backgroundColor: '#000', padding: { x: 4, y: 1 } }).setOrigin(1, 1);
+    gfx.parentContainer?.add(n);
+    gfx._debugTexts = (gfx._debugTexts ?? []).concat(n);
   }
 
   // ── Tile ────────────────────────────────────────────────────────────────
@@ -326,32 +402,92 @@ export function showStoryConversation(scene, start, onDone) {
     drawArt();
 
     c.add(scene.add.text(10, ART_H - 8, `${scene._stop?.name ?? ''} · MILE ${Math.round(scene._odometer ?? 0)}`, { fontSize: '11px', fontFamily: IMPACT, color: '#8FB7E6' }).setOrigin(0, 1));
-    // NPC balloon from panel metadata, mapped to the ART rect.
     // Establishing/intro panels precede the dialogue in the book (Ch.18 special beats).
     try { story.noteNodeShown?.(storyId, nodeId, scene._odometer ?? 0); } catch (_) {}
+    // ── Placement context (workshop §D) ───────────────────────────────────
+    // Balloons and captions live ABOVE the tray band: both the alternate
+    // slots and the clamp bounds stop at BTN_TOP, so nothing readable is ever
+    // placed under the translucent response tray / TAP TO CONTINUE prompt.
+    const safeBottom = BTN_TOP - ART_Y - 4;
+    const artRect  = { x: AX, y: AY, w: AW, h: Math.min(AH, safeBottom - AY) };
+    const tileRect = { x: 0, y: 0, w: TILE_W, h: Math.min(ART_H, safeBottom) };
+    let protectPx  = (meta.protect ?? []).map(rectPx);
+    const placed   = [];                 // rects already on this tile, in reading order
+    let order      = 0;
+    // Debug layer sits above everything on the tile.  Built ONCE per panel
+    // (protected rects + mouth points), then each placement adds its own
+    // mark; a panel swap rebuilds it and re-marks what is already placed.
+    let dbg = null;
+    const debugBase = (rebuild = false) => {
+      if (!comicDebug()) return null;
+      if (dbg && !rebuild) { c.bringToTop(dbg); return dbg; }
+      if (dbg) { for (const t of dbg._debugTexts ?? []) t.destroy(); dbg.destroy(); }
+      dbg = scene.add.graphics(); c.add(dbg); dbg.parentContainer = c;
+      dbg.lineStyle(2, 0xFF3030, 0.95);
+      for (const p of protectPx) dbg.strokeRect(p.x, p.y, p.w, p.h);
+      dbg.fillStyle(0xFF30E0, 1);
+      const m1 = ptPx(meta.tail), m2 = ptPx(meta.playerTail);
+      dbg.fillCircle(m1.x, m1.y, 4); dbg.fillCircle(m2.x, m2.y, 4);
+      return dbg;
+    };
+    const ctx = () => ({ protect: protectPx, art: artRect, bounds: tileRect, avoid: placed, placed, debug: debugBase(), order: ++order });
+    const redrawDebug = () => { if (!comicDebug()) return; const d = debugBase(true); let i = 0; for (const r of placed) debugMark(d, { rect: r, tail: null, clean: true }, ++i, false); };
+    // CAPTION (narration) first, then the NPC line — both optional.
+    let capParts = caption(c, story.resolveCaption?.(storyId, nodeId) ?? '', meta.caption ? rectPx(meta.caption) : { x: AX + 10, y: AY + 10, w: AW * 0.40, h: AH * 0.24 }, ctx());
     let npcBox  = rectPx(meta.bubble);
     let npcTail = ptPx(meta.tail);
-    let npcParts = balloon(c, story.resolveLine(storyId, nodeId), npcBox, npcTail);
+    let npcRects = [];
+    let swapped = false;           // the art changed since the line was placed
+    let lastPlayerRect = null;     // the balloon a reply must follow
+    let replyParts = [];
+    const placeNpc = (text, box, extra = {}) => {
+      const o = { ...ctx(), ...extra }; const before = placed.length;
+      const parts = balloon(c, text, box, npcTail, o);
+      if (!extra.after) npcRects = placed.slice(before);
+      return parts;
+    };
+    let npcParts = placeNpc(story.resolveLine(storyId, nodeId), npcBox);
     const tile = {
       c, storyId, nodeId, node,
       get panelKey() { return panelKey; },
       /** Swap to the RESPONSE panel for the committed choice.  Called by pick()
        *  before the tile slides into the comic, so the live tile and the book
-       *  show the same authored image. */
+       *  show the same authored image — and so every balloon placed from here
+       *  on is checked against THAT image's protected faces and mouth points. */
       setPanelKey(key) {
         if (!key || key === panelKey) return;
         panelKey = key;
         meta = panelMeta(key);
         npcBox  = rectPx(meta.bubble);
         npcTail = ptPx(meta.tail);
+        protectPx = (meta.protect ?? []).map(rectPx);
+        swapped = true;
+        // The opening line was placed against the OLD art; it cannot stay.
+        for (const o of npcParts) o.destroy(); npcParts = [];
+        for (const r of npcRects) { const i = placed.indexOf(r); if (i >= 0) placed.splice(i, 1); }
+        npcRects = [];
         drawArt();
+        redrawDebug();
       },
+      /** The NPC's reply.  READING ORDER (owner 2026-09-10: "the reply above
+       *  and to the left of the preceding quote is confusing"): the opening
+       *  line STAYS on the tile and the reply lands AFTER the player's balloon
+       *  — an authored `replyBubble` slot if the panel has one, else directly
+       *  below the player's balloon, else to its right, else a LOW corner.
+       *  Only when the art was swapped (choice-level panel) is the opening
+       *  line gone, and the reply takes the panel's own bubble slot. */
       setReply(text) {
-        for (const o of npcParts) o.destroy();
-        npcParts = text ? balloon(c, text, npcBox, npcTail) : [];
+        for (const o of replyParts) o.destroy(); replyParts = [];
+        if (!text) return;
+        const pref = meta.replyBubble ? rectPx(meta.replyBubble)
+                   : swapped || !lastPlayerRect ? npcBox
+                   : { x: lastPlayerRect.x, y: lastPlayerRect.y + lastPlayerRect.h + 6, w: npcBox.w, h: npcBox.h };
+        replyParts = placeNpc(text, pref, { after: lastPlayerRect ?? npcRects[0] ?? null });
       },
       setPlayer(text) {
-        balloon(c, text, rectPx(meta.playerBubble), ptPx(meta.playerTail), { fill: 0xFFF9D6 });
+        const before = placed.length;
+        balloon(c, text, rectPx(meta.playerBubble), ptPx(meta.playerTail), { fill: 0xFFF9D6, ...ctx(), after: swapped ? null : (npcRects[0] ?? null) });
+        lastPlayerRect = placed[before] ?? lastPlayerRect;
       },
     };
     strip.add(c);
@@ -370,14 +506,26 @@ export function showStoryConversation(scene, start, onDone) {
     // A stub / dead-end node can't strand the player: one plain way out that
     // records nothing (the story stays parked on this node).
     const list = choices.length ? choices : [{ id: '__tbc', label: 'TO BE CONTINUED…', consequential: false, next: null, effects: {}, _exit: true }];
+    // AUTHORED MANDATORY PLAYER LINE (workshop §A): a one-item choice list is
+    // not a decision.  It plays as the player's speech balloon through the
+    // tap-to-continue sequence — never as a full-width fake button.  (The
+    // dead-end TO BE CONTINUED exit keeps its button.)
+    if (list.length === 1 && !list[0]._exit) {
+      const ch = list[0];
+      const opening = `${story.resolveCaption?.(storyId, nodeId) ?? ''} ${story.resolveLine(storyId, nodeId)}`;
+      scene.time.delayedCall(readMs(opening), () => { if (!finished && tiles.at(-1) === tile) pick(tile, ch); });
+      return;
+    }
     const n = list.length;
     const bh = Math.max(24, Math.min(36, Math.floor((BTN_AREA_H - (n - 1) * BTN_GAP) / n)));
+    // Translucent tray band: the art stays visible through it.
+    btnObjs.push(scene.add.rectangle(SCREEN_W / 2, BTN_TOP + BTN_AREA_H / 2 + 3, SCREEN_W, BTN_AREA_H + 12, 0x02040B, 0.55).setDepth(D + 3));
     let y = BTN_TOP;
     for (const ch of list) {
       const cost = Math.max(0, ch.cost | 0);
       const afford = cost <= cash;
       const label = cost ? `${ch.label}  ($${cost})` : ch.label;
-      const bg = scene.add.rectangle(SCREEN_W / 2, y + bh / 2, ART_W, bh, afford ? 0x143A5A : 0x2A1010)
+      const bg = scene.add.rectangle(SCREEN_W / 2, y + bh / 2, ART_W - 16, bh, afford ? 0x143A5A : 0x2A1010, 0.82)
         .setStrokeStyle(2, afford ? 0x39A8FF : 0x662222).setDepth(D + 3);
       const fs = Math.max(12, Math.min(17, bh - 12));
       const lbl = scene.add.text(SCREEN_W / 2, y + bh / 2, label, {
@@ -386,8 +534,8 @@ export function showStoryConversation(scene, start, onDone) {
       btnObjs.push(bg, lbl);
       if (afford) {
         bg.setInteractive({ useHandCursor: true });
-        bg.on('pointerover', () => bg.setFillStyle(0x1E5280));
-        bg.on('pointerout',  () => bg.setFillStyle(0x143A5A));
+        bg.on('pointerover', () => bg.setFillStyle(0x1E5280, 0.92));
+        bg.on('pointerout',  () => bg.setFillStyle(0x143A5A, 0.82));
         bg.on('pointerdown', (p, _x, _y, ev) => {
           scene._eatTap(p, ev);
           if (scene._tapBlocked(p)) return;
@@ -438,12 +586,13 @@ export function showStoryConversation(scene, start, onDone) {
     // Authored eject (North Bend's "Piss off"): the stop closes behind the
     // tile — no storefront, no welcome NPC.
     if (r.applied && r.leaveStop) leaveAfter = true;
-    scene.time.delayedCall(650, () => { if (!finished && reply) tile.setReply(reply); });
+    const replyAt = readMs(ch.label);
+    scene.time.delayedCall(replyAt, () => { if (!finished && reply) tile.setReply(reply); });
     // The reply lands, then the tile HOLDS until the player taps — no timed
     // hand-off.  The short delay here is only so the prompt doesn't appear on
     // top of the reply arriving, and so the tap that picked the choice can't
     // carry through and skip the beat it just created.
-    scene.time.delayedCall(reply ? 1200 : 450, () => {
+    scene.time.delayedCall(reply ? replyAt + 800 : 450, () => {
       if (finished) return;
       awaitTapThen(() => {
         const nextId = r.next ?? null;
