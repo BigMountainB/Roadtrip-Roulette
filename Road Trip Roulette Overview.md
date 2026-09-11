@@ -204,6 +204,26 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 8) — Brittney's three StageWagon objectives DRAFTED (notes only, nothing in code)
+
+Owner picked this as the next story-canon batch. Draft 1 is in `CLAUDE_WORKING_NOTES.md`
+§"BRITTNEY'S THREE STAGEWAGON OBJECTIVES — Claude draft 1", built on Chat's +5/+3/+0 spec and the
+dialogue-quality rule (concrete need · a line that is hers · a clue about the ride · three answers
+where the right one isn't obvious · a later callback):
+- **Supply run** at Cle Elum (Huff's beer cave): `cleelum_supply` — full run $40 / quick run $15 /
+  no run; `supplies` flag drives the Vantage reunion caption.
+- **Friends / meetup** = the Haylee pickup at Ellensburg: two on-road clue lines (group chat moved
+  camp; "Haylee's at Exit 109 with a cooler") so taking the exit is the choice, like Mercer; node
+  `ellensburg_haylee` welcome / squeeze / no room; blowing past the exit = +0, remembered; two or
+  three Haylee road lines proposed.
+- **Shed the uniform** at Vantage (wardrobe lock respected — she changes in the five minutes before
+  the reunion): `vantage_change` guard / timed / as-is; clothes from Haylee's duffel if aboard,
+  inside-out shirt if not.
+- Proposed gate: RIDE 'EM also needs 2 of 3 objectives at partial-or-better. Two new panels
+  briefed (Cle Elum supply run, Vantage change). Twelve owner questions listed instead of decided
+  (stop placement, need-vs-objective at one stop, Brittney's age, costs, nerve, exit-skip penalty,
+  clothes source, RIDE 'EM gate, Haylee's read, road-line count, reunion art variants, key names).
+
 ### 2026-09-10 (pt 7) — OUT OF GAS card never appeared when a run ENTERED gameplay already at 0 gas
 
 Owner: "when I'm out of gas, the out of gas ending doesn't pop up." Root cause in `GameScene`: the

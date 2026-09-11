@@ -3383,3 +3383,152 @@ Read this before proposing further dialogue: the AUTHORITATIVE DIALOGUE HANDOFF 
   Malik/Dom'nique matrix scoring; Brittney's three StageWagon objectives; StageWagon
   celebration/reward tiers; Classic Rock rest-stop dialogue; Nan rewrite + cookies; the live
   strip / tray / timing / hold-to-zoom comic system; the two-tier comic asset pipeline.
+
+## BRITTNEY'S THREE STAGEWAGON OBJECTIVES — Claude draft 1, 2026-09-10 (red-pen; NOTHING in code)
+
+Source: Chat's §"Three additional StageWagon objectives for Brittney" (+5/+3/+0 each, they
+SUPPLEMENT the needs) + the dialogue-quality rule (concrete need · a line that is *her* · a clue
+about how the ride is landing · three answers where the right one isn't cartoon-obvious · a later
+callback).  Constraints honoured: owner canon (wardrobe LOCKED in the Gas-N-Sip uniform until
+Vantage; Haylee = strawberry blonde, 24, Central University grad student, boards at Ellensburg on
+the Brittney path only; innuendo as seasoning; both of drinking age).  Every stop name below is a
+real amenity at that rest stop (`REST_STOPS` × `BUSINESS_LABELS`), never invented.
+
+### Where they sit on the road (Brittney boards at Mercer, mi 9.5; Vantage is mi 137)
+
+| # | Objective | Stop | Mile | Why here | Businesses on site |
+|---|-----------|------|------|----------|--------------------|
+| 1 | Supply run | **Cle Elum (C)** | 84 | Last town with a gas station + a store before the canyon; Ellensburg is Haylee's beat and shouldn't carry two tiles | Huff's Gas, Gas-N-Sip, CowBella, Les Schwasted, Finesse, AOK Camp |
+| 2 | Friends / meetup → Haylee pickup | **Ellensburg (E)** | 109 | Fixed by owner (Haylee boards here) | Huff's, Gas-N-Sip, CowBella, Lord Motors, Les Schwasted, Finesse |
+| 3 | Shed the uniform | **Vantage (V)**, before the reunion | 137 | Wardrobe lock says she changes AT Vantage, so the objective is the five minutes before she walks up to her friends | Huff's, AM/BM, Les Schwasted, AOK Camp |
+
+Clue lines (Beat 2's "phone is dying / group chat moved again") ride the existing on-road girl-line
+channel between Cle Elum and Ellensburg (mi ≈ 92 and ≈ 104) so the Ellensburg exit is *set up*
+the way Mercer is — the player has to choose to take the exit.
+
+Needs vs objectives at the same stop: Cle Elum and Ellensburg are both in `NEED_STOPS`.  Proposed
+rule — the objective takes the stop and the pending need simply stays pending for the next stop
+(nothing lost, no double tile).  See Q2.
+
+### Objective 1 — SUPPLY RUN · Cle Elum · node `cleelum_supply` (one-time, mandatory while she's aboard)
+
+Portrait: Brittney.  Where: pulled in at Huff's Gas, the beer cave visible through the glass.
+
+**Brittney:** "Okay. Logistics. My babes think I'm rolling up with THE cooler — I'm the cooler
+girl, it's a whole thing. Instead I've got a name tag, a phone on four percent, and whatever's
+rattling around your back seat. Huff's has ice and a beer cave. Give me one real run. Twenty
+minutes, tops, and I'll stop white-knuckling your door handle."
+*(need: cooler + ice + drinks · her: "I'm the cooler girl" · clue: the door-handle line reads
+her nerve back to the player)*
+
+| id | Player says | Cost | She says | Effect |
+|----|-------------|------|----------|--------|
+| `fullRun` (+5) | "Let's do it right. Ice, drinks, water, and something to open them with." | $40 | "Water. WATER. Nobody in the history of that group chat has ever remembered the water." She packs it like she's loading a rifle. | `supplies:'full'`, relationship +5 |
+| `quickRun` (+3) | "Drinks and ice. Ten minutes, then we're rolling." | $15 | Ten minutes. She comes back with beer, a bag of ice, no water, no opener, and gummy worms. "Priorities." | `supplies:'partial'`, relationship +3 |
+| `noRun` (+0) | "Your friends can handle the cooler. We're on a clock." | — | "…Cool. Cool cool cool." She watches the beer cave through the windshield the whole time you pump. | `supplies:'none'`, relationship +0 |
+
+Callbacks: Vantage reunion caption changes — full: "She hands Haylee the cooler like a trophy."
+partial: "She hides the gummy worms behind her back." none: Haylee, dry: "You came empty?" —
+Brittney: "I *came*."  Montage strip ("…how did they handle the long car ride?") gets one cell
+from whichever happened.
+
+### Objective 2 — FRIENDS / MEETUP · Ellensburg · setup lines + node `ellensburg_haylee`
+
+**Road clue 1 (mi ≈ 92, girl-line channel):** "Group chat says they moved campsites AGAIN. If they
+move one more time my FOMO is going to become a medical condition."
+**Road clue 2 (mi ≈ 104):** "Haylee's ride bailed on her. She's sitting at the Ellensburg exit
+with a cooler and a duffel. Ellensburg. Exit 109. I'm just saying it out loud so it's said."
+*(The exit is the choice.  Take it → the node.  Blow past it → `onPass('E')` sets `haylee:'skipped'`
+and she says, flat: "That was my best friend." — +0, remembered.)*
+
+Node `ellensburg_haylee` (mandatory, `when: passenger && !flags.haylee`).  Portrait: Brittney, with
+Haylee's portrait (`npc_haylee`) on her reply.  Panel key `country.ellensburg_haylee` (art exists,
+owner approval pending).
+
+**Brittney:** "THAT'S her. HAYLEE! — okay she's got the cooler, the tent, and I'm ninety percent
+sure my entire weekend is in that duffel. She's the smart one, so be normal. Can we make room?"
+*(need: a seat + cargo space · her: "be normal" · clue: she's introducing you, which she wouldn't
+do for a ride she planned to forget)*
+
+| id | Player says | She says | Effect |
+|----|-------------|----------|--------|
+| `welcome` (+5) | "Haylee, right? Take the front — I'll get the cooler. We'll make room." | **Haylee:** "So you're the ride. She said you were decent." Beat. "She says that about everybody." **Brittney:** "I do NOT." | `haylee:'aboard'`, `hayleeRead:'warm'`, relationship +5 |
+| `squeeze` (+3) | "Fine — but the cooler rides on her lap. We're late." | **Haylee:** "I've held heavier things on my lap." **Brittney:** "HAYLEE." | `haylee:'aboard'`, `hayleeRead:'dry'`, relationship +3 |
+| `noRoom` (+0) | "There's no room. She'll catch the next ride." | **Brittney:** "…She IS the next ride. You're ours." Haylee waves you off without getting up. | `haylee:'left'`, relationship +0 |
+
+Haylee aboard → two or three live road lines before Vantage (proposed, red-pen):
+- mi ≈ 118 — **Haylee:** "Does she always pick the drivers, or did this one pick her?" **Brittney:** "Drive."
+- mi ≈ 128 — **Haylee** (after a clean pass): "Okay. That was smooth." / (after an impact): "Brit. Brit, is this the ride you texted about?"
+- Haylee never flirts and never mentions the phone (she doesn't know); she is the outside eye.
+
+Her own read (`hayleeRead`) is a flag, not a meter: warm / dry / (none).  It only colours the
+reunion line.  See Q9.
+
+### Objective 3 — SHED THE UNIFORM · Vantage · node `vantage_change` (virtual, chained BEFORE `vantage_arrival`)
+
+Wardrobe lock respected: she is in the Gas-N-Sip uniform for the entire ride; this is the five
+minutes at Vantage before she walks up to her friends.  Portrait: Brittney.
+
+**Brittney:** "Okay. Stop here. I am not walking up to my babes smelling like the roller grill
+with a name tag on. Five minutes. There's a bathroom by the boat launch — or your back seat, if
+you turn around and swear on your car."
+*(need: privacy + five minutes · her: "swear on your car" · clue: she's asking, not telling —
+she wants to see what the player does when there's nothing in it for them)*
+
+Where the clothes come from (proposed, see Q7): Haylee aboard → the duffel ("Haylee brought my
+stuff. Told you she's the smart one."); Haylee not aboard → she flips the uniform shirt inside out
+and ditches the name tag ("Improvised. Don't look at the seams.").
+
+| id | Player says | She says | Effect |
+|----|-------------|----------|--------|
+| `guard` (+5) | "Take all the time you need. I'll stand out here and not turn around." | She comes back the same girl with no name tag, and something in her shoulders has let go. "Okay. Now I'm here." | `changed:'full'`, relationship +5 |
+| `timed` (+3) | "Five minutes. I'm timing it." | She changes the shirt, keeps the work pants, and throws the name tag at you. "Souvenir." | `changed:'partial'`, relationship +3 |
+| `asIs` (+0) | "They're your friends. They've seen you in worse." | She gets out in the uniform. She doesn't look back. | `changed:'none'`, relationship +0 |
+
+Payoff: the Vantage arrival/reunion art reads her state — confident & self-directed / improvised /
+still in uniform (name tag on).  Whether that is three art variants or one panel plus caption is
+Q11.
+
+### Scoring, gates, and what the numbers do
+
+- Each objective: +5 / +3 / +0 to Brittney's relationship (Country), exactly as Chat specified.
+  Skipping the Ellensburg exit = +0 (same as `noRoom`), remembered separately (`haylee:'skipped'`).
+- No Nerve from objectives (proposed): Nerve is earned by needs + driving; these are story.  Q5.
+- Chat's "a high score from flirting ≠ a high score from reliability" — proposed gate: **RIDE 'EM
+  additionally requires at least two of the three objectives at partial-or-better** (`supplies`,
+  `haylee` aboard, `changed`), on top of rel ≥ 80 / nerve ≥ 10 / 5 clean passes.  STANDARD and
+  BARELY unchanged.  Q8.
+- Flags are the callback surface: `supplies`, `haylee`, `hayleeRead`, `changed` → reunion caption,
+  montage cells, and (later) the StageWagon celebration tiers.
+
+### Art this adds (append to ART NEEDED when approved)
+
+| Key | File (proposed) | Shape | Brief |
+|-----|-----------------|-------|-------|
+| `country.cleelum_supply` | `country/cleelum/cleelum_01_supply_run.png` | ORD 16:9 | Huff's Gas at dusk, Brittney (uniform, name tag) at the open beer-cave door holding a bag of ice against her hip, the player's car at the pump in the foreground. Faces upper-left; lower third free for the tray. |
+| `country.ellensburg_haylee` | exists (`ellensburg_01_haylee_pickup.png`) | — | owner visual approval only |
+| `country.vantage_change` | `country/vantage/vantage_01b_change.png` | ORD 16:9 | Vantage boat launch, golden hour; the player leaning on the hood facing the river, back to the car; Brittney's silhouette behind the open rear door, name tag on the roof. No face needed for her — the point is the player NOT looking. |
+| `country.vantage_arrival.reunion` | exists (`vantage_02_haylee_reunion.png`) | — | Q11: three variants (confident / improvised / uniform) or caption-only |
+
+### Questions for the owner (not decided)
+
+1. **Supply run at Cle Elum** (mi 84) — or earlier at Easton (Gas-N-Sip only, no gas station) /
+   Snoqualmie Pass?  Cle Elum is my recommendation: it has Huff's + a store, and it keeps
+   Ellensburg for Haylee.
+2. **Objective and a need on the same stop:** defer the need to the next stop (recommended), or
+   chain it (objective tile → need tile, two taps at one stop)?
+3. **Brittney's age** is not fixed anywhere.  Haylee is 24; propose Brittney 23–25 so the beer
+   cave is clean.  Pick a number.
+4. **Costs:** $40 full / $15 partial from the real wallet (like sushi $14 / burrito $9)?
+5. **Nerve:** none from objectives (recommended) or the same +5/+3/0 as the needs?
+6. **Blowing past Exit 109:** +0 like refusing her (recommended), or a real penalty?
+7. **Clothes source:** Haylee's duffel when she's aboard / inside-out shirt when not (recommended),
+   or add a shirt purchase at CowBella (Cle Elum or Ellensburg) as a fourth mini-choice?
+8. **RIDE 'EM gate:** add "2 of 3 objectives at partial-or-better" (recommended), or leave RIDE 'EM
+   purely rel/nerve/passes?
+9. **Haylee's read:** keep it as a flag that only colours the reunion line (recommended), or make
+   it a scored meter as the Haylee profile proposed?
+10. **Haylee road lines:** two, three, or none until the comic system is rebuilt?
+11. **Vantage arrival art:** three variants of the reunion panel, or one panel + caption?
+12. **Node ids** `cleelum_supply` / `ellensburg_haylee` / `vantage_change` and flag names above —
+    confirm before any art is commissioned so keys never rename.
