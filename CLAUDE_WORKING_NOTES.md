@@ -4747,3 +4747,22 @@ car.  The `&& _isBrake()` term first appeared today (Chat c476090, reverted b17e
 reproduce the owner's build.  Live site = b20 (menu) / b21 (title): the owner's phone has none of
 today's changes until "deploy".  Open: why the trooper sequence waited for the brake on his build
 — at 405c169 the dwell had no brake test; may be a build in between.  Pt-13 Overview entry amended.
+
+## OWNER DIRECTIVE — SPEEDS BACK TO HOW THEY WERE; STOP = BRAKE AND 1–2★ AND OFF THE ROAD (Claude, 2026-09-11)
+
+Owner: "You should not be changing speeds or adding different areas that have different speeds. Go
+back to how speeds were yesterday or a week ago and all I want you to do is keep the car going
+unless the brake is pressed AND player has 1 or 2 stars … the 3rd thing is the car has to be off
+the road."
+
+Applied:
+- `constants.OFFROAD_SLOW = 0.6` and the original `_updatePlayer` off-road ease block are restored
+  verbatim from 6a53da4; `offroadSpeedCap` / `OFFROAD_CAP_MPH` and the target-speed cap are gone.
+  Off-road speed behaves exactly as it did before today (soft ease toward the depth curve).
+- `CopSystem.shouldBeginPursuitStop({ armed, iframes, x, brake, shoulderX })` = `armed && !iframes
+  && brake && x > shoulderX`.  `PURSUIT_BRAKE_FRESH_MS` and the brakeSince/shoulderSince timing
+  are removed from the rule (the overlay still shows brakeAge/shoulderAge for the device check).
+  Stars 1–2 are gated by the comply machine's `_psEligible` as before; the speed-trap commit uses
+  the same shoulder+brake test.
+- The two "off-road speed" sections above are superseded by this one.  Do NOT touch off-road
+  speeds again without the owner's explicit word.

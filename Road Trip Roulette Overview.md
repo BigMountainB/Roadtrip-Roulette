@@ -204,19 +204,21 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
-### 2026-09-11 (pt 14) — Off the pavement = 60 mph, hard (owner); balloons hug the lettering
+### 2026-09-11 (pt 14) — Speeds put back exactly as they were; the stop rule is brake AND 1–2★ AND off the road; balloons hug the lettering
 
-Owner: "when the car is driving on the shoulder of the road or in the grass, the speed is 60 miles
-an hour, not 89." The old off-road ceiling was only a per-frame 6% pull toward the cap, applied
-after the throttle had already re-accelerated the car, so it settled ~89 mph at x 1.25. Now
-`constants.offroadSpeedCap(x, onPavedExit)` (pure, tested ×7) caps the TARGET speed: 60 mph past
-the fog line on either side, a FLAT 60 at any depth (the old deep-grass curve read ~48 where the owner pulled off; he asked for 60, so the curve is gone);
-the exit lane's painted extent stays exempt. Live probe: lane 90 → right shoulder 60.0 → grass
-x 2.0 ≈31 → lane 76+ recovering → left shoulder 60.0; no brake, no police. Police stop rule
-(pt 13) untouched. Earlier the same day: balloons now size from the measured text block plus
-0.8 em / 0.5 line-height padding (owner correction "balloons must hug the lettering"), with a
-small bulge only on organic contours; QA log carries textBounds/bodyBounds/padding and flags
-`excessBalloonArea` (fails the gate). Book pages use the same padding. Build tag b24; suite green.
+Owner, after two rounds of my off-road speed changes (a 60 mph target cap, then a flat 60):
+"You should not be changing speeds or adding different areas that have different speeds. Go back
+to how speeds were yesterday or a week ago and all I want you to do is keep the car going unless
+the brake is pressed AND player has 1 or 2 stars … the 3rd thing is the car has to be off the
+road." Done: `OFFROAD_SLOW` and the original off-road ease block are back byte-for-byte (the
+`offroadSpeedCap` function and its target cap are gone), and `CopSystem.shouldBeginPursuitStop`
+is now the plain rule — armed, not in i-frames, brake on, x past the shoulder line — with the
+3-second "fresh brake" timing removed (a brake that is on is a brake). Star gating and the
+>20 mph `armed` guard are unchanged in the comply machine. Probe: shoulder without brake keeps
+going at 1★ and 2★; shoulder + brake stops; brake in a lane does not stop. Earlier the same day:
+balloons size from the measured text block plus 0.8 em / 0.5 line-height padding (owner
+correction "balloons must hug the lettering"), with a small bulge only on organic contours; QA
+log carries textBounds/bodyBounds/padding and flags `excessBalloonArea`. Build tag b24.
 
 **Correction to pt 13 (owner pushback, same day):** the owner was seeing the halt on a FRESH
 game with the brake never touched, so the "latched BRAKE toggle" diagnosis was wrong for his

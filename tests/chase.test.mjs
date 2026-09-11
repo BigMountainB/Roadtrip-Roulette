@@ -11,8 +11,8 @@
 // which is the owner's exact repro: brake hard for a corner at 3 stars and a
 // cruiser overruns you.  The headline case below reproduces that directly.
 
-import { CopSystem, shouldBeginPursuitStop, PURSUIT_BRAKE_FRESH_MS } from '../src/systems/CopSystem.js';
-import { MAX_SPEED, PLAYER_VIRTUAL_Z, offroadSpeedCap, OFFROAD_CAP_MPH } from '../src/constants.js';
+import { CopSystem, shouldBeginPursuitStop } from '../src/systems/CopSystem.js';
+import { MAX_SPEED, PLAYER_VIRTUAL_Z } from '../src/constants.js';
 
 // Divert rolls and spawn placement use Math.random(), so probabilistic tests
 // pin it rather than flaking ~10% of runs.  withRandom(v, fn) forces every
@@ -574,37 +574,20 @@ for (const [s, expectArmed] of [[1, false], [2, false], [3, true]]) {
   cs.stars = 2.0;
   check('a fully earned star does show', cs.starDisplay === 2);
 }
-
-// ── Pull-over rule: shoulder + DELIBERATE brake (owner 2026-09-11) ──────
-// The touch BRAKE pedal is a toggle, so "brake on" alone is not a deliberate
-// act at the shoulder: the brake must be engaged after reaching the shoulder
-// or within PURSUIT_BRAKE_FRESH_MS before it.  Same rule for the 1–2★
-// comply machine and the parked speed-trap commit.
+// ── Pull-over rule (owner 2026-09-11): the car keeps going unless the brake
+// is pressed AND 1–2★ AND the car is off the road.  Star count is the
+// caller's; this is shoulder + brake.  Same rule for the speed-trap commit.
 {
   const S = 1.06;
   const base = { armed: true, iframes: false, shoulderX: S };
-  check('1. shoulder, no brake → no stop', shouldBeginPursuitStop({ ...base, x: 1.25, brake: false }) === false);
-  check('2. shoulder + brake pressed there → stop', shouldBeginPursuitStop({ ...base, x: 1.25, brake: true, shoulderSince: 1000, brakeSince: 1500 }) === true);
-  check('3. brake in a travel lane → no stop', shouldBeginPursuitStop({ ...base, x: 0.4, brake: true, shoulderSince: null, brakeSince: 900 }) === false);
-  check('4. brake released → no stop (the caller resets the dwell)', shouldBeginPursuitStop({ ...base, x: 1.25, brake: false, shoulderSince: 1000, brakeSince: null }) === false);
-  check('brake then pull off, within the window → stop', shouldBeginPursuitStop({ ...base, x: 1.25, brake: true, brakeSince: 5000, shoulderSince: 5000 + PURSUIT_BRAKE_FRESH_MS - 1 }) === true);
-  check('a brake LATCHED long before the shoulder → no stop (the owner\'s "stops without brake")', shouldBeginPursuitStop({ ...base, x: 1.25, brake: true, brakeSince: 1000, shoulderSince: 1000 + PURSUIT_BRAKE_FRESH_MS + 1 }) === false);
-  check('not armed → no stop', shouldBeginPursuitStop({ ...base, armed: false, x: 1.25, brake: true, shoulderSince: 1, brakeSince: 2 }) === false);
-  check('invincibility frames → no stop', shouldBeginPursuitStop({ ...base, iframes: true, x: 1.25, brake: true, shoulderSince: 1, brakeSince: 2 }) === false);
-  check('no timing available → plain shoulder + brake', shouldBeginPursuitStop({ ...base, x: 1.25, brake: true }) === true);
-  check('exactly at the fog line is not the shoulder', shouldBeginPursuitStop({ ...base, x: S, brake: true, shoulderSince: 1, brakeSince: 2 }) === false);
-}
-
-// ── Off-road speed ceiling (owner 2026-09-11: shoulder/grass = 60 mph, not 89) ──
-{
-  const mph = (m) => MAX_SPEED * m / 120;
-  check('on the pavement there is no off-road cap', offroadSpeedCap(0.3) === Infinity && offroadSpeedCap(-0.99) === Infinity);
-  check('just past the fog line the cap is exactly 60 mph', Math.abs(offroadSpeedCap(1.0001) - mph(OFFROAD_CAP_MPH)) < 1e-6);
-  check("the owner's shoulder position (x 1.25) caps at 60 mph", Math.abs(offroadSpeedCap(1.25) - mph(60)) < 1e-6);
-  check('an 89 mph cruise target is held to 60 on the shoulder', Math.min(mph(89), offroadSpeedCap(1.25)) <= mph(60));
-  check('deep grass is the same flat 60 — no depth curve (owner: "48 should be 60")', Math.abs(offroadSpeedCap(1.7) - mph(60)) < 1e-6 && Math.abs(offroadSpeedCap(2.5) - mph(60)) < 1e-6);
-  check('the left shoulder caps the same as the right', offroadSpeedCap(-1.25) === offroadSpeedCap(1.25));
-  check('painted exit-lane pavement past x 1 is exempt', offroadSpeedCap(1.3, true) === Infinity);
+  check('1. shoulder, no brake → no stop (car keeps going)', shouldBeginPursuitStop({ ...base, x: 1.25, brake: false }) === false);
+  check('2. shoulder + brake → stop', shouldBeginPursuitStop({ ...base, x: 1.25, brake: true }) === true);
+  check('3. brake in a travel lane → no stop', shouldBeginPursuitStop({ ...base, x: 0.4, brake: true }) === false);
+  check('4. brake released on the shoulder → no stop (the caller resets the dwell)', shouldBeginPursuitStop({ ...base, x: 1.25, brake: false }) === false);
+  check('a brake left ON (latched pedal) then pulling off → stop — brake is brake', shouldBeginPursuitStop({ ...base, x: 1.25, brake: true }) === true);
+  check('not armed → no stop', shouldBeginPursuitStop({ ...base, armed: false, x: 1.25, brake: true }) === false);
+  check('invincibility frames → no stop', shouldBeginPursuitStop({ ...base, iframes: true, x: 1.25, brake: true }) === false);
+  check('exactly at the fog line is not the shoulder', shouldBeginPursuitStop({ ...base, x: S, brake: true }) === false);
 }
 
 console.log(`\nchase.test: ${passed} passed, ${failed} failed`);

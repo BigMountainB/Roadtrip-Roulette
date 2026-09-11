@@ -151,20 +151,7 @@ export const MAX_SPEED    = 27000; // internal world-units/sec; speedometer read
 // punishment mechanic — lift the clamp deliberately, never by accident.
 export const SPEED_CAP_MPH = 160;
 export const TURN_SPEED   = 2.8;
-// OWNER 2026-09-11: "on the shoulder of the road or in the grass the speed is
-// 60 mph, not 89" — and, same day, not 48 either: the old depth curve
-// (0.6 → 0.15 of MAX_SPEED across x 1.0–2.5, ex-OFFROAD_SLOW) is gone; off the pavement the
-// ceiling is a FLAT 60 at any depth.  The old ceiling was also only a
-// per-frame 6% pull applied AFTER the throttle had re-accelerated the car,
-// so it settled ~30 mph above itself; `offroadSpeedCap` is applied to the
-// TARGET speed instead, so the throttle can never push past it.
-export const OFFROAD_CAP_MPH = 60;
-/** Speed ceiling (world units) for lateral position x; Infinity on pavement.
- *  Exit-lane pavement is exempt even when its x is > 1. */
-export function offroadSpeedCap(lateralX, onPavedExit = false) {
-  if (onPavedExit || Math.abs(lateralX) <= 1) return Infinity;
-  return MAX_SPEED * OFFROAD_CAP_MPH / 120;
-}
+export const OFFROAD_SLOW = 0.6;
 export const CENTRIFUGAL  = 0.3;
 
 // Scoring — CASH ECONOMY V1 (owner workshop 2026-09-05): distance pays an

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   SCREEN_W, SCREEN_H, SEG_LENGTH, ROUTE_SEGS, ROAD_WIDTH, DRAW_DIST,
-  MAX_SPEED, SPEED_CAP_MPH, ACCEL, BRAKE, DECEL, TURN_SPEED, offroadSpeedCap, CENTRIFUGAL,
+  MAX_SPEED, SPEED_CAP_MPH, ACCEL, BRAKE, DECEL, TURN_SPEED, OFFROAD_SLOW, CENTRIFUGAL,
   PTS_DIST, PTS_CRASH, PTS_HITCH, HITCH_REVEAL_MILES, VICE_MULT, VICE_PTS, FULL_BAR_THRESHOLD, COMBO,
   VICES, VICE_CONFIG, VICE_COMBOS, CHECKPOINTS, TOTAL_ROUTE_MILES, REST_STOPS, PASS_THROUGH_CITIES,
   getLocationName,
@@ -5797,12 +5797,9 @@ export class GameScene extends Phaser.Scene {
           // matter — pull off then brake, or brake then pull off — and
           // releasing either one immediately releases the car and cancels the
           // dwell below.
-          // …and the brake must be a DELIBERATE one (owner 2026-09-11): the
-          // touch pedal is a toggle, so a brake latched long before the
-          // shoulder does not commit a stop — see shouldBeginPursuitStop.
           this._pursuitStopping = shouldBeginPursuitStop({
             armed: this._pursuitStopArmed, iframes: _psIframes, x: this.player.x, brake: this._isBrake(),
-            shoulderX: COP_TRAP_SHOULDER_X, brakeSince: this._brakeSince, shoulderSince: this._shoulderSince,
+            shoulderX: COP_TRAP_SHOULDER_X,
           });
           // The stop latches off the SAME flag, so it can no longer engage
           // from braking to a halt in a lane, nor from coasting down on the
@@ -6700,8 +6697,7 @@ export class GameScene extends Phaser.Scene {
       // parked-trap flow that was missed.  SHOULDER_X stays at 1.06 — with the
       // brake back in the chord the looser threshold is no longer a trap.
       if (!this._trapStopping && _safeSeg && shouldBeginPursuitStop({
-            armed: true, iframes: false, x: p.x, brake: this._isBrake(),
-            shoulderX: COP_TRAP_SHOULDER_X, brakeSince: this._brakeSince, shoulderSince: this._shoulderSince })) {
+            armed: true, iframes: false, x: p.x, brake: this._isBrake(), shoulderX: COP_TRAP_SHOULDER_X })) {
         this._trapStopping = true;
       }
       if (this._trapStopping && (!_safeSeg || p.x < COP_TRAP_ABORT_X)) {
@@ -6722,21 +6718,6 @@ export class GameScene extends Phaser.Scene {
     // step every frame during the stop and could even be steered away).
     if (this._trapStopHeld || this._bladderStopHeld || this._pursuitStopHold) { targetSpeed = 0; this._speedZeroReason = this._trapStopHeld ? 'trap_hold' : this._bladderStopHeld ? 'bladder_hold' : 'pursuit_hold'; }   // pinned for a held stop (traffic / bathroom / pursuit)
     if (this._finishCinematic) { targetSpeed = 0; this._speedZeroReason = 'finish'; }   // finish cinematic — ease to a stop at the house
-
-    // Off the pavement (shoulder or grass) the TARGET is capped at 60 mph
-    // (owner 2026-09-11) so the throttle can't out-run the terrain ceiling.
-    // The exit lane's painted extent is pavement and exempt — same test as
-    // the HP-bleed block below.
-    {
-      const _segOR = this.road.getSegment(p.position);
-      let _onRampOR = false;
-      if (_segOR?.exitInfo) {
-        const exOR = sampleExitPlan(_segOR.exitInfo, p.position + PLAYER_VIRTUAL_Z);
-        _onRampOR = !!exOR && exOR.gapX <= 0.0001 && p.x > 0.98 && p.x < exOR.outerX + 0.10;
-      }
-      const _orCap = offroadSpeedCap(p.x, _onRampOR);
-      if (targetSpeed > _orCap) targetSpeed = _orCap;
-    }
 
     // Flat tire from roadblock — hard-cap top speed to 45 mph until timer ends.
     if (this._flatTireTimer > 0) {
@@ -7602,9 +7583,8 @@ export class GameScene extends Phaser.Scene {
         && p.x > 0.98 && p.x < exHere.outerX + 0.10;
     }
     if (Math.abs(p.x) > 1 && !onRamp) {
-      // Same flat 60 mph ceiling the target-speed cap uses; this just eases
-      // an over-speed entry down toward it.
-      const maxSpeed  = offroadSpeedCap(p.x, false);
+      const depth     = clamp((Math.abs(p.x) - 1) / 1.5, 0, 1);
+      const maxSpeed  = MAX_SPEED * lerp(OFFROAD_SLOW, 0.15, depth);
       if (p.speed > maxSpeed) p.speed = lerp(p.speed, maxSpeed, 0.06);
       // Off-road HP bleed — 0.5 HP per second of dirt-driving.  Ramp
       // segments are exempt (they're paved) so pulling over doesn't tax
