@@ -230,7 +230,11 @@ export class ComicSystem {
       p.locked = true;
       return p;
     }
-    if (imp === 'ending' || imp === 'climax' || imp === 'major') {
+    // Chat/Codex corrective pass 2026-09-11: one recorded event is NOT one
+    // page.  MAJOR and CLIMAX beats flow into rows/pages with everything
+    // else, in story order; only a story ENDING (and a meanwhile strip) takes
+    // a page of its own — the one or two true full-page moments per book.
+    if (imp === 'ending') {
       let p = this._openPage(vol);
       // An untouched open page is reused (re-templated) rather than wasted.
       if (p && p.slots.every(s => s == null)) {

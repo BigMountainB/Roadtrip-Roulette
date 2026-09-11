@@ -1,57 +1,75 @@
-// Balloon placement + face protection (comic dialogue workshop §D).
-import { rectsIntersect, segmentCrossesRect, clipTail, layoutBalloon, TAIL_STANDOFF } from '../src/ui/balloonLayout.js';
+// Balloon placement — ranked zones, reading order, narrow routed tails, links
+// (owner directive 2026-09-10) + the pilot's face-protection contract.
+import { rectsIntersect, segmentCrossesRect, buildTail, layoutBalloon, readsAfter, readingOrder, migrateZones, TAIL_STANDOFF, TAIL_BASE_CEILING, TAIL_BASE_TARGET } from '../src/ui/balloonLayout.js';
+import { bodyShape, tailShape, captionShape, seedFor } from '../src/ui/balloonShapes.js';
 
 let passed = 0, failed = 0;
 const check = (name, ok) => { if (ok) passed++; else { failed++; console.log('  ✗ FAIL: ' + name); } };
 
-const art = { x: 0, y: 0, w: 640, h: 360 }, bounds = { x: -40, y: 0, w: 720, h: 360 };
+const art = { x: 0, y: 0, w: 640, h: 360 }, bounds = { x: 0, y: 0, w: 640, h: 336 };
 const face = { x: 300, y: 60, w: 120, h: 160, kind: 'face' };
 const mouth = { x: 360, y: 180 };
+const Z = migrateZones([face, { x: 280, y: 220, w: 160, h: 110, kind: 'body' }, { x: 120, y: 40, w: 100, h: 140, kind: 'hands' }], [{ level: 3, kind: 'sceneDetail', x: 0, y: 0, w: 640, h: 50 }]);
 
+check('migrateZones classifies legacy kinds', Z[0].level === 1 && Z[1].level === 2 && Z[2].level === 2 && Z[3].level === 3);
 check('rects intersect / touch is not overlap', rectsIntersect({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 }) && !rectsIntersect({ x: 0, y: 0, w: 10, h: 10 }, { x: 10, y: 0, w: 10, h: 10 }));
 check('segment through a rect / past a rect', segmentCrossesRect({ x: 0, y: 100 }, { x: 640, y: 100 }, face) && !segmentCrossesRect({ x: 0, y: 10 }, { x: 640, y: 10 }, face));
 
-{ // Authored slot clear of the face: kept, tail clipped at the face edge.
-  const r = layoutBalloon({ size: { w: 200, h: 60 }, box: { x: 20, y: 20, w: 240, h: 90 }, anchor: mouth, protect: [face], art, bounds });
-  check('clean authored slot is used', r.clean && r.slot === 'authored' && r.rect.x === 20 && r.rect.y === 20);
-  check('tail tip stops OUTSIDE the face (never reaches the mouth)', r.tail.clipped && !(r.tail.tx > face.x && r.tail.tx < face.x + face.w && r.tail.ty > face.y && r.tail.ty < face.y + face.h));
-  const d = Math.hypot(r.tail.tx - mouth.x, r.tail.ty - mouth.y);
-  check('tail still aims at the mouth (tip on the balloon→mouth line, short of it)', d > TAIL_STANDOFF && d < 120);
+{ // Authored slot in negative space + Level 3: used; tail clipped outside the face.
+  const r = layoutBalloon({ size: { w: 200, h: 40 }, box: { x: 440, y: 10, w: 200, h: 40 }, anchor: mouth, zones: Z, art, bounds, lineH: 16 });
+  check('authored slot over sky (L3) is accepted and clean', r.slot === 'authored' && r.clean && r.l2 === 0 && r.l3 > 0 && !r.exception);
+  check('tail tip stops OUTSIDE the face', r.tail.clipped && !(r.tail.tx > face.x && r.tail.tx < face.x + face.w && r.tail.ty > face.y && r.tail.ty < face.y + face.h));
+  check('tail base width ≤ 1.25 × line-height (never widens with length)', r.tail.baseW <= TAIL_BASE_TARGET * 16 + 0.01 && r.tail.baseW <= TAIL_BASE_CEILING * 16);
 }
-{ // Authored slot ON the face: moved to an alternate slot.
-  const r = layoutBalloon({ size: { w: 200, h: 60 }, box: { x: 280, y: 80, w: 240, h: 90 }, anchor: mouth, protect: [face], art, bounds });
-  check('authored slot over a face is rejected → alternate slot', r.clean && r.slot !== 'authored' && !rectsIntersect(r.rect, face));
+{ // Authored slot ON the face: never used — moved to the best face-free candidate.
+  const r = layoutBalloon({ size: { w: 200, h: 60 }, box: { x: 280, y: 80, w: 240, h: 90 }, anchor: mouth, zones: Z, art, bounds, lineH: 16 });
+  check('a face is absolute: candidate rejected, alternate chosen', r.slot === 'grid' && !r.exception && !rectsIntersect(r.rect, face));
 }
-{ // Tail would have to cross ANOTHER face to reach the speaker: that slot is rejected.
-  const other = { x: 120, y: 40, w: 100, h: 140, kind: 'face' };
-  const r = layoutBalloon({ size: { w: 90, h: 50 }, box: { x: 10, y: 80, w: 100, h: 60 }, anchor: mouth, protect: [face, other], art, bounds });
-  check('slot whose tail crosses a second face is rejected', r.clean && r.slot !== 'authored' && !segmentCrossesRect({ x: r.tail.ax, y: r.tail.ay }, { x: r.tail.tx, y: r.tail.ty }, other));
+{ // Level 2 vs Level 3: the engine prefers covering scene detail over a story object.
+  const zones = migrateZones([], [{ level: 2, kind: 'phone', x: 20, y: 20, w: 200, h: 60 }, { level: 3, kind: 'sceneDetail', x: 300, y: 20, w: 200, h: 60 }]);
+  const r = layoutBalloon({ size: { w: 200, h: 60 }, box: { x: 20, y: 20, w: 200, h: 60 }, anchor: null, zones, art: { x: 0, y: 0, w: 520, h: 80 }, bounds: { x: 0, y: 0, w: 520, h: 80 }, lineH: 16 });
+  check('prefers negative space / L3 over the L2 story object', r.l2 === 0 && r.clean);
 }
-{ // Existing balloon in the way: avoided.
-  const r = layoutBalloon({ size: { w: 200, h: 60 }, box: { x: 20, y: 20, w: 240, h: 90 }, anchor: null, protect: [], art, bounds, avoid: [{ x: 0, y: 0, w: 260, h: 100 }] });
-  check('overlapping an earlier balloon moves it', r.clean && r.slot !== 'authored' && !rectsIntersect(r.rect, { x: 0, y: 0, w: 260, h: 100 }));
+{ // Only a Level-2 overlap remains: allowed, flagged not-clean, no exception.
+  const zones = migrateZones([], [{ level: 2, kind: 'phone', x: 0, y: 0, w: 300, h: 80 }]);
+  const r = layoutBalloon({ size: { w: 200, h: 60 }, box: { x: 10, y: 10, w: 200, h: 60 }, anchor: null, zones, art: { x: 0, y: 0, w: 300, h: 80 }, bounds: { x: 0, y: 0, w: 300, h: 80 }, lineH: 16 });
+  check('small L2 overlap used only as a last resort (clean:false, no exception)', !r.exception && !r.clean && r.l2 > 0);
 }
-{ // Everything covered: forced, flagged, tail still clipped at the face.
-  const wall = { x: -40, y: 0, w: 720, h: 360 };
-  const r = layoutBalloon({ size: { w: 200, h: 60 }, box: { x: 20, y: 20, w: 240, h: 90 }, anchor: mouth, protect: [wall], art, bounds });
-  check('no clean slot → forced + clean:false', !r.clean && r.slot === 'forced');
+{ // Everything is a face: exception, never placed over it silently.
+  const zones = migrateZones([{ x: 0, y: 0, w: 300, h: 80, kind: 'face' }]);
+  const r = layoutBalloon({ size: { w: 200, h: 60 }, box: { x: 10, y: 10, w: 200, h: 60 }, anchor: null, zones, art: { x: 0, y: 0, w: 300, h: 80 }, bounds: { x: 0, y: 0, w: 300, h: 80 }, lineH: 16 });
+  check('no face-free placement → exception (caller must split)', r.exception && r.slot === 'exception');
 }
-{ // clipTail: anchor outside every protect rect → tail reaches the anchor untouched.
-  const t = clipTail({ x: 20, y: 20, w: 200, h: 60 }, { x: 100, y: 300 }, [face]);
-  check('unprotected anchor: tail reaches it', t && !t.clipped && t.tx === 100 && t.ty === 300);
-  check('anchor beyond a face the path would cross: null (collision)', clipTail({ x: 20, y: 20, w: 200, h: 60 }, { x: 500, y: 300 }, [face]) === null);
+{ // Tail routing: a straight tail would cross another face → routed with a bend, never broadened.
+  const other = { x: 200, y: 120, w: 90, h: 120, kind: 'face' };
+  const zones = migrateZones([face, other]);
+  const t = buildTail({ x: 20, y: 240, w: 150, h: 50 }, mouth, zones, [], 16);
+  check('routed tail exists with a via point and stays narrow', !!t && !!t.via && t.baseW <= TAIL_BASE_TARGET * 16 + 0.01);
 }
-
-
-{ // A tail may cross a torso / object / car, never a face, hands or the phone.
-  const ct = clipTail;
-  const body = { x: 300, y: 60, w: 120, h: 160, kind: 'body' };
-  const t = ct({ x: 20, y: 20, w: 200, h: 60 }, { x: 500, y: 300 }, [body]);
-  const chk = check;
-  chk('tail may cross a body-kind rect', t && !t.clipped && t.tx === 500);
-  chk('tail may not cross a hands-kind rect', ct({ x: 20, y: 20, w: 200, h: 60 }, { x: 500, y: 300 }, [{ ...body, kind: 'hands' }]) === null);
-  chk('anchor ABOVE the balloon: tail leaves the top edge', ct({ x: 200, y: 200, w: 200, h: 60 }, { x: 300, y: 100 }, []).edge === 'top');
+{ // Reading order.
+  check('same band: right of the previous is fine; left is not', readsAfter({ x: 400, y: 20, w: 100, h: 40 }, { x: 100, y: 20, w: 100, h: 40 }) && !readsAfter({ x: 20, y: 20, w: 100, h: 40 }, { x: 400, y: 20, w: 100, h: 40 }));
+  check('a lower band may start at the left again', readsAfter({ x: 20, y: 120, w: 100, h: 40 }, { x: 400, y: 20, w: 100, h: 40 }));
+  check('never above the previous balloon', !readsAfter({ x: 400, y: 0, w: 100, h: 30 }, { x: 100, y: 100, w: 100, h: 40 }));
+  check('geometric reading order: bands top→bottom, left→right', readingOrder([{ x: 400, y: 200, w: 50, h: 30 }, { x: 10, y: 10, w: 50, h: 30 }, { x: 300, y: 10, w: 50, h: 30 }]).join() === '1,2,0');
+  const r = layoutBalloon({ size: { w: 120, h: 40 }, box: { x: 10, y: 10, w: 120, h: 40 }, anchor: null, zones: [], art, bounds, lineH: 16, after: { x: 400, y: 10, w: 100, h: 40 } });
+  check('placement honours reading order over the authored slot', r.order && readsAfter(r.rect, { x: 400, y: 10, w: 100, h: 40 }));
 }
+{ // Linked balloons: a connector bridges two same-speaker balloons; it is collision geometry.
+  const r = layoutBalloon({ size: { w: 150, h: 40 }, box: { x: 440, y: 70, w: 150, h: 40 }, anchor: null, zones: Z, art, bounds, lineH: 16, connectorFrom: { x: 440, y: 10, w: 200, h: 40 } });
+  check('connector built, narrow (≤ 0.75 × line-height)', !!r.connector && r.connector.width <= 0.75 * 16 + 0.01);
+  const polyT = tailShape('speech', { ax: 100, ay: 60, bx: 120, by: 60, tx: 300, ty: 300, baseW: 20, via: { x: 150, y: 200 } }, 4);
+  check('routed tail renders as a bent ribbon polygon', polyT.polygon.length >= 8);
+}
+{ // Shapes: at least three clearly different families, deterministic by copy.
+  const a = bodyShape('speech', { x: 0, y: 0, w: 100, h: 50 }, 1, seedFor('one')).outline;
+  const b = bodyShape('player', { x: 0, y: 0, w: 100, h: 50 }, 1, 1).outline;
+  const c = captionShape({ x: 0, y: 0, w: 100, h: 30 }, 1).outline;
+  const d = bodyShape('shout', { x: 0, y: 0, w: 100, h: 50 }, 1, 1).outline;
+  check('speech / player / caption / shout are different silhouettes', a.length !== c.length && c.length === 8 && d.length > a.length && JSON.stringify(a) !== JSON.stringify(b));
+  check('shape seed is deterministic from the copy', seedFor('hello') === seedFor('hello') && seedFor('hello') !== seedFor('world'));
+  check('tone families exist (flirt / hesitant / worried)', ['flirt', 'hesitant', 'worried'].every(k => bodyShape(k, { x: 0, y: 0, w: 120, h: 60 }, 1, 3).outline.length > 20));
+}
+check('tail standoff is a small positive margin', TAIL_STANDOFF > 0 && TAIL_STANDOFF < 8);
 
 console.log(`balloon tests: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

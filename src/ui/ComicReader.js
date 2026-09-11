@@ -19,8 +19,9 @@
 
 import { PAGE_W, PAGE_H, panelMeta } from '../data/comicPanels.js';
 import { LETTERING, splitByCap } from './StoryTile.js';
-import { layoutBalloon } from './balloonLayout.js';
-import { unit, padding, strokeFor, bodyShape, tailShape, dashOutline } from './balloonShapes.js';
+import { getStoryNode } from '../data/featuredStories.js';
+import { layoutBalloon, migrateZones } from './balloonLayout.js';
+import { unit, padding, strokeFor, bodyShape, tailShape, connectorShape, dashOutline, seedFor } from './balloonShapes.js';
 import { buildPdf, PAGE_SIZES } from './ComicPdf.js';
 
 // Export page pixel size (A-series aspect); JPEG quality.  ~150 dpi on A4.
@@ -130,7 +131,7 @@ function roundRect(ctx, x, y, w, h, r) {
 const WORD_CAP = 25;
 function placeBalloon(ctx, text, kind, box, anchor, P) {
   if (!text) return [];
-  const { panelW, panelH, px, protect, avoid, after, art } = P;
+  const { panelW, panelH, px, zones, avoid, after, art } = P;
   const U = unit(panelW, panelH);
   const pad = padding(kind, U);
   const parts = splitByCap(text, WORD_CAP);
@@ -145,13 +146,15 @@ function placeBalloon(ctx, text, kind, box, anchor, P) {
     const h = lines.length * px * 1.25 + pad.y * 2;
     const want = prev ? { x: Math.min(art.x + art.w - w - 2, prev.x + 12), y: prev.y + prev.h + 3, w, h } : { x: box.x, y: box.y, w, h };
     const last = i === parts.length - 1;
-    const L = layoutBalloon({ size: { w, h }, box: want, anchor: last && kind !== 'caption' && kind !== 'offpanel' ? anchor : null, protect, art, bounds: art, avoid: [...avoid, ...rects], scale: px / 16, after: i === 0 ? after : prev });
-    const body = bodyShape(kind, L.rect, U, (L.rect.x * 7 + L.rect.y) | 0);
+    const L = layoutBalloon({ size: { w, h }, box: want, anchor: last && kind !== 'caption' && kind !== 'offpanel' ? anchor : null, zones, art, bounds: art, avoid: [...avoid, ...rects], scale: px / 16, after: i === 0 ? after : prev, lineH: px * 1.25, connectorFrom: prev });
+    const body = bodyShape(kind, L.rect, U, seedFor(part));
     const tl = tailShape(kind, L.tail, U);
+    const cn = connectorShape(L.connector);
     const fill = kind === 'player' ? '#FFF9D6' : kind === 'caption' ? '#FFF1B8' : '#FFFFFF';
     ctx.save();
     ctx.fillStyle = fill; ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, strokeFor(kind, U, 1.2));
     const path = (pts) => { ctx.beginPath(); pts.forEach((q, k) => k ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); };
+    if (cn?.polygon) { path(cn.polygon); ctx.fill(); ctx.stroke(); }
     if (tl?.polygon) { path(tl.polygon); ctx.fill(); ctx.stroke(); }
     if (tl?.bubbles) for (const b of tl.bubbles) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     if (kind === 'caption') { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(L.rect.x + 2, L.rect.y + 2, w, h); ctx.fillStyle = fill; }
@@ -159,7 +162,7 @@ function placeBalloon(ctx, text, kind, box, anchor, P) {
     if (body.dash) { for (const [a, b] of dashOutline(body.outline, body.dash.dash, body.dash.gap)) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); } }
     else ctx.stroke();
     if (body.inner) { ctx.lineWidth = Math.max(0.8, ctx.lineWidth * 0.6); path(body.inner); ctx.stroke(); }
-    if (tl?.polygon) { path(body.outline); ctx.fill(); }          // re-cover the tail base
+    if (tl?.polygon || cn?.polygon) { path(body.outline); ctx.fill(); }          // re-cover the tail/bridge base
     ctx.fillStyle = kind === 'caption' ? '#222' : INK; ctx.textBaseline = 'top';
     ctx.textAlign = kind === 'caption' ? 'left' : 'center';
     lines.forEach((l, k) => ctx.fillText(l, kind === 'caption' ? L.rect.x + pad.x : L.rect.x + w / 2, L.rect.y + pad.y + k * px * 1.25));
@@ -213,7 +216,8 @@ export function renderPage(ctx, page, w, h, onArt) {
     }
     // Balloons (never baked into art) — same placement + vocabulary as the tile.
     const px = Math.max(9, Math.min(15, Math.round(pw * 0.032)));
-    const P = { panelW: pw, panelH: ph, px, protect: (meta.protect ?? []).map(r => ({ x: x + r.x * pw, y: y + r.y * ph, w: r.w * pw, h: r.h * ph, kind: r.kind })), avoid: [], after: null, art: { x, y, w: pw, h: ph } };
+    const zr = (r) => ({ ...r, x: x + r.x * pw, y: y + r.y * ph, w: r.w * pw, h: r.h * ph });
+    const P = { panelW: pw, panelH: ph, px, zones: migrateZones((meta.protect ?? []).map(zr), (meta.zones ?? []).map(zr)), avoid: [], after: null, art: { x, y, w: pw, h: ph } };
     const R = (r) => ({ x: x + r.x * pw, y: y + r.y * ph, w: r.w * pw, h: r.h * ph });
     const Pt = (p) => ({ x: x + p.x * pw, y: y + p.y * ph });
     if (sub) {
@@ -223,10 +227,13 @@ export function renderPage(ctx, page, w, h, onArt) {
       // Reading order: the NPC line (if it is what the panel shows), the
       // player's chosen sentence, then the NPC reply AFTER it.
       const hasReply = !!event.text?.reply;
-      if (!hasReply && event.text?.line) P.avoid.push(...placeBalloon(ctx, event.text.line, 'speech', R(meta.bubble), Pt(meta.tail), P));
+      if (!hasReply && event.text?.line) P.avoid.push(...placeBalloon(ctx, event.text.line, getStoryNode(event.storyId, event.nodeId)?.lineKind ?? 'speech', R(meta.bubble), Pt(meta.tail), P));
       let playerRect = null;
       if (event.text?.label) { const rs = placeBalloon(ctx, event.text.label, 'player', R(meta.playerBubble), Pt(meta.playerTail), P); P.avoid.push(...rs); playerRect = rs[0] ?? null; }
-      if (hasReply) { P.after = playerRect; placeBalloon(ctx, event.text.reply, 'speech', meta.replyBubble ? R(meta.replyBubble) : R(meta.bubble), Pt(meta.tail), P); }
+      if (hasReply) {
+        const ch = getStoryNode(event.storyId, event.nodeId)?.choices?.find(c => c.id === event.choiceId);
+        P.after = playerRect; placeBalloon(ctx, event.text.reply, ch?.replyKind ?? 'speech', meta.replyBubble ? R(meta.replyBubble) : R(meta.bubble), Pt(meta.tail), P);
+      }
     }
     ctx.restore();
     // Panel border.

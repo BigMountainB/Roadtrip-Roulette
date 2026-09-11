@@ -291,7 +291,7 @@ export class StorySystem {
     const node = this._node(storyId, nodeId);
     const raw = typeof node?.lines === 'function' ? (() => { try { return node.lines(this.story(storyId), this._run); } catch (_) { return []; } })() : node?.lines;
     if (!Array.isArray(raw)) return [];
-    return raw.map(l => ({ speaker: String(l?.speaker ?? node.speaker ?? ''), kind: l?.kind ?? 'speech',
+    return raw.map(l => ({ speaker: String(l?.speaker ?? node.speaker ?? ''), kind: l?.kind ?? 'speech', offpanel: !!l?.offpanel,
       text: typeof l?.text === 'function' ? (() => { try { return String(l.text(this.story(storyId), this._run) ?? ''); } catch (_) { return ''; } })() : String(l?.text ?? '') }))
       .filter(l => l.text);
   }
@@ -301,7 +301,7 @@ export class StorySystem {
   resolveAfter(storyId, nodeId, choiceId) {
     const ch = this._choice(storyId, nodeId, choiceId);
     if (!Array.isArray(ch?.after)) return [];
-    return ch.after.map(l => ({ speaker: String(l?.speaker ?? ''), kind: l?.kind ?? 'speech', text: String(l?.text ?? '') })).filter(l => l.text);
+    return ch.after.map(l => ({ speaker: String(l?.speaker ?? ''), kind: l?.kind ?? 'speech', offpanel: !!l?.offpanel, text: String(l?.text ?? '') })).filter(l => l.text);
   }
 
   /** A choice-less beat advanced by tap: move the active story's cursor.

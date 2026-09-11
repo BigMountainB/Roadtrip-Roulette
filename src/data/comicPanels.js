@@ -142,24 +142,28 @@ export const PANEL_META = {
   //    tray band (y ≥ 0.755). ──
   'hiphop.seattle_lot': {
     art: 'assets/storylines/hiphop/seattle/seattle_01_freestyle_circle.png',
-    caption:      { x: 0.60, y: 0.02, w: 0.38, h: 0.12 },   // narration, top-right sky above the player's head
+    caption:      { x: 0.02, y: 0.02, w: 0.34, h: 0.11 },   // narration, UPPER-LEFT (reads first)
     // Beat 1 opening lines, in order (node.lines[i] → extra[i]): the crew's
-    // hype from off-panel (no tail), Malik's couplet over the skyline with a
-    // tail to his hood, the crowd's "AYYYY!" low-left as an SFX.
-    extra:        [{ x: 0.02, y: 0.02, w: 0.56, h: 0.09 },
+    // hype right of the caption (same band, reads second), Malik's couplet
+    // below over the skyline with a tail to his hood, the crowd's "AYYYY!"
+    // low-left as an SFX (last band).
+    extra:        [{ x: 0.37, y: 0.02, w: 0.60, h: 0.09 },
                    { x: 0.40, y: 0.14, w: 0.28, h: 0.20 },
-                   { x: 0.02, y: 0.60, w: 0.18, h: 0.10 }],
+                   { x: 0.02, y: 0.62, w: 0.18, h: 0.10 }],
     bubble:       { x: 0.04, y: 0.03, w: 0.50, h: 0.24 },   // (unused — Beat 1 has no main line)
     playerBubble: { x: 0.50, y: 0.38, w: 0.24, h: 0.24 },
     replyBubble:  { x: 0.10, y: 0.55, w: 0.24, h: 0.18 },
     tail:         { x: 0.32, y: 0.18 },                     // Malik = the hooded centre performer (back of head)
     playerTail:   { x: 0.755, y: 0.31 },                    // player's mouth
     protect:      [{ x: 0.72, y: 0.15, w: 0.11, h: 0.20, kind: 'face' },    // player (the only visible face)
-                   { x: 0.28, y: 0.12, w: 0.10, h: 0.15, kind: 'head' },    // Malik's hood — tails may END here, balloons keep off it
+                   { x: 0.28, y: 0.14, w: 0.10, h: 0.13, kind: 'head' },    // Malik's hood — tails may END here, balloons keep off it
                    { x: 0.74, y: 0.50, w: 0.07, h: 0.11, kind: 'hands' },
                    { x: 0.21, y: 0.35, w: 0.07, h: 0.10, kind: 'hands' },
                    { x: 0.38, y: 0.35, w: 0.06, h: 0.11, kind: 'phone' },
                    { x: 0.84, y: 0.20, w: 0.13, h: 0.62, kind: 'object' }], // guitar case
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 0.72, h: 0.12 },   // underpass ceiling
+                   { level: 3, kind: 'sceneDetail', x: 0.40, y: 0.12, w: 0.30, h: 0.26 },   // skyline between the crew and the player
+                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.80, w: 1.00, h: 0.20 }],
   },  'hiphop.seattle_clock': {                           // Beat 2: Malik's intro + the player's response
     art: 'assets/storylines/hiphop/seattle/seattle_02_crew_confrontation.png',
     bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },   // 1 Malik
@@ -173,6 +177,9 @@ export const PANEL_META = {
                    { x: 0.73, y: 0.30, w: 0.07, h: 0.17, kind: 'face' },
                    { x: 0.27, y: 0.58, w: 0.12, h: 0.23, kind: 'hands' },
                    { x: 0.40, y: 0.53, w: 0.06, h: 0.13, kind: 'hands' }],
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 1.00, h: 0.20 },   // sky / underpass
+                   { level: 3, kind: 'sceneDetail', x: 0.58, y: 0.05, w: 0.42, h: 0.28 },   // pillars and skyline
+                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.82, w: 1.00, h: 0.18 }],
   },  'hiphop.seattle_route': {
     art: 'assets/storylines/hiphop/seattle/seattle_02_crew_confrontation.png',
     bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },   // 1 Malik
@@ -186,12 +193,15 @@ export const PANEL_META = {
                    { x: 0.73, y: 0.30, w: 0.07, h: 0.17, kind: 'face' },
                    { x: 0.27, y: 0.58, w: 0.12, h: 0.23, kind: 'hands' },
                    { x: 0.40, y: 0.53, w: 0.06, h: 0.13, kind: 'hands' }],
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 1.00, h: 0.20 },
+                   { level: 3, kind: 'sceneDetail', x: 0.58, y: 0.05, w: 0.42, h: 0.28 },
+                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.82, w: 1.00, h: 0.18 }],
   },  'hiphop.seattle_stakes': {                          // Beat 3: lines 6a/6b/7 (extra) + line 8 (bubble), all Malik
     art: 'assets/storylines/hiphop/seattle/seattle_06_stakes_phone.png',
     extra:        [{ x: 0.02, y: 0.02, w: 0.24, h: 0.16 },   // 6a top-left sky
-                   { x: 0.37, y: 0.02, w: 0.24, h: 0.16 },   // 6b top-centre, between the heads
-                   { x: 0.72, y: 0.02, w: 0.26, h: 0.16 }],  // 7  top-right
-    bubble:       { x: 0.72, y: 0.20, w: 0.26, h: 0.30 },   // 8  right, over the pillar
+                   { x: 0.72, y: 0.02, w: 0.26, h: 0.16 },   // 6b top-right (same band, reads second)
+                   { x: 0.72, y: 0.20, w: 0.26, h: 0.24 }],  // 7  right, over the pillar (next band)
+    bubble:       { x: 0.19, y: 0.42, w: 0.22, h: 0.28 },   // 8  lower-left over the player's jacket (last band, leftmost)
     playerBubble: { x: 0.02, y: 0.02, w: 0.24, h: 0.14 },
     tail:         { x: 0.655, y: 0.34 },
     playerTail:   { x: 0.335, y: 0.30 },
@@ -203,10 +213,13 @@ export const PANEL_META = {
                    { x: 0.68, y: 0.58, w: 0.07, h: 0.15, kind: 'hands' },
                    { x: 0.02, y: 0.22, w: 0.16, h: 0.60, kind: 'object' },
                    { x: 0.86, y: 0.55, w: 0.14, h: 0.45, kind: 'car' }],
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 1.00, h: 0.16 },   // sky / underpass deck
+                   { level: 3, kind: 'sceneDetail', x: 0.72, y: 0.16, w: 0.28, h: 0.40 },   // pillar behind Malik
+                   { level: 3, kind: 'sceneDetail', x: 0.36, y: 0.16, w: 0.24, h: 0.18 }],
   },  'hiphop.seattle_offer': {                         // the stakes + decision (handoff 2026-09-10)
     art: 'assets/storylines/hiphop/seattle/seattle_06_stakes_phone.png',
-    extra:        [{ x: 0.02, y: 0.02, w: 0.30, h: 0.14 }], // 9a top-left sky
-    bubble:       { x: 0.37, y: 0.02, w: 0.24, h: 0.16 },   // 9b top-centre, between the heads
+    extra:        [{ x: 0.02, y: 0.02, w: 0.22, h: 0.22 }], // 9a top-left sky, narrow so it clears the player's face
+    bubble:       { x: 0.72, y: 0.02, w: 0.26, h: 0.16 },   // 9b top-right (same band, reads second)
     playerBubble: { x: 0.19, y: 0.42, w: 0.20, h: 0.26 },   // (only if no choice art swaps in)
     tail:         { x: 0.655, y: 0.34 },                    // Malik's mouth
     playerTail:   { x: 0.335, y: 0.30 },                    // player's mouth
@@ -216,8 +229,11 @@ export const PANEL_META = {
                    { x: 0.50, y: 0.35, w: 0.05, h: 0.08, kind: 'face' },
                    { x: 0.45, y: 0.42, w: 0.06, h: 0.15, kind: 'phone' },   // the cracked phone
                    { x: 0.68, y: 0.58, w: 0.07, h: 0.15, kind: 'hands' },   // Malik's gesturing hand
-                   { x: 0.02, y: 0.22, w: 0.16, h: 0.60, kind: 'object' },  // guitar case
+                   { x: 0.02, y: 0.22, w: 0.16, h: 0.60, kind: 'instrument' },  // guitar case
                    { x: 0.86, y: 0.55, w: 0.14, h: 0.45, kind: 'car' }],
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 1.00, h: 0.16 },
+                   { level: 3, kind: 'sceneDetail', x: 0.72, y: 0.16, w: 0.28, h: 0.40 },
+                   { level: 3, kind: 'sceneDetail', x: 0.36, y: 0.16, w: 0.24, h: 0.18 }],
   },
 
   'hiphop.seattle_offer.carry': {                    // the hand-off: Malik reaching out, crew behind
@@ -233,6 +249,10 @@ export const PANEL_META = {
                    { x: 0.86, y: 0.37, w: 0.05, h: 0.09, kind: 'face' },
                    { x: 0.93, y: 0.37, w: 0.05, h: 0.09, kind: 'face' },
                    { x: 0.46, y: 0.60, w: 0.07, h: 0.10, kind: 'hands' }],  // Malik's outstretched hand
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 1.00, h: 0.22 },   // sky / underpass
+                   { level: 3, kind: 'sceneDetail', x: 0.24, y: 0.22, w: 0.34, h: 0.30 },   // skyline between them
+                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.80, w: 1.00, h: 0.20 },   // pavement
+                   { level: 2, kind: 'phone', x: 0.40, y: 0.62, w: 0.10, h: 0.10 }]        // the phone changing hands,
   },
   'hiphop.seattle_offer.carry.radio': {
     art: 'assets/storylines/hiphop/seattle/seattle_04_radio_explanation.png',
@@ -262,6 +282,9 @@ export const PANEL_META = {
                    { x: 0.70, y: 0.27, w: 0.09, h: 0.15, kind: 'face' },    // Brittney
                    { x: 0.56, y: 0.38, w: 0.07, h: 0.12, kind: 'phone' },   // her phone hand
                    { x: 0.66, y: 0.42, w: 0.16, h: 0.30, kind: 'body' }],   // uniform + name tag
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.32, y: 0.00, w: 0.68, h: 0.26 },   // window, rain, forecourt
+                   { level: 3, kind: 'sceneDetail', x: 0.82, y: 0.26, w: 0.18, h: 0.74 },   // shelves right
+                   { level: 3, kind: 'sceneDetail', x: 0.30, y: 0.50, w: 0.34, h: 0.30 }]   // register / counter,
   },  'hiphop.mercer_hook': {
     art: 'assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png',
     bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },
@@ -273,6 +296,9 @@ export const PANEL_META = {
                    { x: 0.70, y: 0.27, w: 0.09, h: 0.15, kind: 'face' },
                    { x: 0.56, y: 0.38, w: 0.07, h: 0.12, kind: 'phone' },
                    { x: 0.66, y: 0.42, w: 0.16, h: 0.30, kind: 'body' }],
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.32, y: 0.00, w: 0.68, h: 0.26 },
+                   { level: 3, kind: 'sceneDetail', x: 0.82, y: 0.26, w: 0.18, h: 0.74 },
+                   { level: 3, kind: 'sceneDetail', x: 0.30, y: 0.50, w: 0.34, h: 0.30 }],
   },  'hiphop.mercer_fork': {
     art: 'assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png',
     bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },
@@ -284,6 +310,9 @@ export const PANEL_META = {
                    { x: 0.70, y: 0.27, w: 0.09, h: 0.15, kind: 'face' },
                    { x: 0.56, y: 0.38, w: 0.07, h: 0.12, kind: 'phone' },
                    { x: 0.66, y: 0.42, w: 0.16, h: 0.30, kind: 'body' }],
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.32, y: 0.00, w: 0.68, h: 0.26 },
+                   { level: 3, kind: 'sceneDetail', x: 0.82, y: 0.26, w: 0.18, h: 0.74 },
+                   { level: 3, kind: 'sceneDetail', x: 0.30, y: 0.50, w: 0.34, h: 0.30 }],
   },  'hiphop.mercer_ultimatum': {                       // Brittney LEFT, player right, phone on the counter
     art: 'assets/storylines/country/mercer_island/mercer_04_quits_leaves_phone.png',
     bubble:       { x: 0.36, y: 0.03, w: 0.36, h: 0.22 },   // 1 Brittney, between the heads, over the window
@@ -296,6 +325,9 @@ export const PANEL_META = {
                    { x: 0.27, y: 0.42, w: 0.08, h: 0.10, kind: 'object' },  // name tag
                    { x: 0.31, y: 0.60, w: 0.10, h: 0.16, kind: 'hands' },   // her hand + card
                    { x: 0.48, y: 0.79, w: 0.10, h: 0.09, kind: 'phone' }],  // Malik's phone on the counter
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.34, y: 0.00, w: 0.40, h: 0.42 },   // window and forecourt
+                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 0.20, h: 0.60 },   // cooler doors left
+                   { level: 3, kind: 'sceneDetail', x: 0.86, y: 0.00, w: 0.14, h: 1.00 }]   // shelves right,
   },
   'hiphop.mercer_fork.keepJob': {
     art: 'assets/storylines/hiphop/mercer_island/mercer_02_keep_job_phone_continues.png',
@@ -503,6 +535,9 @@ export const PANEL_META = {
                    { x: 0.27, y: 0.42, w: 0.08, h: 0.10, kind: 'object' },
                    { x: 0.31, y: 0.60, w: 0.10, h: 0.16, kind: 'hands' },
                    { x: 0.48, y: 0.79, w: 0.10, h: 0.09, kind: 'phone' }],
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.34, y: 0.00, w: 0.40, h: 0.42 },
+                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 0.20, h: 0.60 },
+                   { level: 3, kind: 'sceneDetail', x: 0.86, y: 0.00, w: 0.14, h: 1.00 }],
   },
   // Departure (pilot §E-3): CAPTION top-left, Brittney's balloon beside it
   // over the sky, the player's balloon over the trunk — none over a face.
@@ -521,6 +556,9 @@ export const PANEL_META = {
       { x: 0.68, y: 0.07, w: 0.20, h: 0.80, kind: 'body' },   // Brittney
       { x: 0.80, y: 0.17, w: 0.16, h: 0.58, kind: 'object' }, // open passenger door
     ],
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 0.66, h: 0.28 },   // night sky
+                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.45, w: 0.44, h: 0.35 },   // trunk / rear of the car
+                   { level: 3, kind: 'sceneDetail', x: 0.66, y: 0.00, w: 0.34, h: 0.10 }]   // storefront sign,
   },
   'country.mercer_departure.board': {
     art: 'assets/storylines/country/mercer_island/mercer_03_quit_and_join_player.png',
@@ -537,6 +575,9 @@ export const PANEL_META = {
       { x: 0.68, y: 0.07, w: 0.20, h: 0.80, kind: 'body' },   // Brittney
       { x: 0.80, y: 0.17, w: 0.16, h: 0.58, kind: 'object' }, // open passenger door
     ],
+    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 0.66, h: 0.28 },
+                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.45, w: 0.44, h: 0.35 },
+                   { level: 3, kind: 'sceneDetail', x: 0.66, y: 0.00, w: 0.34, h: 0.10 }],
   },
   'country.need_hunger.sushi': {
     art: 'assets/storylines/country/passenger_needs/hunger_01_buy_sushi.png',

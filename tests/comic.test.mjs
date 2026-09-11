@@ -86,11 +86,14 @@ const go = (story, node, mile = 1) => story.commitChoice({ storyId: 't', nodeId:
   check('all three pages full + locked', vol.pages.every(p => p.locked && p.slots.every(Boolean)));
   go(story, 'big', 10);
   vol = comic.activeVolume();
-  check('major takes a wide page and locks it', vol.pages[3].templateId === 'wide' && vol.pages[3].locked && vol.pages[3].slots[0] === vol.events[9].id);
+  // Corrective pass 2026-09-11: MAJOR and CLIMAX beats FLOW (no page of their own);
+  // the 9 flow events filled 3 pages, so the major starts page 4 (two_up) and the
+  // climax joins it; only the ENDING takes a full page.
+  check('major flows onto the next page (no wide page of its own)', vol.pages[3].templateId === 'two_up' && vol.pages[3].slots[0] === vol.events[9].id);
   go(story, 'peak', 11);
   go(story, 'fin', 12);
   vol = comic.activeVolume() ?? comic.volumes()[0];
-  check('climax + ending pages', vol.pages[4].templateId === 'climax' && vol.pages[5].templateId === 'ending');
+  check('climax shares the major\'s page; the ending takes its own', vol.pages[3].slots[1] === vol.events[10].id && vol.pages[4].templateId === 'ending');
   check('story complete, volume still OPEN (only Pullman closes it)', story.status('t') === STORY_STATUS.COMPLETE && vol.status === 'open');
   // Same events → same book (determinism).
   const r2 = rig();
@@ -104,7 +107,7 @@ const go = (story, node, mile = 1) => story.commitChoice({ storyId: 't', nodeId:
   r3.story.advance('t', 'big');
   go(r3.story, 'big', 2);
   const v3 = r3.comic.activeVolume();
-  check('half page locks before a major', v3.pages[0].locked && v3.pages[0].slots.filter(Boolean).length === 1 && v3.pages[1].templateId === 'wide');
+  check('a major joins the open half page (no forced page break)', v3.pages[0].slots.filter(Boolean).length === 2);
 }
 
 // ═══ 4. Chapters follow runs; unfinished page locks at chapter end ═══════

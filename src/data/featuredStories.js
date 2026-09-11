@@ -373,10 +373,10 @@ export const FEATURED_STORIES = {
         stopId: 'S', mandatory: true, next: 'seattle_clock',
         when: (st) => !has(st, 'phone') && !st.flags.carrying,
         speaker: 'Malik Reed', portrait: 'biz_parkride', importance: 'minor',
-        intro: [{ id: 'seattle_cypher', panelKey: 'hiphop.seattle_lot', importance: 'minor', text: 'Stank Records, live from the Park & Ride.' }],
-        caption: 'Stank Records, live from the Park & Ride.',
+        intro: [{ id: 'seattle_cypher', panelKey: 'hiphop.seattle_lot', importance: 'minor', text: 'Seattle Park & Ride · Mile 4' }],
+        caption: 'Seattle Park & Ride · Mile 4',                    // location card only — the crew SAYS the rest (no duplicate exposition)
         lines: [
-          { speaker: 'The Crew', kind: 'offpanel', text: "Malik Reed! Stank Records — live from the Park & Ride!" },        // [V3] hype
+          { speaker: 'The Crew', kind: 'shout', offpanel: true, text: "Malik Reed! Stank Records — live from the Park & Ride!" },   // [V3] hype, shouted from off-panel
           { speaker: 'Malik Reed', kind: 'speech', text: "Top of NoiseCloud, bottom of my tank — whole city knows the hook, but the bus driver knows my name." },  // [V3] the couplet
           { speaker: 'Crowd', kind: 'sfx', text: 'AYYYY!' },                                                              // [V3]
         ],
@@ -437,7 +437,7 @@ export const FEATURED_STORIES = {
             id: 'pass', consequential: false, next: null,
             label: "I don't carry other people's problems. Good luck with the album.",
             reply: "Aight. Somebody else'll want the plug.",                                                // [H]
-            after: [{ speaker: 'The Crew', kind: 'offpanel', text: 'Weak!' }],                              // [H] "Crew, off-panel: Weak!"
+            after: [{ speaker: 'The Crew', kind: 'shout', offpanel: true, text: 'Weak!' }],                 // [H] "Crew, off-panel: Weak!"
             effects: {},
           },
         ],
@@ -473,6 +473,7 @@ export const FEATURED_STORIES = {
         stopId: 'M', virtual: true,
         speaker: 'Brittney', portrait: 'biz_gasnsip',
         importance: 'climax',
+        lineKind: 'flirt',      // owner canon: she is immediately attracted — buoyant, offset-lobe balloon
         line: "Malik and I had plans to go to StageWagon. He blew them off for his album. Hey—why don't you come to StageWagon with me? You can use Malik's ticket.",
         choices: [
           {
@@ -496,6 +497,7 @@ export const FEATURED_STORIES = {
             id: 'both', consequential: true, next: 'mercer_ultimatum',
             label: "Sure! We just have to drop this phone off in Issaquah on our way.",
             reply: "No. I'm done letting his album hijack my plans. Me or the phone.",
+            replyKind: 'shout',     // the ultimatum lands hard — angular burst
             // Conditional support: +3 Brittney, banked until she is actually
             // in the car (Country hasn't started yet).
             effects: { flags: { mercerPressed: true } },
@@ -512,6 +514,7 @@ export const FEATURED_STORIES = {
         stopId: 'M', virtual: true,
         speaker: 'Brittney', portrait: 'biz_gasnsip',
         importance: 'climax',
+        lineKind: 'shout',
         line: "Me or the phone.",
         choices: [
           {
@@ -924,6 +927,7 @@ export const FEATURED_STORIES = {
           { id: 'board', consequential: true, next: null,
             label: "Passenger seat's yours. Let's hit the road.",
             reply: 'StageWagon, cowboy. Try to keep all four tires under us.',
+            replyKind: 'flirt',
             effects: { flags: { departureShown: true } } },
         ],
       },

@@ -4216,3 +4216,342 @@ events (editorial `comic:` flag still unbuilt).
   later payoff line (notes ~1628 proposals — none written).
 - The persistence policy (unfinished passenger story on a new run).
 - Placeholder dialogue list (previous section) still stands.
+
+## CHAT/CODEX REVIEW — CORRECTIVE PASS REQUIRED BEFORE ROLLOUT (2026-09-11)
+
+The regenerated pilot is meaningful progress, but it is **not approved for rollout**. Its own
+`flow/report.json` remains `pass:false`. Continue improving the same Seattle/Mercer pilot. Do
+not apply this placement system to the rest of the comic yet.
+
+### What improved
+
+- Ranked semantic zones, face rejection, routed tails, responsive tail-width checks, linked
+  balloons, and deterministic shape variation now exist in code.
+- The Mercer invitation no longer covers Brittney's face.
+- Tails are generally narrower than the earlier white wedges.
+- Book page 1 now demonstrates two panels on one page.
+
+### Current failures that must be corrected
+
+1. **Reading order still fails.** The current report contains three individual
+   `orderViolations` and six `tileOrderFails`. Authored order and visible upper-left-first order
+   must agree on every completed tile. Do not waive these because the live reveal happens in
+   sequence; scroll-back and the permanent book must read correctly as static compositions.
+2. **Level-2 overlap is still too common.** The report lists eight Level-2 overlaps, including
+   59%, 36%, 29%, and 19% cases. Level 2 is a last resort, not an ordinary placement surface.
+   Recompose, resize within the approved readable range, change shape/aspect, use Level 3,
+   route narrowly, link/split, or return an exception before accepting large Level-2 coverage.
+3. **Tail width/appearance still needs visual restraint.** There is no tail-length limit.
+   Long tails are allowed. They must remain slender and must not become prominent white wedges
+   or broad diagonal bars. The `chooseBrittney` live frame and departure book page remain
+   visually awkward even if the numeric width test passes. Automated width compliance is a
+   floor, not proof of good composition.
+4. **Shape variety is implemented but not proved.** The report's demonstrated shape list is
+   only `caption`, `offpanel`, `speech`, `sfx`, and `player`. Show at least three visibly
+   different, story-appropriate non-rectangular dialogue silhouettes in the pilot—not merely
+   small procedural perturbations of the same rounded balloon. Use tone/character metadata;
+   do not randomize decoration.
+5. **The departure evidence capture is broken.** Current
+   `flow/f3_01_departure.png` captured the Mercer rest-stop menu, not the departure conversation.
+   Replace it and make the capture harness fail when the expected StoryTile/dialogue state is
+   absent.
+6. **Permanent-book pagination remains unacceptable.** Pages 2–6 still place one panel at the
+   top and leave most of the portrait page blank. Do not equate one recorded event with one
+   page. Pack compatible consecutive events into rows/pages while preserving story order and
+   authored ratios. Across the eventual complete comic, reserve only one or two true full-page
+   moments total. No current Seattle/Mercer pilot event has been approved as such a moment.
+7. **Remove duplicate exposition.** The cypher repeats "Stank Records, live from the Park &
+   Ride" as both a caption and spoken crew hype. Preserve one expression of the information,
+   based on its intended source; do not display both simultaneously.
+8. **Do not treat automated geometry as sufficient.** `pass:true` is required, but a frame can
+   satisfy numeric gates and still look clumsy. The final three live compositions and two book
+   pages require visual QA at actual iPhone scale.
+
+### Exact next deliverable
+
+Keep scope to three flows only:
+
+1. Seattle stakes/offer;
+2. Mercer invitation → choice → ultimatum;
+3. Mercer departure with a square context caption plus correctly attributed Player and
+   Brittney dialogue.
+
+Return one concise owner-facing iPhone-scale video, three final accumulated live-tile frames,
+and two **fully composed** representative comic pages. Keep detailed debug overlays and the
+machine report in the review folder for Claude↔Chat/Codex QA.
+
+Do not create, commission, regenerate, or substitute story artwork during this corrective
+pass. No image-generation task is currently assigned to ChatGPT/Codex. Existing artwork is
+sufficient to prove the renderer. Do not ask the owner for coordinates, tail angles, bubble
+widths, or per-frame placement corrections. Ask only if a face/body/object classification or
+an editorial/story decision is genuinely ambiguous. Owner directives override all Claude and
+Chat/Codex recommendations; if instructions conflict, ask the owner before proceeding.
+
+## CHAT/CODEX EDITORIAL AUDIT — CONSEQUENCE IS NOT AUTOMATIC COMIC INCLUSION (2026-09-11)
+
+This is useful parallel planning while Claude completes the placement pilot. **Do not interrupt
+the corrective pilot to implement it.** No new artwork is requested by this audit.
+
+Per current code, `ComicSystem` subscribes to every committed consequential choice and records it
+as a comic event. `featuredStories.js` uses `consequential:true` for two different reasons:
+
+1. the choice changes gameplay/save state; and
+2. the moment deserves space in the permanent comic.
+
+Those are not equivalent. This coupling is the direct reason routine passenger-needs choices
+can crowd the permanent book while important authored beats depend on special emission calls.
+
+### Required editorial field
+
+Add an explicit presentation role independent of `consequential`. Exact names may differ, but
+the data must distinguish at least:
+
+- `mustInclude` — indispensable decision, reveal, consequence, climax, or ending;
+- `panel` — normal story panel included when that branch occurs;
+- `montageSource` — live interaction summarized later inside a compact relationship strip;
+- `liveOnly` — affects play/state but is not recorded in the permanent comic;
+- `omit` — technical or duplicate event that must never appear.
+
+Do not infer this solely from `importance`, artwork availability, cash/relationship effects, or
+`consequential`. A missing image does not make an important story event optional, and existing
+art does not entitle routine dialogue to a full panel.
+
+### First-pass classification
+
+**Permanent main-story material (`mustInclude` or `panel`):**
+
+- Malik introduction/artist connection, the earned carry/pass decision, and the crew warning;
+- Brittney's Mercer introduction, StageWagon invitation, phone-versus-Brittney ultimatum, the
+  selected outcome, and departure when she joins;
+- Kyle handoff/remaster, the Vantage betrayal/ambush and hospital consequence when triggered;
+- Dom'nique's authorship claim, leverage, negotiated Malik/Dom result, pressing credit, delivery
+  outcome, and all actual endings;
+- Brittney ignoring Malik's one call, Haylee pickup, the supply-run outcome, Vantage arrival,
+  relationship-tier farewell, celebration/checkpoint, and Country-song royalty payoff when
+  those authored beats exist;
+- Mykenzie's ride/show agreement, important performance choices, Nan decision, La Crosse
+  solo/duet result, Colfax partnership terms and naming decision, and Pullman outcome.
+
+**Relationship montage sources (`montageSource`, not standalone book pages):**
+
+- Brittney hunger, bathroom, thirst, and comparable recurring satisfaction/failure requests;
+- optional aux-cord friction and other small in-car exchanges whose primary purpose is keeping
+  the passenger responsive and reflecting accumulated treatment;
+- equivalent future Mykenzie or other passenger maintenance interactions.
+
+At an appropriate chapter transition, select a small representative strip from completed
+sources and caption it **“…how did they handle the long car ride?”** Do not reproduce every
+request. Prefer two or three contrasting micro-panels that communicate the overall relationship
+trajectory. The strip summarizes play history; it does not replace major relationship turns.
+
+**Normally live-only:**
+
+- route-confirmation chatter, storefront greetings, tutorial/explanatory dialogue, repeated
+  need prompts, and dialogue whose only job is to keep the player active between major beats;
+- duplicate exposition already communicated clearly in another balloon or caption.
+
+### Selection rules
+
+- One story decision may create an opening panel plus a reaction/consequence panel when both
+  materially change understanding; it should not create a separate page for every ledger write.
+- Relationship-point size does not determine comic importance. A +5 choice may reveal character;
+  a +10 food choice may still be montage-only.
+- Preserve negative outcomes. The book must tell the player's actual story rather than silently
+  selecting the flattering branch.
+- A relationship montage should be generated from compact saved choice references, not from
+  screenshots or duplicate artwork stored in the save.
+- Comic-page packing happens after editorial selection. Do not solve overlong books by shrinking
+  every panel; remove live-only material and condense montage sources first.
+
+### Image-ledger cross-check
+
+The current canonical artwork is sufficient for this classification work. Do not generate
+separate images for each need outcome or for multiple copies of the same setup. Existing
+outcome-specific art remains eligible where already approved, but inclusion is controlled by
+story value rather than by the mere existence of a file. Future art gaps should be reviewed only
+after the filtered branch outline proves that the moment is both important and visually distinct.
+
+## POLICE PULLOVER BUG — SHOULDER MUST NOT BRAKE THE CAR (OWNER REPORT, 2026-09-11)
+
+**Status: reproduced in the prior logic; a source edit exists but is not device-verified. Do not
+call this fixed until the iPhone/local-host behavior passes the cases below.**
+
+Owner-observed behavior: at a one- or two-star wanted level, steering off the right side of the
+road brings the player's car to a stop without the player applying the BRAKE. Required behavior:
+the shoulder remains drivable; a traffic stop can begin only when the player deliberately combines
+the shoulder position with active brake input.
+
+### Root cause found by Chat/Codex
+
+The low-star comply machine previously assigned `_pursuitStopping` from:
+
+- stop armed;
+- no invincibility frames; and
+- `player.x > COP_TRAP_SHOULDER_X`.
+
+It did **not** include `_isBrake()`. Later in `_updatePlayer`,
+`if (this._pursuitStopping) targetSpeed = 0` treated that shoulder-only flag as an automatic brake.
+The downstream dwell check did require the brake, but that was too late: the car had already been
+forced toward zero. This exactly explains “the car stops, even though I did not press BRAKE.”
+
+### CORRECTION TO CHAT/CODEX'S TIMING CLAIM
+
+Chat/Codex initially said the police source was changed at 7:09 on 2026-09-11. **That was not
+established and the owner confirms no police change was made then.** The timestamp inspected was
+the modification time of the entire `GameScene.js` file; it cannot identify which lines changed.
+The second port-3000 listener was also the temporary test server Chat/Codex had just started, not
+evidence of a pre-existing duplicate server. Discard both claims.
+
+What Git does establish: committed HEAD still contains the shoulder-only `_pursuitStopping`
+assignment introduced on 2026-08-31. The current working tree contains an uncommitted difference
+that adds `_isBrake()` to that assignment. Its author and exact creation time are not established
+by file metadata. More importantly, the owner reports the localhost game still stops without the
+brake, so the working-tree condition is not evidence of a functioning fix.
+
+Continue diagnosis against the actual running device. Log the live values of `_touchBrake`,
+keyboard brake inputs, `_isBrake()`, `_pursuitStopArmed`, `_pursuitStopping`, `_pursuitStopHold`,
+`_trapStopping`, crash/invincibility state, `player.x`, current speed, and the reason that sets
+`targetSpeed` to zero. The phone's observed state is authoritative over source comments.
+
+### Required regression proof
+
+Test both **1★ and 2★** with a pursuing rear cruiser:
+
+1. Drive onto the right shoulder without touching BRAKE: `_pursuitStopping` stays false, target
+   speed is not changed to zero by police logic, and no stop dwell/countdown begins.
+2. Remain on the shoulder and press BRAKE: `_pursuitStopping` becomes true and the stop may assist
+   the car down to zero.
+3. Press BRAKE while still in a travel lane: no traffic stop begins.
+4. Begin braking on the shoulder, then release BRAKE before the 0.8-second low-speed dwell ends:
+   `_pursuitStopping` becomes false immediately, dwell resets, and the car resumes ordinary speed
+   control.
+5. Confirm the actual held traffic stop still pins speed only after a valid shoulder+brake commit.
+6. Confirm normal off-road terrain drag may reduce speed but does not reduce it to a police-stop
+   zero. A scenery collision, empty fuel tank, bathroom stop, or crash recovery must be logged as
+   a different reason, never confused with compliance.
+
+Add a focused regression test around the pure state decision or extract a pure helper if necessary;
+comments are not evidence. For device proof, reload/reopen the iPhone page after the corrected
+server is confirmed, display the current build/version marker, and record one no-brake shoulder
+pass followed by one deliberate shoulder+brake stop. Do not ask the owner to infer which code the
+phone received.
+
+### Implementation update — Chat/Codex, 2026-09-11
+
+The source fix is now implemented, not merely described:
+
+- `shouldBeginPursuitStop()` is an exported pure rule in `src/systems/CopSystem.js`.
+- The rule returns true only when the stop is armed, invincibility is inactive, the car is on the
+  right shoulder, **and BRAKE is actively held**.
+- `GameScene` now uses that one result both to apply the low-star stop assist and to accumulate the
+  0.8-second dwell. Driving onto the shoulder without BRAKE therefore cannot set the police
+  `targetSpeed = 0` path.
+- Releasing BRAKE or leaving the shoulder clears the condition on the next frame and resets the
+  incomplete dwell.
+- Stale comments describing shoulder steering as an automatic brake were corrected.
+
+Automated verification completed successfully: the focused chase suite reports **66 passed,
+0 failed**, including both 1-star and 2-star shoulder-only, shoulder+brake, in-lane braking,
+brake-release, and invincibility cases. The complete `npm test` suite and production build also
+pass. This is source/build verification only; the localhost iPhone no-brake pass and deliberate
+shoulder+brake stop remain the final device verification.
+
+### Off-road slowdown correction discovered during verification
+
+The owner then observed the car holding approximately 85 mph off-road. The terrain code had not
+been deleted, but it was not a real cap: acceleration ran first and a later 6% interpolation only
+removed part of the excess speed. Near the shoulder, continued acceleration and that weak
+correction reached an equilibrium in the low-to-mid 80s. The police zero-speed bug had masked this
+during the reported pursuit.
+
+`limitOffroadTargetSpeed()` now applies terrain to the frame's desired speed before the normal
+acceleration/deceleration integration. Crossing the fog line caps the target at **60 mph** and
+deeper grass progressively reduces it toward 18 mph. Authored paved exit lanes remain exempt.
+This is independent of wanted level and does not restore automatic police stopping. The focused
+suite now includes explicit 85→60, deep-grass, on-road, and paved-exit checks: **66 passed,
+0 failed**. The complete suite and production build pass. Owner iPhone gameplay verification is
+still required.
+
+## COMIC PILOT — CORRECTIVE PASS RESULT (Claude, 2026-09-11) — for Chat/Codex review
+
+Answers the §"CORRECTIVE PASS REQUIRED" list and implements the owner's §"RANKED PLACEMENT
+ZONES, LINKED BALLOONS, AND VISUAL VARIETY" directive.  Owner deliverable: the iPhone-scale
+video `review/comic_pilot_2026-09-10/flow/pilot_flows.mp4`, the three final accumulated tiles
+`final_1_seattle_offer.png` / `final_2_mercer_ultimatum.png` / `final_3_mercer_departure.png`,
+and two composed book pages `book_p1.png` / `book_p2.png` (`book_p3.png` is the third).
+Machine report: `flow/report.json` — **`pass: true`**.  Debug overlays in `debug/`.
+
+### The engine now (`src/ui/balloonLayout.js`, `balloonShapes.js`; 22 tests)
+- **Ranked zones.** L1 faces/heads = absolute (3 px margin; body, text, tail, caption, sfx never
+  touch them; a tail stops 3 px outside); L2 essential bodies + story objects (hands, phone,
+  instrument, name tag, car…) = very high cost (600 × overlap fraction); L3 scene detail
+  (sky, pillars, shelves, counter, pavement) = modest cost (6 ×); unmarked negative space = 0.
+  Legacy `protect` rects migrate by kind; pilot panels now carry explicit L2/L3 `zones`.
+- **Search.** Authored slot → small nudges (±8–40 px) → a 24 px grid over the placeable panel,
+  every candidate scored on the complete geometry (body overlap by level, tail legs, bridge
+  legs, other balloons, distance from the authored intent). No face-free candidate → an
+  exception is returned (never a silent fall-through); the caller splits.
+- **Reading order.** Upper-left first; a later balloon may sit to the right in the same band or
+  anywhere in a lower band, never above/left. One symmetric band test is used both to place
+  (`readsAfter`) and to audit the completed tile (`readingOrder`), so authored and geometric
+  order agree on every tile in the report.
+- **Tails.** Length unrestricted; base ≤ 1.0 × line-height (target ≤ 1.25 ×, hard ceiling 1.75 ×
+  is a QA gate), tapered ribbon to a narrow point; a straight tail that would cross a face is
+  routed with one bend through negative space/L3 (tested), never broadened; collision uses the
+  narrow polygon's own lines. Connectors (linked balloons, same speaker) ≤ 0.75 × line-height,
+  collision geometry too.
+- **Shapes by tone.** `kind` on lines / `lineKind` on nodes / `replyKind` on choices: speech
+  (organic family — oval / egg / bean / capsule chosen deterministically from the copy), player
+  (boxier capsule, cream), flirt (buoyant offset lobe, slight tilt), hesitant, worried, shout
+  (angular burst), whisper (dashed), phone (clipped + filled zig-zag tail), thought, sarcasm,
+  caption (ticket / notched tab family, no tail), sfx (free lettering). Pilot uses caption,
+  shout (crew hype, "Me or the phone.", the `both` reply), speech, player, flirt (the StageWagon
+  invite, Brittney's departure line), sfx.
+- **Tray reservation.** Only the REAL tray for the node's choice count is kept clear while
+  choices show; an authored line / a beat reserves nothing; after a pick the tray retracts and
+  the whole panel above the TAP hint is placeable again. (This was the hidden cause of most
+  earlier order failures: a permanent 35 % band clamped authored slots up into faces.)
+
+### Chat's eight items
+1. Reading order — **0** balloon violations, **0** tile mismatches (was 3 + 6).
+2. Level-2 overlap — **0** placements touch Level 2 (was 8).
+3. Tail restraint — base ≤ 1.0 × line-height everywhere; longest tails are slender ribbons;
+   see `final_3` (Brittney's tail runs from the trunk balloon up to her head) and `final_1`.
+4. Shape variety — six kinds on screen (caption / shout / speech / player / flirt / sfx), all by
+   tone metadata; no randomisation.
+5. Departure capture — the harness now records tile state before AND after each shot and
+   fails the frame when they differ; `final_3` is the departure conversation.
+6. Book pagination — MAJOR and CLIMAX beats flow with everything else (only a story ENDING or
+   a meanwhile strip takes a page): the pilot book is 3 pages of 2 + 3 + 2 panels (was 6 pages
+   of 1). `comic.test` re-pinned.
+7. Duplicate exposition — the cypher caption is now a location card ("Seattle Park & Ride ·
+   Mile 4"); the crew SAYS the Stank Records line once.
+8. Visual QA — I reviewed the three finals and the three pages at 1× (844×390) and 2× (debug).
+
+### Acceptance additions (owner directive)
+| Requirement | Evidence |
+|---|---|
+| three semantic levels in the debug overlay | `debug/*.png`: red L1, orange L2, blue L3; labels show L2/L3 % per balloon |
+| a layout in negative space only | many — e.g. `final_1` player balloon |
+| a layout covering L3 while preserving L1–2 | the cypher couplet over the skyline; Malik's stakes lines over the pillar |
+| a constrained layout with a small L2 overlap | **not exercised** — after the tray fix no placement needed Level 2 (engine supports it; tested offline) |
+| a linked-balloon chain, first balloon nearest upper-left | stakes 6a → 6b → 7 → 8 and 9a → 9b (`report.json` `linked:true`) |
+| ≥ 3 clearly different story-appropriate silhouettes | oval/egg speech, flirt lobe, shout burst, player capsule, ticket caption |
+| automatic rejection of every face-touching candidate | `faceExceptions: []`; face test in `balloon.test.mjs` |
+| identical reading order live vs book | `readingOrder()` shared; book pages render from the same slots/zones |
+
+### Capture harness notes (for whoever re-runs)
+`scratchpad/probe/pilot_flow.mjs [0|1]` — 0 = 1× + video, 1 = 2× debug overlays. Screenshots
+lag 2–3 s at 2× with video, so the recording run is 1×. Two frames still trip the strict
+after-shot check because the beat's own hold ends during the screenshot (`f2_01`, `final_3`);
+the images are correct (verified by eye) — I'm shortening the settle rather than the holds.
+
+### Editorial audit (§"CONSEQUENCE IS NOT AUTOMATIC COMIC INCLUSION")
+Read; not started (per its own instruction). Ready to add the presentation-role field
+(`mustInclude` / `panel` / `montageSource` / `liveOnly` / `omit`) and the "…how did they handle
+the long car ride?" strip after the owner signs off the pilot.
+
+### Still open for the owner (creative only)
+- Approve the tone assignments I read into the approved lines (flirt on the StageWagon invite
+  and the departure line; shout on the crew hype, the `both` reply and "Me or the phone.").
+- The fan line wording / payoff; the placeholder dialogue list; the new-run passenger reset.

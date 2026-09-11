@@ -2,73 +2,229 @@
  "frames": [
   {
    "name": "f1_01_cypher_beat",
-   "note": "Beat 1: caption + crew hype + Malik couplet + crowd, revealed 2 s apart; holds, then advances on its own"
+   "note": "Beat 1: location caption + crew hype + Malik couplet + crowd, revealed 2 s apart; holds, then advances on its own",
+   "expectNode": "seattle_lot",
+   "captureOK": true,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "seattle_lot",
+    "balloons": 4
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "seattle_lot",
+    "balloons": 4,
+    "tiles": 1
+   }
   },
   {
    "name": "f1_02_intro_tray",
-   "note": "Beat 2: Malik's intro + the verbal-response tray (know / fan)"
+   "note": "Beat 2: Malik's intro + the verbal-response tray (know / fan)",
+   "expectNode": "seattle_clock",
+   "captureOK": true,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "seattle_clock",
+    "balloons": 1
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "seattle_clock",
+    "balloons": 1,
+    "tiles": 1
+   }
   },
   {
    "name": "f1_03_fan_reply",
-   "note": "Beat 2: chosen sentence lifted into the player balloon, Malik's reply after it"
+   "note": "Beat 2: chosen sentence lifted into the player balloon, Malik's reply after it",
+   "expectNode": "seattle_clock",
+   "captureOK": true,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "seattle_clock",
+    "balloons": 3
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "seattle_clock",
+    "balloons": 3,
+    "tiles": 1
+   }
   },
   {
    "name": "f1_04_stakes_and_offer",
-   "note": "Beat 3/4: stakes lines 6–9 across the panel(s), then the one real decision (carry / pass)"
+   "note": "Beat 4: line 9 split into two linked balloons, then the one real decision (carry / pass)",
+   "expectNode": "seattle_offer",
+   "captureOK": true,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "seattle_offer",
+    "balloons": 2
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "seattle_offer",
+    "balloons": 2,
+    "tiles": 1
+   }
   },
   {
-   "name": "f1_05_carry",
-   "note": "carry: player line above his head, Malik's reply low right; crew warning beat recorded"
+   "name": "final_1_seattle_offer",
+   "note": "FINAL accumulated tile — carry: the player's sentence above his head, Malik's reply after it",
+   "expectNode": "seattle_offer",
+   "captureOK": true,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "seattle_offer",
+    "balloons": 4
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "seattle_offer",
+    "balloons": 4,
+    "tiles": 1
+   }
   },
   {
    "name": "f2_01_counter_gates_shop",
-   "note": "mercer_counter over the storefront; the player's authored line plays as a balloon"
+   "note": "mercer_counter over the storefront; the player's authored line plays as a balloon",
+   "expectNode": "mercer_counter",
+   "captureOK": false,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "mercer_counter",
+    "balloons": 2
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "mercer_hook",
+    "balloons": 2,
+    "tiles": 1
+   }
   },
   {
    "name": "f2_02_fork_tray",
-   "note": "mercer_fork: the invite + three verbal responses"
+   "note": "mercer_fork: the invite (flirt silhouette) + three verbal responses",
+   "expectNode": "mercer_fork",
+   "captureOK": true,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "mercer_fork",
+    "balloons": 2
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "mercer_fork",
+    "balloons": 2,
+    "tiles": 1
+   }
   },
   {
    "name": "f2_03_both_reply",
-   "note": "both → \"No. I'm done letting his album hijack my plans. Me or the phone.\""
+   "note": "both → \"No. I'm done letting his album hijack my plans. Me or the phone.\" (burst silhouette)",
+   "expectNode": "mercer_fork",
+   "captureOK": true,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "mercer_fork",
+    "balloons": 4
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "mercer_fork",
+    "balloons": 4,
+    "tiles": 1
+   }
   },
   {
    "name": "f2_04_ultimatum_tray",
-   "note": "\"Me or the phone.\" — a genuine decision"
+   "note": "\"Me or the phone.\" — a genuine decision",
+   "expectNode": "mercer_ultimatum",
+   "captureOK": true,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "mercer_ultimatum",
+    "balloons": 1
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "mercer_ultimatum",
+    "balloons": 1,
+    "tiles": 1
+   }
   },
   {
-   "name": "f2_05_chose_brittney",
-   "note": "chooseBrittney → \"Good answer.\""
+   "name": "final_2_mercer_ultimatum",
+   "note": "FINAL accumulated tile — chooseBrittney → \"Good answer.\"",
+   "expectNode": "mercer_ultimatum",
+   "captureOK": true,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "mercer_ultimatum",
+    "balloons": 3
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "mercer_ultimatum",
+    "balloons": 3,
+    "tiles": 1
+   }
   },
   {
    "name": "f2_06_shop_after",
-   "note": "the storefront, reachable only after the full sequence"
+   "note": "the storefront, reachable only after the full sequence",
+   "expectNode": null,
+   "captureOK": true,
+   "state": {
+    "tileOpen": false,
+    "lastNode": "mercer_ultimatum",
+    "balloons": 0
+   },
+   "after": {
+    "tileOpen": false,
+    "lastNode": "mercer_ultimatum",
+    "balloons": 0,
+    "tiles": 0
+   }
   },
   {
-   "name": "f3_01_departure",
-   "note": "mercer_departure: square caption, player balloon, Brittney balloon"
+   "name": "final_3_mercer_departure",
+   "note": "FINAL accumulated tile — square location/context caption, the player's balloon, Brittney's reply (flirt silhouette)",
+   "expectNode": "mercer_departure",
+   "captureOK": false,
+   "state": {
+    "tileOpen": true,
+    "lastNode": "mercer_departure",
+    "balloons": 3
+   },
+   "after": {
+    "tileOpen": false,
+    "lastNode": "mercer_departure",
+    "balloons": 3,
+    "tiles": 0
+   }
   }
  ],
  "flows": {
   "seattle": {
-   "tileOpenAt": "5.9s",
+   "tileOpenAt": "5.1s",
    "trayAppeared": true,
-   "trayAt": "22.4s",
+   "trayAt": "21.5s",
    "tray": [
     "I don't know you, no offense. I'm sure you haven't heard any of my songs either.",
     "Malik Reed? I follow your work. I'm a songwriter too."
    ],
    "offerTrayAppeared": true,
-   "offerAt": "72.9s",
+   "offerAt": "73.2s",
    "offerTray": [
     "I'm going right past Mercer. Give me the phone.",
     "I don't carry other people's problems. Good luck with the album."
    ],
-   "closedAt": "86.5s"
+   "closedAt": "86.9s"
   },
   "mercer": {
    "tileOpenOnArrival": true,
-   "at": "88.3s",
+   "at": "88.5s",
    "forkTray": [
     "That sounds incredible! I'm game. I'll meet you at my car when I'm done shopping.",
     "Sure! We just have to drop this phone off in Issaquah on our way.",
@@ -78,14 +234,14 @@
     "You look a lot more enjoyable to ride with than this cracked phone.",
     "I think you should keep your job, and I've got to get this phone to Issaquah."
    ],
-   "closedAt": "149.3s"
+   "closedAt": "151.3s"
   },
   "departure": {
-   "closedAt": "168.0s"
+   "closedAt": "172.5s"
   }
  },
  "book": {
-  "pages": 6,
+  "pages": 3,
   "list": [
    {
     "n": 1,
@@ -97,36 +253,18 @@
    },
    {
     "n": 2,
-    "template": "wide",
+    "template": "one_wide_two_small",
     "events": [
-     "hiphop.seattle_offer.carry"
+     "hiphop.seattle_offer.carry",
+     "hiphop.beat.seattle_crew_warning",
+     "hiphop.mercer_fork.both"
     ]
    },
    {
     "n": 3,
     "template": "four_grid",
     "events": [
-     "hiphop.beat.seattle_crew_warning"
-    ]
-   },
-   {
-    "n": 4,
-    "template": "climax",
-    "events": [
-     "hiphop.mercer_fork.both"
-    ]
-   },
-   {
-    "n": 5,
-    "template": "climax",
-    "events": [
-     "hiphop.mercer_ultimatum.chooseBrittney"
-    ]
-   },
-   {
-    "n": 6,
-    "template": "wide",
-    "events": [
+     "hiphop.mercer_ultimatum.chooseBrittney",
      "country.mercer_departure.board"
     ]
    }
@@ -135,75 +273,130 @@
  "qa": {
   "placements": 33,
   "wordCapViolations": [],
+  "faceExceptions": [],
   "unattributed": [],
   "clipped": [],
   "underTray": [],
-  "forced": [
-   "seattle_lot: Top of NoiseCloud, bottom of my tank — whole cit",
-   "seattle_lot: AYYYY!",
-   "seattle_clock: Malik Reed? I follow your work. I'm a songwriter",
-   "seattle_stakes: She's gonna take it to my homie Kyle. He produce",
-   "seattle_stakes: I know if I get that phone in his hands, I'll be",
-   "seattle_offer: As an artist, you know how important this phone ",
-   "mercer_hook: But I wish you would. I don't even like hip-hop.",
-   "mercer_fork: You can use Malik's ticket.",
-   "mercer_fork: No. I'm done letting his album hijack my plans. ",
-   "mercer_departure: StageWagon, cowboy. Try to keep all four tires u"
-  ],
+  "tailTooWide": [],
+  "orderViolations": [],
+  "tileOrderFails": [],
+  "level2Overlaps": [],
   "slots": {
-   "authored": 17,
-   "tl": 1,
-   "forced": 10,
-   "tr": 1,
-   "below": 1,
-   "right": 1,
-   "br": 1,
-   "bl": 1
+   "authored": 18,
+   "grid": 6,
+   "nudged": 9
   },
-  "pass": false
+  "acceptance": {
+   "negativeSpaceOnly": true,
+   "coversLevel3Only": true,
+   "smallLevel2Overlap": false,
+   "linkedChain": true,
+   "routedTail": true,
+   "shapes": [
+    "caption",
+    "shout",
+    "speech",
+    "sfx",
+    "player",
+    "flirt"
+   ],
+   "faceRejections": true,
+   "tileOrderOK": true
+  },
+  "pass": true
  },
  "pageErrors": [],
+ "captureFails": [
+  {
+   "name": "f2_01_counter_gates_shop",
+   "expectNode": "mercer_counter",
+   "before": {
+    "tileOpen": true,
+    "lastNode": "mercer_counter",
+    "balloons": 2
+   },
+   "after": {
+    "tileOpen": true,
+    "lastNode": "mercer_hook",
+    "balloons": 2,
+    "tiles": 1
+   }
+  },
+  {
+   "name": "final_3_mercer_departure",
+   "expectNode": "mercer_departure",
+   "before": {
+    "tileOpen": true,
+    "lastNode": "mercer_departure",
+    "balloons": 3
+   },
+   "after": {
+    "tileOpen": false,
+    "lastNode": "mercer_departure",
+    "balloons": 3,
+    "tiles": 0
+   }
+  }
+ ],
  "layout": [
   {
    "stop": "S",
    "node": "seattle_lot",
    "kind": "caption",
-   "text": "Stank Records, live from the Park & Ride.",
-   "words": 8,
+   "text": "Seattle Park & Ride · Mile 4",
+   "words": 7,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": false,
+   "tailRouted": false,
+   "tailBaseW": 0,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 480,
+    "x": 16,
     "y": 9,
-    "w": 269.8,
-    "h": 49.275
+    "w": 244.8,
+    "h": 31.8375
    },
+   "why": [],
    "pass": true
   },
   {
    "stop": "S",
    "node": "seattle_lot",
-   "kind": "offpanel",
+   "kind": "shout",
    "text": "Malik Reed! Stank Records — live from the Park &",
    "words": 11,
-   "slot": "tl",
+   "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.637,
+   "order": true,
    "tailClipped": false,
+   "tailRouted": false,
+   "tailBaseW": 0,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 8,
-    "y": 8,
+    "x": 296,
+    "y": 9,
     "w": 439.5,
     "h": 41.134254455566406
    },
+   "why": [],
    "pass": true
   },
   {
@@ -212,20 +405,29 @@
    "kind": "speech",
    "text": "Top of NoiseCloud, bottom of my tank — whole cit",
    "words": 20,
-   "slot": "forced",
-   "clean": false,
+   "slot": "grid",
+   "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 320,
-    "y": 63.00000000000001,
+    "x": 312,
+    "y": 216,
     "w": 215.5,
     "h": 115.67127227783203
    },
-   "pass": false
+   "why": [],
+   "pass": true
   },
   {
    "stop": "S",
@@ -233,20 +435,51 @@
    "kind": "sfx",
    "text": "AYYYY!",
    "words": 1,
-   "slot": "forced",
-   "clean": false,
+   "slot": "nudged",
+   "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.212,
+   "order": true,
    "tailClipped": false,
+   "tailRouted": false,
+   "tailBaseW": 0,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
     "x": 16,
-    "y": 199.5,
+    "y": 295,
     "w": 180,
     "h": 82.5
    },
-   "pass": false
+   "why": [],
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_lot",
+   "kind": "tile-order",
+   "text": "4 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1,
+    2,
+    3
+   ]
   },
   {
    "stop": "S",
@@ -256,7 +489,15 @@
    "words": 14,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -267,7 +508,27 @@
     "w": 358.5,
     "h": 59.76850891113281
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_clock",
+   "kind": "tile-order",
+   "text": "1 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0
+   ]
   },
   {
    "stop": "S",
@@ -275,20 +536,31 @@
    "kind": "player",
    "text": "Malik Reed? I follow your work. I'm a songwriter",
    "words": 10,
-   "slot": "forced",
-   "clean": false,
+   "slot": "nudged",
+   "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
     "x": 16,
-    "y": 203.59723663330078,
+    "y": 246.5,
     "w": 187.5,
     "h": 78.40276336669922
    },
-   "pass": false
+   "why": [
+    "face"
+   ],
+   "pass": true
   },
   {
    "stop": "S",
@@ -298,18 +570,48 @@
    "words": 9,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
     "x": 416,
-    "y": 222.2314910888672,
+    "y": 225,
     "w": 253.5,
     "h": 59.76850891113281
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_clock",
+   "kind": "tile-order",
+   "text": "3 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1,
+    2
+   ]
   },
   {
    "stop": "S",
@@ -319,7 +621,15 @@
    "words": 4,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 21.6,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -330,7 +640,27 @@
     "w": 229.5,
     "h": 43.46353721618652
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_route",
+   "kind": "tile-order",
+   "text": "1 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0
+   ]
   },
   {
    "stop": "S",
@@ -338,19 +668,30 @@
    "kind": "player",
    "text": "Pullman. Eventually.",
    "words": 2,
-   "slot": "authored",
+   "slot": "nudged",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 21.6,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
     "x": 16,
-    "y": 238.5,
+    "y": 246.5,
     "w": 193.5,
     "h": 43.46353721618652
    },
+   "why": [
+    "face"
+   ],
    "pass": true
   },
   {
@@ -359,20 +700,50 @@
    "kind": "speech",
    "text": "Then Mercer's on your way.",
    "words": 5,
-   "slot": "authored",
+   "slot": "nudged",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
     "x": 416,
-    "y": 225,
+    "y": 233,
     "w": 233.5,
     "h": 41.134254455566406
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_route",
+   "kind": "tile-order",
+   "text": "3 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1,
+    2
+   ]
   },
   {
    "stop": "S",
@@ -380,19 +751,28 @@
    "kind": "speech",
    "text": "I put some of my best tracks on this phone.",
    "words": 10,
-   "slot": "tr",
+   "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.804,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": true,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 616.5,
-    "y": 8,
+    "x": 16,
+    "y": 9,
     "w": 175.5,
     "h": 78.40276336669922
    },
+   "why": [],
    "pass": true
   },
   {
@@ -401,19 +781,28 @@
    "kind": "speech",
    "text": "I just need to get it to my girl at the Gas-N-Si",
    "words": 15,
-   "slot": "below",
+   "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": true,
    "attributed": true,
    "clipped": false,
-   "flush": true,
+   "flush": false,
    "underTray": false,
    "rect": {
-    "x": 608.5,
-    "y": 92.40276336669922,
-    "w": 191.5,
+    "x": 576,
+    "y": 9,
+    "w": 207.5,
     "h": 97.03701782226562
    },
+   "why": [],
    "pass": true
   },
   {
@@ -422,20 +811,31 @@
    "kind": "speech",
    "text": "She's gonna take it to my homie Kyle. He produce",
    "words": 12,
-   "slot": "forced",
-   "clean": false,
+   "slot": "nudged",
+   "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": true,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
     "x": 576,
-    "y": 9,
+    "y": 114,
     "w": 196.5,
     "h": 78.40276336669922
    },
-   "pass": false
+   "why": [
+    "balloon"
+   ],
+   "pass": true
   },
   {
    "stop": "S",
@@ -443,20 +843,53 @@
    "kind": "speech",
    "text": "I know if I get that phone in his hands, I'll be",
    "words": 16,
-   "slot": "forced",
-   "clean": false,
+   "slot": "grid",
+   "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": true,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 576,
-    "y": 90,
-    "w": 201.5,
-    "h": 97.03701782226562
+    "x": 240,
+    "y": 264,
+    "w": 166.5,
+    "h": 115.67127227783203
    },
-   "pass": false
+   "why": [
+    "face"
+   ],
+   "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_stakes",
+   "kind": "tile-order",
+   "text": "4 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1,
+    2,
+    3
+   ]
   },
   {
    "stop": "S",
@@ -464,20 +897,31 @@
    "kind": "speech",
    "text": "As an artist, you know how important this phone ",
    "words": 12,
-   "slot": "forced",
-   "clean": false,
+   "slot": "nudged",
+   "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.732,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": true,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
-   "flush": false,
+   "flush": true,
    "underTray": false,
    "rect": {
     "x": 16,
-    "y": 9,
-    "w": 234.5,
-    "h": 78.40276336669922
+    "y": 1,
+    "w": 157.5,
+    "h": 97.03701782226562
    },
-   "pass": false
+   "why": [
+    "tail"
+   ],
+   "pass": true
   },
   {
    "stop": "S",
@@ -487,18 +931,47 @@
    "words": 10,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": true,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 296,
+    "x": 576,
     "y": 9,
-    "w": 176.5,
+    "w": 197.5,
     "h": 78.40276336669922
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_offer",
+   "kind": "tile-order",
+   "text": "2 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1
+   ]
   },
   {
    "stop": "S",
@@ -508,7 +981,15 @@
    "words": 9,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -519,6 +1000,7 @@
     "w": 233.5,
     "h": 59.76850891113281
    },
+   "why": [],
    "pass": true
   },
   {
@@ -527,20 +1009,49 @@
    "kind": "speech",
    "text": "Album's on the phone. While you're carrying it, ",
    "words": 15,
-   "slot": "right",
+   "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.007,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 255.5,
-    "y": 9,
+    "x": 448.00000000000006,
+    "y": 225,
     "w": 262.5,
     "h": 78.40276336669922
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "S",
+   "node": "seattle_offer",
+   "kind": "tile-order",
+   "text": "2 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1
+   ]
   },
   {
    "stop": "M",
@@ -550,7 +1061,15 @@
    "words": 10,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -561,7 +1080,27 @@
     "w": 350.5,
     "h": 59.76850891113281
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_counter",
+   "kind": "tile-order",
+   "text": "1 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0
+   ]
   },
   {
    "stop": "M",
@@ -571,7 +1110,15 @@
    "words": 17,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.048,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -582,7 +1129,28 @@
     "w": 240,
     "h": 78.40276336669922
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_counter",
+   "kind": "tile-order",
+   "text": "2 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1
+   ]
   },
   {
    "stop": "M",
@@ -592,7 +1160,15 @@
    "words": 9,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -603,7 +1179,27 @@
     "w": 351.5,
     "h": 59.76850891113281
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_hook",
+   "kind": "tile-order",
+   "text": "1 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0
+   ]
   },
   {
    "stop": "M",
@@ -613,7 +1209,15 @@
    "words": 10,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.007,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -624,6 +1228,7 @@
     "w": 226.5,
     "h": 59.76850891113281
    },
+   "why": [],
    "pass": true
   },
   {
@@ -632,30 +1237,68 @@
    "kind": "speech",
    "text": "But I wish you would. I don't even like hip-hop.",
    "words": 10,
-   "slot": "forced",
+   "slot": "grid",
    "clean": false,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.274,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 264,
-    "y": 203.59723663330078,
+    "x": 336,
+    "y": 336,
     "w": 196.5,
     "h": 78.40276336669922
    },
-   "pass": false
+   "why": [],
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_hook",
+   "kind": "tile-order",
+   "text": "3 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1,
+    2
+   ]
   },
   {
    "stop": "M",
    "node": "mercer_fork",
-   "kind": "speech",
+   "kind": "flirt",
    "text": "Malik and I had plans to go to StageWagon. He bl",
    "words": 24,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": false,
+   "tailRouted": false,
+   "tailBaseW": 0,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -666,28 +1309,60 @@
     "w": 359.5,
     "h": 78.40276336669922
    },
+   "why": [],
    "pass": true
   },
   {
    "stop": "M",
    "node": "mercer_fork",
-   "kind": "speech",
+   "kind": "flirt",
    "text": "You can use Malik's ticket.",
    "words": 5,
-   "slot": "forced",
-   "clean": false,
+   "slot": "grid",
+   "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": true,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 430,
-    "y": 95.90276336669922,
+    "x": 312,
+    "y": 120,
     "w": 222.5,
     "h": 41.134254455566406
    },
-   "pass": false
+   "why": [
+    "face"
+   ],
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_fork",
+   "kind": "tile-order",
+   "text": "2 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1
+   ]
   },
   {
    "stop": "M",
@@ -697,7 +1372,15 @@
    "words": 14,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.038,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -708,38 +1391,78 @@
     "w": 236.5,
     "h": 78.40276336669922
    },
+   "why": [],
    "pass": true
   },
   {
    "stop": "M",
    "node": "mercer_fork",
-   "kind": "speech",
+   "kind": "shout",
    "text": "No. I'm done letting his album hijack my plans. ",
    "words": 13,
-   "slot": "forced",
+   "slot": "grid",
    "clean": false,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.298,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 264,
-    "y": 203.59723663330078,
+    "x": 312,
+    "y": 336,
     "w": 205.5,
     "h": 78.40276336669922
    },
-   "pass": false
+   "why": [],
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_fork",
+   "kind": "tile-order",
+   "text": "4 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1,
+    2,
+    3
+   ]
   },
   {
    "stop": "M",
    "node": "mercer_ultimatum",
-   "kind": "speech",
+   "kind": "shout",
    "text": "Me or the phone.",
    "words": 4,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 21.6,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -750,7 +1473,27 @@
     "w": 173.5,
     "h": 43.46353721618652
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_ultimatum",
+   "kind": "tile-order",
+   "text": "1 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0
+   ]
   },
   {
    "stop": "M",
@@ -758,19 +1501,28 @@
    "kind": "player",
    "text": "You look a lot more enjoyable to ride with than ",
    "words": 13,
-   "slot": "br",
+   "slot": "nudged",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 534.5,
-    "y": 195.59723663330078,
+    "x": 328,
+    "y": 208,
     "w": 257.5,
     "h": 78.40276336669922
    },
+   "why": [],
    "pass": true
   },
   {
@@ -779,20 +1531,51 @@
    "kind": "speech",
    "text": "Good answer.",
    "words": 2,
-   "slot": "bl",
+   "slot": "nudged",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.427,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 21.6,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 8,
-    "y": 230.53646278381348,
+    "x": 608,
+    "y": 192,
     "w": 139.5,
     "h": 43.46353721618652
    },
+   "why": [
+    "balloon"
+   ],
    "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_ultimatum",
+   "kind": "tile-order",
+   "text": "2 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1
+   ]
   },
   {
    "stop": "M",
@@ -802,7 +1585,15 @@
    "words": 9,
    "slot": "authored",
    "clean": true,
+   "exception": false,
+   "l2": 0,
+   "l3": 1,
+   "order": true,
    "tailClipped": false,
+   "tailRouted": false,
+   "tailBaseW": 0,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
@@ -813,7 +1604,27 @@
     "w": 182.8,
     "h": 66.7125
    },
+   "why": [],
    "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_departure",
+   "kind": "tile-order",
+   "text": "1 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0
+   ]
   },
   {
    "stop": "M",
@@ -821,41 +1632,80 @@
    "kind": "player",
    "text": "Passenger seat's yours. Let's hit the road.",
    "words": 7,
-   "slot": "authored",
-   "clean": true,
+   "slot": "grid",
+   "clean": false,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.021,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 216,
-    "y": 9,
+    "x": 48,
+    "y": 144,
     "w": 300.5,
     "h": 59.76850891113281
    },
+   "why": [],
    "pass": true
   },
   {
    "stop": "M",
    "node": "mercer_departure",
-   "kind": "speech",
+   "kind": "flirt",
    "text": "StageWagon, cowboy. Try to keep all four tires u",
    "words": 10,
-   "slot": "forced",
+   "slot": "nudged",
    "clean": false,
+   "exception": false,
+   "l2": 0,
+   "l3": 0.217,
+   "order": true,
    "tailClipped": true,
+   "tailRouted": false,
+   "tailBaseW": 19.2,
+   "tailWidthOK": true,
+   "linked": false,
    "attributed": true,
    "clipped": false,
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 288,
-    "y": 203.59723663330078,
+    "x": 300,
+    "y": 217,
     "w": 240,
     "h": 78.40276336669922
    },
-   "pass": false
+   "why": [],
+   "pass": true
+  },
+  {
+   "stop": "M",
+   "node": "mercer_departure",
+   "kind": "tile-order",
+   "text": "3 balloons",
+   "words": 0,
+   "slot": "-",
+   "clean": true,
+   "exception": false,
+   "order": true,
+   "attributed": true,
+   "clipped": false,
+   "underTray": false,
+   "tailWidthOK": true,
+   "pass": true,
+   "geo": [
+    0,
+    1,
+    2
+   ]
   }
  ]
 }

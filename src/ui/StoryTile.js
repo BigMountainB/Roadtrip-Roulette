@@ -29,8 +29,8 @@ import Phaser from 'phaser';
 import { SCREEN_W, SCREEN_H } from '../constants.js';
 import { getStoryNode } from '../data/featuredStories.js';
 import { panelMeta, panelKeyFor, resolvePanelKey } from '../data/comicPanels.js';
-import { layoutBalloon, rectsIntersect } from './balloonLayout.js';
-import { unit, padding, strokeFor, bodyShape, tailShape, sfxSpec, dashOutline } from './balloonShapes.js';
+import { layoutBalloon, migrateZones, readingOrder, TAIL_BASE_CEILING } from './balloonLayout.js';
+import { unit, padding, strokeFor, bodyShape, tailShape, connectorShape, sfxSpec, dashOutline, seedFor } from './balloonShapes.js';
 
 const D = 600;
 // Comic lettering with a readable fallback (iOS ships Chalkboard SE / Marker
@@ -39,7 +39,8 @@ export const LETTERING = '"Chalkboard SE", "Comic Sans MS", "Marker Felt", "Treb
 const CAPTION_FACE = '"Comic Neue", "Trebuchet MS", "Helvetica Neue", Arial, sans-serif';
 const IMPACT = 'Impact, "Arial Black", Arial, sans-serif';
 const INK = 0x141414;
-const FILLS = { speech: 0xFFFFFF, offpanel: 0xFFFFFF, whisper: 0xFFFFFF, phone: 0xF2F6FF, shout: 0xFFFFFF, distress: 0xFFFFFF, thought: 0xFFFFFF, sarcasm: 0xFFFFFF, player: 0xFFF9D6, caption: 0xFFF1B8 };
+const FILLS = { speech: 0xFFFFFF, offpanel: 0xFFFFFF, whisper: 0xFFFFFF, phone: 0xF2F6FF, shout: 0xFFFFFF, distress: 0xFFFFFF, thought: 0xFFFFFF, sarcasm: 0xFFFFFF, player: 0xFFF9D6, caption: 0xFFF1B8, flirt: 0xFFFFFF, hesitant: 0xFFFFFF, worried: 0xFFFFFF };
+const LEVEL_COLORS = { 1: 0xFF3030, 2: 0xFF9A20, 3: 0x3A8CFF };
 
 /** Debug overlays (`?comicdebug=1` / `window.__comicDebug = true`). */
 const comicDebug = () => { try { return !!window.__comicDebug; } catch (_) { return false; } };
@@ -199,21 +200,23 @@ export function showStoryConversation(scene, start, onDone) {
       holdTimer?.remove?.(); holdTimer = null;
       hint.destroy();
     };
-    const advance = () => { cleanup(); if (!finished) fn(); };
+    const holdLog = (why) => { try { (window.__comicHoldLog ??= []).push({ t: Date.now(), ms, why }); } catch (_) {} };
+    const advance = (why = 'timer') => { holdLog(why); cleanup(); if (!finished) fn(); };
     const onDown = (p) => { down = { x: p.x, y: p.y }; };
     const onUpTap = (p) => {
       if (!down) return;
       const moved = Math.hypot(p.x - down.x, p.y - down.y);
       down = null;
       if (moved > 12) return;                  // that was a strip drag
-      advance();
+      advance('tap');
     };
-    const onKey = () => advance();
+    const onKey = () => advance('key');
     for (const o of taps) { o.on('pointerdown', onDown); o.on('pointerup', onUpTap); }
     scene.input.keyboard?.on('keydown-SPACE', onKey);
     scene.input.keyboard?.on('keydown-ENTER', onKey);
     // The timer: re-armed while the player is browsing back.
-    const arm = (t) => { holdTimer = scene.time.delayedCall(t, () => { if (spent) return; if (browsingBack()) { arm(500); return; } advance(); }); };
+    holdLog('arm');
+    const arm = (t) => { holdTimer = scene.time.delayedCall(t, () => { if (spent) return; if (browsingBack()) { arm(500); return; } advance('timer'); }); };
     arm(ms);
     objs.push({ destroy: cleanup });
   }
@@ -228,7 +231,7 @@ export function showStoryConversation(scene, start, onDone) {
     if (!text) return out;
     const kind = opts.kind ?? 'speech';
     const parts = splitByCap(text);
-    const protect = opts.protect ?? [];
+    const zones = opts.zones ?? migrateZones(opts.protect ?? []);
     const avoid = [...(opts.avoid ?? [])];
     let prev = null;
     parts.forEach((part, i) => {
@@ -245,14 +248,22 @@ export function showStoryConversation(scene, start, onDone) {
       const shown = kind === 'caption' ? String(part).toUpperCase() : part;
       const t = scene.add.text(0, 0, shown, { fontSize: `${size}px`, fontFamily: face, fontStyle: style, color: '#141414', wordWrap: { width: maxW - pad.x * 2 }, align: kind === 'caption' ? 'left' : 'center' });
       const w = Math.min(maxW, t.width + pad.x * 2), h = t.height + pad.y * 2;
+      const lineH = size * 1.2;
       const want = prev ? { x: Math.min(TILE_W - w - 6, prev.x + 30), y: prev.y + prev.h + 4, w, h } : { x: box.x, y: box.y, w, h };
-      const L = layoutBalloon({ size: { w, h }, box: want, anchor: last && kind !== 'caption' && kind !== 'offpanel' ? tail : null, protect, art: opts.art ?? null, bounds: opts.bounds ?? null, avoid, after: i === 0 ? (opts.after ?? null) : prev });
+      // Linked balloons: a continuation of the same speaker bridges to the
+      // previous part; only the last part carries the speaker tail.
+      const link = i > 0 ? prev : (opts.connectorFrom ?? null);
+      const wantTail = last && kind !== 'caption' && kind !== 'offpanel' && kind !== 'sfx' ? tail : null;
+      let L = layoutBalloon({ size: { w, h }, box: want, anchor: wantTail, zones, art: opts.art ?? null, bounds: opts.bounds ?? null, avoid, after: i === 0 ? (opts.after ?? null) : prev, lineH, connectorFrom: link });
+      if (L.exception && link) L = layoutBalloon({ size: { w, h }, box: want, anchor: wantTail, zones, art: opts.art ?? null, bounds: opts.bounds ?? null, avoid, after: i === 0 ? (opts.after ?? null) : prev, lineH, connectorFrom: null });
       const g = scene.add.graphics();
       const fill = opts.fill ?? FILLS[kind] ?? 0xFFFFFF;
       const stroke = strokeFor(kind, U);
-      const body = bodyShape(kind, L.rect, U, (L.rect.x * 7 + L.rect.y) | 0);
+      const body = bodyShape(kind, L.rect, U, seedFor(part));
       const tl = tailShape(kind, L.tail, U);
+      const cn = connectorShape(L.connector);
       g.fillStyle(fill, 1); g.lineStyle(stroke, INK, 1);
+      if (cn?.polygon) { g.fillPoints(cn.polygon, true); g.strokePoints(cn.polygon, true); }
       if (tl?.polygon) { g.fillPoints(tl.polygon, true); g.strokePoints(tl.polygon, true); }
       if (tl?.bubbles) for (const b of tl.bubbles) { g.fillCircle(b.x, b.y, b.r); g.strokeCircle(b.x, b.y, b.r); }
       if (kind === 'caption') { g.fillStyle(0x000000, 0.35); g.fillRect(L.rect.x + 3, L.rect.y + 3, w, h); g.fillStyle(fill, 1); }
@@ -260,13 +271,13 @@ export function showStoryConversation(scene, start, onDone) {
       if (body.dash) { for (const [a, b] of dashOutline(body.outline, body.dash.dash, body.dash.gap)) g.lineBetween(a.x, a.y, b.x, b.y); }
       else g.strokePoints(body.outline, true);
       if (body.inner) { g.lineStyle(Math.max(1, stroke * 0.6), INK, 1); g.strokePoints(body.inner, true); }
-      // Re-cover the tail base so the outline reads as open into the tail.
-      if (tl?.polygon) { g.fillStyle(fill, 1); g.fillPoints(body.outline, true); }
+      // Re-cover the tail/bridge base so the outline reads as open into it.
+      if (tl?.polygon || cn?.polygon) { g.fillStyle(fill, 1); g.fillPoints(body.outline, true); }
       t.setPosition(kind === 'caption' ? L.rect.x + pad.x : L.rect.x + w / 2, kind === 'caption' ? L.rect.y + pad.y : L.rect.y + h / 2).setOrigin(kind === 'caption' ? 0 : 0.5);
       container.add([g, t]); out.push(g, t);
       avoid.push(L.rect); opts.placed?.push(L.rect); prev = L.rect;
-      qaLog(opts, { kind, part, L, tail: last ? tail : null, protect });
-      if (opts.debug) debugMark(opts.debug, L, opts.order ?? 0, !L.clean);
+      qaLog(opts, { kind, part, L, tail: wantTail, zones, lineH });
+      if (opts.debug) debugMark(opts.debug, L, opts.order ?? 0, L.exception || !L.clean);
     });
     return out;
   }
@@ -276,40 +287,52 @@ export function showStoryConversation(scene, start, onDone) {
     const spec = sfxSpec(text, ART_W, (box.x + box.y) | 0);
     const t = scene.add.text(0, 0, spec.text, { fontSize: `${Math.min(spec.fontPx, 64)}px`, fontFamily: IMPACT, color: '#FFE45C', stroke: '#141414', strokeThickness: Math.max(3, U) }).setOrigin(0.5);
     const w = t.width + 8, h = t.height + 8;
-    const L = layoutBalloon({ size: { w, h }, box: { x: box.x, y: box.y, w, h }, anchor: null, protect: opts.protect ?? [], art: opts.art ?? null, bounds: opts.bounds ?? null, avoid: opts.avoid ?? [] });
+    const L = layoutBalloon({ size: { w, h }, box: { x: box.x, y: box.y, w, h }, anchor: null, zones: opts.zones ?? migrateZones(opts.protect ?? []), art: opts.art ?? null, bounds: opts.bounds ?? null, avoid: opts.avoid ?? [], after: opts.after ?? null });
     t.setPosition(L.rect.x + w / 2, L.rect.y + h / 2).setAngle(spec.angleDeg);
     container.add(t);
     opts.placed?.push(L.rect);
-    qaLog(opts, { kind: 'sfx', part: text, L, tail: null, protect: opts.protect ?? [] });
+    qaLog(opts, { kind: 'sfx', part: text, L, tail: null, zones: opts.zones ?? [], lineH: 16 });
     if (opts.debug) debugMark(opts.debug, L, opts.order ?? 0, !L.clean);
     return [t];
   }
 
   /** QA gates per placement (workshop Phase 3), into window.__comicLayoutLog. */
-  function qaLog(opts, { kind, part, L, tail, protect }) {
+  function qaLog(opts, { kind, part, L, tail, zones, lineH }) {
     const inRect = (p, r) => !!r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
-    const faces = protect.filter(r => r.kind === 'face' || r.kind === 'head');
+    const faces = (zones ?? []).filter(z => z.level === 1);
     const attributed = !L.tail ? (kind === 'caption' || kind === 'sfx' || kind === 'offpanel' || !tail)
                      : faces.some(r => inRect({ x: L.tail.tx, y: L.tail.ty }, r)) || (tail && faces.some(r => inRect(tail, r)));
+    const tailBaseW = L.tail?.baseW ?? 0, tailCeiling = TAIL_BASE_CEILING * (lineH ?? 16);
     const b = opts.bounds ?? { x: 0, y: 0, w: TILE_W, h: ART_H };
     const clipped = L.rect.x < b.x || L.rect.y < b.y || L.rect.x + L.rect.w > b.x + b.w || L.rect.y + L.rect.h > b.y + b.h;
-    const underTray = L.rect.y + L.rect.h > TRAY_BOTTOM - TRAY_MAX_H;
+    const underTray = L.rect.y + L.rect.h > (opts.safeBottom ?? (TRAY_BOTTOM - TRAY_MAX_H)) + 0.5;
     const flush = !clipped && (L.rect.x - b.x < 4 || L.rect.y - b.y < 4 || b.x + b.w - (L.rect.x + L.rect.w) < 4);
     const rec = { stop: scene._stop?.id ?? null, node: opts.nodeId ?? null, kind, text: String(part).slice(0, 48), words: wordsOf(part),
-      slot: L.slot, clean: L.clean, tailClipped: !!L.tail?.clipped, attributed, clipped, flush, underTray, rect: L.rect,
-      pass: L.clean && attributed && !clipped && !underTray && wordsOf(part) <= WORD_CAP };
+      slot: L.slot, clean: L.clean, exception: !!L.exception, l2: +(L.l2 ?? 0).toFixed(3), l3: +(L.l3 ?? 0).toFixed(3), order: L.order !== false,
+      tailClipped: !!L.tail?.clipped, tailRouted: !!L.tail?.via, tailBaseW: +tailBaseW.toFixed(1), tailWidthOK: tailBaseW <= tailCeiling + 0.01, linked: !!L.connector,
+      attributed, clipped, flush, underTray, rect: L.rect,
+      // PASS = no face (exception=false), attributed, in bounds, above the tray, ≤ cap, order holds, tail narrow.
+      why: L.why ?? [],
+      pass: !L.exception && attributed && !clipped && !underTray && wordsOf(part) <= WORD_CAP && L.order !== false && tailBaseW <= tailCeiling + 0.01 };
     try { (window.__comicLayoutLog ??= []).push(rec); } catch (_) {}
   }
 
-  function debugMark(gfx, L, order, forced) {
-    gfx.lineStyle(2, forced ? 0xFF3030 : 0x30FF60, 1);
+  /** Green = zero face overlap AND best semantic score (no Level-2 overlap);
+   *  amber = Level-2 overlap used; red = exception.  Label = L2/L3 overlap %. */
+  function debugMark(gfx, L, order, bad) {
+    const col = L.exception ? 0xFF3030 : (L.clean === false ? 0xFF9A20 : 0x30FF60);
+    gfx.lineStyle(2, col, 1);
     gfx.strokeRect(L.rect.x, L.rect.y, L.rect.w, L.rect.h);
     if (L.tail) {
       gfx.lineStyle(2, 0xFFE030, 1);
-      gfx.lineBetween((L.tail.ax + L.tail.bx) / 2, (L.tail.ay + L.tail.by) / 2, L.tail.tx, L.tail.ty);
+      const m = { x: (L.tail.ax + L.tail.bx) / 2, y: (L.tail.ay + L.tail.by) / 2 };
+      if (L.tail.via) { gfx.lineBetween(m.x, m.y, L.tail.via.x, L.tail.via.y); gfx.lineBetween(L.tail.via.x, L.tail.via.y, L.tail.tx, L.tail.ty); }
+      else gfx.lineBetween(m.x, m.y, L.tail.tx, L.tail.ty);
       gfx.fillStyle(0xFFE030, 1); gfx.fillCircle(L.tail.tx, L.tail.ty, 3);
     }
-    const n = scene.add.text(L.rect.x - 2, L.rect.y - 2, String(order), { fontSize: '12px', fontFamily: IMPACT, color: '#FFF', backgroundColor: '#000', padding: { x: 4, y: 1 } }).setOrigin(1, 1);
+    if (L.connector) { gfx.lineStyle(2, 0x80FFE0, 1); gfx.lineBetween(L.connector.from.x, L.connector.from.y, L.connector.to.x, L.connector.to.y); }
+    const lbl = L.l2 != null ? `${order} · L2 ${Math.round((L.l2 ?? 0) * 100)}% L3 ${Math.round((L.l3 ?? 0) * 100)}%` : String(order);
+    const n = scene.add.text(L.rect.x - 2, L.rect.y - 2, lbl, { fontSize: '11px', fontFamily: IMPACT, color: '#FFF', backgroundColor: '#000', padding: { x: 4, y: 1 } }).setOrigin(1, 1);
     gfx.parentContainer?.add(n);
     gfx._debugTexts = (gfx._debugTexts ?? []).concat(n);
   }
@@ -353,11 +376,20 @@ export function showStoryConversation(scene, start, onDone) {
     c.add(scene.add.text(10, ART_H - 8, `${scene._stop?.name ?? ''} · MILE ${Math.round(scene._odometer ?? 0)}`, { fontSize: '11px', fontFamily: IMPACT, color: '#8FB7E6' }).setOrigin(0, 1));
     try { story.noteNodeShown?.(storyId, nodeId, scene._odometer ?? 0); } catch (_) {}
 
-    // Placement context: everything lives ABOVE the tray band.
-    const safeBottom = TRAY_BOTTOM - TRAY_MAX_H - 4;
-    const artRect  = { x: AX, y: AY, w: AW, h: Math.min(AH, safeBottom - AY) };
-    const tileRect = { x: 0, y: 0, w: TILE_W, h: Math.min(ART_H, safeBottom) };
+    // Placement context: balloons live ABOVE the tray band — the REAL tray
+    // for this node's choice count (none for an authored line or a beat),
+    // and once a choice is made the tray retracts and the whole panel above
+    // the TAP hint is usable again (the tray is a temporary obstruction, not
+    // a permanent crop — owner-approved direction).
+    const nChoices = story.choicesFor(storyId, nodeId).length;
+    const trayHFor = (n) => n > 1 ? Math.min(TRAY_MAX_H, n * (38 + BTN_GAP) + 18) : 0;
+    const HINT_BAND = 34;
+    let safeBottom = Math.min(TRAY_BOTTOM - trayHFor(nChoices) - 4, SCREEN_H - HINT_BAND);
+    const artRect  = () => ({ x: AX, y: AY, w: AW, h: Math.min(AH, safeBottom - AY) });
+    const tileRect = () => ({ x: 0, y: 0, w: TILE_W, h: Math.min(ART_H, safeBottom) });
     let protectPx  = (meta.protect ?? []).map(rectPx);
+    const zonesOf  = (m) => migrateZones((m.protect ?? []).map(rectPx), (m.zones ?? []).map(z => ({ ...rectPx(z), level: z.level, kind: z.kind, speaker: z.speaker })));
+    let zonesPx    = zonesOf(meta);
     const placed   = [];
     let order      = 0;
     let dbg = null;
@@ -366,21 +398,31 @@ export function showStoryConversation(scene, start, onDone) {
       if (dbg && !rebuild) { c.bringToTop(dbg); return dbg; }
       if (dbg) { for (const t of dbg._debugTexts ?? []) t.destroy(); dbg.destroy(); }
       dbg = scene.add.graphics(); c.add(dbg); dbg.parentContainer = c;
-      dbg.lineStyle(2, 0xFF3030, 0.95);
-      for (const p of protectPx) dbg.strokeRect(p.x, p.y, p.w, p.h);
+      // Zones coloured by level: red = faces (L1), orange = essential bodies /
+      // story objects (L2), blue = scene detail (L3).
+      for (const z of zonesPx) { dbg.lineStyle(2, LEVEL_COLORS[z.level] ?? 0xFFFFFF, 0.95); dbg.strokeRect(z.x, z.y, z.w, z.h); }
       dbg.fillStyle(0xFF30E0, 1);
       const m1 = ptPx(meta.tail), m2 = ptPx(meta.playerTail);
       dbg.fillCircle(m1.x, m1.y, 4); dbg.fillCircle(m2.x, m2.y, 4);
       return dbg;
     };
-    const ctx = () => ({ protect: protectPx, art: artRect, bounds: tileRect, avoid: placed, placed, debug: debugBase(), order: ++order, nodeId });
+    const ctx = () => ({ protect: protectPx, zones: zonesPx, art: artRect(), bounds: tileRect(), avoid: placed, placed, debug: debugBase(), order: ++order, nodeId, safeBottom });
     const redrawDebug = () => { if (!comicDebug()) return; const d = debugBase(true); let i = 0; for (const r of placed) debugMark(d, { rect: r, tail: null, clean: true }, ++i, false); };
+    /** Tile-level reading-order gate: the geometric order of the visible
+     *  balloons (bands top→bottom, left→right) must equal the authored order. */
+    const logTileOrder = () => {
+      const geo = readingOrder(placed);
+      const ok = geo.every((v, i) => v === i);
+      try { (window.__comicLayoutLog ??= []).push({ stop: scene._stop?.id ?? null, node: nodeId, kind: 'tile-order', text: `${placed.length} balloons`, words: 0, slot: '-', clean: ok, exception: false, order: ok, attributed: true, clipped: false, underTray: false, tailWidthOK: true, pass: ok, geo }); } catch (_) {}
+      return ok;
+    };
 
     // Mouth anchor for a named speaker: the node's speaker uses `tail`, the
     // player `playerTail`, others `mouths[name]` when authored, else no tail
     // (off-panel convention) — never a tail aimed at a random object.
     const anchorFor = (speaker, kind) => {
       if (kind === 'caption' || kind === 'sfx' || kind === 'offpanel') return null;
+      if (speaker === 'The Crew' || speaker === 'Crowd') return null;   // never in frame: no tail
       if (speaker === node.speaker) return ptPx(meta.tail);
       const m = meta.mouths?.[speaker];
       return m ? ptPx(m) : null;
@@ -411,17 +453,21 @@ export function showStoryConversation(scene, start, onDone) {
     // leapfrog under the previous), then the main line.  Revealed 2 s apart.
     const opening = story.resolveLines?.(storyId, nodeId) ?? [];
     const mainLine = story.resolveLine(storyId, nodeId);
-    const seq = [...opening.map((l, i) => ({ ...l, slot: meta.extra?.[i] ? rectPx(meta.extra[i]) : null })), ...(mainLine ? [{ speaker: node.speaker, kind: 'speech', text: mainLine, slot: npcBox, main: true }] : [])];
+    const seq = [...opening.map((l, i) => ({ ...l, slot: meta.extra?.[i] ? rectPx(meta.extra[i]) : null })), ...(mainLine ? [{ speaker: node.speaker, kind: node.lineKind ?? 'speech', text: mainLine, slot: npcBox, main: true }] : [])];
     let seqTimer = null, seqDone = false, onSeqDone = null;
     const revealNext = (k) => {
       if (finished || c.active === false) return;
-      if (k >= seq.length) { seqDone = true; onSeqDone?.(); return; }
+      if (k >= seq.length) { seqDone = true; logTileOrder(); onSeqDone?.(); return; }
       const item = seq[k];
-      const anchor = item.main ? npcTail : anchorFor(item.speaker, item.kind);
+      const anchor = item.offpanel ? null : (item.main ? npcTail : anchorFor(item.speaker, item.kind));
       const prevRect = openingRects.at(-1) ?? null;
+      const prevItem = k > 0 ? seq[k - 1] : null;
       const box = item.slot ?? (prevRect ? { x: prevRect.x, y: prevRect.y + prevRect.h + 6, w: npcBox.w, h: npcBox.h } : npcBox);
       const before = placed.length;
-      const parts = placeNpc(item.text, box, { kind: item.kind === 'speech' && !item.main ? 'speech' : item.kind, anchor, after: prevRect });
+      const sameSpeaker = !!prevItem && prevItem.speaker === item.speaker && !['sfx', 'caption', 'offpanel'].includes(item.kind) && !['sfx', 'caption', 'offpanel'].includes(prevItem.kind);
+      let parts = [];
+      try { parts = placeNpc(item.text, box, { kind: item.kind, anchor, after: prevRect, connectorFrom: sameSpeaker ? prevRect : null }); }
+      catch (e) { console.warn('[StoryTile] opening balloon failed', e); }
       if (item.main) npcParts = parts;
       openingParts.push(...parts);
       openingRects.push(...placed.slice(before));
@@ -441,6 +487,7 @@ export function showStoryConversation(scene, start, onDone) {
         npcBox  = rectPx(meta.bubble);
         npcTail = ptPx(meta.tail);
         protectPx = (meta.protect ?? []).map(rectPx);
+        zonesPx = zonesOf(meta);
         swapped = true;
         // Every OPENING balloon was placed against the old art; none may stay.
         for (const o of openingParts) o.destroy(); openingParts = []; npcParts = [];
@@ -453,12 +500,12 @@ export function showStoryConversation(scene, start, onDone) {
        *  `replyBubble`, else directly below it, else to its right, else a low
        *  corner).  On an art swap the opening line is gone and the reply takes
        *  the new panel's bubble slot. */
-      setReply(text, kind = 'speech', speaker = node.speaker) {
+      setReply(text, kind = 'speech', speaker = node.speaker, offpanel = false) {
         if (!text) return;
         const pref = meta.replyBubble ? rectPx(meta.replyBubble)
                    : swapped || !lastPlayerRect ? npcBox
                    : { x: lastPlayerRect.x, y: lastPlayerRect.y + lastPlayerRect.h + 6, w: npcBox.w, h: npcBox.h };
-        const anchor = speaker === node.speaker ? npcTail : anchorFor(speaker, kind);
+        const anchor = offpanel ? null : (speaker === node.speaker ? npcTail : anchorFor(speaker, kind));
         const before = placed.length;
         replyParts.push(...placeNpc(text, pref, { kind, anchor, after: placed.at(-1) ?? lastPlayerRect ?? npcRects[0] ?? null }));
         return placed[before] ?? null;
@@ -469,6 +516,9 @@ export function showStoryConversation(scene, start, onDone) {
         lastPlayerRect = placed[before] ?? lastPlayerRect;
       },
       destroyTimers() { seqTimer?.remove?.(); },
+      logOrder: logTileOrder,
+      /** The tray has retracted: the lower panel is placeable again. */
+      releaseTray() { safeBottom = SCREEN_H - HINT_BAND; },
     };
     strip.add(c);
     tiles.push(tile);
@@ -546,6 +596,7 @@ export function showStoryConversation(scene, start, onDone) {
     // Unselected choices fade promptly; the tray retracts for the reading hold.
     clearButtons(220);
     if (ch._exit) { finish(); return; }
+    tile.releaseTray?.();
     const { storyId, nodeId } = tile;
     const r = story.commitChoice({ storyId, nodeId, choiceId: ch.id, mile: scene._odometer ?? 0, stopId }, {
       cash: (n) => { const d = (scene._infiniteMoney?.() && n < 0) ? 0 : n; scene._score = Math.max(0, (scene._score ?? 0) + d); scene._refreshScore?.(); },
@@ -555,18 +606,23 @@ export function showStoryConversation(scene, start, onDone) {
       passenger:   (p) => { scene._purchases.storyPassenger = p ?? null; },
       radioGrant:  (g) => { scene._purchases.storyRadioGrant = g ?? null; },
     });
-    tile.setPanelKey(r?.entry?.panelKey ?? resolvePanelKey({ storyId, nodeId, choiceId: ch.id, node: tile.node, choice: ch }));
-    tile.setPlayer(ch.label);
+    // FAIL-SAFE (owner 2026-09-11, stuck after a selection): the commit is
+    // already persisted; whatever a rendering step throws, the hold is armed
+    // and the conversation can always advance.
     const reply = story.resolveReply(storyId, nodeId, ch.id);
     const after = story.resolveAfter?.(storyId, nodeId, ch.id) ?? [];
     if (r.applied && r.leaveStop) leaveAfter = true;
+    try {
+      tile.setPanelKey(r?.entry?.panelKey ?? resolvePanelKey({ storyId, nodeId, choiceId: ch.id, node: tile.node, choice: ch }));
+      tile.setPlayer(ch.label);
+    } catch (e) { console.warn('[StoryTile] player balloon failed', e); }
     // Reveal: reply after the player's reading gap, then each `after` line.
-    const followers = [...(reply ? [{ text: reply, kind: 'speech', speaker: tile.node.speaker }] : []), ...after];
+    const followers = [...(reply ? [{ text: reply, kind: ch.replyKind ?? 'speech', speaker: tile.node.speaker }] : []), ...after];
     let t = readMs(ch.label);
     let lastText = ch.label;
     followers.forEach((f, i) => {
       const at = t;
-      scene.time.delayedCall(at, () => { if (!finished) tile.setReply(f.text, f.kind, f.speaker); });
+      scene.time.delayedCall(at, () => { if (finished) return; try { tile.setReply(f.text, f.kind, f.speaker, !!f.offpanel); } catch (e) { console.warn('[StoryTile] reply balloon failed', e); } });
       t += readMs(f.text);
       lastText = f.text;
     });
@@ -575,6 +631,7 @@ export function showStoryConversation(scene, start, onDone) {
     const holdStart = followers.length ? t - readMs(lastText) + 300 : 300;
     scene.time.delayedCall(holdStart, () => {
       if (finished) return;
+      try { tile.logOrder?.(); } catch (_) {}
       holdThen(holdMs(lastText, npcLast), () => advanceTo(storyId, r.next ?? null, r));
     });
   }

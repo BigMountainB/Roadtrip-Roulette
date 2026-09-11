@@ -204,6 +204,27 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-11 (pt 12) — Ranked placement zones, reading-order gate, narrow routed tails, linked balloons, tone shapes; packed book pages; pilot passes
+
+Owner directive (notes §"RANKED PLACEMENT ZONES…") + Chat's corrective list, all in code:
+- `balloonLayout.js` rewritten as a weighted engine: L1 faces absolute (never covered, tails
+  stop 3 px short), L2 story objects/bodies very costly, L3 scene detail cheap, negative space
+  free; authored slot → nudges → scored grid; exception instead of a face fall-through.
+- Reading order upper-left-first enforced at placement and audited per completed tile (one
+  shared band test); tails slender (≤ 1.0 × line-height, ceiling 1.75 ×) with one-bend routing
+  around faces and unlimited length; same-speaker chains bridged by narrow connectors.
+- `balloonShapes.js`: tone families (speech oval/egg/bean/capsule by copy hash, player, flirt,
+  hesitant, worried, shout, whisper, phone, thought, sarcasm, ticket/tab captions, sfx);
+  `lineKind` / `replyKind` / `lines[].kind` authored on the pilot lines.
+- Tray reservation matches the real tray (by choice count) and is released after a pick — the
+  hidden cause of most order failures.
+- Book: MAJOR/CLIMAX beats flow into rows (only endings/meanwhile take a page): 3 packed pages.
+  Cypher panel = a location caption; the crew says the Stank line once. Intro beats notify the
+  comic after the outer canon write. Capture harness verifies tile state before/after shots.
+- Result (`review/comic_pilot_2026-09-10/flow/report.json`): 33 placements, **pass: true** —
+  0 face, 0 Level-2 overlap, 0 order violations, 0 clipped/under-tray, tails within width.
+  Video + 3 final tiles + 3 book pages delivered. Tests 18 files green (balloon 22, comic 37).
+
 ### 2026-09-10 (pt 11) — Comic presentation SYSTEM: six-beat Seattle from the notes, balloon vocabulary, owner-approved timing, verbal tray, book parity, flow recording
 
 Owner: "scan the whole working notes… you can find the things you need" + Chat's course

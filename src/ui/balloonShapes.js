@@ -23,7 +23,9 @@
  * Everything returns plain point arrays; renderers fill/stroke them.
  */
 
-export const KINDS = Object.freeze(['speech', 'player', 'whisper', 'phone', 'shout', 'distress', 'thought', 'sarcasm', 'caption', 'sfx', 'offpanel']);
+export const KINDS = Object.freeze(['speech', 'player', 'whisper', 'phone', 'shout', 'distress', 'thought', 'sarcasm', 'caption', 'sfx', 'offpanel', 'flirt', 'hesitant', 'worried']);
+/** Simple deterministic hash of the copy → shape-family seed (no randomness). */
+export function seedFor(text) { let h = 7; for (const ch of String(text ?? '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 1000; }
 
 export function unit(panelW, panelH) { return Math.min(panelW, panelH) / 100; }
 
@@ -78,6 +80,7 @@ export function bodyShape(kind, rect, U, seed = 1) {
     case 'player':
       return { outline: roundedOutline(rect, 2.2 * U, 32, 0, seed) };           // boxier
     case 'caption':
+      return captionShape(rect, U, 'ticket');
     case 'sarcasm': {
       const outer = [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
       if (kind === 'sarcasm') {
@@ -128,61 +131,118 @@ export function bodyShape(kind, rect, U, seed = 1) {
       return { outline: roundedOutline(rect, Math.min(w, h) / 2.4, 40, 0.15 * U, seed), dash: { dash: 2.5 * U, gap: 1.75 * U } };
     case 'sfx':
       return { outline: [] };
+    case 'flirt': {
+      // Buoyant asymmetric curve with an offset lobe: bigger radius one side, a subtle tilt.
+      const base = roundedOutline(rect, Math.min(w, h) / 2.0, 44, 0.3 * U, seed);
+      const cx = x + w / 2, cy = y + h / 2, tilt = 0.035;
+      return { outline: base.map(p => { const lobe = p.x > cx && p.y < cy ? 1.2 * U : 0; const nx = p.x - cx, ny = p.y - cy, L = Math.hypot(nx, ny) || 1; return { x: p.x + (nx / L) * lobe + (p.y - cy) * tilt, y: p.y + (ny / L) * lobe }; }) };
+    }
+    case 'hesitant': {
+      // Uneven, pinched contour: a stronger deterministic wobble and a pinch on one long edge.
+      const base = roundedOutline(rect, Math.min(w, h) / 2.4, 48, 0.7 * U, seed);
+      const cx = x + w / 2, cy = y + h / 2;
+      return { outline: base.map((p, i) => { const pinch = Math.abs(p.x - cx) < w * 0.12 && p.y > cy ? -1.4 * U : 0; return { x: p.x, y: p.y + pinch }; }) };
+    }
+    case 'worried': {
+      const base = roundedOutline(rect, Math.min(w, h) / 2.4, 64, 0, seed);
+      const amp = 0.6 * U, wl = 4.5 * U; const cx = x + w / 2, cy = y + h / 2; let acc = 0;
+      return { outline: base.map((p, i) => { if (i) acc += Math.hypot(p.x - base[i - 1].x, p.y - base[i - 1].y); const d = Math.sin((acc / wl) * Math.PI * 2) * amp; const nx = p.x - cx, ny = p.y - cy, L = Math.hypot(nx, ny) || 1; return { x: p.x + (nx / L) * d, y: p.y + (ny / L) * d }; }) };
+    }
     case 'offpanel':
     case 'speech':
-    default:
-      // Organic oval with restrained asymmetry (≈0.25U wobble).
-      return { outline: roundedOutline(rect, Math.min(w, h) / 2.4, 40, 0.25 * U, seed) };
+    default: {
+      // Ordinary speech is an organic FAMILY, never a rounded rectangle: the
+      // seed (from the copy) picks oval / egg / bean / capsule with restrained
+      // asymmetry, so consecutive balloons aren't clones but stay one grammar.
+      const fam = Math.abs(seed | 0) % 4;
+      const r = fam === 3 ? Math.min(w, h) / 2 : Math.min(w, h) / 2.4;
+      const base = roundedOutline(rect, r, 44, 0.25 * U, seed);
+      const cx = x + w / 2, cy = y + h / 2;
+      if (fam === 1) return { outline: base.map(p => ({ x: p.x + (p.y < cy ? (p.x - cx) * 0.06 : 0), y: p.y })) };          // egg: wider on top
+      if (fam === 2) return { outline: base.map(p => { const dent = p.y > cy + h * 0.3 && Math.abs(p.x - cx) < w * 0.2 ? -0.9 * U : 0; return { x: p.x, y: p.y + dent }; }) };  // bean: soft dent below
+      return { outline: base };                                                                                          // oval / capsule
+    }
   }
 }
 
-/** Tail geometry from a base on the balloon edge to a tip.  `tail` is the
- *  layout result { ax, ay, bx, by, tx, ty } (balloonLayout.clipTail).
- *  Returns { polygon } for filled tails, { bubbles } for thought, null when
- *  the kind carries no tail (caption, sfx, offpanel). */
+/** Caption FAMILY (narration / place / time): ticket (cut corners), notched
+ *  tab, or plain card — chosen by `variant`; never a speaker tail. */
+export function captionShape(rect, U, variant = 'ticket') {
+  const { x, y, w, h } = rect, c = Math.min(2.2 * U, h / 3);
+  if (variant === 'ticket') return { outline: [{ x: x + c, y }, { x: x + w - c, y }, { x: x + w, y: y + c }, { x: x + w, y: y + h - c }, { x: x + w - c, y: y + h }, { x: x + c, y: y + h }, { x, y: y + h - c }, { x, y: y + c }] };
+  if (variant === 'tab') return { outline: [{ x, y }, { x: x + w - 3 * U, y }, { x: x + w, y: y + h / 2 }, { x: x + w - 3 * U, y: y + h }, { x, y: y + h }] };
+  return { outline: [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }] };
+}
+
+/** Tail geometry from the balloon edge to the tip.  `tail` comes from
+ *  balloonLayout.buildTail: { ax, ay, bx, by, tx, ty, via?, baseW }.
+ *  OWNER RULE: length is unrestricted, WIDTH is not — the base is already
+ *  ≤ 1.25 × line-height; the ribbon tapers to a narrow point and a routed
+ *  tail bends at `via` instead of broadening.  Returns { polygon } for filled
+ *  tails, { bubbles } for thought, null when the kind carries no tail. */
 export function tailShape(kind, tail, U) {
   if (!tail) return null;
   if (kind === 'caption' || kind === 'sfx' || kind === 'offpanel') return null;
   const mid = { x: (tail.ax + tail.bx) / 2, y: (tail.ay + tail.by) / 2 };
-  const dx = tail.tx - mid.x, dy = tail.ty - mid.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len, uy = dy / len;            // toward the tip
-  const px = -uy, py = ux;                        // perpendicular
-  // Tail base width 6–9U (phone 7–9U), length capped at 22U (phone 24U) —
-  // the tip never goes past the clipped endpoint the layout gave us.
-  const baseW = Math.max(6 * U, Math.min(9 * U, len * 0.35));
-  const maxLen = (kind === 'phone' ? 24 : 22) * U;
-  const L = Math.min(len, maxLen);
-  const tip = { x: mid.x + ux * L, y: mid.y + uy * L };
-  const b1 = { x: mid.x + px * baseW / 2, y: mid.y + py * baseW / 2 };
-  const b2 = { x: mid.x - px * baseW / 2, y: mid.y - py * baseW / 2 };
+  const pts = tail.via ? [mid, tail.via, { x: tail.tx, y: tail.ty }] : [mid, { x: tail.tx, y: tail.ty }];
+  const total = pts.slice(1).reduce((s, p, i) => s + Math.hypot(p.x - pts[i].x, p.y - pts[i].y), 0) || 1;
   if (kind === 'thought') {
-    // Two or three diminishing bubbles toward the thinker.
-    const n = L > 12 * U ? 3 : 2;
+    const n = total > 40 ? 3 : 2;
     const bubbles = [];
     for (let i = 1; i <= n; i++) {
       const t = i / (n + 1);
-      bubbles.push({ x: mid.x + ux * L * t, y: mid.y + uy * L * t, r: Math.max(1.5 * U, 3.2 * U * (1 - t)) });
+      const q = pointAt(pts, t * total);
+      bubbles.push({ x: q.x, y: q.y, r: Math.max(1.5 * U, 3.0 * U * (1 - t)) });
     }
     return { bubbles };
   }
-  if (kind === 'phone') {
-    // Filled zig-zag: 3 bends, legs 4–7U, amplitude ≈ 2.2U, kept wide enough to read.
-    const bends = 3;
-    const legs = bends + 1;
-    const amp = 2.2 * U;
-    const left = [], right = [];
-    for (let i = 0; i <= legs; i++) {
-      const t = i / legs;
-      const s = i === 0 || i === legs ? 0 : (i % 2 ? 1 : -1);
-      const wHere = baseW * (1 - t) * 0.5;
-      const cx = mid.x + ux * L * t + px * amp * s, cy = mid.y + uy * L * t + py * amp * s;
-      left.push({ x: cx + px * wHere, y: cy + py * wHere });
-      right.push({ x: cx - px * wHere, y: cy - py * wHere });
-    }
-    return { polygon: [...left, ...right.reverse()] };
+  const baseHalf = tail.baseW / 2;
+  const tipHalf = Math.max(0.6, 0.15 * U);
+  // Ribbon: left/right rails at a width that tapers linearly along the path.
+  const left = [], right = [];
+  const samples = kind === 'phone' ? 5 : (tail.via ? 3 : 2);
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const d = t * total;
+    const q = pointAt(pts, d);
+    const dir = dirAt(pts, d);
+    const nx = -dir.y, ny = dir.x;
+    const half = baseHalf + (tipHalf - baseHalf) * t;
+    const zig = kind === 'phone' && i > 0 && i < samples ? (i % 2 ? 1 : -1) * 1.8 * U : 0;
+    left.push({ x: q.x + nx * (half + zig), y: q.y + ny * (half + zig) });
+    right.push({ x: q.x - nx * (half - zig), y: q.y - ny * (half - zig) });
   }
-  return { polygon: [b1, tip, b2] };
+  // Base corners sit exactly on the balloon edge.
+  left[0] = { x: tail.ax, y: tail.ay }; right[0] = { x: tail.bx, y: tail.by };
+  return { polygon: [...left, ...right.reverse()] };
+}
+
+/** Bridge between two balloons of the same speaker (linked balloons): a
+ *  narrow band, no taper. */
+export function connectorShape(conn) {
+  if (!conn) return null;
+  const dx = conn.to.x - conn.from.x, dy = conn.to.y - conn.from.y, L = Math.hypot(dx, dy) || 1;
+  const nx = -dy / L * conn.width / 2, ny = dx / L * conn.width / 2;
+  return { polygon: [{ x: conn.from.x + nx, y: conn.from.y + ny }, { x: conn.to.x + nx, y: conn.to.y + ny }, { x: conn.to.x - nx, y: conn.to.y - ny }, { x: conn.from.x - nx, y: conn.from.y - ny }] };
+}
+
+function pointAt(pts, d) {
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    if (acc + seg >= d || i === pts.length - 1) { const t = seg ? Math.min(1, (d - acc) / seg) : 0; return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t }; }
+    acc += seg;
+  }
+  return pts[pts.length - 1];
+}
+function dirAt(pts, d) {
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    if (acc + seg >= d || i === pts.length - 1) { return { x: (pts[i].x - pts[i - 1].x) / (seg || 1), y: (pts[i].y - pts[i - 1].y) / (seg || 1) }; }
+    acc += seg;
+  }
+  return { x: 1, y: 0 };
 }
 
 /** Sound-effect lettering spec: size 10–16% of panel width, rotated 6–10°. */
