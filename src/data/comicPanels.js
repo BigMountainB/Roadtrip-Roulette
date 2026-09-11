@@ -53,7 +53,7 @@ export const PANEL_META = {
                    { x: 0.42, y: 0.16, w: 0.44, h: 0.80, kind: 'bill' },
                    { x: 0.36, y: 0.45, w: 0.14, h: 0.18, kind: 'hands' }],
   },
-  'country.ellensburg_haylee': {                    // Haylee pickup (Ellensburg node not wired yet)
+  'country.ellensburg_haylee': {                    // Haylee pickup (node `ellensburg_haylee`, establishing panel)
     art: 'assets/storylines/country/ellensburg/ellensburg_01_haylee_pickup.png',
     bubble:       { x: 0.32, y: 0.03, w: 0.30, h: 0.22 },   // Haylee, sky over the valley
     playerBubble: { x: 0.66, y: 0.02, w: 0.32, h: 0.20 },   // Brittney / player, over the car roof
@@ -63,7 +63,68 @@ export const PANEL_META = {
                    { x: 0.68, y: 0.26, w: 0.16, h: 0.26, kind: 'face' },   // Brittney in the window
                    { x: 0.33, y: 0.69, w: 0.34, h: 0.27, kind: 'cargo' }], // cooler + duffel
   },
-  'country.vantage_arrival.reunion': {              // Haylee with the group at Vantage (beat not wired yet)
+  // Objective 3 — shedding the uniform at Vantage (node `vantage_change`).
+  // Establishing panel = her spotting the friends in uniform; the two changes
+  // resolve to the "changed to road clothes" art (white tank top — owner:
+  // "images are already made"); as-is stays in uniform.
+  'country.vantage_change': {
+    art: 'assets/storylines/country/vantage/vantage_01_spots_friends_work_uniform.png',
+    bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
+    playerBubble: { x: 0.04, y: 0.64, w: 0.45, h: 0.30 },
+    tail:         { x: 0.530, y: 0.292 },
+    playerTail:   { x: 0.271, y: 0.332 },
+    protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
+  },
+  'country.vantage_change.guard': {
+    art: 'assets/storylines/country/mercer_island/mercer_03_changed_to_road_clothes.png',
+    bubble:       { x: 0.04, y: 0.03, w: 0.34, h: 0.22 },   // Brittney, over the chip rack
+    playerBubble: { x: 0.60, y: 0.02, w: 0.38, h: 0.20 },   // player, over the counter
+    tail:         { x: 0.30, y: 0.26 },                     // her mouth
+    playerTail:   { x: 0.70, y: 0.20 },                     // his mouth
+    protect:      [{ x: 0.20, y: 0.15, w: 0.20, h: 0.80, kind: 'face' },   // Brittney, tank top
+                   { x: 0.64, y: 0.02, w: 0.20, h: 0.95, kind: 'face' }],  // player
+  },
+  'country.vantage_change.timed': {
+    art: 'assets/storylines/country/mercer_island/mercer_03_changed_to_road_clothes.png',
+    bubble:       { x: 0.04, y: 0.03, w: 0.34, h: 0.22 },
+    playerBubble: { x: 0.60, y: 0.02, w: 0.38, h: 0.20 },
+    tail:         { x: 0.30, y: 0.26 },
+    playerTail:   { x: 0.70, y: 0.20 },
+    protect:      [{ x: 0.20, y: 0.15, w: 0.20, h: 0.80, kind: 'face' },
+                   { x: 0.64, y: 0.02, w: 0.20, h: 0.95, kind: 'face' }],
+  },
+  'country.vantage_change.asIs': {
+    art: 'assets/storylines/country/vantage/vantage_01_spots_friends_work_uniform.png',
+    bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
+    playerBubble: { x: 0.04, y: 0.64, w: 0.45, h: 0.30 },
+    tail:         { x: 0.530, y: 0.292 },
+    playerTail:   { x: 0.271, y: 0.332 },
+    protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
+  },
+  // Reunion variants by change state (owner: three variants).  The improvised
+  // and uniform variants point at the approved reunion art until their own
+  // files land — swap the `art` path only; keys are stable.
+  'country.vantage_arrival.reunion_improvised': {   // VARIANT ART PENDING (shirt changed, work shorts, no name tag)
+    art: 'assets/storylines/country/vantage/vantage_02_haylee_reunion.png',
+    bubble:       { x: 0.30, y: 0.03, w: 0.30, h: 0.20 },
+    playerBubble: { x: 0.62, y: 0.02, w: 0.36, h: 0.20 },
+    tail:         { x: 0.46, y: 0.33 },
+    playerTail:   { x: 0.82, y: 0.38 },
+    protect:      [{ x: 0.16, y: 0.19, w: 0.15, h: 0.75, kind: 'face' },
+                   { x: 0.40, y: 0.20, w: 0.16, h: 0.75, kind: 'face' },
+                   { x: 0.66, y: 0.26, w: 0.28, h: 0.60, kind: 'face' }],
+  },
+  'country.vantage_arrival.reunion_uniform': {      // VARIANT ART PENDING (still in the Gas-N-Sip uniform, name tag on)
+    art: 'assets/storylines/country/vantage/vantage_02_haylee_reunion.png',
+    bubble:       { x: 0.30, y: 0.03, w: 0.30, h: 0.20 },
+    playerBubble: { x: 0.62, y: 0.02, w: 0.36, h: 0.20 },
+    tail:         { x: 0.46, y: 0.33 },
+    playerTail:   { x: 0.82, y: 0.38 },
+    protect:      [{ x: 0.16, y: 0.19, w: 0.15, h: 0.75, kind: 'face' },
+                   { x: 0.40, y: 0.20, w: 0.16, h: 0.75, kind: 'face' },
+                   { x: 0.66, y: 0.26, w: 0.28, h: 0.60, kind: 'face' }],
+  },
+  'country.vantage_arrival.reunion': {              // Haylee with the group at Vantage (sendOff beat, full change)
     art: 'assets/storylines/country/vantage/vantage_02_haylee_reunion.png',
     bubble:       { x: 0.30, y: 0.03, w: 0.30, h: 0.20 },   // Brittney, sky over the canyon
     playerBubble: { x: 0.62, y: 0.02, w: 0.36, h: 0.20 },   // the friends, over the canopy

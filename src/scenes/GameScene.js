@@ -8,7 +8,7 @@ import {
   getLastSignTown,
   CAR_LEN_Z, CAR_WIDTH_LANES, PLAYER_VIRTUAL_Z,
   VEHICLES,
-  FUEL_BURN_BASE, FUEL_BURN_CLIMB, FUEL_BURN_BOOST, FUEL_BURN_HOT, TOW_COST_USD, TOW_GAS_USD, GAS_USD_PER_MI,
+  FUEL_BURN_BASE, FUEL_BURN_CLIMB, FUEL_BURN_BOOST, FUEL_BURN_HOT, TOW_COST_USD, TOW_GAS_FRAC,
   ENGINE_TEMP_START, ENGINE_WARN_TEMP, ENGINE_LIMP_TEMP, ENGINE_LIMP_CLEAR,
   ENGINE_LIMP_MULT, ENGINE_HP_DPS,
   setCameraMode, CAM, COP_TRAP_SPEED_MPH,
@@ -21244,19 +21244,17 @@ export class GameScene extends Phaser.Scene {
    *  old rule — 50% of cash, repo'ing a non-Beater when broke, free tow for a
    *  broke Beater — is gone, replaced by that card's three choices. */
   /** OUT OF GAS → tow (owner 2026-09-10): $200 tow back to the previous town
-   *  plus $50 of gas (or whatever is left past the $200 if the wallet is
-   *  thinner).  Money and purchases CARRY OVER — the run continues from the
-   *  previous stop with a partial tank, not a full one. */
+   *  and a QUARTER TANK in the car (owner, later that day — the tow includes
+   *  the gas; the old "$50 of gas" left a $200-even wallet stranded on empty).
+   *  Money and purchases CARRY OVER — the run continues from the previous
+   *  stop with a quarter tank, not a full one. */
   _runTow() {
     const prevStop = this._prevRestStop();
-    const cash    = Math.max(0, Math.round(this.score ?? 0));
-    const gasUsd  = Math.max(0, Math.min(TOW_GAS_USD, cash - TOW_COST_USD));
-    const gasMi   = gasUsd / GAS_USD_PER_MI;
-    this.score = Math.max(0, this.score - this._cashLoss(TOW_COST_USD + gasUsd));
-    this._showPopup?.(`🚚 TOWED — $${TOW_COST_USD} + $${gasUsd} gas`, '#FFCC44');
+    this.score = Math.max(0, this.score - this._cashLoss(TOW_COST_USD));
+    this._showPopup?.(`🚚 TOWED — $${TOW_COST_USD} · ¼ tank`, '#FFCC44');
     const _veh = VEHICLES[this.player.vehicleId];
     this.player.gasMaxMi = _veh.rangeMi;
-    this.player.gasMi    = Math.min(_veh.rangeMi, gasMi);
+    this.player.gasMi    = _veh.rangeMi * TOW_GAS_FRAC;
     if (prevStop) {
       this.player.position = prevStop.t * (ROUTE_SEGS * SEG_LENGTH);
       this.lastSegIdx      = Math.floor(this.player.position / SEG_LENGTH);
@@ -21271,7 +21269,7 @@ export class GameScene extends Phaser.Scene {
    * decision point on the same photographic plate, with the player's genre car
    * parked on the shoulder.
    *
-   *   TOW ($200 + $50 gas) → back to the previous town with a partial tank;
+   *   TOW ($200, ¼ tank)   → back to the previous town with a quarter tank;
    *                          money and purchases carry over (owner 2026-09-10)
    *   BACK TO SEATTLE — $0 → shown INSTEAD of the tow when the wallet is under
    *                          $200: fresh run from mile 0 with $0, purchases kept
@@ -21392,18 +21390,17 @@ export class GameScene extends Phaser.Scene {
 
     // Outcome sub-lines — the exact post-choice cash + place, computed from
     // the same state the handlers below apply (never a separate estimate).
-    const _gasUsd   = Math.max(0, Math.min(TOW_GAS_USD, cash - TOW_COST_USD));
-    const _towTotal = this._cashLoss(TOW_COST_USD + _gasUsd);
-    const _towMi    = Math.round(Math.min(_gasUsd / GAS_USD_PER_MI, VEHICLES[this.player.vehicleId]?.rangeMi ?? Infinity));   // capped at a full tank
+    const _towTotal = this._cashLoss(TOW_COST_USD);
+    const _towMi    = Math.round((VEHICLES[this.player.vehicleId]?.rangeMi ?? 0) * TOW_GAS_FRAC);
     if (canTow) {
       mkBtn(SCREEN_W / 2 - 130, 300,
-            `TOW TO ${stopName.toUpperCase()} — $${(TOW_COST_USD + _gasUsd).toLocaleString()}`,
+            `TOW TO ${stopName.toUpperCase()} — $${TOW_COST_USD.toLocaleString()}`,
             0xFFCC44, true, () => {
               close();
               this._runTow();
               this._paused = false;
               this.audio?.setPaused?.(false);
-            }, `→ ${fmtMoney(cash - _towTotal)} · ${stopName} · +${_towMi} mi of gas`);
+            }, `→ ${fmtMoney(cash - _towTotal)} · ${stopName} · ¼ tank (${_towMi} mi)`);
     } else {
       // Can't cover the $200 tow: back to Seattle with nothing in the wallet.
       // Purchases stay on the plate; only the cash is gone.
@@ -24700,6 +24697,7 @@ export class GameScene extends Phaser.Scene {
     try {
       this.story?.exitPassed?.(stopId, this._odometer ?? 0, {
         text: (cid, from, msg) => this._logBuddyText(cid, from, msg),
+        say:  (text) => this._storyHooks().say(text),   // a passenger reacting to the missed exit
         radioGrant: () => { /* radio lock is read live via __genre.canPlay */ },
       });
     } catch (_) {}
@@ -24712,7 +24710,9 @@ export class GameScene extends Phaser.Scene {
    *  line as a HUD popup, wanted stars, seat changes. */
   _storyHooks() {
     return this._storyHooksObj ??= {
-      say: (text) => this._showPopup?.('💋 ' + text, '#FF9FD0', 3.4),
+      // Brittney's lines get the kiss; a line authored as "Haylee: …" is the
+      // back-seat friend (Ellensburg → Vantage) and gets her own marker.
+      say: (text) => this._showPopup?.((/^Haylee:/.test(text) ? '🧢 ' : '💋 ') + text, '#FF9FD0', 3.4),
       wanted: (n) => { if (this.cops) this.cops.stars = Math.max(this.cops.stars ?? 0, n); },
       passenger: () => {},
       text: (cid, from, msg) => this._logBuddyText(cid, from, msg),

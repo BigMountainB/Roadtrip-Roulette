@@ -714,6 +714,7 @@ export class StorySystem {
           relationship: (d) => { st.relationship = clamp(st.relationship + num(d), 0, 100); changed = true; },
           radioGrant: (g) => { this._run.radioGrant = g ?? null; hooks.radioGrant?.(this._run.radioGrant); },
           text: (cid, from, msg) => hooks.text?.(cid, from, msg, id),
+          say:  (text) => hooks.say?.(text, id),
           meanwhile: (stripId) => { if (this._raiseMeanwhile(c, id, stripId, mile)) changed = true; },
           // Authored special panel from a pass event (e.g. the phone locking
           // past Issaquah) — same canon, explicit panelKey honoured.

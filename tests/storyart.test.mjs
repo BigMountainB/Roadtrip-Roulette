@@ -278,8 +278,6 @@ check('establishing key is node-only', panelKeyFor('hiphop', 'mercer_fork') === 
     'classicRock.othello_show.soloIntent',
     // Art created 2026-09-10, wired in PANEL_META ahead of their emission sites:
     'hiphop.vantage_hospital.wake',       // Ellensburg hospital beat — needs the hospital consequence code
-    'country.ellensburg_haylee',          // Haylee pickup node — Ellensburg sequence not written yet
-    'country.vantage_arrival.reunion',    // Haylee at the Vantage reunion — same
   ]);
   const reach = new Set(CODE_EMITTED);
   const addSpecs = (specs) => { for (const b of (Array.isArray(specs) ? specs : specs ? [specs] : [])) {

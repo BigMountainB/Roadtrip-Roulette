@@ -204,6 +204,40 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 9) — Brittney's three StageWagon objectives IN CODE; tow = $200 + a quarter tank
+
+Owner answered the pt 8 questions (answers table in the notes §"OWNER ANSWERS on the objectives
+draft"), so the objectives went from draft to `featuredStories.js`:
+- **Ellensburg (stop E)** — `ellensburg_haylee` (welcome +5 / squeeze +3 / no room +0; Haylee aboard
+  or left) chains into `ellensburg_supply` (full run $40 +5 / quick run $15 +3 / no run +0). The
+  pending need still fires after the chain. Two phone set-up lines on the road first (mi 92 "moved
+  campsites AGAIN … FOMO", mi 104 "Haylee's at the Ellensburg exit … Exit 109") so the exit is the
+  choice; **blowing past Exit 109 is −5** (`onPass.E`, she says "That was my best friend."), undone
+  exactly by a rewind (`onUnpass.E`).
+- **Haylee's meter** (owner: scored) — `flags.hayleeScore` from 50: +15 welcomed / +5 squeezed in /
+  −5 per ≥5 HP impact with her aboard / +2 per three clean passes. Two road lines (mi 118, 128; the
+  second reads her meter). Warm ≥65 / dry ≥45 / cold colours the reunion caption.
+- **Vantage (stop V)** — `vantage_change` now opens the arrival (the `vantage_spotted` intro moved
+  onto it): guard +5 / timed +3 / as-is +0. She has a white tank top and jeans with her (owner);
+  the two changes resolve to `mercer_03_changed_to_road_clothes.png` (previously UNWIRED/REJECTED as
+  a Mercer-time change — re-purposed, checklist updated). `vantage_arrival` only opens after a
+  change choice. The old first-mile "changes in the passenger seat" road beat is REMOVED (wardrobe
+  lock: uniform until Vantage).
+- **RIDE 'EM gate** — `countryOutcome` now also needs two of the three objectives at
+  partial-or-better (`countryObjectives`), so flirt answers alone cap at Standard.
+- **Reunion beat** on `sendOff`: three art keys by change state (`reunion` / `reunion_improvised` /
+  `reunion_uniform` — the last two point at the approved reunion art until their variants land),
+  caption from the cooler + Haylee's read (or Haylee-left / Haylee-skipped lines).
+- Brittney is 26 (canon; not in dialogue). Objectives give NO Nerve (my call pending the owner's
+  yes/no — the question got misread as "which three characters").
+- **Tow**: $200 flat and the tow puts a **quarter tank** in the car (`TOW_GAS_FRAC = 0.25`;
+  `TOW_GAS_USD` gone). Probe: $200-even wallet → towed to the previous town with 18.75 mi and
+  driving; no re-card.
+Tests: story 283 (+26 new: Ellensburg chain, exit skip/rewind, Haylee meter + lines, set-up lines,
+gate, reunion variants), story-art 62 (FUTURE labels for the Haylee/reunion keys removed — reachable
+now), all 17 files green; build green. Art needed list for Chat appended to the notes (Ellensburg
+supply-run panel, two reunion variants, optional Vantage change panel).
+
 ### 2026-09-10 (pt 8) — Brittney's three StageWagon objectives DRAFTED (notes only, nothing in code)
 
 Owner picked this as the next story-canon batch. Draft 1 is in `CLAUDE_WORKING_NOTES.md`

@@ -66,7 +66,7 @@ Legend:
 - [x] Brittney removes her name tag and leaves Malik’s phone — `country/mercer_island/mercer_04_quits_leaves_phone.png`
 - [x] Brittney enters the passenger side while phone remains behind — `country/mercer_island/mercer_03_quit_and_join_player.png`
 - [ ] Player refuses involvement; Brittney stays at work
-- [x] Early road-clothes exit — `country/mercer_island/mercer_03_changed_to_road_clothes.png` — **UNWIRED / REJECTED**
+- [x] Road clothes (white tank top) — `country/mercer_island/mercer_03_changed_to_road_clothes.png` — **WIRED 2026-09-10** as `country.vantage_change.guard` / `.timed` (she sheds the uniform at VANTAGE, objective 3 — owner: "images are already made"; never used at Mercer, the wardrobe lock holds until Vantage)
 - [x] **APPROVED REPLACEMENT** Mercer departure after shopping: Brittney wears her clean Gas-N-Sip uniform and enters the front passenger seat while Player remains behind the wheel — `country/mercer_island/mercer_03_quit_and_join_player.png`
 
 ### Skipping Mercer Island — comic archive only

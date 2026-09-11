@@ -17,7 +17,7 @@ import {
   FEATURED_STORIES, STORY_IDS, STORY_GENRE, validateStories, resolveDialogue,
   lineKey, labelKey, replyKey, DIALOGUE_INDEX,
   vinylOutcome, vinylPayout, VINYL_RECORDS, VINYL_PAY_PRISTINE, FOUNDER_OFFER, VANTAGE_AMBUSH_MILE,
-  countryOutcome, NERVE_MAX, COUNTRY_PAY_STANDARD, COUNTRY_PAY_RIDE_EM, KIDNAP_REPORT_MI, ROADSIDE_STOP_SEC,
+  countryOutcome, countryObjectives, hayleeRead, NERVE_MAX, COUNTRY_PAY_STANDARD, COUNTRY_PAY_RIDE_EM, KIDNAP_REPORT_MI, ROADSIDE_STOP_SEC,
   classicRockOutcome, isBrokenVoice, PULLMAN_PAY, OTHELLO_COVER, OTHELLO_PROPOSITION, NAN_OFFER, SHOW2_TOTAL, SHOW3_SOLO, SHOW3_DUET,
 } from '../src/data/featuredStories.js';
 
@@ -524,21 +524,40 @@ const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, ho
   story.roadEvent('tick', { mile: 40.2, dt: 1.0, stopped: true, onShoulder: true }, rh.hooks);
   story.roadEvent('tick', { mile: 40.2, dt: 0.6, stopped: true, onShoulder: true }, rh.hooks);
   check('1.6 s on the shoulder: roadside exit, seat empty, no stars', story.status('country') === STORY_STATUS.FAILED && story.story('country').endingId === 'roadside_exit' && story.run.passenger === null && rh.log.wanted.length === 0);
-  check('first-drive "changes" beat was recorded', Object.values(story.canon().ledger).some(e => e.nodeId === 'beat' && e.choiceId === 'changes'));
+  check('no first-drive "changes" beat (wardrobe lock: uniform until Vantage)', !Object.values(story.canon().ledger).some(e => e.nodeId === 'beat' && e.choiceId === 'changes'));
 }
 {
   // Vantage endings.
-  const mk = (rel, nerve, passes) => { const { story } = board(); const rec = recorder();
-    const c = story.canon(); c.stories.country.relationship = rel; story._writeCanon(c);
+  // `objs` = how many of her three objectives landed (owner 2026-09-10: RIDE
+  // 'EM needs two of three on top of rel / nerve / passes).
+  const mk = (rel, nerve, passes, objs = 2) => { const { story } = board(); const rec = recorder();
+    const c = story.canon(); c.stories.country.relationship = rel;
+    if (objs >= 1) c.stories.country.flags.supplies = 'full';
+    if (objs >= 2) { c.stories.country.flags.haylee = 'aboard'; c.stories.country.flags.hayleeScore = 70; }
+    if (objs >= 3) c.stories.country.flags.changeChoice = 'partial';
+    story._writeCanon(c);
     story.run.nerve = nerve; story.run.flags.cleanPasses = passes; return { story, rec }; };
-  check('outcome thresholds use raw 0–100', countryOutcome({ relationship: 80 }, { nerve: 10, flags: { cleanPasses: 5 } }) === 'ride_em'
-    && countryOutcome({ relationship: 79 }, { nerve: 25, flags: { cleanPasses: 50 } }) === 'standard'
-    && countryOutcome({ relationship: 80 }, { nerve: 9, flags: { cleanPasses: 5 } }) === 'standard'
-    && countryOutcome({ relationship: 39 }, { nerve: 25, flags: { cleanPasses: 9 } }) === 'barely');
+  const two = { supplies: 'partial', haylee: 'aboard' };
+  check('outcome thresholds use raw 0–100', countryOutcome({ relationship: 80, flags: two }, { nerve: 10, flags: { cleanPasses: 5 } }) === 'ride_em'
+    && countryOutcome({ relationship: 79, flags: two }, { nerve: 25, flags: { cleanPasses: 50 } }) === 'standard'
+    && countryOutcome({ relationship: 80, flags: two }, { nerve: 9, flags: { cleanPasses: 5 } }) === 'standard'
+    && countryOutcome({ relationship: 39, flags: two }, { nerve: 25, flags: { cleanPasses: 9 } }) === 'barely');
+  check('RIDE \'EM needs two of three objectives (flirt-only score caps at Standard)',
+    countryOutcome({ relationship: 95, flags: {} }, { nerve: 25, flags: { cleanPasses: 50 } }) === 'standard'
+    && countryOutcome({ relationship: 95, flags: { supplies: 'full' } }, { nerve: 25, flags: { cleanPasses: 50 } }) === 'standard'
+    && countryOutcome({ relationship: 95, flags: { supplies: 'none', haylee: 'aboard', changeChoice: 'partial' } }, { nerve: 25, flags: { cleanPasses: 50 } }) === 'ride_em'
+    && countryObjectives({ flags: { supplies: 'full', haylee: 'left', changeChoice: 'none' } }) === 1);
   let t = mk(85, 12, 6);
-  check('Vantage pending (mandatory) with her aboard', t.story.pendingAt('V').some(p => p.nodeId === 'vantage_arrival' && p.mandatory));
+  check('Vantage: the CHANGE tile is pending first (mandatory); the ending waits behind it', t.story.pendingAt('V').some(p => p.nodeId === 'vantage_change' && p.mandatory) && !t.story.pendingAt('V').some(p => p.nodeId === 'vantage_arrival'));
+  let r = H('country', 'vantage_change', 'guard', t.story, t.rec.hooks, 137);
+  check('guard: +5, chains into the ending, ending now pending', r.applied && r.next === 'vantage_arrival' && t.story.story('country').relationship === 90 && t.story.story('country').flags.changeChoice === 'full' && t.story.pendingAt('V').some(p => p.nodeId === 'vantage_arrival'));
   check('Ride \'Em line adds "Text me on your way back"', t.story.resolveLine('country', 'vantage_arrival').includes('Text me on your way back'));
-  let r = H('country', 'vantage_arrival', 'sendOff', t.story, t.rec.hooks, 137);
+  r = H('country', 'vantage_arrival', 'sendOff', t.story, t.rec.hooks, 137);
+  {
+    const reunion = Object.values(t.story.canon().ledger).find(e => e.nodeId === 'beat' && e.choiceId === 'reunion');
+    check('sendOff records the reunion beat: full-change art, cooler-trophy caption, Haylee warm', !!reunion && reunion.panelKey === 'country.vantage_arrival.reunion'
+      && /cooler like a trophy/.test(reunion.fallbackText?.line ?? '') && /This one's okay/.test(reunion.fallbackText?.line ?? ''));
+  }
   check('Ride \'Em: $2,500 once, Country owned, contact, complete, seat empty', r.applied && t.rec.log.cash === COUNTRY_PAY_RIDE_EM && t.rec.log.unlocks.join() === 'country' && t.rec.log.contacts.join() === 'brittney' && t.story.canon().contacts.brittney?.name === 'Brittney' && t.story.status('country') === STORY_STATUS.COMPLETE && t.story.run.passenger === null);
   check('Ride \'Em double tap: nothing', H('country', 'vantage_arrival', 'sendOff', t.story, t.rec.hooks, 137).applied === false && t.rec.log.cashCalls === 1);
   t = mk(60, 3, 0);
@@ -549,6 +568,55 @@ const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, ho
   H('country', 'vantage_arrival', 'sendOff', t.story, t.rec.hooks, 137);
   check('Barely Made It: $0 but Country still unlocks', t.rec.log.cashCalls === 0 && t.rec.log.unlocks.join() === 'country' && t.story.story('country').endingId === 'barely');
   check('after she leaves: hiphop is shelved (available) and Country is done', t.story.status('hiphop') === STORY_STATUS.AVAILABLE && t.story.pendingAt('V').every(p => p.storyId !== 'country'));
+}
+{
+  // Brittney's three StageWagon objectives (owner 2026-09-10).
+  // Ellensburg: Haylee's pickup chains into the supply run; the pending need still fires after.
+  const { story, rec } = board(); const rh = roadHooks();
+  story.restStopVisited('E');
+  const pend = story.pendingAt('E');
+  check('Ellensburg: Haylee pickup pending first, supply run NOT yet, need still queued', pend[0]?.nodeId === 'ellensburg_haylee' && pend[0].mandatory && !pend.some(p => p.nodeId === 'ellensburg_supply') && pend.some(p => /^need_/.test(p.nodeId)));
+  let r = H('country', 'ellensburg_haylee', 'welcome', story, rec.hooks, 109, 'E');
+  // (board() leaves Brittney at 55: Mercer's `ride` carries +5 across.)
+  check('welcome: +5, Haylee aboard at 65, chains into the supply run', r.applied && r.next === 'ellensburg_supply' && story.story('country').relationship === 60 && story.story('country').flags.haylee === 'aboard' && story.story('country').flags.hayleeScore === 65 && story.pendingAt('E').some(p => p.nodeId === 'ellensburg_supply'));
+  check('supply line mentions Haylee\'s tent when she is aboard', story.resolveLine('country', 'ellensburg_supply').includes('Haylee brought the tent'));
+  r = H('country', 'ellensburg_supply', 'fullRun', story, rec.hooks, 109, 'E');
+  check('full run: $40, +5, supplies full, chain over', r.applied && rec.log.cash === -40 && story.story('country').relationship === 65 && story.story('country').flags.supplies === 'full' && !story.pendingAt('E').some(p => /^ellensburg_/.test(p.nodeId)));
+  // Haylee's meter on the road: −5 per real impact, +2 per three clean passes; her two lines.
+  story.roadEvent('damage', { hp: 6, source: 'npc_side', mile: 112 }, rh.hooks);
+  check('impact with Haylee aboard: her meter 65 → 60', story.story('country').flags.hayleeScore === 60);
+  story.roadEvent('damage', { hp: 2, source: 'offroad_left', mile: 113 }, rh.hooks);
+  check('scrape does not touch her meter', story.story('country').flags.hayleeScore === 60);
+  for (let i = 0; i < 3; i++) story.roadEvent('pass', { mile: 114 + i * 0.1 }, rh.hooks);
+  check('three clean passes: +2 → 62', story.story('country').flags.hayleeScore === 62);
+  story.roadEvent('tick', { mile: 118.5, dt: 1, mph: 70, stopped: false, onShoulder: false }, rh.hooks);
+  story.roadEvent('tick', { mile: 128.5, dt: 1, mph: 70, stopped: false, onShoulder: false }, rh.hooks);
+  const hl = rh.log.said.filter(s => s.startsWith('Haylee:'));
+  check('Haylee speaks twice on the road (118, 128), dry read at 62', hl.length === 2 && hl[0].includes('pick the drivers') && hl[1].includes('That was smooth'));
+  check('hayleeRead thresholds', hayleeRead({ flags: { hayleeScore: 65 } }) === 'warm' && hayleeRead({ flags: { hayleeScore: 45 } }) === 'dry' && hayleeRead({ flags: { hayleeScore: 44 } }) === 'cold' && hayleeRead({ flags: {} }) === null);
+}
+{
+  // Set-up lines before Exit 109, and blowing past it: −5, remembered, reversible by rewind.
+  const { story } = board(); const rh = roadHooks();
+  story.roadEvent('tick', { mile: 92.2, dt: 1, mph: 70, stopped: false, onShoulder: false }, rh.hooks);
+  story.roadEvent('tick', { mile: 104.2, dt: 1, mph: 70, stopped: false, onShoulder: false }, rh.hooks);
+  check('two phone set-up lines (campsites moved; Haylee at Exit 109)', rh.log.said.length === 2 && rh.log.said[0].includes('moved campsites') && rh.log.said[1].includes('Exit 109'));
+  const said = [];
+  check('pass Ellensburg: −5 (55 → 50), haylee=skipped, she says so', story.exitPassed('E', 109.3, { say: (t) => said.push(t) }).join() === 'country' && story.story('country').relationship === 50 && story.story('country').flags.haylee === 'skipped' && said[0] === 'That was my best friend.');
+  check('pass twice: idempotent', story.exitPassed('E', 109.4, {}).length === 0 && story.story('country').relationship === 50);
+  check('skipped: no Ellensburg tiles, no Haylee lines, objective count 0', !story.pendingAt('E').some(p => /^ellensburg_/.test(p.nodeId)) && countryObjectives(story.story('country')) === 0);
+  check('rewind before the exit undoes it exactly', story.exitUnpassed('E', 108.5, {}).join() === 'country' && story.story('country').relationship === 55 && story.story('country').flags.haylee == null && story.pendingAt('E').some(p => p.nodeId === 'ellensburg_haylee'));
+  // No room → she's "left": objective 2 not counted, supply run still follows.
+  const r = H('country', 'ellensburg_haylee', 'noRoom', story, {}, 109, 'E');
+  check('no room: +0, haylee=left, supply run still chains', r.applied && story.story('country').relationship === 55 && story.story('country').flags.haylee === 'left' && r.next === 'ellensburg_supply');
+  check('supply line without Haylee has no tent', !story.resolveLine('country', 'ellensburg_supply').includes('tent'));
+  // Vantage as-is → uniform reunion art; no-run cooler caption; Haylee "left" caption.
+  H('country', 'ellensburg_supply', 'noRun', story, {}, 109, 'E');
+  H('country', 'vantage_change', 'asIs', story, {}, 137);
+  H('country', 'vantage_arrival', 'sendOff', story, {}, 137);
+  const reunion = Object.values(story.canon().ledger).find(e => e.nodeId === 'beat' && e.choiceId === 'reunion');
+  check('as-is + empty cooler + Haylee left → uniform art, "You came empty?", "does not look at you"', reunion?.panelKey === 'country.vantage_arrival.reunion_uniform' && /You came empty/.test(reunion.fallbackText?.line ?? '') && /does not look at you/.test(reunion.fallbackText?.line ?? ''));
+  check('objectives after all three answered: supplies none, haylee left, change none → 0; rel 55 still lands Standard', countryObjectives(story.story('country')) === 0 && story.story('country').endingId === 'standard');
 }
 
 // ═══ 12. Classic Rock — ImprompTour (Ch. 18.8) ═══════════════════════════
@@ -707,7 +775,7 @@ function tour(choices, seed = {}) {
   // Choice-effect strips: Nan refused → wrong town; Ride 'Em → Brittney's friends; Cle Elum credited to Malik → Stank legal.
   const t = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'refuse']]);
   check('Nan refused → "Nan visits the wrong town" queued', t.story.peekMeanwhile()?.stripId === 'nan_wrong_town');
-  const b = board(); const c = b.story.canon(); c.stories.country.relationship = 90; b.story._writeCanon(c);
+  const b = board(); const c = b.story.canon(); c.stories.country.relationship = 90; Object.assign(c.stories.country.flags, { supplies: 'full', haylee: 'aboard', changeChoice: 'full' }); b.story._writeCanon(c);
   b.story.run.nerve = 20; b.story.run.flags.cleanPasses = 9;
   H('country', 'vantage_arrival', 'sendOff', b.story, b.rec.hooks, 137);
   check("Ride 'Em → Brittney's friends strip", b.story.peekMeanwhile()?.stripId === 'brittney_friends');

@@ -164,6 +164,44 @@ export function classicRockOutcome(st) {
 }
 export const NEED_ROTATION      = ['hunger', 'bathroom', 'thirst'];
 export const NEED_STOPS         = ['B', 'I', 'SQ', 'N', 'SP', 'EA', 'C', 'TH', 'E'];   // between Mercer and Vantage
+// Brittney's three StageWagon OBJECTIVES (owner 2026-09-10, from Chat's spec):
+// the supply run + Haylee's pickup at Ellensburg, and shedding the uniform at
+// Vantage.  Each is +5 full / +3 partial / +0 none to the relationship — no
+// Nerve (Nerve is driving + needs).  Blowing past Exit 109 with Haylee waiting
+// there is −5 (owner: "negative feels better").  RIDE 'EM needs two of the
+// three at partial-or-better on top of rel/nerve/passes, so a score built on
+// flirt answers alone can't max her.
+export const OBJ_FULL           = 5;
+export const OBJ_HALF           = 3;
+export const OBJ_SKIP_EXIT      = -5;
+export const RIDE_EM_OBJECTIVES = 2;
+export const SUPPLY_FULL_USD    = 40;
+export const SUPPLY_QUICK_USD   = 15;
+// Haylee's own read on the player — a scored meter (owner), 0–100 from 50:
+// +15 welcomed / +5 squeezed in; −5 per real impact with her aboard; +2 per
+// three clean passes.  It only colours the Vantage reunion (warm / dry / cold).
+export const HAYLEE_START       = 50;
+export const HAYLEE_WELCOME     = 15;
+export const HAYLEE_SQUEEZE     = 5;
+export const HAYLEE_IMPACT      = -5;
+export const HAYLEE_PASS_BONUS  = 2;
+export const HAYLEE_WARM        = 65;
+export const HAYLEE_DRY         = 45;
+export const HAYLEE_LINES_MI    = [118, 128];   // her two road lines (owner: two)
+export const CLUE_LINES_MI      = [92, 104];    // Brittney's phone set-up lines before Exit 109
+/** How many of the three objectives landed at partial-or-better. */
+export function countryObjectives(st) {
+  const f = st?.flags ?? {};
+  return (f.supplies === 'full' || f.supplies === 'partial' ? 1 : 0)
+       + (f.haylee === 'aboard' ? 1 : 0)
+       + (f.changeChoice === 'full' || f.changeChoice === 'partial' ? 1 : 0);
+}
+/** Haylee's read of the player from her meter. */
+export function hayleeRead(st) {
+  const s = st?.flags?.hayleeScore;
+  if (typeof s !== 'number') return null;
+  return s >= HAYLEE_WARM ? 'warm' : s >= HAYLEE_DRY ? 'dry' : 'cold';
+}
 export const NERVE_LINES = {
   20: "Okay. Okay. That was closer than I dress for.",
   15: "You know I have to be alive to see this concert, right?",
@@ -178,10 +216,12 @@ export const FLIRT_LINES = [
 export function isScrapeSource(source = '') {
   return source.startsWith('offroad') || source.endsWith('_rail') || source === 'water_shoulder' || source === 'tunnel_wall';
 }
-/** Vantage ending from raw relationship, Nerve at arrival, clean passes. */
+/** Vantage ending from raw relationship, Nerve at arrival, clean passes, and
+ *  (owner 2026-09-10) at least RIDE_EM_OBJECTIVES of her three objectives. */
 export function countryOutcome(st, run) {
   const rel = st.relationship ?? 0, nerve = run.nerve ?? 0, passes = run.flags?.cleanPasses ?? 0;
-  if (rel >= RIDE_EM_REL && nerve >= RIDE_EM_NERVE && passes >= RIDE_EM_PASSES) return 'ride_em';
+  if (rel >= RIDE_EM_REL && nerve >= RIDE_EM_NERVE && passes >= RIDE_EM_PASSES
+      && countryObjectives(st) >= RIDE_EM_OBJECTIVES) return 'ride_em';
   if (rel >= STANDARD_REL) return 'standard';
   return 'barely';
 }
@@ -706,6 +746,27 @@ export const FEATURED_STORIES = {
     },
     // She is in the seat for as long as the story is active.
     deriveRun: (st, run) => { run.passenger = { id: 'brittney', name: 'Brittney', storyId: 'country' }; run.nerve = Math.max(0, Math.min(NERVE_MAX, run.nerve ?? NERVE_MAX)); },
+    // Blew past Exit 109 with Haylee waiting on the shoulder (owner: −5, and
+    // she remembers).  A rewind before the exit undoes it exactly.
+    onPass: {
+      E: (api) => {
+        const { state: st, run } = api;
+        if (!run.passenger || st.flags.haylee != null) return false;
+        api.flags({ haylee: 'skipped' });
+        api.relationship(OBJ_SKIP_EXIT);
+        api.say("That was my best friend.");
+        return true;
+      },
+    },
+    onUnpass: {
+      E: (api) => {
+        const { state: st } = api;
+        if (st.flags.haylee !== 'skipped') return false;
+        api.flags({ haylee: null });
+        api.relationship(-OBJ_SKIP_EXIT);
+        return true;
+      },
+    },
     onRestStop: (stopId, api) => {
       const { run, state: st } = api;
       // No flat refill (owner 2026-09-09) — nerve comes from the need
@@ -734,10 +795,28 @@ export const FEATURED_STORIES = {
           run.flags.fastSec = (run.flags.fastSec ?? 0) + (ev.dt ?? 0);
           if (run.flags.fastSec >= NERVE_FAST_SEC) { run.flags.fastSec -= NERVE_FAST_SEC; gainNerve(1); }
         }
-        if (!st.flags.changed) {
-          api.flags({ changed: true });
-          api.beat({ beatId: 'changes', importance: 'consequence', speaker: 'Brittney', portrait: 'biz_gasnsip',
-                     text: 'She kicks off the work shoes, wriggles out of the Gas-N-Sip polo and into road clothes right there in the passenger seat. "Eyes on the road, cowboy."' });
+        // (The old first-mile "changes into road clothes" beat is gone —
+        // owner canon: she stays in the Gas-N-Sip uniform until Vantage,
+        // where shedding it is her third objective, `vantage_change`.)
+        // Phone set-up lines before Exit 109 — the exit is the choice.
+        if (st.flags.haylee == null) {
+          if (!st.flags.clue1 && mile >= CLUE_LINES_MI[0]) {
+            api.flags({ clue1: true });
+            talk("Group chat says they moved campsites AGAIN. If they move one more time my FOMO is going to become a medical condition.");
+          } else if (!st.flags.clue2 && mile >= CLUE_LINES_MI[1]) {
+            api.flags({ clue2: true });
+            talk("Haylee's ride bailed on her. She's sitting at the Ellensburg exit with a cooler and a duffel. Exit 109. I'm just saying it out loud so it's said.");
+          }
+        } else if (st.flags.haylee === 'aboard') {
+          if (!st.flags.hayleeLine1 && mile >= HAYLEE_LINES_MI[0]) {
+            api.flags({ hayleeLine1: true });
+            talk('Haylee: "Does she always pick the drivers, or did this one pick her?" — Brittney: "Drive."');
+          } else if (!st.flags.hayleeLine2 && mile >= HAYLEE_LINES_MI[1]) {
+            api.flags({ hayleeLine2: true });
+            talk((st.flags.hayleeScore ?? HAYLEE_START) >= HAYLEE_DRY
+              ? 'Haylee: "Okay. That was smooth. I\'m not saying it again."'
+              : 'Haylee: "Brit. Brit. Is this the ride you texted about?"');
+          }
         }
         const n0 = run.flags.nerve0Mile;
         if (n0 != null) {
@@ -770,6 +849,10 @@ export const FEATURED_STORIES = {
         const before = run.nerve ?? NERVE_MAX;
         run.nerve = Math.max(0, before - hp);
         run.flags.nerveFlashAt = mile;
+        // Haylee in the back seat keeps her own score of the driving.
+        if (st.flags.haylee === 'aboard' && hp >= 5) {
+          api.flags({ hayleeScore: Math.max(0, Math.min(100, (st.flags.hayleeScore ?? HAYLEE_START) + HAYLEE_IMPACT)) });
+        }
         // 0 Nerve wins over every other line; then any 5+ HP accident speaks
         // immediately (two authored flavours); then threshold crossings.
         if (run.nerve === 0 && before > 0) { run.flags.nerve0Mile = mile; talk("Pull over. Now. I'm getting out."); return; }
@@ -788,6 +871,9 @@ export const FEATURED_STORIES = {
       if (type === 'pass') {
         run.flags.cleanPasses = (run.flags.cleanPasses ?? 0) + 1;
         if (run.flags.cleanPasses % NERVE_PASSES_PER === 0) gainNerve(1);
+        if (st.flags.haylee === 'aboard' && run.flags.cleanPasses % NERVE_PASSES_PER === 0) {
+          api.flags({ hayleeScore: Math.max(0, Math.min(100, (st.flags.hayleeScore ?? HAYLEE_START) + HAYLEE_PASS_BONUS)) });
+        }
         if (run.flags.cleanPasses % GOOD_MOVE_EVERY === 0 && canTalk() && (run.nerve ?? 0) > 0) {
           const i = (run.flags.flirtIdx ?? 0); run.flags.flirtIdx = i + 1;
           talk(FLIRT_LINES[i % FLIRT_LINES.length]);
@@ -808,6 +894,53 @@ export const FEATURED_STORIES = {
             label: "Passenger seat's yours. Let's hit the road.",
             reply: 'She slides into the passenger seat. "StageWagon, cowboy. Try to keep all four tires under us."',
             effects: { flags: { departureShown: true } } },
+        ],
+      },
+
+      // ── Ellensburg — objectives 2 + 1: Haylee's pickup, then the supply
+      // run (owner 2026-09-10: "if the supply run is for Vantage, it's in
+      // Ellensburg").  The pending need still fires after this chain. ──────
+      ellensburg_haylee: {
+        stopId: 'E', mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.haylee == null,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'major',
+        panelKey: 'country.ellensburg_haylee',
+        line: "THAT'S her. HAYLEE! — okay, she's got the cooler, the tent, and I'm ninety percent sure my entire weekend is in that duffel. She's the smart one, so be normal. Can we make room?",
+        choices: [
+          { id: 'welcome', consequential: true, next: 'ellensburg_supply',
+            label: "Haylee, right? Take the front — I'll get the cooler. We'll make room.",
+            reply: 'Haylee: "So you\'re the ride. She said you were decent." A beat. "She says that about everybody." Brittney: "I do NOT."',
+            effects: { flags: { haylee: 'aboard', hayleeScore: HAYLEE_START + HAYLEE_WELCOME }, relationship: OBJ_FULL } },
+          { id: 'squeeze', consequential: true, next: 'ellensburg_supply',
+            label: "Fine — but the cooler rides on her lap. We're late.",
+            reply: 'Haylee: "I\'ve held heavier things on my lap." Brittney: "HAYLEE."',
+            effects: { flags: { haylee: 'aboard', hayleeScore: HAYLEE_START + HAYLEE_SQUEEZE }, relationship: OBJ_HALF } },
+          { id: 'noRoom', consequential: true, next: 'ellensburg_supply',
+            label: "There's no room. She'll catch the next ride.",
+            reply: 'Brittney: "…She IS the next ride. You\'re ours." Haylee waves you off without getting up.',
+            effects: { flags: { haylee: 'left' } } },
+        ],
+      },
+      ellensburg_supply: {
+        stopId: 'E', mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.haylee != null && st.flags.haylee !== 'skipped' && st.flags.supplies == null,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
+        line: (st) => "Okay. Logistics. My babes think I'm rolling up with THE cooler — I'm the cooler girl, it's a whole thing. "
+          + (st.flags.haylee === 'aboard' ? "Haylee brought the tent; I've got a name tag and a phone on four percent. " : "Instead I've got a name tag and a phone on four percent. ")
+          + "Huff's has ice and a beer cave. One real run. Twenty minutes, tops, and I'll stop white-knuckling your door handle.",
+        choices: [
+          { id: 'fullRun', consequential: true, next: null, cost: SUPPLY_FULL_USD,
+            label: "Let's do it right. Ice, drinks, water, and something to open them with.",
+            reply: "Water. WATER. Nobody in the history of that group chat has ever remembered the water. She packs the cooler like she's loading a rifle.",
+            effects: { flags: { supplies: 'full' }, relationship: OBJ_FULL } },
+          { id: 'quickRun', consequential: true, next: null, cost: SUPPLY_QUICK_USD,
+            label: "Drinks and ice. Ten minutes, then we're rolling.",
+            reply: "Ten minutes. She comes back with beer, a bag of ice, no water, no opener, and gummy worms. \"Priorities.\"",
+            effects: { flags: { supplies: 'partial' }, relationship: OBJ_HALF } },
+          { id: 'noRun', consequential: true, next: null,
+            label: "Your friends can handle the cooler. We're on a clock.",
+            reply: "\"…Cool. Cool cool cool.\" She watches the beer cave through the windshield the whole time you pump.",
+            effects: { flags: { supplies: 'none' } } },
         ],
       },
 
@@ -904,16 +1037,58 @@ export const FEATURED_STORIES = {
         ],
       },
 
-      // ── Vantage — her friends, her exit, the ending ─────────────────────
-      vantage_arrival: {
+      // ── Vantage — objective 3: shed the uniform (she has a white tank top
+      // and jeans with her — owner), in the five minutes before her friends.
+      // The wardrobe lock holds until here.  Chains straight into the ending.
+      vantage_change: {
         intro: [{ id: 'vantage_spotted', panelKey: 'country.vantage_arrival.spotted', importance: 'minor', text: 'She sees her friends before the car stops.' }],
         stopId: 'V', mandatory: true,
-        when: (st, run) => !!run.passenger,
+        when: (st, run) => !!run.passenger && st.flags.changeChoice == null,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'major',
+        line: "Okay. Stop here. I am not walking up to my babes smelling like the roller grill with a name tag on. I've had a tank top and jeans in my bag since Mercer. Five minutes. There's a bathroom by the boat launch — or your back seat, if you turn around and swear on your car.",
+        choices: [
+          { id: 'guard', consequential: true, next: 'vantage_arrival',
+            label: "Take all the time you need. I'll stand out here and not turn around.",
+            reply: "She comes back the same girl with no name tag, and something in her shoulders has let go. \"Okay. NOW I'm here.\"",
+            effects: { flags: { changeChoice: 'full' }, relationship: OBJ_FULL } },
+          { id: 'timed', consequential: true, next: 'vantage_arrival',
+            label: "Five minutes. I'm timing it.",
+            reply: "She changes the shirt, keeps the work shorts, and throws the name tag at you. \"Souvenir.\"",
+            effects: { flags: { changeChoice: 'partial' }, relationship: OBJ_HALF } },
+          { id: 'asIs', consequential: true, next: 'vantage_arrival',
+            label: "They're your friends. They've seen you in worse.",
+            reply: "She gets out in the uniform. She doesn't look back.",
+            effects: { flags: { changeChoice: 'none' } } },
+        ],
+      },
+
+      // ── Vantage — her friends, her exit, the ending ─────────────────────
+      vantage_arrival: {
+        stopId: 'V', mandatory: true,
+        when: (st, run) => !!run.passenger && st.flags.changeChoice != null,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'ending',
         line: (st, run) => "Those are my babes! I'm gonna go jump in with them. I wish you were coming with us. We would run you dry."
           + (countryOutcome(st, run) === 'ride_em' ? " Text me on your way back. I'd love to see you again." : ''),
         choices: [
           { id: 'sendOff', consequential: true, next: null,
+            // The reunion panel reads all three objectives: the change state
+            // picks the art (three variants — owner), supplies + Haylee's
+            // meter write the caption.
+            beats: [{ id: 'reunion', importance: 'ending',
+              keys: ['country.vantage_arrival.reunion', 'country.vantage_arrival.reunion_improvised', 'country.vantage_arrival.reunion_uniform'],
+              panelKey: (st) => ({ full: 'country.vantage_arrival.reunion', partial: 'country.vantage_arrival.reunion_improvised', none: 'country.vantage_arrival.reunion_uniform' })[st.flags.changeChoice] ?? 'country.vantage_arrival.reunion',
+              text: (st) => {
+                const f = st.flags;
+                const cooler = f.supplies === 'full'    ? 'She hands Haylee the cooler like a trophy.'
+                             : f.supplies === 'partial' ? 'She hides the gummy worms behind her back.'
+                             :                            'Haylee, dry: "You came empty?" Brittney: "I CAME."';
+                const read = hayleeRead(st);
+                const h = f.haylee !== 'aboard' ? (f.haylee === 'left' ? 'Haylee got here on her own. She does not look at you.' : f.haylee === 'skipped' ? 'Haylee got here on her own. Brittney does not bring it up. Haylee does.' : '')
+                        : read === 'warm' ? 'Haylee, to the group: "This one\'s okay."'
+                        : read === 'dry'  ? 'Haylee, to the group: "This one drives like a text message."'
+                        :                   'Haylee, to the group: "Do NOT get in that car."';
+                return `${cooler} ${h}`.trim();
+              } }],
             label: "Go on. Text me when you're back in Seattle.",
             reply: (st, run) => {
               const o = countryOutcome(st, run);

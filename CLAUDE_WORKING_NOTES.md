@@ -3250,6 +3250,145 @@ but it does **not** require an in-game reveal panel. It will probably be describ
 game trailer and/or beginning credits. Remove the proposed Seattle car-radio reveal image
 from the art queue. During gameplay the royalty money simply enters the normal wallet.
 
+## COMIC DIALOGUE WORKSHOP HANDOFF — real choices, Mercer gate, captions, face safety (owner screenshots + Chat audit, 2026-09-10)
+
+**Status: diagnose and redesign; do not paper over these defects with new artwork.**
+
+Owner screenshots exposed four separate problems:
+
+1. Seattle presents a single mandatory Player sentence as a full-width “choice” button.
+2. A Mercer visit skipped the entire Brittney counter introduction, opened the storefront,
+   then showed Brittney boarding when HIT THE ROAD was pressed.
+3. Narration is being placed inside a speech balloon as though Brittney said it.
+4. Balloons/tails cover NPC faces in some panels even though `protect` metadata exists.
+
+### A. Why Player currently receives no real option
+
+`featuredStories.js` currently authors `seattle_clock` with exactly one choice:
+`know`. `StoryTile.showButtons()` renders every choice list—including a one-item
+exposition list—as response buttons. Therefore the screenshot is behaving as coded; it is
+not a hidden-button layout bug.
+
+New content/UI distinction:
+
+- **Genuine choice:** two or three materially different Player responses are shown in the
+  translucent response tray and can affect tone/relationship/flags.
+- **Authored mandatory Player line:** it appears as a Player speech balloon through
+  tap-to-continue sequencing; it must not masquerade as a decision button.
+- **NPC continuation:** another balloon in the same tile; never a fake Player choice.
+
+Proposed genuine responses to Malik's introduction (owner review before final copy):
+
+- Respectful: “I don't know you, no offense. I'm sure you haven't heard any of my songs either.”
+- Cocky: “Should I? You haven't heard any of my songs.”
+- Dismissive: “Never heard of you. What do you want?”
+
+All preserve the canon that Player is not familiar with Malik. Malik's reaction may adjust
+relationship slightly, but every route can continue to “Which way you headed?” Do not invent
+a fake branch whose only purpose is displaying a Player sentence.
+
+### B. Mercer introduction skip — required diagnosis
+
+The dialogue is present in code as:
+`mercer_counter → mercer_hook → mercer_fork → optional mercer_ultimatum`.
+`RestStopScene._maybeShowEncounter()` is intended to call
+`story.pendingAt('M')` before ordinary storefront encounters. The observed run nevertheless
+opened the shop and later satisfied the Country `mercer_departure` gate, meaning Country
+was active and Brittney was already the passenger by the time HIT THE ROAD was pressed.
+
+Claude must reproduce and report the exact state transition; do not merely assert that the
+nodes exist. At Mercer arrival, capture:
+
+- Hip-Hop status, `nodeId`, `replayCount`, `items.phone`,
+  `flags.mercerDone`, `flags.phoneLeft`, and relevant ledger keys.
+- Country status, `nodeId`, passenger, and relationship.
+- `_storyGateDone`, the complete result of `pendingAt('M')`, and every call that commits
+  `mercer_fork.ride` or starts Country.
+
+Test both:
+
+1. A completely fresh run carrying Malik's phone.
+2. An existing/hot-reloaded save that contains earlier Seattle/Mercer ledger data.
+
+Acceptance: the storefront cannot become interactive until the full mandatory Brittney
+sequence resolves. Old save data must not silently select Brittney or skip directly to
+departure. If migration or replay policy intentionally preserves an old choice, surface that
+fact in the diagnostic report and provide a safe test-reset route.
+
+### C. Caption boxes and spoken balloons are different content types
+
+Current Country departure data is structurally wrong:
+
+- Node line: narration (“Brittney clocks out and meets you…”).
+- Player label: spoken dialogue.
+- Reply: narration plus a quoted Brittney sentence
+  (`She slides into… "StageWagon…"`).
+
+`StoryTile` sends the whole node line and whole reply through `balloon()`, so the
+screenshot makes Brittney apparently say “She slides into the passenger seat.”
+
+Required structured content model (field names may differ):
+
+```js
+sequence: [
+  { kind: 'caption', text: 'Brittney clocks out and meets you beside the car.' },
+  { kind: 'speech', speaker: 'player', text: "Passenger seat's yours. Let's hit the road." },
+  { kind: 'action', text: 'She slides into the passenger seat.' },
+  { kind: 'speech', speaker: 'brittney', text: 'StageWagon, cowboy. Try to keep all four tires under us.' }
+]
+```
+
+Rendering rules:
+
+- `caption` / `action`: square or lightly rectangular context box, no tail, visually
+  distinct paper color and caption typeface.
+- `speech`: organic balloon with a tail aimed at the speaker.
+- `thought`: thought treatment only.
+- Never infer narration by displaying quotation marks inside an NPC balloon. Content type
+  must be authored or deterministically migrated.
+
+For the current departure panel, recommended visible treatment:
+
+- Upper-left square caption: “Brittney clocks out and meets you beside the car.”
+- Player speech balloon: “Passenger seat's yours. Let's hit the road.”
+- Brittney speech balloon: “StageWagon, cowboy. Try to keep all four tires under us.”
+- “She slides into the passenger seat” is already visible in the art and may be omitted.
+
+### D. Face protection currently does not protect faces
+
+`comicPanels.js` supplies `protect` rectangles, but the current
+`StoryTile.balloon()` and `buildTile()` use only `bubble`, `playerBubble`, `tail`,
+and `playerTail`. They never test the balloon body or tail triangles against `protect`.
+The metadata therefore documents safety without enforcing it.
+
+Pilot requirements:
+
+- Collision-test the final balloon body, text bounds, tail base, and complete tail path
+  against every protected face/hand/object rectangle.
+- A tail may aim toward an authored mouth point but must stop short of the protected facial
+  area; it may not cross a face to reach that point.
+- If collision occurs: try an alternate balloon slot/attachment edge, then a routed bend,
+  then a gutter-hanging position, then split the dialogue/tile. Never accept face coverage.
+- Validate authored mouth anchors against the actual selected choice art, not only the
+  establishing image.
+- Add debug overlays for protected rectangles, mouth points, balloon bounds, tail paths,
+  reading-order numbers, and the translucent tray-risk area.
+
+### E. Three-panel review pilot before rollout
+
+Claude should correct and render screenshots for:
+
+1. **Seattle `seattle_clock`:** genuine multi-option response tray followed by the chosen
+   Player balloon and Malik reaction.
+2. **Mercer counter/fork:** the complete intro visibly gates the shop and demonstrates
+   alternating dialogue plus the “Me or the phone” choice.
+3. **Country Mercer departure:** one square caption, one Player speech balloon, and one
+   Brittney speech balloon, with no face/tail/protected-region intersections.
+
+Save normal screenshots plus debug-overlay versions in one review folder and write the exact
+paths here for Chat/Codex visual review. Do not bulk-apply placement to the remaining comic
+until these three pass.
+
 ## Dom'nique holds the tape over Malik for money — SCENARIO DRAFT (Claude, 2026-09-10; owner asked for this role)
 
 Owner: "there should be a role where Dom tries to hold the tape over Malik for money."  Read as
@@ -3532,3 +3671,42 @@ Q11.
 11. **Vantage arrival art:** three variants of the reunion panel, or one panel + caption?
 12. **Node ids** `cleelum_supply` / `ellensburg_haylee` / `vantage_change` and flag names above —
     confirm before any art is commissioned so keys never rename.
+
+## OWNER ANSWERS on the objectives draft — 2026-09-10 (later) — and what is NOW IN CODE
+
+Owner answered all twelve questions; draft 1 above is superseded where they differ.
+
+| # | Owner's call | In code |
+|---|--------------|---------|
+| 1 | Supply run is FOR Vantage, so it happens at **Ellensburg**, not Cle Elum | `ellensburg_haylee` → `ellensburg_supply` chain at stop E |
+| 2 | The need can run **after** the objective panel | Both are mandatory at E; the queue shows the chain, then the pending need |
+| 3 | Brittney is **26** (does not need to be in dialogue) | not in dialogue; recorded in canon memory |
+| 4 | Costs $40 / $15 fine | `SUPPLY_FULL_USD` / `SUPPLY_QUICK_USD` |
+| 5 | (Owner read "three" as characters — the question was whether the three OBJECTIVES give Nerve) | Implemented as relationship-only, NO Nerve; flagged to the owner for a yes/no |
+| 6 | Skipping Exit 109: **−5** ("negative feels better") | `onPass.E`: −5, `haylee:'skipped'`, she says "That was my best friend."; `onUnpass.E` reverses on rewind |
+| 7 | She HAS a white tank top and jeans with her; images already made | `vantage_change` line says so; `guard`/`timed` resolve to `mercer_03_changed_to_road_clothes.png` (was UNWIRED/REJECTED as a Mercer-time change; re-purposed for Vantage, checklist updated) |
+| 8 | RIDE 'EM needs 2 of 3 objectives: **yes** | `countryOutcome` gate via `countryObjectives(st) >= RIDE_EM_OBJECTIVES` |
+| 9 | Haylee's read = **a scored meter** | `flags.hayleeScore` 0–100 from 50: +15 welcome / +5 squeeze / −5 per ≥5 HP impact aboard / +2 per 3 clean passes; `hayleeRead()` warm ≥65 / dry ≥45 / cold |
+| 10 | **Two** Haylee road lines | mi 118 ("Does she always pick the drivers…") and 128 (smooth vs "is this the ride you texted about?" by her meter) |
+| 11 | Three reunion art variants: fine | keys `country.vantage_arrival.reunion` (full change) / `.reunion_improvised` / `.reunion_uniform` — the last two point at the existing reunion art UNTIL their files exist (swap `art` only) |
+| 12 | (keys) | `ellensburg_haylee`, `ellensburg_supply`, `vantage_change`; flags `supplies`, `haylee`, `hayleeScore`, `changeChoice` |
+
+Also in code from the same batch:
+- The old first-mile "she changes into road clothes in the passenger seat" beat is REMOVED (it broke the
+  wardrobe lock). The `vantage_spotted` intro panel now opens `vantage_change`, and `vantage_arrival`
+  only opens after a change choice.
+- Two Brittney phone set-up lines on the road (mi 92 "moved campsites AGAIN … FOMO"; mi 104 "Haylee's
+  … at the Ellensburg exit … Exit 109") so taking the exit is the choice, like Mercer.
+- The reunion beat on `sendOff` writes the caption from all three: cooler (trophy / gummy worms / "You
+  came empty?" — "I CAME."), Haylee's read (warm "This one's okay" / dry "drives like a text message" /
+  cold "Do NOT get in that car"), or Haylee-left / Haylee-skipped lines.
+- Out-of-gas tow (unrelated, same batch): $200 flat and the tow puts a QUARTER TANK in the car.
+
+### ART NEEDED — additions from this batch (for Chat)
+
+| Key | File | Shape | Brief |
+|-----|------|-------|-------|
+| `country.ellensburg_supply` (+ `.fullRun` / `.quickRun` / `.noRun`) | `country/ellensburg/ellensburg_02_supply_run.png` | ORD 16:9 | Huff's Gas, Ellensburg, dusk. Brittney in the Gas-N-Sip uniform (name tag on) at the open beer-cave door with a bag of ice on her hip; Haylee (strawberry-blonde braid, cap) loading the cooler by the car; the player at the pump. Faces upper-left/centre; lower third free for the tray. Until it exists the node uses the generic tile. |
+| `country.vantage_arrival.reunion_improvised` | `country/vantage/vantage_02b_reunion_improvised.png` | ORD 16:9 | Same composition as `vantage_02_haylee_reunion.png`: Brittney in the white tank top but still in the Gas-N-Sip work shorts, no name tag. |
+| `country.vantage_arrival.reunion_uniform` | `country/vantage/vantage_02c_reunion_uniform.png` | ORD 16:9 | Same composition: Brittney still fully in uniform, name tag on, friends' faces reading it. |
+| `country.vantage_change` (optional) | `country/vantage/vantage_01b_change.png` | ORD 16:9 | Boat launch, golden hour; the player leaning on the hood facing the river, back to the car; Brittney's silhouette behind the open rear door, name tag on the roof. Currently the establishing panel reuses `vantage_01_spots_friends_work_uniform.png`. |
