@@ -21,7 +21,7 @@ import { PAGE_W, PAGE_H, panelMeta } from '../data/comicPanels.js';
 import { LETTERING, splitByCap } from './StoryTile.js';
 import { getStoryNode } from '../data/featuredStories.js';
 import { layoutBalloon, migrateZones } from './balloonLayout.js';
-import { unit, padding, strokeFor, bodyShape, tailShape, connectorShape, dashOutline, seedFor } from './balloonShapes.js';
+import { unit, paddingFor, bulgeFor, strokeFor, bodyShape, tailShape, connectorShape, dashOutline, seedFor } from './balloonShapes.js';
 import { buildPdf, PAGE_SIZES } from './ComicPdf.js';
 
 // Export page pixel size (A-series aspect); JPEG quality.  ~150 dpi on A4.
@@ -133,7 +133,9 @@ function placeBalloon(ctx, text, kind, box, anchor, P) {
   if (!text) return [];
   const { panelW, panelH, px, zones, avoid, after, art } = P;
   const U = unit(panelW, panelH);
-  const pad = padding(kind, U);
+  const lineH = px * 1.25;
+  const pad = paddingFor(kind, px, lineH);      // hug the lettering (owner 2026-09-11)
+  const bulge = bulgeFor(kind, lineH);
   const parts = splitByCap(text, WORD_CAP);
   const rects = [];
   let prev = null;
@@ -142,8 +144,8 @@ function placeBalloon(ctx, text, kind, box, anchor, P) {
   parts.forEach((part, i) => {
     const shown = kind === 'caption' ? String(part).toUpperCase() : part;
     const lines = wrap(ctx, shown, Math.max(40, box.w - pad.x * 2));
-    const w = Math.min(box.w, Math.max(...lines.map(l => ctx.measureText(l).width)) + pad.x * 2);
-    const h = lines.length * px * 1.25 + pad.y * 2;
+    const w = Math.min(box.w, Math.max(...lines.map(l => ctx.measureText(l).width)) + pad.x * 2 + bulge * 2);
+    const h = lines.length * px * 1.25 + pad.y * 2 + bulge * 2;
     const want = prev ? { x: Math.min(art.x + art.w - w - 2, prev.x + 12), y: prev.y + prev.h + 3, w, h } : { x: box.x, y: box.y, w, h };
     const last = i === parts.length - 1;
     const L = layoutBalloon({ size: { w, h }, box: want, anchor: last && kind !== 'caption' && kind !== 'offpanel' ? anchor : null, zones, art, bounds: art, avoid: [...avoid, ...rects], scale: px / 16, after: i === 0 ? after : prev, lineH: px * 1.25, connectorFrom: prev });
@@ -165,7 +167,7 @@ function placeBalloon(ctx, text, kind, box, anchor, P) {
     if (tl?.polygon || cn?.polygon) { path(body.outline); ctx.fill(); }          // re-cover the tail/bridge base
     ctx.fillStyle = kind === 'caption' ? '#222' : INK; ctx.textBaseline = 'top';
     ctx.textAlign = kind === 'caption' ? 'left' : 'center';
-    lines.forEach((l, k) => ctx.fillText(l, kind === 'caption' ? L.rect.x + pad.x : L.rect.x + w / 2, L.rect.y + pad.y + k * px * 1.25));
+    lines.forEach((l, k) => ctx.fillText(l, kind === 'caption' ? L.rect.x + pad.x + bulge : L.rect.x + w / 2, L.rect.y + pad.y + bulge + k * px * 1.25));
     ctx.restore();
     rects.push(L.rect); prev = L.rect;
   });

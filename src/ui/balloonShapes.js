@@ -29,11 +29,33 @@ export function seedFor(text) { let h = 7; for (const ch of String(text ?? '')) 
 
 export function unit(panelW, panelH) { return Math.min(panelW, panelH) / 100; }
 
-/** Padding inside the body (3.5U × 2.5U for speech; captions tighter). */
-export function padding(kind, U) {
-  if (kind === 'caption') return { x: 2.2 * U, y: 1.6 * U };
+/** Padding inside the body — OWNER CORRECTION 2026-09-11 "balloons must hug
+ *  the lettering": measure the wrapped text first, then add only the
+ *  required breathing room — 0.70–0.95 em horizontally, 0.42–0.65 rendered
+ *  line-heights vertically.  Organic ovals may bulge past this only where
+ *  their curvature requires it (see `bulgeFor`).  Never a preset rectangle,
+ *  never the master viewBox, never shrunk text. */
+export const PAD_EM_X = [0.70, 0.95];
+export const PAD_LH_Y = [0.42, 0.65];
+export function paddingFor(kind, fontPx, lineH = fontPx * 1.2) {
   if (kind === 'sfx') return { x: 0, y: 0 };
-  return { x: 3.5 * U, y: 2.5 * U };
+  if (kind === 'caption') return { x: 0.70 * fontPx, y: 0.42 * lineH };
+  return { x: 0.80 * fontPx, y: 0.50 * lineH };
+}
+/** Extra silhouette allowance for organic contours so the curve clears the
+ *  text's corners; zero for boxy families.  Part of the collision rect. */
+export function bulgeFor(kind, lineH) {
+  if (kind === 'caption' || kind === 'sfx' || kind === 'player' || kind === 'sarcasm' || kind === 'phone') return 0;
+  if (kind === 'shout') return 0.20 * lineH;
+  return 0.30 * lineH;
+}
+/** QA: is this body materially larger than the lettering needs?  Compares the
+ *  body area against the minimum allowed (text + minimum padding + bulge). */
+export function excessBalloonArea(kind, textW, textH, bodyW, bodyH, fontPx, lineH = fontPx * 1.2) {
+  const b = bulgeFor(kind, lineH);
+  const minW = textW + 2 * PAD_EM_X[0] * fontPx + 2 * b, minH = textH + 2 * PAD_LH_Y[0] * lineH + 2 * b;
+  const excess = 1 - (minW * minH) / Math.max(1, bodyW * bodyH);
+  return { excess: +excess.toFixed(3), flagged: excess > 0.18 };
 }
 
 /** Stroke width in px for a kind (design value, floored to ≈2 CSS px). */

@@ -1,7 +1,7 @@
 // Balloon placement — ranked zones, reading order, narrow routed tails, links
 // (owner directive 2026-09-10) + the pilot's face-protection contract.
 import { rectsIntersect, segmentCrossesRect, buildTail, layoutBalloon, readsAfter, readingOrder, migrateZones, TAIL_STANDOFF, TAIL_BASE_CEILING, TAIL_BASE_TARGET } from '../src/ui/balloonLayout.js';
-import { bodyShape, tailShape, captionShape, seedFor } from '../src/ui/balloonShapes.js';
+import { bodyShape, tailShape, captionShape, seedFor, paddingFor, bulgeFor, excessBalloonArea, PAD_EM_X, PAD_LH_Y } from '../src/ui/balloonShapes.js';
 
 let passed = 0, failed = 0;
 const check = (name, ok) => { if (ok) passed++; else { failed++; console.log('  ✗ FAIL: ' + name); } };
@@ -70,6 +70,16 @@ check('segment through a rect / past a rect', segmentCrossesRect({ x: 0, y: 100 
   check('tone families exist (flirt / hesitant / worried)', ['flirt', 'hesitant', 'worried'].every(k => bodyShape(k, { x: 0, y: 0, w: 120, h: 60 }, 1, 3).outline.length > 20));
 }
 check('tail standoff is a small positive margin', TAIL_STANDOFF > 0 && TAIL_STANDOFF < 8);
+
+{ // Hug the lettering (owner 2026-09-11): padding in em / line-height, organic bulge, excess flag.
+  const p = paddingFor('speech', 16, 19.2);
+  check('speech padding inside 0.70–0.95 em × 0.42–0.65 lh', p.x / 16 >= PAD_EM_X[0] && p.x / 16 <= PAD_EM_X[1] && p.y / 19.2 >= PAD_LH_Y[0] && p.y / 19.2 <= PAD_LH_Y[1]);
+  check('caption padding is the tight end of the range', paddingFor('caption', 13, 15.6).x / 13 <= 0.75);
+  check('boxy families do not bulge; organic ones bulge a little', bulgeFor('player', 19.2) === 0 && bulgeFor('caption', 19.2) === 0 && bulgeFor('speech', 19.2) > 0 && bulgeFor('speech', 19.2) <= 0.35 * 19.2);
+  const tight = excessBalloonArea('speech', 200, 40, 200 + 2 * 0.8 * 16 + 2 * bulgeFor('speech', 19.2), 40 + 2 * 0.5 * 19.2 + 2 * bulgeFor('speech', 19.2), 16, 19.2);
+  const loose = excessBalloonArea('speech', 200, 40, 340, 110, 16, 19.2);
+  check('a text-tight body is not flagged; a preset-sized body is', !tight.flagged && loose.flagged);
+}
 
 console.log(`balloon tests: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

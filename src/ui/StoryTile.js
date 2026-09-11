@@ -30,7 +30,7 @@ import { SCREEN_W, SCREEN_H } from '../constants.js';
 import { getStoryNode } from '../data/featuredStories.js';
 import { panelMeta, panelKeyFor, resolvePanelKey } from '../data/comicPanels.js';
 import { layoutBalloon, migrateZones, readingOrder, TAIL_BASE_CEILING } from './balloonLayout.js';
-import { unit, padding, strokeFor, bodyShape, tailShape, connectorShape, sfxSpec, dashOutline, seedFor } from './balloonShapes.js';
+import { unit, paddingFor, bulgeFor, excessBalloonArea, strokeFor, bodyShape, tailShape, connectorShape, sfxSpec, dashOutline, seedFor } from './balloonShapes.js';
 
 const D = 600;
 // Comic lettering with a readable fallback (iOS ships Chalkboard SE / Marker
@@ -237,18 +237,23 @@ export function showStoryConversation(scene, start, onDone) {
     parts.forEach((part, i) => {
       const last = i === parts.length - 1;
       if (kind === 'sfx') { out.push(...sfx(container, part, box, opts)); return; }
-      const pad = padding(kind, U);
       const maxW = Math.max(120, box.w);
-      const sizes = [20, 18, 16, 14, MIN_FONT];
       // Size from PANEL scale: 16 px is the gameplay body size; a very short
       // line may go larger, never smaller than the floor.
       let size = wordsOf(part) <= 4 ? 18 : 16;
+      const lineH0 = size * 1.2;
+      // HUG THE LETTERING (owner 2026-09-11): wrap first, measure the text
+      // block, then add only 0.8 em / 0.5 line-height of breathing room;
+      // organic contours get a small bulge so the curve clears the corners.
+      const pad = paddingFor(kind, size, lineH0);
+      const bulge = bulgeFor(kind, lineH0);
       const face = kind === 'caption' ? CAPTION_FACE : LETTERING;
       const style = kind === 'caption' ? 'bold' : (kind === 'whisper' ? 'italic' : 'normal');
       const shown = kind === 'caption' ? String(part).toUpperCase() : part;
       const t = scene.add.text(0, 0, shown, { fontSize: `${size}px`, fontFamily: face, fontStyle: style, color: '#141414', wordWrap: { width: maxW - pad.x * 2 }, align: kind === 'caption' ? 'left' : 'center' });
-      const w = Math.min(maxW, t.width + pad.x * 2), h = t.height + pad.y * 2;
-      const lineH = size * 1.2;
+      const textW = t.width, textH = t.height;
+      const w = Math.min(maxW, textW + pad.x * 2 + bulge * 2), h = textH + pad.y * 2 + bulge * 2;
+      const lineH = lineH0;
       const want = prev ? { x: Math.min(TILE_W - w - 6, prev.x + 30), y: prev.y + prev.h + 4, w, h } : { x: box.x, y: box.y, w, h };
       // Linked balloons: a continuation of the same speaker bridges to the
       // previous part; only the last part carries the speaker tail.
@@ -273,10 +278,10 @@ export function showStoryConversation(scene, start, onDone) {
       if (body.inner) { g.lineStyle(Math.max(1, stroke * 0.6), INK, 1); g.strokePoints(body.inner, true); }
       // Re-cover the tail/bridge base so the outline reads as open into it.
       if (tl?.polygon || cn?.polygon) { g.fillStyle(fill, 1); g.fillPoints(body.outline, true); }
-      t.setPosition(kind === 'caption' ? L.rect.x + pad.x : L.rect.x + w / 2, kind === 'caption' ? L.rect.y + pad.y : L.rect.y + h / 2).setOrigin(kind === 'caption' ? 0 : 0.5);
+      t.setPosition(kind === 'caption' ? L.rect.x + pad.x + bulge : L.rect.x + w / 2, kind === 'caption' ? L.rect.y + pad.y + bulge : L.rect.y + h / 2).setOrigin(kind === 'caption' ? 0 : 0.5);
       container.add([g, t]); out.push(g, t);
       avoid.push(L.rect); opts.placed?.push(L.rect); prev = L.rect;
-      qaLog(opts, { kind, part, L, tail: wantTail, zones, lineH });
+      qaLog(opts, { kind, part, L, tail: wantTail, zones, lineH, textW, textH, fontPx: size });
       if (opts.debug) debugMark(opts.debug, L, opts.order ?? 0, L.exception || !L.clean);
     });
     return out;
@@ -297,7 +302,7 @@ export function showStoryConversation(scene, start, onDone) {
   }
 
   /** QA gates per placement (workshop Phase 3), into window.__comicLayoutLog. */
-  function qaLog(opts, { kind, part, L, tail, zones, lineH }) {
+  function qaLog(opts, { kind, part, L, tail, zones, lineH, textW = 0, textH = 0, fontPx = 16 }) {
     const inRect = (p, r) => !!r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
     const faces = (zones ?? []).filter(z => z.level === 1);
     const attributed = !L.tail ? (kind === 'caption' || kind === 'sfx' || kind === 'offpanel' || !tail)
@@ -313,7 +318,12 @@ export function showStoryConversation(scene, start, onDone) {
       attributed, clipped, flush, underTray, rect: L.rect,
       // PASS = no face (exception=false), attributed, in bounds, above the tray, ≤ cap, order holds, tail narrow.
       why: L.why ?? [],
-      pass: !L.exception && attributed && !clipped && !underTray && wordsOf(part) <= WORD_CAP && L.order !== false && tailBaseW <= tailCeiling + 0.01 };
+      // Hug-the-lettering QA (owner 2026-09-11): text block, body, padding per side, excess flag.
+      textBounds: { w: +textW.toFixed(1), h: +textH.toFixed(1) }, bodyBounds: { w: +L.rect.w.toFixed(1), h: +L.rect.h.toFixed(1) },
+      padding: { left: +((L.rect.w - textW) / 2).toFixed(1), right: +((L.rect.w - textW) / 2).toFixed(1), top: +((L.rect.h - textH) / 2).toFixed(1), bottom: +((L.rect.h - textH) / 2).toFixed(1), em: +(((L.rect.w - textW) / 2) / fontPx).toFixed(2), lh: +(((L.rect.h - textH) / 2) / (lineH || fontPx * 1.2)).toFixed(2) },
+      excessBalloonArea: kind === 'sfx' ? false : excessBalloonArea(kind, textW, textH, L.rect.w, L.rect.h, fontPx, lineH).flagged,
+      pass: false };
+    rec.pass = !L.exception && attributed && !clipped && !underTray && wordsOf(part) <= WORD_CAP && L.order !== false && tailBaseW <= tailCeiling + 0.01 && !rec.excessBalloonArea;
     try { (window.__comicLayoutLog ??= []).push(rec); } catch (_) {}
   }
 
