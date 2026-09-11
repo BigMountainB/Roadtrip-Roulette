@@ -99,18 +99,6 @@ const COP_ESCAPE_UNITS = UNITS_PER_MILE * COP_ESCAPE_MILES;
 // blocking / overtaking / PIT are unreachable and two guards enforce it.
 const MIN_STARS_AHEAD = 4;
 
-// A low-star traffic stop is a deliberate two-part action: move onto the
-// shoulder and hold the brake.  Keep this decision pure so shoulder-only
-// auto-braking cannot be reintroduced without failing the chase tests.
-export function shouldBeginPursuitStop({
-  armed = false,
-  invincible = false,
-  onShoulder = false,
-  brakeHeld = false,
-} = {}) {
-  return !!armed && !invincible && !!onShoulder && !!brakeHeld;
-}
-
 // Car length in world units.  Derived, not guessed: LANE_DASH_LEN (3) x
 // SEG_LENGTH (200) = 600 units per dash, and a US-standard highway dash is
 // 10 ft, giving ~60.8 units/ft.  The spec's 5 m car length is therefore

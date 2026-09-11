@@ -151,18 +151,7 @@ export const MAX_SPEED    = 27000; // internal world-units/sec; speedometer read
 // punishment mechanic — lift the clamp deliberately, never by accident.
 export const SPEED_CAP_MPH = 160;
 export const TURN_SPEED   = 2.8;
-// Crossing the fog line caps the car at 60 mph (50% of the 120 mph world
-// reference); deeper grass progressively lowers that cap to 18 mph.
-export const OFFROAD_SLOW = 0.5;
-
-/** Apply the terrain speed ceiling to the desired speed for this frame.
- *  Exit-lane pavement is deliberately exempt even when its lateral x is > 1. */
-export function limitOffroadTargetSpeed(targetSpeed, lateralX, onPavedExit = false) {
-  if (onPavedExit || Math.abs(lateralX) <= 1) return targetSpeed;
-  const depth = Math.max(0, Math.min(1, (Math.abs(lateralX) - 1) / 1.5));
-  const ratio = OFFROAD_SLOW + (0.15 - OFFROAD_SLOW) * depth;
-  return Math.min(targetSpeed, MAX_SPEED * ratio);
-}
+export const OFFROAD_SLOW = 0.6;
 export const CENTRIFUGAL  = 0.3;
 
 // Scoring — CASH ECONOMY V1 (owner workshop 2026-09-05): distance pays an

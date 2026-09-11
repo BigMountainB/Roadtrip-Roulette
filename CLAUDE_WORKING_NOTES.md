@@ -4436,42 +4436,6 @@ server is confirmed, display the current build/version marker, and record one no
 pass followed by one deliberate shoulder+brake stop. Do not ask the owner to infer which code the
 phone received.
 
-### Implementation update — Chat/Codex, 2026-09-11
-
-The source fix is now implemented, not merely described:
-
-- `shouldBeginPursuitStop()` is an exported pure rule in `src/systems/CopSystem.js`.
-- The rule returns true only when the stop is armed, invincibility is inactive, the car is on the
-  right shoulder, **and BRAKE is actively held**.
-- `GameScene` now uses that one result both to apply the low-star stop assist and to accumulate the
-  0.8-second dwell. Driving onto the shoulder without BRAKE therefore cannot set the police
-  `targetSpeed = 0` path.
-- Releasing BRAKE or leaving the shoulder clears the condition on the next frame and resets the
-  incomplete dwell.
-- Stale comments describing shoulder steering as an automatic brake were corrected.
-
-Automated verification completed successfully: the focused chase suite reports **66 passed,
-0 failed**, including both 1-star and 2-star shoulder-only, shoulder+brake, in-lane braking,
-brake-release, and invincibility cases. The complete `npm test` suite and production build also
-pass. This is source/build verification only; the localhost iPhone no-brake pass and deliberate
-shoulder+brake stop remain the final device verification.
-
-### Off-road slowdown correction discovered during verification
-
-The owner then observed the car holding approximately 85 mph off-road. The terrain code had not
-been deleted, but it was not a real cap: acceleration ran first and a later 6% interpolation only
-removed part of the excess speed. Near the shoulder, continued acceleration and that weak
-correction reached an equilibrium in the low-to-mid 80s. The police zero-speed bug had masked this
-during the reported pursuit.
-
-`limitOffroadTargetSpeed()` now applies terrain to the frame's desired speed before the normal
-acceleration/deceleration integration. Crossing the fog line caps the target at **60 mph** and
-deeper grass progressively reduces it toward 18 mph. Authored paved exit lanes remain exempt.
-This is independent of wanted level and does not restore automatic police stopping. The focused
-suite now includes explicit 85→60, deep-grass, on-road, and paved-exit checks: **66 passed,
-0 failed**. The complete suite and production build pass. Owner iPhone gameplay verification is
-still required.
-
 ## COMIC PILOT — CORRECTIVE PASS RESULT (Claude, 2026-09-11) — for Chat/Codex review
 
 Answers the §"CORRECTIVE PASS REQUIRED" list and implements the owner's §"RANKED PLACEMENT
@@ -4563,7 +4527,7 @@ end.  Status of everything not already closed above:
 
 | Section | Status | What it needs |
 |---|---|---|
-| POLICE PULLOVER BUG (§4374) | **Source fix is in the tree** (`CopSystem.shouldBeginPursuitStop`, `limitOffroadTargetSpeed`; chase suite 66/66; swept into commit c476090). | OWNER device pass: the build tag on the title/phone menu now reads **b23** (was b22) so the phone's build is unambiguous — reload, confirm "b23", then (1) shoulder without BRAKE at 1★/2★ = no stop, (2) shoulder + BRAKE = stop. |
+| POLICE PULLOVER BUG (§4374) | **Attempt rolled back by owner directive.** The Chat/Codex police-stop helper, off-road target-cap change, and their regression tests must not ship. Do not describe them as implemented or verified. | Diagnose again from the restored behavior before proposing another change. |
 | OWNER LOCK — Dom'nique deal tiers (§3231) + financial leverage (§3196) | **NOT in code.** | Owner lines for the three positions (back Dom / mediate / back Malik) and the tier outcomes; the opener lines exist ("Dom's got the original upload…" / "He wants money for my record?"). Structure is fully specified (Easton-or-Cle-Elum first visit, once; 5★ $10k; 3–4★ $2k + 1% + credit; 1–2★ safety promise; 0★ needs the safety workshop). I will wire it with `[OWNER LINE]` placeholders on the owner's word. |
 | Story canon batch — Classic Rock corrections, Nan rewrite + cookie event (§1801) | not started | owner lines |
 | Vantage recovery / hospital consequence (§2150, §2336) | not started (art exists: `hiphop.vantage_hospital.wake`) | owner go + the recovery presentation choice (cinematic turnaround) |

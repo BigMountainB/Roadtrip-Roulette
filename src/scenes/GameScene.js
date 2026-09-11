@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   SCREEN_W, SCREEN_H, SEG_LENGTH, ROUTE_SEGS, ROAD_WIDTH, DRAW_DIST,
-  MAX_SPEED, SPEED_CAP_MPH, ACCEL, BRAKE, DECEL, TURN_SPEED, CENTRIFUGAL,
+  MAX_SPEED, SPEED_CAP_MPH, ACCEL, BRAKE, DECEL, TURN_SPEED, OFFROAD_SLOW, CENTRIFUGAL,
   PTS_DIST, PTS_CRASH, PTS_HITCH, HITCH_REVEAL_MILES, VICE_MULT, VICE_PTS, FULL_BAR_THRESHOLD, COMBO,
   VICES, VICE_CONFIG, VICE_COMBOS, CHECKPOINTS, TOTAL_ROUTE_MILES, REST_STOPS, PASS_THROUGH_CITIES,
   getLocationName,
@@ -15,7 +15,7 @@ import {
   COP_TRAP_COMPLY_SEC, COP_TRAP_PULLOVER_MPH, COP_TRAP_SHOULDER_X, COP_TRAP_ABORT_X, COP_TRAP_HOLD_SEC,
   COP_TICKET_SPEEDING, COP_TICKET_SPEEDING_2COP,
   FINISH_PARK_SEC, FINISH_PARK_X, FINISH_PARK_LERP,
-  GIRL_MAX_SKIPS, GIRL_PARTY_BONUS, limitOffroadTargetSpeed,
+  GIRL_MAX_SKIPS, GIRL_PARTY_BONUS,
 } from '../constants.js';
 // Live world-width bindings (set once at boot from device aspect): the world
 // projection centers on WORLD_CX while the fixed-800 HUD is centered by
@@ -49,7 +49,7 @@ import { EffectsSystem } from '../systems/EffectsSystem.js';
 import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
 import { StorySystem } from '../systems/StorySystem.js';
 import { ComicSystem } from '../systems/ComicSystem.js';
-import { CopSystem, FLEE_EXIT_HOLD_REL, shouldBeginPursuitStop } from '../systems/CopSystem.js';
+import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
 import { genreArtPath, genreDefaultPath, GENRE_ART, restStopManifest } from '../systems/AssetManifest.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
 import { ensureStopSign } from '../data/shoppingSign.js';
@@ -2442,7 +2442,7 @@ export class GameScene extends Phaser.Scene {
     this._pursuitStopHold     = null;   // { t, mult } while held at the roadside
     this._pursuitStopDwell    = 0;      // seconds spent below the pull-over speed
     this._pursuitStopArmed    = false;  // true once the player has DRIVEN with the tail
-    this._pursuitStopping     = false;  // deliberate shoulder + brake commit
+    this._pursuitStopping     = false;  // right-shoulder commit — auto-brake to the stop
     this._pursuitFollowBaseMi = null;   // mile the current follow began at
     this._pursuitFollowStars  = 0;      // star level that baseline belongs to
     this._gameFinished   = false;
@@ -5693,8 +5693,8 @@ export class GameScene extends Phaser.Scene {
     //       in CopSystem).  Pull over → TRIPLE ticket + 15 s wait.  Ignore
     //       it for 5 miles → +1★ (war).
     // Complying resolves through the same clearArrest slate-wipe as a
-    // speed-trap stop. "Pulling over" = moving onto the right shoulder and
-    // deliberately holding BRAKE until nearly stopped, with a cruiser nearby.
+    // speed-trap stop.  "Pulling over" = holding near-stopped with the
+    // cruiser on your bumper — no extra button to learn.
     {
       const _psP = this.player;
       if (this._pursuitStopHold) {
@@ -5760,12 +5760,9 @@ export class GameScene extends Phaser.Scene {
           // matter — pull off then brake, or brake then pull off — and
           // releasing either one immediately releases the car and cancels the
           // dwell below.
-          this._pursuitStopping = shouldBeginPursuitStop({
-            armed: this._pursuitStopArmed,
-            invincible: _psIframes,
-            onShoulder: this.player.x > COP_TRAP_SHOULDER_X,
-            brakeHeld: this._isBrake(),
-          });
+          this._pursuitStopping = this._pursuitStopArmed && !_psIframes
+                                  && this.player.x > COP_TRAP_SHOULDER_X
+                                  && this._isBrake();
           // The stop latches off the SAME flag, so it can no longer engage
           // from braking to a halt in a lane, nor from coasting down on the
           // shoulder.  No separate brake test here — it is already part of
@@ -6540,8 +6537,7 @@ export class GameScene extends Phaser.Scene {
     // real-world gradePct (e.g., 0.06 = 6 % grade) so the I-90 climb up
     // Snoqualmie and the Ryegrass→Vantage drop both feel right.
     const curSegIdx = Math.floor(p.position / SEG_LENGTH) % this.road.segments.length;
-    const curSeg    = this.road.segments[curSegIdx];
-    const curGrade  = curSeg?.gradePct ?? 0;
+    const curGrade  = this.road.segments[curSegIdx]?.gradePct ?? 0;
     // Gain 2.0 → 6% climb costs 12 % top speed (≈ 14 mph drop at 120
     // cruise); 5% descent gives +10 %.  Clamp so micro-noise can't
     // swing speed by more than ±15 %.
@@ -6554,18 +6550,6 @@ export class GameScene extends Phaser.Scene {
     const _capUnits = mphToUnits(SPEED_CAP_MPH);
     const _capped   = targetSpeed > _capUnits;
     if (_capped) targetSpeed = _capUnits;
-
-    // Terrain ceiling is part of the TARGET speed, not a small correction
-    // after acceleration. The former 6% post-update lerp could be cancelled
-    // by the accelerator and settle around 85 mph on the shoulder. Crossing
-    // the fog line now reliably eases toward 60 mph; deeper grass is slower.
-    let _onPavedExitForSpeed = false;
-    if (curSeg?.exitInfo) {
-      const exHere = sampleExitPlan(curSeg.exitInfo, p.position + PLAYER_VIRTUAL_Z);
-      _onPavedExitForSpeed = !!exHere && exHere.gapX <= 0.0001
-        && p.x > 0.98 && p.x < exHere.outerX + 0.10;
-    }
-    targetSpeed = limitOffroadTargetSpeed(targetSpeed, p.x, _onPavedExitForSpeed);
 
     // ── Engine heat / overheating ─────────────────────────────────────────
     // engineTemp lerps toward a target driven by ambient desert heat, the
@@ -6670,8 +6654,11 @@ export class GameScene extends Phaser.Scene {
     } else if (this._trapStopping) {
       this._trapStopping = false;
     }
-    // 1-2★ comply flow: only the deliberate shoulder + brake chord sets this
-    // flag. Shoulder position by itself must remain ordinary off-road driving.
+    // 1-2★ comply flow, same idea (owner 2026-08-31): with the blue PULL
+    // OVER blink up, steering onto the right shoulder auto-brakes the car to
+    // the stop — cruise braking floors at 60 mph, so without this the player
+    // "pulls over" onto the grass and just keeps driving.  Flag managed by
+    // the comply machine in update().
     if (this._pursuitStopping) targetSpeed = 0;
     // _pursuitStopHold pins IN the physics step too (owner 2026-08-31: the
     // update-loop zeroing ran AFTER cruise easing, so the car crept forward a
@@ -7528,8 +7515,7 @@ export class GameScene extends Phaser.Scene {
         p.xImpulse      = Math.max(0, p.xImpulse ?? 0);
       }
     }
-    // Off-road: the target-speed ceiling is applied above, before normal
-    // acceleration/braking integration. This post-steering check handles HP.
+    // Off-road: gradually cap speed rather than multiplying each frame.
     // EXCEPT — the exit lane's pavement (from the shared ExitPath) counts
     // as paved road, so driving lane 5 through the taper/parallel section
     // carries no off-road slowdown or HP bleed.  Only the actual painted
@@ -7544,6 +7530,9 @@ export class GameScene extends Phaser.Scene {
         && p.x > 0.98 && p.x < exHere.outerX + 0.10;
     }
     if (Math.abs(p.x) > 1 && !onRamp) {
+      const depth     = clamp((Math.abs(p.x) - 1) / 1.5, 0, 1);
+      const maxSpeed  = MAX_SPEED * lerp(OFFROAD_SLOW, 0.15, depth);
+      if (p.speed > maxSpeed) p.speed = lerp(p.speed, maxSpeed, 0.06);
       // Off-road HP bleed — 0.5 HP per second of dirt-driving.  Ramp
       // segments are exempt (they're paved) so pulling over doesn't tax
       // the player.

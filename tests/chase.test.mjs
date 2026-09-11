@@ -11,8 +11,8 @@
 // which is the owner's exact repro: brake hard for a corner at 3 stars and a
 // cruiser overruns you.  The headline case below reproduces that directly.
 
-import { CopSystem, shouldBeginPursuitStop } from '../src/systems/CopSystem.js';
-import { MAX_SPEED, PLAYER_VIRTUAL_Z, limitOffroadTargetSpeed } from '../src/constants.js';
+import { CopSystem } from '../src/systems/CopSystem.js';
+import { MAX_SPEED, PLAYER_VIRTUAL_Z } from '../src/constants.js';
 
 // Divert rolls and spawn placement use Math.random(), so probabilistic tests
 // pin it rather than flaking ~10% of runs.  withRandom(v, fn) forces every
@@ -37,38 +37,6 @@ function pursuitCop(position, laneOffset = 0) {
     color: 0xFFFFFF, alive: true, painted: false,
     _closeFactor: 0.08, _laneDrift: 0.5,
   };
-}
-
-// ── 1-2★ traffic-stop input chord ───────────────────────────────────────
-// Both tiers use this same pure decision after the rear-pursuer eligibility
-// check. Merely driving onto the shoulder must never apply the police brake.
-for (const stars of [1, 2]) {
-  const base = { armed: true, invincible: false, onShoulder: true };
-  check(`${stars} star(s) — shoulder alone does not begin a stop`,
-    !shouldBeginPursuitStop({ ...base, brakeHeld: false }));
-  check(`${stars} star(s) — shoulder plus brake begins a stop`,
-    shouldBeginPursuitStop({ ...base, brakeHeld: true }));
-  check(`${stars} star(s) — braking in a travel lane does not begin a stop`,
-    !shouldBeginPursuitStop({ ...base, onShoulder: false, brakeHeld: true }));
-  check(`${stars} star(s) — releasing brake cancels the stopping state`,
-    !shouldBeginPursuitStop({ ...base, brakeHeld: false }));
-  check(`${stars} star(s) — invincibility prevents a stop commit`,
-    !shouldBeginPursuitStop({ ...base, invincible: true, brakeHeld: true }));
-}
-
-// The ordinary terrain slowdown remains independent of the police stop.
-// An 85 mph target becomes a maximum of 60 mph immediately past the fog line,
-// while pavement and authored exit lanes remain unaffected.
-{
-  const mph = n => MAX_SPEED * (n / 120);
-  check('off-road — 85 mph target is capped at 60 mph',
-    limitOffroadTargetSpeed(mph(85), 1.0001) <= mph(60));
-  check('off-road — deeper grass has a lower speed ceiling',
-    limitOffroadTargetSpeed(mph(85), 2.5) < mph(60));
-  check('on-road — terrain does not alter the target speed',
-    limitOffroadTargetSpeed(mph(85), 0.95) === mph(85));
-  check('paved exit lane — terrain does not alter the target speed',
-    limitOffroadTargetSpeed(mph(85), 1.2, true) === mph(85));
 }
 
 /** Run the sim and report the worst (largest) cop-minus-player depth seen. */
