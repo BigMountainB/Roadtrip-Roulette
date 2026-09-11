@@ -3228,6 +3228,28 @@ an amount. The “Demand a split: credit and a cut” option in the earlier C5 m
 the starting implementation, but it must be framed as **Dom'nique holding legitimate financial
 leverage over Malik**, not Player independently inventing a threat.
 
+## OWNER LOCK — Dom'nique deal tiers + jingle presentation (2026-09-10)
+
+This closes and supersedes the open economics paragraph immediately above:
+
+- **5★ relationship with Malik:** Player can secure Dom'nique's ultimate demand: **$10,000**.
+  Producer authorship/credit must not be erased simply because the cash demand is satisfied.
+- **3–4★:** Player can secure the compromise package: **$2,000 + 1% royalties + producer
+  credit**. These are one combined deal, not three alternative choices.
+- **1–2★:** Player can secure only Malik's promise that Dom'nique's family and friends will
+  be safe from Malik and his crew. Dom receives no acceptable financial settlement.
+- **0★:** Malik may “go postal on everyone.” The exact playable consequence, targets, and
+  presentation still require a safety/story workshop before implementation; do not silently
+  reduce this to an ordinary refusal.
+
+The negotiation triggers at **Easton or Cle Elum, whichever eligible rest stop Player visits
+first**, and must occur only once.
+
+The commercial-jingle origin explains Player's starting **$3-per-mile** passive royalties,
+but it does **not** require an in-game reveal panel. It will probably be described in the
+game trailer and/or beginning credits. Remove the proposed Seattle car-radio reveal image
+from the art queue. During gameplay the royalty money simply enters the normal wallet.
+
 ## Dom'nique holds the tape over Malik for money — SCENARIO DRAFT (Claude, 2026-09-10; owner asked for this role)
 
 Owner: "there should be a role where Dom tries to hold the tape over Malik for money."  Read as

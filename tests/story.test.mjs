@@ -104,7 +104,7 @@ function recorder() {
   const r1 = story.commitChoice(sel, rec.hooks);
   check('first commit applies', r1.applied === true && r1.entry != null);
   check('story auto-activates on first consequential choice', story.status('hiphop') === STORY_STATUS.ACTIVE);
-  check('Mercer fork opens (predicate) and Seattle closes', story.pendingAt('M').some(p => p.nodeId === 'mercer_fork') && story.pendingAt('S').length === 0);
+  check('Mercer fork opens (predicate) and Seattle closes', story.pendingAt('M').some(p => p.nodeId === 'mercer_counter') && story.pendingAt('S').length === 0);
   check('durable item recorded (phone)', story.story('hiphop').items.phone === true);
   check('radio grant hook fired once', rec.log.radio.length === 1 && rec.log.radio[0] === 'hiphop_phonk');
   check('run state carries the grant', story.run.radioGrant === 'hiphop_phonk');
@@ -122,7 +122,7 @@ function recorder() {
   // Force-close immediately after the commit → relaunch → same canon.
   const story2 = new StorySystem(reload());
   check('after reload: choice is in the ledger', story2.hasCommitted('hiphop', 'seattle_offer', 'carry'));
-  check('after reload: item survives + Mercer still pending', story2.story('hiphop').items.phone === true && story2.pendingAt('M').some(p => p.nodeId === 'mercer_fork'));
+  check('after reload: item survives + Mercer still pending', story2.story('hiphop').items.phone === true && story2.pendingAt('M').some(p => p.nodeId === 'mercer_counter'));
   const r3 = story2.commitChoice(sel, rec.hooks);
   check('after reload: re-commit is a no-op', r3.applied === false && rec.log.panels === 1);
 
@@ -220,14 +220,14 @@ function recorder() {
 {
   const story = new StorySystem(freshSave());
   const atS = story.pendingAt('S');
-  check('Seattle offers the hiphop entry (mandatory)', atS.length === 1 && atS[0].storyId === 'hiphop' && atS[0].mandatory === true && atS[0].nodeId === 'seattle_offer');
+  check('Seattle offers the hiphop entry (mandatory)', atS.length === 1 && atS[0].storyId === 'hiphop' && atS[0].mandatory === true && atS[0].nodeId === 'seattle_lot');
   check('Mercer: nothing pending before the story starts', story.pendingAt('M').length === 0);
   check('Vantage offers classicRock entry', story.pendingAt('V').some(p => p.storyId === 'classicRock'));
-  check('activate() starts at startNode', story.activate('hiphop') === true && story.story('hiphop').nodeId === 'seattle_offer');
+  check('activate() starts at startNode', story.activate('hiphop') === true && story.story('hiphop').nodeId === 'seattle_lot');
   check('activate() idempotent', story.activate('hiphop') === false);
-  check('activated-but-uncommitted: Seattle still open (scene re-entry re-prompts until a choice lands)', story.pendingAt('S').some(p => p.nodeId === 'seattle_offer'));
+  check('activated-but-uncommitted: Seattle still open (scene re-entry re-prompts until a choice lands)', story.pendingAt('S').some(p => p.nodeId === 'seattle_lot'));
   story.commitChoice({ storyId: 'hiphop', nodeId: 'seattle_offer', choiceId: 'carry' }, {});
-  check('after commit: Seattle closed, Mercer open', story.pendingAt('S').length === 0 && story.pendingAt('M').some(p => p.nodeId === 'mercer_fork'));
+  check('after commit: Seattle closed, Mercer open', story.pendingAt('S').length === 0 && story.pendingAt('M').some(p => p.nodeId === 'mercer_counter'));
   check('Bellevue founder not yet (Mercer unresolved)', story.pendingAt('B').length === 0);
   check('advance() rejects unknown node', story.advance('hiphop', 'nope') === false);
   check('kill() marks dead + clears node', story.kill('hiphop', 'vantage_ram') === true && story.status('hiphop') === STORY_STATUS.DEAD && story.story('hiphop').nodeId === null);
@@ -426,7 +426,7 @@ function board() {
 const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, hooks: { say: (t) => log.said.push(t), wanted: (n) => log.wanted.push(n), passenger: () => {} } }; };
 {
   const { story } = board();
-  check('boarding: Country active, rel 50, Nerve 25, Brittney seated', story.status('country') === STORY_STATUS.ACTIVE && story.story('country').relationship === 50 && story.run.nerve === NERVE_MAX && story.run.passenger?.id === 'brittney');
+  check('boarding: Country active, rel 55 (50 + ride\'s +5), Nerve 25, Brittney seated', story.status('country') === STORY_STATUS.ACTIVE && story.story('country').relationship === 55 && story.run.nerve === NERVE_MAX && story.run.passenger?.id === 'brittney');
   // Rest stop → need assigned (hunger first), Nerve refill capped.
   story.restStopVisited('B');
   check('first stop: hunger pending, Nerve capped at 25', story.story('country').flags.pendingNeed === 'hunger' && story.run.nerve === NERVE_MAX);
@@ -434,24 +434,24 @@ const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, ho
   const rec = recorder();
   check('repeatable node refuses a commit without its stop', H('country', 'need_hunger', 'wait', story, rec.hooks, 12).reason === 'needs_stop');
   H('country', 'need_hunger', 'wait', story, rec.hooks, 12, 'B');
-  check('wait: no purchase, need persists, rel −5', rec.log.cashCalls === 0 && story.story('country').flags.pendingNeed === 'hunger' && story.story('country').relationship === 45);
+  check('wait: no purchase, need persists, rel −5', rec.log.cashCalls === 0 && story.story('country').flags.pendingNeed === 'hunger' && story.story('country').relationship === 50);
   check('wait: closed at Bellevue, still open at Issaquah (repeatable)', !story.pendingAt('B').some(p => p.nodeId === 'need_hunger') && story.pendingAt('I').some(p => p.nodeId === 'need_hunger'));
   story.restStopVisited('I');
   check('second stop: need unchanged while pending', story.story('country').flags.pendingNeed === 'hunger');
   const r2 = H('country', 'need_hunger', 'sushi', story, rec.hooks, 18, 'I');
-  check('sushi at Issaquah: separate ledger key, $14 once, satisfied, rel +10', r2.applied && r2.entry.key.includes('@I') && rec.log.cash === -14 && rec.log.cashCalls === 1 && story.story('country').flags.pendingNeed == null && story.story('country').relationship === 55);
+  check('sushi at Issaquah: separate ledger key, $14 once, satisfied, rel +10', r2.applied && r2.entry.key.includes('@I') && rec.log.cash === -14 && rec.log.cashCalls === 1 && story.story('country').flags.pendingNeed == null && story.story('country').relationship === 60);
   check('sushi double tap: nothing', H('country', 'need_hunger', 'sushi', story, rec.hooks, 18, 'I').applied === false && rec.log.cashCalls === 1);
   story.restStopVisited('SQ');
   check('third stop: bathroom next in rotation', story.story('country').flags.pendingNeed === 'bathroom' && story.pendingAt('SQ').some(p => p.nodeId === 'need_bathroom'));
   H('country', 'need_bathroom', 'hold', story, rec.hooks, 25, 'SQ');
-  check('hold: need persists, rel unchanged', story.story('country').flags.pendingNeed === 'bathroom' && story.story('country').relationship === 55);
+  check('hold: need persists, rel unchanged', story.story('country').flags.pendingNeed === 'bathroom' && story.story('country').relationship === 60);
   story.restStopVisited('N');
   H('country', 'need_bathroom', 'goWith', story, rec.hooks, 32, 'N');
-  check('play swords: satisfied, rel +10', story.story('country').flags.pendingNeed == null && story.story('country').relationship === 65);
+  check('play swords: satisfied, rel +10', story.story('country').flags.pendingNeed == null && story.story('country').relationship === 70);
   story.restStopVisited('SP');
   check('thirst next', story.story('country').flags.pendingNeed === 'thirst');
   H('country', 'need_thirst', 'fountain', story, rec.hooks, 53, 'SP');
-  check('fountain: free, satisfied, rel −8', rec.log.cashCalls === 1 && story.story('country').flags.pendingNeed == null && story.story('country').relationship === 57);
+  check('fountain: free, satisfied, rel −8', rec.log.cashCalls === 1 && story.story('country').flags.pendingNeed == null && story.story('country').relationship === 62);
   story.restStopVisited('V');
   check('Vantage assigns no need', story.story('country').flags.pendingNeed == null);
 }
@@ -494,7 +494,7 @@ const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, ho
   // Good driving: every 5th clean pass flirts (+2 rel), cooldown respected.
   const { story } = board(); const rh = roadHooks();
   for (let i = 0; i < 5; i++) story.roadEvent('pass', { mile: 10 + i * 0.5 }, rh.hooks);
-  check('5th clean pass: flirt line + rel 52', rh.log.said.length === 1 && rh.log.said[0].startsWith('Keep threading') && story.story('country').relationship === 52);
+  check('5th clean pass: flirt line + rel 52', rh.log.said.length === 1 && rh.log.said[0].startsWith('Keep threading') && story.story('country').relationship === 57);
   for (let i = 0; i < 5; i++) story.roadEvent('pass', { mile: 13 + i * 0.5 }, rh.hooks);
   check('10th: second flirt rotates', rh.log.said.length === 2 && rh.log.said[1].startsWith('If you can keep'));
   check('clean passes counted', story.run.flags.cleanPasses === 10);
@@ -758,7 +758,7 @@ function tour(choices, seed = {}) {
   const { story } = board(); const radio = [];
   check('aux quest optional at Bellevue behind the need', story.pendingAt('B').some(p => p.nodeId === 'brittney_aux' && !p.mandatory) && story.pendingAt('B')[0].mandatory === true || story.pendingAt('B').length === 1);
   const r = story.commitChoice({ storyId: 'country', nodeId: 'brittney_aux', choiceId: 'give', mile: 12 }, { radio: (c) => radio.push(c) });
-  check('give: radio → country once, rel +5', r.applied && radio.join() === 'country' && story.story('country').relationship === 55);
+  check('give: radio → country once, rel +5', r.applied && radio.join() === 'country' && story.story('country').relationship === 60);
   story.commitChoice({ storyId: 'country', nodeId: 'brittney_aux', choiceId: 'give', mile: 12 }, { radio: (c) => radio.push(c) });
   check('give twice: radio not re-fired', radio.length === 1);
   const c = story.canon(); c.stories.country.relationship = 60; story._writeCanon(c);
@@ -782,13 +782,13 @@ if (failed) process.exit(1);
 {
   const save = freshSave(); const story = new StorySystem(save); const rec = recorder();
   const beats = () => Object.values(story.canon().ledger).filter(e => e.nodeId === 'beat');
-  const n1 = story.noteNodeShown('hiphop', 'seattle_offer', 4);
-  const n2 = story.noteNodeShown('hiphop', 'seattle_offer', 4);
+  const n1 = story.noteNodeShown('hiphop', 'seattle_lot', 4);
+  const n2 = story.noteNodeShown('hiphop', 'seattle_lot', 4);
   check('intro beat recorded once when the node is shown', n1 === 1 && n2 === 0);
-  check('intro beat carries the AUTHORED panel key', beats().some(e => e.panelKey === 'hiphop.seattle_offer.intro'));
+  check('intro beat carries the AUTHORED panel key', beats().some(e => e.panelKey === 'hiphop.seattle_lot'));
   H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
   const order = Object.values(story.canon().ledger).map(e => e.panelKey);
-  const iIntro = order.indexOf('hiphop.seattle_offer.intro'), iCarry = order.indexOf('hiphop.seattle_offer.carry'), iRadio = order.indexOf('hiphop.seattle_offer.carry.radio');
+  const iIntro = order.indexOf('hiphop.seattle_lot'), iCarry = order.indexOf('hiphop.seattle_offer.carry'), iRadio = order.indexOf('hiphop.seattle_offer.carry.radio');
   check('follow-up beat recorded AFTER the choice (intro → choice → radio)', iIntro >= 0 && iCarry > iIntro && iRadio > iCarry);
   // beatsBefore: Kyle's session lands BEFORE the hand-over entry
   H('hiphop', 'mercer_fork', 'keepJob', story, rec.hooks, 9);
@@ -807,4 +807,23 @@ if (failed) process.exit(1);
   check('recordBeat honours an explicit panelKey', beats().some(e => e.panelKey === 'hiphop.vantage_recovery.first_tail'));
   story.recordBeat({ storyId: 'country', beatId: 'roadside_exit', text: 'y', mile: 40 });
   check('recordBeat without panelKey keeps the generic beat key', beats().some(e => e.panelKey === 'country.beat.roadside_exit'));
+}
+
+
+// ── Mercer handoff (2026-09-10): the "both" → ultimatum fork ─────────────
+{
+  const save = freshSave(); const story = new StorySystem(save); const rec = recorder();
+  H('hiphop', 'seattle_offer', 'carry', story, rec.hooks, 4);
+  const r1 = H('hiphop', 'mercer_fork', 'both', story, rec.hooks, 9);
+  check('both: +3 banked, chains to the ultimatum, Mercer not done yet', r1.applied && r1.next === 'mercer_ultimatum' && story.story('hiphop').flags.mercerPressed === true && !story.story('hiphop').flags.mercerDone);
+  H('hiphop', 'mercer_ultimatum', 'chooseBrittney', story, rec.hooks, 9);
+  check('chooseBrittney: Country starts at 50 + 5, Malik −10 (60 → 50), phone left, Brittney seated',
+    story.status('country') === STORY_STATUS.ACTIVE && story.story('country').relationship === 55
+    && story.run.passenger?.id === 'brittney' && story.story('hiphop').items?.phone == null);
+  const s2 = new StorySystem(freshSave()); const r2 = recorder();
+  H('hiphop', 'seattle_offer', 'carry', s2, r2.hooks, 4);
+  H('hiphop', 'mercer_fork', 'both', s2, r2.hooks, 9);
+  H('hiphop', 'mercer_ultimatum', 'keepPromise', s2, r2.hooks, 9);
+  check('keepPromise: Brittney stays, delivery continues, Malik +10 (70)', s2.story('hiphop').flags.mercerDone === true && s2.story('hiphop').flags.path === 'hiphop' && s2.story('hiphop').flags.brittneyRefused === true && s2.story('hiphop').relationship === 70 && !s2.run.passenger);
+  check('Seattle chain is live-only: non-consequential tiles leave no ledger entry', !Object.values(s2.canon().ledger).some(e => ['seattle_lot', 'seattle_clock', 'seattle_route', 'mercer_counter', 'mercer_hook'].includes(e.nodeId)));
 }

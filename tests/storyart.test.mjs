@@ -277,7 +277,6 @@ check('establishing key is node-only', panelKeyFor('hiphop', 'mercer_fork') === 
     'classicRock.othello_show.duetYes',   // no duet-yes choice in the final Othello tree (folded into Washtucna)
     'classicRock.othello_show.soloIntent',
     // Art created 2026-09-10, wired in PANEL_META ahead of their emission sites:
-    'hiphop.seattle_stakes',              // Seattle v3 Beat 3 — node lands with the v3 rewrite
     'hiphop.vantage_hospital.wake',       // Ellensburg hospital beat — needs the hospital consequence code
     'country.ellensburg_haylee',          // Haylee pickup node — Ellensburg sequence not written yet
     'country.vantage_arrival.reunion',    // Haylee at the Vantage reunion — same

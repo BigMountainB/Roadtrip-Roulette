@@ -220,7 +220,7 @@ export const FEATURED_STORIES = {
     title: "Malik's Phone",
     genre: STORY_GENRE.hiphop,
     entry: { stopId: 'S' },
-    startNode: 'seattle_offer',
+    startNode: 'seattle_lot',   // handoff 2026-09-10: cypher → intro → route → stakes/decision
     endings: {
       sold_out:      { label: 'COMPLETE! SORT OF…', unlock: false },
       pristine:      { label: 'PRISTINE DROP',      unlock: true },
@@ -316,18 +316,56 @@ export const FEATURED_STORIES = {
     },
     nodes: {
       // ── Seattle / Park & Ride ──────────────────────────────────────────
-      seattle_offer: {
-        intro: [{ id: 'seattle_intro', panelKey: 'hiphop.seattle_offer.intro', importance: 'minor', text: 'Malik steps out of the circle. His crew follows.' }],
+      // ── Seattle / Park & Ride — AUTHORITATIVE DIALOGUE HANDOFF (owner + Chat,
+      //    2026-09-10).  A chain of short tiles (non-consequential, live-only)
+      //    leading to the SAME decision node + keys (`seattle_offer.carry/pass`).
+      //    Malik does NOT know Brittney is on a double; he routes the player to
+      //    Mercer only.  The cypher intro panel is the only book entry before
+      //    the decision. ──
+      seattle_lot: {
         stopId: 'S', mandatory: true,
+        when: (st) => !has(st, 'phone') && !st.flags.carrying,
+        speaker: 'The Crew', portrait: 'biz_parkride', importance: 'minor',
+        intro: [{ id: 'seattle_cypher', panelKey: 'hiphop.seattle_lot', importance: 'minor', text: 'Stank Records, live from the Park & Ride.' }],
+        line: "Malik Reed! Stank Records — live from the Park & Ride!",
+        choices: [
+          { id: 'watch', consequential: false, next: 'seattle_clock',
+            label: "Not bad.",
+            reply: "Top of NoiseCloud, bottom of my tank — whole city knows the hook, but the bus driver knows my name." },
+        ],
+      },
+      seattle_clock: {
+        stopId: 'S', virtual: true,
+        speaker: 'Malik Reed', portrait: 'biz_parkride', importance: 'minor',
+        line: "Malik Reed. Stank Records. About to be the biggest hip-hop name in this town.",
+        choices: [
+          { id: 'know', consequential: false, next: 'seattle_route',
+            label: "I don't know you, no offense. I'm sure you haven't heard any of my songs either.",
+            reply: "Fair enough." },
+        ],
+      },
+      seattle_route: {
+        stopId: 'S', virtual: true,
+        speaker: 'Malik Reed', portrait: 'biz_parkride', importance: 'minor',
+        line: "Which way you headed?",
+        choices: [
+          { id: 'pullman', consequential: false, next: 'seattle_offer',
+            label: "Pullman. Eventually.",
+            reply: "Then Mercer's on your way." },
+        ],
+      },
+      seattle_offer: {
+        stopId: 'S', virtual: true,
         speaker: 'Malik Reed', portrait: 'biz_parkride',
         importance: 'major',
-        line: "Yo — you headed east? My girl Brittney's working the Gas-N-Sip on Mercer Island. Run her my phone. The album's on it and I ain't trusting the mail.",
+        line: "I put some of my best tracks on this phone. I just need to get it to my girl at the Gas-N-Sip on Mercer Island. She's gonna take it to my homie Kyle. He produces some fire. I know if I get that phone in his hands, I'll be Seattle's next big thing. As an artist, you know how important this phone is to me—and how badly I want the tracks on it remastered.",
         choices: [
           {
             id: 'carry', consequential: true, next: null,
-            beats: [{ id: 'seattle_radio', panelKey: 'hiphop.seattle_offer.carry.radio', importance: 'minor', speaker: 'Malik Reed', text: 'Stank Records owns the radio till the phone is delivered.' }],
+            // Crew warning replaces every "scratch the screen" line (handoff).
+            beats: [{ id: 'seattle_crew_warning', panelKey: 'hiphop.seattle_offer.carry.radio', importance: 'minor', speaker: 'The Crew', text: "It's in your best interest to protect that phone. And don't touch the girl." }],
             label: "I'm going right past Mercer. Give me the phone.",
-            reply: "Album's on the phone. As long as you're carrying it, you can play Hip-Hop on the radio. Just don't skip the stop—this thing locks itself when it thinks somebody ran off with it.",
+            reply: "Album's on the phone. While you're carrying it, you can play Hip-Hop on the radio.",
             effects: { items: { phone: true }, flags: { carrying: true }, relationship: 60, radioGrant: STORY_GENRE.hiphop },
           },
           {
@@ -339,40 +377,95 @@ export const FEATURED_STORIES = {
         ],
       },
 
-      // ── Mercer Island / Gas-N-Sip — the only early fork ────────────────
-      mercer_fork: {
+      // ── Mercer Island / Gas-N-Sip — AUTHORITATIVE DIALOGUE HANDOFF ──────
+      //    counter → "Ugh…"/apology → the StageWagon invite + three choices
+      //    (+5 / +3→ultimatum / +0) → ultimatum.  Keys `mercer_fork.ride/keepJob`
+      //    kept; `both` + `mercer_ultimatum` are new.  Brittney's points go to
+      //    the COUNTRY record via relationshipFor.
+      mercer_counter: {
         stopId: 'M', mandatory: true,
         when: (st) => has(st, 'phone') && !has(st, 'phoneLocked') && !st.flags.mercerDone,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'minor',
+        line: "Welcome to Gas-N-Sip, hon! What can I do to—uh—for you?",
+        choices: [
+          { id: 'ask', consequential: false, next: 'mercer_hook',
+            label: "Hey, are you Brittney? I have one of Malik's phones he wanted me to get to you.",
+            reply: "" },
+        ],
+      },
+      mercer_hook: {
+        stopId: 'M', virtual: true,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'minor',
+        line: "Ugh. Even when Malik's not here, it's about him.",
+        choices: [
+          { id: 'sorry', consequential: false, next: 'mercer_fork',
+            label: "Oh, sorry. I don't want to get between you two.",
+            reply: "But I wish you would. I don't even like hip-hop." },
+        ],
+      },
+      mercer_fork: {
+        stopId: 'M', virtual: true,
         speaker: 'Brittney', portrait: 'biz_gasnsip',
         importance: 'climax',
-        line: "Malik sent you? Of course he did. They just put me on a double, and I was supposed to run that phone out to his engineer in Issaquah myself. So either I lose this job or he loses his album.",
+        line: "Malik and I had plans to go to StageWagon. He blew them off for his album. Hey—why don't you come to StageWagon with me? You can use Malik's ticket.",
         choices: [
           {
-            id: 'keepJob', consequential: true, next: null,
-            label: "You should keep your job. I'll deliver the phone like I promised.",
-            reply: "You right. I'm done doing him favors anyway. You definitely missed out on a fun copilot to keep you awake. 😘",
-            effects: { flags: { mercerDone: true, path: 'hiphop' }, relationship: 10 },
-          },
-          {
             id: 'ride', consequential: true, next: null,
-            // CROSS-STORY ART OVERRIDE (Ch.18 mapping contract).  This choice
-            // starts the Country route, so the approved panel is authored under
-            // `country.`, while the committed ledger key is naturally
-            // `hiphop.mercer_fork.ride` (identity follows the node it was made
-            // at, and must NOT be rewritten to chase artwork).  Naming the key
-            // here is the sanctioned way to bridge the two.
+            // CROSS-STORY ART OVERRIDE (Ch.18 mapping contract): the Country
+            // route starts here, so the approved panel is authored under
+            // `country.`; the ledger key stays `hiphop.mercer_fork.ride`.
             panelKey: 'country.mercer_fork.ride',
-            label: "You don't need this job or that boyfriend. I'll give you a ride to the concert.",
+            label: "That sounds incredible! I'm game. I'll meet you at my car when I'm done shopping.",
             reply: "My boyfriend can lick someone else's butt. Take me to StageWagon, babe!",
-            // The phone stays on the counter: temp radio ends, Brittney is in
-            // the car (Country, Phase 4), and Hip-Hop goes back on the shelf
-            // for a later run.
+            // Full support: +5 Brittney.  The phone stays on the counter: temp
+            // radio ends, Brittney is in the car, Hip-Hop resets for this run.
             effects: {
               items: { phone: false }, flags: { mercerDone: true, path: 'country', phoneLeft: true },
-              radioGrant: null, startStory: 'country',
+              radioGrant: null, startStory: 'country', relationshipFor: { country: 5 },
               passenger: { id: 'brittney', name: 'Brittney', storyId: 'country' },
               resetStory: 'hiphop',
             },
+          },
+          {
+            id: 'both', consequential: true, next: 'mercer_ultimatum',
+            label: "Sure! We just have to drop this phone off in Issaquah on our way.",
+            reply: "No. I'm done letting his album hijack my plans. Me or the phone.",
+            // Conditional support: +3 Brittney, banked until she is actually
+            // in the car (Country hasn't started yet).
+            effects: { flags: { mercerPressed: true } },
+          },
+          {
+            id: 'keepJob', consequential: true, next: null,
+            label: "It's probably best if you keep your job. I can deliver the album.",
+            reply: "Whatever, dude. We would've had a sloppy-ass time. Do you need anything else? …Don't miss the exit. Malik watches that phone's location like it's the RedZone. He's had people beaten up for less.",
+            effects: { flags: { mercerDone: true, path: 'hiphop' }, relationship: 10 },
+          },
+        ],
+      },
+      mercer_ultimatum: {
+        stopId: 'M', virtual: true,
+        speaker: 'Brittney', portrait: 'biz_gasnsip',
+        importance: 'climax',
+        line: "Me or the phone.",
+        choices: [
+          {
+            id: 'chooseBrittney', consequential: true, next: null,
+            panelKey: 'country.mercer_fork.ride',
+            label: "You. Leave the phone.",
+            reply: "Good answer.",
+            // +3 (both) +2 here = +5 Brittney total; Malik −10 for wavering.
+            effects: {
+              items: { phone: false }, flags: { mercerDone: true, path: 'country', phoneLeft: true },
+              radioGrant: null, startStory: 'country', relationshipFor: { country: 5 }, relationship: -10,
+              passenger: { id: 'brittney', name: 'Brittney', storyId: 'country' },
+              resetStory: 'hiphop',
+            },
+          },
+          {
+            id: 'keepPromise', consequential: true, next: null,
+            label: "I have to take the phone.",
+            reply: "Then take his phone and go. Don't miss the exit. Malik watches that phone's location like it's the RedZone. He's had people beaten up for less.",
+            effects: { flags: { mercerDone: true, path: 'hiphop', brittneyRefused: true }, relationship: 10 },
           },
         ],
       },

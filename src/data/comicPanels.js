@@ -42,17 +42,7 @@ export const PANEL_META = {
   //    mouth boxes measured by eye on the 1672×941 frames; balloons sit in the
   //    sky/negative space each brief reserved).  Keys whose emission site
   //    doesn't exist yet are labeled FUTURE in tests/storyart.test.mjs. ──
-  'hiphop.seattle_stakes': {                        // Seattle v3 Beat 3 (node not wired yet)
-    art: 'assets/storylines/hiphop/seattle/seattle_06_stakes_phone.png',
-    bubble:       { x: 0.73, y: 0.02, w: 0.26, h: 0.30 },   // Malik, upper-right sky
-    playerBubble: { x: 0.34, y: 0.02, w: 0.22, h: 0.20 },   // player thought, between the heads
-    tail:         { x: 0.64, y: 0.32 },                     // Malik's mouth
-    playerTail:   { x: 0.31, y: 0.30 },                     // player's mouth
-    protect:      [{ x: 0.05, y: 0.12, w: 0.31, h: 0.86 },  // player + guitar case
-                   { x: 0.55, y: 0.12, w: 0.26, h: 0.86 },  // Malik
-                   { x: 0.42, y: 0.39, w: 0.07, h: 0.17, kind: 'phone' },
-                   { x: 0.82, y: 0.55, w: 0.18, h: 0.42, kind: 'car' }],
-  },
+
   'hiphop.vantage_hospital.wake': {                 // Ellensburg hospital (skipped-Issaquah path; emission not wired yet)
     art: 'assets/storylines/hiphop/vantage_ambush/ellensburg_hospital_01_player_wakes_with_bill.png',
     bubble:       { x: 0.64, y: 0.02, w: 0.34, h: 0.22 },   // the one reaction line, over the window
@@ -84,22 +74,39 @@ export const PANEL_META = {
                    { x: 0.66, y: 0.26, w: 0.28, h: 0.60, kind: 'face' }],  // the three friends (Haylee centre)
   },
   // ── Hip-Hop (28 approved panels) ──
-  'hiphop.seattle_offer': {
+  'hiphop.seattle_lot': {
     art: 'assets/storylines/hiphop/seattle/seattle_01_freestyle_circle.png',
     bubble:       { x: 0.04, y: 0.04, w: 0.58, h: 0.26 },
     playerBubble: { x: 0.40, y: 0.69, w: 0.56, h: 0.26 },
     tail:         { x: 0.30, y: 0.30 },
     playerTail:   { x: 0.70, y: 0.95 },
     protect:      [{ x: 0.20, y: 0.18, w: 0.65, h: 0.66 }],
-  },
-  'hiphop.seattle_offer.intro': {
+  },  'hiphop.seattle_clock': {
     art: 'assets/storylines/hiphop/seattle/seattle_02_crew_confrontation.png',
     bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
     playerBubble: { x: 0.04, y: 0.64, w: 0.45, h: 0.30 },
     tail:         { x: 0.70, y: 0.35 },
     playerTail:   { x: 0.25, y: 0.94 },
     protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
+  },  'hiphop.seattle_route': {
+    art: 'assets/storylines/hiphop/seattle/seattle_02_crew_confrontation.png',
+    bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
+    playerBubble: { x: 0.04, y: 0.64, w: 0.45, h: 0.30 },
+    tail:         { x: 0.70, y: 0.35 },
+    playerTail:   { x: 0.25, y: 0.94 },
+    protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
+  },  'hiphop.seattle_offer': {                         // the stakes + decision (handoff 2026-09-10)
+    art: 'assets/storylines/hiphop/seattle/seattle_06_stakes_phone.png',
+    bubble:       { x: 0.73, y: 0.02, w: 0.26, h: 0.30 },   // Malik, upper-right sky
+    playerBubble: { x: 0.34, y: 0.02, w: 0.22, h: 0.20 },   // player thought, between the heads
+    tail:         { x: 0.64, y: 0.32 },                     // Malik's mouth
+    playerTail:   { x: 0.31, y: 0.30 },                     // player's mouth
+    protect:      [{ x: 0.05, y: 0.12, w: 0.31, h: 0.86 },  // player + guitar case
+                   { x: 0.55, y: 0.12, w: 0.26, h: 0.86 },  // Malik
+                   { x: 0.42, y: 0.39, w: 0.07, h: 0.17, kind: 'phone' },
+                   { x: 0.82, y: 0.55, w: 0.18, h: 0.42, kind: 'car' }],
   },
+
   'hiphop.seattle_offer.carry': {
     art: 'assets/storylines/hiphop/seattle/seattle_03_phone_handoff.png',
     bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
@@ -124,12 +131,33 @@ export const PANEL_META = {
     playerTail:   { x: 0.25, y: 0.94 },
     protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
   },
-  'hiphop.mercer_fork': {
+  'hiphop.mercer_counter': {
     art: 'assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png',
     bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
     playerBubble: { x: 0.04, y: 0.64, w: 0.45, h: 0.30 },
     tail:         { x: 0.70, y: 0.35 },
     playerTail:   { x: 0.25, y: 0.94 },
+    protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
+  },  'hiphop.mercer_hook': {
+    art: 'assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png',
+    bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
+    playerBubble: { x: 0.04, y: 0.64, w: 0.45, h: 0.30 },
+    tail:         { x: 0.70, y: 0.35 },
+    playerTail:   { x: 0.25, y: 0.94 },
+    protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
+  },  'hiphop.mercer_fork': {
+    art: 'assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png',
+    bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
+    playerBubble: { x: 0.04, y: 0.64, w: 0.45, h: 0.30 },
+    tail:         { x: 0.70, y: 0.35 },
+    playerTail:   { x: 0.25, y: 0.94 },
+    protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
+  },  'hiphop.mercer_ultimatum': {
+    art: 'assets/storylines/country/mercer_island/mercer_04_quits_leaves_phone.png',
+    bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
+    playerBubble: { x: 0.04, y: 0.64, w: 0.45, h: 0.30 },
+    tail:         { x: 0.303, y: 0.252 },
+    playerTail:   { x: 0.753, y: 0.276 },
     protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
   },
   'hiphop.mercer_fork.keepJob': {

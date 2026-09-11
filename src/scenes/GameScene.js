@@ -1120,6 +1120,7 @@ export class GameScene extends Phaser.Scene {
     this._bladderBurstMile = null;   // odometer where Thirst hit ≥90 (bursting)
     // Restore persisted survival state on a rest-stop resume (fresh runs start clean).
     if (this._resumeFromStop || this._resumeFromPosition != null) {
+      if (this._resumeFromStop === 'M') this.time.delayedCall(400, () => this._maybeMalikCall());
       const _ss = this.registry.get('save')?.get?.('survivalState');
       if (_ss) this.survival.restore(_ss);
       const _bf = this.registry.get('save')?.get?.('activeBuffs');
@@ -26785,6 +26786,32 @@ export class GameScene extends Phaser.Scene {
    *  Inits on first call (which also arms the iOS native-gesture unlock),
    *  resumes the context if an autoplay block suspended it, and never restarts
    *  a song that's already playing.  Respects the mute toggle. */
+  /** Malik's post-Mercer CALL (authoritative handoff 2026-09-10): the player
+   *  stopped at Mercer, Brittney stayed, the player took the phone, HIT THE
+   *  ROAD.  Malik tracks the phone and expected Brittney.  Plays once, before
+   *  driving resumes, as a tap-to-dismiss card; recorded as a comic beat with
+   *  its own panel key (art pending).  Skipped-Mercer keeps the TEXT instead. */
+  _maybeMalikCall() {
+    const story = this.story; if (!story) return;
+    const st = story.story?.('hiphop'); if (!st || story.status?.('hiphop') !== 'active') return;
+    if (!st.items?.phone || st.items?.phoneLocked || st.flags?.path !== 'hiphop' || !st.flags?.mercerDone
+        || st.flags?.skippedMercer || st.flags?.malikCalled) return;
+    const lines = [
+      'MALIK: Britt? You headed to Kyle?',
+      "YOU: She had to work a double, so I'm doing you a solid.",
+      'MALIK: …Damn. She told you where to go?',
+      "YOU: Yeah. Kyle's spot in Issaquah.",
+      "MALIK: Good. I can see the phone moving. Don't get creative.",
+    ];
+    try {
+      story.recordBeat({ storyId: 'hiphop', beatId: 'mercer_malik_call', panelKey: 'hiphop.mercer_malik_call',
+                         importance: 'consequence', speaker: 'Malik Reed', text: lines.join('\n'),
+                         mile: this._odometer ?? 0, effects: { flags: { malikCalled: true } } });
+    } catch (_) {}
+    this._showOutcomeCard('📱 MALIK\n' + lines.join('\n'), '#9FE8FF');
+    this.haptics?.notify?.();
+  }
+
   /** A story just granted a genre (Malik's phone → Hip-Hop): switch the radio
    *  to that station ONCE per grant so the album plays the moment the player
    *  drives off (owner 2026-09-10: "auto-start playing after the Malik

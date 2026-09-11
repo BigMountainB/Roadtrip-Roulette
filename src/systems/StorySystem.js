@@ -491,6 +491,15 @@ export class StorySystem {
     // Hip-Hop to the shelf for a later run).  Bumps the attempt so the
     // shelved attempt's ledger entries stay put and a fresh start can
     // re-commit the same nodes.
+    // Cross-story relationship (2026-09-10): Brittney's Mercer points land on
+    // the COUNTRY record even though the choice was committed on the Hip-Hop
+    // node — applied after startStory so the seeded start isn't overwritten.
+    if (isObj(fx.relationshipFor)) {
+      for (const [sid, d] of Object.entries(fx.relationshipFor)) {
+        const o = c.stories[sid] ?? (c.stories[sid] = emptyStoryState());
+        o.relationship = clamp(o.relationship + num(d), 0, 100);
+      }
+    }
     if (typeof fx.resetStory === 'string' && c.stories[fx.resetStory]) {
       const o = c.stories[fx.resetStory];
       c.stories[fx.resetStory] = { ...emptyStoryState(), replayCount: (o.replayCount ?? 0) + 1 };

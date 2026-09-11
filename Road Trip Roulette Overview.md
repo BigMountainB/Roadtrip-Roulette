@@ -204,6 +204,42 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-10 (pt 6) — AUTHORITATIVE DIALOGUE HANDOFF implemented: Seattle chain, Mercer fork + ultimatum, Malik's call; audio 3/6/7; new art wired; Malik starts at 60
+
+Story graph changed for the first time (`featuredStories.js`), per the owner+Chat handoff
+(notes §"AUTHORITATIVE DIALOGUE HANDOFF"):
+- **Seattle** is now a chain of short live-only tiles → the same decision keys:
+  `seattle_lot` (hype + Malik's NoiseCloud/bus couplet; cypher art `seattle_01`; its intro
+  beat is the book's establishing panel) → `seattle_clock` ("Malik Reed. Stank Records…" /
+  "I don't know you, no offense…" / "Fair enough.") → `seattle_route` ("Which way you
+  headed?" / "Pullman. Eventually." / "Then Mercer's on your way.") → `seattle_offer`
+  (the stakes lines 6–9 on the new stakes-phone art; `carry` / `pass` keys unchanged).
+  Malik routes the player to Mercer ONLY and doesn't know about the double.  Carry reply
+  loses the lock sentence; the crew warning beat is now "It's in your best interest to
+  protect that phone. And don't touch the girl." (replaces "scratch the screen").
+- **Mercer**: `mercer_counter` ("Welcome to Gas-N-Sip, hon!…" / "Hey, are you Brittney?…")
+  → `mercer_hook` ("Ugh. Even when Malik's not here…" / "Oh, sorry…" / "But I wish you
+  would. I don't even like hip-hop.") → `mercer_fork` (StageWagon invite) with `ride` (+5
+  Brittney), NEW `both` (+3, → `mercer_ultimatum` "Me or the phone.": `chooseBrittney` = +5
+  total & Malik −10, `keepPromise` = she stays, Malik +10) and `keepJob` (+0; reply now
+  carries her warning "Don't miss the exit. Malik watches that phone's location like it's the
+  RedZone. He's had people beaten up for less.").  Brittney's points reach the COUNTRY
+  record through a new cross-story `relationshipFor` effect, applied after `startStory`.
+- **Malik's call** at HIT THE ROAD from Mercer when Brittney stayed (`_maybeMalikCall`):
+  the exact five-line exchange as a tap-to-dismiss card, recorded once as a comic beat
+  (`hiphop.mercer_malik_call`, art pending).  Skipped Mercer keeps the text.  No Bellevue text.
+- **Album opener**: a random one of Rain City Roll Call / King of this County / Rain City
+  Code (owner reconfirmed over the handoff's Roll Call line).
+- **Panel map**: `seattle_offer` → stakes-phone art; `seattle_lot`/`clock`/`route`,
+  `mercer_counter`/`hook`/`ultimatum` mapped; the four new Chat images wired (hospital,
+  Haylee pickup, Vantage reunion) + Haylee's portrait registered; 81 panel keys.
+- **Malik starts at 60** (via the Seattle carry effect — a stray edit to Brittney's Country
+  start was caught by tests and reverted).  **Audio 3/6/7** done: one unlock listener +
+  100 ms buffer + 250 ms debounce (no-op while running), transactional init cleanup, stall
+  watchdog re-armed on foreground.  Dom's tape-for-money role drafted in the notes.
+- Tests: story suite reshaped (pending nodes, +5 Country baseline) + new ultimatum tests;
+  17 files green.
+
 ### 2026-09-10 (pt 5) — Special story beats emitted; Malik's album auto-plays; rewind re-opens exits; exit signs at ½/¼ mi; hash-mark exit arrows
 
 - **Ch.18 special beats (the 31 "unreachable" panels)**: StorySystem now records
