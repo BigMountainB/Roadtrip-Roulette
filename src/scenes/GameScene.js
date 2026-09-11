@@ -49,7 +49,7 @@ import { EffectsSystem } from '../systems/EffectsSystem.js';
 import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
 import { StorySystem } from '../systems/StorySystem.js';
 import { ComicSystem } from '../systems/ComicSystem.js';
-import { CopSystem, FLEE_EXIT_HOLD_REL } from '../systems/CopSystem.js';
+import { CopSystem, FLEE_EXIT_HOLD_REL, shouldBeginPursuitStop } from '../systems/CopSystem.js';
 import { genreArtPath, genreDefaultPath, GENRE_ART, restStopManifest } from '../systems/AssetManifest.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
 import { ensureStopSign } from '../data/shoppingSign.js';
@@ -1822,6 +1822,13 @@ export class GameScene extends Phaser.Scene {
     // graphics layer so the user can see ONLY the yellow / magenta /
     // cyan lines without the F3 blue frames + red boxes + labels.
     this._paintedEdgeGfx = this.add.graphics().setDepth(19).setVisible(false);
+    // ?copdebug=1 — live pull-over state on screen + window.__copLog ring
+    // buffer (last 600 frames), for the shoulder/brake device check.
+    try { this._copDebug = /[?&]copdebug\b/.test(window.location.search); } catch (_) { this._copDebug = false; }
+    if (this._copDebug) {
+      this._copDbgText = this.add.text(8, 150, '', { fontSize: '11px', fontFamily: 'monospace', color: '#FFE45C', backgroundColor: '#000000AA', padding: { x: 4, y: 3 } }).setDepth(950).setScrollFactor(0);
+      this._hudObjects?.push(this._copDbgText);
+    }
     this._debugText = this.add.text(8, 8, '', {
       fontFamily: 'monospace, Courier', fontSize: '11px',
       color: '#FFFFFF', backgroundColor: 'rgba(0,0,0,0.55)',
@@ -4449,6 +4456,35 @@ export class GameScene extends Phaser.Scene {
     return { left: this._isLeftRaw(), right: this._isRightRaw() };
   }
   _isBrake() { return this._touchBrake || !!this.cursors?.down.isDown || !!this.wasd?.down.isDown; }
+
+  /** Pull-over diagnostics (Chat/Codex list, 2026-09-11): every value that
+   *  can stop the car, per frame.  Cheap; the ring buffer always exists so a
+   *  headless probe can read it, the on-screen text only with ?copdebug=1. */
+  _copDiagnostics(rawDt) {
+    const p = this.player; if (!p) return;
+    const now = this.time?.now ?? 0;
+    const rear = this.cops?.getRearCopInfo?.(p.position + PLAYER_VIRTUAL_Z);
+    const rec = {
+      t: Math.round(now), mph: Math.round(this._displayMPH?.() ?? 0), x: +p.x.toFixed(3),
+      stars: this.cops?.starDisplay ?? 0, rearCops: rear?.count ?? 0, rearRelZ: rear?.nearestRelZ == null ? null : Math.round(rear.nearestRelZ),
+      touchBrake: !!this._touchBrake, kbBrake: !!(this.cursors?.down?.isDown || this.wasd?.down?.isDown), isBrake: this._isBrake(),
+      brakeAge: this._brakeSince == null ? null : Math.round(now - this._brakeSince), shoulderAge: this._shoulderSince == null ? null : Math.round(now - this._shoulderSince),
+      armed: !!this._pursuitStopArmed, stopping: !!this._pursuitStopping, dwell: +(this._pursuitStopDwell ?? 0).toFixed(2), hold: !!this._pursuitStopHold,
+      trapActive: !!this._trapPursuitActive, trapStopping: !!this._trapStopping, trapHeld: !!this._trapStopHeld, bladderHeld: !!this._bladderStopHeld,
+      iframes: now < (this._invincibleUntil ?? 0), crashHold: now < (this._crashRecoveryUntil ?? 0), zero: this._speedZeroReason ?? null,
+      // eligibility terms of the 1–2★ comply machine (why it may not arm)
+      firstTap: !!this._awaitingFirstGameTap, noPolice: !!this._customFlags?.noPolice, awaitingStart: !!this._awaitingStart, rawStars: +((this.cops?.stars ?? 0).toFixed(2)),
+    };
+    try { const L = (window.__copLog ??= []); L.push(rec); if (L.length > 600) L.splice(0, L.length - 600); window.__copNow = rec; } catch (_) {}
+    if (this._copDbgText) {
+      this._copDbgText.setText([
+        `build b23 · ${(window.__BUILD_ID ?? 'dev')}   ${rec.mph} mph  x ${rec.x}  ★${rec.stars}  rear ${rec.rearCops} (${rec.rearRelZ ?? '-'})`,
+        `brake touch:${rec.touchBrake ? 'ON' : 'off'} kb:${rec.kbBrake ? 'ON' : 'off'} → isBrake ${rec.isBrake}  brakeAge ${rec.brakeAge ?? '-'}ms  shoulderAge ${rec.shoulderAge ?? '-'}ms`,
+        `pursuit armed:${rec.armed} stopping:${rec.stopping} dwell:${rec.dwell} hold:${rec.hold}   trap active:${rec.trapActive} stopping:${rec.trapStopping} held:${rec.trapHeld}`,
+        `iframes:${rec.iframes} crashHold:${rec.crashHold} bladderHeld:${rec.bladderHeld}   SPEED ZEROED BY: ${rec.zero ?? '— (none)'}`,
+      ].join('\n'));
+    }
+  }
   _isBoost() {
     // No boost while the accel pedal's charge is empty — the pedal's
     // own update auto-toggles _touchBoost off, but a keyboard hold
@@ -5085,6 +5121,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Physics ───────────────────────────────────────────────────────
     this._updatePlayer(dt, phys);
+    this._copDiagnostics?.(rawDt);
     this._updateTraffic(dt);
     // Easy-mode only: vice pickups creep FORWARD toward the player at a
     // steady ~20 mph relative.  Safe accumulator rewrite — re-homes each
@@ -5760,9 +5797,13 @@ export class GameScene extends Phaser.Scene {
           // matter — pull off then brake, or brake then pull off — and
           // releasing either one immediately releases the car and cancels the
           // dwell below.
-          this._pursuitStopping = this._pursuitStopArmed && !_psIframes
-                                  && this.player.x > COP_TRAP_SHOULDER_X
-                                  && this._isBrake();
+          // …and the brake must be a DELIBERATE one (owner 2026-09-11): the
+          // touch pedal is a toggle, so a brake latched long before the
+          // shoulder does not commit a stop — see shouldBeginPursuitStop.
+          this._pursuitStopping = shouldBeginPursuitStop({
+            armed: this._pursuitStopArmed, iframes: _psIframes, x: this.player.x, brake: this._isBrake(),
+            shoulderX: COP_TRAP_SHOULDER_X, brakeSince: this._brakeSince, shoulderSince: this._shoulderSince,
+          });
           // The stop latches off the SAME flag, so it can no longer engage
           // from braking to a halt in a lane, nor from coasting down on the
           // shoulder.  No separate brake test here — it is already part of
@@ -6475,6 +6516,20 @@ export class GameScene extends Phaser.Scene {
   // ─── Player movement ──────────────────────────────────────────────────
   _updatePlayer(dt, phys) {
     const p = this.player;
+    // ── Pull-over diagnostics (owner 2026-09-11: "car stops on the shoulder
+    //    with 1–2★ without the brake").  Edge timestamps for the brake and the
+    //    shoulder, and the REASON the speed target is zeroed this frame —
+    //    shown on screen with ?copdebug=1 and logged to window.__copLog.
+    {
+      const _now = this.time?.now ?? 0;
+      const _brk = this._isBrake();
+      if (_brk && this._brakeSince == null) this._brakeSince = _now;
+      if (!_brk) this._brakeSince = null;
+      const _onSh = p.x > COP_TRAP_SHOULDER_X;
+      if (_onSh && this._shoulderSince == null) this._shoulderSince = _now;
+      if (!_onSh) this._shoulderSince = null;
+      this._speedZeroReason = null;
+    }
 
     // Speed: cruise at the vehicle's topMph; boost adds vehicle.boostMph
     // on top.  Flat mph bonuses stack on both (energy +4 single/refreshing,
@@ -6530,7 +6585,7 @@ export class GameScene extends Phaser.Scene {
     // Out of gas — coast to 0.  Multiplies targetSpeed by 0 so the
     // BRAKE/ACCEL ramp brings the car down at its normal deceleration.
     // Empty-tank stall — skipped in custom mode (no gas requirement).
-    if (Difficulty.mode?.() !== 'custom' && this.player.gasMi <= 0) targetSpeed = 0;
+    if (Difficulty.mode?.() !== 'custom' && this.player.gasMi <= 0) { targetSpeed = 0; this._speedZeroReason = 'out_of_gas'; }
 
     // Grade physics — subtle climb/descent effect on top speed.  Uphill
     // shaves a few mph off the cruise; downhill adds a few.  Uses the
@@ -6644,13 +6699,15 @@ export class GameScene extends Phaser.Scene {
       // only get into a traffic stop if your brakes are on"); this is the
       // parked-trap flow that was missed.  SHOULDER_X stays at 1.06 — with the
       // brake back in the chord the looser threshold is no longer a trap.
-      if (!this._trapStopping && _safeSeg && this._isBrake() && p.x > COP_TRAP_SHOULDER_X) {
+      if (!this._trapStopping && _safeSeg && shouldBeginPursuitStop({
+            armed: true, iframes: false, x: p.x, brake: this._isBrake(),
+            shoulderX: COP_TRAP_SHOULDER_X, brakeSince: this._brakeSince, shoulderSince: this._shoulderSince })) {
         this._trapStopping = true;
       }
       if (this._trapStopping && (!_safeSeg || p.x < COP_TRAP_ABORT_X)) {
         this._trapStopping = false;     // left the shoulder / unsafe ground → abort
       }
-      if (this._trapStopping) targetSpeed = 0;   // ease to a halt
+      if (this._trapStopping) { targetSpeed = 0; this._speedZeroReason = 'trap_stop'; }   // ease to a halt
     } else if (this._trapStopping) {
       this._trapStopping = false;
     }
@@ -6659,12 +6716,12 @@ export class GameScene extends Phaser.Scene {
     // the stop — cruise braking floors at 60 mph, so without this the player
     // "pulls over" onto the grass and just keeps driving.  Flag managed by
     // the comply machine in update().
-    if (this._pursuitStopping) targetSpeed = 0;
+    if (this._pursuitStopping) { targetSpeed = 0; this._speedZeroReason = 'pursuit_stop'; }
     // _pursuitStopHold pins IN the physics step too (owner 2026-08-31: the
     // update-loop zeroing ran AFTER cruise easing, so the car crept forward a
     // step every frame during the stop and could even be steered away).
-    if (this._trapStopHeld || this._bladderStopHeld || this._pursuitStopHold) targetSpeed = 0;   // pinned for a held stop (traffic / bathroom / pursuit)
-    if (this._finishCinematic) targetSpeed = 0;   // finish cinematic — ease to a stop at the house
+    if (this._trapStopHeld || this._bladderStopHeld || this._pursuitStopHold) { targetSpeed = 0; this._speedZeroReason = this._trapStopHeld ? 'trap_hold' : this._bladderStopHeld ? 'bladder_hold' : 'pursuit_hold'; }   // pinned for a held stop (traffic / bathroom / pursuit)
+    if (this._finishCinematic) { targetSpeed = 0; this._speedZeroReason = 'finish'; }   // finish cinematic — ease to a stop at the house
 
     // Flat tire from roadblock — hard-cap top speed to 45 mph until timer ends.
     if (this._flatTireTimer > 0) {
@@ -7629,6 +7686,7 @@ export class GameScene extends Phaser.Scene {
                           && _nowFr >= (this._crashRollStartAt ?? 0);
     if (_iframeActive && !_inRollPhase) {
       p.speed = 0;
+      this._speedZeroReason = 'crash_hold';
     } else {
       // CLAMP at the route end — do NOT modulo-wrap.  Wrapping looped the run
       // back to mile 0 (car still rolling, HP intact) if the mile-289 finish

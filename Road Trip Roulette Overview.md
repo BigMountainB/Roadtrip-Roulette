@@ -204,6 +204,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-11 (pt 13) — Pull-over needs a DELIBERATE brake; live pull-over diagnostics (`?copdebug=1`)
+
+Owner: at 1–2★ the car stops on the shoulder "without brake applied" and should keep 60 mph. A
+headless run of Chat's six regression cases against the running build showed the police logic
+already required the brake (shoulder with no brake = 89 mph, no stop). The cause is the touch
+BRAKE pedal being a toggle: a brake latched earlier counts as "brake on", so drifting onto the
+shoulder commits the stop (and 60 mph is the latched-brake cruise floor he sees). Fix:
+`CopSystem.shouldBeginPursuitStop` (pure, tested ×10) — the brake must be engaged on the shoulder
+or within 3 s before reaching it; used by the 1–2★ comply machine and the speed-trap commit.
+`GameScene` tracks brake/shoulder edge times and a per-frame zero-speed reason; `?copdebug=1`
+shows all of it on screen (+ `window.__copLog`). Probe after the fix: latched brake → shoulder
+= 60 mph, no stop; fresh brake press on the shoulder = stop. Off-road physics untouched (the
+owner reverted Chat's cap). Build tag b23. 18 test files green.
+
 ### 2026-09-11 (pt 12) — Ranked placement zones, reading-order gate, narrow routed tails, linked balloons, tone shapes; packed book pages; pilot passes
 
 Owner directive (notes §"RANKED PLACEMENT ZONES…") + Chat's corrective list, all in code:

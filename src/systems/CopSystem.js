@@ -94,6 +94,24 @@ const UNITS_PER_MILE   = (ROUTE_SEGS * SEG_LENGTH) / TOTAL_ROUTE_MILES;
 const COP_ESCAPE_MILES = 1.5;
 const COP_ESCAPE_UNITS = UNITS_PER_MILE * COP_ESCAPE_MILES;
 
+// ── Pull-over rule (owner 2026-09-11) ────────────────────────────────────
+// "The shoulder remains drivable; a traffic stop can begin only when the
+// player DELIBERATELY combines the shoulder position with active brake
+// input."  The touch BRAKE pedal is a TOGGLE that stays latched until GAS is
+// tapped, so "brake is on" alone is not a deliberate act at the moment of
+// pulling over — the owner's "car stops on the shoulder without the brake"
+// is a brake latched minutes earlier.  Deliberate = the brake was engaged
+// while already on the shoulder, or within PURSUIT_BRAKE_FRESH_MS before
+// reaching it (pull off then brake, or brake then pull off — both orders).
+// Used by the 1–2★ comply machine AND the parked speed-trap commit.
+export const PURSUIT_BRAKE_FRESH_MS = 3000;
+export function shouldBeginPursuitStop({ armed, iframes = false, x, brake, shoulderX = 1.06, brakeSince = null, shoulderSince = null, freshMs = PURSUIT_BRAKE_FRESH_MS }) {
+  if (!armed || iframes || !brake) return false;
+  if (!(x > shoulderX)) return false;
+  if (brakeSince == null || shoulderSince == null) return true;    // no timing available: shoulder + brake
+  return brakeSince >= shoulderSince - freshMs;                      // a stale, latched brake does not count
+}
+
 // ── Chase discipline (police-chase spec, owner 2026-07-28) ──────────────
 // A pursuer may only get IN FRONT of the player at 4-5 stars.  Below that,
 // blocking / overtaking / PIT are unreachable and two guards enforce it.

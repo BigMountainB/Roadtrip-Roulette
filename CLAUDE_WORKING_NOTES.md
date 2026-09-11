@@ -3927,11 +3927,109 @@ Required fallback order:
 2. Entire box/tail using only Level 3 scene detail.
 3. Box/tail spanning negative space plus Level 3.
 4. If still impossible, allow the smallest useful overlap with Level 2 while using Level 3/negative space for the rest.
-5. Try an alternate shape, attachment edge, linked-balloon arrangement, gutter position, or approved crop.
+5. Try an alternate shape, attachment edge, linked-balloon arrangement, gutter position, or a crop that passes the crop-safety rules below.
 6. Split the dialogue into another linked balloon or another tile.
 7. **Never fall through into Level 1. Faces remain forbidden even when every other candidate fails.** Return a layout exception instead.
 
 This is a weighted layout problem: Level 1 overlap has infinite/reject cost; Level 2 has a very high cost; Level 3 has a modest cost; negative space has zero cost. Score the complete visible geometry, not only the balloon's rectangular bounding box.
+
+### OWNER ADDITION — crop safety for Levels 1–2 and all lettering (2026-09-11)
+
+Cropping is subject to the same semantic hierarchy as text placement. A crop may remove **Level 3 scene detail only**. It must never clip, trim, hide, or push outside the visible panel any part of:
+
+- **Level/layer 1:** a protected face, head, hair silhouette, or its safety margin;
+- **Level/layer 2:** a story-essential body, gesture, interaction, prop, vehicle, phone, or other object needed to understand the beat; or
+- **any text element:** words, balloon body, caption box, outline, padding, tail, linked-balloon connector, thought-bubble trail, phone/electronic zigzag, sound effect, or speaker label.
+
+This is an absolute rule, not a scoring preference. Level 1, Level 2, and text must be **fully contained** inside the final visible panel—not merely intersecting it or having their center points inside it.
+
+Required rendering order and behavior:
+
+1. Resolve the destination slot, scale, and proposed image crop first.
+2. Transform all authored Level 1 and Level 2 regions into final visible-panel coordinates.
+3. Reject any proposed crop that does not fully contain every Level 1 or Level 2 region required for that beat, including its safety margin. Cropping may not make a protected region disappear from collision checks.
+4. Lay out balloons, captions, tails, connectors, labels, and sound effects only after the crop is known.
+5. Run a final containment check on the complete rendered geometry of every text element. Keep it inside the panel by at least the larger of the rendered stroke width or 2 screen pixels at the target display size.
+6. Repeat these checks separately for live gameplay, scrollback, the menu comic, hold-to-zoom, screenshots, and exported pages at every supported orientation and slot ratio.
+
+If the selected slot cannot satisfy these rules, do not force the crop and do not silently accept clipping. Recompose in this order: choose another focus/crop, use fit or letterboxing, extend nonessential background/negative space, change or reflow the page template, give the panel a wider slot, or split the beat/dialogue across linked balloons or another tile. Return a layout exception if none of those options works.
+
+QA must report separate counts for `croppedLevel1`, `croppedLevel2`, and `croppedText`. Every count must be zero. A report may not claim `pass: true` when any of those counts is nonzero, including on a narrow phone, after rotation, or on an incomplete final comic page.
+
+### OWNER ADDITION — intentional line wrapping and authentic balloon variety (2026-09-11)
+
+The lettering must look composed by a comic letterer, not like ordinary UI text placed inside a rounded rectangle. Professional lettering guidance generally shapes dialogue into a compact oval or soft diamond: shorter lines near the top and bottom and longer lines through the middle, with comfortable air between the lettering and outline. Sources for implementation and review include Todd Klein's [balloon lettering guidance](https://kleinletters.com/Blog/more-about-pen-lettering/), Nate Piekos/Blambot's [comic-book grammar and balloon conventions](https://blambot.com/pages/comic-book-grammar-tradition), and Blambot's [professional lettering tips](https://blambot.com/pages/lettering-tips).
+
+#### One-word-line rule
+
+Do not leave a single word stranded on its own line when the complete dialogue contains three or more words. A one-word line is permitted only when:
+
+- the entire dialogue contains only one or two words;
+- the writer explicitly marks that word as a dramatic beat or visual emphasis; or
+- every line is intentionally one word, creating a deliberately tall, narrow balloon whose shape and scene composition support that effect.
+
+An automatically produced one-word first, middle, or final line is a failed wrap—not acceptable merely because the text technically fits. Reflow before rendering by trying, in order: different natural phrase breaks, a modestly wider or differently shaped balloon, balanced tracking within the approved readability range, or a linked second balloon at a real pause in the speech. Do not solve an orphan by shrinking the type below the readable minimum, changing the dialogue, covering a higher-priority zone, or cropping protected content.
+
+Score candidate line breaks for all of the following:
+
+- no unapproved one-word line;
+- phrases remain together where a speaker would naturally pause;
+- the outer text silhouette suits the balloon—normally short/wide/short rather than a rectangular block;
+- adjacent line lengths change gradually instead of producing an accidental shelf or spike;
+- the reading order remains obvious; and
+- the final balloon remains comfortably padded and visually balanced.
+
+#### Creative shape system—not random decoration
+
+Build a reusable vector balloon grammar with controlled organic variation. Balloons from the same family may vary in width, height, asymmetry, curvature, attachment edge, and lobe placement so repeated panels do not look stamped from one template. However, unusual outlines must communicate how the line sounds or how it is delivered. Do not randomly assign dramatic shapes merely to make every balloon different.
+
+The supported families should include at minimum:
+
+- **ordinary speech:** softly irregular oval, egg, capsule, or rounded lozenge; calm and highly readable;
+- **compact or dry reply:** small tight oval/lozenge with generous padding, including intentionally isolated one- or two-word replies;
+- **linked thought/continued speech:** touching balloons for one continuous thought, or a narrow connector between distinct successive thoughts; linked balloons may leapfrog across the panel in reading order;
+- **whisper/private speech:** restrained dashed outline and/or smaller muted lettering with extra air—not an oversized novelty cloud;
+- **shout/anger:** irregular burst or roughened outline with heavier lettering, with spike count and intensity proportional to the delivery;
+- **phone/radio/electronic speech:** visually distinct transmitted-speech outline and a narrow zigzag/electric tail;
+- **fear, injury, exhaustion, or fading speech:** controlled wavy or trembling outline with broken cadence;
+- **thought/internal voice:** narration caption by default; use a cloud balloon and diminishing circular trail only when the story deliberately calls for the traditional effect;
+- **off-panel speech:** balloon at the panel boundary with an open-ended or boundary-directed tail; and
+- **narration/context:** rectangular or clipped-corner caption boxes without speaker tails, visually distinct from spoken dialogue.
+
+The system should also support occasional butted balloons, curved or S-shaped tails, interrupted balloons, overlapping/linked clusters, balloons partly occupying gutters when the page design permits it, and border shapes tailored around available negative space. These are layout tools, not decoration. All remain subject to reading order, narrow-tail, protected-zone, and crop-safety rules.
+
+#### OWNER CORRECTION — joins are open bridges, not enclosed decorations (2026-09-11)
+
+The current diamond, double-diamond, and fully outlined rectangle shapes placed between balloons are not acceptable as ordinary balloon connectors. They read as additional empty boxes or decorative symbols instead of one continuous dialogue chain.
+
+Use the established comic-lettering distinction described by Comicraft's [Creating Tails and Joins](https://balloontales.com/creating-tails-and-joins/), Blambot's [Joining Balloons](https://blambot.com/pages/comic-book-grammar-tradition), and the illustrated [LetterMyComic joining guide](https://www.lettermycomic.com/guide):
+
+1. **Direct join for closely related speech:** overlap the two balloon bodies and union them into one continuous filled silhouette. Remove the internal outlines where the shapes overlap. There is no intermediary diamond, rectangle, or seam.
+2. **Bridge connector when balloons need separation:** draw an open neck/band between the two balloons. A vertical bridge has only its left and right edge strokes; its top and bottom remain open into the balloon bodies. A horizontal bridge has only its top and bottom edge strokes; its left and right ends remain open. The fill flows continuously from one balloon through the bridge into the next.
+3. **No end caps:** never draw a four-sided rectangle, closed diamond, double diamond, bow tie, outlined chain link, or other completely enclosed shape between ordinary balloons.
+4. **Simple geometry first:** bridge edges should usually be straight and direct, approximately parallel or only subtly tapered. A gentle curve or S-shaped route is allowed when needed to travel around protected art. Do not zigzag merely for decoration.
+5. **Keep connectors subordinate:** the bridge must be visibly narrower than either balloon and should not look large enough to contain another line of dialogue. It receives no text.
+6. **Preserve outline continuity:** where a bridge enters a balloon, suppress the balloon outline across the entire opening so the junction reads as one open passage. Do not leave a line running behind or across the connector.
+7. **One actual speaker tail:** a linked group from the same speaker normally needs one narrow pointer toward that speaker, not a separate speaker tail from every balloon. The bridge between balloons is not a speaker tail and never points at a face.
+8. **Use meaning to choose the join:** directly touching/merged balloons imply one continuous thought; a visible bridge can introduce a small pause, separate successive ideas, or organize a staggered exchange. A true dramatic pause may justify separate unconnected balloons.
+
+Diamonds and other closed shapes may exist only as deliberately authored **balloon bodies** for a specific voice or story effect. They are never the default plumbing between balloons.
+
+Add connector-specific QA failures: `closedConnector`, `interiorJoinSeam`, `connectorEndCap`, `connectorTooWide`, and `decorativeConnector`. Every count must be zero for pilot approval. The balloon contact sheet must show direct merged joins, short vertical and horizontal open bridges, one longer protected-zone-avoiding bridge, and an intentionally separate unconnected pair for comparison.
+
+Claude should implement and demonstrate this as a **balloon contact sheet** before another panel-by-panel correction cycle: show every family at normal and narrow-phone sizes, several organic silhouettes within each family, valid and invalid line wraps, linked exchanges, and the same examples after rotation and book-page placement. Chat and Claude can reject technical failures from that sheet; the owner should only need to approve the overall visual language and any genuinely subjective style choices.
+
+#### ART-DIRECTION DELIVERABLE — SVG balloon library pilot 01 (2026-09-11)
+
+Chat created the first reviewable balloon art library. This is an **approval pilot, not authorization to integrate it yet**:
+
+- contact sheet: `review/comic_balloon_library_2026-09-11/contact-sheet.svg`
+- rendered preview: `review/comic_balloon_library_2026-09-11/contact-sheet.png`
+- reusable SVG masters and implementation manifest: `public/assets/ui/comic/balloons/`
+
+The folder separates balloon bodies, speaker tails, and open bridges. It contains ordinary organic families, a compact reply, player lozenge, whisper, shout, electronic, distress, thought, and narration caption designs plus straight/curved/electronic tails and vertical/horizontal open bridges. No story art was generated or duplicated.
+
+Do not substitute newly invented procedural diamonds, connector boxes, or runtime-random silhouettes when this library is integrated. First obtain owner feedback on pilot 01, revise the masters/contact sheet if requested, and only then wire the approved SVG language into both the live tile and permanent comic renderers.
 
 ### Metadata model
 
@@ -4542,3 +4640,44 @@ end.  Status of everything not already closed above:
 
 Nothing else in the document asks for code that isn't either done or waiting on one of the
 inputs above.
+
+## POLICE PULLOVER — DIAGNOSIS ON THE RUNNING BUILD + DELIBERATE-BRAKE FIX (Claude, 2026-09-11)
+
+Owner: "when I pull over to the side of the road with one or two stars, the car stops without
+brake applied. No traffic stop takes place until I apply the brake, but the car should continue
+to move at 60 mph if brake is not applied."  Did Chat's listed work against the running game
+(the owner had reverted Chat's earlier attempt, commit b17e4e0).
+
+### What the running build actually does (headless, 2★, cruiser on the bumper, `scratchpad/probe/cop_probe.mjs`)
+| Case | Result on HEAD before the fix |
+|---|---|
+| 1. shoulder, no BRAKE | 89–91 mph the whole time, `_pursuitStopping` false, nothing zeroes speed |
+| 2. shoulder + BRAKE | pursuit stop, car to 0, dwell 0.57 s, hold begins |
+| 3. BRAKE in a lane | 61 mph (cruise-brake floor), no stop |
+| 6. off-road alone | soft cap only (equilibrium ~89 mph at x 1.25), never a police zero |
+So the police logic in HEAD already required the brake and never stopped a no-brake car.
+
+### The real cause: the touch BRAKE pedal is a TOGGLE
+`GameScene` pedal handler: `this._touchBrake = !this._touchBrake` — one tap latches BRAKE on until
+GAS is tapped (the pedal glows).  A brake latched minutes earlier counts as "brake on", so the
+moment the car drifts onto the shoulder with a cruiser behind, the stop commits — the owner sees
+"stops without brake".  His "should continue at 60 mph" is exactly the latched-brake cruise floor.
+
+### Fix (in code): a stop needs a DELIBERATE brake
+`CopSystem.shouldBeginPursuitStop({ armed, iframes, x, brake, shoulderX, brakeSince, shoulderSince })`
+— pure, exported, used by BOTH the 1–2★ comply machine and the parked speed-trap commit.  The brake
+must have been engaged while already on the shoulder, or within `PURSUIT_BRAKE_FRESH_MS` = 3000 ms
+before reaching it (pull off then brake, or brake then pull off).  A brake latched longer ago does
+not count.  `GameScene._updatePlayer` tracks the two edges (`_brakeSince`, `_shoulderSince`).
+No change to off-road physics (the owner reverted Chat's 60 mph cap; not re-applied).
+
+Probe after the fix (2★): latched brake in the lane 4.5 s → drift onto the shoulder → **60 mph, no
+stop**; release + fresh BRAKE press on the shoulder → **stop, hold**.  Cases 1–3 unchanged.
+`tests/chase.test.mjs` +10 focused cases on the pure rule (62/62); full suite 18 files green.
+
+### Device check for the owner (build **b23**)
+Open the game with `?copdebug=1` on the phone: a yellow monospace box shows live `brake
+touch/kb → isBrake`, `brakeAge`, `shoulderAge`, `armed/stopping/dwell/hold`, trap state, i-frames,
+and `SPEED ZEROED BY: <reason>` every frame (also `window.__copLog`, last 600 frames).  Then:
+(1) tap BRAKE once in a lane (it latches — pedal glows), drive on, drift onto the shoulder with a
+cruiser behind → car keeps 60, no stop; (2) tap GAS (unlatches), then BRAKE on the shoulder → stop.

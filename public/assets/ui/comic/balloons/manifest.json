@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "status": "art-direction pilot; owner approval required before integration",
+  "bodyViewBox": "0 0 400 220",
+  "componentViewBox": "0 0 260 220",
+  "stroke": {
+    "color": "#17191d",
+    "linecap": "round",
+    "linejoin": "round"
+  },
+  "bodies": [
+    { "id": "speech-oval", "file": "speech-oval.svg", "use": "ordinary speech", "aspectRange": [1.45, 2.8] },
+    { "id": "speech-egg", "file": "speech-egg.svg", "use": "ordinary speech; slightly warmer or more animated", "aspectRange": [1.4, 2.6] },
+    { "id": "speech-bean", "file": "speech-bean.svg", "use": "ordinary speech; conversational and informal", "aspectRange": [1.5, 2.8] },
+    { "id": "speech-capsule", "file": "speech-capsule.svg", "use": "brief dry reply", "aspectRange": [1.8, 3.6] },
+    { "id": "player-lozenge", "file": "player-lozenge.svg", "use": "player speech; cream fill", "aspectRange": [1.5, 3.0] },
+    { "id": "whisper", "file": "whisper.svg", "use": "whisper or private speech only", "aspectRange": [1.45, 2.7] },
+    { "id": "shout", "file": "shout.svg", "use": "shouting, alarm, or explosive anger only", "aspectRange": [1.45, 2.4] },
+    { "id": "electronic", "file": "electronic.svg", "use": "phone, radio, or speaker transmission only", "aspectRange": [1.45, 2.7] },
+    { "id": "distress", "file": "distress.svg", "use": "fear, injury, exhaustion, or fading speech", "aspectRange": [1.4, 2.5] },
+    { "id": "thought", "file": "thought.svg", "use": "traditional thought only; captions remain the default internal voice", "aspectRange": [1.4, 2.5] },
+    { "id": "caption-ticket", "file": "caption-ticket.svg", "use": "narration, context, location, or time", "aspectRange": [1.6, 4.2] }
+  ],
+  "components": [
+    { "id": "tail-straight", "file": "tail-straight.svg", "use": "ordinary speaker pointer" },
+    { "id": "tail-curved", "file": "tail-curved.svg", "use": "route around protected artwork" },
+    { "id": "tail-electronic", "file": "tail-electronic.svg", "use": "transmitted voice only" },
+    { "id": "bridge-vertical", "file": "bridge-vertical.svg", "use": "open vertical link between separated balloons" },
+    { "id": "bridge-horizontal", "file": "bridge-horizontal.svg", "use": "open horizontal link between separated balloons" }
+  ]
+}
