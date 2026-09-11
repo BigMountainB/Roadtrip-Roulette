@@ -4555,3 +4555,26 @@ the long car ride?" strip after the owner signs off the pilot.
 - Approve the tone assignments I read into the approved lines (flirt on the StageWagon invite
   and the departure line; shout on the crew hype, the `both` reply and "Me or the phone.").
 - The fan line wording / payoff; the placeholder dialogue list; the new-run passenger reset.
+
+## BACKLOG SWEEP — every open item in this document (Claude, 2026-09-11)
+
+Owner: "make sure there isn't new work for you anywhere in the entire document."  Read end to
+end.  Status of everything not already closed above:
+
+| Section | Status | What it needs |
+|---|---|---|
+| POLICE PULLOVER BUG (§4374) | **Source fix is in the tree** (`CopSystem.shouldBeginPursuitStop`, `limitOffroadTargetSpeed`; chase suite 66/66; swept into commit c476090). | OWNER device pass: the build tag on the title/phone menu now reads **b23** (was b22) so the phone's build is unambiguous — reload, confirm "b23", then (1) shoulder without BRAKE at 1★/2★ = no stop, (2) shoulder + BRAKE = stop. |
+| OWNER LOCK — Dom'nique deal tiers (§3231) + financial leverage (§3196) | **NOT in code.** | Owner lines for the three positions (back Dom / mediate / back Malik) and the tier outcomes; the opener lines exist ("Dom's got the original upload…" / "He wants money for my record?"). Structure is fully specified (Easton-or-Cle-Elum first visit, once; 5★ $10k; 3–4★ $2k + 1% + credit; 1–2★ safety promise; 0★ needs the safety workshop). I will wire it with `[OWNER LINE]` placeholders on the owner's word. |
+| Story canon batch — Classic Rock corrections, Nan rewrite + cookie event (§1801) | not started | owner lines |
+| Vantage recovery / hospital consequence (§2150, §2336) | not started (art exists: `hiphop.vantage_hospital.wake`) | owner go + the recovery presentation choice (cinematic turnaround) |
+| Encounter A — Malik's North Bend chase mechanics (§2336) | not started | owner go |
+| Malik contact spine C1–C7 + Malik↔Dom matrix scoring (§2938) | drafted, not in code | owner lines for C2–C7 |
+| Comic image storage — two-tier assets (§2868) | not started | owner go (it's the "P0" partner of the stability audit) |
+| iPhone stability audit P0/P1 (§3719) | read, not started | owner go ("ask before implementation") |
+| Editorial audit — presentation roles + car-ride montage (§4290) | read, queued | owner sign-off of the pilot |
+| Exit-time prefetch of likely panels (§669) | optimisation, open | none — can do any time |
+| Placeholder dialogue (Brittney objectives) (§4131) | in code as placeholders | owner rewrite |
+| Fan line wording/payoff; new-run passenger reset; tone assignments | open | owner calls |
+
+Nothing else in the document asks for code that isn't either done or waiting on one of the
+inputs above.

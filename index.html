@@ -4393,7 +4393,7 @@
           sSec('Data') +
           `<div class="pa-row"><span class="k">♻️ Reset player</span><button id="set-reset" class="pa-toggle" style="border-color:#FF4466;color:#FF7799;background:#2a1118;">RESET</button></div>` +
           `<p class="pa-note">Reset clears money, vehicles, vices &amp; checkpoints. Your lifetime stats, records and trophies are KEPT. Volume + mute apply instantly here on the start menu — no run needed.</p>` +
-          `<p class="pa-note" style="opacity:.55">Game build: b22 · ${(window.__BUILD_ID ?? 'dev')}</p>`);
+          `<p class="pa-note" style="opacity:.55">Game build: b23 · ${(window.__BUILD_ID ?? 'dev')}</p>`);
         const plateBtn = document.getElementById('set-plate');
         addTap(plateBtn, () => {
           // Edit the ACTIVE player's plate from Settings (not just first launch).
@@ -5049,7 +5049,7 @@
         tutmSheet.innerHTML = `<div class="tm-title">${e.title}</div><div class="tm-body">${e.desc}</div>
           <div class="tm-nav"><button data-nav="-1" ${i > 0 ? '' : 'disabled'}>‹ PREV</button>
           <button data-nav="x">✕</button><button data-nav="1" ${i < list.length - 1 ? '' : 'disabled'}>NEXT ›</button></div>
-          <div class="tm-build">b22</div>`;
+          <div class="tm-build">b23</div>`;
         // Real buttons through the project's tap helper — iOS was not
         // delivering click events to the old text spans (owner 2026-09-03).
         addTap(tutmSheet.querySelector('[data-nav="-1"]'), () => { if (i > 0) tutmShow(list[i - 1]); });
@@ -5100,7 +5100,7 @@
           Whenever you have a question, select it to enter Tutorial Mode. In Tutorial Mode, select any button, icon, text,
           or display to learn what it does.</div>
           <div class="tm-nav" style="justify-content:center"><button data-ok="1">GOT IT</button></div>
-          <div class="tm-build">b22</div>`;
+          <div class="tm-build">b23</div>`;
         // GOT IT drops the card; the mode (already on) stays.
         addTap(tutmSheet.querySelector('[data-ok]'), () => { T().setIntroSeen(); tutmSheet.classList.remove('show'); if (tutmOn) tutmBanner.classList.add('on'); });
         tutmFitSheet();
