@@ -204,6 +204,20 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-11 (pt 14) — Off the pavement = 60 mph, hard (owner); balloons hug the lettering
+
+Owner: "when the car is driving on the shoulder of the road or in the grass, the speed is 60 miles
+an hour, not 89." The old off-road ceiling was only a per-frame 6% pull toward the cap, applied
+after the throttle had already re-accelerated the car, so it settled ~89 mph at x 1.25. Now
+`constants.offroadSpeedCap(x, onPavedExit)` (pure, tested ×7) caps the TARGET speed: 60 mph past
+the fog line on either side, the old steeper curve below that in deep grass (never above 60);
+the exit lane's painted extent stays exempt. Live probe: lane 90 → right shoulder 60.0 → grass
+x 2.0 ≈31 → lane 76+ recovering → left shoulder 60.0; no brake, no police. Police stop rule
+(pt 13) untouched. Earlier the same day: balloons now size from the measured text block plus
+0.8 em / 0.5 line-height padding (owner correction "balloons must hug the lettering"), with a
+small bulge only on organic contours; QA log carries textBounds/bodyBounds/padding and flags
+`excessBalloonArea` (fails the gate). Book pages use the same padding. Build tag b24; suite green.
+
 ### 2026-09-11 (pt 13) — Pull-over needs a DELIBERATE brake; live pull-over diagnostics (`?copdebug=1`)
 
 Owner: at 1–2★ the car stops on the shoulder "without brake applied" and should keep 60 mph. A

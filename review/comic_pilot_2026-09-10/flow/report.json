@@ -191,40 +191,40 @@
    "name": "final_3_mercer_departure",
    "note": "FINAL accumulated tile — square location/context caption, the player's balloon, Brittney's reply (flirt silhouette)",
    "expectNode": "mercer_departure",
-   "captureOK": false,
+   "captureOK": true,
    "state": {
     "tileOpen": true,
     "lastNode": "mercer_departure",
     "balloons": 3
    },
    "after": {
-    "tileOpen": false,
+    "tileOpen": true,
     "lastNode": "mercer_departure",
     "balloons": 3,
-    "tiles": 0
+    "tiles": 1
    }
   }
  ],
  "flows": {
   "seattle": {
-   "tileOpenAt": "5.1s",
+   "tileOpenAt": "5.6s",
    "trayAppeared": true,
-   "trayAt": "21.5s",
+   "trayAt": "22.5s",
    "tray": [
     "I don't know you, no offense. I'm sure you haven't heard any of my songs either.",
     "Malik Reed? I follow your work. I'm a songwriter too."
    ],
    "offerTrayAppeared": true,
-   "offerAt": "73.2s",
+   "offerAt": "74.8s",
    "offerTray": [
     "I'm going right past Mercer. Give me the phone.",
     "I don't carry other people's problems. Good luck with the album."
    ],
-   "closedAt": "86.9s"
+   "closedAt": "88.9s"
   },
   "mercer": {
    "tileOpenOnArrival": true,
-   "at": "88.5s",
+   "at": "91.4s",
    "forkTray": [
     "That sounds incredible! I'm game. I'll meet you at my car when I'm done shopping.",
     "Sure! We just have to drop this phone off in Issaquah on our way.",
@@ -234,10 +234,10 @@
     "You look a lot more enjoyable to ride with than this cracked phone.",
     "I think you should keep your job, and I've got to get this phone to Issaquah."
    ],
-   "closedAt": "151.3s"
+   "closedAt": "154.1s"
   },
   "departure": {
-   "closedAt": "172.5s"
+   "closedAt": "172.4s"
   }
  },
  "book": {
@@ -283,8 +283,8 @@
   "level2Overlaps": [],
   "slots": {
    "authored": 18,
-   "grid": 6,
-   "nudged": 9
+   "grid": 7,
+   "nudged": 8
   },
   "acceptance": {
    "negativeSpaceOnly": true,
@@ -321,21 +321,6 @@
     "balloons": 2,
     "tiles": 1
    }
-  },
-  {
-   "name": "final_3_mercer_departure",
-   "expectNode": "mercer_departure",
-   "before": {
-    "tileOpen": true,
-    "lastNode": "mercer_departure",
-    "balloons": 3
-   },
-   "after": {
-    "tileOpen": false,
-    "lastNode": "mercer_departure",
-    "balloons": 3,
-    "tiles": 0
-   }
   }
  ],
  "layout": [
@@ -363,10 +348,27 @@
    "rect": {
     "x": 16,
     "y": 9,
-    "w": 244.8,
-    "h": 31.8375
+    "w": 247.4,
+    "h": 33.5655
    },
    "why": [],
+   "textBounds": {
+    "w": 225,
+    "h": 17.4
+   },
+   "bodyBounds": {
+    "w": 247.4,
+    "h": 33.6
+   },
+   "padding": {
+    "left": 11.2,
+    "right": 11.2,
+    "top": 8.1,
+    "bottom": 8.1,
+    "em": 0.7,
+    "lh": 0.42
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -379,7 +381,7 @@
    "clean": true,
    "exception": false,
    "l2": 0,
-   "l3": 0.637,
+   "l3": 0.633,
    "order": true,
    "tailClipped": false,
    "tailRouted": false,
@@ -393,10 +395,27 @@
    "rect": {
     "x": 296,
     "y": 9,
-    "w": 439.5,
-    "h": 41.134254455566406
+    "w": 441.28000000000003,
+    "h": 45.51425445556641
    },
    "why": [],
+   "textBounds": {
+    "w": 408,
+    "h": 18.6
+   },
+   "bodyBounds": {
+    "w": 441.3,
+    "h": 45.5
+   },
+   "padding": {
+    "left": 16.6,
+    "right": 16.6,
+    "top": 13.4,
+    "bottom": 13.4,
+    "em": 1.04,
+    "lh": 0.7
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -423,10 +442,27 @@
    "rect": {
     "x": 312,
     "y": 216,
-    "w": 215.5,
-    "h": 115.67127227783203
+    "w": 224.00000000000003,
+    "h": 105.25701782226562
    },
    "why": [],
+   "textBounds": {
+    "w": 198,
+    "h": 74.5
+   },
+   "bodyBounds": {
+    "w": 224,
+    "h": 105.3
+   },
+   "padding": {
+    "left": 13,
+    "right": 13,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 0.81,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -439,7 +475,7 @@
    "clean": true,
    "exception": false,
    "l2": 0,
-   "l3": 0.212,
+   "l3": 0.115,
    "order": true,
    "tailClipped": false,
    "tailRouted": false,
@@ -452,11 +488,28 @@
    "underTray": false,
    "rect": {
     "x": 16,
-    "y": 295,
+    "y": 287,
     "w": 180,
     "h": 82.5
    },
    "why": [],
+   "textBounds": {
+    "w": 0,
+    "h": 0
+   },
+   "bodyBounds": {
+    "w": 180,
+    "h": 82.5
+   },
+   "padding": {
+    "left": 90,
+    "right": 90,
+    "top": 41.3,
+    "bottom": 41.3,
+    "em": 5.63,
+    "lh": 2.58
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -505,10 +558,27 @@
    "rect": {
     "x": 400,
     "y": 13.5,
-    "w": 358.5,
-    "h": 59.76850891113281
+    "w": 364.12,
+    "h": 67.98850891113281
    },
    "why": [],
+   "textBounds": {
+    "w": 327,
+    "h": 37.3
+   },
+   "bodyBounds": {
+    "w": 364.1,
+    "h": 68
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -554,12 +624,29 @@
    "rect": {
     "x": 16,
     "y": 246.5,
-    "w": 187.5,
-    "h": 78.40276336669922
+    "w": 181.6,
+    "h": 75.10276336669922
    },
    "why": [
     "face"
    ],
+   "textBounds": {
+    "w": 156,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 181.6,
+    "h": 75.1
+   },
+   "padding": {
+    "left": 12.8,
+    "right": 12.8,
+    "top": 9.6,
+    "bottom": 9.6,
+    "em": 0.8,
+    "lh": 0.5
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -586,10 +673,27 @@
    "rect": {
     "x": 416,
     "y": 225,
-    "w": 253.5,
-    "h": 59.76850891113281
+    "w": 259.12,
+    "h": 67.98850891113281
    },
    "why": [],
+   "textBounds": {
+    "w": 222,
+    "h": 37.3
+   },
+   "bodyBounds": {
+    "w": 259.1,
+    "h": 68
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -637,10 +741,27 @@
    "rect": {
     "x": 400,
     "y": 13.5,
-    "w": 229.5,
-    "h": 43.46353721618652
+    "w": 239.76000000000002,
+    "h": 55.52353721618652
    },
    "why": [],
+   "textBounds": {
+    "w": 198,
+    "h": 21
+   },
+   "bodyBounds": {
+    "w": 239.8,
+    "h": 55.5
+   },
+   "padding": {
+    "left": 20.9,
+    "right": 20.9,
+    "top": 17.3,
+    "bottom": 17.3,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -686,12 +807,29 @@
    "rect": {
     "x": 16,
     "y": 246.5,
-    "w": 193.5,
-    "h": 43.46353721618652
+    "w": 190.8,
+    "h": 42.56353721618652
    },
    "why": [
     "face"
    ],
+   "textBounds": {
+    "w": 162,
+    "h": 21
+   },
+   "bodyBounds": {
+    "w": 190.8,
+    "h": 42.6
+   },
+   "padding": {
+    "left": 14.4,
+    "right": 14.4,
+    "top": 10.8,
+    "bottom": 10.8,
+    "em": 0.8,
+    "lh": 0.5
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -700,7 +838,7 @@
    "kind": "speech",
    "text": "Then Mercer's on your way.",
    "words": 5,
-   "slot": "nudged",
+   "slot": "authored",
    "clean": true,
    "exception": false,
    "l2": 0,
@@ -717,11 +855,28 @@
    "underTray": false,
    "rect": {
     "x": 416,
-    "y": 233,
-    "w": 233.5,
-    "h": 41.134254455566406
+    "y": 225,
+    "w": 239.12,
+    "h": 49.354254455566405
    },
    "why": [],
+   "textBounds": {
+    "w": 202,
+    "h": 18.6
+   },
+   "bodyBounds": {
+    "w": 239.1,
+    "h": 49.4
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -751,11 +906,11 @@
    "kind": "speech",
    "text": "I put some of my best tracks on this phone.",
    "words": 10,
-   "slot": "authored",
+   "slot": "nudged",
    "clean": true,
    "exception": false,
    "l2": 0,
-   "l3": 0.804,
+   "l3": 0.82,
    "order": true,
    "tailClipped": true,
    "tailRouted": true,
@@ -764,15 +919,34 @@
    "linked": false,
    "attributed": true,
    "clipped": false,
-   "flush": false,
+   "flush": true,
    "underTray": false,
    "rect": {
     "x": 16,
-    "y": 9,
-    "w": 175.5,
-    "h": 78.40276336669922
+    "y": 1,
+    "w": 181.12,
+    "h": 86.62276336669922
    },
-   "why": [],
+   "why": [
+    "tail"
+   ],
+   "textBounds": {
+    "w": 144,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 181.1,
+    "h": 86.6
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -799,10 +973,27 @@
    "rect": {
     "x": 576,
     "y": 9,
-    "w": 207.5,
-    "h": 97.03701782226562
+    "w": 208,
+    "h": 105.25701782226562
    },
    "why": [],
+   "textBounds": {
+    "w": 176,
+    "h": 74.5
+   },
+   "bodyBounds": {
+    "w": 208,
+    "h": 105.3
+   },
+   "padding": {
+    "left": 16,
+    "right": 16,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -828,13 +1019,30 @@
    "underTray": false,
    "rect": {
     "x": 576,
-    "y": 114,
-    "w": 196.5,
-    "h": 78.40276336669922
+    "y": 122,
+    "w": 202.12,
+    "h": 86.62276336669922
    },
    "why": [
     "balloon"
    ],
+   "textBounds": {
+    "w": 165,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 202.1,
+    "h": 86.6
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -859,14 +1067,31 @@
    "flush": false,
    "underTray": false,
    "rect": {
-    "x": 240,
+    "x": 216,
     "y": 264,
-    "w": 166.5,
-    "h": 115.67127227783203
+    "w": 172.12,
+    "h": 123.89127227783203
    },
    "why": [
     "face"
    ],
+   "textBounds": {
+    "w": 135,
+    "h": 93.2
+   },
+   "bodyBounds": {
+    "w": 172.1,
+    "h": 123.9
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -897,30 +1122,45 @@
    "kind": "speech",
    "text": "As an artist, you know how important this phone ",
    "words": 12,
-   "slot": "nudged",
+   "slot": "grid",
    "clean": true,
    "exception": false,
    "l2": 0,
-   "l3": 0.732,
+   "l3": 1,
    "order": true,
    "tailClipped": true,
-   "tailRouted": true,
+   "tailRouted": false,
    "tailBaseW": 19.2,
    "tailWidthOK": true,
    "linked": false,
    "attributed": true,
    "clipped": false,
-   "flush": true,
+   "flush": false,
    "underTray": false,
    "rect": {
-    "x": 16,
-    "y": 1,
-    "w": 157.5,
-    "h": 97.03701782226562
+    "x": 312,
+    "y": 24,
+    "w": 163.12,
+    "h": 105.25701782226562
    },
-   "why": [
-    "tail"
-   ],
+   "why": [],
+   "textBounds": {
+    "w": 126,
+    "h": 74.5
+   },
+   "bodyBounds": {
+    "w": 163.1,
+    "h": 105.3
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -947,10 +1187,27 @@
    "rect": {
     "x": 576,
     "y": 9,
-    "w": 197.5,
-    "h": 78.40276336669922
+    "w": 203.12,
+    "h": 86.62276336669922
    },
    "why": [],
+   "textBounds": {
+    "w": 166,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 203.1,
+    "h": 86.6
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -997,10 +1254,27 @@
    "rect": {
     "x": 16,
     "y": 9,
-    "w": 233.5,
-    "h": 59.76850891113281
+    "w": 237.6,
+    "h": 56.468508911132815
    },
    "why": [],
+   "textBounds": {
+    "w": 212,
+    "h": 37.3
+   },
+   "bodyBounds": {
+    "w": 237.6,
+    "h": 56.5
+   },
+   "padding": {
+    "left": 12.8,
+    "right": 12.8,
+    "top": 9.6,
+    "bottom": 9.6,
+    "em": 0.8,
+    "lh": 0.5
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1013,7 +1287,7 @@
    "clean": true,
    "exception": false,
    "l2": 0,
-   "l3": 0.007,
+   "l3": 0.006,
    "order": true,
    "tailClipped": true,
    "tailRouted": false,
@@ -1027,10 +1301,27 @@
    "rect": {
     "x": 448.00000000000006,
     "y": 225,
-    "w": 262.5,
-    "h": 78.40276336669922
+    "w": 268.12,
+    "h": 86.62276336669922
    },
    "why": [],
+   "textBounds": {
+    "w": 231,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 268.1,
+    "h": 86.6
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1077,10 +1368,27 @@
    "rect": {
     "x": 400,
     "y": 13.5,
-    "w": 350.5,
-    "h": 59.76850891113281
+    "w": 356.12,
+    "h": 67.98850891113281
    },
    "why": [],
+   "textBounds": {
+    "w": 319,
+    "h": 37.3
+   },
+   "bodyBounds": {
+    "w": 356.1,
+    "h": 68
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1112,7 +1420,7 @@
    "clean": true,
    "exception": false,
    "l2": 0,
-   "l3": 0.048,
+   "l3": 0.032,
    "order": true,
    "tailClipped": true,
    "tailRouted": false,
@@ -1126,10 +1434,27 @@
    "rect": {
     "x": 16,
     "y": 202.5,
-    "w": 240,
-    "h": 78.40276336669922
+    "w": 234.6,
+    "h": 75.10276336669922
    },
    "why": [],
+   "textBounds": {
+    "w": 209,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 234.6,
+    "h": 75.1
+   },
+   "padding": {
+    "left": 12.8,
+    "right": 12.8,
+    "top": 9.6,
+    "bottom": 9.6,
+    "em": 0.8,
+    "lh": 0.5
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1176,10 +1501,27 @@
    "rect": {
     "x": 400,
     "y": 13.5,
-    "w": 351.5,
-    "h": 59.76850891113281
+    "w": 357.12,
+    "h": 67.98850891113281
    },
    "why": [],
+   "textBounds": {
+    "w": 320,
+    "h": 37.3
+   },
+   "bodyBounds": {
+    "w": 357.1,
+    "h": 68
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1211,7 +1553,7 @@
    "clean": true,
    "exception": false,
    "l2": 0,
-   "l3": 0.007,
+   "l3": 0,
    "order": true,
    "tailClipped": true,
    "tailRouted": false,
@@ -1225,10 +1567,27 @@
    "rect": {
     "x": 16,
     "y": 202.5,
-    "w": 226.5,
-    "h": 59.76850891113281
+    "w": 220.6,
+    "h": 56.468508911132815
    },
    "why": [],
+   "textBounds": {
+    "w": 195,
+    "h": 37.3
+   },
+   "bodyBounds": {
+    "w": 220.6,
+    "h": 56.5
+   },
+   "padding": {
+    "left": 12.8,
+    "right": 12.8,
+    "top": 9.6,
+    "bottom": 9.6,
+    "em": 0.8,
+    "lh": 0.5
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1241,7 +1600,7 @@
    "clean": false,
    "exception": false,
    "l2": 0,
-   "l3": 0.274,
+   "l3": 0.299,
    "order": true,
    "tailClipped": true,
    "tailRouted": false,
@@ -1255,10 +1614,27 @@
    "rect": {
     "x": 336,
     "y": 336,
-    "w": 196.5,
-    "h": 78.40276336669922
+    "w": 208,
+    "h": 67.98850891113281
    },
    "why": [],
+   "textBounds": {
+    "w": 178,
+    "h": 37.3
+   },
+   "bodyBounds": {
+    "w": 208,
+    "h": 68
+   },
+   "padding": {
+    "left": 15,
+    "right": 15,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 0.94,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1306,10 +1682,27 @@
    "rect": {
     "x": 400,
     "y": 13.5,
-    "w": 359.5,
-    "h": 78.40276336669922
+    "w": 365.12,
+    "h": 86.62276336669922
    },
    "why": [],
+   "textBounds": {
+    "w": 328,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 365.1,
+    "h": 86.6
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1336,12 +1729,29 @@
    "rect": {
     "x": 312,
     "y": 120,
-    "w": 222.5,
-    "h": 41.134254455566406
+    "w": 228.12,
+    "h": 49.354254455566405
    },
    "why": [
     "face"
    ],
+   "textBounds": {
+    "w": 191,
+    "h": 18.6
+   },
+   "bodyBounds": {
+    "w": 228.1,
+    "h": 49.4
+   },
+   "padding": {
+    "left": 18.6,
+    "right": 18.6,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1374,7 +1784,7 @@
    "clean": true,
    "exception": false,
    "l2": 0,
-   "l3": 0.038,
+   "l3": 0.02,
    "order": true,
    "tailClipped": true,
    "tailRouted": false,
@@ -1388,10 +1798,27 @@
    "rect": {
     "x": 16,
     "y": 202.5,
-    "w": 236.5,
-    "h": 78.40276336669922
+    "w": 230.6,
+    "h": 75.10276336669922
    },
    "why": [],
+   "textBounds": {
+    "w": 205,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 230.6,
+    "h": 75.1
+   },
+   "padding": {
+    "left": 12.8,
+    "right": 12.8,
+    "top": 9.6,
+    "bottom": 9.6,
+    "em": 0.8,
+    "lh": 0.5
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1404,7 +1831,7 @@
    "clean": false,
    "exception": false,
    "l2": 0,
-   "l3": 0.298,
+   "l3": 0.559,
    "order": true,
    "tailClipped": true,
    "tailRouted": false,
@@ -1417,11 +1844,28 @@
    "underTray": false,
    "rect": {
     "x": 312,
-    "y": 336,
-    "w": 205.5,
-    "h": 78.40276336669922
+    "y": 312,
+    "w": 207.28,
+    "h": 82.78276336669921
    },
    "why": [],
+   "textBounds": {
+    "w": 174,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 207.3,
+    "h": 82.8
+   },
+   "padding": {
+    "left": 16.6,
+    "right": 16.6,
+    "top": 13.4,
+    "bottom": 13.4,
+    "em": 1.04,
+    "lh": 0.7
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1470,10 +1914,27 @@
    "rect": {
     "x": 288,
     "y": 13.5,
-    "w": 173.5,
-    "h": 43.46353721618652
+    "w": 179.44,
+    "h": 51.20353721618652
    },
    "why": [],
+   "textBounds": {
+    "w": 142,
+    "h": 21
+   },
+   "bodyBounds": {
+    "w": 179.4,
+    "h": 51.2
+   },
+   "padding": {
+    "left": 18.7,
+    "right": 18.7,
+    "top": 15.1,
+    "bottom": 15.1,
+    "em": 1.04,
+    "lh": 0.7
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1519,10 +1980,27 @@
    "rect": {
     "x": 328,
     "y": 208,
-    "w": 257.5,
-    "h": 78.40276336669922
+    "w": 267.6,
+    "h": 75.10276336669922
    },
    "why": [],
+   "textBounds": {
+    "w": 242,
+    "h": 55.9
+   },
+   "bodyBounds": {
+    "w": 267.6,
+    "h": 75.1
+   },
+   "padding": {
+    "left": 12.8,
+    "right": 12.8,
+    "top": 9.6,
+    "bottom": 9.6,
+    "em": 0.8,
+    "lh": 0.5
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1535,7 +2013,7 @@
    "clean": true,
    "exception": false,
    "l2": 0,
-   "l3": 0.427,
+   "l3": 0.466,
    "order": true,
    "tailClipped": true,
    "tailRouted": false,
@@ -1549,12 +2027,29 @@
    "rect": {
     "x": 608,
     "y": 192,
-    "w": 139.5,
-    "h": 43.46353721618652
+    "w": 149.76000000000002,
+    "h": 55.52353721618652
    },
    "why": [
     "balloon"
    ],
+   "textBounds": {
+    "w": 108,
+    "h": 21
+   },
+   "bodyBounds": {
+    "w": 149.8,
+    "h": 55.5
+   },
+   "padding": {
+    "left": 20.9,
+    "right": 20.9,
+    "top": 17.3,
+    "bottom": 17.3,
+    "em": 1.16,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1601,10 +2096,27 @@
    "rect": {
     "x": 16,
     "y": 13.5,
-    "w": 182.8,
-    "h": 66.7125
+    "w": 185.4,
+    "h": 68.4405
    },
    "why": [],
+   "textBounds": {
+    "w": 163,
+    "h": 52.3
+   },
+   "bodyBounds": {
+    "w": 185.4,
+    "h": 68.4
+   },
+   "padding": {
+    "left": 11.2,
+    "right": 11.2,
+    "top": 8.1,
+    "bottom": 8.1,
+    "em": 0.7,
+    "lh": 0.42
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1636,7 +2148,7 @@
    "clean": false,
    "exception": false,
    "l2": 0,
-   "l3": 0.021,
+   "l3": 0,
    "order": true,
    "tailClipped": true,
    "tailRouted": false,
@@ -1650,10 +2162,27 @@
    "rect": {
     "x": 48,
     "y": 144,
-    "w": 300.5,
-    "h": 59.76850891113281
+    "w": 294.6,
+    "h": 56.468508911132815
    },
    "why": [],
+   "textBounds": {
+    "w": 269,
+    "h": 37.3
+   },
+   "bodyBounds": {
+    "w": 294.6,
+    "h": 56.5
+   },
+   "padding": {
+    "left": 12.8,
+    "right": 12.8,
+    "top": 9.6,
+    "bottom": 9.6,
+    "em": 0.8,
+    "lh": 0.5
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {
@@ -1681,9 +2210,26 @@
     "x": 300,
     "y": 217,
     "w": 240,
-    "h": 78.40276336669922
+    "h": 67.98850891113281
    },
    "why": [],
+   "textBounds": {
+    "w": 212,
+    "h": 37.3
+   },
+   "bodyBounds": {
+    "w": 240,
+    "h": 68
+   },
+   "padding": {
+    "left": 14,
+    "right": 14,
+    "top": 15.4,
+    "bottom": 15.4,
+    "em": 0.88,
+    "lh": 0.8
+   },
+   "excessBalloonArea": false,
    "pass": true
   },
   {

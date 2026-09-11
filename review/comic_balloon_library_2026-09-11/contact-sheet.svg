@@ -28,84 +28,80 @@
   <g transform="translate(55 165)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">ORDINARY · OVAL</text><text x="24" y="65" class="use">neutral, clear, most common</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M27 111C24 59 82 26 184 22C294 16 369 46 375 102C382 159 320 195 216 198C105 202 35 171 27 111Z" class="body ink"/></g>
-    <text x="235" y="174" class="dialogue"><tspan x="235">That depends on</tspan><tspan x="235" dy="31">where we’re going.</tspan></text>
+    <g transform="translate(85 105) scale(.75 .62)" filter="url(#shadow)"><path d="M27 111C24 59 82 26 184 22C294 16 369 46 375 102C382 159 320 195 216 198C105 202 35 171 27 111Z" class="body ink"/></g>
+    <text x="235" y="165" class="dialogue"><tspan x="235">That depends on</tspan><tspan x="235" dy="31">where we’re going.</tspan></text>
   </g>
   <g transform="translate(565 165)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">ORDINARY · EGG</text><text x="24" y="65" class="use">warm, alert, lightly animated</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M29 117C20 62 74 25 189 18C302 11 378 46 376 102C374 160 312 195 208 200C100 204 38 173 29 117Z" class="body ink"/></g>
-    <text x="235" y="170" class="dialogue"><tspan x="235">Okay, that was</tspan><tspan x="235" dy="31">actually impressive.</tspan></text>
+    <g transform="translate(85 105) scale(.75 .62)" filter="url(#shadow)"><path d="M29 117C20 62 74 25 189 18C302 11 378 46 376 102C374 160 312 195 208 200C100 204 38 173 29 117Z" class="body ink"/></g>
+    <text x="235" y="164" class="dialogue"><tspan x="235">Okay, that was</tspan><tspan x="235" dy="31">actually impressive.</tspan></text>
   </g>
   <g transform="translate(1075 165)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">ORDINARY · BEAN</text><text x="24" y="65" class="use">casual, conversational, playful</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M26 105C29 48 101 18 209 23C319 17 378 55 373 112C370 165 308 195 220 190C184 188 165 201 126 191C61 174 22 150 26 105Z" class="body ink"/></g>
-    <text x="235" y="161" class="dialogue"><tspan x="235">You always this</tspan><tspan x="235" dy="31">confident, cowboy?</tspan></text>
+    <g transform="translate(85 105) scale(.75 .62)" filter="url(#shadow)"><path d="M26 105C29 48 101 18 209 23C319 17 378 55 373 112C370 165 308 195 220 190C184 188 165 201 126 191C61 174 22 150 26 105Z" class="body ink"/></g>
+    <text x="235" y="164" class="dialogue"><tspan x="235">You always this</tspan><tspan x="235" dy="31">confident, cowboy?</tspan></text>
   </g>
 
   <!-- Row 2 -->
   <g transform="translate(55 510)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">COMPACT REPLY</text><text x="24" y="65" class="use">one or two words; generous air</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M34 110C33 62 72 36 130 33L282 31C337 31 369 62 368 108C369 157 331 185 274 187L126 189C69 188 35 158 34 110Z" class="body ink"/></g>
-    <text x="235" y="185" class="dialogue">Fair enough.</text>
+    <g transform="translate(105 115) scale(.65 .52)" filter="url(#shadow)"><path d="M34 110C33 62 72 36 130 33L282 31C337 31 369 62 368 108C369 157 331 185 274 187L126 189C69 188 35 158 34 110Z" class="body ink"/></g>
+    <text x="235" y="174" class="dialogue">Fair enough.</text>
   </g>
   <g transform="translate(565 510)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">PLAYER · LOZENGE</text><text x="24" y="65" class="use">subtly boxier; cream, not color alone</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M48 31C35 46 27 74 29 111C26 147 36 174 56 190C92 199 150 198 206 197C272 201 330 194 363 176C372 153 374 127 371 101C374 70 363 45 345 29C297 20 250 24 197 21C137 18 83 21 48 31Z" class="player ink"/></g>
-    <text x="235" y="168" class="dialogue"><tspan x="235">Don’t even stress</tspan><tspan x="235" dy="31">about it. I got you.</tspan></text>
+    <g transform="translate(80 105) scale(.78 .62)" filter="url(#shadow)"><path d="M48 31C35 46 27 74 29 111C26 147 36 174 56 190C92 199 150 198 206 197C272 201 330 194 363 176C372 153 374 127 371 101C374 70 363 45 345 29C297 20 250 24 197 21C137 18 83 21 48 31Z" class="player ink"/></g>
+    <text x="235" y="164" class="dialogue"><tspan x="235">Don’t even stress</tspan><tspan x="235" dy="31">about it. I got you.</tspan></text>
   </g>
   <g transform="translate(1075 510)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">WHISPER</text><text x="24" y="65" class="use">restrained broken outline; smaller voice</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M30 112C27 58 89 24 195 22C304 18 371 49 374 104C379 158 316 194 211 197C105 201 34 170 30 112Z" fill="#fffdf8" stroke="#6b6d70" stroke-width="5" stroke-dasharray="12 9" stroke-linecap="round" stroke-linejoin="round"/></g>
-    <text x="235" y="172" class="small-dialogue" fill="#50545b"><tspan x="235">That was Malik,</tspan><tspan x="235" dy="28">wasn’t it?</tspan></text>
+    <g transform="translate(90 108) scale(.73 .60)" filter="url(#shadow)"><path d="M30 112C27 58 89 24 195 22C304 18 371 49 374 104C379 158 316 194 211 197C105 201 34 170 30 112Z" fill="#fffdf8" stroke="#6b6d70" stroke-width="5" stroke-dasharray="12 9" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <text x="235" y="163" class="small-dialogue" fill="#50545b"><tspan x="235">That was Malik,</tspan><tspan x="235" dy="28">wasn’t it?</tspan></text>
   </g>
 
   <!-- Row 3 -->
   <g transform="translate(55 855)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">SHOUT / ALARM</text><text x="24" y="65" class="use">irregular burst; reserve for real volume</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M25 108L50 94L34 70L70 67L66 40L105 52L119 24L151 44L177 18L202 42L231 17L252 45L290 25L299 55L339 45L334 76L373 78L353 102L380 119L346 132L360 158L322 157L321 187L283 174L264 201L234 180L207 204L180 179L149 201L129 173L91 189L87 158L49 162L61 134L25 127L46 116Z" fill="#fff8ef" stroke="#17191d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></g>
-    <text x="235" y="171" class="dialogue" style="font-size:28px"><tspan x="235">HE’S RIGHT</tspan><tspan x="235" dy="33">BEHIND US!</tspan></text>
+    <g transform="translate(78 109) scale(.79 .61)" filter="url(#shadow)"><path d="M25 108L50 94L34 70L70 67L66 40L105 52L119 24L151 44L177 18L202 42L231 17L252 45L290 25L299 55L339 45L334 76L373 78L353 102L380 119L346 132L360 158L322 157L321 187L283 174L264 201L234 180L207 204L180 179L149 201L129 173L91 189L87 158L49 162L61 134L25 127L46 116Z" fill="#fff8ef" stroke="#17191d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <text x="235" y="163" class="dialogue" style="font-size:28px"><tspan x="235">HE’S RIGHT</tspan><tspan x="235" dy="33">BEHIND US!</tspan></text>
   </g>
   <g transform="translate(565 855)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">PHONE / RADIO</text><text x="24" y="65" class="use">transmitted voice; cool fill and electric edge</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M39 39L61 25L82 37L104 23L126 36L150 22L173 35L198 21L222 35L247 22L269 37L294 24L315 39L342 29L359 49L351 72L369 92L353 113L369 136L349 153L357 178L331 188L310 177L287 192L264 178L240 193L217 178L193 195L169 179L145 193L123 178L98 191L79 175L52 183L40 159L51 139L34 117L48 96L32 73L49 55Z" fill="#eef8ff" class="ink"/></g>
-    <text x="235" y="171" class="dialogue" font-style="italic"><tspan x="235">Don’t get</tspan><tspan x="235" dy="31">creative.</tspan></text>
+    <g transform="translate(95 109) scale(.70 .61)" filter="url(#shadow)"><path d="M39 39L61 25L82 37L104 23L126 36L150 22L173 35L198 21L222 35L247 22L269 37L294 24L315 39L342 29L359 49L351 72L369 92L353 113L369 136L349 153L357 178L331 188L310 177L287 192L264 178L240 193L217 178L193 195L169 179L145 193L123 178L98 191L79 175L52 183L40 159L51 139L34 117L48 96L32 73L49 55Z" fill="#eef8ff" class="ink"/></g>
+    <text x="235" y="163" class="dialogue" font-style="italic"><tspan x="235">Don’t get</tspan><tspan x="235" dy="31">creative.</tspan></text>
   </g>
   <g transform="translate(1075 855)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">DISTRESS / FADING</text><text x="24" y="65" class="use">controlled trembling, never random spikes</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M27 110C27 98 34 90 31 78C28 66 41 62 49 54C57 46 66 49 78 40C89 31 104 34 119 29C135 24 145 29 162 24C180 19 191 25 209 22C228 19 238 25 255 24C272 23 283 30 299 31C315 32 322 41 335 45C348 49 348 61 358 69C368 78 363 91 372 101C381 111 371 121 371 133C371 145 359 150 354 161C349 172 334 171 323 179C312 187 297 183 282 190C267 197 251 191 234 196C216 201 202 195 184 198C166 201 153 194 136 194C118 194 109 185 94 184C78 183 72 173 60 168C48 163 48 151 39 143C30 135 35 122 27 110Z" fill="#fffaf1" class="ink"/></g>
-    <text x="235" y="171" class="small-dialogue"><tspan x="235">I’m fine…</tspan><tspan x="235" dy="28">just keep driving.</tspan></text>
+    <g transform="translate(95 109) scale(.70 .61)" filter="url(#shadow)"><path d="M27 110C27 98 34 90 31 78C28 66 41 62 49 54C57 46 66 49 78 40C89 31 104 34 119 29C135 24 145 29 162 24C180 19 191 25 209 22C228 19 238 25 255 24C272 23 283 30 299 31C315 32 322 41 335 45C348 49 348 61 358 69C368 78 363 91 372 101C381 111 371 121 371 133C371 145 359 150 354 161C349 172 334 171 323 179C312 187 297 183 282 190C267 197 251 191 234 196C216 201 202 195 184 198C166 201 153 194 136 194C118 194 109 185 94 184C78 183 72 173 60 168C48 163 48 151 39 143C30 135 35 122 27 110Z" fill="#fffaf1" class="ink"/></g>
+    <text x="235" y="163" class="small-dialogue"><tspan x="235">I’m fine…</tspan><tspan x="235" dy="28">just keep driving.</tspan></text>
   </g>
 
   <!-- Row 4 -->
   <g transform="translate(55 1200)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">TRADITIONAL THOUGHT</text><text x="24" y="65" class="use">rare; narration captions remain the default</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M62 156C39 151 26 134 31 115C16 99 22 76 42 66C38 44 60 28 84 33C96 14 124 12 143 26C162 8 193 10 210 26C232 8 265 14 276 34C301 23 328 36 332 57C356 59 370 78 362 98C381 112 375 136 354 145C355 168 330 182 306 175C291 195 260 198 241 182C219 201 186 200 168 182C144 197 113 190 102 171C87 174 72 169 62 156Z" class="body ink"/></g>
-    <text x="235" y="171" class="dialogue"><tspan x="235">This is probably</tspan><tspan x="235" dy="31">a terrible idea.</tspan></text>
+    <g transform="translate(90 108) scale(.73 .61)" filter="url(#shadow)"><path d="M62 156C39 151 26 134 31 115C16 99 22 76 42 66C38 44 60 28 84 33C96 14 124 12 143 26C162 8 193 10 210 26C232 8 265 14 276 34C301 23 328 36 332 57C356 59 370 78 362 98C381 112 375 136 354 145C355 168 330 182 306 175C291 195 260 198 241 182C219 201 186 200 168 182C144 197 113 190 102 171C87 174 72 169 62 156Z" class="body ink"/></g>
+    <text x="235" y="163" class="dialogue"><tspan x="235">This is probably</tspan><tspan x="235" dy="31">a terrible idea.</tspan></text>
   </g>
   <g transform="translate(565 1200)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">CONTEXT CAPTION</text><text x="24" y="65" class="use">narration is never placed in a speech balloon</text>
-    <g transform="translate(45 76) scale(.94 .88)" filter="url(#shadow)"><path d="M28 42L54 22H346L373 48V176L350 198H51L27 174Z" fill="#ffe59a" class="ink"/><path d="M40 54L61 36H338" fill="none" stroke="#fff3c7" stroke-width="5" opacity=".8"/></g>
-    <text x="235" y="157" class="small-dialogue"><tspan x="235">MERCER ISLAND</tspan><tspan x="235" dy="29">MILE 10 · 11:48 P.M.</tspan></text>
+    <g transform="translate(85 110) scale(.75 .58)" filter="url(#shadow)"><path d="M28 42L54 22H346L373 48V176L350 198H51L27 174Z" fill="#ffe59a" class="ink"/><path d="M40 54L61 36H338" fill="none" stroke="#fff3c7" stroke-width="5" opacity=".8"/></g>
+    <text x="235" y="161" class="small-dialogue"><tspan x="235">MERCER ISLAND</tspan><tspan x="235" dy="29">MILE 10 · 11:48 P.M.</tspan></text>
   </g>
   <g transform="translate(1075 1200)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">OPEN BRIDGE · CORRECT</text><text x="24" y="65" class="use">two edge strokes; no caps or enclosed diamond</text>
     <g filter="url(#shadow)">
-      <path d="M118 88C79 87 54 106 55 136C55 165 82 181 122 180C163 181 190 164 190 135C191 106 162 87 118 88Z" class="body ink"/>
-      <path d="M151 177H176V224H151Z" class="body"/>
-      <path d="M151 177V224M176 177V224" fill="none" class="ink"/>
-      <path d="M207 219C164 216 136 236 138 264C138 291 170 306 218 305C265 307 297 288 296 260C297 232 262 218 207 219Z" class="body ink"/>
-      <path d="M151 172H179V229H151Z" class="body"/>
+      <path d="M158 178L158 224C145 235 138 249 138 264C138 291 170 306 218 305C265 307 297 288 296 260C297 234 266 219 207 219C190 219 177 221 169 224L169 178C182 167 190 151 190 135C191 106 162 87 118 88C79 87 54 106 55 136C55 165 82 181 122 180C138 180 150 179 158 178Z" class="body ink"/>
     </g>
     <text x="122" y="126" class="small-dialogue">First idea.</text>
     <text x="218" y="264" class="small-dialogue">Next idea.</text>
@@ -116,7 +112,7 @@
     <rect width="730" height="300" rx="18" class="card"/>
     <text x="24" y="40" class="label">LINE-WRAP SILHOUETTE</text>
     <text x="25" y="72" class="good">✓ APPROVED SHAPE</text>
-    <path d="M35 182C34 120 98 91 250 92C399 88 465 120 464 181C468 243 399 272 250 271C99 274 34 244 35 182Z" class="body ink" filter="url(#shadow)"/>
+    <path d="M70 182C69 136 122 111 250 112C376 109 431 136 430 181C433 228 375 249 250 249C124 252 69 229 70 182Z" class="body ink" filter="url(#shadow)"/>
     <text x="250" y="144" class="small-dialogue"><tspan x="250">As an artist, you know</tspan><tspan x="250" dy="28">how important these tracks</tspan><tspan x="250" dy="28">are to me.</tspan></text>
     <text x="505" y="72" class="bad">✕ ORPHANED “ME.”</text>
     <rect x="505" y="92" width="190" height="180" rx="70" class="body ink"/>
@@ -127,10 +123,7 @@
     <rect width="730" height="300" rx="18" class="card"/>
     <text x="24" y="40" class="label">CONNECTOR GRAMMAR</text>
     <text x="25" y="72" class="good">✓ OPEN BAND OR MERGED SILHOUETTE</text>
-    <path d="M45 126C45 99 75 86 124 87C173 85 202 102 201 129C202 155 172 170 124 169C75 170 44 154 45 126Z" class="body ink"/>
-    <path d="M181 117H259V139H181Z" class="body"/><path d="M181 117H259M181 139H259" fill="none" class="ink"/>
-    <path d="M288 126C288 99 318 86 367 87C416 85 445 102 444 129C445 155 415 170 367 169C318 170 287 154 288 126Z" class="body ink"/>
-    <path d="M181 112H263V144H181Z" class="body"/>
+    <path d="M201 123L288 123C301 100 327 87 367 87C416 85 445 102 444 129C445 155 415 170 367 169C327 170 301 156 288 133L201 133C188 157 160 170 124 169C75 170 44 154 45 126C45 99 75 86 124 87C164 86 189 99 201 123Z" class="body ink"/>
     <text x="493" y="72" class="bad">✕ CLOSED DECORATION</text>
     <path d="M485 126C485 101 508 88 546 88C583 88 606 101 606 126C606 151 583 165 546 165C508 165 485 151 485 126Z" class="body ink"/>
     <path d="M611 126L636 103L661 126L636 149Z" class="body ink"/>
@@ -138,29 +131,25 @@
     <line x1="485" y1="202" x2="705" y2="202" stroke="#b52735" stroke-width="7" stroke-linecap="round"/><line x1="595" y1="183" x2="595" y2="221" stroke="#b52735" stroke-width="7" stroke-linecap="round"/>
   </g>
 
-  <!-- Tail row: tails are separate components and are drawn beneath bodies so their bases stay open. -->
+  <!-- Tail row: final examples are unioned silhouettes with one outside contour. -->
   <g transform="translate(55 1880)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">STRAIGHT SPEAKER TAIL</text><text x="24" y="65" class="use">narrow taper; no base cap; stops before face</text>
-    <path d="M169 176L200 176L385 270Z" fill="#fffdf8"/><path d="M169 176L385 270M200 176L385 270" fill="none" class="ink"/>
-    <path d="M45 139C44 102 83 82 166 80C252 77 310 98 313 135C317 172 267 194 183 196C96 199 49 177 45 139Z" class="body ink"/>
+    <path d="M166 190L385 270L205 190C267 188 317 172 313 135C310 98 252 77 166 80C83 82 44 102 45 139C49 176 96 196 166 190Z" class="body ink"/>
     <text x="179" y="130" class="small-dialogue">One clear voice.</text>
     <circle cx="397" cy="275" r="5" fill="#b52735"/><text x="292" y="296" class="use">mouth direction</text>
   </g>
   <g transform="translate(565 1880)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">CURVED / ROUTED TAIL</text><text x="24" y="65" class="use">one clean bend around protected artwork</text>
-    <path d="M167 173L199 173C238 192 252 230 390 268C271 246 205 226 151 203Z" fill="#fffdf8"/><path d="M167 173C224 195 259 232 390 268M199 173C238 192 252 230 390 268" fill="none" class="ink"/>
-    <path d="M45 139C44 102 83 82 166 80C252 77 310 98 313 135C317 172 267 194 183 196C96 199 49 177 45 139Z" class="body ink"/>
+    <path d="M166 190C224 203 272 243 390 268C281 232 243 197 205 190C267 188 317 172 313 135C310 98 252 77 166 80C83 82 44 102 45 139C49 176 96 196 166 190Z" class="body ink"/>
     <text x="179" y="130" class="small-dialogue">Around the face.</text>
     <circle cx="401" cy="271" r="5" fill="#b52735"/>
   </g>
   <g transform="translate(1075 1880)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">ELECTRONIC TAIL</text><text x="24" y="65" class="use">narrow zigzag; phone/radio only</text>
-    <path d="M169 176H205L225 197L213 211L256 225L243 242L385 274L276 231L289 214L244 204L257 187L205 176Z" fill="#eef8ff" stroke="#17191d" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M162 176H211" stroke="#eef8ff" stroke-width="10"/>
-    <path d="M45 139C44 102 83 82 166 80C252 77 310 98 313 135C317 172 267 194 183 196C96 199 49 177 45 139Z" fill="#eef8ff" class="ink"/>
+    <path d="M166 190L193 197L214 214L202 228L243 238L230 253L385 274L260 244L274 226L232 217L245 202L205 190C267 188 317 172 313 135C310 98 252 77 166 80C83 82 44 102 45 139C49 176 96 196 166 190Z" fill="#eef8ff" class="ink"/>
     <text x="179" y="130" class="small-dialogue" font-style="italic">Malik calling.</text>
     <circle cx="397" cy="277" r="5" fill="#b52735"/>
   </g>

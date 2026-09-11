@@ -12,7 +12,7 @@
 // cruiser overruns you.  The headline case below reproduces that directly.
 
 import { CopSystem, shouldBeginPursuitStop, PURSUIT_BRAKE_FRESH_MS } from '../src/systems/CopSystem.js';
-import { MAX_SPEED, PLAYER_VIRTUAL_Z } from '../src/constants.js';
+import { MAX_SPEED, PLAYER_VIRTUAL_Z, offroadSpeedCap, OFFROAD_CAP_MPH } from '../src/constants.js';
 
 // Divert rolls and spawn placement use Math.random(), so probabilistic tests
 // pin it rather than flaking ~10% of runs.  withRandom(v, fn) forces every
@@ -593,6 +593,18 @@ for (const [s, expectArmed] of [[1, false], [2, false], [3, true]]) {
   check('invincibility frames → no stop', shouldBeginPursuitStop({ ...base, iframes: true, x: 1.25, brake: true, shoulderSince: 1, brakeSince: 2 }) === false);
   check('no timing available → plain shoulder + brake', shouldBeginPursuitStop({ ...base, x: 1.25, brake: true }) === true);
   check('exactly at the fog line is not the shoulder', shouldBeginPursuitStop({ ...base, x: S, brake: true, shoulderSince: 1, brakeSince: 2 }) === false);
+}
+
+// ── Off-road speed ceiling (owner 2026-09-11: shoulder/grass = 60 mph, not 89) ──
+{
+  const mph = (m) => MAX_SPEED * m / 120;
+  check('on the pavement there is no off-road cap', offroadSpeedCap(0.3) === Infinity && offroadSpeedCap(-0.99) === Infinity);
+  check('just past the fog line the cap is exactly 60 mph', Math.abs(offroadSpeedCap(1.0001) - mph(OFFROAD_CAP_MPH)) < 1e-6);
+  check("the owner's shoulder position (x 1.25) caps at 60 mph", Math.abs(offroadSpeedCap(1.25) - mph(60)) < 1e-6);
+  check('an 89 mph cruise target is held to 60 on the shoulder', Math.min(mph(89), offroadSpeedCap(1.25)) <= mph(60));
+  check('deep grass is slower than the shoulder, never faster', offroadSpeedCap(2.0) < offroadSpeedCap(1.25) && offroadSpeedCap(2.5) < mph(60));
+  check('the left shoulder caps the same as the right', offroadSpeedCap(-1.25) === offroadSpeedCap(1.25));
+  check('painted exit-lane pavement past x 1 is exempt', offroadSpeedCap(1.3, true) === Infinity);
 }
 
 console.log(`\nchase.test: ${passed} passed, ${failed} failed`);

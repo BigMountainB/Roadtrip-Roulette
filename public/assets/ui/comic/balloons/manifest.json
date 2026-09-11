@@ -8,6 +8,34 @@
     "linecap": "round",
     "linejoin": "round"
   },
+  "fit": {
+    "rule": "measure final wrapped text first; fit the selected contour tightly around that block",
+    "horizontalPaddingEm": [0.70, 0.95],
+    "verticalPaddingLineHeight": [0.42, 0.65],
+    "forbidden": [
+      "large preset balloon rectangles",
+      "preserving blank master viewBox whitespace",
+      "shrinking text to make an oversized body appear intentional"
+    ]
+  },
+  "composition": {
+    "rule": "boolean-union body, tail, and any bridges first; draw one final outside contour",
+    "speakerTail": "two tapering outside edges; completely open at balloon junction; no base seam",
+    "bridge": "exactly two narrow side rails; completely open into both balloons; no end caps or balloon-outline seams",
+    "bridgeWidthLineHeight": {
+      "target": [0.35, 0.55],
+      "hardMaximum": 0.65,
+      "distanceInvariant": true,
+      "comparison": "visibly slimmer than an ordinary speaker-tail base"
+    },
+    "forbidden": [
+      "stroking body and tail as separate closed polygons",
+      "balloon outline crossing a tail opening",
+      "bridge with only one visible side rail",
+      "bridge end caps",
+      "interior join seams"
+    ]
+  },
   "bodies": [
     { "id": "speech-oval", "file": "speech-oval.svg", "use": "ordinary speech", "aspectRange": [1.45, 2.8] },
     { "id": "speech-egg", "file": "speech-egg.svg", "use": "ordinary speech; slightly warmer or more animated", "aspectRange": [1.4, 2.6] },

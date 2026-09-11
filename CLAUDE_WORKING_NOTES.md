@@ -4017,6 +4017,20 @@ Diamonds and other closed shapes may exist only as deliberately authored **ballo
 
 Add connector-specific QA failures: `closedConnector`, `interiorJoinSeam`, `connectorEndCap`, `connectorTooWide`, and `decorativeConnector`. Every count must be zero for pilot approval. The balloon contact sheet must show direct merged joins, short vertical and horizontal open bridges, one longer protected-zone-avoiding bridge, and an intentionally separate unconnected pair for comparison.
 
+#### OWNER CLARIFICATION — union first; one outside contour (2026-09-11)
+
+Separate body, bridge, and tail files are implementation components, not separately outlined objects in the final art. Boolean-union all participating filled shapes first and then draw **one final outside contour** around the combined silhouette.
+
+- A speaker tail has two visible tapering outside edges and **no border at its base**. The balloon outline must be absent across the full tail opening. The tail must look grown from the balloon, not pasted beneath it.
+- A balloon-to-balloon bridge has **exactly two visible side rails**. Both ends are completely open into their balloons. The balloon outlines must be absent across both openings. If only one rail is visible, if either end is capped, or if any balloon-outline fragment crosses the opening, the bridge fails.
+- Do not stroke closed body, tail, and bridge polygons separately and then cover some seams with fill. Construct the unioned boundary or explicitly remove every interior segment before stroking.
+
+Add QA failures `tailBaseSeam`, `balloonOutlineAcrossTail`, `bridgeMissingRail`, and `balloonOutlineAcrossBridge`. All must be zero.
+
+#### OWNER CORRECTION — bridge connectors are substantially thinner than tails (2026-09-11)
+
+Pilot 01's union/opening behavior is now correct, but its bridge connectors were visually much too thick. A bridge is a subtle reading-order link, not a pipe or structural bar. Target bridge width is **0.35–0.55 of the rendered dialogue line-height**, with an absolute maximum of **0.65 line-height**. It must be visibly slimmer than a normal speaker-tail base. Connector length never increases connector width. Add QA failure `connectorTooThickRelativeToTail` and reject any contact-sheet example that reads as a bar before it reads as a dialogue connection.
+
 Claude should implement and demonstrate this as a **balloon contact sheet** before another panel-by-panel correction cycle: show every family at normal and narrow-phone sizes, several organic silhouettes within each family, valid and invalid line wraps, linked exchanges, and the same examples after rotation and book-page placement. Chat and Claude can reject technical failures from that sheet; the owner should only need to approve the overall visual language and any genuinely subjective style choices.
 
 #### ART-DIRECTION DELIVERABLE — SVG balloon library pilot 01 (2026-09-11)
@@ -4030,6 +4044,14 @@ Chat created the first reviewable balloon art library. This is an **approval pil
 The folder separates balloon bodies, speaker tails, and open bridges. It contains ordinary organic families, a compact reply, player lozenge, whisper, shout, electronic, distress, thought, and narration caption designs plus straight/curved/electronic tails and vertical/horizontal open bridges. No story art was generated or duplicated.
 
 Do not substitute newly invented procedural diamonds, connector boxes, or runtime-random silhouettes when this library is integrated. First obtain owner feedback on pilot 01, revise the masters/contact sheet if requested, and only then wire the approved SVG language into both the live tile and permanent comic renderers.
+
+#### OWNER CORRECTION — balloons must hug the lettering (2026-09-11)
+
+Pilot 01 initially showed too much empty space between the dialogue and balloon outline. That would unnecessarily cover artwork. The blank SVG master dimensions are contour references only; they must never become fixed or minimum gameplay dimensions.
+
+Required fit sequence: wrap the dialogue intentionally, measure the final text block, add only the required breathing room, and fit/regenerate the selected contour around that result. Target **0.70–0.95 em horizontal padding** and **0.42–0.65 rendered line-height vertical padding**. Organic oval shoulders may extend beyond those targets only where curvature requires it. A balloon must not preserve empty master-viewBox space, expand to a generic preset rectangle, or shrink readable text to justify an oversized body.
+
+Add QA fields for the measured text bounds, body bounds, and padding on all four sides. Flag `excessBalloonArea` when the body could be materially reduced without violating text padding, line-wrap, outline, or shape-family rules. When choosing between two otherwise valid placements, prefer the smaller balloon footprint because it preserves more story art.
 
 ### Metadata model
 
@@ -4076,7 +4098,7 @@ Do **not** impose a maximum tail length. A long tail is valid when the balloon m
 
 - Tail width must **not scale up with tail length**. Long tails remain narrow.
 - Prefer a slender tapered ribbon, curved pointer, or narrow multi-segment route over a broad triangle.
-- Starting implementation target: speaker-tail base no wider than about `1.25 ×` the rendered text line-height; hard ceiling `1.75 ×` line-height. A balloon-to-balloon connector should normally be no wider than `0.75 ×` line-height. These are responsive limits, not source-image pixels.
+- Starting implementation target: speaker-tail base no wider than about `1.25 ×` the rendered text line-height; hard ceiling `1.75 ×` line-height. A balloon-to-balloon connector is much slimmer: target `0.35–0.55 ×` line-height with a hard ceiling of `0.65 ×`. It must remain visibly narrower than the base of an ordinary speaker tail, and its width must not increase with connector length. These are responsive limits, not source-image pixels.
 - The speaker tip should resolve to a narrow point/stroke; it may approach the mouth anchor but must stop outside the Level 1 face boundary.
 - If a straight narrow tail would cross a face or essential object, route it with a gentle bend or controlled zig/zag through negative space or Level 3. Do not solve routing by broadening the tail.
 - Measure collision using the actual narrow tail polygon/stroke, not the large triangle between balloon and speaker.
@@ -4681,3 +4703,35 @@ touch/kb → isBrake`, `brakeAge`, `shoulderAge`, `armed/stopping/dwell/hold`, t
 and `SPEED ZEROED BY: <reason>` every frame (also `window.__copLog`, last 600 frames).  Then:
 (1) tap BRAKE once in a lane (it latches — pedal glows), drive on, drift onto the shoulder with a
 cruiser behind → car keeps 60, no stop; (2) tap GAS (unlatches), then BRAKE on the shoulder → stop.
+
+## OFF-ROAD SPEED — 60 MPH HARD CEILING (OWNER DIRECTIVE, Claude, 2026-09-11)
+
+Owner (in session, after the pull-over fix): "when the car is driving on the shoulder of the road
+or in the grass, the speed is 60 miles an hour, not 89."  This supersedes the pt-13 note that the
+off-road cap was left soft after the b17e4e0 revert — that revert was of the bundled police
+attempt; the owner now wants the cap.
+
+- Cause of 89: the old ceiling (`MAX_SPEED × lerp(OFFROAD_SLOW, 0.15, depth)`) was applied as a
+  6%/frame pull AFTER the throttle integration, so accel vs. pull settled ~30 mph above it.
+- Fix: `constants.offroadSpeedCap(lateralX, onPavedExit)` → Infinity on pavement / painted exit
+  lane; otherwise `min(60 mph, old depth curve)`.  `GameScene._updatePlayer` caps `targetSpeed`
+  with it (before the flat-tire / bush caps), so the throttle itself cannot exceed it; the later
+  off-road block still eases an over-speed entry down and bleeds HP as before.
+- Live probe (`scratchpad/probe/speed_probe.mjs`, no brake, no police): lane 90.2 · right shoulder
+  x 1.25 = **60.0** · grass x 2.0 ≈ 31 (hit scenery once) · lane again 75→92 · left shoulder
+  x −1.25 = **60.0**.  `tests/chase.test.mjs` +7 (69/69); full suite green.  Build tag **b24**.
+- Interaction with the pull-over rule: shoulder without a deliberate brake = 60 mph, no stop;
+  shoulder + fresh brake = stop.  Unchanged.
+
+## BALLOONS HUG THE LETTERING — APPLIED (Claude, 2026-09-11)
+
+Owner correction implemented before he redirected to the speed issue (he asked for no more balloon
+work right now, so this is logged and parked): `balloonShapes.paddingFor(kind, fontPx, lineH)` =
+0.80 em × 0.50 line-height (captions 0.70 × 0.42), `bulgeFor(kind)` adds ≤ 0.30 lh only on
+organic contours (0 for player lozenge / caption / phone / sarcasm); body = wrapped text block +
+padding + bulge, never a preset rectangle or the master viewBox, text never shrunk.  Used by the
+tile (`StoryTile.balloon`) and the book (`ComicReader.placeBalloon`).  QA log per balloon now has
+`textBounds`, `bodyBounds`, `padding {left,right,top,bottom,em,lh}`, `excessBalloonArea` (>18%
+over the minimum footprint fails the gate).  `tests/balloon.test.mjs` +4 (26/26).  The SVG
+balloon library in `public/assets/ui/comic/balloons/` is still "owner approval required before
+integration" — not wired in.

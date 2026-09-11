@@ -1,4 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 220" data-rtr-role="balloon-bridge" data-rtr-family="vertical-open">
-  <path d="M92 0H168V220H92Z" fill="#fffdf8"/>
-  <path d="M92 0V220M168 0V220" fill="none" stroke="#17191d" stroke-width="6" stroke-linecap="round"/>
+  <path d="M120 0H140V220H120Z" fill="#fffdf8"/>
+  <path d="M120 0V220M140 0V220" fill="none" stroke="#17191d" stroke-width="6" stroke-linecap="round"/>
 </svg>
