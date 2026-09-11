@@ -218,6 +218,15 @@ x 2.0 ≈31 → lane 76+ recovering → left shoulder 60.0; no brake, no police.
 small bulge only on organic contours; QA log carries textBounds/bodyBounds/padding and flags
 `excessBalloonArea` (fails the gate). Book pages use the same padding. Build tag b24; suite green.
 
+**Correction to pt 13 (owner pushback, same day):** the owner was seeing the halt on a FRESH
+game with the brake never touched, so the "latched BRAKE toggle" diagnosis was wrong for his
+case. The real cause is the 2026-08-31 commit "Pulling onto the shoulder now commits both stop
+flows" (405c169): shoulder position alone set `_pursuitStopping`, and `_updatePlayer` zeroes the
+target speed on that flag — the grass itself braked the car. The brake requirement only entered
+the tree today (c476090 → owner revert b17e4e0 → 6a53da4). The live Cloudflare build is still
+b20/b21, so the owner's phone has none of today's changes until he says "deploy". The 3 s
+freshness rule stays as a safeguard against a stale latch, not as the fix.
+
 ### 2026-09-11 (pt 13) — Pull-over needs a DELIBERATE brake; live pull-over diagnostics (`?copdebug=1`)
 
 Owner: at 1–2★ the car stops on the shoulder "without brake applied" and should keep 60 mph. A

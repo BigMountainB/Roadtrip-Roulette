@@ -4735,3 +4735,15 @@ tile (`StoryTile.balloon`) and the book (`ComicReader.placeBalloon`).  QA log pe
 over the minimum footprint fails the gate).  `tests/balloon.test.mjs` +4 (26/26).  The SVG
 balloon library in `public/assets/ui/comic/balloons/` is still "owner approval required before
 integration" — not wired in.
+
+## CORRECTION — the shoulder halt was NOT the brake latch (Claude, 2026-09-11, after owner pushback)
+
+Owner: "I would be driving an entirely fresh game without pressing the brake once. Then when I
+pulled over the car would stop."  He is right.  Git: 405c169 (2026-08-31, "Pulling onto the
+shoulder now commits both stop flows") set `_pursuitStopping = armed && !iframes && x > SHOULDER`
+with no brake term, and `_updatePlayer` sets targetSpeed = 0 on that flag → the grass braked the
+car.  The `&& _isBrake()` term first appeared today (Chat c476090, reverted b17e4e0, re-done as
+`shouldBeginPursuitStop` in 6a53da4).  My probe ran against the post-c476090 tree, so it could not
+reproduce the owner's build.  Live site = b20 (menu) / b21 (title): the owner's phone has none of
+today's changes until "deploy".  Open: why the trooper sequence waited for the brake on his build
+— at 405c169 the dwell had no brake test; may be a build in between.  Pt-13 Overview entry amended.
