@@ -3312,3 +3312,74 @@ Withdrawn: brief B (walk-off — reuses `seattle_05`), brief E (counter welcome 
 ### Ultimatum player lines — OWNER 2026-09-10 (replace Claude's placeholders; now in code)
 - `mercer_ultimatum.chooseBrittney`: "You look a lot more enjoyable to ride with than this cracked phone."
 - `mercer_ultimatum.keepPromise`: "I think you should keep your job, and I've got to get this phone to Issaquah."
+
+## IMPLEMENTATION STATUS FOR CHATGPT — what is NOW IN CODE (Claude, 2026-09-10, commit d816580)
+
+Read this before proposing further dialogue: the AUTHORITATIVE DIALOGUE HANDOFF above is
+**implemented**, not just drafted.  Everything below is on `main`, tested (17 suites), built.
+
+### Story graph (`src/data/featuredStories.js`)
+- **Hip-Hop startNode = `seattle_lot`.**  Seattle is a chain of live-only tiles
+  (non-consequential choices, no ledger entries): `seattle_lot` (hype line + Malik's
+  NoiseCloud/bus couplet; its `intro` beat is the book's establishing panel, key
+  `hiphop.seattle_lot`) → `seattle_clock` (Malik intro / "I don't know you, no offense…" /
+  "Fair enough.") → `seattle_route` ("Which way you headed?" / "Pullman. Eventually." /
+  "Then Mercer's on your way.") → `seattle_offer` (lines 6–9 as the NPC line; `carry` /
+  `pass` keys UNCHANGED).  `carry` reply: "Album's on the phone. While you're carrying it,
+  you can play Hip-Hop on the radio."  Crew beat after carry (key
+  `hiphop.seattle_offer.carry.radio`): "It's in your best interest to protect that phone.
+  And don't touch the girl."  `pass` reply unchanged.  `seattle_offer.intro` beat and the
+  `hiphop.seattle_stakes` key are GONE (stakes art now sits on `hiphop.seattle_offer`).
+- **Mercer**: `mercer_counter` (mandatory; welcome / "Hey, are you Brittney?…"; empty reply)
+  → `mercer_hook` (virtual; "Ugh…" / "Oh, sorry…" / "But I wish you would…") →
+  `mercer_fork` (virtual; the StageWagon invite) with `ride` (+5 Brittney via
+  `relationshipFor: { country: 5 }`), NEW `both` (flags `mercerPressed`, → `mercer_ultimatum`),
+  `keepJob` (+10 Malik; reply carries the RedZone warning) → `mercer_ultimatum` (virtual;
+  "Me or the phone.") with `chooseBrittney` (owner line "You look a lot more enjoyable to
+  ride with than this cracked phone." — ride effects + Brittney +5 + Malik −10) and
+  `keepPromise` (owner line "I think you should keep your job, and I've got to get this
+  phone to Issaquah." — flags `mercerDone`, `path:'hiphop'`, `brittneyRefused`; Malik +10;
+  reply carries the RedZone warning).  `country.mercer_departure` unchanged.
+- **Malik's relationship starts at 60** (the `carry` effect).  Country still starts at 50 and
+  gets Brittney's Mercer points on top (55 after `ride` / `chooseBrittney`).
+- **Special beats**: `node.intro`, `choice.beatsBefore`, `choice.beats`, `node.beats` with
+  explicit `panelKey` (strings or evaluated fns declaring `keys`), emitted by StorySystem;
+  road/ambush beats from GameScene (`first_tail`, `side_ram`, `boxed_in`, `fatal`,
+  `special_delivery`) and `locked_phone` from `onPass.I`.  71→ now all mapped keys except
+  the two future Othello ones + the four not-yet-emitted art keys are reachable.
+- **`onUnpass` handlers** (M, I) reverse pass effects when the player REWINDS to before an
+  exit (GameScene `_doRewind` → `StorySystem.exitUnpassed`).
+
+### Engine (`src/systems/StorySystem.js`, `src/scenes/GameScene.js`, `src/ui/StoryTile.js`)
+- `_beatInto` accepts `panelKey`; `_emitAuthoredBeats`; `noteNodeShown(storyId, nodeId)`
+  (StoryTile calls it when a tile is built); `commitChoice` emits `beatsBefore` / `beats` /
+  `node.beats`; `exitUnpassed`; `_applyStoryEffects` supports `relationshipFor`; the pass
+  api has `beat`.
+- **Malik's call**: `GameScene._maybeMalikCall()` fires 400 ms after resuming from stop 'M'
+  when hiphop is active, phone held & unlocked, `path==='hiphop'`, `mercerDone`,
+  `!skippedMercer`, `!malikCalled` — the exact five-line exchange as a tap-to-dismiss card,
+  recorded once as beat `hiphop.mercer_malik_call` (sets `malikCalled`).  **Its panel art is
+  still missing** (see ART NEEDED #1).  Skipped Mercer keeps the existing text; no Bellevue.
+- **Radio grant**: `_applyRadioGrant()` — when the Hip-Hop grant lands it switches the
+  station once per run and opens on a RANDOM one of Rain City Roll Call / King of this
+  County / Rain City Code (never Two Lives); the four m4a tracks are on the PHONK station.
+- **Rewind** re-opens passed exits + reverses story pass effects; exit signs at ½ / ¼ mi;
+  six 1.5× exit-lane arrows; out-of-gas = $200 tow + $50 gas to the previous town or
+  Seattle with $0 (money + parts carry over).
+- **Audio audit 3/6/7 done**; comic reader's four diagnosed bugs done; memory fixes done.
+
+### Panel map (`src/data/comicPanels.js`, 81 keys)
+- New/remapped: `hiphop.seattle_lot` (seattle_01), `hiphop.seattle_clock` / `seattle_route`
+  (seattle_02), `hiphop.seattle_offer` (seattle_06 stakes), `hiphop.mercer_counter` /
+  `mercer_hook` (mercer_01), `hiphop.mercer_ultimatum` (mercer_04), `hiphop.vantage_hospital.wake`,
+  `country.ellensburg_haylee`, `country.vantage_arrival.reunion`; Haylee portrait registered
+  as `npc_haylee` (deferred with the npc group).  Protect boxes measured by eye — please
+  correct any in the metadata pass.
+
+### Still NOT in code (waiting on owner/Chat)
+- Haylee's Ellensburg pickup node + road lines; the Vantage reunion beat; the hospital
+  consequence; Encounter A (Malik's chase) mechanics; Dom's tape-leverage nodes (`dom_terms`
+  + the `malik_cut_call` branch); the Malik text/call spine C1–C7 beyond the Mercer call; the
+  Malik/Dom'nique matrix scoring; Brittney's three StageWagon objectives; StageWagon
+  celebration/reward tiers; Classic Rock rest-stop dialogue; Nan rewrite + cookies; the live
+  strip / tray / timing / hold-to-zoom comic system; the two-tier comic asset pipeline.
