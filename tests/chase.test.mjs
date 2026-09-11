@@ -602,7 +602,7 @@ for (const [s, expectArmed] of [[1, false], [2, false], [3, true]]) {
   check('just past the fog line the cap is exactly 60 mph', Math.abs(offroadSpeedCap(1.0001) - mph(OFFROAD_CAP_MPH)) < 1e-6);
   check("the owner's shoulder position (x 1.25) caps at 60 mph", Math.abs(offroadSpeedCap(1.25) - mph(60)) < 1e-6);
   check('an 89 mph cruise target is held to 60 on the shoulder', Math.min(mph(89), offroadSpeedCap(1.25)) <= mph(60));
-  check('deep grass is slower than the shoulder, never faster', offroadSpeedCap(2.0) < offroadSpeedCap(1.25) && offroadSpeedCap(2.5) < mph(60));
+  check('deep grass is the same flat 60 — no depth curve (owner: "48 should be 60")', Math.abs(offroadSpeedCap(1.7) - mph(60)) < 1e-6 && Math.abs(offroadSpeedCap(2.5) - mph(60)) < 1e-6);
   check('the left shoulder caps the same as the right', offroadSpeedCap(-1.25) === offroadSpeedCap(1.25));
   check('painted exit-lane pavement past x 1 is exempt', offroadSpeedCap(1.3, true) === Infinity);
 }

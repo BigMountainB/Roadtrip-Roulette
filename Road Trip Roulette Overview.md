@@ -210,7 +210,7 @@ Owner: "when the car is driving on the shoulder of the road or in the grass, the
 an hour, not 89." The old off-road ceiling was only a per-frame 6% pull toward the cap, applied
 after the throttle had already re-accelerated the car, so it settled ~89 mph at x 1.25. Now
 `constants.offroadSpeedCap(x, onPavedExit)` (pure, tested ×7) caps the TARGET speed: 60 mph past
-the fog line on either side, the old steeper curve below that in deep grass (never above 60);
+the fog line on either side, a FLAT 60 at any depth (the old deep-grass curve read ~48 where the owner pulled off; he asked for 60, so the curve is gone);
 the exit lane's painted extent stays exempt. Live probe: lane 90 → right shoulder 60.0 → grass
 x 2.0 ≈31 → lane 76+ recovering → left shoulder 60.0; no brake, no police. Police stop rule
 (pt 13) untouched. Earlier the same day: balloons now size from the measured text block plus

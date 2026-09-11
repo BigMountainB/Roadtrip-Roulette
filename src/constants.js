@@ -151,22 +151,19 @@ export const MAX_SPEED    = 27000; // internal world-units/sec; speedometer read
 // punishment mechanic — lift the clamp deliberately, never by accident.
 export const SPEED_CAP_MPH = 160;
 export const TURN_SPEED   = 2.8;
-export const OFFROAD_SLOW = 0.6;
-// OWNER 2026-09-11: on the shoulder or in the grass the car goes 60 mph, not
-// 89.  The old ceiling was only a per-frame 6% pull toward it, applied AFTER
-// the throttle had re-accelerated the car, so it settled ~30 mph above the
-// ceiling.  `offroadSpeedCap` is applied to the TARGET speed instead, so the
-// throttle itself can never push past it; deeper grass keeps the old
-// steeper curve as a further ceiling (never above OFFROAD_CAP_MPH).
+// OWNER 2026-09-11: "on the shoulder of the road or in the grass the speed is
+// 60 mph, not 89" — and, same day, not 48 either: the old depth curve
+// (0.6 → 0.15 of MAX_SPEED across x 1.0–2.5, ex-OFFROAD_SLOW) is gone; off the pavement the
+// ceiling is a FLAT 60 at any depth.  The old ceiling was also only a
+// per-frame 6% pull applied AFTER the throttle had re-accelerated the car,
+// so it settled ~30 mph above itself; `offroadSpeedCap` is applied to the
+// TARGET speed instead, so the throttle can never push past it.
 export const OFFROAD_CAP_MPH = 60;
 /** Speed ceiling (world units) for lateral position x; Infinity on pavement.
  *  Exit-lane pavement is exempt even when its x is > 1. */
 export function offroadSpeedCap(lateralX, onPavedExit = false) {
-  const ax = Math.abs(lateralX);
-  if (onPavedExit || ax <= 1) return Infinity;
-  const depth = Math.max(0, Math.min(1, (ax - 1) / 1.5));
-  const curve = MAX_SPEED * (OFFROAD_SLOW + (0.15 - OFFROAD_SLOW) * depth);
-  return Math.min(MAX_SPEED * OFFROAD_CAP_MPH / 120, curve);
+  if (onPavedExit || Math.abs(lateralX) <= 1) return Infinity;
+  return MAX_SPEED * OFFROAD_CAP_MPH / 120;
 }
 export const CENTRIFUGAL  = 0.3;
 

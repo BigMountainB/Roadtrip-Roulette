@@ -7602,8 +7602,8 @@ export class GameScene extends Phaser.Scene {
         && p.x > 0.98 && p.x < exHere.outerX + 0.10;
     }
     if (Math.abs(p.x) > 1 && !onRamp) {
-      // Same ceiling the target-speed cap uses (≤ 60 mph, steeper in deep
-      // grass); this just eases an over-speed entry down toward it.
+      // Same flat 60 mph ceiling the target-speed cap uses; this just eases
+      // an over-speed entry down toward it.
       const maxSpeed  = offroadSpeedCap(p.x, false);
       if (p.speed > maxSpeed) p.speed = lerp(p.speed, maxSpeed, 0.06);
       // Off-road HP bleed — 0.5 HP per second of dirt-driving.  Ramp

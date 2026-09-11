@@ -4714,7 +4714,7 @@ attempt; the owner now wants the cap.
 - Cause of 89: the old ceiling (`MAX_SPEED × lerp(OFFROAD_SLOW, 0.15, depth)`) was applied as a
   6%/frame pull AFTER the throttle integration, so accel vs. pull settled ~30 mph above it.
 - Fix: `constants.offroadSpeedCap(lateralX, onPavedExit)` → Infinity on pavement / painted exit
-  lane; otherwise `min(60 mph, old depth curve)`.  `GameScene._updatePlayer` caps `targetSpeed`
+  lane; otherwise a FLAT 60 mph (owner follow-up: the kept depth curve read 48 where he pulled off — "should be 60" — so the curve and `OFFROAD_SLOW` are gone; terrain grip + HP bleed bands unchanged).  `GameScene._updatePlayer` caps `targetSpeed`
   with it (before the flat-tire / bush caps), so the throttle itself cannot exceed it; the later
   off-road block still eases an over-speed entry down and bleeds HP as before.
 - Live probe (`scratchpad/probe/speed_probe.mjs`, no brake, no police): lane 90.2 · right shoulder
