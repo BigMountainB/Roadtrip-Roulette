@@ -220,6 +220,16 @@ balloons size from the measured text block plus 0.8 em / 0.5 line-height padding
 correction "balloons must hug the lettering"), with a small bulge only on organic contours; QA
 log carries textBounds/bodyBounds/padding and flags `excessBalloonArea`. Build tag b24.
 
+**Comic tray taps did nothing (owner, Mercer Island, same day) — FIXED.** With full-screen
+tiles the full-screen drag zone (depth 604) covered the choice buttons (603), and Phaser hands a
+tap to the topmost interactive object only, so a real finger on a choice never reached it. The
+pilot probe had emitted `pointerdown` on the button objects directly and never caught it. Tray
+band and buttons now sit at 605, labels at 606, above the drag zone. Verified with a real canvas
+click in headless: player balloon, then the reply. Probes must click the screen from now on. The
+"comic progresses without tapping" part is the designed cadence (owner's 2 s bubble gap; a
+finished tile holds 3 s / 6 s then advances, a tap skips the hold) — whether beats should instead
+WAIT for a tap is an open owner call.
+
 **Correction to pt 13 (owner pushback, same day):** the owner was seeing the halt on a FRESH
 game with the brake never touched, so the "latched BRAKE toggle" diagnosis was wrong for his
 case. The real cause is the 2026-08-31 commit "Pulling onto the shoulder now commits both stop

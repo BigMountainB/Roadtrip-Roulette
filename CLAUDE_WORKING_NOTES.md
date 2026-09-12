@@ -4766,3 +4766,18 @@ Applied:
   the same shoulder+brake test.
 - The two "off-road speed" sections above are superseded by this one.  Do NOT touch off-road
   speeds again without the owner's explicit word.
+
+## COMIC TRAY — REAL TAPS WERE SWALLOWED BY THE DRAG ZONE (Claude, 2026-09-11)
+
+Owner (Mercer Island, dev build): "when I tapped on my choice nothing happened."  Real-click
+probe (`scratchpad/probe/tray_click.mjs`, page.mouse.click at the button's canvas position):
+Phaser's hit list at the point was [scrim 600, button 603, dragZone 604] and `topOnly` gives the
+tap to the dragZone.  This began when tiles went full-screen (the drag zone grew to cover the tray
+band).  The pilot probe's `__pick` emitted `pointerdown` on the button object, bypassing the hit
+test — which is why the pilot passed while the device failed.  Fix: tray band + buttons at
+D+5 (605), labels at D+6 (606).  After the fix the same real click produces the player balloon
+and the reply.  RULE for every future probe: drive the UI with real screen clicks/taps, never
+`emit`.  Not changed: the auto-advance cadence (choice-less beats hold then advance; a tap skips)
+— the owner noticed "the comic was progressing without me tapping"; whether beats should wait
+for a tap is his call (asked).  The earlier "stuck at this screen" report (2026-09-10) was very
+likely this same bug, not the mid-rewrite page.

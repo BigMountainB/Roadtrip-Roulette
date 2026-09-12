@@ -562,17 +562,22 @@ export function showStoryConversation(scene, start, onDone) {
     }
     // Tray: smoked glass over the lower part of the art, cream sentence-case
     // choice surfaces in the dialogue face with a quote tail motif.
+    // The tray sits ABOVE the full-screen drag zone (D + 4): Phaser hands a
+    // tap to the topmost interactive object only, and with full-screen tiles
+    // the drag zone covers the tray — a real finger on a choice did nothing
+    // (owner, Mercer Island, 2026-09-11).  The pilot probe had emitted
+    // pointerdown on the button objects directly and never caught it.
     const n = list.length;
     const bh = 38;
     const trayH = Math.min(TRAY_MAX_H, n * (bh + BTN_GAP) + 18);
     const trayTop = TRAY_BOTTOM - trayH;
-    btnObjs.push(scene.add.rectangle(SCREEN_W / 2, trayTop + trayH / 2, SCREEN_W, trayH, 0x070B14, 0.80).setDepth(D + 3));
+    btnObjs.push(scene.add.rectangle(SCREEN_W / 2, trayTop + trayH / 2, SCREEN_W, trayH, 0x070B14, 0.80).setDepth(D + 5));
     let y = trayTop + 10;
     for (const ch of list) {
       const cost = Math.max(0, ch.cost | 0);
       const afford = cost <= cash;
       const label = cost ? `${ch.label}  ($${cost})` : ch.label;
-      const g = scene.add.graphics().setDepth(D + 3);
+      const g = scene.add.graphics().setDepth(D + 5);
       const draw = (hover) => {
         g.clear();
         g.fillStyle(afford ? 0xFFF9D6 : 0x8A8378, hover ? 1 : 0.92);
@@ -584,7 +589,7 @@ export function showStoryConversation(scene, start, onDone) {
       draw(false);
       const lbl = scene.add.text(48, y + bh / 2, label, {
         fontSize: '16px', fontFamily: LETTERING, color: afford ? '#141414' : '#3A3630', wordWrap: { width: ART_W - 96 }, align: 'left',
-      }).setOrigin(0, 0.5).setDepth(D + 4);
+      }).setOrigin(0, 0.5).setDepth(D + 6);
       btnObjs.push(g, lbl);
       if (afford) {
         g.setInteractive(new Phaser.Geom.Rectangle(28, y, ART_W - 56, bh), Phaser.Geom.Rectangle.Contains, { useHandCursor: true });
