@@ -12,6 +12,10 @@
     "rule": "measure final wrapped text first; fit the selected contour tightly around that block",
     "horizontalPaddingEm": [0.70, 0.95],
     "verticalPaddingLineHeight": [0.42, 0.65],
+    "referenceContourInsetCssPx": 10,
+    "verticalCenterMetric": "visible glyph/ink bounds, not baseline or font line box",
+    "contourFit": "offset each line's measured visible rectangle, union neighboring envelopes, then smooth into one organic path; never trace individual glyph outlines",
+    "oneWordLine": "allowed in an intentional compact stack when neighboring lines are generally 2–4 words; reject a severe orphan beneath a substantially wider line, especially after 7+ words",
     "forbidden": [
       "large preset balloon rectangles",
       "preserving blank master viewBox whitespace",
@@ -21,6 +25,7 @@
   "composition": {
     "rule": "boolean-union body, tail, and any bridges first; draw one final outside contour",
     "speakerTail": "two tapering outside edges; completely open at balloon junction; no base seam",
+    "tailPolicy": "mandatory for every visible/on-panel speaker, including shout, whisper, distress, player, and ordinary speech; omit only for captions, SFX, or explicitly off-panel speech",
     "bridge": "exactly two narrow side rails; completely open into both balloons; no end caps or balloon-outline seams",
     "bridgeWidthLineHeight": {
       "target": [0.35, 0.55],
@@ -28,6 +33,7 @@
       "distanceInvariant": true,
       "comparison": "visibly slimmer than an ordinary speaker-tail base"
     },
+    "bridgeRailStrokeVsBodyOutline": [0.70, 0.85],
     "forbidden": [
       "stroking body and tail as separate closed polygons",
       "balloon outline crossing a tail opening",

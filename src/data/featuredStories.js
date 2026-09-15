@@ -755,7 +755,12 @@ export const FEATURED_STORIES = {
     id: 'country', version: 2,
     title: 'StageWagon or Bust',
     genre: STORY_GENRE.country,
-    entry: null,                    // started by hiphop.mercer_fork.ride
+    // Two ways in (owner 2026-09-14): Hip-Hop's Mercer ride choice starts it
+    // at `startNode` (Vantage), OR — with no phone in play this run — Brittney
+    // opens COLD at Mercer herself (`entry.nodeId`): she thinks the player is
+    // cute, her boss just gave her a double, she's mad at her boyfriend and
+    // wants the concert.  Reason enough to leave.
+    entry: { stopId: 'M', nodeId: 'mercer_cold' },
     startNode: 'vantage_arrival',
     startRelationship: 50,
     endings: {
@@ -768,10 +773,13 @@ export const FEATURED_STORIES = {
     meanwhile: {
       brittney_friends: pendingStrip("Brittney's StageWagon friends read her messages", ['StageWagon Friend', 'StageWagon Friend', 'Brittney']),
     },
-    // Brittney can only board at Mercer, off the live Hip-Hop fork.
+    // Brittney can only board at Mercer — off the live Hip-Hop fork, or on
+    // her own cold open when no phone is in play.
     passengerJoinStop: (st, run, canon) => {
       const hh = canon.stories.hiphop;
-      return (hh?.status === 'active' && hh.items?.phone && !hh.items?.phoneLocked && !hh.flags?.mercerDone) ? 'M' : null;
+      if (hh?.status === 'active' && hh.items?.phone && !hh.items?.phoneLocked && !hh.flags?.mercerDone) return 'M';
+      if (st.status === 'available' && !hh?.items?.phone && !run.passenger) return 'M';
+      return null;
     },
     // She is in the seat for as long as the story is active.
     deriveRun: (st, run) => { run.passenger = { id: 'brittney', name: 'Brittney', storyId: 'country' }; run.nerve = Math.max(0, Math.min(NERVE_MAX, run.nerve ?? NERVE_MAX)); },
@@ -911,6 +919,61 @@ export const FEATURED_STORIES = {
       }
     },
     nodes: {
+      // ── Mercer / Gas-N-Sip — COLD OPEN, no Malik (owner 2026-09-14) ─────
+      //    Fires only when no phone is in play this run (skipped the Park &
+      //    Ride, or passed on carrying).  Same opening line she uses when the
+      //    player has the phone.  Lines marked [OWNER LINE …] are the owner's
+      //    to write ("I'll think of the rest later") — never invent them.
+      //    Dom'nique is out of the story on this path (Hip-Hop never starts);
+      //    the jealous boyfriend can still come for the player.
+      mercer_cold: {
+        stopId: 'M', mandatory: true,
+        when: (st, run, canon) => !run.passenger && !st.flags.coldDone && !canon?.stories?.hiphop?.items?.phone,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
+        line: "Welcome to Gas-N-Sip, hon! What can I do to—uh—for you?",
+        choices: [
+          { id: 'day', consequential: false, next: 'mercer_cold_woes',
+            label: "Hey, how's your day going?",
+            reply: "" },
+          { id: 'pretty', consequential: false, next: 'mercer_cold_woes',
+            label: "What's a pretty girl like you doing in this joint?",
+            reply: "[OWNER LINE — country.mercer_cold.pretty.reply]" },
+        ],
+      },
+      // Brittney unloads her woes: the double her boss just gave her, the
+      // boyfriend she's pissed at, the concert she wants to go to.
+      mercer_cold_woes: {
+        stopId: 'M', virtual: true,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'minor',
+        line: "[OWNER LINES — Brittney unloads: the double, the boyfriend, the concert]",
+        next: 'mercer_cold_offer',
+      },
+      mercer_cold_offer: {
+        stopId: 'M', virtual: true,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'major',
+        line: "[OWNER LINE — Brittney's ride pitch, no Malik]",
+        choices: [
+          { id: 'ride', consequential: true, next: 'vantage_arrival',
+            panelKey: 'country.mercer_fork.ride',
+            label: "[OWNER LINE — player says yes]",
+            reply: "[OWNER LINE — Brittney's reply to yes]",
+            // Same numbers as the Hip-Hop ride (+5 Brittney).  `next` parks
+            // the story at Vantage exactly where `startStory` would.
+            effects: {
+              flags: { coldDone: true, path: 'country', coldStart: true },
+              relationship: 5,
+              passenger: { id: 'brittney', name: 'Brittney', storyId: 'country' },
+            },
+          },
+          { id: 'pass', consequential: true, next: null,
+            label: "[OWNER LINE — player says no]",
+            reply: "[OWNER LINE — Brittney's reply to no]",
+            // Back on the shelf for this run; a later run can open cold again.
+            effects: { flags: { coldDone: true }, resetStory: 'country' },
+          },
+        ],
+      },
+
       // Virtual because it appears only when HIT THE ROAD is pressed, after
       // Brittney has finished serving the player at Mercer Gas-N-Sip.
       mercer_departure: {

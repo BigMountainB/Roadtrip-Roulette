@@ -6,6 +6,187 @@ This file is a durable handoff between the owner, Codex, and Claude. Keep it bes
 
 Treat these as product requirements, not suggestions.
 
+## CURRENT CANONICAL DIALOGUE — READ THIS FIRST (owner + Chat/Codex, consolidated 2026-09-12)
+
+**This is the only active dialogue/story handoff for Seattle, Mercer, Brittney's first road
+beats, and the connected Malik consequences. It supersedes every older Seattle/Mercer draft,
+"authoritative dialogue handoff," pilot transcript, implementation report, placeholder line,
+and dialogue quotation elsewhere in this file whenever they differ. Older sections remain only
+as development history. Do not pull dialogue out of them. Do not restore lines merely because
+they are still present in `featuredStories.js`.**
+
+### Source-control rule for story copy
+
+- Text labeled **EXACT OWNER LINE** below may be implemented verbatim, with punctuation-only
+  cleanup when needed. Do not paraphrase it or combine it with an older line.
+- Material labeled **CANON DIRECTION — COPY NOT LOCKED** controls character, continuity, and
+  event order, but is not permission for Claude to invent final dialogue. Use `[OWNER LINE]`
+  placeholders and ask the owner when exact words are required.
+- Existing code is not the writing authority. It presently contains superseded Claude/Chat
+  copy. A line being implemented does not make it approved.
+- Never silently merge two generations of a scene. When this section changes, the newest entry
+  replaces the older entry instead of being appended as a competing version.
+- Player dialogue is a real choice only when two or more meaningfully different responses are
+  authored. A mandatory Player line belongs in a speech balloon, not a one-button choice tray.
+
+### Seattle meeting — active public setup; Martin history remains a workshop option
+
+**ACTIVE CANON DIRECTION — FINAL COPY STILL NEEDS REVIEW:**
+
+- Malik behaves as though he does **not know Player** when they meet. The scene may play as a
+  stranger interaction even if a later-approved backstory eventually explains that the behavior
+  was an act.
+- Malik shows Player his **NoiseCloud** page to prove that he is a successful artist. NoiseCloud
+  remains an active story element. It is also the later evidence carrying Dom'nique's name/date
+  and supporting Dom'nique's ownership claim to the beat.
+- Player must receive genuine response options rather than one mandatory sentence disguised as
+  a choice. The previously discussed choices remain available for workshop:
+  - unfamiliar/grounded: “I don't know you, no offense. I'm sure you haven't heard any of my songs either.”
+  - guarded: “Who's asking?”
+  - fan/fellow artist: “Malik Reed? I follow your work. I'm a songwriter too.”
+- These are candidate branch lines, not permission to collapse all three into one exchange. Each
+  requires a compatible Malik response and must converge naturally on his route and phone request.
+- Keep the NoiseCloud proof separate from invented crowd hype. The old comic-pilot crew lines and
+  “Top of NoiseCloud, bottom of my tank” / bus-driver couplet are not owner-approved dialogue.
+
+**WORKSHOP OPTION — NOT CANON, NOT FOR IMPLEMENTATION YET:** Player and Malik may have attended
+junior high together, when Malik was known as **Martin**. In that version, Malik grew up in the
+suburbs, hides that past from his crew, and only pretends not to know Player. Player recognizes
+the act and can protect, needle, or threaten Malik's secret. This would affect the Seattle meeting,
+later jealousy, Malik's “fan” accusation, and other callbacks, so Claude must not write or wire it
+until the owner explicitly approves the backstory and revised dialogue.
+
+### Seattle phone pitch — approved substance after the new recognition scene
+
+Malik believes Brittney will receive the phone at Mercer and personally take it to Kyle. He does
+**not** know she will be stuck working a double. Player agrees only to the Mercer handoff, not to
+Issaquah and not to choosing Malik over Brittney.
+
+**EXACT OWNER LINE — Malik (may be divided into several short balloons without changing words):**
+
+> “I put some of my best tracks on this phone and I just need to get it to my girl at the
+> Gas-N-Sip on Mercer Island. She's gonna take it to my homie Kyle, who produces some fire.
+> I know if I get that phone in his hands, I'll be Seattle's next big thing.”
+
+If Player identifies as a songwriter/artist, Malik can use that common ground to explain why the
+phone matters. The approved idea is: **“As an artist, you know how important this phone is to me…”**
+Exact complete wording and its branch-specific lead-in still need review.
+
+On acceptance, use two separate crew balloons:
+
+- **EXACT OWNER LINE — Crew:** “It's in your best interest to protect that phone.”
+- **EXACT OWNER LINE — Crew:** “And don't touch the girl.”
+
+Do not use “don't scratch the screen.” The screen is already cracked; the tracks/data matter.
+When driving begins, play **Rain City Roll Call**, then continue the Hip-Hop/Phonk playlist.
+
+### Mercer Gas-N-Sip introduction — active exact dialogue
+
+This entire conversation must occur before the shop becomes interactive and before Brittney can
+become a passenger. Brittney is immediately attracted to Player; convey it through acting and
+delivery rather than a narration balloon stating it.
+
+- **Brittney:** “Welcome to Gas-N-Sip, hon! What can I do to—uh—for you?”
+- **Player:** “Hey, are you Brittney? I have one of Malik's phones he wanted me to get to you.”
+- **Brittney:** “Ugh. Even when Malik's not here, it's about him.”
+- **Player:** “Oh, sorry. I don't want to get between you two.”
+- **Brittney:** “But I wish you would! I don't even like hip-hop.”
+- **Brittney:** “Malik and I had plans to go to StageWagon. He blew them off for his album.”
+- **Brittney:** “Hey! Why don't you come to StageWagon with me? You can use Malik's ticket.”
+
+Current real Player choices:
+
+1. **Full support — +5 Brittney**
+   - **Player:** “That sounds incredible! I'm game. I'll meet you at my car when I'm done shopping.”
+   - Brittney leaves with Player; Malik's phone stays at Mercer.
+2. **Conditional support — +3 before the ultimatum**
+   - **Player:** “Sure! We just have to drop this phone off in Issaquah on our way.”
+   - **Brittney:** “No. I'm done letting his album hijack my plans. Me or the phone.”
+   - Choose Brittney: total +5; phone stays at Mercer. Choose phone: Brittney stays at work.
+3. **No support — +0 Brittney**
+   - **Player:** “It's probably best if you keep your job. I can deliver the album.”
+   - **Brittney:** “Whatever, dude. We would've had a sloppy-ass time. Do you need anything else?”
+   - The shop opens; Player continues with the phone.
+
+Retire “I gave Malik my word,” “from one artist to another,” and any statement that Player
+promised to take the phone to Issaquah. If Brittney explains the risk, use:
+
+- **Brittney:** “Don't miss the exit. Malik watches that phone's location like it's the RedZone.”
+- **Brittney:** “He's had people beaten up for less.”
+
+If Brittney stays, Malik calls immediately after **HIT THE ROAD**, before driving resumes:
+
+- **Malik:** “Britt? You headed to Kyle?”
+- **Player:** “She had to work a double, so I'm doing you a solid.”
+- **Malik:** “…Damn. She told you where to go?”
+- **Player:** “Yeah. Kyle's spot in Issaquah.”
+- **Malik:** “Good. I can see the phone moving. Don't get creative.”
+
+### Brittney passenger path — ignored call, Haylee, and supply run
+
+- Brittney ignores one Malik call at the first eligible **Bellevue or Issaquah rest stop**, whichever
+  Player visits first. It happens before that stop's storefront choices and never repeats.
+- Required images/actions: her phone lights with Malik's name; she looks at it; she declines the
+  call; a third composition may show Player speaking if needed. Do not generate duplicate costume
+  variants of the same beat.
+- **Player:** “That was Malik, wasn't it?”
+- **Brittney, quietly:** “Yes.”
+- Then present these three exact responses:
+  - Positive: **“Don't even stress about it. I got you.”**
+  - Neutral: **“What's the worst that can happen?”**
+  - Negative: **“Is this going to be bad for my health? I should've left you at the gas station.”**
+- **Haylee** is Brittney's strawberry-blonde friend. Player and Brittney pick her up in Ellensburg.
+  How Player treats Haylee changes Brittney's relationship with Player.
+- The **supply run is approved** as a subsequent Brittney/Haylee objective. Its exact dialogue is
+  not approved. Existing Claude placeholder lines are not canon and must not be shown as final
+  copy. Keep `[OWNER LINE]` placeholders until that scene is workshopped.
+- Successful arrival at StageWagon is the celebration/checkpoint. The Country-song royalty idea
+  may arise while Player plays guitar at Vantage and an artist asks to use the song on tour; exact
+  dialogue and reward thresholds remain to be written.
+
+### Mutually exclusive Malik consequences
+
+- **Brittney path:** phone was left at Mercer. Brittney and later Haylee may be in the car. Malik
+  alone catches them near North Bend in the Hip-Hop/Phonk vehicle.
+- **Phone-delivery path:** Brittney and Haylee are not in the car. After Issaquah, Kyle returns the
+  phone with the thumb drive and the phone locks. If Player skips Issaquah, the Vantage retaliation
+  uses the three cars Malik sent; Malik's message is **“I just sent the dogs after you. Woof.”**
+- Never combine the three-car Vantage ambush with Malik's one-car North Bend chase.
+
+North Bend chase presentation on the Brittney path:
+
+1. Brittney notices Malik's car in the passenger-side mirror while Player checks the rearview.
+2. Malik's car is much closer; Malik's face is visible in the driver's seat.
+3. Chase begins as real driving gameplay in rain or snow; either provides poor traction.
+4. Player must hit Malik three times. Otherwise the chase continues until Player crashes.
+5. On failure, Player wakes in an Ellensburg hospital at 50% health, holding a large hospital
+   bill; the bill takes all current money. Hospital art already exists.
+
+The old accusation “You took my phone and my girl?” is invalid on this branch because the phone
+stayed at Mercer. Exact revised confrontation copy is **not yet locked**. If the optional Martin
+history is later approved, revise the confrontation and earlier callbacks together rather than
+silently inserting the backstory into this one beat.
+
+### Dialogue/comic presentation rules
+
+- Most balloons contain 5–10 words; hard ceiling 20–25 words.
+- A single-word last line is acceptable when surrounding lines are also short (roughly 2–4 words).
+  Avoid a lone orphan after a line of seven or more words; rewrap the text instead.
+- Narration, action, location, and context use square/rectangular **caption boxes without tails**.
+  Spoken words use speech balloons. Never place narration inside a character's speech balloon.
+- Player choices overlay the artwork in the translucent response tray. The tile does not advance
+  until Player chooses. Player's selected line becomes a balloon on the tile.
+- If Player is last to speak, hold 3 seconds. If an NPC speaks afterward, reveal all subsequent
+  NPC balloons in the same tile and hold about 6 seconds, lengthened for longer copy. Tap skips.
+- Faces are Level 1 and may never be covered or cropped. Essential bodies/story objects are Level
+  2 and may not be cropped. Text balloons also may not be cropped. Prefer negative space, then
+  Level 3 scene detail, then the smallest necessary Level 2 overlap; never Level 1.
+- Reading order begins nearest the upper-left and proceeds right/down. Connected same-speaker
+  balloons may share narrow, open bridge connectors. Tails/connectors must be slender, unbordered
+  where they join their balloon, and never form the giant white wedges seen in early pilots.
+- Routine passenger-satisfaction exchanges are montage sources, not equal story panels. Condense
+  them beneath a caption such as **“…how did they handle the long car ride?”**
+
 ## Memory audit implementation — 2026-09-09 (Claude, same day as the diagnosis below)
 
 Owner approved working the list; status per finding (verify on a real iPhone per the
@@ -1375,7 +1556,7 @@ Claude's art-direction review should focus first on:
 
 Do not spend new-art budget first on minor conversational variants that can be represented honestly with shared establishing art and branch-specific balloons.
 
-## Story build-out — Seattle opening REVIEW DRAFT (Claude, 2026-09-09; owner: "I draft, you red-pen")
+## ARCHIVE — Seattle opening review draft (2026-09-09; dialogue superseded)
 
 Owner's brief: "There's no introduction to who Malik is, no showing him rapping with his
 friends to build character, he doesn't mention the phone holds his newest album that needs
@@ -1477,7 +1658,7 @@ Purpose: the chapter's travel bridge; the finished book gets a page turn here.
    node) and to the Country/Classic Rock openings?  I'd propose Mercer next since it's the
    fork into Brittney's whole arc.
 
-### ChatGPT/Codex red-pen — Seattle opening draft (2026-09-09)
+### ARCHIVE — ChatGPT/Codex red-pen (2026-09-09; dialogue superseded)
 
 **Overall verdict: approve the six-beat structure, with dialogue and art-request revisions below. Do not wire it yet as final copy until the owner approves this red-pen.** The new sequence fixes the real structural problem: Malik becomes a person with a performance, obligation, deadline, and reason to notice the player before asking for help. Establish → contact → stakes → decision → consequence → travel is the correct order.
 
@@ -1600,7 +1781,7 @@ This prevents writing dozens of beautiful beats around assumptions the actual st
 
 These answers should be expressed through action and short dialogue, not a second exposition dump.
 
-### Owner addition — player may recognize Malik and identify as an artist (2026-09-09)
+### ARCHIVE — former recognition draft (2026-09-09; current top section controls)
 
 The owner suggests that the player can tell Malik they are a fan of his work and an artist too. **Approve this as an optional Beat 2 response and a meaningful trust accelerator.** It gives Malik a human reason to believe the player understands what the album and deadline mean.
 
@@ -1636,7 +1817,7 @@ Do not turn the opening into a biography questionnaire. The player need not name
 
 For the permanent comic, Beat 2 may normally be omitted. If the fan/artist flag receives a later payoff, the finished book may include the recognition as a small setup inset or incorporate its wording into a Malik relationship strip so the payoff remains legible.
 
-## Mercer / Brittney story direction — OWNER CANON + REVIEW DRAFT 2026-09-09
+## ARCHIVE — Mercer/Brittney owner canon + review draft (2026-09-09; current section controls dialogue)
 
 ### Owner-established character and relationship canon
 
@@ -2233,7 +2414,7 @@ No. Starting at Vantage and pretending the attack never happened makes “return
 - The resolved ambush does not fire a second time.
 - A small second-pass Vantage callback may acknowledge the prior fight without another chase.
 
-### Seattle opening — REVISED DRAFT v2 (Claude, 2026-09-09, red-pen + owner addition applied)
+### ARCHIVE — Seattle opening revised draft v2 (2026-09-09; dialogue superseded)
 
 Accepting the six-beat structure and every markup point, with two code-truth corrections:
 
@@ -2484,7 +2665,7 @@ a road-event emission site (mile trigger + flag guards) and the live strip's pho
 presentation; the existing texts/`_showTextMsgBox` HUD could carry the live version until
 the strip exists.
 
-## Seattle V2 dialogue correction — OWNER 2026-09-10
+## ARCHIVE — Seattle V2 dialogue correction (2026-09-10; superseded)
 
 **Canonical Mercer store name confirmed from the production icon and code: 'Gas-N-Sip'.** The actual logo reads 'GAS-N-SIP'; existing business labels, storefront assets, Brittney uniform references, and featured-story data agree. Replace draft uses of 'Sip-N-Go', 'Sip and Co', or other variants with **Gas-N-Sip**.
 
@@ -2518,7 +2699,7 @@ Set/rename the stable flag accordingly—prefer a concept such as `playerMusicia
 
 The earlier V2 guarded reply—“Malik Reed. You just heard the best verse in this lot.”—is superseded by this complete exchange. Also remove the pending question about whether “artist” should remain broad; the owner has now made the player's songs explicit.
 
-## Seattle v3 + Mercer sequence + Haylee profile — Claude, 2026-09-10 (drafts; nothing implemented)
+## ARCHIVE — Seattle v3 + Mercer sequence (Haylee facts retained only where current canon agrees)
 
 Authority applied: the **2026-09-10 Seattle correction** (musician exchange, Gas-N-Sip) and
 the **2026-09-10 Haylee identity** override everything earlier they touch, including my v2
@@ -2719,7 +2900,7 @@ any prompt, sheet, portrait, panel, or dialogue key.  Everything below is PROPOS
 10. **Haylee dialogue keys / node ids:** `ellensburg_haylee` (pickup), `haylee_road_*` (live), plus her `meanwhile` strip id — settle before art prompts so keys never rename.
 11. **Country reward threshold** (base album for every arrival vs treated-well only) and the Malik 1-star "fill the tank" rounding remain open from the 09-09 list — unchanged.
 
-## OWNER CORRECTIONS 2026-09-10 (later) — authoritative over Seattle v3 / Mercer draft above
+## ARCHIVE — 2026-09-10 corrections (superseded wherever the current canonical section differs)
 
 1. **Malik only says "Then Mercer is on your way."**  He is NOT planning to send the player to
    Kyle.  The player's job from Malik is the Mercer handoff to Brittney, full stop.  The ONLY
@@ -3039,12 +3220,12 @@ rounded UP to the dollar, capped at a full tank; shown on the button before paym
   replies (±2–5 each, ignores −3/−5) and the mediation choices widen both ends, so the
   proposed bands (<20/20/40/60/75/90) are reachable without grinding.
 
-## AUTHORITATIVE DIALOGUE HANDOFF — Seattle → Mercer → first road contact (owner + Chat, consolidated 2026-09-10)
+## SUPERSEDED ARCHIVE — former dialogue handoff (2026-09-10; do not implement)
 
-**Claude: use this section as the current dialogue source of truth. It supersedes every
-earlier Seattle/Mercer draft where the wording, knowledge, route, choice labels, crew
-warnings, or trigger timing conflicts. This is a writing handoff, not a claim that the code
-has already been changed. Preserve existing stable save keys wherever possible.**
+**This entire section was superseded by `CURRENT CANONICAL DIALOGUE — READ THIS FIRST` at the
+top of this file. It is retained only to explain old code and commits. None of its dialogue is
+an implementation source. Preserve existing stable save keys where possible, but replace stale
+copy and event assumptions with the current canonical section.**
 
 ### Non-negotiable continuity
 
@@ -3962,17 +4143,13 @@ The lettering must look composed by a comic letterer, not like ordinary UI text 
 
 #### One-word-line rule
 
-Do not leave a single word stranded on its own line when the complete dialogue contains three or more words. A one-word line is permitted only when:
+A one-word final line is not automatically wrong. It is permitted when the surrounding lines are also compact—generally two to four words per line—and the total result forms an intentional, space-efficient tall/narrow balloon. It is also permitted when the entire dialogue contains only one or two words, when the writer explicitly marks that word as a dramatic beat, or when every line is intentionally one word.
 
-- the entire dialogue contains only one or two words;
-- the writer explicitly marks that word as a dramatic beat or visual emphasis; or
-- every line is intentionally one word, creating a deliberately tall, narrow balloon whose shape and scene composition support that effect.
-
-An automatically produced one-word first, middle, or final line is a failed wrap—not acceptable merely because the text technically fits. Reflow before rendering by trying, in order: different natural phrase breaks, a modestly wider or differently shaped balloon, balanced tracking within the approved readability range, or a linked second balloon at a real pause in the speech. Do not solve an orphan by shrinking the type below the readable minimum, changing the dialogue, covering a higher-priority zone, or cropping protected content.
+The actual failure is a **severe orphan**: one lonely word beneath a substantially wider line, especially a line of seven or more words, when the dialogue can be rewrapped into more balanced phrases. In that case, rewrap before rendering by trying, in order: better natural phrase breaks, a narrower/taller contour-fit balloon, a modestly wider alternative shape, or a linked second balloon at a real pause. Do not solve a severe orphan by shrinking the type below the readable minimum, changing the dialogue, covering a higher-priority zone, or cropping protected content.
 
 Score candidate line breaks for all of the following:
 
-- no unapproved one-word line;
+- no severe orphan; a one-word line among compact two-to-four-word lines is acceptable;
 - phrases remain together where a speaker would naturally pause;
 - the outer text silhouette suits the balloon—normally short/wide/short rather than a rectangular block;
 - adjacent line lengths change gradually instead of producing an accidental shelf or spike;
@@ -4052,6 +4229,22 @@ Pilot 01 initially showed too much empty space between the dialogue and balloon 
 Required fit sequence: wrap the dialogue intentionally, measure the final text block, add only the required breathing room, and fit/regenerate the selected contour around that result. Target **0.70–0.95 em horizontal padding** and **0.42–0.65 rendered line-height vertical padding**. Organic oval shoulders may extend beyond those targets only where curvature requires it. A balloon must not preserve empty master-viewBox space, expand to a generic preset rectangle, or shrink readable text to justify an oversized body.
 
 Add QA fields for the measured text bounds, body bounds, and padding on all four sides. Flag `excessBalloonArea` when the body could be materially reduced without violating text padding, line-wrap, outline, or shape-family rules. When choosing between two otherwise valid placements, prefer the smaller balloon footprint because it preserves more story art.
+
+#### OWNER DIRECTION — 10 px text-contour fit and optical centering (2026-09-11)
+
+Add a compact **text-contour balloon** option. After the final dialogue has been wrapped, measure the visible glyph/ink bounds of each line. Offset those line envelopes by approximately **10 CSS pixels at the reference gameplay scale**, union neighboring envelopes, and smooth their stepped exterior into one restrained organic contour. Scale the inset proportionally for the menu comic, zoom, and export. Do not trace every glyph—this is a smooth line-envelope shape, not a sticker around individual letters.
+
+This permits an odd/asymmetric but compact balloon that follows changing line lengths and covers substantially less artwork than a generic oval. It does not repeal the one-word-line rule: first find balanced natural line breaks, then contour-fit the approved lines. Splitting at a genuine speech beat into two linked tight balloons remains preferable to one oversized balloon.
+
+Vertically center using the union of actual visible glyph bounds, including ascenders and descenders—not the baseline or the font's invisible line box. The current compact reply, whisper, phone/radio, and linked-balloon samples look optically high and must be corrected. QA should compare top and bottom visible padding and flag `textOpticallyHigh` or `textOpticallyLow` when the difference exceeds 2 reference pixels without an authored reason.
+
+For narrow connectors, use rail strokes at roughly **70–85% of the ordinary balloon outline weight** so two close parallel rails do not read as a single heavy black bar. Connector rail strokes may never be heavier than the body outline.
+
+#### OWNER CLARIFICATION — every visible speaker requires a tail (2026-09-11)
+
+If dialogue comes from a visible/on-panel character, its balloon must have an attributed tail. This includes shout, whisper, distress, flirt, hesitant, worried, player, and ordinary speech balloons—the special body shape does not replace speaker attribution. A body-only SVG is an art master, not a complete on-panel balloon.
+
+Tail omission is valid only for a narration/context caption, free-floating sound effect, or dialogue explicitly authored as off-panel. A transmitted voice uses the appropriate electronic tail toward the visible device/source. A linked sequence from the same visible speaker normally uses one speaker tail for the united group. Add QA failure `visibleSpeakerMissingTail`.
 
 ### Metadata model
 
@@ -4144,7 +4337,7 @@ The three-system pilot is not ready until it demonstrates:
 
 Claude and ChatGPT/Codex should resolve the ordinary geometry and visual QA under these rules. Ask the owner only if the **classification itself** is ambiguous—for example, whether an object or gesture is essential to understanding the story—not where to move an individual balloon.
 
-## COMIC DIALOGUE WORKSHOP — PILOT REPORT (Claude, 2026-09-10, later)
+## HISTORICAL IMPLEMENTATION REPORT — comic dialogue pilot (not a dialogue source)
 
 Owner: "Work through the handoff. Diagnose the Mercer skip and build the three-panel review
 pilot before changing the rest of the comic." Everything below is in code; nothing beyond
@@ -4264,7 +4457,7 @@ errors. Chat/Codex: review these before any placement is applied to the rest of 
 Read in full. No change made: it says "ask the owner before implementation". Ready to start
 P0 (per-stop rest-stop working set) on the owner's word.
 
-## COMIC PILOT — SYSTEM BUILD + FLOW EVIDENCE (Claude, 2026-09-10, late) — for Chat/Codex review
+## HISTORICAL IMPLEMENTATION REPORT — comic pilot system build (not a dialogue source)
 
 Per §"OWNER COURSE CORRECTION — COMIC PILOT WORKFLOW": one note, what changed, which gates
 pass, what is unresolved.  Owner-facing deliverable = `review/comic_pilot_2026-09-10/flow/pilot_flows.mp4`
@@ -4781,3 +4974,26 @@ and the reply.  RULE for every future probe: drive the UI with real screen click
 — the owner noticed "the comic was progressing without me tapping"; whether beats should wait
 for a tap is his call (asked).  The earlier "stuck at this screen" report (2026-09-10) was very
 likely this same bug, not the mid-rewrite page.
+
+## BRITTNEY COLD OPEN AT MERCER — WIRED, OWNER LINES PENDING (Claude, 2026-09-14)
+
+Owner structure (2026-09-14): boards without Malik (double shift, pissed at boyfriend, wants the
+concert); talks to the stranger because he's cute; jealous boyfriend still possible; Dom'nique
+out on this path; same relationship numbers.  Owner lines so far: same opening line as the phone
+flow; player openers "Hey, how's your day going?" (→ she unloads) and "What's a pretty girl like
+you doing in this joint?".  "I'll think of the rest later."
+
+Placeholders the owner still owes (grep `[OWNER LINE` in featuredStories.js, country nodes):
+- `country.mercer_cold.pretty.reply` — her reply to the pretty-girl line
+- `country.mercer_cold_woes.line` — Brittney unloads: the double, the boyfriend, the concert
+  (can become `lines[]` if he writes it as several bubbles)
+- `country.mercer_cold_offer.line` — her ride pitch (no Malik)
+- `country.mercer_cold_offer.ride.label` / `.reply` — player yes, her reply
+- `country.mercer_cold_offer.pass.label` / `.reply` — player no, her reply
+Mechanics: `entry: { stopId: 'M', nodeId: 'mercer_cold' }` (StorySystem `pendingAt` honours
+`entry.nodeId`; `when` gets canon as 3rd arg; a first commit on a story's own entry marks the
+ledger entry `started` — `startedThisRun` counts it for the current attempt only).  Panel art:
+the ride reuses `country.mercer_fork.ride`; the cold nodes have no panels yet (placeholder art).
+Fits the 2026-09-14 "Master in the Beater" target (Brittney aboard without Malik → Wyatt reveal
+at the Gorge); the no-Brittney Wyatt introduction is a separate, unapproved item.
+Chat/Codex: nothing to do here until the owner's lines land.

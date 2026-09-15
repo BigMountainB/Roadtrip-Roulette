@@ -12,6 +12,7 @@
       .dialogue{font:700 25px 'Marker Felt','Comic Sans MS','Trebuchet MS',sans-serif;fill:#17191d;text-anchor:middle}
       .small-dialogue{font:700 21px 'Marker Felt','Comic Sans MS','Trebuchet MS',sans-serif;fill:#17191d;text-anchor:middle}
       .ink{stroke:#17191d;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+      .bridge-ink{stroke:#17191d;stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round}
       .body{fill:#fffdf8}
       .player{fill:#fff3bd}
       .caption{fill:#ffe59a}
@@ -49,7 +50,7 @@
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">COMPACT REPLY</text><text x="24" y="65" class="use">one or two words; generous air</text>
     <g transform="translate(105 115) scale(.65 .52)" filter="url(#shadow)"><path d="M34 110C33 62 72 36 130 33L282 31C337 31 369 62 368 108C369 157 331 185 274 187L126 189C69 188 35 158 34 110Z" class="body ink"/></g>
-    <text x="235" y="174" class="dialogue">Fair enough.</text>
+    <text x="235" y="182" class="dialogue">Fair enough.</text>
   </g>
   <g transform="translate(565 510)">
     <rect width="470" height="315" rx="18" class="card"/>
@@ -61,21 +62,22 @@
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">WHISPER</text><text x="24" y="65" class="use">restrained broken outline; smaller voice</text>
     <g transform="translate(90 108) scale(.73 .60)" filter="url(#shadow)"><path d="M30 112C27 58 89 24 195 22C304 18 371 49 374 104C379 158 316 194 211 197C105 201 34 170 30 112Z" fill="#fffdf8" stroke="#6b6d70" stroke-width="5" stroke-dasharray="12 9" stroke-linecap="round" stroke-linejoin="round"/></g>
-    <text x="235" y="163" class="small-dialogue" fill="#50545b"><tspan x="235">That was Malik,</tspan><tspan x="235" dy="28">wasn’t it?</tspan></text>
+    <text x="235" y="169" class="small-dialogue" fill="#50545b"><tspan x="235">That was Malik,</tspan><tspan x="235" dy="28">wasn’t it?</tspan></text>
   </g>
 
   <!-- Row 3 -->
   <g transform="translate(55 855)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">SHOUT / ALARM</text><text x="24" y="65" class="use">irregular burst; reserve for real volume</text>
-    <g transform="translate(78 109) scale(.79 .61)" filter="url(#shadow)"><path d="M25 108L50 94L34 70L70 67L66 40L105 52L119 24L151 44L177 18L202 42L231 17L252 45L290 25L299 55L339 45L334 76L373 78L353 102L380 119L346 132L360 158L322 157L321 187L283 174L264 201L234 180L207 204L180 179L149 201L129 173L91 189L87 158L49 162L61 134L25 127L46 116Z" fill="#fff8ef" stroke="#17191d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g transform="translate(78 109) scale(.79 .61)" filter="url(#shadow)"><path d="M25 108L50 94L34 70L70 67L66 40L105 52L119 24L151 44L177 18L202 42L231 17L252 45L290 25L299 55L339 45L334 76L373 78L353 102L380 119L346 132L360 158L322 157L430 220L300 174L283 174L264 201L234 180L207 204L180 179L149 201L129 173L91 189L87 158L49 162L61 134L25 127L46 116Z" fill="#fff8ef" stroke="#17191d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></g>
     <text x="235" y="163" class="dialogue" style="font-size:28px"><tspan x="235">HE’S RIGHT</tspan><tspan x="235" dy="33">BEHIND US!</tspan></text>
+    <circle cx="421" cy="245" r="4" fill="#b52735"/>
   </g>
   <g transform="translate(565 855)">
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">PHONE / RADIO</text><text x="24" y="65" class="use">transmitted voice; cool fill and electric edge</text>
     <g transform="translate(95 109) scale(.70 .61)" filter="url(#shadow)"><path d="M39 39L61 25L82 37L104 23L126 36L150 22L173 35L198 21L222 35L247 22L269 37L294 24L315 39L342 29L359 49L351 72L369 92L353 113L369 136L349 153L357 178L331 188L310 177L287 192L264 178L240 193L217 178L193 195L169 179L145 193L123 178L98 191L79 175L52 183L40 159L51 139L34 117L48 96L32 73L49 55Z" fill="#eef8ff" class="ink"/></g>
-    <text x="235" y="163" class="dialogue" font-style="italic"><tspan x="235">Don’t get</tspan><tspan x="235" dy="31">creative.</tspan></text>
+    <text x="235" y="169" class="dialogue" font-style="italic"><tspan x="235">Don’t get</tspan><tspan x="235" dy="31">creative.</tspan></text>
   </g>
   <g transform="translate(1075 855)">
     <rect width="470" height="315" rx="18" class="card"/>
@@ -101,10 +103,10 @@
     <rect width="470" height="315" rx="18" class="card"/>
     <text x="24" y="38" class="label">OPEN BRIDGE · CORRECT</text><text x="24" y="65" class="use">two edge strokes; no caps or enclosed diamond</text>
     <g filter="url(#shadow)">
-      <path d="M158 178L158 224C145 235 138 249 138 264C138 291 170 306 218 305C265 307 297 288 296 260C297 234 266 219 207 219C190 219 177 221 169 224L169 178C182 167 190 151 190 135C191 106 162 87 118 88C79 87 54 106 55 136C55 165 82 181 122 180C138 180 150 179 158 178Z" class="body ink"/>
+      <path d="M158 178L158 224C145 235 138 249 138 264C138 291 170 306 218 305C265 307 297 288 296 260C297 234 266 219 207 219C190 219 177 221 169 224L169 178C182 167 190 151 190 135C191 106 162 87 118 88C79 87 54 106 55 136C55 165 82 181 122 180C138 180 150 179 158 178Z" class="body bridge-ink"/>
     </g>
-    <text x="122" y="126" class="small-dialogue">First idea.</text>
-    <text x="218" y="264" class="small-dialogue">Next idea.</text>
+    <text x="122" y="135" class="small-dialogue">First idea.</text>
+    <text x="218" y="273" class="small-dialogue">Next idea.</text>
   </g>
 
   <!-- Bottom QA examples -->
@@ -112,9 +114,9 @@
     <rect width="730" height="300" rx="18" class="card"/>
     <text x="24" y="40" class="label">LINE-WRAP SILHOUETTE</text>
     <text x="25" y="72" class="good">✓ APPROVED SHAPE</text>
-    <path d="M70 182C69 136 122 111 250 112C376 109 431 136 430 181C433 228 375 249 250 249C124 252 69 229 70 182Z" class="body ink" filter="url(#shadow)"/>
-    <text x="250" y="144" class="small-dialogue"><tspan x="250">As an artist, you know</tspan><tspan x="250" dy="28">how important these tracks</tspan><tspan x="250" dy="28">are to me.</tspan></text>
-    <text x="505" y="72" class="bad">✕ ORPHANED “ME.”</text>
+    <path d="M150 118C126 119 111 131 109 148C94 157 92 179 105 190C111 209 134 219 169 218L332 218C365 218 389 207 395 190C408 178 405 157 391 148C388 131 372 119 347 118Z" class="body ink" filter="url(#shadow)"/>
+    <text x="250" y="144" class="small-dialogue"><tspan x="250">As an artist,</tspan><tspan x="250" dy="28">you know how important</tspan><tspan x="250" dy="28">these tracks are to me.</tspan></text>
+    <text x="505" y="72" class="good">✓ COMPACT STACK</text>
     <rect x="505" y="92" width="190" height="180" rx="70" class="body ink"/>
     <text x="600" y="126" class="small-dialogue"><tspan x="600">As an artist,</tspan><tspan x="600" dy="28">you know how</tspan><tspan x="600" dy="28">important these</tspan><tspan x="600" dy="28">tracks are to</tspan><tspan x="600" dy="28">me.</tspan></text>
   </g>
@@ -123,7 +125,7 @@
     <rect width="730" height="300" rx="18" class="card"/>
     <text x="24" y="40" class="label">CONNECTOR GRAMMAR</text>
     <text x="25" y="72" class="good">✓ OPEN BAND OR MERGED SILHOUETTE</text>
-    <path d="M201 123L288 123C301 100 327 87 367 87C416 85 445 102 444 129C445 155 415 170 367 169C327 170 301 156 288 133L201 133C188 157 160 170 124 169C75 170 44 154 45 126C45 99 75 86 124 87C164 86 189 99 201 123Z" class="body ink"/>
+    <path d="M201 123L288 123C301 100 327 87 367 87C416 85 445 102 444 129C445 155 415 170 367 169C327 170 301 156 288 133L201 133C188 157 160 170 124 169C75 170 44 154 45 126C45 99 75 86 124 87C164 86 189 99 201 123Z" class="body bridge-ink"/>
     <text x="493" y="72" class="bad">✕ CLOSED DECORATION</text>
     <path d="M485 126C485 101 508 88 546 88C583 88 606 101 606 126C606 151 583 165 546 165C508 165 485 151 485 126Z" class="body ink"/>
     <path d="M611 126L636 103L661 126L636 149Z" class="body ink"/>

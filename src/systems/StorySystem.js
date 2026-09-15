@@ -95,6 +95,7 @@ export function normalizeStoryCanon(src) {
         attempt: Math.max(0, num(e.attempt) | 0),
         at: Math.max(0, num(e.at) | 0), mile: Math.max(0, num(e.mile)),
         runId: typeof e.runId === 'string' ? e.runId : null,
+        started: e.started === true,   // this commit started its story on its own entry node
         effects: isObj(e.effects) ? e.effects : {},
         // Comic beat payload (18.2): stable keys + the copy as it read when
         // committed.  MUST round-trip or the reader loses old panels' text.
@@ -241,8 +242,12 @@ export class StorySystem {
           if (here) candidates.push([nid, node]);
         }
       } else if (st.status === STORY_STATUS.AVAILABLE && def.entry?.stopId === stopId) {
-        const node = def.nodes?.[def.startNode];
-        if (node) candidates.push([def.startNode, node]);
+        // A story may open at a node other than the one a cross-story
+        // `startStory` seeds (Country: Brittney's cold open at Mercer vs. the
+        // Vantage arrival Hip-Hop hands it to) — `entry.nodeId` names it.
+        const nid  = def.entry.nodeId ?? def.startNode;
+        const node = def.nodes?.[nid];
+        if (node) candidates.push([nid, node]);
       }
       for (const [nid, node] of candidates) {
         if (!this._nodeOpen(id, nid, node, st, c, stopId)) continue;
@@ -254,7 +259,9 @@ export class StorySystem {
   }
 
   _nodeOpen(storyId, nodeId, node, st, c, stopId = null) {
-    try { if (typeof node.when === 'function' && !node.when(st, this._run)) return false; } catch (_) { return false; }
+    // `when(state, run, canon)` — canon lets a node look across stories (the
+    // cold Country open must stand down while Hip-Hop's phone flow owns Mercer).
+    try { if (typeof node.when === 'function' && !node.when(st, this._run, c)) return false; } catch (_) { return false; }
     const attempt = st.replayCount ?? 0;
     // A `repeatable` node (Brittney's needs) can fire at several stops; its
     // ledger keys carry the stop so each visit is its own beat.
@@ -316,12 +323,18 @@ export class StorySystem {
     });
   }
 
-  /** Was `storyId` STARTED (a choice with `startStory` committed) during the
-   *  current run?  Distinguishes "she got in the car on this trip" from a
-   *  passenger story still active from an earlier run (workshop §B). */
+  /** Was `storyId` STARTED during the current run — by another story's
+   *  `startStory` or by a first commit on its own entry node?  Distinguishes
+   *  "she got in the car on this trip" from a passenger story still active
+   *  from an earlier run (workshop §B). */
   startedThisRun(storyId) {
     const c = this.canon();
-    return Object.values(c.ledger).some(e => e.runId === this._run.runId && e.effects?.startStory === storyId);
+    // A self-start only counts for the CURRENT attempt: declining Brittney's
+    // cold ride shelves Country (resetStory bumps replayCount), so that
+    // attempt's start no longer says she is in the car.
+    const attempt = c.stories[storyId]?.replayCount ?? 0;
+    return Object.values(c.ledger).some(e => e.runId === this._run.runId
+      && (e.effects?.startStory === storyId || (e.started && e.storyId === storyId && e.attempt === attempt)));
   }
 
   /** Reply for a choice — static string or `(state, run) => string`. */
@@ -490,6 +503,7 @@ export class StorySystem {
     if (st.status === STORY_STATUS.AVAILABLE) {
       st.status = STORY_STATUS.ACTIVE;
       st.relationship = clamp(num(this._defs[storyId]?.startRelationship, st.relationship), 0, 100);
+      entry.started = true;            // this commit started the story on its own entry
     }
     this._applyStoryEffects(c, storyId, effects, at);
     if (effects.relationship != null) this._run.flags.relFlashAt = mile;   // gameplay-only frame flash

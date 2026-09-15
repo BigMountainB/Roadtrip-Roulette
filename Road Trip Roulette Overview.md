@@ -204,6 +204,83 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-14 — Brittney's COLD OPEN at Mercer: the Country story no longer needs Malik
+
+Owner: "It appears that I have to go to the Seattle Park & Ride if I want the comic to start at
+all! There is no Mercer interaction with Brittney if I don't." Decisions (his): she can board
+without Malik — she works the Gas-N-Sip, her boss just gave her a double, she's pissed at her
+boyfriend and wants the concert; she talks to a stranger because she thinks he's cute; the
+jealous boyfriend can still come for the player; Dom'nique is out of the story on this path; same
+relationship numbers. Wiring: the Country story now has its own `entry` at Mercer
+(`entry.nodeId: 'mercer_cold'`, a new StorySystem field — `startNode` still names where Hip-Hop's
+ride hands it in), gated to fire only when no phone is in play this run (skipped the Park & Ride,
+or passed on carrying) — with the phone, Hip-Hop's counter owns Mercer and the cold open stands
+down (`when(state, run, canon)` now receives the canon). Nodes: `mercer_cold` (her same opening
+line; the owner's two openers "Hey, how's your day going?" / "What's a pretty girl like you doing
+in this joint?") → `mercer_cold_woes` (choice-less beat) → `mercer_cold_offer` (ride / pass). The
+ride seats Brittney, +5 on the 50 start, parks the story at Vantage exactly where `startStory`
+would, and counts as started this run for the departure gate (a self-start is recorded on the
+ledger entry, per attempt); pass shelves Country for the run. Every line the owner hasn't written
+yet is a literal `[OWNER LINE — …]` placeholder — none invented. Real-tap probe: cold open →
+day → woes → offer → ride → Brittney aboard, story at Vantage. Story tests re-pinned + 14 new
+(297); full suite green. Fits the new narrative target below (Brittney aboard without Malik;
+the alternate Wyatt introduction when she is NOT picked up still needs the owner's approval).
+
+### 2026-09-14 — NEW NARRATIVE TARGET: Chapter 1, `Master in the Beater` (design only; not yet wired)
+
+Owner and Chat replaced the old “Player is simply driving to a first headlining show” spine with
+an inheritance/rights-clearance story. Player is **Ralph “Ralphy” Bater Jr.** His late father,
+**Ralph Bater Sr.**, had an apparently failed career but an exceptional producer's ear. Ralph Sr.
+preserved and assembled unrelated, unfinished performances into one unauthorized cross-genre
+master that could become a chart-topping album. His last request is for Ralphy to finish it,
+clear the contributors, and deliver the completed record to the Pullman radio station. The working
+chapter title is **Chapter 1: Master in the Beater**. The name/premise contains an intentional
+unspoken “Master Bater” joke; dialogue should never stop to explain it.
+
+The target complete-album split is five equal 20% interests: **Dom’nique** (original beat),
+**Tennessee** (principal lyrics, including the chorus), **Malik** (hip-hop vocals plus his creative
+lyric changes), **Wyatt** (country performance/vocals plus his creative lyric changes), and
+**Ralphy** (Ralph Sr.'s inherited production, arrangement, and master share). Ralph Sr.'s case
+contains his contributor roadmap, proposed splits, and blank signature lines. It is enough for
+Ralphy to pursue releases but not enough to authenticate every source. The album can be completed
+without Malik and/or Wyatt cooperating, but their disputed elements must be removed: worse lyrics
+and none of their vocals. Strong conversations can instead produce permissions plus updated vocal
+or track pieces that improve the album's eventual chart ranking.
+
+Locked supporting decisions: Dom’nique's normal settlement is **$1,000 + 15%** and his no-royalty
+buyout is **$7,500** (the buyout is optional, never a first-run completion gate). Malik's phone
+mission remains, but **gas is no longer payment**. Malik uses his signature as leverage for getting
+the phone delivered. If Ralphy refuses the delivery and tries to leave with a master containing
+Malik's voice, Malik's crew has a story-grounded reason to try to seize it and shoot at the
+escaping car; the viral bystander-video/$1-per-mile branch remains usable. Kyle does not prove the
+obvious fact that Ralph Sr. assembled the album: Ralph's note already says that. Kyle compares the
+master, phone, and session material to verify which source belongs to whom and which improvements
+can legally remain.
+
+**Wyatt is Brittney's father.** Ralphy knows Wyatt will be at the Gorge but has no contact details;
+Ralphy does not tell Brittney whose signature he needs, and Brittney does not reveal the family
+connection during the drive. At the Gorge the reveal is deliberately plain: Brittney says,
+**“That should be easy. He’s my dad.”** A good relationship makes her offer to take Ralphy
+backstage; a weaker relationship gets only directions to meet Wyatt at the merchandise booth
+after his set. Brittney has noticed Ralphy's guitar and asked him to play throughout the trip; at
+the Gorge she finally asks him to perform. Another artist wanting to use Ralphy's song validates
+him independently, adds a royalty opportunity, and inspires him to consider booking shows before
+he later meets Mykenzie. If Brittney is not picked up, the alternate Wyatt introduction (possibly
+through Haylee, otherwise a harder solo approach) still needs final owner approval.
+
+Kyle is at the Vantage record shop because it is **Malik's record-release party and Kyle mastered
+that separate Malik record**. After all available signatures and upgraded performances are
+accounted for, Kyle can remaster Ralph Sr.'s cross-genre album there for the final Pullman leg.
+Dom’nique is **not** at the release party unless a later beat gives his presence a necessary story
+purpose; his negotiation belongs earlier on the route.
+
+**Dialogue mandate:** retain the game's funny, racy, dark-comedy voice while writing this new
+spine. Use character-specific jokes, sexual innuendo, profanity, jealousy, awkward misunderstandings,
+and consequences where appropriate; do not replace them with sanitized exposition. Humor must
+advance character, negotiation, tension, or payoff rather than create disposable filler panels.
+Keep the established comic readability rule (generally 5–10 words per balloon; hard ceiling
+20–25 except a deliberately approved exception). Owner dialogue overrides older drafts.
+
 ### 2026-09-11 (pt 14) — Speeds put back exactly as they were; the stop rule is brake AND 1–2★ AND off the road; balloons hug the lettering
 
 Owner, after two rounds of my off-road speed changes (a 60 mph target cap, then a flat 60):
@@ -13012,6 +13089,68 @@ Mandatory story encounters run before and temporarily block storefronts and ordi
 After the story interaction resolves, reveal the normal rest-stop choices. This includes
 Brittney at Mercer Island and her automatic Vantage departure. Make story acceptance and choice
 handling idempotent against double taps and scene re-entry.
+
+### 18.5A Authoritative narrative replacement target — Chapter 1: Master in the Beater (2026-09-14)
+
+This is the approved **design target**, not a claim that the current `featuredStories.js` graph has
+already been replaced. Where this subsection conflicts with the older delivery-only premise in
+§18.6–18.7, build toward this subsection and ask the owner before deleting or retiring an existing
+mission, key, choice, or piece of dialogue.
+
+Player is **Ralph “Ralphy” Bater Jr.** His father, **Ralph Bater Sr.**, was an unsuccessful but
+gifted producer who preserved separate unfinished sessions by assembling them into one compelling,
+unauthorized cross-genre master. Ralph Sr.'s final request sends Ralphy from Seattle to the Pullman
+radio station to finish the record and clear every contribution. Ralphy loves his father and music;
+he carries his guitar because he plays and writes, not because he rejects the family legacy. The
+trip gradually gives him the confidence to consider performing his own material.
+
+**Five equal interests in the ideal complete version:**
+
+1. Dom’nique — 20% for the original beat.
+2. Malik — 20% for his vocals and the lyrical liberties he added.
+3. Wyatt — 20% for his country performance/vocals and the lyrical liberties he added.
+4. Tennessee — 20% as the principal lyricist, including the chorus and other core writing.
+5. Ralphy Bater — 20% inherited from Ralph Sr. for production, arrangement, and the master.
+
+The case note is a roadmap: contributor names, proposed percentages, source notes, and blank
+signature lines. It establishes Ralph Sr.'s intent and sends Ralphy to the right people; it is not
+independent proof of provenance. Kyle's job is to compare the physical master, Malik's phone, and
+source/session material, verify who supplied each element, identify what can legally stay, and
+perform the final remaster. The album remains completable without Malik or Wyatt, but omitting
+either removes that artist's vocals and improved lyrics and lowers the chart result. Excellent
+relationship/conversation outcomes can add new vocals or updated track pieces and raise the
+ranking. Rights retained and album quality are related but separate results.
+
+**Malik remains a phone mission.** He uses his lyrics/vocal signature as the bargaining chip for
+delivery; he does not buy the favor with gas. Refusing the errand alone does not justify gunfire.
+The escape branch escalates because Malik recognizes that Ralphy intends to leave with an
+unreleased master containing Malik's voice, tries to stop him from taking it, and the crew shoots
+at the departing car. Dom’nique's approved ordinary deal is $1,000 + 15%; the $7,500 buyout removes
+his continuing royalty and is an optional high-cash/replay outcome, not required to finish once.
+
+**Gorge / Wyatt reveal.** Wyatt is Brittney's father. Ralphy knows Wyatt is appearing at the Gorge
+but lacks contact information. Ralphy never tells Brittney whom he needs to meet, and she does not
+volunteer her father's identity, so neither recognizes the shared connection during the drive.
+When Ralphy finally names Wyatt, Brittney answers: **“That should be easy. He’s my dad.”** Strong
+treatment earns a backstage introduction; a weaker relationship gets directions to the merch
+booth after Wyatt's set and a harder negotiation. Brittney has repeatedly asked Ralphy to play the
+guitar visible in his car; at the Gorge he finally performs. Another artist asking to use his song
+creates a possible royalty achievement and motivates Ralphy to consider live shows before his
+later Mykenzie story. The non-Brittney route to Wyatt must remain beatable; Haylee can provide a
+less powerful introduction, or Ralphy can attempt a difficult direct approach, pending the owner's
+final choice.
+
+**Vantage record shop.** Kyle attends because the stop hosts Malik's record-release party and Kyle
+mastered Malik's separate record. Once the releases and optional replacement performances are
+collected, Kyle remasters the best cleared version of Ralph Sr.'s album for delivery to Pullman.
+Dom’nique does not attend merely to manufacture a confrontation; keep his earlier negotiation
+unless a later approved beat makes his presence essential.
+
+**Tone is part of the specification.** Dialogue remains funny, racy, profane when character-true,
+and driven by dark comedy, innuendo, jealousy, awkwardness, and escalating consequences. It must
+not become sterile rights-clearance exposition. Every comic dialogue beat should reveal character,
+alter leverage/relationship, make a decision playable, or pay off an earlier joke. Default to
+5–10-word balloons and do not exceed 20–25 words without a deliberately approved exception.
 
 ### 18.6 Featured Story A — Hip-Hop: Malik's Phone
 

@@ -61,7 +61,7 @@ function recorder() {
   check('every story maps to a genre', STORY_IDS.every(id => typeof STORY_GENRE[id] === 'string'));
   check('hiphop enters at Seattle', FEATURED_STORIES.hiphop.entry?.stopId === 'S');
   check('classicRock enters at Vantage', FEATURED_STORIES.classicRock.entry?.stopId === 'V');
-  check('country has no entry of its own (forks off hiphop)', FEATURED_STORIES.country.entry == null);
+  check('country enters cold at Mercer (owner 2026-09-14) at its own entry node', FEATURED_STORIES.country.entry?.stopId === 'M' && FEATURED_STORIES.country.entry?.nodeId === 'mercer_cold' && FEATURED_STORIES.country.startNode === 'vantage_arrival');
 }
 
 // ═══ 2. Save migration — existing v3 plate loads, storyCanon backfilled ═══
@@ -221,7 +221,7 @@ function recorder() {
   const story = new StorySystem(freshSave());
   const atS = story.pendingAt('S');
   check('Seattle offers the hiphop entry (mandatory)', atS.length === 1 && atS[0].storyId === 'hiphop' && atS[0].mandatory === true && atS[0].nodeId === 'seattle_lot');
-  check('Mercer: nothing pending before the story starts', story.pendingAt('M').length === 0);
+  check('Mercer before any story: only Brittney\'s cold Country open pends (no Hip-Hop node)', story.pendingAt('M').length === 1 && story.pendingAt('M')[0].storyId === 'country' && story.pendingAt('M')[0].nodeId === 'mercer_cold' && story.pendingAt('M')[0].mandatory === true);
   check('Vantage offers classicRock entry', story.pendingAt('V').some(p => p.storyId === 'classicRock'));
   check('activate() starts at startNode', story.activate('hiphop') === true && story.story('hiphop').nodeId === 'seattle_lot');
   check('activate() idempotent', story.activate('hiphop') === false);
@@ -787,7 +787,7 @@ function tour(choices, seed = {}) {
 {
   // Hitchhiker gating.
   const story = new StorySystem(freshSave());
-  check('no story started: open everywhere except Vantage (the waitress could still board there)', !story.hitchhikerBlocked('M') && story.hitchhikerBlocked('V') && !story.hitchhikerBlocked('B'));
+  check('no story started: blocked at Mercer (Brittney could board cold) and Vantage (the waitress), open at Bellevue', story.hitchhikerBlocked('M') && story.hitchhikerBlocked('V') && !story.hitchhikerBlocked('B'));
   H('hiphop', 'seattle_offer', 'carry', story, {}, 4);
   check('phone live, Mercer fork open: blocked at Mercer only', story.hitchhikerBlocked('M') && !story.hitchhikerBlocked('B'));
   check('waitress available: blocked at Vantage', story.hitchhikerBlocked('V'));
@@ -841,6 +841,49 @@ function tour(choices, seed = {}) {
   check('"mine": controlling +1, solo following +5, La Crosse line changes', t.story.story('classicRock').flags.controlling === 1 && t.story.story('classicRock').flags.soloFollowing === 5 && t.story.resolveLine('classicRock', 'lacrosse_show').startsWith('We open with yours.'));
   const t2 = tour([['vantage_diner', 'east'], ['vantage_offer', 'accept'], ['othello_cover', 'pay'], ['othello_show', 'hearBoth'], ['hatton_nan', 'refuse'], ['washtucna_show', 'equal'], ['setlist', 'hers']]);
   check('"hers": rel +5, La Crosse opens with hers', t2.story.story('classicRock').relationship === 95 && t2.story.resolveLine('classicRock', 'lacrosse_show').startsWith('We open with mine'));
+}
+
+// ═══ Brittney's COLD OPEN at Mercer — no Malik this run (owner 2026-09-14) ═══
+{
+  // Skipped the Park & Ride entirely: the cold node pends at Mercer; the
+  // casual openers don't commit; the ride starts Country on its own entry,
+  // seats Brittney, parks the story at Vantage, and counts as started this run.
+  const story = new StorySystem(freshSave());
+  const p0 = story.pendingAt('M');
+  check('cold: pends at Mercer, mandatory, Country', p0.length === 1 && p0[0].storyId === 'country' && p0[0].nodeId === 'mercer_cold' && p0[0].mandatory);
+  check('cold: same opening line as the phone flow', FEATURED_STORIES.country.nodes.mercer_cold.line === FEATURED_STORIES.hiphop.nodes.mercer_counter.line);
+  check("cold: the owner's two openers, casual (no ledger)", FEATURED_STORIES.country.nodes.mercer_cold.choices.every(c => c.consequential === false && c.next === 'mercer_cold_woes'));
+  const day = story.commitChoice({ storyId: 'country', nodeId: 'mercer_cold', choiceId: 'day', mile: 9.5, stopId: 'M' }, {});
+  check('cold: casual opener leaves the story unstarted', day.applied && day.entry === null && story.status('country') === STORY_STATUS.AVAILABLE);
+  check('cold: woes beat is choice-less and flows to the offer', FEATURED_STORIES.country.nodes.mercer_cold_woes.next === 'mercer_cold_offer' && !(FEATURED_STORIES.country.nodes.mercer_cold_woes.choices ?? []).length);
+  let seated = null;
+  const r = story.commitChoice({ storyId: 'country', nodeId: 'mercer_cold_offer', choiceId: 'ride', mile: 9.5, stopId: 'M' }, { passenger: (p) => { seated = p; } });
+  check('cold ride: Country active, started on its own entry', r.applied && story.status('country') === STORY_STATUS.ACTIVE && story.startedThisRun('country') === true);
+  check('cold ride: Brittney seated, +5 on a 50 start (same as the Hip-Hop ride)', seated?.id === 'brittney' && story._run.passenger?.id === 'brittney' && story.story('country').relationship === 55);
+  check('cold ride: story parked at Vantage arrival, Mercer closed', story.story('country').nodeId === 'vantage_arrival' && story.pendingAt('M').every(p => p.nodeId !== 'mercer_cold'));
+  check('cold ride: departure beat pends at HIT THE ROAD (virtual, passenger aboard)', (() => { const n = FEATURED_STORIES.country.nodes.mercer_departure; return n.virtual && n.when(story.story('country'), story._run) === true; })());
+  check('cold: Hip-Hop never started, so Dom\'nique is out of the story', story.status('hiphop') === STORY_STATUS.AVAILABLE && story.pendingAt('I').length === 0);
+}
+{
+  // Met Malik and CARRIED the phone: Hip-Hop's Mercer counter owns the stop; the cold open stands down.
+  const story = new StorySystem(freshSave());
+  H('hiphop', 'seattle_offer', 'carry', story, {}, 4);
+  const p = story.pendingAt('M');
+  check('phone in play: Mercer counter pends, cold open hidden', p.some(x => x.nodeId === 'mercer_counter') && !p.some(x => x.nodeId === 'mercer_cold'));
+}
+{
+  // Met Malik and PASSED: no phone → Brittney still opens cold.
+  const story = new StorySystem(freshSave());
+  H('hiphop', 'seattle_offer', 'pass', story, {}, 4);
+  check('passed on the phone: cold open still pends at Mercer', story.pendingAt('M').some(x => x.storyId === 'country' && x.nodeId === 'mercer_cold'));
+}
+{
+  // Declined the cold ride: Country back on the shelf for this run, no passenger, nothing at Vantage from Country.
+  const story = new StorySystem(freshSave());
+  let seated = 'untouched';
+  story.commitChoice({ storyId: 'country', nodeId: 'mercer_cold_offer', choiceId: 'pass', mile: 9.5, stopId: 'M' }, { passenger: (p) => { seated = p; } });
+  check('cold pass: shelved, no passenger, not started this run', story.status('country') === STORY_STATUS.AVAILABLE && seated === 'untouched' && story._run.passenger == null && story.startedThisRun('country') === false);
+  check('cold pass: Country has nothing at Vantage', story.pendingAt('V').every(p => p.storyId !== 'country'));
 }
 
 console.log(`story tests: ${passed} passed, ${failed} failed`);
