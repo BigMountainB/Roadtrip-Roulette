@@ -5262,3 +5262,21 @@ the ride reuses `country.mercer_fork.ride`; the cold nodes have no panels yet (p
 Fits the 2026-09-14 "Master in the Beater" target (Brittney aboard without Malik → Wyatt reveal
 at the Gorge); the no-Brittney Wyatt introduction is a separate, unapproved item.
 Chat/Codex: nothing to do here until the owner's lines land.
+
+## START NAME PROMPT — CANCEL + previous plate restored (Claude, 2026-09-16)
+
+Owner: no cancel on the name screen after tapping a new plate and START.  The modal's CANCEL
+existed but the START gate opened it `required`.  Now dismissible there (first-launch + tutorial
+prompts unchanged), `showPlateModal({ onCancel })` added, CANCEL restores the plate the player came
+from (`GameScene._plateSlotBefore`, set in `_onPlateSlotTap` when a blank slot is tapped from a
+used one; `_selectPlateSlot(i)` extracted).  Probe `scratchpad/probe/plate_cancel.mjs` (real click;
+note `#opening-call` z 1000000 covers everything in headless until hidden — on device it is
+dismissed before the title).
+
+## COLD-OPEN TILES — why art/lines were missing (Claude, 2026-09-16)
+
+No `comicPanels` key for the new nodes → bare tile; lines are the owner's `[OWNER LINE]`
+placeholders.  Interim: node `panelKey` aliases to the approved Mercer counter panels
+(`mercer_cold`→`hiphop.mercer_counter`, `mercer_cold_woes`→`hiphop.mercer_hook`,
+`mercer_cold_offer`→`hiphop.mercer_fork`); `StoryTile.buildTile` now uses `resolvePanelKey` (node
+aliases honoured).  The owner says he will redo the comic art — these aliases are placeholders.

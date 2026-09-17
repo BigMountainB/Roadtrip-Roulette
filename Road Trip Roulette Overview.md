@@ -204,6 +204,26 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-16 — CANCEL on the START name prompt; cold-open tiles borrow the Mercer counter art
+
+Owner: "When you select a new plate and hit start, the screen comes up to type in a new name, but
+there is no cancel. There should be a cancel in case player accidentally hit the new plate."
+The DOM plate modal already had a CANCEL button, but the START-time gate opened it `required`
+(hidden CANCEL, no backdrop/Escape dismiss). Now: that gate opens it dismissible, the modal gained
+an `onCancel` callback, and CANCEL puts the previously active plate back (`_plateSlotBefore`,
+remembered when a blank slot is tapped from a used one) and stays on the title — no run starts,
+so a blank plate still never reaches a run (START re-runs the gate). The first-launch and
+guided-tutorial prompts stay `required`. Real-click probe: blank slot → START → CANCEL visible →
+click → modal closed, plate 0 active again, still on the title.
+
+Owner also asked why the comic showed no images and missing lines on the new Mercer cold open.
+Art is keyed per node/choice in `comicPanels.js`; the cold nodes were new and unkeyed, so the
+tile drew the bare gradient ("STORY ART PENDING"), and every line he hasn't written is a literal
+`[OWNER LINE — …]` placeholder by design. Until he redraws, the three cold nodes alias the
+approved counter panels (`hiphop.mercer_counter` / `mercer_hook` / `mercer_fork`) via node-level
+`panelKey`, which `StoryTile.buildTile` now resolves the same way the ledger does. Screenshot
+verified: counter art + her line + the two openers.
+
 ### 2026-09-16 — Default station = the plate's genre (POP), never a random draw
 
 Owner: "The default music should be pop music. Not K-pop, not emo rock pop, just pop. It seems
