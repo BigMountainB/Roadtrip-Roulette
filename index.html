@@ -2097,6 +2097,7 @@
       const errEl = document.getElementById('plate-err');
       if (!modal || !input || !done) return;
       let pendingDone = null;
+      let pendingCancel = null;      // opts.onCancel — the caller undoes what led here (e.g. a mis-tapped NEW plate)
       // `required` = mandatory entry (first run / leaderboard identity): the
       // modal can't be dismissed, only submitted with a valid name — no blank
       // plate can reach a run (owner 2026-07-21).
@@ -2106,7 +2107,13 @@
       const sanitize = (v) => String(v || '').toUpperCase()
         .replace(/[^\x20-\x7E]/g, '').replace(/[<>&"'`\\]/g, '').slice(0, 8);
       const showErr = (m) => { if (errEl) errEl.textContent = m || ''; };
-      const close = () => { if (modalRequired) return; modal.classList.remove('open'); pendingDone = null; showErr(''); };
+      const close = () => {
+        if (modalRequired) return;
+        modal.classList.remove('open');
+        const cb = pendingCancel;
+        pendingDone = null; pendingCancel = null; showErr('');
+        if (cb) cb();
+      };
       input.addEventListener('input', () => { input.value = sanitize(input.value); showErr(''); });
       let submitting = false;
       const submit = async () => {
@@ -2131,7 +2138,7 @@
         }
         const name = res.plate;
         const cb = pendingDone;
-        pendingDone = null;
+        pendingDone = null; pendingCancel = null;
         modal.classList.remove('open');
         showErr('');
         if (cb) cb(name);
@@ -2151,6 +2158,7 @@
       window.showPlateModal = (opts) => {
         opts = opts || {};
         pendingDone = (typeof opts.onDone === 'function') ? opts.onDone : null;
+        pendingCancel = (typeof opts.onCancel === 'function') ? opts.onCancel : null;
         modalRequired = !!opts.required;
         // When required, hide CANCEL and block backdrop/Escape dismissal so a
         // plate MUST be chosen before playing.

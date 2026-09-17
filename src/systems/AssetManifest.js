@@ -1,4 +1,4 @@
-import { allBandKeys } from '../road/Biomes.js';
+import { allBandKeys, bandKeysInWindow, OPENING_BAND_KEYS, BIOMES } from '../road/Biomes.js';
 
 export const ASSET_MANIFEST = {
   // Biome parallax bands — derived from the biome table itself so the
@@ -621,16 +621,95 @@ export function flattenManifest() {
 // depend on the full inventory.
 export const REST_STOP_GROUPS = ['npc', 'npcBusinesses', 'shopfronts'];
 
+// ── Route-streamed backdrop (memory audit, 2026-09-15) ───────────────────
+// Second deferral pass.  After the rest-stop split, boot was still ~609 MiB
+// decoded against a 250 MiB target, and `scenery` was the largest remaining
+// block — but unlike rest-stop art it is on screen constantly, so it cannot
+// hide behind the off-ramp fade.  It streams on a mile window instead
+// (GameScene._ensureSceneryAssets).
+//
+// DEFERRED — both verified to degrade gracefully if a texture is late:
+//   biomes     band swap is guarded by textures.exists (GameScene ~16469), so
+//              a missing band HOLDS the previous biome's art rather than
+//              blanking.  ~135 MiB total; 3-6 keys live at a time.
+//   northBend  the plate checks textures.exists and hides (GameScene ~16598).
+//
+// NOT deferred, deliberately:
+//   tunnelFaces     no exists() guard found in TunnelFaceMesh — a late texture
+//                   would be a broken tunnel face.  13.1 MiB; revisit after
+//                   adding a guard.
+//   groundTextures  drawn under the road every frame, guard unverified.  48 MiB.
+//   roadTextures    three route-wide asphalt materials; nothing to stream.
+const ROUTE_STREAM_GROUPS = ['northBend'];
+/** The biome whose bands MUST ship at boot — the band tileSprites are built
+ *  with BIOMES[0] before streaming runs, so it has no prior texture to hold. */
+const BOOT_BAND_KEYS = new Set(OPENING_BAND_KEYS);
+
 /** Everything BootScene should load at launch. */
 export function bootManifest() {
   return Object.entries(ASSET_MANIFEST)
-    .filter(([group]) => !REST_STOP_GROUPS.includes(group))
-    .flatMap(([, entries]) => entries);
+    .filter(([group]) => !REST_STOP_GROUPS.includes(group)
+                      && !ROUTE_STREAM_GROUPS.includes(group))
+    // `biomes` is filtered per-KEY rather than as a whole group: the opening
+    // biome stays, the other eight stream in.
+    .flatMap(([group, entries]) => (group === 'biomes'
+      ? entries.filter(e => BOOT_BAND_KEYS.has(e.key))
+      : entries));
 }
 
-/** The deferred rest-stop set (RestStopScene preloads what's missing). */
+/** The deferred rest-stop set.  Used to warm the HTTP cache during the exit
+ *  cinematic (compressed bytes only — no decode, no texture memory).
+ *
+ *  NOT a preload list any more (memory audit 2026-09-15, second pass): bulk-
+ *  loading all 36 cost 216 MiB decoded and they never came back out, so from
+ *  the first stop onward every drive carried them.  Measured peak at a stop
+ *  mid-conversation was 741 MiB against a 250 MiB budget, which is what the
+ *  silent iOS restarts were.  RestStopScene now preloads only THIS stop's
+ *  storefronts and demand-loads portraits; GameScene releases the whole set
+ *  on the way back to the road. */
 export function restStopManifest() {
   return REST_STOP_GROUPS.flatMap(group => ASSET_MANIFEST[group] ?? []);
+}
+
+/** Path for one rest-stop key, so a screen can demand-load it by key alone. */
+export function restStopAssetPath(key) {
+  for (const group of REST_STOP_GROUPS) {
+    const hit = (ASSET_MANIFEST[group] ?? []).find(e => e.key === key);
+    if (hit) return hit.path;
+  }
+  return null;
+}
+
+/** Every rest-stop key — released when the player returns to the road.
+ *  Deliberately enumerated from the manifest, never matched by `npc_` prefix:
+ *  GameScene's traffic cars (`npc_car_white`, `npc_hatchback`, …) share that
+ *  prefix and are NOT rest-stop art. */
+export function restStopEvictableKeys() {
+  return restStopManifest().map(e => e.key);
+}
+
+/** Backdrop art needed within [mile - back, mile + ahead].
+ *  Returns manifest entries; the caller skips whatever is already loaded. */
+export function routeStreamManifest(mile, ahead = 8, back = 8) {
+  const want = new Set(bandKeysInWindow(mile, ahead, back));
+  const out = (ASSET_MANIFEST.biomes ?? []).filter(e => want.has(e.key));
+  // North Bend's hero peaks ride the `north_bend` biome's own window, so the
+  // range stays correct if that biome is ever re-tuned.
+  const nb = BIOMES.find(b => b.key === 'north_bend');
+  if (nb && !(nb.e < mile - back || nb.s > mile + ahead)) {
+    out.push(...(ASSET_MANIFEST.northBend ?? []));
+  }
+  return out;
+}
+
+/** Route-streamed keys that may be evicted once outside the window.  Never
+ *  includes the boot bands — those must stay resident for the whole run. */
+export function routeStreamEvictableKeys() {
+  const keys = (ASSET_MANIFEST.biomes ?? [])
+    .map(e => e.key)
+    .filter(k => !BOOT_BAND_KEYS.has(k));
+  keys.push(...(ASSET_MANIFEST.northBend ?? []).map(e => e.key));
+  return keys;
 }
 
 // ── Genre / Culture art (owner 2026-07-17) ───────────────────────────────

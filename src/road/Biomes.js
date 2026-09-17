@@ -257,3 +257,27 @@ export function allBandKeys() {
   for (const b of BIOMES) for (const l of BAND.layers) keys.add(bandKey(texOf(b), l));
   return [...keys];
 }
+
+/** Band keys for every biome overlapping [mile - back, mile + ahead].
+ *
+ *  Backs the route-streamed backdrop (memory audit): the full band set decodes
+ *  to ~135 MiB, but only the biomes near the player can be on screen.  The
+ *  window is generous on purpose — bands are drawn AT THE HORIZON, so a biome
+ *  is visible well before its mile range is entered, and loading late shows
+ *  the PREVIOUS biome's art (GameScene's band swap is guarded by
+ *  textures.exists, so it holds rather than blanking).  Too much loaded costs
+ *  a few MB; too little is a visible wrong-horizon. */
+export function bandKeysInWindow(mile, ahead = 8, back = 8) {
+  const lo = mile - back, hi = mile + ahead;
+  const keys = new Set();
+  for (const b of BIOMES) {
+    if (b.e < lo || b.s > hi) continue;          // no overlap with the window
+    for (const l of BAND.layers) keys.add(bandKey(texOf(b), l));
+  }
+  return [...keys];
+}
+
+/** Bands that MUST be at boot.  The tileSprites are constructed with
+ *  BIOMES[0]'s key before any streaming runs, so without these the opening
+ *  frame has no texture to hold and paints a missing-texture fill. */
+export const OPENING_BAND_KEYS = BAND.layers.map(l => bandKey(texOf(BIOMES[0]), l));

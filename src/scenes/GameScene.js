@@ -50,7 +50,10 @@ import { MissionSystem, CARSICK_MAX_DAMAGE } from '../systems/MissionSystem.js';
 import { StorySystem } from '../systems/StorySystem.js';
 import { ComicSystem } from '../systems/ComicSystem.js';
 import { CopSystem, FLEE_EXIT_HOLD_REL, shouldBeginPursuitStop } from '../systems/CopSystem.js';
-import { genreArtPath, genreDefaultPath, GENRE_ART, restStopManifest } from '../systems/AssetManifest.js';
+import { genreArtPath, genreDefaultPath, GENRE_ART, restStopManifest,
+         routeStreamManifest, routeStreamEvictableKeys,
+         restStopEvictableKeys } from '../systems/AssetManifest.js';
+import { crumb } from '../systems/StabilityDiag.js';
 import { ENDING_PLATES, activeEndingGenre, loadEndingArt, placeEndingCar } from '../data/endingArt.js';
 import { ensureStopSign } from '../data/shoppingSign.js';
 import { FAIL_REASON, selectTip, tipContext } from '../data/endingTips.js';
@@ -171,6 +174,16 @@ const READOUT_TOP_Y   = 10;    // shared top edge for the corner readouts
 // scale.  ?dev=1 still exposes window.__carScale as a live override if ever
 // needed, but the baked value is the single source of truth.
 const PLAYER_CAR_SCALE = 0.097;
+
+// ── Backdrop streaming window (memory audit, 2026-09-15) ─────────────────
+// Miles either side of the player for _ensureSceneryAssets.  LOAD is generous
+// because bands are drawn AT THE HORIZON — a biome is visible long before its
+// mile range starts, so loading late shows the previous biome's art.  EVICT is
+// wider still, which is the hysteresis: without the gap, idling on a biome
+// boundary would load and drop the same textures every couple of seconds.
+// Erring big costs a few MB; erring small is a visible wrong-horizon.
+const SCENERY_LOAD_MI  = 8;
+const SCENERY_EVICT_MI = 14;
 
 // ── CAR : ROAD COUPLING (owner 2026-09-10) ───────────────────────────────
 // The player car is pinned to a fixed screen row, so on a grade the road
@@ -747,6 +760,24 @@ export class GameScene extends Phaser.Scene {
     // first crash.
     this._tiltShutdownHooked = false;
 
+    // ── Streamer / lifecycle state (iPhone stability pass 2026-09-15) ──────
+    // The scene INSTANCE is reused and gameTime restarts at 0, so a throttle
+    // stamp left from the previous run (say 500 s) would silence the first
+    // scenery/police sweeps until gameTime caught up — minutes of a bare
+    // backdrop after a restart.  Reset every stamp and ledger here.  The
+    // decoded textures themselves live on the game-level TextureManager and
+    // are simply found resident by the first sweep (request() is a no-op for
+    // a resident key).  The previous generation's streamer handle is released
+    // so a completion still in flight from it can never call into this one.
+    this._scnAssetT = -99;
+    this._polAssetT = -99;
+    this._polEvictT = -99;
+    this._polQueued = new Set();
+    this._polPinCache = null;
+    try { this._stream?.release(); } catch (_) {}
+    this._stream = this.registry.get('streamer')?.handle('game') ?? null;
+    this._stream?.pin((k) => this._isStreamedKeyOnScreen(k));
+
     this._missionConfig = data?.mission ?? null;
     this._hubReturn     = data?.hubReturn ?? null;
     // Skip-title flag — Game Over's RETRY uses this to jump straight
@@ -1183,6 +1214,16 @@ export class GameScene extends Phaser.Scene {
     // Restore persisted survival state on a rest-stop resume (fresh runs start clean).
     if (this._resumeFromStop || this._resumeFromPosition != null) {
       if (this._resumeFromStop === 'M') this.time.delayedCall(400, () => this._maybeMalikCall());
+      // ── Release the rest-stop art (memory audit 2026-09-15, second pass) ──
+      // Storefronts and portraits are 1672x941 / 1086x1448 — 6 MiB decoded
+      // each — and nothing on the road draws them.  Held for the session they
+      // rode on top of the boot set for the whole drive, which is what the
+      // silent iOS restarts were: 741 MiB measured at a stop mid-conversation
+      // against a 250 MiB budget.  Safe here and not in RestStopScene's own
+      // teardown: scene.start() has already shut that scene down and destroyed
+      // its display objects, so nothing can render a destroyed frame.  The
+      // HTTP cache still holds the bytes, so the next stop re-decodes fast.
+      this._releaseRestStopTextures();
       const _ss = this.registry.get('save')?.get?.('survivalState');
       if (_ss) this.survival.restore(_ss);
       const _bf = this.registry.get('save')?.get?.('activeBuffs');
@@ -3344,6 +3385,14 @@ export class GameScene extends Phaser.Scene {
     // the fresh offset here.
     this.scale.on('resize', this._applyDecoupledCameras, this);
     this.events.once('shutdown', () => this.scale.off('resize', this._applyDecoupledCameras, this));
+    // Stability pass: release the streamer handle (its pending callbacks go
+    // stale, its pins vanish) and leave a breadcrumb on the way out.
+    this.events.once('shutdown', () => {
+      try { crumb(this.game, 'game-shutdown'); } catch (_) {}
+      try { this._stream?.release(); } catch (_) {}
+      this._stream = null;
+    });
+    try { crumb(this.game, 'game-create', { resume: this._resumeFromStop ?? null }); } catch (_) {}
 
     // ── Mid-drive autosave lifecycle hooks ──────────────────────────────
     // pagehide / visibilitychange(hidden) are the moments iOS is about to
@@ -4758,6 +4807,9 @@ export class GameScene extends Phaser.Scene {
     // Jurisdiction police sets stream in region-by-region (throttled to a
     // check every ~2 s; queues the current + upcoming agencies' frames).
     this._ensurePoliceAssets();
+    // Backdrop bands + North Bend peaks stream on a mile window, and are
+    // EVICTED behind the player — the half the police streamer never does.
+    this._ensureSceneryAssets();
 
     // DUI bust-to-start screen is showing — freeze the world (the full-screen
     // overlay covers it) until the 5s delayedCall restarts the scene.
@@ -15963,6 +16015,112 @@ export class GameScene extends Phaser.Scene {
    *  nine at boot would cost ~21 MB of mobile load; instead each set
    *  arrives a few miles before its jurisdiction does.  The resolver's
    *  fallback chain covers the (rare) frame drawn before its file lands. */
+  /**
+   * Stream the backdrop on a mile window, and EVICT behind the player.
+   *
+   * The band set decodes to ~135 MiB and North Bend's peaks another ~25, but
+   * only the biomes near the player can be on screen.  BootScene now ships
+   * only the opening biome's bands; everything else arrives here.
+   *
+   * Loading is GENEROUS and eviction is LAZIER still — bands are drawn at the
+   * horizon, so a biome is visible well before its mile range starts, and the
+   * asymmetric windows give hysteresis so sitting on a boundary can't thrash
+   * load/evict.  Being a few MB over is free; being late is a visible
+   * wrong-horizon.
+   */
+  _ensureSceneryAssets(force = false) {
+    const t = this.gameTime ?? 0;
+    if (!force && t - (this._scnAssetT ?? -99) < 2) return;
+    this._scnAssetT = t;
+    const mile = (this.player.position / (ROUTE_SEGS * SEG_LENGTH)) * TOTAL_ROUTE_MILES;
+
+    // ── Load anything the window wants that isn't resident ──
+    // Through the ImageStreamer (stability pass 2026-09-15), NOT this.load:
+    // the scene LoaderPlugin can sit stuck in LOADING after a scene.restart()
+    // (see _ensurePoliceAssets), and the streamer dedups, bounds decode
+    // concurrency and retries with backoff.  request() is a no-op for a
+    // resident key.
+    const stream = this._stream;
+    if (!stream) return;
+    for (const { key, path } of routeStreamManifest(mile, SCENERY_LOAD_MI, SCENERY_LOAD_MI)) {
+      stream.request(key, path);
+    }
+
+    // ── Evict what's well outside it ──
+    // The route window is the CANDIDATE rule; the streamer's pins (see
+    // _isStreamedKeyOnScreen) are the protection — a band still displayed
+    // across a blend, a visible plate or peak, is never dropped no matter
+    // what the window says.  The byte budget on top of this runs inside the
+    // streamer after every load.
+    const keep = new Set(routeStreamManifest(mile, SCENERY_EVICT_MI, SCENERY_EVICT_MI)
+      .map(e => e.key));
+    // The window IS the working set: it is pinned (see _isStreamedKeyOnScreen)
+    // so the streamer's byte budget can never fight this rule — the first
+    // device boot showed the budget evicting in-window police frames and the
+    // sweep re-requesting them (load/evict oscillation).
+    this._scnKeep = keep;
+    stream.releaseUnpinned(routeStreamEvictableKeys().filter(k => !keep.has(k)));
+  }
+
+  /**
+   * Pin predicate registered with the streamer in init(): true for any
+   * streamed texture that is on screen RIGHT NOW, so no eviction rule —
+   * route window or byte budget — can pull a texture out from under a live
+   * GameObject (which renders a destroyed frame and throws; see the 09-15
+   * landmark re-bind note).
+   */
+  _isStreamedKeyOnScreen(k) {
+    if (this._scnKeep?.has(k)) return true;            // inside the scenery evict window
+    for (const set of ['a', 'b']) {
+      for (const ts of Object.values(this._biomeLayers?.[set] ?? {})) {
+        if (ts?.displayTexture?.key === k) return true;
+      }
+    }
+    if (k === 'nb_base_plate') return !!this._nbBasePlate?.visible;
+    for (let i = 0; i < LANDMARKS.length; i++) {
+      if (LANDMARKS[i].key === k) return !!this._landmarkImgs?.[i]?.visible;
+    }
+    return this._policeKeyPinned(k);
+  }
+
+  /** Police art inside the route window (every agency _ensurePoliceAssets
+   *  has queued and not yet evicted — current + 12 mi ahead + WSP), plus
+   *  anything a live cop wears, plus the global generic/SWAT/heli sets the
+   *  resolver falls back to, is pinned.  The 25-mi-behind rule in
+   *  _ensurePoliceAssets is the ONLY thing that drops an agency. */
+  _policeKeyPinned(k) {
+    if (!/^(jur_|car_(back|front)_(police|swat)|cop_heli)/.test(k)) return false;
+    if (!/^jur_/.test(k)) return true;                 // the '__extras' sets
+    const t = this.gameTime ?? 0;
+    if (!this._polPinCache || t - (this._polPinCacheT ?? -99) > 1) {
+      const live = new Set(['washington_state_patrol']);
+      for (const id of (this._polQueued ?? [])) if (id !== '__extras') live.add(id);
+      for (const c of (this.cops?.cops ?? [])) if (c?.agencyId) live.add(c.agencyId);
+      const keys = new Set();
+      for (const id of live) { try { for (const { key } of agencyTextureList(id)) keys.add(key); } catch (_) {} }
+      this._polPinCache = keys;
+      this._polPinCacheT = t;
+    }
+    return this._polPinCache.has(k);
+  }
+
+  /** Drop every rest-stop texture on the way back to the road.  Keys come
+   *  from the manifest, never from an `npc_` prefix match — the traffic cars
+   *  (`npc_car_white`, `npc_hatchback`, …) share that prefix and must stay.
+   *  The `__ph` placeholders RestStopScene generates go too. */
+  _releaseRestStopTextures() {
+    const keys = [];
+    for (const key of restStopEvictableKeys()) keys.push(key, `${key}__ph`);
+    const stream = this.registry.get('streamer');
+    let freed = 0;
+    if (stream) {
+      freed = stream.release(keys);              // explicit: ignores pins, cancels pending loads
+    } else {
+      for (const k of keys) { if (this.textures.exists(k)) { try { this.textures.remove(k); } catch (_) {} } }
+    }
+    if (freed) console.log(`[tex] released rest-stop art — ${(freed / 1048576).toFixed(1)} MiB decoded`);
+  }
+
   _ensurePoliceAssets(force = false) {
     const t = this.gameTime ?? 0;
     if (!force && t - (this._polAssetT ?? -99) < 2) return;
@@ -16012,47 +16170,16 @@ export class GameScene extends Phaser.Scene {
       const s = this._policeTexStats();
       console.log(`[police-tex] queueing ${_newAgencies.join('+')} — ${s.count} police textures, ~${s.mib} MiB decoded before load`);
     }
-    // Requested-file ledger — every {key,path} an agency queue has ever
-    // asked for.  The load pass below sweeps THIS (≤ ~130 entries, every
-    // ~2 s) so transient failures retry without any per-frame requests.
-    this._polWanted ??= new Map();
-    for (const { key, path } of wanted) this._polWanted.set(key, path);
-
-    // Plain Image() elements + textures.addImage, NOT this.load: the scene
-    // LoaderPlugin can sit in a stuck LOADING state after a scene.restart()
-    // (verified headless 2026-08-27 — files queued after the restart never
-    // even hit the network).  The browser HTTP cache keeps re-entries free
-    // and the texture manager holds the decoded copy, so angle swaps never
-    // re-fetch or re-decode.
-    //
-    // Per-key load STATES (2026-08-29 pipeline review item 7): the old
-    // _polLoading set marked keys forever on first attempt, so one dropped
-    // request (flaky LAN, backgrounded tab) left that texture unloadable
-    // for the whole session.  States: absent from _polTex = idle/loaded;
-    // 'loading' = in flight; 'failed' = retry after backoff (3·2^tries s,
-    // 3 tries); 'gone' = gave up (genuinely missing file — resolver
-    // fallbacks own it; never blocks other keys).
-    this._polTex ??= new Map();
-    const texman = this.textures;   // game-level — survives scene restarts
-    for (const [key, path] of this._polWanted) {
-      if (texman.exists(key)) { this._polTex.delete(key); continue; }
-      const e = this._polTex.get(key);
-      if (e?.state === 'loading' || e?.state === 'gone') continue;
-      if (e?.state === 'failed' && t < e.nextAt) continue;
-      const tries = (e?.tries ?? 0) + 1;
-      this._polTex.set(key, { state: 'loading', tries, nextAt: 0 });
-      const img = new Image();
-      img.onload  = () => {
-        if (!texman.exists(key)) texman.addImage(key, img);
-        this._polTex.delete(key);   // loaded — clear the active-loading state
-      };
-      img.onerror = () => {
-        this._polTex.set(key, tries >= 3
-          ? { state: 'gone',   tries }
-          : { state: 'failed', tries, nextAt: (this.gameTime ?? 0) + 3 * Math.pow(2, tries) });
-      };
-      img.src = path;
-    }
+    // Every request goes through the ImageStreamer (stability pass
+    // 2026-09-15) — the ONE dynamic loader.  It keeps what this path already
+    // needed (plain Image(), not the scene LoaderPlugin that sits stuck in
+    // LOADING after a scene.restart() — verified headless 2026-08-27; per-key
+    // retry with backoff; 'gone' after 3 tries never blocks other keys) and
+    // adds what it lacked: bounded decode concurrency, dedup, a byte budget,
+    // and bookkeeping at GAME level instead of on this reused scene instance
+    // (the old _polTex / _polWanted maps).  The browser HTTP cache keeps
+    // re-entries free; the TextureManager holds the decoded copy.
+    if (this._stream) for (const { key, path } of wanted) this._stream.request(key, path);
 
     // ── Eviction (memory audit 2026-09-09, Finding 5) ─────────────────────
     // _polWanted was a LIFETIME ledger: every streamed region stayed decoded
@@ -16078,14 +16205,10 @@ export class GameScene extends Phaser.Scene {
         const lastEnd = Math.max(...a.regions.map(rg => rg[1]));
         if (mile - lastEnd < BEHIND_MI) continue;
         if (liveAgencies.has(id)) continue;
-        let freed = 0;
-        for (const { key } of agencyTextureList(id)) {
-          this._polWanted.delete(key);
-          this._polTex.delete(key);
-          if (texman.exists(key)) { try { texman.remove(key); freed++; } catch (_) {} }
-        }
+        const freed = this._stream ? this._stream.releaseKeys(agencyTextureList(id).map(e => e.key)) : 0;
         this._polQueued.delete(id);
-        if (freed) console.log(`[police-tex] evicted ${id}: ${freed} textures, region ended ${Math.round(mile - lastEnd)} mi behind`);
+        this._polPinCache = null;
+        if (freed) console.log(`[police-tex] evicted ${id}: ${(freed / 1048576).toFixed(1)} MiB, region ended ${Math.round(mile - lastEnd)} mi behind`);
       }
     }
   }
@@ -16599,7 +16722,17 @@ export class GameScene extends Phaser.Scene {
       if (w <= 0.01 || !this.textures.exists('nb_base_plate')) {
         plate.setVisible(false);
       } else {
-        const tex = this.textures.get('nb_base_plate').source[0];
+        // RE-BIND.  The plate object is built once in create(), but
+        // 'nb_base_plate' now STREAMS (routeStreamManifest) — so at create
+        // time the key doesn't exist and the image binds Phaser's __MISSING
+        // frame, and every evict/reload cycle mints a NEW Texture instance
+        // while the object keeps holding the destroyed one (whose glTexture
+        // is null — that renders as a hard throw, not a missing image).
+        // Compare by object identity, not by key: a destroyed Texture keeps
+        // its .key, so a key check silently passes on a dead frame.
+        const live = this.textures.get('nb_base_plate');
+        if (plate.texture !== live) plate.setTexture('nb_base_plate');
+        const tex = live.source[0];
         // OVERSCAN.  At exactly SCREEN_W the plate covers the viewport only
         // while perfectly centred, so any lateral shift exposed a hard
         // vertical edge with flat terrain beside it.  1.45x means it can
@@ -16637,9 +16770,13 @@ export class GameScene extends Phaser.Scene {
       }
       const p = projectLandmark(lm, mile, horizonX, horizonY);
       if (!p || p.h < 2) { img.setVisible(false); return; }
+      // RE-BIND — see the plate above.  Peaks stream too, so the create()
+      // binding is __MISSING at boot and goes stale on every reload.
+      const live = this.textures.get(lm.key);
+      if (img.texture !== live) img.setTexture(lm.key);
       // Fully off-screen either side — skip rather than draw a huge offscreen
       // quad, which is wasted fill and can upset the WebGL batch.
-      const tex = this.textures.get(lm.key).source[0];
+      const tex = live.source[0];
       const drawW = p.h * (tex.width / tex.height);
       if (p.x + drawW / 2 < -40 || p.x - drawW / 2 > SCREEN_W + 40) {
         img.setVisible(false);
@@ -26303,28 +26440,38 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Make slot `i` the active plate and refresh everything keyed on it. */
+  _selectPlateSlot(i) {
+    const save = this.registry.get('save');
+    if (!save) return;
+    save.selectSlot?.(i);
+    this.registry.get('stats')?.reload?.();
+    // Each plate carries its own starting genre — mirror the newly-active
+    // plate's genre into rtr.genre and reskin the art (owner 2026-07-17).
+    try { window.__genre?.syncActive?.(); } catch (_) {}
+    // Tutorial flags are per-slot, so the phone tile's pulse must be re-read
+    // for the newly-active plate (owner 2026-09-07).
+    try { window.__tutmTileSync?.(); } catch (_) {}
+    this._refreshPlateSlots();
+  }
+
   _onPlateSlotTap(i) {
     if (!this._awaitingStart) return;   // only live while the title is up
     const save = this.registry.get('save');
     if (!save) return;
-    const selectAndRefresh = () => {
-      save.selectSlot?.(i);
-      this.registry.get('stats')?.reload?.();
-      // Each plate carries its own starting genre — mirror the newly-active
-      // plate's genre into rtr.genre and reskin the art (owner 2026-07-17).
-      try { window.__genre?.syncActive?.(); } catch (_) {}
-      // Tutorial flags are per-slot, so the phone tile's pulse must be re-read
-      // for the newly-active plate (owner 2026-09-07).
-      try { window.__tutmTileSync?.(); } catch (_) {}
-      this._refreshPlateSlots();
-    };
+    const selectAndRefresh = () => this._selectPlateSlot(i);
     if (save.slotUsed?.(i)) {
+      this._plateSlotBefore = null;     // a real plate — nothing to undo
       selectAndRefresh();
     } else if (!this._titleTut) {
       // Tutorial skipped — just activate the blank slot + its music; the plate
       // NAME is asked once at START (see _startGameplay's plate guard), so
       // picking your driver/music doesn't interrupt you with a name prompt
-      // (owner 2026-07-21).
+      // (owner 2026-07-21).  Remember the plate we came FROM so CANCEL on that
+      // name prompt can put it back (owner 2026-09-16: "in case player
+      // accidentally hit the new plate").
+      const from = save.activeSlot;
+      this._plateSlotBefore = (from !== i && save.slotUsed?.(from)) ? from : null;
       selectAndRefresh();
     } else {
       // Inside the guided tutorial: name it now via the DOM modal so the
@@ -27131,10 +27278,12 @@ export class GameScene extends Phaser.Scene {
     // station IS a genre).  settings.radio is a station index; any in-range
     // integer is a real choice (index 0 = HIP-HOP counts — no `> 0` gate).
     // If no default is starred, fall back to the genre the save was made in.
-    const _defSt = this.registry?.get?.('save')?.get?.('settings.radio', null);
+    // 2026-09-16: resolved by AudioSystem (starred culture → starred index →
+    // ACTIVE GENRE → random) so a fresh POP profile starts on POP, not on
+    // whatever the dice said.  A pending resume's own genre still wins over
+    // the genre fallback when nothing is starred.
     const pend   = this._pendingResumeMusic ?? null;
-    let station  = (Number.isInteger(_defSt) && _defSt >= 0) ? _defSt : -1;
-    if (station < 0 && pend?.culture) station = a.stationIndexForCulture?.(pend.culture) ?? -1;
+    let station  = a.resolveDefaultStation?.(this.registry?.get?.('save'), { preferCulture: pend?.culture ?? null }) ?? -1;
 
     if (!a.ready) {
       if (station >= 0) a.setStation?.(station);
@@ -27207,7 +27356,10 @@ export class GameScene extends Phaser.Scene {
     } catch (_) {}
     if (!_tutBusy && window.__plate?.needsEntry?.()) {
       window.showPlateModal?.({
-        required: true,
+        // Not `required` (owner 2026-09-16): CANCEL must exist for a
+        // mis-tapped NEW plate.  No blank plate can still reach a run — we
+        // return below without starting, and START re-runs this gate.
+        required: false,
         // The modal only self-commits when no onDone is given, so this callback
         // owns the set().  Re-entering runs the gate again: if the name somehow
         // didn't take, the player is asked again rather than dropped into a run
@@ -27215,6 +27367,14 @@ export class GameScene extends Phaser.Scene {
         onDone: (name) => {
           try { window.__plate?.set?.(name); } catch (_) {}
           this._startGameplay();
+        },
+        // CANCEL: stay on the title and put the previous plate back if the
+        // blank slot was picked by mistake.
+        onCancel: () => {
+          const back = this._plateSlotBefore;
+          this._plateSlotBefore = null;
+          const save = this.registry.get('save');
+          if (back != null && save?.slotUsed?.(back)) this._selectPlateSlot(back);
         },
       });
       return;
@@ -27313,11 +27473,12 @@ export class GameScene extends Phaser.Scene {
       // Implicit start = a random song from the FULL catalogue (station
       // weighted by track count, track randomized within it) — unless the
       // player saved a default station in the Music app settings.
-      const _defSt = this.registry?.get?.('save')?.get?.('settings.radio', null);
-      // Any in-range index is a real choice — index 0 (HIP-HOP) included;
-      // the old `> 0` gate silently ignored a HIP-HOP default (2026-07-22).
-      const _station = (Number.isInteger(_defSt) && _defSt >= 0)
-        ? _defSt : (this.audio.randomStationIndex?.() ?? 0);
+      // Starred default (culture first) → ACTIVE GENRE's station → random,
+      // resolved in one place (AudioSystem.resolveDefaultStation, owner
+      // 2026-09-16).  Any in-range starred index is a real choice — index 0
+      // (HIP-HOP) included; the old `> 0` gate silently ignored it (2026-07-22).
+      const _station = this.audio.resolveDefaultStation?.(this.registry?.get?.('save'))
+        ?? (this.audio.randomStationIndex?.() ?? 0);
       if (!this.audio._inited) {
         // First-ever init.
         this.audio.currentStation = _station;

@@ -6,6 +6,271 @@ This file is a durable handoff between the owner, Codex, and Claude. Keep it bes
 
 Treat these as product requirements, not suggestions.
 
+## CURRENT PRIORITY — IMPLEMENT THE iPHONE STABILITY PASS (owner + Chat/Codex, 2026-09-15)
+
+**This is the current implementation directive. Artwork production is paused until the owner
+explicitly resumes it. This section supersedes the older restart-audit language that says the
+recommendations are read-only or require separate authorization. The owner has now authorized
+the focused code fixes below. Older stability sections remain useful diagnostic history, but
+their measurements and authorization status are not current when they conflict with this section.**
+
+Perform a focused iPhone stability pass on Road Trip Roulette. Do not modify, regenerate,
+resize, replace, or delete artwork. Do not change dialogue, story logic, gameplay balance,
+police behavior, or other unrelated systems.
+
+The game is restarting again despite reduced reported texture memory. Treat this as a likely
+iOS/WebKit memory termination caused by transient allocation peaks and fragile scene-lifecycle
+handling. Do not claim that a lower Phaser TextureManager total proves that whole-process memory
+is lower.
+
+### Before editing
+
+1. Inspect the current working tree and preserve all unrelated uncommitted work.
+2. Review this file, `Road Trip Roulette Overview.md`, `src/main.js`,
+   `src/systems/TextureBudget.js`, `src/scenes/GameScene.js`,
+   `src/scenes/RestStopScene.js`, and `src/systems/AssetManifest.js`.
+3. Establish current baseline measurements and run the complete existing test suite.
+4. Make narrowly scoped stability changes. Do not perform a broad rewrite of gameplay.
+
+### Confirmed current risks to address
+
+- Recent measurements were approximately **479 MiB while driving after a rest stop** and
+  **561 MiB at a rest stop**, compared with the declared **250 MiB** texture budget. An earlier
+  measured peak was approximately **741 MiB**. Cutting a reported total roughly in half did not
+  make the working set safe.
+- `TextureBudget.textureReport()` estimates registered texture sources. It does not include the
+  high-resolution canvas/framebuffer, WebGL-driver overhead, temporary decode/upload copies,
+  DOM images, audio, JavaScript heap, or released images still awaiting garbage collection.
+- Demand loading followed by immediate release can lower steady-state reports while increasing
+  transient overlap, repeated decoding, upload churn, and fragmentation.
+- `src/main.js` uses the phone's device-pixel ratio in rendering. A Retina ratio can multiply
+  canvas/backing-buffer area dramatically, and rotation can create an additional temporary peak.
+- The >30-second background-return path can rebuild all WebGL resources when a probe fails or
+  throws, even without proof that the entire context needs rebuilding.
+- `GameScene` is reused while its game-time counter resets. New streamer state including
+  `_scnAssetT`, `_polAssetT`, `_polEvictT`, `_polQueued`, `_polWanted`, and `_polTex` is not all
+  demonstrably reset and cleaned up across starts/shutdowns.
+- The code warns that Phaser's LoaderPlugin can remain stuck after a scene restart, yet the new
+  scenery streamer still uses it. The project must not retain contradictory dynamic-loading
+  mechanisms with different failure behavior.
+- `RestStopScene._ensureNpcTexture()` uses per-request `once('loaderror')` listeners. One failed
+  file can consume listeners belonging to other requests and leave their keys marked as loading.
+- `GameScene.js` is more than 29,000 lines and owns many unrelated systems. That makes missed
+  lifecycle cleanup likely, but file size alone is not proof of the restart cause.
+- Existing tests pass but do not reproduce repeated rest-stop cycles, scene restarts, rotation,
+  background recovery, failed concurrent loads, or real WebGL/process-memory pressure. Some
+  memory assertions still rely on asset counts instead of decoded bytes.
+
+### Required fixes
+
+#### 1. Measure the restart boundary rather than only registered textures
+
+Expand the diagnostics to report, where supported:
+
+- Active texture count and estimated decoded texture memory
+- Canvas/backing-buffer dimensions and estimated bytes
+- Effective device-pixel ratio
+- WebGL renderer/context state
+- JavaScript heap information
+- Count and estimated size of in-flight image decodes/uploads
+- Dynamic asset queues, recently loaded keys, and recently evicted keys
+- Current scene, route mile, orientation, visibility state, and running/session peak estimates
+
+Persist one small diagnostic breadcrumb in local storage immediately before and after boot,
+scene changes, rest-stop entry/exit, story/comic open/close, orientation settles, visibility
+changes, and WebGL recovery. It must survive an operating-system termination. Do not retain
+screenshots, large arrays, or an unbounded log.
+
+#### 2. Bound Retina rendering and coalesce rotation work
+
+Inspect the use of `window.devicePixelRatio`. Establish a safe bounded effective rendering ratio
+on mobile rather than accepting an unrestricted Retina multiplier. Preserve readable UI and
+correct layout; do not reduce visual quality more than required without asking the owner.
+
+Coalesce `ResizeObserver`, `window.resize`, `orientationchange`, and `visualViewport.resize` into
+one controlled, cancellable settle operation. A newer event must replace pending timers/frames.
+Resize only when rounded effective dimensions actually change, and avoid duplicate Phaser
+refreshes or canvas reallocations.
+
+#### 3. Replace blanket background WebGL rebuilding
+
+- Distinguish a genuinely lost/restored context from an inconclusive or throwing probe.
+- Do not rebuild all resources merely because one probe throws or 30 seconds elapsed.
+- Recovery must run at most once per real restoration and must not overlap with rotation,
+  scene loading, or asset streaming.
+- Restore only resources that actually require restoration, using Phaser's own context lifecycle
+  where it already owns that responsibility.
+- Record diagnostics immediately before and after any recovery attempt.
+
+#### 4. Correct reused-scene state and stale callbacks
+
+Audit every field, timer, listener, retry, queue, and in-flight request introduced by the scenery,
+police, story, and rest-stop streamers. Explicitly initialize/reset the relevant state during
+`init()` and clean it during scene shutdown. Late completions from an older scene generation must
+not mutate a newly started scene. Use a scene/request generation token or equivalent protection.
+
+At minimum, verify `_scnAssetT`, `_polAssetT`, `_polEvictT`, `_polQueued`, `_polWanted`, and
+`_polTex`; do not assume this list is exhaustive.
+
+#### 5. Use one reliable dynamic image-loading path
+
+Resolve the contradiction between scenery loading through Phaser's restart-sensitive LoaderPlugin
+and police loading through another mechanism. Build one small, testable dynamic image-loading
+service for streamed scenery, police art, story art, and rest-stop portraits. It must provide:
+
+- One in-flight request per texture key and request deduplication
+- Controlled concurrency so multiple large images are not decoded simultaneously
+- Per-key success, failure, bounded retry, and cancellation bookkeeping
+- Scene/generation tokens that reject stale completions
+- Guaranteed removal of every in-flight marker on success, failure, or cancellation
+- No permanent `LOADING` state and no unbounded retry loop
+- Correct behavior if the owning scene shuts down during a request
+
+#### 6. Fix rest-stop portrait failure handling
+
+Replace the shared `once('loaderror')` pattern in `_ensureNpcTexture()`. One file's failure must
+not consume error handlers belonging to other files. Every requested key must finish in exactly
+one state: loaded, failed with a bounded retry policy, or cancelled.
+
+#### 7. Reduce peak memory without creating load/evict oscillation
+
+Use a bounded, measured cache policy with:
+
+- A strict decoded-byte target instead of only an entry-count target
+- Hysteresis so assets do not oscillate around one threshold
+- Route-aware or least-recently-used eviction
+- Protection for textures currently displayed or referenced
+- A cooldown preventing immediate reload of a just-evicted texture
+- Limited decoding/upload concurrency
+- Removal only after all consumers have finished
+- Correct WebGL texture destruction
+- Diagnostics for load, eviction, reload, and transient-overlap peaks
+
+The objective is to lower the **peak**, not merely the total reported after garbage collection.
+Preserve full-quality source files on disk. Do not solve the issue by deleting or replacing art.
+
+#### 8. Contain the monolith without a risky rewrite
+
+Do not rewrite the 29,000-line `GameScene` during this stability pass. Extract only the dynamic
+asset lifecycle/streaming responsibilities into a dedicated module if that is the safest way to
+remove duplicated state and cleanup behavior. Everything outside stability must behave as before.
+
+### Required regression coverage
+
+Add tests for:
+
+- Repeated `GameScene` starts with streamer timestamps/state correctly reset
+- At least ten rest-stop enter/exit cycles
+- Several simultaneous image requests with request deduplication
+- One file failing while unrelated files still complete correctly
+- Scene shutdown during an active load
+- A stale completion arriving after a new scene generation
+- Repeated viewport/orientation events producing one settle sequence
+- Repeated background/foreground cycles
+- An inconclusive/throwing WebGL probe not triggering a blanket rebuild
+- Cache hysteresis preventing immediate load/evict/reload oscillation
+- Memory limits based on estimated decoded bytes, not only manifest entry counts
+
+Run the complete existing test suite and production build after implementation. Automated tests
+do not prove that iPhone restarting is fixed; the owner will perform the final gameplay test.
+
+### Deliverables and completion rules
+
+- Implement the focused stability fixes without touching artwork or narrative work.
+- List every changed file and explain the stability issue addressed by each change.
+- Report comparable before/after measurements using the same route and scene sequence.
+- Clearly identify everything that still requires a physical-iPhone test.
+- Update this section and `Road Trip Roulette Overview.md` with what was actually completed,
+  measured results, and remaining risks. Do not mark unmeasured work fixed.
+- Do not commit unless the owner explicitly requests it.
+- If an older Claude directive conflicts with this owner-approved section, stop and ask the owner
+  rather than overriding these requirements.
+
+### COMPLETION REPORT (Claude, 2026-09-16) — implemented; awaiting the owner's physical-iPhone test
+
+Nothing here is marked "fixed". Automated coverage proves the state machines behave; only the
+device run proves the restarts stop. Not committed (per this section).
+
+**Changed files and the stability issue each addresses**
+
+| file | issue addressed |
+|---|---|
+| NEW `src/systems/ImageStreamer.js` | items 5/6/7/8 — the ONE dynamic image loader: per-key state machine (queued → loading → loaded / failed+backoff / gone after 3), dedup, `maxInFlight` 2, scene-generation handles whose release drops callbacks + pins, post-eviction cooldown, byte budget with hysteresis (96 → 72 MiB) + LRU + pins, removal via `TextureManager.remove()` → `TextureSource.destroy()` → `renderer.deleteTexture()` |
+| NEW `src/systems/StabilityDiag.js` | item 1 — snapshot (textures, canvas backing + compositor bytes at DPR, GL wrapper counts, JS heap where supported, streamer queues/recent loads/evictions, scene, mile, orientation, visibility, session peak) and a ≤ 2 KB localStorage breadcrumb (`rtr_diag`: last record + 14-line ring). Boot reads the previous session and logs a verdict (`js-error` / `ended-while-backgrounded` / `ended-during-rotation` / `ended-during-gpu-recovery` / `ended-during-<event>` / `ended-silently`) — visible on the phone through `?devtools=1`; `window.__diagLast`, `__diag(label)`, `__diagRing()` |
+| NEW `src/systems/ViewportSettle.js` | item 2 — the settle scheduler extracted so "N events → one ladder" is under test; `pending()` tells GPU recovery a rotation is in flight |
+| NEW `src/systems/GpuRecovery.js` | item 3 — `probeGpu` (healthy / evicted / lost / inconclusive), `decideRecovery`, and a controller: inconclusive or THROWING probe → no rebuild (fail closed); one rebuild per real restoration; 60 s cooldown; deferred (≤ 3×, 1.2 s) while a settle / scene load / streamer request is in flight |
+| `src/main.js` | items 1/2/3 wiring: settle ladders (rotation, cold-load, `_rotateEnter`) all through the scheduler; visibility → controller; crumbs on settle-that-changed-size, hidden/visible, gpu-rebuild start/done/failed. The old `catch (_) { return true; }` (throw → full rebuild) is gone |
+| `src/scenes/BootScene.js` | registers the streamer (game level) + installs the diag probe + `boot` crumb |
+| `src/scenes/GameScene.js` | item 4 — `init()` resets `_scnAssetT/_polAssetT/_polEvictT` (= −99) and `_polQueued`, releases the previous generation's handle and takes a new one; `_polTex`/`_polWanted` removed. Scenery + police load/evict through the streamer; `_isStreamedKeyOnScreen` pins displayed bands, the visible plate/peaks, live-agency + WSP + extras police art; rest-stop release through the streamer; `game-create/shutdown` crumbs. (Earlier 09-15: plate/peak re-bind by Texture identity; `_releaseRestStopTextures`.) |
+| `src/scenes/RestStopScene.js` | item 6 — the shared `once('loaderror')` pattern is gone from both `_ensureNpcTexture` and `_loadMissingShopBg`; per-VISIT handle in `init()`, released on shutdown; pins the card portrait + the storefront on screen; `reststop-enter/exit` crumbs; storefront recovery resolves the manifest path first (`SHOP_BG_PATH` still pointed Les Schwasted at the raw logo badge). (Earlier 09-15: per-stop preload, demand-loaded portraits under a `__ph` placeholder key.) |
+| `src/ui/StoryTile.js` | story panels through a per-conversation handle (force = skip cooldown); on-screen panel pinned; `story-open/close` crumbs |
+| `tests/stability.test.mjs` NEW (131 checks), `tests/launch.test.mjs` (+ decoded-BYTE ceilings via sharp: boot ≤ 470 MB, per-stop storefront set ≤ 40 MB), `package.json` | required regression coverage (all eleven bullets: repeated scene starts, ten rest-stop cycles, dedup, one failure among many, shutdown mid-load, stale generation, N viewport events → one ladder, repeated background/foreground, inconclusive/throwing probe, cooldown/hysteresis, byte-based limits) |
+
+**Item 2 — finding, not a change.** Under `Phaser.Scale.FIT` the canvas backing buffer is `baseSize`
+(`canvas.width = this.baseSize.width`, ScaleManager.refresh: "the canvas pixel size remains
+untouched"); `zoom` only feeds the CSS size and FIT re-derives that from the parent box. So the
+render ratio is already 1 — there is no Retina multiplier on the backing buffer to bound, and
+`zoom` was left as-is rather than changed to claim a fix. The unavoidable DPR cost is WebKit's
+compositor layer for a fullscreen element (css × dpr)² × 4 ≈ 12 MB at DPR 3; the diag reports
+backing and compositor bytes separately so the on-device number is visible.
+
+**Measurements (same static model as 09-15: decoded w×h×4 over the manifests; not process memory)**
+
+| phase | before (09-15 AM) | after per-stop preload + release | this pass |
+|---|---|---|---|
+| rest stop, story conversation open (peak) | 741 MB | 561 MB | 561 MB — plus the streamer's byte budget caps *streamed* textures at 96 MiB and evicts LRU-unpinned down to 72 |
+| driving after a stop | 695 MB | 479 MB | 479 MB |
+| decode concurrency (transient overlap) | unbounded — one police sweep started `new Image()` for every wanted key at once (~43 on the first sweep); rest-stop preload was one 36-file loader batch | 36-file batch gone (per stop ≤ 6 files) | ≤ 2 images decoding at any time, everywhere |
+
+Boot is still 463.7 MB against the 250 MB budget; this pass did not move the boot set (out of its
+scope — see remaining risks).
+
+**Requires the physical-iPhone test (the automated suite proves none of this stops restarts):**
+cold boot → drive past Mercer → three or more stops → open/close the comic five times → 30+ min
+backgrounded then return (watch for `[resume] …` lines) → ten portrait↔landscape rotations. After
+ANY restart, open with `?devtools=1` and read the `[diag] previous session: …` line (or
+`window.__diagLast`), then `__diagRing()` for the last 14 events — that is what now tells us whether
+the process ended backgrounded, mid-rotation, mid-rest-stop-load, or during GPU rebuild.
+
+**Corrections after the owner's first device boot (2026-09-16, same day)**
+- The first build threw `Uncaught error` in `_ensureSceneryAssets` before the title: the scene
+  called `releaseUnpinned()` on its streamer HANDLE, which only had `request/pin/release` — and
+  `release()` on a handle disposes it, so the police path's `release(keys)` would have killed the
+  game's handle. My source-regex checks matched the text without exercising the API. Fixed: handles
+  now expose `releaseKeys / releaseUnpinned / touch`; `release()` stays "dispose"; a test drives
+  every method the scenes call on a real handle and asserts no scene passes keys to `release()`.
+- The first headless boot (Playwright against the dev server, scratchpad `bootprobe.mjs`) showed
+  the 96 MiB streamed budget evicting **in-window Seattle PD frames** while the sweep kept wanting
+  them (`loaded 41 / evicted 15`, bellevue keys in both recent lists) — the oscillation item 7
+  forbids, and Seattle cops would have rendered as generic art. Structural fix: the route windows
+  ARE the working set and are now pinned (scenery evict window via `_scnKeep`; every agency in
+  `_polQueued`, not just live cops), so the budget is a backstop above them. Re-measured the
+  window: **police 130.5 MB worst mile, of which the generic/SWAT/heli "extras" are 90.0 MB (15
+  files, loaded on the first sweep at mile 0)**; scenery windows ~45 MB; a stop's portraits +
+  panels ~50 MB → budget set to 256 / 208 MiB from that number. The streamer now warns (throttled)
+  when the pinned working set alone exceeds the budget. Re-probe: `evicted 0, reloaded 0`,
+  resident 132 MB at mile ~2.
+- The `[diag] previous session` line reported THIS session's cold-load `settle` crumb as a previous
+  session (BootScene installed the probe after main.js had already written). The install moved to
+  main.js right after `new Phaser.Game`. Verdict renamed `ended-after-viewport-settle` — a settle
+  is a rotation OR the cold-load fit, and the line should not over-claim.
+- Consequence for the numbers above: police art was never in the static model, so real driving
+  footprint is ≈ 479 + 130 ≈ **610 MB** decoded, not 479. The 90 MB of extras is the obvious next
+  cut (defer SWAT/heli until a 3★+ pursuit is possible) — an art-routing decision, so flagged here
+  rather than changed.
+
+**Remaining risks / not done**
+- Police extras: 90 MB of generic/SWAT/heli renders resident from mile 0 for the whole run.
+- Boot working set 464 MB (~1.9× budget). Next split is `buildings/codex` (92.8 MB / 70 files) on the
+  existing route window — NOTE `_sceneGhostPool` binds `codex_bellevue_skyline` in `create()` and
+  needs the identity re-bind the landmarks got, or it reproduces the destroyed-frame throw.
+- The streamer's budget governs only what it streams (bands, police, panels, portraits); the boot set
+  sits outside it by design.
+- A long story conversation holds every panel it walked until `finish()` (Mercer worst case 46 MB).
+- WebKit process memory (JS heap, audio buffers, DOM, driver copies) is still unmeasured on Safari
+  (no `performance.memory`); the breadcrumb tells us WHEN, not the exact number.
+- `GameOverScene` has no crumb (not a memory-relevant transition; add if the ring ever needs it).
+
 ## CURRENT CANONICAL DIALOGUE — READ THIS FIRST (owner + Chat/Codex, consolidated 2026-09-12)
 
 **This is the only active dialogue/story handoff for Seattle, Mercer, Brittney's first road
@@ -4847,7 +5112,7 @@ end.  Status of everything not already closed above:
 | Encounter A — Malik's North Bend chase mechanics (§2336) | not started | owner go |
 | Malik contact spine C1–C7 + Malik↔Dom matrix scoring (§2938) | drafted, not in code | owner lines for C2–C7 |
 | Comic image storage — two-tier assets (§2868) | not started | owner go (it's the "P0" partner of the stability audit) |
-| iPhone stability audit P0/P1 (§3719) | read, not started | owner go ("ask before implementation") |
+| iPhone stability audit P0/P1 (§3719) | IMPLEMENTED 2026-09-16 as the CURRENT PRIORITY pass (see its COMPLETION REPORT at the top) | owner's physical-iPhone test |
 | Editorial audit — presentation roles + car-ride montage (§4290) | read, queued | owner sign-off of the pilot |
 | Exit-time prefetch of likely panels (§669) | optimisation, open | none — can do any time |
 | Placeholder dialogue (Brittney objectives) (§4131) | in code as placeholders | owner rewrite |

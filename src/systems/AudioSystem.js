@@ -1,3 +1,4 @@
+import { DEFAULT_GENRE } from '../constants.js';
 /**
  * AudioSystem — 11-station radio.  Stations with a `tracks: []` list play
  * real MP3 files (the user's MIDI library, batch-converted via FluidSynth
@@ -514,6 +515,32 @@ for (const st of STATIONS) {
  *  This module has no imports, so importing it from SaveSystem introduces no
  *  cycle, and its module scope is pure data (safe to import headlessly). */
 export const STATION_COUNT = STATIONS.length;
+export const STATION_CULTURES = STATIONS.map(s => s.culture).filter(Boolean);
+
+/**
+ * Which station a session starts on (owner 2026-09-16: "the default music
+ * should be pop music — not K-pop, not emo rock pop, just pop").
+ *
+ *   1. the station the player STARRED in the Music app — by culture first
+ *      (`settings.radioCulture`), so inserting a station can never shift the
+ *      choice onto a neighbour (it did once: POP took index 9 and pushed METAL);
+ *      the legacy index (`settings.radio`) is honoured when no culture is stored
+ *   2. otherwise the ACTIVE GENRE's station (the plate's genre → DEFAULT_GENRE)
+ *   3. otherwise, only if the genre has no station, a track-weighted random pick
+ *
+ * Before this the fallback was straight to random — so a fresh POP profile
+ * opened on whatever the dice said, and K-POP came up.  Pure; exported for
+ * tests.
+ */
+export function defaultStationIndex({ starredCulture = null, starredIndex = -1, preferCulture = null, genre = null, random = () => 0 } = {}) {
+  const byCulture = (c) => (c ? STATIONS.findIndex(s => s.culture === c) : -1);
+  let i = byCulture(starredCulture);
+  if (i < 0 && Number.isInteger(starredIndex) && starredIndex >= 0 && starredIndex < STATIONS.length) i = starredIndex;
+  if (i < 0) i = byCulture(preferCulture);          // e.g. the genre a resumed save was playing
+  if (i < 0) i = byCulture(genre || DEFAULT_GENRE);
+  if (i < 0) i = random();
+  return Math.max(0, Math.min(STATIONS.length - 1, i | 0));
+}
 
 /** Starting music volume (0..1).  Exported as the single source of truth: the
  *  save schema seeds `settings.volume` from it and the UI bridges fall back to
@@ -549,7 +576,13 @@ export class AudioSystem {
     // run does, so a fixed 0 here meant every session opened on PHONK and
     // the run-start randomizer never got a turn).  A saved Music-app default
     // station still overrides this in BootScene.
-    this.currentStation = this.randomStationIndex?.() ?? 0;
+    // Start on the ACTIVE GENRE's station (owner 2026-09-16), not a random
+    // one.  The save isn't up yet when this constructor runs, so the plate's
+    // genre comes from its boot mirror (`rtr.genre`, written by __genre.set);
+    // BootScene re-resolves with the real save (a starred default wins there).
+    let _bootGenre = null;
+    try { _bootGenre = window.localStorage?.getItem?.('rtr.genre') || null; } catch (_) {}
+    this.currentStation = defaultStationIndex({ genre: _bootGenre, random: () => this.randomStationIndex?.() ?? 0 });
     this.muted         = false;
     // Music-app pause (distinct from game-pause `paused`, which only ducks
     // volume).  When true, the scheduler stops synthesizing AND any real
@@ -1186,6 +1219,23 @@ export class AudioSystem {
   // ── Music position: save / restore (owner 2026-07-23) ──────────────────
   // A STATION *is* a genre (each carries a `culture` id), so these are the
   // genre-aware hooks the save + boot paths use.
+
+  /** The session's default station, resolved against the real save: the
+   *  starred Music-app default (culture first, legacy index second), else the
+   *  active genre's station, else random.  See defaultStationIndex(). */
+  resolveDefaultStation(save, { preferCulture = null } = {}) {
+    let starredCulture = null, starredIndex = -1, genre = null;
+    try {
+      const st = save?.get?.('settings', null);
+      if (st?.radioSet === true) {
+        starredCulture = typeof st.radioCulture === 'string' ? st.radioCulture : null;
+        starredIndex   = Number.isInteger(st.radio) ? st.radio : -1;
+      }
+      genre = save?.get?.('genre', null) || null;
+      if (!genre) { try { genre = window.localStorage?.getItem?.('rtr.genre') || null; } catch (_) {} }
+    } catch (_) {}
+    return defaultStationIndex({ starredCulture, starredIndex, preferCulture, genre, random: () => this.randomStationIndex?.() ?? 0 });
+  }
 
   /** Station index whose `culture` id matches, or -1 — the genre→station lookup. */
   stationIndexForCulture(culture) {

@@ -204,6 +204,132 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-16 — Default station = the plate's genre (POP), never a random draw
+
+Owner: "The default music should be pop music. Not K-pop, not emo rock pop, just pop. It seems
+like on the developer tools link it was playing K-pop."  `DEFAULT_GENRE` was already `'pop'` — the
+run start never consulted it.  Three sites picked the station: `AudioSystem`'s constructor
+(`randomStationIndex()`), `BootScene` (starred `settings.radio` index or nothing), and
+`_startGameplay` (starred index, else `randomStationIndex()`).  A fresh POP profile therefore
+opened on a track-weighted random station; K-POP came up.
+
+- One resolver, `AudioSystem.defaultStationIndex()` / `resolveDefaultStation(save)`: starred
+  Music-app default **by culture** (`settings.radioCulture`, new) → legacy starred index → the
+  resumed save's own genre (`preferCulture`) → **the plate's genre → DEFAULT_GENRE** → random only
+  if the genre has no station.  All three sites call it.
+- The star now stores the culture too (`main.js setDefaultStation`) and the sanitizer keeps it only
+  when starred and only if the catalogue has it — a catalogue insert can never shift the star onto a
+  neighbour again (it did once: POP took index 9 and pushed METAL).
+- Boot probe on a fresh profile: `station: pop, genre: pop`.  audio.test +22 checks (pure resolver
+  precedence, sanitizer round-trip, wiring).  Full suite green except one story-art guard broken by a
+  parallel session's `resolvePanelKey` change in StoryTile (not this work — left for that session).
+
+### 2026-09-16 — iPhone stability pass: one image loader, bounded GPU recovery, breadcrumbs that survive the kill
+
+Owner-authorized directive in CLAUDE_WORKING_NOTES.md ("CURRENT PRIORITY — IMPLEMENT THE iPHONE
+STABILITY PASS"); the full completion report, per-file table, measurements and device-test plan
+live under that section. Summary:
+
+- **`src/systems/ImageStreamer.js`** replaces four ad-hoc runtime loaders (scenery via the
+  restart-sensitive scene LoaderPlugin, police via bare `Image()` with retry maps on the reused
+  scene, story panels via a shared `once('complete')`, rest-stop portraits/storefronts via a shared
+  `once('loaderror')` where ONE failed file ate every other request's error handler). Per-key state
+  machine, dedup, ≤ 2 decodes in flight, per-scene handles (release at shutdown = late completions
+  call nothing), 20 s post-eviction cooldown (UI art uses `force`), 96→72 MiB byte budget with LRU +
+  pins for whatever is on screen.
+- **`GameScene.init()` resets** `_scnAssetT/_polAssetT/_polEvictT/_polQueued` — the reused instance
+  restarts `gameTime` at 0, so a stale stamp silenced the first scenery/police sweeps after a
+  restart. `_polTex`/`_polWanted` are gone.
+- **`src/systems/GpuRecovery.js`**: the >30 s background-return probe used to return "rebuild
+  everything" when it THREW. Inconclusive/throwing → no rebuild; one rebuild per restoration; 60 s
+  cooldown; deferred while a rotation settle or load is in flight.
+- **`src/systems/ViewportSettle.js`**: the settle ladder extracted and tested (N events → one
+  ladder); `_rotateEnter`'s per-event timers coalesced too.
+- **`src/systems/StabilityDiag.js`**: ≤ 2 KB localStorage breadcrumb at boot / scene changes /
+  rest-stop in-out / story open-close / settle / hidden-visible / GPU rebuild. Next boot logs
+  `[diag] previous session: <verdict>` (read it with `?devtools=1` or `window.__diagLast`).
+- **DPR finding (no change):** under FIT the backing buffer is `baseSize` — `zoom` only feeds the CSS
+  size — so there is no Retina multiplier to bound; the diag reports backing vs compositor bytes.
+- Tests: `tests/stability.test.mjs` (131, behavioural against the real modules with injected
+  Image/timers/clock) + decoded-BYTE ceilings in launch.test (boot ≤ 470 MB, per-stop ≤ 40 MB).
+  Full suite green (20 files); production build clean. Not committed, not deployed.
+- Unchanged and still the biggest number: boot 463.7 MB decoded. Next split = `buildings/codex`.
+- Same-day corrections after the owner's first boot threw: streamer HANDLES lacked
+  `releaseUnpinned` (source-regex tests had matched text without calling the API — a Playwright
+  boot probe now backs them); the 96 MiB streamed budget was evicting in-window police art and
+  is now a 256/208 MiB backstop above PINNED route windows; the diag probe moved to main.js so it
+  can't read its own session. New measurement: police extras (generic/SWAT/heli) are **90 MB**
+  resident from mile 0 — real driving footprint ≈ 610 MB, not 479.
+
+### 2026-09-15 — Silent restarts measured: rest-stop art was resident for the whole session; per-stop preload + release on exit (−216 MB)
+
+Owner reported repeated restarts — twice leaving a rest stop after a story beat,
+once driving Bellevue → Issaquah.  No crash overlay any time, which rules out a
+JS exception: `src/main.js` paints a full-screen stack trace on `error` /
+`unhandledrejection`, so a silent vanish-and-restart is the OS killing the
+WebKit process for memory.
+
+**Measured, not assumed.**  Decoded cost at the moment of the first two crashes
+(rest stop, story conversation open):
+
+| bucket | files | decoded |
+|---|---|---|
+| boot | 283 | 463.7 MB |
+| rest-stop (bulk) | 36 | 216.0 MB |
+| route-streamed scenery @ mi 10 | 3 | 15.0 MB |
+| story panels (Mercer conversation) | 8 | 46.1 MB |
+| **peak** | | **740.8 MB** (budget 250) |
+
+The rest-stop bucket was the fixable half: `RestStopScene.preload()` loaded all
+36 on the first stop and nothing ever freed them, so from stop one onward every
+mile of driving carried 216 MB it could not use.  That is why the Bellevue →
+Issaquah restart happened nowhere near a rest stop.
+
+Changes:
+- **Per-stop preload** (`RestStopScene._stopPreloadList`): only the storefront
+  backdrops this stop's `amenities` can put on screen (+ the regional dealer
+  brand when the stop lists plain `dealer`, + the Brittney Gas-N-Sip variant at
+  Mercer).  12–36 MB per stop instead of 216.  Worst stop is C at 36 MB.
+- **Portraits demand-load** (`_ensureNpcTexture`): 25 portraits at 1086×1448 =
+  6.3 MB each were the bulk of that number.  One now loads only when a card
+  asks for it, behind the placeholder blob that screen already drew.  The
+  placeholder is generated under a `<key>__ph` key — writing it to the real key
+  would make `textures.exists(key)` true forever and permanently shadow the
+  file.  The portrait call site re-fits on arrival (placeholder is 200×220, the
+  art is not, so a bare `setTexture` would stretch).
+- **Released on the way out** (`GameScene._releaseRestStopTextures`, called from
+  the `resumeFromStop` branch of `create`).  Deliberately in GameScene and not
+  in RestStopScene's teardown: by then `scene.start()` has shut that scene down
+  and destroyed its display objects, so nothing can render a destroyed frame.
+  Keys come from the manifest, never a `npc_` prefix match — the traffic cars
+  (`npc_car_white`, `npc_hatchback`, …) share that prefix and must stay.
+- `_beginExitCommit`'s HTTP-cache warm stays: compressed bytes only, no decode,
+  so a released texture re-decodes fast at the next stop.
+
+Result: peak at a stop **741 → 561 MB**; driving after a stop **695 → 479 MB**.
+
+**Also fixed — a regression from the 09-15 scenery streaming (below).**  The
+North Bend base plate and the five hero peaks are built once in `create()`, but
+their textures now stream.  They never re-bound: at boot the key doesn't exist
+so the image binds Phaser's `__MISSING` frame, and every evict/reload cycle
+mints a NEW Texture while the object keeps holding the destroyed one — whose
+`glTexture` is null, which throws in the renderer rather than just looking
+wrong.  Both draw sites now re-bind by **Texture object identity**, not by key:
+a destroyed Texture keeps its `.key`, so a key comparison silently passes on a
+dead frame.
+
+**Still over budget — next lever.**  479 MB while driving is ~2× the 250 MB
+target, so restarts may persist on the oldest devices.  Remaining boot weight:
+`buildings/codex` 92.8 MB / 70 files, `cars` 96.4 MB / 64, `scenery` 88.1 MB /
+21, `ui` 81.8 MB / 47.  `buildings/codex` is the best next split — the keys are
+region-specific (`codex_seattle_*`, `codex_bellevue_*`) and `RouteData.js`
+already places them by mile, so the existing `routeStreamManifest` window
+applies.  ⚠ When doing it: `_sceneGhostPool` and the scenery pools are built in
+`create()` bound to `codex_bellevue_skyline` — they need the same identity
+re-bind as the landmarks above, or it reproduces exactly the bug just fixed.
+
+Full suite green (19 files); production build clean.  Nothing deployed.
+
 ### 2026-09-14 — Brittney's COLD OPEN at Mercer: the Country story no longer needs Malik
 
 Owner: "It appears that I have to go to the Seattle Park & Ride if I want the comic to start at

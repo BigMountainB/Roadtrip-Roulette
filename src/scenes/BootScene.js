@@ -4,6 +4,8 @@ import { AudioSystem } from '../systems/AudioSystem.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { bootManifest, genreArtPath } from '../systems/AssetManifest.js';
 import { installTextureProbe, logTextureReport } from '../systems/TextureBudget.js';
+import { ImageStreamer } from '../systems/ImageStreamer.js';
+import { crumb } from '../systems/StabilityDiag.js';
 import { DEFAULT_GENRE } from '../constants.js';
 import { Wallet } from '../economy/Wallet.js';
 import { StatsTracker } from '../systems/StatsTracker.js';
@@ -152,10 +154,13 @@ export class BootScene extends Phaser.Scene {
     this.registry.set('wallet',       wallet);
     this.registry.set('stats',        stats);
 
-    // Apply the player's chosen default radio station (Music app) on boot.
-    const _defStation = save.get('settings.radio', null);
-    if (Number.isInteger(_defStation) && _defStation >= 0) {   // 0 = HIP-HOP is a real choice
-      this.registry.get('audio')?.setStation?.(_defStation);
+    // Start station, now that the real save is up: the starred Music-app
+    // default (culture first), else the ACTIVE GENRE's station — never random
+    // (owner 2026-09-16: "the default music should be pop").
+    {
+      const _audio = this.registry.get('audio');
+      const _st = _audio?.resolveDefaultStation?.(save);
+      if (Number.isInteger(_st) && _st >= 0) _audio.setStation?.(_st);
     }
     // One-time Tier-0 migration (key settings.bgRadioPolicyV2, owner
     // 2026-09-05): installs that INHERITED the old default-ON background
@@ -199,6 +204,15 @@ export class BootScene extends Phaser.Scene {
       installTextureProbe(this.game);
       logTextureReport(this.game, 'after Boot');
     } catch (_) {}
+
+    // ONE dynamic image loader for the whole game (iPhone stability pass
+    // 2026-09-15): scenery bands, police art, story panels and rest-stop
+    // portraits all stream through it.  Game-level, because the
+    // TextureManager it fills is.  (The diag probe that reads how the
+    // PREVIOUS session ended is installed in main.js, before the first
+    // breadcrumb of this one — the cold-load settle fires before this scene.)
+    if (!this.registry.get('streamer')) this.registry.set('streamer', new ImageStreamer(this.textures));
+    try { crumb(this.game, 'boot'); } catch (_) {}
 
     // Boot straight into GameScene — its own title overlay handles the
     // pre-start intro, so the road style is identical to gameplay (same

@@ -13,7 +13,8 @@ import {
   SHOP_GREETERS, BRITTNEY_MERCER_GREETER,
 } from '../data/encounters.js';
 import { getPortrait } from '../data/npcPortraits.js';
-import { restStopManifest } from '../systems/AssetManifest.js';
+import { restStopManifest, restStopAssetPath } from '../systems/AssetManifest.js';
+import { crumb } from '../systems/StabilityDiag.js';
 import { nextTownFact } from '../data/townFacts.js';
 import { MISSION_TIERS, tierFor, contactIdFor, contactGreeting } from '../systems/MissionSystem.js';
 import { getInstalled, buyUpgrade, getUpgradeEffects } from '../systems/UpgradeSystem.js';
@@ -480,16 +481,19 @@ export class RestStopScene extends Phaser.Scene {
   constructor() { super({ key: 'RestStop' }); }
 
   /** Off-ramp manifest split (memory audit 2026-09-09, Finding 1): the
-   *  rest-stop-only art (NPC portraits + storefront backdrops, ~200 MiB
-   *  decoded) is NOT in BootScene's manifest anymore.  Whatever is still
-   *  missing loads HERE, behind the off-ramp fade the player already sees —
-   *  usually only on the FIRST stop of a session (textures live on the
-   *  game-level TextureManager afterwards), and near-instantly even then
-   *  because _beginExitCommit warmed the HTTP cache during the exit
-   *  cinematic.  A minimal loading card shows only while something actually
-   *  loads; Phaser skips straight to create() when the queue is empty. */
+   *  rest-stop-only art (NPC portraits + storefront backdrops) is NOT in
+   *  BootScene's manifest.  It loads HERE, behind the off-ramp fade the
+   *  player already sees, and near-instantly because _beginExitCommit warmed
+   *  the HTTP cache during the exit cinematic.  A minimal loading card shows
+   *  only while something actually loads; Phaser skips straight to create()
+   *  when the queue is empty.
+   *
+   *  Second pass (2026-09-15): only THIS STOP's storefronts preload — see
+   *  _stopPreloadList().  The bulk load was 36 files / 216 MiB decoded that
+   *  stayed resident for the rest of the session; portraits now demand-load
+   *  (_ensureNpcTexture) and GameScene releases the set on the way out. */
   preload() {
-    const missing = restStopManifest().filter(({ key }) => !this.textures.exists(key));
+    const missing = this._stopPreloadList().filter(({ key }) => !this.textures.exists(key));
     if (!missing.length) return;
     for (const { key, path } of missing) this.load.image(key, path);
     // ui_loading_screen is a boot asset, so it's available to draw on.
@@ -511,12 +515,51 @@ export class RestStopScene extends Phaser.Scene {
     this.load.once('complete', () => { for (const o of objs) { try { o.destroy(); } catch (_) {} } });
   }
 
+  /**
+   * The rest-stop art THIS stop can actually put on screen without a beat of
+   * delay: the storefront backdrop behind every tile the landing screen will
+   * offer.  A stop carries 2-5 amenities, so this is ~12-30 MiB instead of
+   * the whole 216 MiB bucket.
+   *
+   * Everything else stays out until it is asked for:
+   *   • a storefront that isn't in `amenities` (shouldn't happen, but the
+   *     dealer sub-screens resolve through _activeDealerKey) is recovered by
+   *     _loadMissingShopBg, which re-applies the chrome when it lands;
+   *   • NPC / shop-greeter portraits demand-load in _ensureNpcTexture behind
+   *     the placeholder blob that screen already draws.
+   */
+  _stopPreloadList() {
+    const want = new Set();
+    for (const k of (this._stop?.amenities ?? [])) {
+      if (SHOP_BG[k]) want.add(SHOP_BG[k]);
+    }
+    // The landing tiles bypass the regional `dealer` chooser, but the Cars /
+    // Accessories sub-screens still resolve their chrome through it — so a
+    // stop listing plain `dealer` needs whichever brand its region picks.
+    if ((this._stop?.amenities ?? []).includes('dealer')) {
+      want.add((this._stop?.mileage ?? 0) < 100 ? SHOP_BG.lord : SHOP_BG.suck);
+    }
+    // Mercer swaps the Gas-N-Sip storefront for the one with Brittney behind
+    // the counter — a different file, and it is the FIRST thing the Country
+    // fork shows, so it must not pop in.
+    try { if (this._brittneyWorksAtMercer?.()) want.add('shop_bg_gasnsip_brittney'); } catch (_) {}
+    const byKey = new Map(restStopManifest().map(e => [e.key, e]));
+    return [...want].map(k => byKey.get(k)).filter(Boolean);
+  }
+
   init(data) {
     this._stop     = data?.stop     ?? { id: '?', name: 'Rest Stop' };
     // Phaser reuses this scene INSTANCE for every stop, so the story gate
     // (Ch. 18.5 mandatory-first) must be re-armed per visit or the second
     // stop of a run never shows its story tile.
     this._storyGateDone = false;
+    // Streamer handle per VISIT (stability pass 2026-09-15): a load that
+    // completes after this visit ends can never call back into the next one.
+    // The pin keeps whatever this screen is drawing safe from the byte budget.
+    try { this._stream?.release(); } catch (_) {}
+    this._stream = this.registry.get('streamer')?.handle('reststop') ?? null;
+    this._cardPortraitKey = null;
+    this._stream?.pin((k) => k === this._cardPortraitKey || this._shopBg?.texture?.key === k);
     this._score    = data?.score    ?? 0;
     this._stars    = data?.stars    ?? 0;
     this._position = data?.position ?? 0;
@@ -610,6 +653,14 @@ export class RestStopScene extends Phaser.Scene {
     _applyVP();
     this.scale.on('resize', _applyVP, this);
     this.events.once('shutdown', () => this.scale.off('resize', _applyVP, this));
+    // Stability pass: breadcrumb the visit and release the streamer handle on
+    // the way out (its pending callbacks go stale, its pins vanish).
+    try { crumb(this.game, 'reststop-enter', { stop: this._stop?.id ?? null }); } catch (_) {}
+    this.events.once('shutdown', () => {
+      try { crumb(this.game, 'reststop-exit', { stop: this._stop?.id ?? null }); } catch (_) {}
+      try { this._stream?.release(); } catch (_) {}
+      this._stream = null;
+    });
 
     // Rebuild the vices section using THIS player's unlock state — the
     // module-level SECTIONS.vices.items was computed at import time
@@ -1975,10 +2026,38 @@ export class RestStopScene extends Phaser.Scene {
     };
   }
 
-  /** Lazily synthesize a placeholder portrait texture (colored bust) so
-   *  encounters are playable before real art exists. */
-  _ensureNpcTexture(key, tint) {
-    if (this.textures.exists(key)) return;
+  /**
+   * Lazily synthesize a placeholder portrait texture (colored bust) so
+   * encounters are playable before real art exists.
+   *
+   * Portraits are 1086x1448 — 6.3 MiB decoded EACH, and there are 25 of them.
+   * Preloading the set was the bulk of the 216 MiB that stayed resident for
+   * the whole session (memory audit 2026-09-15), so a portrait now loads only
+   * when a card actually asks for it.  `onReal` fires once the real art lands
+   * so the caller can re-fit — the placeholder is 200x220, the art is not, so
+   * a bare setTexture would stretch.
+   *
+   * The placeholder is generated under a SEPARATE key: writing it to `key`
+   * would make textures.exists(key) true forever and permanently shadow the
+   * real file.  Returns the key to draw right now.
+   */
+  _ensureNpcTexture(key, tint, onReal) {
+    if (this.textures.exists(key)) return key;
+
+    // Queue the real file through the ImageStreamer (stability pass
+    // 2026-09-15).  The earlier per-request once('loaderror') was wrong: one
+    // failed file consumed the error listener belonging to every other
+    // in-flight request and left their keys marked "loading" for the rest of
+    // the visit.  The streamer dedups per key, retries with backoff, gives up
+    // after 3 tries without blocking anyone, and only calls `onReal` while
+    // this visit's handle is alive.
+    const path = restStopAssetPath(key);
+    // force: on-demand UI art skips the streamer's post-eviction cooldown.
+    if (path && this._stream) this._stream.request(key, path, onReal ?? null, null, { force: true });
+
+    const phKey = `${key}__ph`;
+    if (this.textures.exists(phKey)) return phKey;
+    key = phKey;
     const w = 200, h = 220;
     const g = this.make.graphics({ x: 0, y: 0, add: false });
     g.fillStyle(0x0A0F1A, 1); g.fillRoundedRect(0, 0, w, h, 10);
@@ -1990,6 +2069,7 @@ export class RestStopScene extends Phaser.Scene {
     g.lineStyle(4, 0x39A8FF, 0.7); g.strokeRoundedRect(2, 2, w - 4, h - 4, 10);
     g.generateTexture(key, w, h);
     g.destroy();
+    return key;
   }
 
   /** Build the portrait card overlay: portrait, speaker, line, optional fact,
@@ -2132,12 +2212,22 @@ export class RestStopScene extends Phaser.Scene {
     // A node may override the card portrait (e.g. a passenger making their
     // own ask inside the contact's conversation).
     const port = getPortrait(node.portrait ?? enc.portrait);
-    this._ensureNpcTexture(port.texture, port.placeholderTint ?? 0x555555);
-    const tex = this.textures.get(port.texture)?.source?.[0];
-    const iw = tex?.width || 600, ih = tex?.height || 660;
-    const scale = Math.max(imgW / iw, ph / ih);
-    const portImg = this.add.image(px + imgW / 2, py, port.texture)
-      .setOrigin(0.5, 0).setDisplaySize(iw * scale, ih * scale).setDepth(D + 2);
+    // Cover-fit whatever key we can draw NOW; if that's the placeholder, the
+    // real file is loading and `fit` runs again on arrival at its own size.
+    const fit = (key) => {
+      if (!portImg?.scene) return;                    // card already torn down
+      const tex = this.textures.get(key)?.source?.[0];
+      const iw = tex?.width || 600, ih = tex?.height || 660;
+      const scale = Math.max(imgW / iw, ph / ih);
+      portImg.setTexture(key).setDisplaySize(iw * scale, ih * scale);
+    };
+    const drawKey = this._ensureNpcTexture(
+      port.texture, port.placeholderTint ?? 0x555555,
+      (realKey) => { this._cardPortraitKey = realKey; fit(realKey); });
+    this._cardPortraitKey = drawKey;      // pinned against the streamer's byte budget
+    const portImg = this.add.image(px + imgW / 2, py, drawKey)
+      .setOrigin(0.5, 0).setDepth(D + 2);
+    fit(drawKey);
     const maskG = this.make.graphics(); maskG.fillStyle(0xffffff).fillRoundedRect(px, py, imgW + 14, ph, 14);
     maskG.fillRect(px + imgW - 14, py, 14, ph);   // square inner edge
     portImg.setMask(maskG.createGeometryMask());
@@ -2691,25 +2781,19 @@ export class RestStopScene extends Phaser.Scene {
 
   /** Retry one missing storefront instead of leaving the blue fallback up. */
   _loadMissingShopBg(sectionKey, bgKey) {
-    const path = SHOP_BG_PATH[bgKey];
-    if (!path) return;
-    this._shopBgLoading ??= new Set();
-    if (this._shopBgLoading.has(bgKey)) return;
-    this._shopBgLoading.add(bgKey);
-
-    const doneEvent = `filecomplete-image-${bgKey}`;
-    const finish = () => {
-      this._shopBgLoading.delete(bgKey);
+    // Manifest path first — SHOP_BG_PATH still points Les Schwasted at the
+    // raw logo badge (the file the 07-31 "wrong storefront" fix moved away
+    // from); the manifest carries the real storefront.
+    const path = restStopAssetPath(bgKey) ?? SHOP_BG_PATH[bgKey];
+    if (!path || !this._stream) return;
+    // The streamer dedups per key, so re-entering the same shop while the
+    // file is in flight adds a waiter rather than a second request.  Its
+    // shared once('loaderror') predecessor is gone (see _ensureNpcTexture).
+    this._stream.request(bgKey, path, () => {
       if (this._activeChromeKey === sectionKey && this.textures.exists(bgKey)) {
         this._applyShopChrome(sectionKey);
       }
-    };
-    this.load.once(doneEvent, finish);
-    this.load.once('loaderror', file => {
-      if (file?.key === bgKey) this._shopBgLoading.delete(bgKey);
-    });
-    this.load.image(bgKey, path);
-    if (!this.load.isLoading()) this.load.start();
+    }, null, { force: true });   // on-demand UI art skips the post-eviction cooldown
   }
 
   /** Place the stocked category tabs across the full bottom edge. */

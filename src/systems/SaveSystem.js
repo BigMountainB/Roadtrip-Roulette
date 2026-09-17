@@ -1,4 +1,4 @@
-import { STATION_COUNT, DEFAULT_VOLUME } from './AudioSystem.js';
+import { STATION_COUNT, STATION_CULTURES, DEFAULT_VOLUME } from './AudioSystem.js';
 
 const STORAGE_KEY    = 'rtr.save.v3';
 // Legacy key from the DUI-branded builds — same v3 schema, just the old name.
@@ -782,6 +782,10 @@ export class SaveSystem {
     // when an eleventh arrived (POP took index 9, so METAL at 10 clamped down to
     // POP on every reload).  See STATION_COUNT in AudioSystem.
     s.radio    = s.radioSet ? finiteInt(src.radio, -1, -1, STATION_COUNT - 1) : -1;
+    // The starred station is ALSO stored by culture (2026-09-16) so a catalogue
+    // insert can never shift the choice onto a neighbour; only a culture the
+    // catalogue actually has survives.
+    s.radioCulture = (s.radioSet && STATION_CULTURES.includes(src.radioCulture)) ? src.radioCulture : null;
     if (src.backgroundRadio !== undefined) s.backgroundRadio = src.backgroundRadio === true;
     // The one-time Tier-0 migration stamp MUST survive sanitization or the
     // migration re-runs every boot and force-disables a deliberate opt-in

@@ -419,7 +419,8 @@ const mkPulse = (bridge, tile) => function pulse() {
 // against.  Lower BOOT_ENTRY_CEILING as assets move behind the off-ramp
 // boundary; never raise it.
 {
-  const { flattenManifest, bootManifest, restStopManifest, REST_STOP_GROUPS } =
+  const { flattenManifest, bootManifest, restStopManifest, REST_STOP_GROUPS,
+          routeStreamManifest, routeStreamEvictableKeys } =
     await import('../src/systems/AssetManifest.js');
   const { decodedBytes, MOBILE_BUDGET_MB } = await import('../src/systems/TextureBudget.js');
 
@@ -432,9 +433,14 @@ const mkPulse = (bridge, tile) => function pulse() {
   //   315  2026-09-09 off-ramp split: npc + npcBusinesses + shopfronts (33
   //        entries, ~200 MB decoded) moved behind the rest-stop boundary —
   //        BootScene now loads bootManifest(), RestStopScene preloads the rest.
+  //   285  2026-09-15 backdrop streaming: 8 of 9 biomes' bands + northBend
+  //        (30 entries, ~145 MB decoded) now stream on a mile window with
+  //        eviction (GameScene._ensureSceneryAssets).  Only the OPENING
+  //        biome's bands ship at boot — the band tileSprites are built with
+  //        BIOMES[0] before streaming runs and have no prior texture to hold.
   // Anything that would add a full-size scene, story or vehicle image belongs
   // behind the off-ramp boundary instead of in this number.
-  const BOOT_ENTRY_CEILING = 315;
+  const BOOT_ENTRY_CEILING = 285;
   const n = bootManifest().length;
   console.log(`      → boot manifest: ${n} entries (ceiling ${BOOT_ENTRY_CEILING}; ${restStopManifest().length} deferred to the off-ramp)`);
 
@@ -450,10 +456,85 @@ const mkPulse = (bridge, tile) => function pulse() {
   const bootKeys = new Set(bootManifest().map(e => e.key));
   check('deferred set is disjoint from boot',
     restStopManifest().every(e => !bootKeys.has(e.key)));
-  check('boot + deferred = full manifest',
-    bootManifest().length + restStopManifest().length === flattenManifest().length);
-  check('RestStopScene preloads the deferred set',
-    readFileSync(ROOT + 'src/scenes/RestStopScene.js', 'utf8').includes('restStopManifest()'));
+  const restStopScene = readFileSync(ROOT + 'src/scenes/RestStopScene.js', 'utf8');
+  check('RestStopScene knows the deferred set', restStopScene.includes('restStopManifest()'));
+
+  // ── Per-stop preload + release (2026-09-15, second memory pass) ──
+  // Bulk-preloading all 36 cost 216 MB decoded that then stayed resident for
+  // the whole session — the silent-restart cause, measured at a 741 MB peak.
+  // preload() must take the PER-STOP subset, never the whole bucket again.
+  check('RestStopScene preloads a per-stop subset',
+    /preload\(\)\s*\{[\s\S]{0,200}_stopPreloadList\(\)/.test(restStopScene));
+  check('_stopPreloadList exists', restStopScene.includes('_stopPreloadList()'));
+  check('portraits demand-load instead of preloading',
+    /_ensureNpcTexture\([\s\S]{0,900}restStopAssetPath\(key\)/.test(restStopScene));
+  // The placeholder must NOT be written to the real key: textures.exists(key)
+  // would be true forever and permanently shadow the real file.
+  check('the portrait placeholder uses its own key',
+    /\$\{key\}__ph/.test(restStopScene));
+
+  check('GameScene releases the rest-stop set on the way back to the road',
+    gameScene.includes('_releaseRestStopTextures'));
+  check('the release is wired to the rest-stop resume',
+    /_resumeFromStop[\s\S]{0,900}_releaseRestStopTextures\(\)/.test(gameScene));
+
+  // The release enumerates manifest keys.  Matching `npc_` by PREFIX instead
+  // would take GameScene's traffic cars with it and blank every car on the
+  // road — this asserts the two namespaces really do collide, so the guard
+  // is protecting something real.
+  const { restStopEvictableKeys, restStopAssetPath } =
+    await import('../src/systems/AssetManifest.js');
+  const evictable = new Set(restStopEvictableKeys());
+  check('the rest-stop evict set matches the deferred manifest',
+    evictable.size === restStopManifest().length);
+  for (const carKey of ['npc_car_white', 'npc_hatchback', 'npc_minivan', 'npc_wagon']) {
+    check(`traffic car ${carKey} is NOT released with the rest-stop art`,
+      !evictable.has(carKey));
+  }
+  check('rest-stop keys and traffic cars really do share the npc_ prefix',
+    [...evictable].some(k => k.startsWith('npc_')));
+  check('every rest-stop key resolves to a path',
+    restStopManifest().every(e => restStopAssetPath(e.key) === e.path));
+  check('restStopAssetPath returns null for a non-rest-stop key',
+    restStopAssetPath('npc_car_white') === null);
+
+  // ── Backdrop streaming (2026-09-15) — the THIRD bucket ──
+  // There are now three: boot, the off-ramp set, and the mile-windowed
+  // backdrop.  Together they must still account for every manifest key, or
+  // something has quietly stopped loading anywhere.
+  const routeKeys = routeStreamEvictableKeys();
+  check('route-streamed set is non-empty', routeKeys.length >= 20);
+  check('route-streamed set is disjoint from boot',
+    routeKeys.every(k => !bootKeys.has(k)));
+  const rsKeys = new Set(restStopManifest().map(e => e.key));
+  check('route-streamed set is disjoint from the off-ramp set',
+    routeKeys.every(k => !rsKeys.has(k)));
+  check('boot + off-ramp + route-streamed = full manifest',
+    bootManifest().length + restStopManifest().length + routeKeys.length
+      === flattenManifest().length);
+  check('GameScene streams the backdrop', gameScene.includes('_ensureSceneryAssets'));
+  // Eviction now goes through the ImageStreamer (stability pass 2026-09-15):
+  // releaseUnpinned() is what reaches TextureManager.remove().
+  check('the scenery sweep evicts (through the streamer)',
+    /_ensureSceneryAssets[\s\S]{0,2000}releaseUnpinned\(/.test(gameScene));
+  check('the streamer really removes textures',
+    /release\(keys\)[\s\S]{0,900}this\.tex\.remove\(key\)/.test(read('src/systems/ImageStreamer.js')));
+
+  // The opening biome MUST ship at boot: the band tileSprites are constructed
+  // with BIOMES[0] before any streaming runs, so with nothing resident they
+  // would paint a missing-texture fill on frame 1.
+  const openBands = bootManifest().filter(e => /assets\/scenery\/biomes\//.test(e.path));
+  check('the opening biome ships at boot', openBands.length >= 3);
+  check('the other biomes do NOT ship at boot', openBands.length <= 4);
+
+  // The window has to be a real window, and load earlier than it evicts
+  // (hysteresis) or idling on a biome boundary thrashes.
+  check('a mid-route window is smaller than the whole set',
+    routeStreamManifest(60, 8, 8).length < flattenManifest()
+      .filter(e => /assets\/scenery\/biomes\//.test(e.path)).length);
+  check('load window is narrower than the evict window',
+    /SCENERY_LOAD_MI\s*=\s*(\d+)/.exec(gameScene)?.[1] * 1
+      < /SCENERY_EVICT_MI\s*=\s*(\d+)/.exec(gameScene)?.[1] * 1);
 
   // The probe that makes the reduction measurable must stay wired.
   const bootSrc = readFileSync(ROOT + 'src/scenes/BootScene.js', 'utf8');
@@ -481,6 +562,58 @@ const mkPulse = (bridge, tile) => function pulse() {
   check('tile releases them on finish', /finish = \(\)[\s\S]{0,400}textures\.remove\(k\)/.test(tileSrc));
   check('release happens after teardown',
     /teardown\(\);[\s\S]{0,200}textures\.remove/.test(tileSrc));
+}
+
+// ── Decoded-BYTE ceilings (stability pass 2026-09-15) ────────────────────
+// Entry counts are a weak proxy: one 1086×1448 portrait is ~6 MiB decoded.
+// These read real image dimensions (sharp) and fail on bytes.  Ratchet DOWN
+// only; raising one is a deliberate re-baseline that must be justified here.
+//   boot   463.7 MB measured 2026-09-15 (283 files)     → ceiling 470
+//   stop    36.0 MB worst per-stop storefront set (C)   → ceiling 40
+{
+  const { statSync, existsSync } = await import('node:fs');
+  let sharp = null;
+  try { sharp = (await import('sharp')).default; } catch (_) {}
+  if (!sharp) {
+    console.log('      → sharp unavailable; decoded-byte ceilings skipped');
+  } else {
+    const { bootManifest, restStopManifest } = await import('../src/systems/AssetManifest.js');
+    const { REST_STOPS } = await import('../src/constants.js');
+    const dims = async (rel) => {
+      const p = ROOT + 'public/' + String(rel).split('?')[0];
+      if (!existsSync(p)) return null;
+      try { const m = await sharp(p).metadata(); return { w: m.width || 0, h: m.height || 0 }; } catch (_) { return null; }
+    };
+    const tally = async (list) => {
+      let bytes = 0, n = 0;
+      for (const { path } of list) { const d = await dims(path); if (!d) continue; n++; bytes += d.w * d.h * 4; }
+      return { n, mb: bytes / 1048576 };
+    };
+    const BOOT_MB_CEILING = 470;
+    const STOP_MB_CEILING = 40;
+    const boot = await tally(bootManifest());
+    console.log(`      → boot decoded: ${boot.mb.toFixed(1)} MB across ${boot.n} files (ceiling ${BOOT_MB_CEILING})`);
+    check('boot decoded bytes under the ceiling', boot.mb <= BOOT_MB_CEILING);
+
+    // Per-stop storefront working set, mirroring RestStopScene._stopPreloadList.
+    const rsSrc = readFileSync(ROOT + 'src/scenes/RestStopScene.js', 'utf8');
+    const tbl = rsSrc.match(/const SHOP_BG = \{([\s\S]*?)\};/)?.[1] ?? '';
+    const SHOP_BG = Object.fromEntries([...tbl.matchAll(/(\w+):\s*'([^']+)'/g)].map(m => [m[1], m[2]]));
+    const byKey = new Map(restStopManifest().map(e => [e.key, e]));
+    let worst = { id: '?', mb: 0 };
+    for (const s of REST_STOPS) {
+      const want = new Set();
+      for (const k of (s.amenities ?? [])) if (SHOP_BG[k]) want.add(SHOP_BG[k]);
+      if ((s.amenities ?? []).includes('dealer')) want.add((s.mileage ?? 0) < 100 ? SHOP_BG.lord : SHOP_BG.suck);
+      if (s.id === 'M') want.add('shop_bg_gasnsip_brittney');
+      const t = await tally([...want].map(k => byKey.get(k)).filter(Boolean));
+      if (t.mb > worst.mb) worst = { id: s.id, mb: t.mb };
+    }
+    console.log(`      → worst per-stop storefront set: ${worst.id} at ${worst.mb.toFixed(1)} MB (ceiling ${STOP_MB_CEILING})`);
+    check('per-stop storefront working set under the ceiling', worst.mb <= STOP_MB_CEILING);
+    check('no stop reaches the whole deferred bucket',
+      worst.mb < (await tally(restStopManifest())).mb / 2);
+  }
 }
 
 console.log(`\nlaunch tests: ${pass} passed, ${fail} failed`);

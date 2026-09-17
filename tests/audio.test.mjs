@@ -357,5 +357,66 @@ check('muted=false survives a restart', roundTripSetting('muted', false) === fal
   check('#7 foreground resume of a background track re-arms the stall watchdog', vis.includes('this._startSkipWatchdog()'));
 }
 
+// ── Default station = the ACTIVE GENRE, never random (owner 2026-09-16) ──
+// "The default music should be pop music. Not K-pop, not emo rock pop, just
+// pop."  The run start used to fall straight from the starred default to a
+// track-weighted RANDOM station, so a fresh POP profile opened on whatever the
+// dice said — K-POP came up.  Now: starred (culture first) → active genre →
+// random only if the genre has no station.
+{
+  const { defaultStationIndex, STATION_CULTURES } = await import('../src/systems/AudioSystem.js');
+  const { DEFAULT_GENRE } = await import('../src/constants.js');
+  const idx = (c) => STATION_CULTURES.indexOf(c);
+  let randomCalls = 0;
+  const random = () => { randomCalls++; return 0; };
+
+  check('DEFAULT_GENRE is plain pop', DEFAULT_GENRE === 'pop');
+  check('the catalogue has a POP station', idx('pop') >= 0);
+  check('POP is not K-POP', idx('pop') !== idx('k_pop') && idx('k_pop') >= 0);
+  check('nothing starred, no genre → DEFAULT_GENRE (pop), no dice',
+    defaultStationIndex({ random }) === idx('pop') && randomCalls === 0);
+  check('nothing starred, plate genre country → country',
+    defaultStationIndex({ genre: 'country', random }) === idx('country'));
+  check('starred culture beats the plate genre',
+    defaultStationIndex({ starredCulture: 'metal', genre: 'pop', random }) === idx('metal'));
+  check('starred culture beats a STALE starred index (catalogue insert can\'t shift the star)',
+    defaultStationIndex({ starredCulture: 'metal', starredIndex: idx('k_pop'), genre: 'pop', random }) === idx('metal'));
+  check('legacy starred index (no culture stored) is still honoured',
+    defaultStationIndex({ starredIndex: idx('reggae'), genre: 'pop', random }) === idx('reggae'));
+  check('a resumed save\'s own genre beats the plate genre but not the star',
+    defaultStationIndex({ preferCulture: 'reggae', genre: 'pop', random }) === idx('reggae')
+    && defaultStationIndex({ starredCulture: 'metal', preferCulture: 'reggae', genre: 'pop', random }) === idx('metal'));
+  check('random is only reached when the genre has no station',
+    (randomCalls = 0, defaultStationIndex({ genre: 'no_such_genre', random }), randomCalls === 1));
+  check('out-of-range starred index is ignored, not clamped onto a neighbour',
+    defaultStationIndex({ starredIndex: 99, genre: 'pop', random }) === idx('pop'));
+
+  // Sanitizer: the starred culture must survive a reload — and only a real one.
+  localStorage.clear();
+  const sv = new SaveSystem();
+  sv.set('settings', { radioSet: true, radio: idx('metal'), radioCulture: 'metal' });
+  check('starred culture survives a restart', new SaveSystem().get('settings', {}).radioCulture === 'metal');
+  localStorage.clear();
+  new SaveSystem().set('settings', { radioSet: true, radio: 0, radioCulture: 'not_a_station' });
+  check('unknown starred culture is dropped', new SaveSystem().get('settings', {}).radioCulture === null);
+  localStorage.clear();
+  new SaveSystem().set('settings', { radioSet: false, radio: 3, radioCulture: 'metal' });
+  check('an un-starred culture does not survive (no accidental default)', new SaveSystem().get('settings', {}).radioCulture === null);
+
+  // Wiring: every start-station site goes through the resolver; no site
+  // falls to random before the genre.
+  const gs = readFileSync(ROOT + 'src/scenes/GameScene.js', 'utf8');
+  const bs = readFileSync(ROOT + 'src/scenes/BootScene.js', 'utf8');
+  const mj = readFileSync(ROOT + 'src/main.js', 'utf8');
+  check('AudioSystem constructor starts on the genre, not random-first',
+    /defaultStationIndex\(\{ genre: _bootGenre/.test(audioSrc));
+  check('BootScene applies the resolved default', bs.includes('resolveDefaultStation?.(save)'));
+  check('run start resolves the default (no bare random fallback)',
+    (gs.match(/resolveDefaultStation\?\.\(/g) || []).length >= 2
+    && !/_defSt : \(this\.audio\.randomStationIndex/.test(gs));
+  check('starring a station stores its culture too', mj.includes("sv?.set?.('settings.radioCulture', culture)"));
+  check('getDefaultStation resolves culture-first', /getDefaultStation: \(\) => \{[\s\S]{0,400}stationIndexForCulture\?\.\(st\.radioCulture\)/.test(mj));
+}
+
 console.log(`\naudio tests: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

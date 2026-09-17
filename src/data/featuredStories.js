@@ -930,6 +930,9 @@ export const FEATURED_STORIES = {
         stopId: 'M', mandatory: true,
         when: (st, run, canon) => !run.passenger && !st.flags.coldDone && !canon?.stories?.hiphop?.items?.phone,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
+        // Art: same counter, same girl — reuse the approved Mercer panels
+        // until the owner redraws (he plans to); these are aliases, not new art.
+        panelKey: 'hiphop.mercer_counter',
         line: "Welcome to Gas-N-Sip, hon! What can I do to—uh—for you?",
         choices: [
           { id: 'day', consequential: false, next: 'mercer_cold_woes',
@@ -945,12 +948,14 @@ export const FEATURED_STORIES = {
       mercer_cold_woes: {
         stopId: 'M', virtual: true,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'minor',
+        panelKey: 'hiphop.mercer_hook',
         line: "[OWNER LINES — Brittney unloads: the double, the boyfriend, the concert]",
         next: 'mercer_cold_offer',
       },
       mercer_cold_offer: {
         stopId: 'M', virtual: true,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'major',
+        panelKey: 'hiphop.mercer_fork',
         line: "[OWNER LINE — Brittney's ride pitch, no Malik]",
         choices: [
           { id: 'ride', consequential: true, next: 'vantage_arrival',

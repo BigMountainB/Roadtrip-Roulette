@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { initOpeningCall } from './ui/OpeningCallSequence.js';
 import { mountComicReader, releaseComicArt } from './ui/ComicReader.js';
+import { createSettleScheduler, SETTLE_STEPS_COLD } from './systems/ViewportSettle.js';
+import { createVisibilityRecovery } from './systems/GpuRecovery.js';
+import { crumb, installDiagProbe } from './systems/StabilityDiag.js';
 // Story senders that text the player before they're a saved contact.
 const STORY_CONTACT_NAMES = { malik: '🎤 Malik Reed', brittney: '💋 Brittney', waitress: '🎸 Mykenzie' };
 import { BootScene }    from './scenes/BootScene.js';
@@ -122,6 +125,9 @@ const config = {
 // the body element exists and Phaser can mount its canvas.
 const _boot = () => {
   const game = new Phaser.Game(config);
+  // Read how the PREVIOUS session ended before this one writes its first
+  // breadcrumb (the cold-load settle below fires before BootScene runs).
+  try { installDiagProbe(game); } catch (_) {}
 
   // ── Text-entry vs. game keyboard ─────────────────────────────────────
   // The game binds driving / hotkeys (W A S D F M R Q, Space, Enter, arrows)
@@ -317,8 +323,11 @@ const _boot = () => {
     if (window.__phoneLock?.get?.()) return;   // player locked the menu on purpose
     try { window.__phoneMenu.close(); } catch (_) {}
   };
-  window.addEventListener('orientationchange', () => setTimeout(_rotateEnter, 120));
-  window.addEventListener('resize',            () => setTimeout(_rotateEnter, 120));
+  // Coalesced (stability pass 2026-09-15): one pending 120 ms check per burst
+  // of rotation events, not a fresh timer per event.
+  const _rotateEnterSettle = createSettleScheduler({ apply: _rotateEnter, useRaf: false, steps: [120] });
+  window.addEventListener('orientationchange', () => _rotateEnterSettle.schedule());
+  window.addEventListener('resize',            () => _rotateEnterSettle.schedule());
 
   // One-time opening call.  Mounted AFTER __phoneMenu above, because the
   // sequence finishes by opening that menu rather than rebuilding it.  It
@@ -1393,11 +1402,21 @@ const _boot = () => {
     },
     // Default station (genre) that auto-plays on boot — persisted in the
     // save's settings.radio.  Setting it also switches to it now as feedback.
-    getDefaultStation: () => game.registry.get('save')?.get?.('settings.radio', -1),   // -1 = no default set (so index 0 isn't falsely starred)
+    // -1 = no default set (so index 0 isn't falsely starred).  Culture-first:
+    // the starred station is stored by culture too (2026-09-16), so a catalogue
+    // insert can't shift the star onto a neighbour.
+    getDefaultStation: () => {
+      const st = game.registry.get('save')?.get?.('settings', null);
+      if (st?.radioSet !== true) return -1;
+      const byCulture = game.registry.get('audio')?.stationIndexForCulture?.(st.radioCulture) ?? -1;
+      return byCulture >= 0 ? byCulture : (Number.isInteger(st.radio) ? st.radio : -1);
+    },
     setDefaultStation: (idx) => {
       const i = parseInt(idx, 10) || 0;
       const sv = game.registry.get('save');
+      const culture = game.registry.get('audio')?.getStations?.()?.[i]?.culture ?? null;
       sv?.set?.('settings.radio', i);
+      sv?.set?.('settings.radioCulture', culture);
       sv?.set?.('settings.radioSet', true);   // marks a DELIBERATE choice (survives the sanitizer)
       game.registry.get('audio')?.setStation?.(i);
     },
@@ -1554,6 +1573,9 @@ const _boot = () => {
           // (verified in Phaser 3.90 ScaleManager) — the old explicit
           // refresh() after it doubled every resize event (Finding 3).
           game.scale.setParentSize(r.width, r.height);
+          // Breadcrumb only when the fit actually changed — a settle ladder
+          // that lands on the same box writes nothing.
+          try { crumb(game, 'settle', { w: fw, h: fh }); } catch (_) {}
         }
       }
 
@@ -1585,15 +1607,13 @@ const _boot = () => {
   // (The ladder itself stays — the iOS rotation animation often fires no
   // final 'resize' once it settles, so a single immediate re-fit lands on a
   // MID-rotation size: "low, then pops".)
-  let _settleTimers = [];
-  let _settleRaf = 0;
-  const scheduleOrientationSettle = (steps = [120, 300, 550, 900]) => {
-    for (const t of _settleTimers) clearTimeout(t);
-    _settleTimers = [];
-    if (_settleRaf) cancelAnimationFrame(_settleRaf);
-    _settleRaf = requestAnimationFrame(() => { _settleRaf = 0; applyOrientation(); });
-    for (const ms of steps) _settleTimers.push(setTimeout(applyOrientation, ms));
-  };
+  // The scheduler itself lives in systems/ViewportSettle.js (stability pass
+  // 2026-09-15) so the "N events → one ladder" contract is under test; its
+  // pending() is also how the GPU-recovery path knows a rotation is still in
+  // flight and must not be overlapped.
+  const _settle = createSettleScheduler({ apply: applyOrientation });
+  const scheduleOrientationSettle = (steps) => _settle.schedule(steps);
+  window.__settlePending = () => _settle.pending();
 
   const onOrientationChange = () => {
     // Close any open rotate-reminder popup on every rotation so it can never
@@ -1613,54 +1633,68 @@ const _boot = () => {
   // same order, as Phaser's own contextRestoredHandler.  On a healthy context
   // this is just a one-off re-upload hitch; on an evicted one it's the
   // difference between a running game and a texture salad.
-  let _hiddenAt = 0;
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') { _hiddenAt = Date.now(); return; }
-    const away = Date.now() - _hiddenAt;
-    _hiddenAt = 0;
-    if (away < 30000) return;                      // brief app-switch: nothing to do
+  // Memory audit 2026-09-09 (Finding 4): rebuilding every GL resource on a
+  // HEALTHY context transiently duplicates a huge share of the GPU
+  // allocation (createResource() allocates new handles before the old ones
+  // are collected) — with the current texture set that spike alone can get
+  // the WebKit process killed.  So PROBE first: gl.isTexture() on a sample of
+  // live wrappers; dead handles fail it, a healthy context passes and we do
+  // NOTHING.
+  //
+  // Stability pass 2026-09-15 (systems/GpuRecovery.js): the probe used to
+  // return "rebuild" when it THREW.  Now an inconclusive or throwing probe
+  // fails CLOSED (no rebuild, logged), a rebuild runs at most once per real
+  // restoration with a cooldown, and it is deferred — never overlapped —
+  // while a rotation settle or an asset load is in flight.
+  const _rebuildGl = () => {
     const r = game.renderer;
-    if (!r?.gl || r.contextLost) return;           // real loss → Phaser's own handler owns it
-    // Memory audit 2026-09-09 (Finding 4): rebuilding every GL resource on a
-    // HEALTHY context transiently duplicates a huge share of the GPU
-    // allocation (createResource() allocates new handles before the old ones
-    // are collected) — with the current texture set that spike alone can get
-    // the WebKit process killed, and the restart then gets blamed on the next
-    // rotation.  So PROBE first: gl.isTexture() on a sample of live wrappers.
-    // Safari's silent eviction replaces the underlying context state, so dead
-    // handles fail the probe; a healthy context passes and we do NOTHING.
-    const evictionDetected = (() => {
-      try {
-        const gl = r.gl;
-        if (gl.isContextLost?.()) return false;    // real loss → Phaser's handler
-        let checked = 0, dead = 0;
-        for (const w of (r.glTextureWrappers ?? [])) {
-          if (!w?.webGLTexture) continue;
-          checked++;
-          if (!gl.isTexture(w.webGLTexture)) dead++;
-          if (checked >= 8) break;
+    for (const listName of ['glTextureWrappers', 'glBufferWrappers',
+      'glFramebufferWrappers', 'glProgramWrappers',
+      'glAttribLocationWrappers', 'glUniformLocationWrappers']) {
+      const list = r[listName];
+      if (list) for (const w of list) { try { w.createResource(); } catch (_) {} }
+    }
+    try { r.createTemporaryTextures(); } catch (_) {}
+    try { r.pipelines.restoreContext(); } catch (_) {}
+    // The texture planes hold raw-GL state (REPEAT / mipmaps / anisotropy)
+    // outside wrapper bookkeeping — drop their caches so it re-applies.
+    const s = game.scene?.getScene?.('Game');
+    if (s?.groundPlane) s.groundPlane._ok = false;
+    try { s?.roadPlane?._ready?.clear?.(); } catch (_) {}
+  };
+  const _recovery = createVisibilityRecovery({
+    getGpu: () => {
+      const r = game.renderer;
+      return r?.gl ? { gl: r.gl, wrappers: r.glTextureWrappers ?? [], contextLost: !!r.contextLost } : null;
+    },
+    isBusy: () => _settle.pending()
+      || (game.scene?.getScenes?.(true) ?? []).some(s => { try { return !!s.load?.isLoading?.(); } catch (_) { return false; } })
+      || (game.registry.get('streamer')?.inFlight ?? 0) > 0,
+    rebuild: _rebuildGl,
+    onEvent: (ev, info) => {
+      if (ev === 'decide') {
+        if (!(info.action === 'skip' && info.reason === 'brief')) {
+          console.log(`[resume] ${info.action}: ${info.reason} (${Math.round((info.awayMs ?? 0) / 1000)}s hidden)`);
         }
-        return checked > 0 && dead > 0;
-      } catch (_) { return true; }                 // can't prove health → old behavior
-    })();
-    if (!evictionDetected) return;                 // healthy GPU: no rebuild, no spike
-    try {
-      for (const listName of ['glTextureWrappers', 'glBufferWrappers',
-        'glFramebufferWrappers', 'glProgramWrappers',
-        'glAttribLocationWrappers', 'glUniformLocationWrappers']) {
-        const list = r[listName];
-        if (list) for (const w of list) { try { w.createResource(); } catch (_) {} }
+        if (/^inconclusive/.test(info.reason ?? '')) {
+          console.warn('[resume] GPU probe inconclusive — NOT rebuilding (fail closed)');
+        }
+      } else if (ev === 'rebuild-start') {
+        try { crumb(game, 'gpu-rebuild-start', { awayMs: info.awayMs }); } catch (_) {}
+      } else if (ev === 'rebuild-done' || ev === 'rebuild-failed') {
+        try { crumb(game, 'gpu-' + ev); } catch (_) {}
+        console.warn(`[resume] GPU resources ${ev === 'rebuild-done' ? 'rebuilt' : 'rebuild FAILED: ' + info.error}`);
       }
-      try { r.createTemporaryTextures(); } catch (_) {}
-      try { r.pipelines.restoreContext(); } catch (_) {}
-      // The texture planes hold raw-GL state (REPEAT / mipmaps / anisotropy)
-      // outside wrapper bookkeeping — drop their caches so it re-applies.
-      const s = game.scene?.getScene?.('Game');
-      if (s?.groundPlane) s.groundPlane._ok = false;
-      try { s?.roadPlane?._ready?.clear?.(); } catch (_) {}
-      console.warn(`[resume] GPU resources rebuilt after ${Math.round(away / 1000)}s hidden`);
-    } catch (e) { console.warn('[resume] texture refresh failed', e); }
+    },
   });
+  document.addEventListener('visibilitychange', () => {
+    const st = document.visibilityState;
+    // The 'hidden' crumb is the one that matters: if iOS ends the process
+    // while we're backgrounded, this is the last record the next boot reads.
+    try { crumb(game, st === 'hidden' ? 'hidden' : 'visible'); } catch (_) {}
+    _recovery.onVisibility(st);
+  });
+  window.__gpuRecovery = () => _recovery.state();
 
   window.addEventListener('resize',            onOrientationChange);
   window.addEventListener('orientationchange', onOrientationChange);
@@ -1672,7 +1706,7 @@ const _boot = () => {
   // longer tail; and a ResizeObserver on #game-root so ANY later box change
   // (toolbar show/hide, PWA chrome, split-view) re-fits without needing a
   // rotation — it too replaces the pending sequence rather than stacking.
-  scheduleOrientationSettle([120, 300, 550, 900, 1600]);
+  _settle.schedule(SETTLE_STEPS_COLD);
   try {
     const _root = document.getElementById('game-root');
     if (_root && 'ResizeObserver' in window) {

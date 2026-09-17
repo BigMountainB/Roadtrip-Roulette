@@ -28,6 +28,7 @@
 import Phaser from 'phaser';
 import { SCREEN_W, SCREEN_H } from '../constants.js';
 import { getStoryNode } from '../data/featuredStories.js';
+import { crumb } from '../systems/StabilityDiag.js';
 import { panelMeta, panelKeyFor, resolvePanelKey } from '../data/comicPanels.js';
 import { layoutBalloon, migrateZones, readingOrder, TAIL_BASE_CEILING } from './balloonLayout.js';
 import { unit, paddingFor, bulgeFor, excessBalloonArea, strokeFor, bodyShape, tailShape, connectorShape, sfxSpec, dashOutline, seedFor } from './balloonShapes.js';
@@ -121,12 +122,24 @@ export function showStoryConversation(scene, start, onDone) {
   // Panel textures this conversation loaded on demand — released on teardown
   // (a 1672x941 panel is ~6 MB decoded; see the iPhone memory audit).
   const loadedArtKeys = new Set();
+  // Panels load through the game's ImageStreamer (stability pass 2026-09-15)
+  // on a handle that lives exactly as long as this conversation: a completion
+  // that lands after finish() caches the texture but calls nothing here.  The
+  // panel currently on screen is pinned so the streamer's byte budget can't
+  // evict it mid-tile.
+  const streamer = scene.registry?.get?.('streamer') ?? null;
+  const artHandle = streamer?.handle('story') ?? null;
+  let artOnScreen = null;
+  artHandle?.pin((k) => k === artOnScreen);
   const finish = () => {
     if (finished) return; finished = true;
     scene._storyTileOpen = false;
     teardown();
-    for (const k of loadedArtKeys) { try { scene.textures.remove(k); } catch (_) {} }
+    try { artHandle?.release(); } catch (_) {}
+    if (streamer) streamer.release([...loadedArtKeys]);
+    else for (const k of loadedArtKeys) { try { scene.textures.remove(k); } catch (_) {} }
     loadedArtKeys.clear();
+    try { crumb(scene.game, 'story-close', { story: start?.storyId ?? null }); } catch (_) {}
     if (leaveAfter && typeof scene._continue === 'function') { scene._continue(); return; }
     onDone?.();
   };
@@ -137,6 +150,7 @@ export function showStoryConversation(scene, start, onDone) {
   scene._gateTaps();
   const scrim = add(scene._swallowTaps(scene.add.rectangle(SCREEN_W / 2, SCREEN_H / 2, SCREEN_W, SCREEN_H, 0x02040B, 0.86).setDepth(D)));
   scene._storyTileOpen = true;      // the rest stop's SPACE = leave binding must not fire under us
+  try { crumb(scene.game, 'story-open', { story: start?.storyId ?? null, node: start?.nodeId ?? null }); } catch (_) {}
   const frame = scene.add.graphics().setDepth(D + 1);
   frame.fillStyle(0x000000, 1); frame.fillRect(ART_X - 3, ART_Y - 3, ART_W + 6, ART_H + 6);
   add(frame);
@@ -350,7 +364,9 @@ export function showStoryConversation(scene, start, onDone) {
   // ── Tile ────────────────────────────────────────────────────────────────
   function buildTile(storyId, nodeId, node) {
     const c = scene.add.container(tiles.length * (TILE_W + GAP), 0);
-    let panelKey = panelKeyFor(storyId, nodeId);
+    // Node-level `panelKey` aliases count here too (Brittney's cold open reuses
+    // the approved Mercer counter panels) — same resolution the ledger uses.
+    let panelKey = resolvePanelKey({ storyId, nodeId, node }) ?? panelKeyFor(storyId, nodeId);
     let meta     = panelMeta(panelKey);
     const bg = scene.add.graphics();
     bg.fillGradientStyle(0x1B2A44, 0x1B2A44, 0x0A1020, 0x0A1020, 1); bg.fillRect(0, 0, TILE_W, ART_H);
@@ -368,6 +384,8 @@ export function showStoryConversation(scene, start, onDone) {
       artObjs = [];
       const url = meta.art;
       if (url && scene.textures.exists(url)) {
+        artOnScreen = url;
+        streamer?.touch?.(url);
         const img = scene.add.image(AX + AW / 2, AY + AH / 2, url).setDisplaySize(AW, AH).setOrigin(0.5);
         c.add(img); artObjs.push(img);
         c.sendToBack?.(img); c.sendToBack?.(bg);
@@ -376,6 +394,16 @@ export function showStoryConversation(scene, start, onDone) {
       const ph = scene.add.text(AX + AW / 2, AY + AH / 2, url ? 'STORY ART LOADING…' : 'STORY ART PENDING', { fontSize: '11px', fontFamily: IMPACT, color: '#3E5A80' }).setOrigin(0.5);
       c.add(ph); artObjs.push(ph);
       if (!url) return;
+      if (artHandle) {
+        loadedArtKeys.add(url);
+        // force: the player is looking at this tile NOW — never hold it for
+        // the streamer's post-eviction cooldown (a panel this conversation
+        // shares with the one that just ended would otherwise sit on
+        // "LOADING…" for 20 s).
+        artHandle.request(url, url, () => { if (c.active !== false && myReq === artReq) drawArt(); }, null, { force: true });
+        return;
+      }
+      // No streamer (headless probes that skip BootScene): scene loader fallback.
       if (scene.load.isLoading()) { scene.load.once('complete', () => { if (c.active !== false && myReq === artReq) drawArt(); }); return; }
       scene.load.image(url, url);
       loadedArtKeys.add(url);

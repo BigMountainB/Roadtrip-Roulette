@@ -182,8 +182,8 @@ check('establishing key is node-only', panelKeyFor('hiphop', 'mercer_fork') === 
   const tileSrc = readFileSync(ROOT + 'src/ui/StoryTile.js', 'utf8');
   check('tile no longer imports the NPC portrait', !/^import \{ getPortrait \}/m.test(tileSrc));
   check('tile does not draw a portrait texture', !tileSrc.includes('port.texture'));
-  check('tile starts from the ESTABLISHING node key',
-    /let panelKey = panelKeyFor\(storyId, nodeId\)/.test(tileSrc));
+  check('tile starts from the ESTABLISHING node key (node panelKey aliases honoured, then the node key)',
+    /let panelKey = resolvePanelKey\(\{ storyId, nodeId, node \}\) \?\? panelKeyFor\(storyId, nodeId\)/.test(tileSrc));
   check('tile can swap panels', /setPanelKey\(key\)/.test(tileSrc));
   check('pick() swaps to the committed panel before the comic',
     /tile\.setPanelKey\([\s\S]{0,200}r\?\.entry\?\.panelKey/.test(tileSrc));
