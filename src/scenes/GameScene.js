@@ -4981,12 +4981,20 @@ export class GameScene extends Phaser.Scene {
           locName:    this._dailyStage
                         ? (this._lastCheckpoint?.name ?? 'Seattle, WA')
                         : 'Seattle, WA',
-          hp:         this.damage?.getDurability?.() ?? null,
-          fuelMi:     this.player?.gasMi ?? null,
-          stars:      this.cops?.stars ?? 0,
-          viceLevels: { ...(this.vices?.levels ?? {}) },
-          f12Tokens:  [...(this.cops?.f12Tokens ?? [])],
-          coalAmmo:   this.cops?.coalAmmo ?? 0,
+          // A snap rebuilt MID-RUN (registry lost to a page reload / iOS
+          // memory kill) must not bank the CURRENT state as "the run's
+          // start": RESTART DRIVE then rewound to mile 0 carrying the
+          // mid-run HP (owner 2026-10-03: "restarted the run, my life was
+          // still at 1 HP").  The start of a run is full HP; the mid-run
+          // tank / stars / vices / weapons are dropped (null = the restart
+          // path keeps its fresh defaults) for the same reason.
+          hp:         _fresh ? (this.damage?.getDurability?.() ?? null)
+                             : (this.damage?.getMax?.() ?? null),
+          fuelMi:     _fresh ? (this.player?.gasMi ?? null) : null,
+          stars:      _fresh ? (this.cops?.stars ?? 0) : 0,
+          viceLevels: _fresh ? { ...(this.vices?.levels ?? {}) } : {},
+          f12Tokens:  _fresh ? [...(this.cops?.f12Tokens ?? [])] : [],
+          coalAmmo:   _fresh ? (this.cops?.coalAmmo ?? 0) : null,
           vehicleId:  this.player?.vehicleId ?? 'beater',
           upgrades:     JSON.parse(JSON.stringify(_save?.get?.('upgrades')     ?? {})),
           tempUpgrades: JSON.parse(JSON.stringify(_save?.get?.('tempUpgrades') ?? {})),
@@ -21785,7 +21793,12 @@ export class GameScene extends Phaser.Scene {
         } catch (_) {}
         this.registry?.set?.('runEligibleEarnings', 0);
         this.audio?.setPaused?.(false);
-        this.scene.restart();
+        // Explicit `{}`: a bare restart() REPLAYS the data this scene was
+        // last started with (Phaser Systems.start only replaces truthy
+        // data), so after a CONTINUE it respawned at the checkpoint with
+        // half HP instead of going back to Seattle.
+        this.registry?.remove?.('runStartSnap');
+        this.scene.restart({});
       }, `→ $0 · Seattle · parts & upgrades kept`);
     }
     mkBtn(SCREEN_W / 2 + 130, 200, 'LOAD SAVE', 0x39A8FF, true, () => {

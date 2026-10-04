@@ -468,5 +468,24 @@ function makeStreamer(opts = {}) {
     /_policeKeyPinned\(k\)[\s\S]{0,900}for \(const id of \(this\._polQueued \?\? \[\]\)\)/.test(gs));
 }
 
+// ── Restart HP (owner 2026-10-03: "restarted the run, my life was still at
+// 1 HP") ─────────────────────────────────────────────────────────────────
+{
+  const gs = read('src/scenes/GameScene.js');
+  const mj = read('src/main.js');
+  const snap = gs.slice(gs.indexOf("let _snap = !_fresh ? this.registry.get('runStartSnap')"));
+  check('a mid-run rebuilt run-start snap banks FULL HP, not the current HP',
+    /hp:\s*_fresh \? \(this\.damage\?\.getDurability\?\.\(\) \?\? null\)\s*:\s*\(this\.damage\?\.getMax\?\.\(\) \?\? null\)/.test(snap));
+  check('a mid-run rebuilt snap does not bank mid-run stars / fuel',
+    /stars:\s*_fresh \?/.test(snap) && /fuelMi:\s*_fresh \?/.test(snap));
+  // Phaser Systems.start only replaces data when it is truthy, so a bare
+  // restart() replays the previous start (a checkpoint respawn) — start-over
+  // paths must pass explicit data.
+  const phaserSys = read('node_modules/phaser/src/scene/Systems.js');
+  check('premise: Phaser keeps the old data on a falsy restart', /if \(data\)\s*\{\s*settings\.data = data;/.test(phaserSys));
+  check('BACK TO SEATTLE restarts with explicit fresh data', /'BACK TO SEATTLE — \$0'[\s\S]{0,1200}this\.scene\.restart\(\{\}\)/.test(gs));
+  check('phone-menu Start Over restarts with explicit fresh data', /__startOver = \(\) => \{[\s\S]{0,600}restart\?\.\(\{\}\)/.test(mj));
+}
+
 console.log(`stability tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

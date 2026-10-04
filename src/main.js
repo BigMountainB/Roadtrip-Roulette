@@ -970,7 +970,10 @@ const _boot = () => {
       // Deliberate restart — drop the live-run autosave so the fresh run
       // doesn't immediately auto-resume the old one.
       try { game?.registry?.get?.('save')?.set?.('liveRun', null); } catch (_) {}
-      game?.scene?.getScene?.('Game')?.scene?.restart?.();
+      try { game?.registry?.remove?.('runStartSnap'); } catch (_) {}
+      // Explicit `{}` — a bare restart() replays the last start's data (a
+      // checkpoint respawn with its half HP), which is not a start over.
+      game?.scene?.getScene?.('Game')?.scene?.restart?.({});
       reapplyAfterRestart();
     } catch (_) {}
   };
