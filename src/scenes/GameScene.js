@@ -7215,7 +7215,15 @@ export class GameScene extends Phaser.Scene {
     // Capture the gap BEFORE updating — used below to detect a skid
     // (driver wants more lateral than the tires can deliver).
     const _slipGap = Math.abs(desiredLateral - p.steerVelocity);
-    p.steerVelocity += (desiredLateral - p.steerVelocity) * grip * dt * settleRate;
+    // Exponential (frame-rate-independent) settle — owner 2026-10-04: "when I
+    // steer, it takes a while to react and then it's over steering".  The
+    // old Euler step `+= gap * grip*dt*settleRate` has a per-frame factor of
+    // ~0.13 at 60 fps but passes 1 once a frame takes > ~125 ms, so on a
+    // dropped frame the car OVERSHOT its target lateral in one step (and
+    // oscillated past ~250 ms).  1 − e^(−k·dt) is the exact solution of the
+    // same ease: ~identical at 60 fps (0.125 vs 0.133), never above 1.
+    p.steerVelocity += (desiredLateral - p.steerVelocity)
+      * (1 - Math.exp(-grip * dt * settleRate));
 
     // Skid detection — the car is sliding when grip is poor AND the
     // wanted lateral exceeds what the tires are achieving by a wide

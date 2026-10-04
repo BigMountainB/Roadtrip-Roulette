@@ -512,6 +512,25 @@ const _boot = () => {
         document.body.append(box, padBack, padFwd);
       };
       mount();
+
+      // Live frame-rate readout (owner 2026-10-04, jerky steering): a small
+      // corner tag — avg fps and the worst frame of the last second — so a
+      // device report says whether frames are dropping.  Steering stretches
+      // with long frames, so "worst ms" is the number that matters.
+      const fpsTag = document.createElement('div');
+      fpsTag.style.cssText = 'position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:999001;'
+        + 'background:rgba(0,0,0,.7);color:#0f8;font:11px monospace;padding:2px 6px;border-radius:4px;pointer-events:none';
+      let worst = 0, last = performance.now();
+      const tick = (t) => { worst = Math.max(worst, t - last); last = t; requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+      setInterval(() => {
+        const fps = Math.round(window.__phaserGame?.loop?.actualFps ?? 0);
+        fpsTag.textContent = `${fps} fps · worst ${Math.round(worst)} ms`;
+        fpsTag.style.color = worst > 100 ? '#f55' : worst > 40 ? '#fd6' : '#0f8';
+        worst = 0;
+      }, 1000);
+      const mountTag = () => { if (!document.body) return setTimeout(mountTag, 50); document.body.append(fpsTag); };
+      mountTag();
     }
   } catch (_) { /* never let the debug overlay break boot */ }
   window.__daily = {

@@ -487,5 +487,22 @@ function makeStreamer(opts = {}) {
   check('phone-menu Start Over restarts with explicit fresh data', /__startOver = \(\) => \{[\s\S]{0,600}restart\?\.\(\{\}\)/.test(mj));
 }
 
+// ── Steering settle is frame-rate independent (owner 2026-10-04: "takes a
+// while to react and then it's over steering") ───────────────────────────
+{
+  const gs = read('src/scenes/GameScene.js');
+  check('steer settle uses the exponential form',
+    /p\.steerVelocity \+= \(desiredLateral - p\.steerVelocity\)\s*\* \(1 - Math\.exp\(-grip \* dt \* settleRate\)\)/.test(gs));
+  check('the overshooting Euler settle is gone',
+    !/p\.steerVelocity \+= \(desiredLateral - p\.steerVelocity\) \* grip \* dt \* settleRate;/.test(gs));
+  // Behaviour: a step input never overshoots at ANY frame rate.
+  for (const k of [8, 10, 15]) for (const fps of [60, 20, 8, 4, 2]) {
+    let v = 0, peak = 0; const dt = 1 / fps;
+    for (let i = 0; i < fps * 3; i++) { v += (1 - v) * (1 - Math.exp(-dt * k)); peak = Math.max(peak, v); }
+    check(`settle k=${k} @ ${fps} fps never passes its target`, peak <= 1 + 1e-9);
+  }
+  check('?devtools shows a live fps + worst-frame readout', read('src/main.js').includes('fps · worst'));
+}
+
 console.log(`stability tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

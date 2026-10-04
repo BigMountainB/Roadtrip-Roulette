@@ -89,6 +89,7 @@ export function snapshot(game, ev = '', extra = {}) {
   } catch (_) { rec.stream = null; }
   rec.scenes = activeScenes(game);
   rec.mile = currentMile(game);
+  try { rec.fps = Math.round(game?.loop?.actualFps ?? 0) || null; } catch (_) {}
   try {
     rec.vis = typeof document !== 'undefined' ? document.visibilityState : null;
     rec.orient = (typeof window !== 'undefined')
