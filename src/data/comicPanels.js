@@ -37,6 +37,47 @@ export const DEFAULT_PANEL_META = Object.freeze({
 });
 
 /** Per-panel overrides — filled in Phase 8.  Key: `${storyId}.${nodeId}`. */
+// Measured metadata shared by several keys that show the SAME panel.  Factories,
+// not shared objects: each key gets its own fresh literal so a consumer that
+// migrates or mutates zones can never alias another key's geometry.
+// (Deduped 2026-09-22 — the Mercer counter block was pasted three times and
+// the ultimatum block twice.)
+
+/** Mercer counter (pilot): Brittney right at the register, player left. */
+const MERCER_COUNTER = () => ({
+  art: 'assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png',
+  bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },   // 1 Brittney, over the window
+  playerBubble: { x: 0.02, y: 0.45, w: 0.30, h: 0.24 },   // 2 player, over his jacket
+  replyBubble:  { x: 0.33, y: 0.55, w: 0.26, h: 0.18 },   // 3 Brittney's reply, over the counter
+  tail:         { x: 0.74, y: 0.39 },                     // Brittney's mouth
+  playerTail:   { x: 0.31, y: 0.26 },                     // player's mouth (profile)
+  protect:      [{ x: 0.18, y: 0.07, w: 0.14, h: 0.27, kind: 'face' },    // player
+                 { x: 0.70, y: 0.27, w: 0.09, h: 0.15, kind: 'face' },    // Brittney
+                 { x: 0.56, y: 0.38, w: 0.07, h: 0.12, kind: 'phone' },   // her phone hand
+                 { x: 0.66, y: 0.42, w: 0.16, h: 0.30, kind: 'body' }],   // uniform + name tag
+  zones:        [{ level: 3, kind: 'sceneDetail', x: 0.32, y: 0.00, w: 0.68, h: 0.26 },   // window, rain, forecourt
+                 { level: 3, kind: 'sceneDetail', x: 0.82, y: 0.26, w: 0.18, h: 0.74 },   // shelves right
+                 { level: 3, kind: 'sceneDetail', x: 0.30, y: 0.50, w: 0.34, h: 0.30 }],  // register / counter
+});
+
+/** Mercer ultimatum: Brittney LEFT, player right, phone on the counter. */
+const MERCER_ULTIMATUM = () => ({
+  art: 'assets/storylines/country/mercer_island/mercer_04_quits_leaves_phone.png',
+  bubble:       { x: 0.36, y: 0.03, w: 0.36, h: 0.22 },   // 1 Brittney, between the heads, over the window
+  playerBubble: { x: 0.36, y: 0.48, w: 0.34, h: 0.22 },   // 2 player, over the counter
+  replyBubble:  { x: 0.71, y: 0.48, w: 0.27, h: 0.22 },   // 3 Brittney's reply, right of 2 over the player's jacket
+  tail:         { x: 0.28, y: 0.33 },                     // Brittney's mouth
+  playerTail:   { x: 0.76, y: 0.31 },                     // player's mouth
+  protect:      [{ x: 0.20, y: 0.19, w: 0.13, h: 0.20, kind: 'face' },    // Brittney
+                 { x: 0.74, y: 0.18, w: 0.10, h: 0.17, kind: 'face' },    // player
+                 { x: 0.27, y: 0.42, w: 0.08, h: 0.10, kind: 'object' },  // name tag
+                 { x: 0.31, y: 0.60, w: 0.10, h: 0.16, kind: 'hands' },   // her hand + card
+                 { x: 0.48, y: 0.79, w: 0.10, h: 0.09, kind: 'phone' }],  // Malik's phone on the counter
+  zones:        [{ level: 3, kind: 'sceneDetail', x: 0.34, y: 0.00, w: 0.40, h: 0.42 },   // window and forecourt
+                 { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 0.20, h: 0.60 },   // cooler doors left
+                 { level: 3, kind: 'sceneDetail', x: 0.86, y: 0.00, w: 0.14, h: 1.00 }],  // shelves right
+});
+
 export const PANEL_META = {
   // ── Art created by ChatGPT 2026-09-10, wired on owner instruction (protect /
   //    mouth boxes measured by eye on the 1672×941 frames; balloons sit in the
@@ -270,65 +311,11 @@ export const PANEL_META = {
     playerTail:   { x: 0.25, y: 0.94 },
     protect:      [{ x: 0.02, y: 0.08, w: 0.40, h: 0.82 }, { x: 0.58, y: 0.08, w: 0.40, h: 0.82 }],
   },
-  // Mercer counter art (pilot): Brittney right at the register, player left.
-  'hiphop.mercer_counter': {
-    art: 'assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png',
-    bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },   // 1 Brittney, over the window
-    playerBubble: { x: 0.02, y: 0.45, w: 0.30, h: 0.24 },   // 2 player, over his jacket
-    replyBubble:  { x: 0.33, y: 0.55, w: 0.26, h: 0.18 },   // 3 Brittney's reply, over the counter
-    tail:         { x: 0.74, y: 0.39 },                     // Brittney's mouth
-    playerTail:   { x: 0.31, y: 0.26 },                     // player's mouth (profile)
-    protect:      [{ x: 0.18, y: 0.07, w: 0.14, h: 0.27, kind: 'face' },    // player
-                   { x: 0.70, y: 0.27, w: 0.09, h: 0.15, kind: 'face' },    // Brittney
-                   { x: 0.56, y: 0.38, w: 0.07, h: 0.12, kind: 'phone' },   // her phone hand
-                   { x: 0.66, y: 0.42, w: 0.16, h: 0.30, kind: 'body' }],   // uniform + name tag
-    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.32, y: 0.00, w: 0.68, h: 0.26 },   // window, rain, forecourt
-                   { level: 3, kind: 'sceneDetail', x: 0.82, y: 0.26, w: 0.18, h: 0.74 },   // shelves right
-                   { level: 3, kind: 'sceneDetail', x: 0.30, y: 0.50, w: 0.34, h: 0.30 }]   // register / counter,
-  },  'hiphop.mercer_hook': {
-    art: 'assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png',
-    bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },
-    playerBubble: { x: 0.02, y: 0.45, w: 0.30, h: 0.24 },
-    replyBubble:  { x: 0.33, y: 0.55, w: 0.26, h: 0.18 },
-    tail:         { x: 0.74, y: 0.39 },
-    playerTail:   { x: 0.31, y: 0.26 },
-    protect:      [{ x: 0.18, y: 0.07, w: 0.14, h: 0.27, kind: 'face' },
-                   { x: 0.70, y: 0.27, w: 0.09, h: 0.15, kind: 'face' },
-                   { x: 0.56, y: 0.38, w: 0.07, h: 0.12, kind: 'phone' },
-                   { x: 0.66, y: 0.42, w: 0.16, h: 0.30, kind: 'body' }],
-    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.32, y: 0.00, w: 0.68, h: 0.26 },
-                   { level: 3, kind: 'sceneDetail', x: 0.82, y: 0.26, w: 0.18, h: 0.74 },
-                   { level: 3, kind: 'sceneDetail', x: 0.30, y: 0.50, w: 0.34, h: 0.30 }],
-  },  'hiphop.mercer_fork': {
-    art: 'assets/storylines/hiphop/mercer_island/mercer_01_brittney_double_shift.png',
-    bubble:       { x: 0.50, y: 0.03, w: 0.46, h: 0.22 },
-    playerBubble: { x: 0.02, y: 0.45, w: 0.30, h: 0.24 },
-    replyBubble:  { x: 0.33, y: 0.55, w: 0.26, h: 0.18 },
-    tail:         { x: 0.74, y: 0.39 },
-    playerTail:   { x: 0.31, y: 0.26 },
-    protect:      [{ x: 0.18, y: 0.07, w: 0.14, h: 0.27, kind: 'face' },
-                   { x: 0.70, y: 0.27, w: 0.09, h: 0.15, kind: 'face' },
-                   { x: 0.56, y: 0.38, w: 0.07, h: 0.12, kind: 'phone' },
-                   { x: 0.66, y: 0.42, w: 0.16, h: 0.30, kind: 'body' }],
-    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.32, y: 0.00, w: 0.68, h: 0.26 },
-                   { level: 3, kind: 'sceneDetail', x: 0.82, y: 0.26, w: 0.18, h: 0.74 },
-                   { level: 3, kind: 'sceneDetail', x: 0.30, y: 0.50, w: 0.34, h: 0.30 }],
-  },  'hiphop.mercer_ultimatum': {                       // Brittney LEFT, player right, phone on the counter
-    art: 'assets/storylines/country/mercer_island/mercer_04_quits_leaves_phone.png',
-    bubble:       { x: 0.36, y: 0.03, w: 0.36, h: 0.22 },   // 1 Brittney, between the heads, over the window
-    playerBubble: { x: 0.36, y: 0.48, w: 0.34, h: 0.22 },   // 2 player, over the counter
-    replyBubble:  { x: 0.71, y: 0.48, w: 0.27, h: 0.22 },   // 3 Brittney's reply, right of 2 over the player's jacket
-    tail:         { x: 0.28, y: 0.33 },                     // Brittney's mouth
-    playerTail:   { x: 0.76, y: 0.31 },                     // player's mouth
-    protect:      [{ x: 0.20, y: 0.19, w: 0.13, h: 0.20, kind: 'face' },    // Brittney
-                   { x: 0.74, y: 0.18, w: 0.10, h: 0.17, kind: 'face' },    // player
-                   { x: 0.27, y: 0.42, w: 0.08, h: 0.10, kind: 'object' },  // name tag
-                   { x: 0.31, y: 0.60, w: 0.10, h: 0.16, kind: 'hands' },   // her hand + card
-                   { x: 0.48, y: 0.79, w: 0.10, h: 0.09, kind: 'phone' }],  // Malik's phone on the counter
-    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.34, y: 0.00, w: 0.40, h: 0.42 },   // window and forecourt
-                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 0.20, h: 0.60 },   // cooler doors left
-                   { level: 3, kind: 'sceneDetail', x: 0.86, y: 0.00, w: 0.14, h: 1.00 }]   // shelves right,
-  },
+  // Mercer counter art (pilot) — three nodes on the same panel.
+  'hiphop.mercer_counter':   MERCER_COUNTER(),
+  'hiphop.mercer_hook':      MERCER_COUNTER(),
+  'hiphop.mercer_fork':      MERCER_COUNTER(),
+  'hiphop.mercer_ultimatum': MERCER_ULTIMATUM(),
   'hiphop.mercer_fork.keepJob': {
     art: 'assets/storylines/hiphop/mercer_island/mercer_02_keep_job_phone_continues.png',
     bubble:       { x: 0.54, y: 0.05, w: 0.42, h: 0.30 },
@@ -523,22 +510,7 @@ export const PANEL_META = {
   },
 
   // ── Country (2 approved panels with measured tail anchors) ──
-  'country.mercer_fork.ride': {                      // same art as hiphop.mercer_ultimatum — same measured metadata
-    art: 'assets/storylines/country/mercer_island/mercer_04_quits_leaves_phone.png',
-    bubble:       { x: 0.36, y: 0.03, w: 0.36, h: 0.22 },
-    playerBubble: { x: 0.36, y: 0.48, w: 0.34, h: 0.22 },
-    replyBubble:  { x: 0.71, y: 0.48, w: 0.27, h: 0.22 },
-    tail:         { x: 0.28, y: 0.33 },
-    playerTail:   { x: 0.76, y: 0.31 },
-    protect:      [{ x: 0.20, y: 0.19, w: 0.13, h: 0.20, kind: 'face' },
-                   { x: 0.74, y: 0.18, w: 0.10, h: 0.17, kind: 'face' },
-                   { x: 0.27, y: 0.42, w: 0.08, h: 0.10, kind: 'object' },
-                   { x: 0.31, y: 0.60, w: 0.10, h: 0.16, kind: 'hands' },
-                   { x: 0.48, y: 0.79, w: 0.10, h: 0.09, kind: 'phone' }],
-    zones:        [{ level: 3, kind: 'sceneDetail', x: 0.34, y: 0.00, w: 0.40, h: 0.42 },
-                   { level: 3, kind: 'sceneDetail', x: 0.00, y: 0.00, w: 0.20, h: 0.60 },
-                   { level: 3, kind: 'sceneDetail', x: 0.86, y: 0.00, w: 0.14, h: 1.00 }],
-  },
+  'country.mercer_fork.ride': MERCER_ULTIMATUM(),    // same art as hiphop.mercer_ultimatum — same measured metadata
   // Departure (pilot §E-3): CAPTION top-left, Brittney's balloon beside it
   // over the sky, the player's balloon over the trunk — none over a face.
   'country.mercer_departure': {

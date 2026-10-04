@@ -354,26 +354,11 @@ const COLUMBIA_BASIN_SPARSE_PINES = ['tree_ponderosa_1', 'tree_ponderosa_2'];
 const CODEX_SKYLINE_BACKDROPS = new Set([
   'codex_seattle_tmobile_park',
   'codex_seattle_lumen_field',
-  'codex_seattle_columbia_center',
-  'codex_seattle_municipal_tower',
-  'codex_seattle_safeco_plaza',
-  'codex_seattle_1201_third',
-  'codex_seattle_f5_tower',
-  'codex_seattle_city_centre',
-  'codex_seattle_rainier_square',
-  'codex_seattle_two_union_square',
-  'codex_seattle_russell_investments',
-  'codex_seattle_tower_pair',
-  'codex_seattle_office_cluster',
+  // The cycle pools above, spread rather than re-listed (2026-09-22) so a
+  // building added to a pool can't miss the setback/heightBoost path.
+  ...CODEX_SEATTLE_SKYLINE,
   'codex_seattle_skyline',
-  'codex_bellevue_skyline',
-  'codex_pse_bellevue_office',
-  'codex_pse_bellevue_second_office',
-  'codex_bellevue_wavy_residential',
-  'codex_bellevue_city_center_dark',
-  'codex_bellevue_braced_glass_tower',
-  'codex_bellevue_twin_residential',
-  'codex_bellevue_residential_cluster',
+  ...CODEX_BELLEVUE_SKYLINE,
   // Directional variants used by the per-side cycle pools — without
   // these, the suffixed keys missed the city-building setback/heightBoost
   // path and got planted at the close 2.05 roadside offset, jamming

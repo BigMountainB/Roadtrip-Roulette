@@ -196,17 +196,6 @@ export class ImageStreamer {
     if (r) r.lastUsed = this.now();
   }
 
-  /** Register a texture someone else loaded (e.g. a scene preload) so the
-   *  budget and release() account for it. */
-  adopt(key) {
-    if (this.resident.has(key) || !this.tex.exists(key)) return false;
-    const s = this.tex.get(key)?.source?.[0];
-    const bytes = ((s?.width ?? 0) * (s?.height ?? 0) * 4) || 0;
-    this.resident.set(key, { bytes, lastUsed: this.now(), loadedAt: this.now() });
-    this._notePeak();
-    return true;
-  }
-
   // ── Eviction ─────────────────────────────────────────────────────────────
   /**
    * Remove textures (and cancel their pending loads).  Ignores pins — this is

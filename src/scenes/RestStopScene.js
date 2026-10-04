@@ -353,23 +353,9 @@ const GARAGE_KEYS = new Set(['schwasted', 'fap']);
 /** Shops whose menu is a single column over the storefront's empty left third. */
 const FULL_BLEED = new Set([...Object.keys(SHOP_BG), 'dealer_acc', 'dealer_cars', 'sam_acc']);
 
-// Direct paths let a shop recover its own backdrop on demand. Large storefront
-// textures can be dropped during a memory-constrained mobile boot even though
-// the smaller logo/menu assets survive; without this retry every shop silently
-// fell back to the blue services-sign panel for the rest of the session.
-const SHOP_BG_PATH = {
-  shop_bg_huffs:         'assets/businesses/storefront_huffs.png',
-  shop_bg_cowbellas:     'assets/businesses/storefront_cowbellas.png',
-  shop_bg_aok:           'assets/businesses/storefront_aok.png',
-  shop_bg_lord:          'assets/businesses/storefront_lord.png',
-  shop_bg_suck:          'assets/businesses/storefront_suck.png',
-  shop_bg_gasnsip:       'assets/businesses/storefront_gasnsip.png',
-  shop_bg_gasnsip_brittney: 'assets/businesses/storefront_gasnsip_mercer_brittney.png',
-  shop_bg_am_bm:         'assets/businesses/storefront_am_bm.png',
-  shop_bg_parkride:      'assets/businesses/storefront_park-and-ride.png',
-  shop_bg_les_schwasted: 'assets/businesses/raw/les_schwasted_v2.png',
-  shop_bg_fap:           'assets/businesses/storefront_fap.png',
-};
+// (SHOP_BG_PATH removed 2026-09-22: it duplicated AssetManifest's storefront
+// paths — and had drifted, pointing Les Schwasted at the raw logo badge.  A
+// shop recovers its backdrop through restStopAssetPath() now, one source.)
 
 const TAB_ORDER = ['gas', 'hunting', 'camp', 'lord', 'suck', 'schwasted', 'fap', 'parkride', 'vices', 'ambm'];
 // Pristine hitchhiker item (captured at import, before any per-stop filtering).
@@ -2781,10 +2767,7 @@ export class RestStopScene extends Phaser.Scene {
 
   /** Retry one missing storefront instead of leaving the blue fallback up. */
   _loadMissingShopBg(sectionKey, bgKey) {
-    // Manifest path first — SHOP_BG_PATH still points Les Schwasted at the
-    // raw logo badge (the file the 07-31 "wrong storefront" fix moved away
-    // from); the manifest carries the real storefront.
-    const path = restStopAssetPath(bgKey) ?? SHOP_BG_PATH[bgKey];
+    const path = restStopAssetPath(bgKey);
     if (!path || !this._stream) return;
     // The streamer dedups per key, so re-entering the same shop while the
     // file is in flight adds a waiter rather than a second request.  Its

@@ -247,6 +247,18 @@ const CAR_SURFACE_MAX_DEV = 70;
 // Per-frame easing toward the target row.
 const CAR_SURFACE_EASE    = 0.12;
 
+// Framed-panel chrome (see _drawFramedPanel): the modal triple ring and the
+// popup double ring, formerly copy-pasted per builder.
+const FRAME_RINGS_MODAL = [
+  { inset: 0,  width: 3, color: 0x39A8FF, alpha: 0.96, radius: 7 },
+  { inset: 7,  width: 1, color: 0xFF39AF, alpha: 0.78, radius: 5 },
+  { inset: 13, width: 1, color: 0xF4F7FF, alpha: 0.24, radius: 4 },
+];
+const FRAME_RINGS_CARD = [
+  { inset: 0, width: 3, color: 0x39A8FF, alpha: 0.92, radius: 7 },
+  { inset: 5, width: 1, color: 0xFF39AF, alpha: 0.70, radius: 5 },
+];
+
 // The rear-view car is the chase-camera anchor. Its bottom edge stays at this
 // screen-space baseline while the projected road, scenery, and traffic move
 // around it. Intentional cinematics (exit ramp and water sinking) may override
@@ -10209,15 +10221,7 @@ export class GameScene extends Phaser.Scene {
     const panelH = SCREEN_H - 100;
     const panelX = 40;
     const panelY = 50;
-    const panel = this.add.graphics().setDepth(D + 1);
-    panel.fillStyle(0x020611, 0.96);
-    panel.fillRoundedRect(panelX, panelY, panelW, panelH, 7);
-    panel.lineStyle(3, 0x39A8FF, 0.96);
-    panel.strokeRoundedRect(panelX, panelY, panelW, panelH, 7);
-    panel.lineStyle(1, 0xFF39AF, 0.78);
-    panel.strokeRoundedRect(panelX + 7, panelY + 7, panelW - 14, panelH - 14, 5);
-    panel.lineStyle(1, 0xF4F7FF, 0.24);
-    panel.strokeRoundedRect(panelX + 13, panelY + 13, panelW - 26, panelH - 26, 4);
+    const panel = this._drawFramedPanel(panelX, panelY, panelW, panelH, { depth: D + 1 });
     objs.push(panel);
 
     const title = this.add.text(SCREEN_W / 2, panelY + 18, 'GARAGE', {
@@ -11115,14 +11119,7 @@ export class GameScene extends Phaser.Scene {
         // event — the recovery snap below must not fight the scripted motion.
         if (isHeadOn && !this._endingCine) {
           // Player spins to the recovery lane + 2 s i-frame, same as any head-on.
-          this.player.x             = this._postCrashLaneX();
-          this.player.steerVelocity = 0;
-          this.player.xImpulse      = 0;
-          this.player.speed         = MAX_SPEED * 0.18;
-          this._invincibleUntil = Math.max(this._invincibleUntil ?? 0,
-            (this.time?.now ?? 0) + 2000);
-          this._crashRecoveryUntil = this._invincibleUntil;
-          this._crashRollStartAt   = (this.time?.now ?? 0) + 1000;
+          this._snapToRecoveryLane();
         }
         return;   // semi keeps rolling — NOT destroyed, NOT spun/flipped
       }
@@ -11153,16 +11150,7 @@ export class GameScene extends Phaser.Scene {
         // recovery lane and grant 2-second i-frame.  All subsequent
         // damage is absorbed during the blink, so chaining a head-on
         // into a tree or another NPC costs only the first hit.
-        // Drop to the cold-start rolling speed; the crash-recovery
-        // auto-pilot then ramps back up to 60 mph during the blink.
-        this.player.x             = this._postCrashLaneX();
-        this.player.steerVelocity = 0;
-        this.player.xImpulse      = 0;
-        this.player.speed         = MAX_SPEED * 0.18;
-        this._invincibleUntil = Math.max(this._invincibleUntil ?? 0,
-          (this.time?.now ?? 0) + 2000);
-        this._crashRecoveryUntil = this._invincibleUntil;
-        this._crashRollStartAt   = (this.time?.now ?? 0) + 1000;
+        this._snapToRecoveryLane();
       }
       car.alive      = false;
       car.crashed    = true;
@@ -11344,17 +11332,8 @@ export class GameScene extends Phaser.Scene {
       this.effects.triggerShake(440 + impact.severity * 360, 0.015 + impact.severity * 0.012);
       this._applyDamage((3 + impact.severity * 3) * damageMul, 'cop_head_on');
       // Same spin-to-recovery-lane + 2-sec i-frame as NPC head-on —
-      // chained damage during the blink is fully absorbed.  Drop to
-      // the cold-start rolling speed; the crash-recovery auto-pilot
-      // then ramps back up to 60 mph during the blink.
-      this.player.x             = this._postCrashLaneX();
-      this.player.steerVelocity = 0;
-      this.player.xImpulse      = 0;
-      this.player.speed         = MAX_SPEED * 0.18;
-      this._invincibleUntil = Math.max(this._invincibleUntil ?? 0,
-        (this.time?.now ?? 0) + 2000);
-      this._crashRecoveryUntil = this._invincibleUntil;
-      this._crashRollStartAt   = (this.time?.now ?? 0) + 1000;
+      // chained damage during the blink is fully absorbed.
+      this._snapToRecoveryLane();
       const headons = this.cops.registerHeadOn();
       const left = 3 - headons;
       this._showPopup(
@@ -11556,6 +11535,24 @@ export class GameScene extends Phaser.Scene {
    *    Easy   →  +0.75  (far-right lane, safest)
    *    Normal →  +0.25  (player-direction inner lane)
    *    Hard   →  -0.25  (oncoming inner lane — into traffic)            */
+  /** Head-on recovery, shared by the semi / NPC / cop branches of the
+   *  collision handler (was three identical copies): spin the car to the
+   *  difficulty-appropriate recovery lane, drop to the cold-start rolling
+   *  speed (the crash-recovery auto-pilot ramps back to 60 mph), and grant
+   *  a 2 s i-frame so chaining a head-on into the next hit costs only the
+   *  first.  Callers gate on `!this._endingCine` — a fatal blow's cinematic
+   *  owns the car and must not be snapped. */
+  _snapToRecoveryLane() {
+    this.player.x             = this._postCrashLaneX();
+    this.player.steerVelocity = 0;
+    this.player.xImpulse      = 0;
+    this.player.speed         = MAX_SPEED * 0.18;
+    this._invincibleUntil = Math.max(this._invincibleUntil ?? 0,
+      (this.time?.now ?? 0) + 2000);
+    this._crashRecoveryUntil = this._invincibleUntil;
+    this._crashRollStartAt   = (this.time?.now ?? 0) + 1000;
+  }
+
   _postCrashLaneX() {
     const m = Difficulty.mode?.();
     const sub = (m === 'custom') ? (Difficulty.customSub?.() ?? 'normal') : m;
@@ -12480,15 +12477,7 @@ export class GameScene extends Phaser.Scene {
     const panelH = SCREEN_H - 60;
     const panelX = 20;
     const panelY = 30;
-    const panel = this.add.graphics().setDepth(D + 1);
-    panel.fillStyle(0x020611, 0.96);
-    panel.fillRoundedRect(panelX, panelY, panelW, panelH, 7);
-    panel.lineStyle(3, 0x39A8FF, 0.96);
-    panel.strokeRoundedRect(panelX, panelY, panelW, panelH, 7);
-    panel.lineStyle(1, 0xFF39AF, 0.78);
-    panel.strokeRoundedRect(panelX + 7, panelY + 7, panelW - 14, panelH - 14, 5);
-    panel.lineStyle(1, 0xF4F7FF, 0.24);
-    panel.strokeRoundedRect(panelX + 13, panelY + 13, panelW - 26, panelH - 26, 4);
+    const panel = this._drawFramedPanel(panelX, panelY, panelW, panelH, { depth: D + 1 });
     objs.push(panel);
 
     const title = this.add.text(SCREEN_W / 2, panelY + 14, 'ROUTE MAP', {
@@ -26627,13 +26616,8 @@ export class GameScene extends Phaser.Scene {
     objs.push(scrim);
 
     const cardW = 460, cardH = 190;
-    const card = this.add.graphics().setDepth(D + 1);
-    card.fillStyle(0x050812, 0.97);
-    card.fillRoundedRect(cx - cardW / 2, cy - cardH / 2, cardW, cardH, 7);
-    card.lineStyle(3, 0x39A8FF, 0.92);
-    card.strokeRoundedRect(cx - cardW / 2, cy - cardH / 2, cardW, cardH, 7);
-    card.lineStyle(1, 0xFF39AF, 0.70);
-    card.strokeRoundedRect(cx - cardW / 2 + 5, cy - cardH / 2 + 5, cardW - 10, cardH - 10, 5);
+    const card = this._drawFramedPanel(cx - cardW / 2, cy - cardH / 2, cardW, cardH,
+      { depth: D + 1, fill: 0x050812, fillAlpha: 0.97, rings: FRAME_RINGS_CARD });
     objs.push(card);
 
     const ttl = this.add.text(cx, cy - 58, 'SAVED GAME FOUND', {
@@ -26739,6 +26723,25 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * The game's framed-panel chrome — a dark rounded fill with concentric
+   * stroke rings — drawn ONCE here instead of copy-pasted per modal (it was
+   * in four: garage, map, save prompt, confirm popup).  Returns the Graphics
+   * so callers keep their own reference.
+   * @param rings  [{ inset, width, color, alpha, radius }] outer → inner
+   */
+  _drawFramedPanel(x, y, w, h, { depth, fill = 0x020611, fillAlpha = 0.96, radius = 7, rings = FRAME_RINGS_MODAL } = {}) {
+    const g = this.add.graphics();
+    if (depth != null) g.setDepth(depth);
+    g.fillStyle(fill, fillAlpha);
+    g.fillRoundedRect(x, y, w, h, radius);
+    for (const r of rings) {
+      g.lineStyle(r.width, r.color, r.alpha);
+      g.strokeRoundedRect(x + r.inset, y + r.inset, w - r.inset * 2, h - r.inset * 2, r.radius);
+    }
+    return g;
+  }
+
   _buildConfirmPopup(title, message, onYes, onNo) {
     this._modalOpen = true;
     const objs = [];
@@ -26755,13 +26758,8 @@ export class GameScene extends Phaser.Scene {
     objs.push(scrim);
 
     const cardW = 380, cardH = 180;
-    const card = this.add.graphics().setDepth(D + 1);
-    card.fillStyle(0x050812, 0.97);
-    card.fillRoundedRect(cx - cardW / 2, cy - cardH / 2, cardW, cardH, 7);
-    card.lineStyle(3, 0x39A8FF, 0.92);
-    card.strokeRoundedRect(cx - cardW / 2, cy - cardH / 2, cardW, cardH, 7);
-    card.lineStyle(1, 0xFF39AF, 0.70);
-    card.strokeRoundedRect(cx - cardW / 2 + 5, cy - cardH / 2 + 5, cardW - 10, cardH - 10, 5);
+    const card = this._drawFramedPanel(cx - cardW / 2, cy - cardH / 2, cardW, cardH,
+      { depth: D + 1, fill: 0x050812, fillAlpha: 0.97, rings: FRAME_RINGS_CARD });
     objs.push(card);
 
     const ttl = this.add.text(cx, cy - 56, title, {

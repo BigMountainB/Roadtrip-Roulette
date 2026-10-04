@@ -311,18 +311,6 @@ export class StorySystem {
     return ch.after.map(l => ({ speaker: String(l?.speaker ?? ''), kind: l?.kind ?? 'speech', offpanel: !!l?.offpanel, text: String(l?.text ?? '') })).filter(l => l.text);
   }
 
-  /** A choice-less beat advanced by tap: move the active story's cursor.
-   *  Nothing is recorded (there was nothing to choose). */
-  advance(storyId, nextId) {
-    if (!nextId || !this._node(storyId, nextId)) return false;
-    return this.mutateCanon((c) => {
-      const st = c.stories[storyId];
-      if (!st || st.status !== STORY_STATUS.ACTIVE) return false;
-      st.nodeId = nextId;
-      return true;
-    });
-  }
-
   /** Was `storyId` STARTED during the current run — by another story's
    *  `startStory` or by a first commit on its own entry node?  Distinguishes
    *  "she got in the car on this trip" from a passenger story still active

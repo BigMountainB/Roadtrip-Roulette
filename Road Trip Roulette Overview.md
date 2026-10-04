@@ -204,6 +204,40 @@ genre past the first (deferred to post-dev-mode — see the pending list above).
 
 ## Changelog (newest first)
 
+### 2026-09-22 — Dead/duplicate-code audit: repetitive blocks folded; the rest reported, not touched
+
+Owner: "review for any spaghetti code or any code being useless… you don't need to change now
+unless it's repetitive."  Tool-driven sweep (unused exports/imports, methods never called,
+fields written-never-read, duplicate class members, repeated 8-line windows across src/).
+
+**Changed (repetitive only; behaviour identical, suite green, boot probe clean):**
+- `GameScene._snapToRecoveryLane()` — the head-on recovery snap (lane, speed, 2 s i-frame) was
+  pasted three times in the collision handler (semi / NPC / cop branches).
+- `GameScene._drawFramedPanel()` + `FRAME_RINGS_MODAL / _CARD` — the dark rounded panel with
+  concentric rings was pasted four times (garage modal, map modal, save prompt, confirm popup).
+- `StorySystem.advance()` was defined TWICE in the class (esbuild warned every build); the first
+  was shadowed and dead.  Removed — the surviving one is what comic.test exercises.
+- `comicPanels.js`: the Mercer counter metadata block was pasted three times and the ultimatum
+  block twice — now `MERCER_COUNTER()` / `MERCER_ULTIMATUM()` factories (fresh object per key, so
+  nothing aliases).
+- `RouteData.CODEX_SKYLINE_BACKDROPS` re-listed the 19 Seattle/Bellevue pool keys — now spreads
+  the pools, so a building added to a pool can't miss the setback path.
+- `RestStopScene.SHOP_BG_PATH` duplicated the manifest's storefront paths (and had drifted: Les
+  Schwasted → the raw logo badge).  Removed; `restStopAssetPath()` is the one source.
+- `ImageStreamer.adopt()` — my own unused leftover from the 09-16 pass.  Removed.
+
+**Reported, not changed (useless or spaghetti, but not repetitive) — see the 09-22 chat report:**
+uncalled methods (`_drawViceBarsOld_disabled`, `_buildAchievementsModal`, `_projectVehicle`,
+`_tryEspresso`, `_onPassOut`, `Road.renderVehicle`, `ViceSystem.checkPassOut/isPermastoned/
+chooseAddictedVice`, `SaveSystem.resetSlot/resetProfile/hasSave`, …); write-only fields
+(`_exitState` ×10 writes, `_genrePlayed` ×5, `_tapLatchValid`, `_customStartVehicleId`,
+`_purchases.storyPassenger/storyRadioGrant`); 19 unused imports; dead exports (`RUMBLE_SEGS`,
+`COP_SPAWN_Z`, `VICE_PRICE`, `getStory`, `getStoryChoice`, `UNTABBED_SLOTS`, `weekKey`,
+`allTemplates`); the inert-by-construction `CAR_SURFACE_FOLLOW` block still sampling the road
+every frame (belongs on the strip list next to `CAR_ROAD_COUPLING`); and the structural one —
+the forward and mirror scenery renderers are near-duplicate passes (clearance push, ramp push,
+Road.js wall-edge math each exist twice, with comments asking to keep them "symmetric").
+
 ### 2026-09-16 — CANCEL on the START name prompt; cold-open tiles borrow the Mercer counter art
 
 Owner: "When you select a new plate and hit start, the screen comes up to type in a new name, but
