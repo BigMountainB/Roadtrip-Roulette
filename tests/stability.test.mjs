@@ -520,5 +520,7 @@ function makeStreamer(opts = {}) {
     /_autoIgnore\(this\._hudObjects, this\.cameras\.main\);/.test(gs) && /_autoIgnore\(this\._worldObjects, this\._uiCam\);/.test(gs));
 }
 
+check('unchanged Text colour/stroke does not re-render', /T\.setColor = function \(c\) \{ return this\.style\?\.color === c \? this/.test(read('src/main.js')));
+
 console.log(`stability tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

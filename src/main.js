@@ -30,6 +30,20 @@ import { AudioSystem, DEFAULT_VOLUME } from './systems/AudioSystem.js';
 import { CloudSave }         from './systems/CloudSave.js';
 import { challengeForDate, weekDailies, DAILY_WEEKLY_BONUS, stageConfigFor, challengeById, DAILY_CHALLENGES } from './systems/DailyChallenges.js';
 
+// Text.setColor / setStroke re-render the label's canvas and re-upload it to the
+// GPU even when the value is unchanged (Phaser guards setFontSize, not these).
+// The HUD sets colours every frame, so 7 static labels cost a canvas upload per
+// frame each — slow in iOS Safari (owner 2026-11-01, ?perfscan: hiding the HUD
+// took draw from 65 to 29 ms).  Same value = no work, for every Text in the game.
+{
+  const T = Phaser.GameObjects.Text.prototype;
+  const setColor = T.setColor, setStroke = T.setStroke;
+  T.setColor = function (c) { return this.style?.color === c ? this : setColor.call(this, c); };
+  T.setStroke = function (c, w) {
+    return (this.style?.stroke === c && this.style?.strokeThickness === w) ? this : setStroke.call(this, c, w);
+  };
+}
+
 // Audio unlock is installed by an inline <script> at the top of
 // index.html so the listener is in place BEFORE the module bundle is
 // even fetched.  See window.__audioUnlockCount / __audioUnlockedRunning
