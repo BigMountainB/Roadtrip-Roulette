@@ -513,26 +513,46 @@ const _boot = () => {
       };
       mount();
 
-      // Live frame-rate readout (owner 2026-10-04, jerky steering): a small
-      // corner tag — avg fps and the worst frame of the last second — so a
-      // device report says whether frames are dropping.  Steering stretches
-      // with long frames, so "worst ms" is the number that matters.
+    }
+  } catch (_) { /* never let the debug overlay break boot */ }
+
+  // ── Live frame-rate readout: ?fps=1 (alone) or ?devtools=1 ──────────────
+  // Owner 2026-10-04 / 11-01, jerky steering: avg fps, the worst frame of the
+  // last second, and WHERE the frame went — `logic` = Phaser update (all
+  // scene update() work), `draw` = render submission (CPU side of WebGL).
+  // If logic + draw is far below the frame time, the cost is outside the
+  // game loop (GPU, HTML/CSS compositing, GC).  ?fps=1 shows ONLY this tag —
+  // the ?devtools console + warp pads cover the portrait menu.
+  try {
+    const _q = new URLSearchParams(window.location.search);
+    if (_q.get('fps') === '1' || _q.get('devtools') === '1') {
       const fpsTag = document.createElement('div');
-      fpsTag.style.cssText = 'position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:999001;'
-        + 'background:rgba(0,0,0,.7);color:#0f8;font:11px monospace;padding:2px 6px;border-radius:4px;pointer-events:none';
+      fpsTag.style.cssText = 'position:fixed;top:calc(env(safe-area-inset-top,0px) + 4px);left:50%;transform:translateX(-50%);z-index:999001;'
+        + 'background:rgba(0,0,0,.75);color:#0f8;font:11px monospace;padding:2px 6px;border-radius:4px;pointer-events:none;white-space:nowrap';
       let worst = 0, last = performance.now();
       const tick = (t) => { worst = Math.max(worst, t - last); last = t; requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
+      let uSum = 0, rSum = 0, n = 0, uT = 0, rT = 0;
+      const hook = () => {
+        const ev = window.__phaserGame?.events;
+        if (!ev) return setTimeout(hook, 200);
+        ev.on('prestep',    () => { uT = performance.now(); });
+        ev.on('poststep',   () => { uSum += performance.now() - uT; n++; });
+        ev.on('prerender',  () => { rT = performance.now(); });
+        ev.on('postrender', () => { rSum += performance.now() - rT; });
+      };
+      hook();
       setInterval(() => {
         const fps = Math.round(window.__phaserGame?.loop?.actualFps ?? 0);
-        fpsTag.textContent = `${fps} fps · worst ${Math.round(worst)} ms`;
+        const u = n ? uSum / n : 0, r = n ? rSum / n : 0;
+        fpsTag.textContent = `${fps} fps · worst ${Math.round(worst)} ms · logic ${u.toFixed(1)} · draw ${r.toFixed(1)} ms`;
         fpsTag.style.color = worst > 100 ? '#f55' : worst > 40 ? '#fd6' : '#0f8';
-        worst = 0;
+        worst = 0; uSum = rSum = n = 0;
       }, 1000);
       const mountTag = () => { if (!document.body) return setTimeout(mountTag, 50); document.body.append(fpsTag); };
       mountTag();
     }
-  } catch (_) { /* never let the debug overlay break boot */ }
+  } catch (_) {}
   window.__daily = {
     today() {
       const c = challengeForDate();
