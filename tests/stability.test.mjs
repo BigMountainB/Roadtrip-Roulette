@@ -504,5 +504,21 @@ function makeStreamer(opts = {}) {
   check('?devtools shows a live fps + worst-frame readout', read('src/main.js').includes('fps · worst'));
 }
 
+// ── iPhone draw cost (owner 2026-11-01: 6–12 fps; ?perfscan put 98% of draw
+// in Graphics) ────────────────────────────────────────────────────────────
+{
+  const helpers = read('src/utils/Helpers.js');
+  const road = read('src/road/Road.js');
+  const gs = read('src/scenes/GameScene.js');
+  const ft = helpers.slice(helpers.indexOf('export function fillTrap'));
+  check('fillTrap draws two triangles (no per-frame earcut path)',
+    /g\.fillTriangle\(x1, y1, x2, y2, x3, y3\);\s*g\.fillTriangle\(x1, y1, x3, y3, x4, y4\);/.test(ft)
+    && !/fillPoints/.test(ft.slice(0, ft.indexOf('\n}'))));
+  check('road skips translucent overlays on sub-pixel segments', /const subPx = \(nyA - fyA\) < 1;/.test(road)
+    && (road.match(/!subPx/g) || []).length >= 3);
+  check('late HUD/world objects auto-ignore the other camera',
+    /_autoIgnore\(this\._hudObjects, this\.cameras\.main\);/.test(gs) && /_autoIgnore\(this\._worldObjects, this\._uiCam\);/.test(gs));
+}
+
 console.log(`stability tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

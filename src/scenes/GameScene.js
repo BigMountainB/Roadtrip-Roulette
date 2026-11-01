@@ -3390,6 +3390,22 @@ export class GameScene extends Phaser.Scene {
     this._uiCam = this.cameras.add(0, 0, C.WORLD_W, SCREEN_H);
     this.cameras.main.ignore(this._hudObjects);
     this._uiCam.ignore(this._worldObjects);
+    // Objects created LATER (lazily-built HUD pieces) were pushed into these
+    // lists after the ignore() above ran, so nothing excluded them from the
+    // other camera: the survival-bar labels rendered through BOTH cameras —
+    // a second, offset copy ("AAlertness", "DDrinks" on a wide phone, owner
+    // screenshot 2026-11-01) and double the draw.  Every later push now
+    // applies the matching ignore, so no call site can forget it.
+    const _autoIgnore = (list, cam) => {
+      const push = Array.prototype.push;
+      list.push = function (...items) {
+        const r = push.apply(this, items);
+        try { cam.ignore(items.filter(Boolean)); } catch (_) {}
+        return r;
+      };
+    };
+    _autoIgnore(this._hudObjects, this.cameras.main);
+    _autoIgnore(this._worldObjects, this._uiCam);
     this._applyDecoupledCameras();
     // Re-center whenever the canvas is resized to the device aspect (boot rAF /
     // rotation).  main.js's applyOrientation() calls setGameSize AFTER updating

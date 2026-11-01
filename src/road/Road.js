@@ -3388,6 +3388,14 @@ export class Road {
     const fyA   = curr.screenY;
     const nyA   = next ? next.screenY : curr.screenY + 4;
     const segHA = Math.max(1, nyA - fyA);
+    // Sub-pixel segment (owner 2026-11-01, iPhone drawing at 6–12 fps): near
+    // the horizon a segment projects to less than one pixel row.  Faint
+    // TRANSLUCENT overlays (crown shading, tyre wear, shoulder / sidewalk
+    // tint) contribute nothing visible there, yet were ~half the ~17k road
+    // triangles per frame.  Only those overlays skip on such segments —
+    // opaque structure (surface, lines, rails, curbs) always draws, so no gap
+    // can open.
+    const subPx = (nyA - fyA) < 1;
 
     // Single grass shade — lighter of the two — so the roadside reads as
     // a continuous field instead of striped bands (matches the road's
@@ -4060,7 +4068,7 @@ export class Road {
       const swTone = (noise1(seg.index / 9) - 0.5) * 0.16;
       const swCol  = lerpColor(SIDEWALK_DK, swTone > 0 ? SIDEWALK_LT : 0x6E6A62,
                                Math.abs(swTone) * 2);
-      for (const sd of EDGE_SIDES) {
+      for (const sd of (subPx ? [] : EDGE_SIDES)) {   // translucent tone: skip sub-pixel rows
         const eR2 = sd > 0 ? swExtF : 0, eR1 = sd > 0 ? swExtN : 0;
         const oIn2 = exClampX(x2 + sd * (w2 + rw2) + eR2),  oIn1 = exClampX(x1 + sd * (w1 + rw1) + eR1);
         const oOut2 = exClampX(oIn2 + sd * sidewalkW2),     oOut1 = exClampX(oIn1 + sd * sidewalkW1);
@@ -4195,7 +4203,7 @@ export class Road {
     // this segment's OWN projection so the gradient sweeps with the roadway
     // through curves instead of sitting in screen space.  Deliberately at the
     // edge of perception — it should register as form, never as a stripe.
-    if (texSeg && !seg.tunnel && w2 > 4) {
+    if (texSeg && !seg.tunnel && w2 > 4 && !subPx) {
       const crownFade = 1 - smoothstep((curr.relZ - 9000) / 39000);
       const cA = 0.055 * crownFade * (1 - snowBlanket) * nightMul;
       if (cA > 0.004) {
@@ -4218,7 +4226,7 @@ export class Road {
     // carriageway); both are gone.  Everything here is anchored to world
     // position via roadDetail(), so it can never flicker or crawl.
     const wearFade = 1 - smoothstep((curr.relZ - 9000) / 39000);
-    if (texSeg && !seg.tunnel && w2 > 6 && wearFade > 0.02) {
+    if (texSeg && !seg.tunnel && w2 > 6 && wearFade > 0.02 && !subPx) {
       // Broad, faint wheel-path darkening, one pair per travel lane.
       const wearA = mat.wearAmt * wearFade * (1 - snowBlanket);
       if (wearA > 0.008) {
@@ -4423,7 +4431,7 @@ export class Road {
       // shoulder reads as the same material as the carriageway — just dirtier
       // and less trafficked — instead of as a separately-coloured strip.
       const shA = mat.shoulderDark * (1 - snowBlanket) * nightMul;
-      if (shA > 0.01) {
+      if (shA > 0.01 && !subPx) {
         for (const sd of EDGE_SIDES) {
           fillTrap(surfaceG, 0x000000,
             eF(FOG_1, sd), fyA, eF(1.00, sd), fyA,
