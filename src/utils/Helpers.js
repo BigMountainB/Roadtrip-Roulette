@@ -29,15 +29,22 @@ export function project(worldX, worldY, worldZ, camX, camY, camZ, camDepth, scre
   };
 }
 
-/** Draw filled trapezoid on a Phaser Graphics object */
+/**
+ * Draw filled trapezoid on a Phaser Graphics object.
+ *
+ * Two triangles, NOT fillPoints (owner 2026-11-01, jerky steering at 6-12
+ * fps on iPhone).  fillPoints records a closed PATH, and Phaser's WebGL
+ * renderer re-triangulates every path with earcut on EVERY frame — the road
+ * draws ~5,400 of these per frame, which measured 98% of the iPhone's 134 ms
+ * draw time (?perfscan: all Graphics hidden → 3.1 ms).  fillTriangle goes
+ * straight to the batch with no triangulation and no per-call point objects.
+ * A road trapezoid is a convex quad in order (far-L, far-R, near-R, near-L),
+ * so the fan 1-2-3 + 1-3-4 covers exactly the same pixels.
+ */
 export function fillTrap(g, color, x1, y1, x2, y2, x3, y3, x4, y4, alpha = 1) {
   g.fillStyle(color, alpha);
-  g.fillPoints([
-    { x: x1, y: y1 },
-    { x: x2, y: y2 },
-    { x: x3, y: y3 },
-    { x: x4, y: y4 },
-  ], true);
+  g.fillTriangle(x1, y1, x2, y2, x3, y3);
+  g.fillTriangle(x1, y1, x3, y3, x4, y4);
 }
 
 /** Rumble strip width in pixels given half-road width */
