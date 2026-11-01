@@ -545,12 +545,82 @@ const _boot = () => {
       setInterval(() => {
         const fps = Math.round(window.__phaserGame?.loop?.actualFps ?? 0);
         const u = n ? uSum / n : 0, r = n ? rSum / n : 0;
-        fpsTag.textContent = `${fps} fps · worst ${Math.round(worst)} ms · logic ${u.toFixed(1)} · draw ${r.toFixed(1)} ms`;
+        fpsTag.textContent = `${fps} fps · worst ${Math.round(worst)} ms · logic ${u.toFixed(1)} · draw ${r.toFixed(1)} ms`
+          + (fpsTag.dataset.final ? `\n${fpsTag.dataset.final}` : '');
         fpsTag.style.color = worst > 100 ? '#f55' : worst > 40 ? '#fd6' : '#0f8';
         worst = 0; uSum = rSum = n = 0;
       }, 1000);
       const mountTag = () => { if (!document.body) return setTimeout(mountTag, 50); document.body.append(fpsTag); };
       mountTag();
+
+      // ── ?perfscan=1 — on-device render bisect (owner 2026-11-01: draw
+      // 153 ms vs logic 15 ms on the iPhone; desktop draws the same frame in
+      // ~3 ms, so the cost only exists on the device).  While driving, hides
+      // ONE layer group at a time for RENDER ONLY (prerender → postrender;
+      // game logic never sees it), measures draw ms for 3 s per group, then
+      // prints the table in the tag.  The group whose removal drops draw ms
+      // the most is the cost.  Buckets are by depth, matching the scene's
+      // layering (sky/backdrop < 1.3, ground+road 1.3–2, mid 2–7, sprites +
+      // traffic 7–9.9, player, fx ≥ 9.96) plus the HUD camera.
+      if (_q.get('perfscan') === '1') {
+        const GROUPS = [
+          ['none',    () => false],
+          ['sky',     (o, d) => d < 1.3],
+          ['road',    (o, d) => d >= 1.3 && d < 2],
+          ['mid',     (o, d) => d >= 2 && d < 7],
+          ['sprites', (o, d) => d >= 7 && d < 9.9],
+          ['fx',      (o, d) => d >= 9.96],
+          ['hud',     'hud'],
+          ['allGfx',  (o) => o.type === 'Graphics'],
+        ];
+        const res = {};
+        let gi = -1, gT = 0, gSum = 0, gN = 0, hidden = [], hudCam = null, armed = false, t0 = 0;
+        const scene = () => window.__phaserGame?.scene?.getScene?.('Game');
+        const driving = () => { const s = scene(); return s && !s._awaitingStart && !s._paused && s.scene.isActive(); };
+        const ev2 = () => window.__phaserGame?.events;
+        const arm = () => {
+          const ev = ev2(); if (!ev) return setTimeout(arm, 300);
+          ev.on('prerender', () => {
+            if (!driving()) return;
+            if (!armed) { armed = true; gi = 0; gT = performance.now() + 2000; }   // 2 s settle first
+            const s = scene(); const g = GROUPS[gi]; if (!g) return;
+            if (g[1] === 'hud') { hudCam = s._uiCam; if (hudCam?.visible) hudCam.setVisible(false); }
+            else {
+              const hudSet = s._hudSet ??= new Set(s._hudObjects ?? []);
+              for (const o of s.children.list) {
+                if (!o.visible || hudSet.has(o)) continue;
+                if (g[1](o, o.depth)) { o.visible = false; hidden.push(o); }
+              }
+            }
+            t0 = performance.now();   // timed AFTER the hide pass, so its own cost is excluded
+          });
+          ev.on('postrender', () => {
+            const drawMs = t0 ? performance.now() - t0 : 0; t0 = 0;
+            for (const o of hidden) o.visible = true;
+            hidden.length = 0;
+            if (hudCam) { hudCam.setVisible(true); hudCam = null; }
+            if (!armed || gi < 0 || gi >= GROUPS.length) return;
+            const now = performance.now();
+            // Paused / menu / rest stop: freeze the scan rather than burn a
+            // group's window on frames that weren't measured.
+            if (!driving()) { gT = Math.max(gT, now + 400); return; }
+            if (now < gT) return;
+            if (drawMs) { gSum += drawMs; gN++; }
+            if (now >= gT + 3000) {
+              res[GROUPS[gi][0]] = gN ? +(gSum / gN).toFixed(1) : null;
+              gi++; gSum = 0; gN = 0; gT = now + 400;
+              if (gi >= GROUPS.length) {
+                const line = Object.entries(res).map(([k, v]) => `${k} ${v}`).join(' · ');
+                console.warn('[perfscan] draw ms with group hidden → ' + line);
+                window.__perfscan = res;
+                fpsTag.style.whiteSpace = 'pre-wrap'; fpsTag.style.maxWidth = '90vw';
+                fpsTag.dataset.final = 'draw ms hidden→ ' + line;
+              }
+            }
+          });
+        };
+        arm();
+      }
     }
   } catch (_) {}
   window.__daily = {
