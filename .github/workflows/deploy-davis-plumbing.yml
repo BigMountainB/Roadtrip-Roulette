@@ -11,6 +11,7 @@ on:
   push:
     paths:
       - .github/workflows/deploy-davis-plumbing.yml
+      - .github/davis-plumbing-redeploy.txt   # edit this file to redeploy
   workflow_dispatch:
 
 # Never run two deploys of the same site at once.
