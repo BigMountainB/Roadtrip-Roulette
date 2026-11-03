@@ -13,6 +13,11 @@ on:
       - .github/workflows/deploy-davis-plumbing.yml
   workflow_dispatch:
 
+# Never run two deploys of the same site at once.
+concurrency:
+  group: deploy-davis-plumbing
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
