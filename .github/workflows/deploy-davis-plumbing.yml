@@ -1,0 +1,51 @@
+name: Deploy Davis Plumbing site
+
+# Deploys the Davis Plumbing marketing site (lives in the BigMountainB/Code-Practice
+# repo, branch claude/davis-plumbing-rebuild-p0huf5) to its OWN Cloudflare Pages
+# project, `davisplumbing` -> https://davisplumbing.pages.dev
+#
+# It lives here only to borrow this repo's Cloudflare secrets (CF_PAGES_API_TOKEN /
+# CF_ACCOUNT_ID). It never touches the `roadtrip-roulette` Pages project.
+
+on:
+  push:
+    paths:
+      - .github/workflows/deploy-davis-plumbing.yml
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the Davis Plumbing site
+        uses: actions/checkout@v4
+        with:
+          repository: BigMountainB/Code-Practice
+          ref: claude/davis-plumbing-rebuild-p0huf5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build the site and collect only public files
+        working-directory: Claude/Websites/DavisPlumbing
+        run: |
+          node build.mjs
+          mkdir -p "$GITHUB_WORKSPACE/_site"
+          rsync -a ./ "$GITHUB_WORKSPACE/_site/" \
+            --exclude src --exclude scripts --exclude '*.md' \
+            --exclude package.json --exclude build.mjs --exclude .gitignore
+
+      # No-op once the project exists; `|| true` keeps it from failing the run.
+      - name: Ensure the Pages project exists
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: npx --yes wrangler@3 pages project create davisplumbing --production-branch=main || true
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: npx --yes wrangler@3 pages deploy _site --project-name=davisplumbing --branch=main --commit-dirty=true
