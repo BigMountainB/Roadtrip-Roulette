@@ -38,7 +38,7 @@ jobs:
           node build.mjs
           mkdir -p "$GITHUB_WORKSPACE/_site"
           rsync -a ./ "$GITHUB_WORKSPACE/_site/" \
-            --exclude src --exclude scripts --exclude '*.md' \
+            --exclude src --exclude scripts --exclude '*.md' --exclude /images \
             --exclude package.json --exclude build.mjs --exclude .gitignore
 
       # No-op once the project exists; `|| true` keeps it from failing the run.
