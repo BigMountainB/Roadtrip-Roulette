@@ -2,4 +2,4 @@ Pushing a change to this file redeploys https://davisplumbing.pages.dev
 (see .github/workflows/deploy-davis-plumbing.yml). The site source is the
 claude/davis-plumbing-rebuild-p0huf5 branch of BigMountainB/Code-Practice.
 
-Last redeploy: 2026-11-03, Code-Practice commit 2e79cc3 (new crew and family photos)
+Last redeploy: 2026-11-03, Code-Practice commit 7e4a01e (About page family + crew photos)
