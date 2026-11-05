@@ -13,8 +13,7 @@
     "preview": "vite preview",
     "cap:add": "npx cap add ios",
     "cap:sync": "npx cap sync",
-    "cap:open": "npx cap open ios",
-    "build:dialogue": "node scripts/buildDialoguePage.mjs"
+    "cap:open": "npx cap open ios"
   },
   "dependencies": {
     "@capacitor/core": "^5.0.0",
