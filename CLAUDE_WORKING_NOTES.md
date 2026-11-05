@@ -5280,3 +5280,7 @@ placeholders.  Interim: node `panelKey` aliases to the approved Mercer counter p
 (`mercer_cold`→`hiphop.mercer_counter`, `mercer_cold_woes`→`hiphop.mercer_hook`,
 `mercer_cold_offer`→`hiphop.mercer_fork`); `StoryTile.buildTile` now uses `resolvePanelKey` (node
 aliases honoured).  The owner says he will redo the comic art — these aliases are placeholders.
+
+## OWNER LINE (2026-11-05) — Dad's first text, hospital intro
+Ralph Sr.'s first text to Ralphy (Hospital intro, beat 1) is: **"Man down! St. Anne’s hospital. ASAP!"**
+(owner's words; replaces the draft "In the hospital. Come by ASAP."). The hospital is St. Anne's.
