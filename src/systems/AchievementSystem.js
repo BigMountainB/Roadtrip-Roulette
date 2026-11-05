@@ -124,6 +124,9 @@ const RUN_DEFS = {
   maxed_coma:        { label: 'MAXED FOOD COMA',   icon: '😵', desc: 'Hit 99% food coma without passing out.' },
   maxed_slushie:     { label: 'MAXED SLUSHIE',     icon: '🧊', desc: 'Hit 99% slushie without passing out.' },
   maxed_caffeine:        { label: 'MAXED CAFFEINE',    icon: '☕', desc: 'Hit 99% caffeine pills without passing out.' },
+  // Story: Brittney got out early — scared out at zero Nerve or fed up with
+  // you (owner 2026-11-05).  Name is a placeholder for the owner to rename.
+  good_riddance:     { label: 'GOOD RIDDANCE',     icon: '🚪', desc: 'Get Brittney out of your car before StageWagon.' },
 };
 
 // Tier ordering — higher index = better.  Difficulty mode → tier id.

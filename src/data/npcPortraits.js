@@ -20,6 +20,7 @@ export const NPC_PORTRAITS = {
   chip_seller:     { texture: 'npc_chip_seller',     name: 'Chip Guy',             placeholderTint: 0xFFB52E },
   hiker_one_boot:  { texture: 'npc_hiker_one_boot',  name: 'Hiker (One Boot)',     placeholderTint: 0x6E8B3D },
   farm_worker:     { texture: 'npc_farm_worker',     name: 'Farm Worker',          placeholderTint: 0x9A6B2E },
+  wyatt:           { texture: 'npc_wyatt',           name: 'Wyatt',                placeholderTint: 0xA0522D },   // Brittney's dad, country singer (§18.5A) — no portrait art yet; tinted placeholder
   haylee:          { texture: 'npc_haylee',          name: 'Haylee',               placeholderTint: 0xE8A87C },   // Brittney's Ellensburg friend (strawberry blonde, 24, Central University grad student)
   desert_oddball:  { texture: 'npc_desert_oddball',  name: 'Desert Oddball',       placeholderTint: 0xB5462E },
   // Women of the road.

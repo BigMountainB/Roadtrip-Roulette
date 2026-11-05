@@ -29,6 +29,7 @@ import Phaser from 'phaser';
 import { SCREEN_W, SCREEN_H } from '../constants.js';
 import { getStoryNode } from '../data/featuredStories.js';
 import { crumb } from '../systems/StabilityDiag.js';
+import { AchievementSystem } from '../systems/AchievementSystem.js';
 import { panelMeta, panelKeyFor, resolvePanelKey } from '../data/comicPanels.js';
 import { layoutBalloon, migrateZones, readingOrder, TAIL_BASE_CEILING } from './balloonLayout.js';
 import { unit, paddingFor, bulgeFor, excessBalloonArea, strokeFor, bodyShape, tailShape, connectorShape, sfxSpec, dashOutline, seedFor } from './balloonShapes.js';
@@ -99,9 +100,16 @@ const MIN_FONT = 13;                                // ≥ 13 CSS px at gameplay
 /** Run every pending story node for this stop in order, then `onDone`. */
 export function runStoryQueue(scene, pending, onDone) {
   const q = [...pending];
+  const story = scene.registry?.get?.('story');
+  const stopId = scene._stop?.id;
   const next = () => {
     const p = q.shift();
     if (!p) { onDone?.(); return; }
+    // The queue is computed on arrival; an earlier tile can close a later
+    // one (Brittney gets out → her need tile at this stop no longer applies).
+    try {
+      if (story?.pendingAt && !story.pendingAt(stopId).some(x => x.storyId === p.storyId && x.nodeId === p.nodeId)) { next(); return; }
+    } catch (_) {}
     showStoryConversation(scene, p, next);
   };
   next();
@@ -648,6 +656,10 @@ export function showStoryConversation(scene, start, onDone) {
       wanted:      (n) => { const cur = scene._stars ?? 0; if (n > cur) scene._purchases.bumpStarsOnResume = (scene._purchases.bumpStarsOnResume ?? 0) + (n - cur); scene._stars = Math.max(cur, n); },
       passenger:   (p) => { scene._purchases.storyPassenger = p ?? null; },
       radioGrant:  (g) => { scene._purchases.storyRadioGrant = g ?? null; },
+      survivalFloor: (f) => { scene._raiseSurvivalFloor?.(f); },
+      achievement: (id) => { try { AchievementSystem.award(id, scene.registry); } catch (_) {} },
+      // Texts land in the phone when driving resumes (GameScene._logBuddyText).
+      text:        (cid, from, msg) => { (scene._purchases.storyTexts ??= []).push({ cid, from, msg }); },
     });
     // FAIL-SAFE (owner 2026-09-11, stuck after a selection): the commit is
     // already persisted; whatever a rendering step throws, the hold is armed

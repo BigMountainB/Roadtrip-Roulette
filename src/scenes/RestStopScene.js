@@ -3657,6 +3657,27 @@ export class RestStopScene extends Phaser.Scene {
    *  Food) at ~60% scale.  Values = entry snapshot + this visit's purchases
    *  (restroom empty, encounter food/drink survivalDelta), so the bars
    *  live-update while shopping. */
+  /** Raise survival bars to a FLOOR (never lowers a bar): { fullness,
+   *  hydration } are 0–100 levels, `alertness` is 100 − tiredness.  Banked in
+   *  _purchases.survivalDelta like any purchase, read through the entry
+   *  snapshot plus this visit's deltas.  Brittney's early exit leaves the
+   *  cooler behind (owner 2026-11-05). */
+  _raiseSurvivalFloor(floor = {}) {
+    const e = this._survAtEntry ?? { tiredness: 0, hydration: 50, fullness: 50 };
+    const d = (this._purchases.survivalDelta ??= {});
+    for (const bar of ['fullness', 'hydration']) {
+      if (floor[bar] == null) continue;
+      const cur = (e[bar] ?? 0) + (d[bar] ?? 0);
+      if (cur < floor[bar]) d[bar] = (d[bar] ?? 0) + (floor[bar] - cur);
+    }
+    if (floor.alertness != null) {
+      const maxTired = 100 - floor.alertness;
+      const cur = (e.tiredness ?? 0) + (d.tiredness ?? 0);
+      if (cur > maxTired) d.tiredness = (d.tiredness ?? 0) - (cur - maxTired);
+    }
+    this._drawSurvivalMini?.();
+  }
+
   _drawSurvivalMini() {
     const g = this._survMiniGfx;
     if (!g) return;

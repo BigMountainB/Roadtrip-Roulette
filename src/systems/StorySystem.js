@@ -511,6 +511,11 @@ export class StorySystem {
     if (isObj(effects.cargo)) Object.assign(this._run.cargo, effects.cargo);
     if (typeof effects.radio === 'string') hooks.radio?.(effects.radio);
     if (typeof effects.meanwhile === 'string') this.mutateCanon((c2) => !!this._raiseMeanwhile(c2, storyId, effects.meanwhile, mile));
+    // Brittney's early exit (owner 2026-11-05): raise survival bars to a
+    // floor, award a trophy, send a text.  The scene owns all three.
+    if (isObj(effects.survivalFloor)) hooks.survivalFloor?.(effects.survivalFloor);
+    if (typeof effects.achievement === 'string') hooks.achievement?.(effects.achievement);
+    if (isObj(effects.text) && effects.text.msg) hooks.text?.(effects.text.cid, effects.text.from, effects.text.msg, storyId);
     hooks.panel?.(entry, node, choice);
     for (const fn of this._listeners) { try { fn(entry, { node, choice }); } catch (_) {} }
     // Authored FOLLOW-UP beats (special panels: pressing/loaded, evaluated
@@ -708,6 +713,9 @@ export class StorySystem {
         beat: (b) => { const e = this._beatInto(c, { storyId: id, mile: payload.mile ?? 0, ...b }); if (e) changed = true; return e; },
         meanwhile: (stripId) => { if (this._raiseMeanwhile(c, id, stripId, payload.mile ?? 0)) changed = true; },
         fail: (endingId) => { if (!TERMINAL.has(st.status)) { st.status = STORY_STATUS.FAILED; st.endingId = endingId ?? null; st.nodeId = null; changed = true; } },
+        survivalFloor: (floor) => hooks.survivalFloor?.(floor),
+        achievement: (aid) => hooks.achievement?.(aid),
+        text: (cid, from, msg) => hooks.text?.(cid, from, msg, id),
       };
       try { def.onRoad(type, payload, api); } catch (_) {}
     }
@@ -810,9 +818,14 @@ export class StorySystem {
       for (const [id, def] of Object.entries(this._defs)) {
         const st = c.stories[id];
         const fn = def.onUnpass?.[stopId];
-        if (!st || st.status !== STORY_STATUS.ACTIVE || typeof fn !== 'function') continue;
+        // A story that ENDED by driving past this exit (its onPass set
+        // `flags.unpassReopens = stopId`) is still offered the rewind, so the
+        // exit stays takeable after a rewind (owner 2026-09-10).
+        const reopenable = st?.status === STORY_STATUS.FAILED && st.flags?.unpassReopens === stopId;
+        if (!st || (st.status !== STORY_STATUS.ACTIVE && !reopenable) || typeof fn !== 'function') continue;
         const api = {
           state: st, run: this._run, mile,
+          reopen: () => { if (reopenable) { st.status = STORY_STATUS.ACTIVE; st.endingId = null; delete st.flags.unpassReopens; changed = true; } },
           flags: (o) => { Object.assign(st.flags, o); changed = true; },
           items: (o) => { for (const [k, v] of Object.entries(o)) { if (v === false || v == null) delete st.items[k]; else st.items[k] = v; } changed = true; },
           relationship: (d) => { st.relationship = clamp(st.relationship + num(d), 0, 100); changed = true; },

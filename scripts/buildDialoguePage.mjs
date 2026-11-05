@@ -28,7 +28,8 @@ import {
   FOUNDER_OFFER, COUNTRY_PAY_RIDE_EM, COUNTRY_PAY_STANDARD, RIDE_EM_REL, RIDE_EM_NERVE,
   RIDE_EM_PASSES, STANDARD_REL, HAYLEE_WARM, HAYLEE_DRY, NAN_STAY_REL, SIXTY_FORTY_REL,
   BROKEN_VOICE_CONTROLLING, BROKEN_VOICE_REL, TRUE_ENDING_REL, PULLMAN_PAY, CLUE_LINES_MI,
-  HAYLEE_LINES_MI, KIDNAP_WARN_MI, KIDNAP_REPORT_MI,
+  HAYLEE_LINES_MI, KIDNAP_WARN_MI, KIDNAP_REPORT_MI, EXIT_SURVIVAL_FLOOR, FED_UP_REL,
+  HAYLEE_FAVOR_FULL_USD, HAYLEE_FAVOR_QUICK_USD,
 } from '../src/data/featuredStories.js';
 import { PANEL_META } from '../src/data/comicPanels.js';
 import { REST_STOP_ENCOUNTERS, BRITTNEY_MERCER_GREETER } from '../src/data/encounters.js';
@@ -307,7 +308,7 @@ function countryChapter() {
     choiceOpts: { fountain: {} } });
 
   const tick = (mile, flags = {}) => capture((api) => C.onRoad('tick', { mile, mph: 60, dt: 0.016 }, api),
-    { flags: { ...flags }, items: {} }, { passenger: {}, nerve: 25, flags: {} });
+    { flags: { ...flags }, items: {} }, { passenger: { id: 'brittney' }, nerve: 25, flags: {} });
   const clue1 = tick(CLUE_LINES_MI[0]), clue2 = tick(CLUE_LINES_MI[1], { clue1: true });
   B.node('roadE', { stage: `I-90 east · miles ${CLUE_LINES_MI[0]}–${CLUE_LINES_MI[1]}`, beats: [...clue1, ...clue2],
     prompt: 'Exit 109 is coming up.',
@@ -390,11 +391,37 @@ function countryChapter() {
       beats: [...reunion, ...sendBeats.filter(b => b.when.outcome === o), ...(o === 'ride_em' ? meanwhileBeats('country', 'brittney_friends') : [])],
       ...ending('country', o, { endingNote: endNote[o] }) });
 
-  // Road lines that fire from driving, not from a stop.
+  // Drive Brittney's road hook with scripted events and capture what she says.
   const sim = (events, flags = {}) => {
-    const s = { flags: { haylee: 'left', ...flags }, items: {} }, run = { passenger: {}, nerve: 25, flags: {} };
+    const s = { flags: { haylee: 'left', ...flags }, items: {} }, run = { passenger: { id: 'brittney' }, nerve: 25, flags: {} };
     return capture((api) => events.forEach(([t, ev]) => C.onRoad(t, ev, api)), s, run);
   };
+  // ── Brittney leaves early (owner 2026-11-05) → Haylee → Wyatt ─────────
+  const exitNote = `She leaves the cooler: Food and Water rise to ${EXIT_SURVIVAL_FLOOR.fullness}%, Alertness to ${EXIT_SURVIVAL_FLOOR.alertness}% (only if lower). Trophy: GOOD RIDDANCE.`;
+  const isText = (b) => /\(text\)$/.test(b.speaker ?? '');
+  const roadOut = sim([['damage', { hp: 25, mile: 50 }], ['tick', { mile: 50.1, dt: 2, stopped: true, onShoulder: true }]], { haylee: null });
+  B.node('exit.roadside', { stage: 'I-90 · the shoulder', art: firstArt('country.beat.roadside_exit'), set: { brittneyLeft: 'roadside' },
+    beats: roadOut.filter(b => b.text && !isText(b)), prompt: exitNote, next: 'exit.after', advanceLabel: 'Drive on' });
+  B.stop('fed_up_exit', { stage: 'Next rest stop · she has had enough', to: { letHerGo: 'exit.after' },
+    choiceOpts: { letHerGo: { choice: { set: { brittneyLeft: 'fedUp' } }, note: exitNote } } });
+  B.node('exit.after', { stage: 'Back on I-90, alone', beats: [...roadOut.filter(isText), ...meanwhileBeats('country', 'brittney_rant')],
+    prompt: 'Malik gets his girlfriend back, angry at the stranger; the game remembers that for his signature later. The empty seat also lets ordinary paying hitchhikers appear again.',
+    next: 'ellensburg_hitch', advanceLabel: 'On to Exit 109' });
+  B.stop('ellensburg_hitch', { stage: 'Ellensburg · Exit 109', to: { pickUp: 'haylee_favors', driveOn: 'exit.end' } });
+  B.stop('haylee_favors', { stage: 'Ellensburg · concert favors', next: 'haylee_talk',
+    choiceOpts: { fullRun: { choice: { set: { favors: 'full' } } }, quickRun: { choice: { set: { favors: 'partial' } } }, noRun: { choice: { set: { favors: 'none' } } } } });
+  B.stop('haylee_talk', { stage: 'Ellensburg · about Brittney', next: 'toWyatt',
+    choiceOpts: { trashTalk: { choice: { set: { trashTalk: true } } }, polite: { choice: { set: { trashTalk: false } } } } });
+  B.node('toWyatt', { stage: 'Vantage', route: [{ when: { favors: ['full', 'partial'], trashTalk: true }, to: 'vantage_wyatt' }, { to: 'vantage_haylee_bye' }] });
+  B.stop('vantage_wyatt', { stage: 'Vantage · Brittney’s dad', to: { meet: 'vantage_wyatt.meet' },
+    choiceOpts: { meet: { reply: ending('country', 'haylee_intro', { endingNote: 'Country unlocked · Wyatt in your contacts' }) } } });
+  B.nodes['vantage_wyatt.meet'].next = null;
+  B.stop('vantage_haylee_bye', { stage: 'Vantage · Haylee’s friends', to: { bye: 'exit.end' } });
+  B.node('exit.end', { stage: 'Without Brittney', route: [{ when: { brittneyLeft: 'fedUp' }, to: 'end.fed_up' }, { to: 'end.roadside_exit' }] });
+  for (const e of ['fed_up', 'roadside_exit'])
+    B.node('end.' + e, { stage: 'Without Brittney', beats: [], prompt: 'No Country unlock on this route, but the cooler, the trophy and Malik’s gratitude are yours.', ...ending('country', e, { endingNote: 'Story over · no unlock' }) });
+
+  // Road lines that fire from driving, not from a stop.
   const crashSide = sim([['damage', { hp: 6, source: 'side_swipe', mile: 50 }]]);
   const crashFront = sim([['damage', { hp: 6, source: 'rear_end', mile: 50 }]]);
   const nerveText = new Set(Object.values(NERVE_LINES));
@@ -403,6 +430,7 @@ function countryChapter() {
   const roadside = sim([['damage', { hp: 25, mile: 50 }], ['tick', { mile: 50.1, dt: 2, stopped: true, onShoulder: true }]]);
   const issues = [
     { id: 'placeholders', title: 'Her StageWagon friends’ strip has no captions', detail: 'The RIDE ’EM ending raises a three-panel Meanwhile strip; its captions are placeholders.' },
+    { id: 'early-exit', title: 'New early-exit lines are placeholders', detail: `Brittney’s fed-up exit, Haylee at Exit 109, her concert favors ($${HAYLEE_FAVOR_FULL_USD} / $${HAYLEE_FAVOR_QUICK_USD}), the trash-talk choice, Wyatt’s introduction and Malik’s text are all [OWNER LINE] slots.` },
     { id: 'stops', title: 'Needs follow the stops you take', detail: 'In the game her needs rotate hunger → bathroom → thirst, one per rest stop between Mercer and Vantage. This walkthrough puts them at Bellevue, Issaquah and North Bend; the bathroom line names a business at whichever stop you are at.' },
     { id: 'canon', title: 'Older canon than chapters 1–3', detail: '§18.5A makes Brittney Wyatt’s daughter and moves the reveal to the Gorge; this ride still ends at Vantage the way the code does today.' },
   ];
@@ -412,7 +440,11 @@ function countryChapter() {
     startStage: 'Mercer Island', startPrompt: 'Brittney said yes at the Gas-N-Sip (chapter 3). She is clocking out.',
     startArt: firstArt('country.mercer_departure'),
     initial: {},
-    entries: [{ id: 'aboard', label: 'Brittney is riding to StageWagon', detail: 'Picks up where chapter 3’s yes ends.', to: 'mercer_departure' }],
+    entries: [
+      { id: 'aboard', label: 'Brittney is riding to StageWagon', detail: 'Picks up where chapter 3’s yes ends.', to: 'mercer_departure' },
+      { id: 'roadside', label: 'Scare her out of the car', detail: 'Her Nerve hits zero and you pull onto the shoulder (before Exit 109).', to: 'exit.roadside' },
+      { id: 'fedUp', label: 'Treat her badly until she quits', detail: `Her relationship drops under one star (${FED_UP_REL} of 100); she gets out at the next stop.`, to: 'fed_up_exit' },
+    ],
     issues, nodes: B.nodes,
     extras: [
       { title: 'When she gets rattled (Nerve)', note: 'She starts at 25 Nerve. Crashes cost Nerve; speeding, clean passes and near misses build it back. She comments as it falls.',
@@ -421,7 +453,7 @@ function countryChapter() {
         ...crashSide.map(b => ({ ...b, note: 'side-swipe or corner hit' })), ...crashFront.map(b => ({ ...b, note: 'any other big hit' })) ] },
       { title: 'Flirting on clean passes', note: 'Every fifth clean pass, +2 relationship.', items: FLIRT_LINES.map(text => ({ speaker: 'Brittney', text })) },
       { title: 'Zero Nerve', note: `If you keep driving after she asks to get out: a warning after ${KIDNAP_WARN_MI} mile, five stars and a failed story (KIDNAPPING REPORT) after ${KIDNAP_REPORT_MI}.`, items: zero },
-      { title: 'Pulling over at zero Nerve', note: 'Stopping on the shoulder lets her out (ROADSIDE EXIT).', items: roadside.filter(b => !/^Pull over/.test(b.text)) },
+      { title: 'Pulling over at zero Nerve', note: 'Stopping on the shoulder lets her out. Play it from the start screen: “Scare her out of the car”.', items: roadside.filter(b => b.text && (b.speaker === 'Brittney' || b.speaker === 'Scene') && !/^Pull over/.test(b.text)) },
     ],
   };
 }
@@ -605,6 +637,7 @@ const memory = {
   rel: 'Relationship (0–100)', controlling: 'Controlling choices', following: 'Duet following', soloFollowing: 'Solo following',
   show1: 'Othello', auditionNext: 'Audition at Washtucna', setlist: 'La Crosse opener', deal: 'Colfax deal', name: 'Marquee name',
   w: 'Washtucna set', l: 'La Crosse set', duetOffered: 'Duet offered',
+  brittneyLeft: 'Brittney left', favors: 'Haylee’s concert favors', trashTalk: 'Talked trash about Brittney',
 };
 function storyPage(story) {
   const tpl = fs.readFileSync(path.join(SRC, 'story-player.html'), 'utf8');

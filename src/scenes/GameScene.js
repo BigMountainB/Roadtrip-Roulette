@@ -3221,6 +3221,10 @@ export class GameScene extends Phaser.Scene {
           }
           // Encounter survival effects (food/drink/coffee) → adjust the bars,
           // and fill the bladder from whatever you ate/drank.
+          // Story texts committed at the stop (Malik after Brittney's exit).
+          if (Array.isArray(buys.storyTexts)) {
+            for (const t of buys.storyTexts) { try { this._logBuddyText(t.cid, t.from, t.msg); } catch (_) {} }
+          }
           if (buys.survivalDelta && this.survival) {
             const cl = (v) => Math.max(0, Math.min(100, v));
             const d  = buys.survivalDelta;
@@ -25124,6 +25128,16 @@ export class GameScene extends Phaser.Scene {
       wanted: (n) => { if (this.cops) this.cops.stars = Math.max(this.cops.stars ?? 0, n); },
       passenger: () => {},
       text: (cid, from, msg) => this._logBuddyText(cid, from, msg),
+      // Brittney's early exit (owner 2026-11-05): she leaves the cooler —
+      // raise Food/Water/Alertness to a floor (never lowers a bar) — and a trophy.
+      survivalFloor: (f) => {
+        const sv = this.survival;
+        if (!sv || !f) return;
+        if (f.fullness  != null) sv.fullness  = Math.max(sv.fullness,  f.fullness);
+        if (f.hydration != null) sv.hydration = Math.max(sv.hydration, f.hydration);
+        if (f.alertness != null) sv.tiredness = Math.min(sv.tiredness, 100 - f.alertness);
+      },
+      achievement: (id) => { try { AchievementSystem.award(id, this.registry); } catch (_) {} },
       // A story handed the aux cord over: switch the radio to that genre.
       radio: (culture) => {
         try {

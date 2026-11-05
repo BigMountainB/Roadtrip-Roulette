@@ -19,6 +19,7 @@ import {
   vinylOutcome, vinylPayout, VINYL_RECORDS, VINYL_PAY_PRISTINE, FOUNDER_OFFER, VANTAGE_AMBUSH_MILE,
   countryOutcome, countryObjectives, hayleeRead, NERVE_MAX, COUNTRY_PAY_STANDARD, COUNTRY_PAY_RIDE_EM, KIDNAP_REPORT_MI, ROADSIDE_STOP_SEC,
   classicRockOutcome, isBrokenVoice, PULLMAN_PAY, OTHELLO_COVER, OTHELLO_PROPOSITION, NAN_OFFER, SHOW2_TOTAL, SHOW3_SOLO, SHOW3_DUET,
+  FED_UP_REL, BRITTNEY_EXIT_TROPHY, HAYLEE_FAVOR_FULL_USD, HAYLEE_FAVOR_QUICK_USD, SUPPLY_FULL_USD, SUPPLY_QUICK_USD, wyattIntroEarned,
 } from '../src/data/featuredStories.js';
 
 let passed = 0, failed = 0;
@@ -523,9 +524,100 @@ const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, ho
   check('stopped ON the road: not a drop', story.status('country') === STORY_STATUS.ACTIVE);
   story.roadEvent('tick', { mile: 40.2, dt: 1.0, stopped: true, onShoulder: true }, rh.hooks);
   story.roadEvent('tick', { mile: 40.2, dt: 0.6, stopped: true, onShoulder: true }, rh.hooks);
-  check('1.6 s on the shoulder: roadside exit, seat empty, no stars', story.status('country') === STORY_STATUS.FAILED && story.story('country').endingId === 'roadside_exit' && story.run.passenger === null && rh.log.wanted.length === 0);
+  // Owner 2026-11-05: before Exit 109 the story stays open for Haylee's
+  // hitchhike; the exit is recorded instead of ending it on the spot.
+  check('1.6 s on the shoulder: she\'s out, seat empty, no stars, Haylee route open', story.status('country') === STORY_STATUS.ACTIVE && story.story('country').flags.brittneyLeft === 'roadside' && story.run.passenger === null && rh.log.wanted.length === 0);
   check('no first-drive "changes" beat (wardrobe lock: uniform until Vantage)', !Object.values(story.canon().ledger).some(e => e.nodeId === 'beat' && e.choiceId === 'changes'));
 }
+// ═══ Brittney leaves early (owner 2026-11-05) ═════════════════════════════
+const exitHooks = () => {
+  const log = { said: [], wanted: [], floors: [], trophies: [], texts: [], cash: 0, unlocks: [], contacts: [] };
+  return { log, hooks: {
+    say: (t) => log.said.push(t), wanted: (n) => log.wanted.push(n), passenger: () => {},
+    survivalFloor: (f) => log.floors.push(f), achievement: (id) => log.trophies.push(id),
+    text: (cid, from, msg) => log.texts.push({ cid, from, msg }),
+    cash: (n) => { log.cash += n; }, unlockGenre: (g) => log.unlocks.push(g), contact: (c) => log.contacts.push(c.id),
+  } };
+};
+const roadsideOut = (story, hooks, mile = 40) => {
+  story.roadEvent('damage', { hp: 30, source: 'head_on', mile }, hooks);
+  story.roadEvent('tick', { mile, dt: 2, stopped: true, onShoulder: true }, hooks);
+};
+{
+  // Zero-Nerve exit: cooler floor, trophy, Malik text + flag, MEANWHILE strip.
+  const { story } = board(); const x = exitHooks();
+  roadsideOut(story, x.hooks);
+  const f = story.story('country').flags;
+  check('exit: survival floor 75/75/80 handed to the scene', x.log.floors.length === 1 && x.log.floors[0].fullness === 75 && x.log.floors[0].hydration === 75 && x.log.floors[0].alertness === 80);
+  check('exit: trophy awarded', x.log.trophies.length === 1 && x.log.trophies[0] === BRITTNEY_EXIT_TROPHY);
+  check('exit: Malik texts, flagged grateful', x.log.texts.some(t => t.cid === 'malik') && f.malikGrateful === true);
+  check('exit: her MEANWHILE strip is queued', (story.run.meanwhileQueue ?? []).some(m => m.stripId === 'brittney_rant'));
+  check('exit: needs stop (no need tile at the next stop)', (story.restStopVisited('I'), !story.pendingAt('I').some(p => p.storyId === 'country' && p.nodeId.startsWith('need_'))));
+  check('exit: Nerve lines stop — she is not in the car', (story.roadEvent('damage', { hp: 6, source: 'rear_end', mile: 45 }, x.hooks), x.log.said.length === 1));
+  check('exit before Ellensburg: generic hitchhiker blocked only at Exit 109', story.hitchhikerBlocked('E') && !story.hitchhikerBlocked('I'));
+  check('fresh run keeps the seat empty', (story.resetRun(), story.run.passenger === null));
+}
+{
+  // Exit AFTER Ellensburg (Haylee already handled) → final, no Haylee route.
+  const { story } = board(); const x = exitHooks();
+  const c = story.canon(); c.stories.country.flags.haylee = 'left'; story._writeCanon(c);
+  roadsideOut(story, x.hooks, 115);
+  check('exit after Ellensburg: ROADSIDE EXIT, rewards still paid', story.status('country') === STORY_STATUS.FAILED && story.story('country').endingId === 'roadside_exit' && x.log.trophies.length === 1 && x.log.floors.length === 1);
+}
+{
+  // Fed-up exit: relationship under one star → she gets out at the next stop.
+  const { story } = board(); const x = exitHooks();
+  const c = story.canon(); c.stories.country.relationship = FED_UP_REL - 1; story._writeCanon(c);
+  story.restStopVisited('B');
+  const pend = story.pendingAt('B');
+  check('fed up: exit tile is first at the next stop, before her need', pend[0]?.nodeId === 'fed_up_exit' && pend.some(p => p.nodeId === 'need_hunger'));
+  H('country', 'fed_up_exit', 'letHerGo', story, x.hooks, 12, 'B');
+  check('fed up: seat empty, rewards paid, story open for Haylee', story.run.passenger === null && x.log.floors.length === 1 && x.log.trophies.length === 1 && x.log.texts.some(t => t.cid === 'malik') && story.story('country').flags.brittneyLeft === 'fedUp' && story.isActive('country'));
+  check('fed up: her queued need tile closes', !story.pendingAt('B').some(p => p.nodeId === 'need_hunger'));
+  check('fed up: not offered while relationship ≥ one star', (() => { const b2 = board(); return !b2.story.pendingAt('B').some(p => p.nodeId === 'fed_up_exit'); })());
+
+  // Haylee at Exit 109 → favors (double price) → trash talk → Wyatt at Vantage.
+  check('Haylee hitchhiking at Ellensburg (mandatory)', story.pendingAt('E').some(p => p.nodeId === 'ellensburg_hitch' && p.mandatory) && !story.pendingAt('E').some(p => p.nodeId === 'ellensburg_haylee'));
+  H('country', 'ellensburg_hitch', 'pickUp', story, x.hooks, 109, 'E');
+  check('pick up: Haylee in the seat', story.run.passenger?.id === 'haylee' && story.story('country').flags.hitch === 'aboard');
+  check('fresh run restores Haylee, not Brittney', (story.resetRun(), story.run.passenger?.id === 'haylee'));
+  H('country', 'haylee_favors', 'fullRun', story, x.hooks, 109, 'E');
+  check('favors cost double Brittney\'s full run', x.log.cash === -HAYLEE_FAVOR_FULL_USD && HAYLEE_FAVOR_FULL_USD === 2 * SUPPLY_FULL_USD && HAYLEE_FAVOR_QUICK_USD === 2 * SUPPLY_QUICK_USD);
+  H('country', 'haylee_talk', 'trashTalk', story, x.hooks, 109, 'E');
+  check('no Brittney tiles with Haylee aboard', !story.pendingAt('E').some(p => p.storyId === 'country') && (story.restStopVisited('V'), !story.pendingAt('V').some(p => p.nodeId === 'vantage_change')));
+  const v = story.pendingAt('V');
+  check('Vantage: Wyatt introduction (favors + trash talk)', v.some(p => p.nodeId === 'vantage_wyatt') && !v.some(p => p.nodeId === 'vantage_haylee_bye'));
+  H('country', 'vantage_wyatt', 'meet', story, x.hooks, 137, 'V');
+  check("Wyatt met: HAYLEE'S INTRO, Country unlocked, Wyatt in contacts, seat empty", story.status('country') === STORY_STATUS.COMPLETE && story.story('country').endingId === 'haylee_intro' && x.log.unlocks.includes('country') && x.log.contacts.includes('wyatt') && story.run.passenger === null);
+}
+{
+  // Haylee without the trash talk → she just says goodbye at Vantage.
+  const { story } = board(); const x = exitHooks();
+  roadsideOut(story, x.hooks);
+  H('country', 'ellensburg_hitch', 'pickUp', story, x.hooks, 109, 'E');
+  H('country', 'haylee_favors', 'quickRun', story, x.hooks, 109, 'E');
+  H('country', 'haylee_talk', 'polite', story, x.hooks, 109, 'E');
+  check('quick favors cost double', x.log.cash === -HAYLEE_FAVOR_QUICK_USD);
+  const v = story.pendingAt('V');
+  check('polite about Brittney: no Wyatt, Haylee says goodbye', !v.some(p => p.nodeId === 'vantage_wyatt') && v.some(p => p.nodeId === 'vantage_haylee_bye'));
+  H('country', 'vantage_haylee_bye', 'bye', story, x.hooks, 137, 'V');
+  check('goodbye: ROADSIDE EXIT, no unlock', story.status('country') === STORY_STATUS.FAILED && story.story('country').endingId === 'roadside_exit' && !x.log.unlocks.length);
+  check('trash talk without favors is not enough', !wyattIntroEarned({ flags: { favors: 'none', trashTalk: true } }) && wyattIntroEarned({ flags: { favors: 'partial', trashTalk: true } }));
+}
+{
+  // Leaving Haylee on the shoulder, or driving past her exit (and rewinding).
+  const a = board(); const xa = exitHooks();
+  roadsideOut(a.story, xa.hooks);
+  H('country', 'ellensburg_hitch', 'driveOn', a.story, xa.hooks, 109, 'E');
+  check('left Haylee: ROADSIDE EXIT', a.story.status('country') === STORY_STATUS.FAILED && a.story.story('country').endingId === 'roadside_exit');
+  const b = board(); const xb = exitHooks();
+  roadsideOut(b.story, xb.hooks);
+  b.story.exitPassed('E', 110);
+  check('drove past Exit 109 after she left: route closed', b.story.status('country') === STORY_STATUS.FAILED && b.story.story('country').endingId === 'roadside_exit');
+  b.story.exitUnpassed('E', 108);
+  check('rewind before Exit 109 reopens Haylee', b.story.isActive('country') && b.story.pendingAt('E').some(p => p.nodeId === 'ellensburg_hitch'));
+}
+
 {
   // Vantage endings.
   // `objs` = how many of her three objectives landed (owner 2026-09-10: RIDE

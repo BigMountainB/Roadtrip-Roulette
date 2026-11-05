@@ -189,6 +189,62 @@ export const HAYLEE_WARM        = 65;
 export const HAYLEE_DRY         = 45;
 export const HAYLEE_LINES_MI    = [118, 128];   // her two road lines (owner: two)
 export const CLUE_LINES_MI      = [92, 104];    // Brittney's phone set-up lines before Exit 109
+// ── Brittney leaves early (owner 2026-11-05) ────────────────────────────
+// Two ways out: the zero-Nerve roadside exit, and a "fed up" exit when her
+// relationship falls under one star — she gets out at the next rest stop.
+// Either way the player is paid back a little (smaller than keeping her):
+//   · she leaves the cooler — Food and Water rise to 75%, Alertness to 80%
+//     (each only if lower);
+//   · a trophy, and a MEANWHILE strip of her telling her friends about it;
+//   · Malik gets his girlfriend back angry at the stranger (flag + text) —
+//     read later by the signature negotiation (§18.5A);
+//   · if she left before Exit 109, Haylee is hitchhiking there.  Buy her
+//     concert favors (double Brittney's supply-run price) AND talk trash
+//     about Brittney — the player isn't told that her friends and her dad
+//     find her hard to take too — and Haylee introduces him to Wyatt at
+//     Vantage.
+export const FED_UP_REL            = 20;     // < one star (0–100 raw)
+export const EXIT_SURVIVAL_FLOOR   = { fullness: 75, hydration: 75, alertness: 80 };
+export const HAYLEE_FAVOR_FULL_USD  = SUPPLY_FULL_USD * 2;
+export const HAYLEE_FAVOR_QUICK_USD = SUPPLY_QUICK_USD * 2;
+export const BRITTNEY_EXIT_TROPHY  = 'good_riddance';
+const MALIK_EXIT_TEXT = '[OWNER LINE — Malik texts after Brittney gets home from the ride]';
+const HAYLEE_PASSENGER = { id: 'haylee', name: 'Haylee', storyId: 'country' };
+/** Who is in the seat for the Country story. */
+export const brit   = (run) => run?.passenger?.id === 'brittney';
+export const haylee = (run) => run?.passenger?.id === 'haylee';
+/** Haylee's hitchhike only exists if Brittney got out before Exit 109. */
+const hayleeRouteOpen = (st) => st.flags?.haylee == null;
+/** Concert favors bought AND Brittney trash-talked → Wyatt introduction. */
+export function wyattIntroEarned(st) {
+  const f = st?.flags ?? {};
+  return (f.favors === 'full' || f.favors === 'partial') && f.trashTalk === true;
+}
+/** Ending when Brittney's exit is final (no Haylee route). */
+const exitEnding = (kind) => (kind === 'fedUp' ? 'fed_up' : 'roadside_exit');
+/** Everything Brittney's exit grants, as choice effects. */
+function brittneyExitEffects(st, kind) {
+  return {
+    flags: { brittneyLeft: kind, malikGrateful: true, pendingNeed: null },
+    passenger: null,
+    survivalFloor: EXIT_SURVIVAL_FLOOR,
+    achievement: BRITTNEY_EXIT_TROPHY,
+    meanwhile: 'brittney_rant',
+    text: { cid: 'malik', from: 'Malik Reed', msg: MALIK_EXIT_TEXT },
+    ...(hayleeRouteOpen(st) ? {} : { ending: exitEnding(kind), status: 'failed' }),
+  };
+}
+/** Same grants through a road-event api (the zero-Nerve exit happens while driving). */
+function applyBrittneyExit(api, kind) {
+  const fx = brittneyExitEffects(api.state, kind);
+  api.flags(fx.flags);
+  api.passenger(null);
+  api.survivalFloor?.(fx.survivalFloor);
+  api.achievement?.(fx.achievement);
+  api.meanwhile(fx.meanwhile);
+  api.text?.(fx.text.cid, fx.text.from, fx.text.msg);
+  if (fx.ending) api.fail(fx.ending);
+}
 /** How many of the three objectives landed at partial-or-better. */
 export function countryObjectives(st) {
   const f = st?.flags ?? {};
@@ -769,9 +825,14 @@ export const FEATURED_STORIES = {
       barely:        { label: 'BARELY MADE IT',    unlock: true },
       roadside_exit: { label: 'ROADSIDE EXIT',     unlock: false },
       kidnapping:    { label: 'KIDNAPPING REPORT', unlock: false },
+      // Brittney's early exits (owner 2026-11-05).  FED UP = the rudeness
+      // exit; HAYLEE'S INTRO = Haylee took you to Wyatt instead.
+      fed_up:        { label: 'FED UP',            unlock: false },
+      haylee_intro:  { label: "HAYLEE'S INTRO",    unlock: true },
     },
     meanwhile: {
       brittney_friends: pendingStrip("Brittney's StageWagon friends read her messages", ['StageWagon Friend', 'StageWagon Friend', 'Brittney']),
+      brittney_rant:    pendingStrip('Brittney tells her friends about the ride', ['Brittney', 'StageWagon Friend', 'Brittney']),
     },
     // Brittney can only board at Mercer — off the live Hip-Hop fork, or on
     // her own cold open when no phone is in play.
@@ -779,16 +840,29 @@ export const FEATURED_STORIES = {
       const hh = canon.stories.hiphop;
       if (hh?.status === 'active' && hh.items?.phone && !hh.items?.phoneLocked && !hh.flags?.mercerDone) return 'M';
       if (st.status === 'available' && !hh?.items?.phone && !run.passenger) return 'M';
+      // Brittney's gone and Haylee is thumbing at Exit 109: no generic rider there.
+      if (st.status === 'active' && st.flags?.brittneyLeft && st.flags?.hitch == null && !run.passenger) return 'E';
       return null;
     },
-    // She is in the seat for as long as the story is active.
-    deriveRun: (st, run) => { run.passenger = { id: 'brittney', name: 'Brittney', storyId: 'country' }; run.nerve = Math.max(0, Math.min(NERVE_MAX, run.nerve ?? NERVE_MAX)); },
+    // Brittney is in the seat for as long as the story is active — unless
+    // she has left, when it's Haylee (picked up at Exit 109) or nobody.
+    deriveRun: (st, run) => {
+      if (st.flags.brittneyLeft) { run.passenger = st.flags.hitch === 'aboard' ? { ...HAYLEE_PASSENGER } : null; return; }
+      run.passenger = { id: 'brittney', name: 'Brittney', storyId: 'country' };
+      run.nerve = Math.max(0, Math.min(NERVE_MAX, run.nerve ?? NERVE_MAX));
+    },
     // Blew past Exit 109 with Haylee waiting on the shoulder (owner: −5, and
     // she remembers).  A rewind before the exit undoes it exactly.
     onPass: {
       E: (api) => {
         const { state: st, run } = api;
-        if (!run.passenger || st.flags.haylee != null) return false;
+        // Brittney already gone: driving past Haylee's exit closes her route.
+        if (st.flags.brittneyLeft && st.flags.hitch == null) {
+          api.flags({ hitch: 'passed', unpassReopens: 'E' });
+          api.fail(exitEnding(st.flags.brittneyLeft));
+          return true;
+        }
+        if (!brit(run) || st.flags.haylee != null) return false;
         api.flags({ haylee: 'skipped' });
         api.relationship(OBJ_SKIP_EXIT);
         api.say("That was my best friend.");
@@ -798,6 +872,7 @@ export const FEATURED_STORIES = {
     onUnpass: {
       E: (api) => {
         const { state: st } = api;
+        if (st.flags.hitch === 'passed') { api.reopen?.(); api.flags({ hitch: null }); return true; }
         if (st.flags.haylee !== 'skipped') return false;
         api.flags({ haylee: null });
         api.relationship(-OBJ_SKIP_EXIT);
@@ -809,7 +884,7 @@ export const FEATURED_STORIES = {
       // No flat refill (owner 2026-09-09) — nerve comes from the need
       // choices' own effects and from crash-free crazy driving.
       run.flags.atStop = stopId;   // need lines reference THIS stop's businesses
-      if (stopId === 'V' || stopId === 'M') return;
+      if (stopId === 'V' || stopId === 'M' || !brit(run)) return;
       if (!st.flags.pendingNeed) {
         const n = st.flags.needCount ?? 0;
         api.flags({ pendingNeed: NEED_ROTATION[n % NEED_ROTATION.length], needCount: n + 1 });
@@ -817,7 +892,7 @@ export const FEATURED_STORIES = {
     },
     onRoad: (type, ev, api) => {
       const { run, state: st } = api;
-      if (!run.passenger) return;
+      if (!brit(run)) return;   // Nerve, flirting and the exits are Brittney's
       const mile = ev.mile ?? 0;
       const canTalk = () => (mile - (run.flags.lastLineMile ?? -9)) >= LINE_COOLDOWN_MI;
       const talk = (text) => { run.flags.lastLineMile = mile; api.say(text); };
@@ -872,8 +947,7 @@ export const FEATURED_STORIES = {
             if (run.flags.shoulderSec >= ROADSIDE_STOP_SEC) {
               api.beat({ beatId: 'roadside_exit', importance: 'ending', speaker: 'Brittney', portrait: 'biz_gasnsip',
                          text: 'She\'s out before the car fully stops, boots on gravel, thumb already up for the next truck. "Have a nice life, cowboy."' });
-              api.fail('roadside_exit');
-              api.passenger(null);
+              applyBrittneyExit(api, 'roadside');
               return;
             }
           } else run.flags.shoulderSec = 0;
@@ -983,7 +1057,7 @@ export const FEATURED_STORIES = {
       // Brittney has finished serving the player at Mercer Gas-N-Sip.
       mercer_departure: {
         stopId: 'M', mandatory: true, virtual: true,
-        when: (st, run) => !!run.passenger && !st.flags.departureShown,
+        when: (st, run) => brit(run) && !st.flags.departureShown,
         speaker: 'Brittney', portrait: 'brittney_gasnsip', importance: 'major',
         // Structured content (workshop §C): the narration is a CAPTION box,
         // the player's line is a speech balloon, Brittney's reply is a speech
@@ -1000,12 +1074,29 @@ export const FEATURED_STORIES = {
         ],
       },
 
+      // ── Fed up (owner 2026-11-05) — her relationship fell under one star:
+      //    she gets out at the next rest stop.  Listed before the needs so
+      //    it runs first; the stop's queued need tiles then stand down.
+      //    Lines are the owner's to write. ──────────────────────────────────
+      fed_up_exit: {
+        stopId: null, repeatable: true, stops: NEED_STOPS, mandatory: true,
+        when: (st, run) => brit(run) && !st.flags.brittneyLeft && (st.relationship ?? 0) < FED_UP_REL,
+        speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'ending',
+        line: "[OWNER LINE — Brittney has had enough and is getting out here]",
+        choices: [
+          { id: 'letHerGo', consequential: true, next: 'ellensburg_hitch',
+            label: "[OWNER LINE — player's parting shot]",
+            reply: "[OWNER LINE — Brittney's exit line]",
+            effects: (st) => brittneyExitEffects(st, 'fedUp') },
+        ],
+      },
+
       // ── Ellensburg — objectives 2 + 1: Haylee's pickup, then the supply
       // run (owner 2026-09-10: "if the supply run is for Vantage, it's in
       // Ellensburg").  The pending need still fires after this chain. ──────
       ellensburg_haylee: {
         stopId: 'E', mandatory: true,
-        when: (st, run) => !!run.passenger && st.flags.haylee == null,
+        when: (st, run) => brit(run) && st.flags.haylee == null,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'major',
         panelKey: 'country.ellensburg_haylee',
         line: "THAT'S her. HAYLEE! — okay, she's got the cooler, the tent, and I'm ninety percent sure my entire weekend is in that duffel. She's the smart one, so be normal. Can we make room?",
@@ -1026,7 +1117,7 @@ export const FEATURED_STORIES = {
       },
       ellensburg_supply: {
         stopId: 'E', mandatory: true,
-        when: (st, run) => !!run.passenger && st.flags.haylee != null && st.flags.haylee !== 'skipped' && st.flags.supplies == null,
+        when: (st, run) => brit(run) && st.flags.haylee != null && st.flags.haylee !== 'skipped' && st.flags.supplies == null,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
         line: (st) => "Okay. Logistics. My babes think I'm rolling up with THE cooler — I'm the cooler girl, it's a whole thing. "
           + (st.flags.haylee === 'aboard' ? "Haylee brought the tent; I've got a name tag and a phone on four percent. " : "Instead I've got a name tag and a phone on four percent. ")
@@ -1047,10 +1138,67 @@ export const FEATURED_STORIES = {
         ],
       },
 
+      // ── Haylee hitchhiking at Exit 109 (owner 2026-11-05) — only when
+      //    Brittney got out before Ellensburg.  Her ride bailed (Brittney's
+      //    clue line).  Concert favors cost double Brittney's supply run.
+      //    The hidden rule: talking trash about Brittney is what she wants
+      //    to hear — favors + trash talk earns the Wyatt introduction at
+      //    Vantage.  Every line is the owner's to write. ──────────────────
+      ellensburg_hitch: {
+        stopId: 'E', mandatory: true,
+        when: (st, run) => !!st.flags.brittneyLeft && st.flags.hitch == null && !run.passenger,
+        speaker: 'Haylee', portrait: 'haylee', importance: 'major',
+        line: "[OWNER LINE — Haylee on the shoulder at Exit 109, cooler and duffel, thumb out]",
+        choices: [
+          { id: 'pickUp', consequential: true, next: 'haylee_favors',
+            label: "[OWNER LINE — player offers Haylee a ride]",
+            reply: "[OWNER LINE — Haylee climbs in]",
+            effects: { flags: { hitch: 'aboard' }, passenger: { ...HAYLEE_PASSENGER } } },
+          { id: 'driveOn', consequential: true, next: null,
+            label: "[OWNER LINE — player leaves Haylee on the shoulder]",
+            reply: "[OWNER LINE — Haylee's reply]",
+            effects: (st) => ({ flags: { hitch: 'left' }, ending: exitEnding(st.flags.brittneyLeft), status: 'failed' }) },
+        ],
+      },
+      haylee_favors: {
+        stopId: 'E', mandatory: true, virtual: true,
+        speaker: 'Haylee', portrait: 'haylee', importance: 'choice',
+        line: "[OWNER LINE — Haylee asks for concert favors from Huff's]",
+        choices: [
+          { id: 'fullRun', consequential: true, next: 'haylee_talk', cost: HAYLEE_FAVOR_FULL_USD,
+            label: "[OWNER LINE — player buys the full run]",
+            reply: "[OWNER LINE — Haylee's reply]",
+            effects: { flags: { favors: 'full' } } },
+          { id: 'quickRun', consequential: true, next: 'haylee_talk', cost: HAYLEE_FAVOR_QUICK_USD,
+            label: "[OWNER LINE — player buys a quick run]",
+            reply: "[OWNER LINE — Haylee's reply]",
+            effects: { flags: { favors: 'partial' } } },
+          { id: 'noRun', consequential: true, next: 'haylee_talk',
+            label: "[OWNER LINE — player won't pay for her favors]",
+            reply: "[OWNER LINE — Haylee's reply]",
+            effects: { flags: { favors: 'none' } } },
+        ],
+      },
+      haylee_talk: {
+        stopId: 'E', mandatory: true, virtual: true,
+        speaker: 'Haylee', portrait: 'haylee', importance: 'choice',
+        line: "[OWNER LINE — Haylee asks what happened with Brittney]",
+        choices: [
+          { id: 'trashTalk', consequential: true, next: null,
+            label: "[OWNER LINE — player talks trash about Brittney]",
+            reply: "[OWNER LINE — Haylee, quietly delighted]",
+            effects: { flags: { trashTalk: true } } },
+          { id: 'polite', consequential: true, next: null,
+            label: "[OWNER LINE — player stays polite about Brittney]",
+            reply: "[OWNER LINE — Haylee's reply]",
+            effects: { flags: { trashTalk: false } } },
+        ],
+      },
+
       // ── Needs (repeatable, one per rest stop while pending) ────────────
       need_hunger: {
         stopId: null, repeatable: true, stops: NEED_STOPS, mandatory: true,
-        when: (st, run) => !!run.passenger && st.flags.pendingNeed === 'hunger',
+        when: (st, run) => brit(run) && st.flags.pendingNeed === 'hunger',
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
         line: "🍆 I'm starving. I don't swallow much meat these days, but I'm always down for fish tacos.",
         choices: [
@@ -1070,7 +1218,7 @@ export const FEATURED_STORIES = {
       },
       need_bathroom: {
         stopId: null, repeatable: true, stops: NEED_STOPS, mandatory: true,
-        when: (st, run) => !!run.passenger && st.flags.pendingNeed === 'bathroom',
+        when: (st, run) => brit(run) && st.flags.pendingNeed === 'bathroom',
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
         // Owner 2026-09-09: "She should only reference businesses at current
         // rest stops" — the name comes from THIS stop's amenities (stashed in
@@ -1102,7 +1250,7 @@ export const FEATURED_STORIES = {
       },
       need_thirst: {
         stopId: null, repeatable: true, stops: NEED_STOPS, mandatory: true,
-        when: (st, run) => !!run.passenger && st.flags.pendingNeed === 'thirst',
+        when: (st, run) => brit(run) && st.flags.pendingNeed === 'thirst',
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'choice',
         line: "💧 I'm parched. Something cold before we get back on that road?",
         choices: [
@@ -1121,7 +1269,7 @@ export const FEATURED_STORIES = {
       // Vantage.  Optional, once, at the first need stop after boarding. ──
       brittney_aux: {
         stopId: 'B', mandatory: false,
-        when: (st, run) => !!run.passenger && !st.flags.auxAsked,
+        when: (st, run) => brit(run) && !st.flags.auxAsked,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'minor',
         line: "Give me the aux. If I hear one more phonk drop before Vantage I'm walking to StageWagon.",
         choices: [
@@ -1140,13 +1288,43 @@ export const FEATURED_STORIES = {
         ],
       },
 
+      // ── Vantage with Haylee (owner 2026-11-05) — favors + trash talk earn
+      //    the introduction to Wyatt, Brittney's dad, who finds her hard to
+      //    take too.  Otherwise Haylee thanks you and joins her friends. ──
+      vantage_wyatt: {
+        stopId: 'V', mandatory: true,
+        when: (st, run) => haylee(run) && wyattIntroEarned(st) && !st.flags.wyattMet,
+        speaker: 'Wyatt', portrait: 'wyatt', importance: 'ending',
+        lines: [{ speaker: 'Haylee', text: "[OWNER LINE — Haylee introduces Ralphy to Wyatt, Brittney's dad]" }],
+        line: "[OWNER LINE — Wyatt hears what Ralphy said about Brittney]",
+        choices: [
+          { id: 'meet', consequential: true, next: null,
+            label: "[OWNER LINE — player to Wyatt]",
+            reply: "[OWNER LINE — Wyatt's reply]",
+            effects: { flags: { wyattMet: true, hitch: 'done' }, passenger: null, contact: { id: 'wyatt', name: 'Wyatt' },
+                       ending: 'haylee_intro', unlockGenre: STORY_GENRE.country } },
+        ],
+      },
+      vantage_haylee_bye: {
+        stopId: 'V', mandatory: true,
+        when: (st, run) => haylee(run) && !wyattIntroEarned(st),
+        speaker: 'Haylee', portrait: 'haylee', importance: 'ending',
+        line: "[OWNER LINE — Haylee thanks Ralphy and heads for her friends]",
+        choices: [
+          { id: 'bye', consequential: true, next: null,
+            label: "[OWNER LINE — player says goodbye]",
+            reply: "[OWNER LINE — Haylee's reply]",
+            effects: (st) => ({ flags: { hitch: 'done' }, passenger: null, ending: exitEnding(st.flags.brittneyLeft), status: 'failed' }) },
+        ],
+      },
+
       // ── Vantage — objective 3: shed the uniform (she has a white tank top
       // and jeans with her — owner), in the five minutes before her friends.
       // The wardrobe lock holds until here.  Chains straight into the ending.
       vantage_change: {
         intro: [{ id: 'vantage_spotted', panelKey: 'country.vantage_arrival.spotted', importance: 'minor', text: 'She sees her friends before the car stops.' }],
         stopId: 'V', mandatory: true,
-        when: (st, run) => !!run.passenger && st.flags.changeChoice == null,
+        when: (st, run) => brit(run) && st.flags.changeChoice == null,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'major',
         line: "Okay. Stop here. I am not walking up to my babes smelling like the roller grill with a name tag on. I've had a tank top and jeans in my bag since Mercer. Five minutes. There's a bathroom by the boat launch — or your back seat, if you turn around and swear on your car.",
         choices: [
@@ -1168,7 +1346,7 @@ export const FEATURED_STORIES = {
       // ── Vantage — her friends, her exit, the ending ─────────────────────
       vantage_arrival: {
         stopId: 'V', mandatory: true,
-        when: (st, run) => !!run.passenger && st.flags.changeChoice != null,
+        when: (st, run) => brit(run) && st.flags.changeChoice != null,
         speaker: 'Brittney', portrait: 'biz_gasnsip', importance: 'ending',
         line: (st, run) => "Those are my babes! I'm gonna go jump in with them. I wish you were coming with us. We would run you dry."
           + (countryOutcome(st, run) === 'ride_em' ? " Text me on your way back. I'd love to see you again." : ''),
