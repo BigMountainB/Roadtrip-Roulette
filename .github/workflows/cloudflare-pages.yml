@@ -30,6 +30,10 @@ on:
   push:
     branches:
       - main
+      # Dialogue-page-only deploys (2026-11-05): this branch is the live game
+      # commit (c00f063) plus website/dialogue.html, so pushing it updates
+      # /dialogue without changing /demo or /fully.  Only on this branch.
+      - claude/dialogue-only
   workflow_dispatch:   # manual re-run
 
 jobs:
