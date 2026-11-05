@@ -72,6 +72,7 @@ import { getPaletteAtProgress, lerpColor } from '../utils/Colors.js';
 import { getUpgradeEffects, getInstalledUpgrade, clearTempUpgrades } from '../systems/UpgradeSystem.js';
 import { aggregateBuffEffects, hasSpecialBuff } from '../data/buffs.js';
 import { genreTraitFor, mult as traitMult, rollWeaponBonusUse, cargoShieldAbsorbs, policeWarningChance, speedForDifficulty } from '../data/genreVehicleTraits.js';
+import { NERVE_MAX } from '../data/featuredStories.js';
 import { DrivingCombo } from '../systems/DrivingCombo.js';
 import { POLICE_AGENCIES, POLICE_SPRITE_META, agencyPoolAt, agencyTextureList, pickAgencyId,
          resolvePoliceSprite, jurFrameKey, SPIN_LADDER_FULL, PIT_CONTACT_LADDER,
@@ -11850,6 +11851,10 @@ export class GameScene extends Phaser.Scene {
       } else {
         const _extended = this.combo?.pickupExtend?.() ?? false;
         this._showPopup(_extended ? `${label}  ⏱ +${COMBO.PICKUP_EXT_SEC}s` : `${label}`, '#FFFF44');
+      }
+      // Brittney's Nerve: +0.5 per sprite, +1 at a ×10+ combo (owner 2026-11-05).
+      if (this.story?.run?.passenger) {
+        try { this.story.roadEvent('pickup', { mile: this._odometer ?? 0, comboLevel: this.combo?.level ?? 1 }, this._storyHooks()); } catch (_) {}
       }
       this.effects.triggerShake(55, 0.002);
       // Special events from the item.
@@ -25244,11 +25249,15 @@ export class GameScene extends Phaser.Scene {
       // threshold in the story reads the raw value), plus the duet Following.
       const stars = Math.max(0, Math.min(5, Math.round((st.relationship ?? 0) / 20)));
       label = `🎸 ${p.name.toUpperCase()}  ${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}  FOLLOWING ${Math.round(st.following ?? 0)}`;
+    } else if (p.id !== 'brittney') {
+      // Haylee after Brittney's exit (owner 2026-11-05): no Nerve, no needs.
+      label = `🧢 ${p.name.toUpperCase()}`;
     } else {
       const need = st.flags?.pendingNeed;
       const icon = need === 'hunger' ? '🍆' : need === 'thirst' ? '💧' : need === 'bathroom' ? '🚻' : '';
-      const nerve = Math.round(story.run.nerve ?? 0);
-      label = `💋 ${p.name.toUpperCase()}  NERVE ${nerve}/25${icon ? '  ' + icon : ''}`;
+      // Sprites add half points (owner 2026-11-05): show the half, never round up to full.
+      const n = Math.floor((story.run.nerve ?? 0) * 2) / 2;
+      label = `💋 ${p.name.toUpperCase()}  NERVE ${Number.isInteger(n) ? n : n.toFixed(1)}/${NERVE_MAX}${icon ? '  ' + icon : ''}`;
     }
     if (!this._storyHud) {
       this._storyHud = this.add.text(30, 124, label, { fontSize: '12px', fontFamily: 'Impact, "Arial Black", Arial, sans-serif', color: '#FFD0E0', stroke: '#000', strokeThickness: 3 })

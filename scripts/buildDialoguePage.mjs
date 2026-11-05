@@ -29,7 +29,7 @@ import {
   RIDE_EM_PASSES, STANDARD_REL, HAYLEE_WARM, HAYLEE_DRY, NAN_STAY_REL, SIXTY_FORTY_REL,
   BROKEN_VOICE_CONTROLLING, BROKEN_VOICE_REL, TRUE_ENDING_REL, PULLMAN_PAY, CLUE_LINES_MI,
   HAYLEE_LINES_MI, KIDNAP_WARN_MI, KIDNAP_REPORT_MI, EXIT_SURVIVAL_FLOOR, FED_UP_REL,
-  HAYLEE_FAVOR_FULL_USD, HAYLEE_FAVOR_QUICK_USD,
+  HAYLEE_FAVOR_FULL_USD, HAYLEE_FAVOR_QUICK_USD, NERVE_MAX, NERVE_PICKUP, NERVE_PICKUP_HOT, NERVE_PICKUP_COMBO,
 } from '../src/data/featuredStories.js';
 import { PANEL_META } from '../src/data/comicPanels.js';
 import { REST_STOP_ENCOUNTERS, BRITTNEY_MERCER_GREETER } from '../src/data/encounters.js';
@@ -447,7 +447,7 @@ function countryChapter() {
     ],
     issues, nodes: B.nodes,
     extras: [
-      { title: 'When she gets rattled (Nerve)', note: 'She starts at 25 Nerve. Crashes cost Nerve; speeding, clean passes and near misses build it back. She comments as it falls.',
+      { title: 'When she gets rattled (Nerve)', note: `She starts at ${NERVE_MAX} Nerve. Crashes cost Nerve; speeding, clean passes, near misses and road sprites build it back (+${NERVE_PICKUP} per sprite, +${NERVE_PICKUP_HOT} at a ×${NERVE_PICKUP_COMBO}+ combo). Being rude never touches it. She comments as it falls.`,
         items: Object.entries(NERVE_LINES).sort((a, b) => b[0] - a[0]).map(([t, text]) => ({ speaker: 'Brittney', text, note: `Nerve drops to ${t}` })) },
       { title: 'After a big crash (5+ HP)', items: [
         ...crashSide.map(b => ({ ...b, note: 'side-swipe or corner hit' })), ...crashFront.map(b => ({ ...b, note: 'any other big hit' })) ] },

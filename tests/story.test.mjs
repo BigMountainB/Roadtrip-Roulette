@@ -19,7 +19,7 @@ import {
   vinylOutcome, vinylPayout, VINYL_RECORDS, VINYL_PAY_PRISTINE, FOUNDER_OFFER, VANTAGE_AMBUSH_MILE,
   countryOutcome, countryObjectives, hayleeRead, NERVE_MAX, COUNTRY_PAY_STANDARD, COUNTRY_PAY_RIDE_EM, KIDNAP_REPORT_MI, ROADSIDE_STOP_SEC,
   classicRockOutcome, isBrokenVoice, PULLMAN_PAY, OTHELLO_COVER, OTHELLO_PROPOSITION, NAN_OFFER, SHOW2_TOTAL, SHOW3_SOLO, SHOW3_DUET,
-  FED_UP_REL, BRITTNEY_EXIT_TROPHY, HAYLEE_FAVOR_FULL_USD, HAYLEE_FAVOR_QUICK_USD, SUPPLY_FULL_USD, SUPPLY_QUICK_USD, wyattIntroEarned,
+  NERVE_PICKUP_COMBO, NERVE_NEED_HALF, FED_UP_REL, BRITTNEY_EXIT_TROPHY, HAYLEE_FAVOR_FULL_USD, HAYLEE_FAVOR_QUICK_USD, SUPPLY_FULL_USD, SUPPLY_QUICK_USD, wyattIntroEarned,
 } from '../src/data/featuredStories.js';
 
 let passed = 0, failed = 0;
@@ -529,6 +529,26 @@ const roadHooks = () => { const log = { said: [], wanted: [] }; return { log, ho
   check('1.6 s on the shoulder: she\'s out, seat empty, no stars, Haylee route open', story.status('country') === STORY_STATUS.ACTIVE && story.story('country').flags.brittneyLeft === 'roadside' && story.run.passenger === null && rh.log.wanted.length === 0);
   check('no first-drive "changes" beat (wardrobe lock: uniform until Vantage)', !Object.values(story.canon().ledger).some(e => e.nodeId === 'beat' && e.choiceId === 'changes'));
 }
+// ═══ Nerve from road sprites; cruelty never touches it (owner 2026-11-05) ══
+{
+  const { story } = board(); const rh = roadHooks();
+  story.run.nerve = 10;
+  story.roadEvent('pickup', { mile: 20, comboLevel: 3 }, rh.hooks);
+  check('sprite: +0.5 Nerve', story.run.nerve === 10.5);
+  story.roadEvent('pickup', { mile: 20.1, comboLevel: NERVE_PICKUP_COMBO }, rh.hooks);
+  check('sprite at a ×10 combo: +1 Nerve', story.run.nerve === 11.5);
+  story.run.nerve = NERVE_MAX - 0.5;
+  story.roadEvent('pickup', { mile: 20.2, comboLevel: 15 }, rh.hooks);
+  check('sprite never pushes Nerve past the max', story.run.nerve === NERVE_MAX);
+  story.run.nerve = 10; story.restStopVisited('B');
+  H('country', 'need_hunger', 'wait', story, {}, 12, 'B');
+  story.restStopVisited('I'); H('country', 'need_hunger', 'burrito', story, {}, 18, 'I');
+  check('cruel/half-hearted answers cost relationship, never Nerve', story.run.nerve === 10 + NERVE_NEED_HALF && story.story('country').relationship < 55);
+  const x = board(); x.story.run.nerve = 10; x.story.run.passenger = { id: 'haylee', name: 'Haylee', storyId: 'country' };
+  x.story.roadEvent('pickup', { mile: 20, comboLevel: 12 }, rh.hooks);
+  check('Haylee in the seat: sprites do nothing to Nerve', x.story.run.nerve === 10);
+}
+
 // ═══ Brittney leaves early (owner 2026-11-05) ═════════════════════════════
 const exitHooks = () => {
   const log = { said: [], wanted: [], floors: [], trophies: [], texts: [], cash: 0, unlocks: [], contacts: [] };

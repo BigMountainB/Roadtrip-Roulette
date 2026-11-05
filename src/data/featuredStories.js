@@ -109,6 +109,12 @@ export const NERVE_NEED_HALF    = 3;
 export const NERVE_FAST_MPH     = 115;  // +1 per NERVE_FAST_SEC above this
 export const NERVE_FAST_SEC     = 15;
 export const NERVE_PASSES_PER   = 3;    // +1 per 3 clean overtakes
+// Road sprites (owner 2026-11-05): each pickup is worth +0.5 Nerve, like it
+// is for the player — a whole +1 while the driving combo is ×10 or higher.
+// Cruelty never touches Nerve; that is what relationship is for.
+export const NERVE_PICKUP       = 0.5;
+export const NERVE_PICKUP_HOT   = 1;
+export const NERVE_PICKUP_COMBO = 10;
 
 export const NERVE_THRESHOLDS   = [20, 15, 10, 5];
 export const KIDNAP_WARN_MI     = 1.0;    // "I'm calling the cops"
@@ -899,7 +905,8 @@ export const FEATURED_STORIES = {
       // Crash-free crazy driving BUILDS her nerve (owner 2026-09-09):
       //   +1 per NERVE_FAST_SEC (15 s) of cumulative driving above 115 mph,
       //   +1 per NERVE_PASSES_PER (3) clean overtakes,
-      //   +1 per head-on near miss (see the 'nearMiss' event below).
+      //   +1 per head-on near miss (see the 'nearMiss' event below),
+      //   +0.5 per road sprite collected (+1 at a ×10+ combo).
       // Damage still subtracts HP-for-HP, so a crash undoes the thrill.
       const gainNerve = (n) => { run.nerve = Math.min(NERVE_MAX, (run.nerve ?? NERVE_MAX) + n); };
       if (type === 'tick') {
@@ -973,6 +980,10 @@ export const FEATURED_STORIES = {
         } else {
           for (const t of NERVE_THRESHOLDS) if (before > t && run.nerve <= t && t > 0 && canTalk()) { talk(NERVE_LINES[t]); break; }
         }
+        return;
+      }
+      if (type === 'pickup') {
+        gainNerve((ev.comboLevel ?? 1) >= NERVE_PICKUP_COMBO ? NERVE_PICKUP_HOT : NERVE_PICKUP);
         return;
       }
       if (type === 'nearMiss') {
