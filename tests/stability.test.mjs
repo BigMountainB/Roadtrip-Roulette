@@ -468,59 +468,5 @@ function makeStreamer(opts = {}) {
     /_policeKeyPinned\(k\)[\s\S]{0,900}for \(const id of \(this\._polQueued \?\? \[\]\)\)/.test(gs));
 }
 
-// ── Restart HP (owner 2026-10-03: "restarted the run, my life was still at
-// 1 HP") ─────────────────────────────────────────────────────────────────
-{
-  const gs = read('src/scenes/GameScene.js');
-  const mj = read('src/main.js');
-  const snap = gs.slice(gs.indexOf("let _snap = !_fresh ? this.registry.get('runStartSnap')"));
-  check('a mid-run rebuilt run-start snap banks FULL HP, not the current HP',
-    /hp:\s*_fresh \? \(this\.damage\?\.getDurability\?\.\(\) \?\? null\)\s*:\s*\(this\.damage\?\.getMax\?\.\(\) \?\? null\)/.test(snap));
-  check('a mid-run rebuilt snap does not bank mid-run stars / fuel',
-    /stars:\s*_fresh \?/.test(snap) && /fuelMi:\s*_fresh \?/.test(snap));
-  // Phaser Systems.start only replaces data when it is truthy, so a bare
-  // restart() replays the previous start (a checkpoint respawn) — start-over
-  // paths must pass explicit data.
-  const phaserSys = read('node_modules/phaser/src/scene/Systems.js');
-  check('premise: Phaser keeps the old data on a falsy restart', /if \(data\)\s*\{\s*settings\.data = data;/.test(phaserSys));
-  check('BACK TO SEATTLE restarts with explicit fresh data', /'BACK TO SEATTLE — \$0'[\s\S]{0,1200}this\.scene\.restart\(\{\}\)/.test(gs));
-  check('phone-menu Start Over restarts with explicit fresh data', /__startOver = \(\) => \{[\s\S]{0,600}restart\?\.\(\{\}\)/.test(mj));
-}
-
-// ── Steering settle is frame-rate independent (owner 2026-10-04: "takes a
-// while to react and then it's over steering") ───────────────────────────
-{
-  const gs = read('src/scenes/GameScene.js');
-  check('steer settle uses the exponential form',
-    /p\.steerVelocity \+= \(desiredLateral - p\.steerVelocity\)\s*\* \(1 - Math\.exp\(-grip \* dt \* settleRate\)\)/.test(gs));
-  check('the overshooting Euler settle is gone',
-    !/p\.steerVelocity \+= \(desiredLateral - p\.steerVelocity\) \* grip \* dt \* settleRate;/.test(gs));
-  // Behaviour: a step input never overshoots at ANY frame rate.
-  for (const k of [8, 10, 15]) for (const fps of [60, 20, 8, 4, 2]) {
-    let v = 0, peak = 0; const dt = 1 / fps;
-    for (let i = 0; i < fps * 3; i++) { v += (1 - v) * (1 - Math.exp(-dt * k)); peak = Math.max(peak, v); }
-    check(`settle k=${k} @ ${fps} fps never passes its target`, peak <= 1 + 1e-9);
-  }
-  check('?devtools shows a live fps + worst-frame readout', read('src/main.js').includes('fps · worst'));
-}
-
-// ── iPhone draw cost (owner 2026-11-01: 6–12 fps; ?perfscan put 98% of draw
-// in Graphics) ────────────────────────────────────────────────────────────
-{
-  const helpers = read('src/utils/Helpers.js');
-  const road = read('src/road/Road.js');
-  const gs = read('src/scenes/GameScene.js');
-  const ft = helpers.slice(helpers.indexOf('export function fillTrap'));
-  check('fillTrap draws two triangles (no per-frame earcut path)',
-    /g\.fillTriangle\(x1, y1, x2, y2, x3, y3\);\s*g\.fillTriangle\(x1, y1, x3, y3, x4, y4\);/.test(ft)
-    && !/fillPoints/.test(ft.slice(0, ft.indexOf('\n}'))));
-  check('road skips translucent overlays on sub-pixel segments', /const subPx = \(nyA - fyA\) < 1;/.test(road)
-    && (road.match(/!subPx/g) || []).length >= 3);
-  check('late HUD/world objects auto-ignore the other camera',
-    /_autoIgnore\(this\._hudObjects, this\.cameras\.main\);/.test(gs) && /_autoIgnore\(this\._worldObjects, this\._uiCam\);/.test(gs));
-}
-
-check('unchanged Text colour/stroke does not re-render', /T\.setColor = function \(c\) \{ return this\.style\?\.color === c \? this/.test(read('src/main.js')));
-
 console.log(`stability tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

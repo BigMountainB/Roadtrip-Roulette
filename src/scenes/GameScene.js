@@ -3390,22 +3390,6 @@ export class GameScene extends Phaser.Scene {
     this._uiCam = this.cameras.add(0, 0, C.WORLD_W, SCREEN_H);
     this.cameras.main.ignore(this._hudObjects);
     this._uiCam.ignore(this._worldObjects);
-    // Objects created LATER (lazily-built HUD pieces) were pushed into these
-    // lists after the ignore() above ran, so nothing excluded them from the
-    // other camera: the survival-bar labels rendered through BOTH cameras —
-    // a second, offset copy ("AAlertness", "DDrinks" on a wide phone, owner
-    // screenshot 2026-11-01) and double the draw.  Every later push now
-    // applies the matching ignore, so no call site can forget it.
-    const _autoIgnore = (list, cam) => {
-      const push = Array.prototype.push;
-      list.push = function (...items) {
-        const r = push.apply(this, items);
-        try { cam.ignore(items.filter(Boolean)); } catch (_) {}
-        return r;
-      };
-    };
-    _autoIgnore(this._hudObjects, this.cameras.main);
-    _autoIgnore(this._worldObjects, this._uiCam);
     this._applyDecoupledCameras();
     // Re-center whenever the canvas is resized to the device aspect (boot rAF /
     // rotation).  main.js's applyOrientation() calls setGameSize AFTER updating
@@ -4997,20 +4981,12 @@ export class GameScene extends Phaser.Scene {
           locName:    this._dailyStage
                         ? (this._lastCheckpoint?.name ?? 'Seattle, WA')
                         : 'Seattle, WA',
-          // A snap rebuilt MID-RUN (registry lost to a page reload / iOS
-          // memory kill) must not bank the CURRENT state as "the run's
-          // start": RESTART DRIVE then rewound to mile 0 carrying the
-          // mid-run HP (owner 2026-10-03: "restarted the run, my life was
-          // still at 1 HP").  The start of a run is full HP; the mid-run
-          // tank / stars / vices / weapons are dropped (null = the restart
-          // path keeps its fresh defaults) for the same reason.
-          hp:         _fresh ? (this.damage?.getDurability?.() ?? null)
-                             : (this.damage?.getMax?.() ?? null),
-          fuelMi:     _fresh ? (this.player?.gasMi ?? null) : null,
-          stars:      _fresh ? (this.cops?.stars ?? 0) : 0,
-          viceLevels: _fresh ? { ...(this.vices?.levels ?? {}) } : {},
-          f12Tokens:  _fresh ? [...(this.cops?.f12Tokens ?? [])] : [],
-          coalAmmo:   _fresh ? (this.cops?.coalAmmo ?? 0) : null,
+          hp:         this.damage?.getDurability?.() ?? null,
+          fuelMi:     this.player?.gasMi ?? null,
+          stars:      this.cops?.stars ?? 0,
+          viceLevels: { ...(this.vices?.levels ?? {}) },
+          f12Tokens:  [...(this.cops?.f12Tokens ?? [])],
+          coalAmmo:   this.cops?.coalAmmo ?? 0,
           vehicleId:  this.player?.vehicleId ?? 'beater',
           upgrades:     JSON.parse(JSON.stringify(_save?.get?.('upgrades')     ?? {})),
           tempUpgrades: JSON.parse(JSON.stringify(_save?.get?.('tempUpgrades') ?? {})),
@@ -7231,15 +7207,7 @@ export class GameScene extends Phaser.Scene {
     // Capture the gap BEFORE updating — used below to detect a skid
     // (driver wants more lateral than the tires can deliver).
     const _slipGap = Math.abs(desiredLateral - p.steerVelocity);
-    // Exponential (frame-rate-independent) settle — owner 2026-10-04: "when I
-    // steer, it takes a while to react and then it's over steering".  The
-    // old Euler step `+= gap * grip*dt*settleRate` has a per-frame factor of
-    // ~0.13 at 60 fps but passes 1 once a frame takes > ~125 ms, so on a
-    // dropped frame the car OVERSHOT its target lateral in one step (and
-    // oscillated past ~250 ms).  1 − e^(−k·dt) is the exact solution of the
-    // same ease: ~identical at 60 fps (0.125 vs 0.133), never above 1.
-    p.steerVelocity += (desiredLateral - p.steerVelocity)
-      * (1 - Math.exp(-grip * dt * settleRate));
+    p.steerVelocity += (desiredLateral - p.steerVelocity) * grip * dt * settleRate;
 
     // Skid detection — the car is sliding when grip is poor AND the
     // wanted lateral exceeds what the tires are achieving by a wide
@@ -21817,12 +21785,7 @@ export class GameScene extends Phaser.Scene {
         } catch (_) {}
         this.registry?.set?.('runEligibleEarnings', 0);
         this.audio?.setPaused?.(false);
-        // Explicit `{}`: a bare restart() REPLAYS the data this scene was
-        // last started with (Phaser Systems.start only replaces truthy
-        // data), so after a CONTINUE it respawned at the checkpoint with
-        // half HP instead of going back to Seattle.
-        this.registry?.remove?.('runStartSnap');
-        this.scene.restart({});
+        this.scene.restart();
       }, `→ $0 · Seattle · parts & upgrades kept`);
     }
     mkBtn(SCREEN_W / 2 + 130, 200, 'LOAD SAVE', 0x39A8FF, true, () => {
