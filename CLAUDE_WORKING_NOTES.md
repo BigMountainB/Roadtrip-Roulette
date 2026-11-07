@@ -5284,3 +5284,10 @@ aliases honoured).  The owner says he will redo the comic art — these aliases 
 ## OWNER LINE (2026-11-05) — Dad's first text, hospital intro
 Ralph Sr.'s first text to Ralphy (Hospital intro, beat 1) is: **"Man down! St. Anne’s hospital. ASAP!"**
 (owner's words; replaces the draft "In the hospital. Come by ASAP."). The hospital is St. Anne's.
+
+## Story playtest pages — how they go live (2026-11-07)
+- `/dialogue` (Rain Check branch, 18 chapters) and `/dialogue2` (reunion branch, §18.5J) are
+  published from branch `claude/dialogue-only` = live game commit `c00f063` + the two pages.
+  Pushing that branch deploys; game pages stay as live. Don't `npm run deploy` for page edits.
+- `/dialogue2` source: `art-source/reunion-playtest/story.mjs` → `node art-source/reunion-playtest/build.mjs`.
+  Each panel has an editable Artwork description (`artDesc`).

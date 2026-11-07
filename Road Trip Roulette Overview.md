@@ -13462,6 +13462,24 @@ HTML pages were preserved using current live bytes; 416 absent asset URLs return
 HTML fallback were omitted rather than published as bogus binary files. The full production
 update still needs owner approval; revalidate the live baseline if deployment occurs later.
 
+**Published 2026-11-07 (Claude, owner-approved):** `/dialogue2` is live at
+https://roadtrip-roulette.pages.dev/dialogue2/ . It was NOT published from the staged
+`/tmp/rtr-dialogue2-publish-live` folder (that lives on the owner's Mac and was not reachable).
+Instead it went out through the `claude/dialogue-only` branch: the exact commit the live game was
+built from (`c00f063`; live build stamp 2026-10-04 02:12:38 UTC, rebuilt bundles match byte for
+byte apart from the build time) + `website/dialogue.html` + `website/dialogue2/index.html`.
+Pushing that branch runs the Cloudflare Pages workflow (its copy triggers on push to that branch
+only), so `/dialogue`, `/demo`, `/fully` and the landing pages stay exactly as live. Before the
+deploy the live site was rechecked against the branch (dialogue, b23 game, eight landing pages).
+To publish a dialogue page change later: commit the rebuilt page onto `claude/dialogue-only` and
+push. Never `npm run deploy` for this; it ships unrelated game changes.
+
+**Artwork descriptions (owner 2026-11-07):** every panel (scene node) on `/dialogue2` has one
+editable **Artwork** line above its dialogue, using the same ✎ editor (edit, undo, export as
+“Artwork · Was / Now”). Source: node `extra.artDesc` in `story.mjs`; until it is set the page shows
+`[ARTWORK — <panel title>: describe this panel]`. Edits are matched by original text, so that
+placeholder names its panel and `build.mjs` fails on duplicate panel titles within a chapter.
+
 ### 18.6 Featured Story A — Hip-Hop: Malik's Phone
 
 This story may be pursued on a later run if Country is chosen first, or Hip-Hop may be purchased
