@@ -1,0 +1,16 @@
+{
+  "base": "https://roadtrip-roulette.pages.dev",
+  "stage": "/tmp/rtr-dialogue2-publish-live",
+  "total": 2391,
+  "same": 1972,
+  "restoredLive": 3,
+  "omitted": 416,
+  "changedPaths": [
+    "demo/index.html",
+    "dialogue/index.html",
+    "fully/index.html"
+  ],
+  "newPaths": [
+    "dialogue2/index.html"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "method": "Built-in image_gen",
+  "prompt": "Use case: illustration-story. Asset: protagonist character design reference sheet for Road Trip Roulette. Create BRENDAN, recognizable as the real adult man in photos 1–4, in the detailed comic-book rendering of reference image 5. Images 1–4 are IDENTITY references only; image 5 is STYLE ONLY, do not copy that younger man's face or shaggy hair. Preserve Brendan's distinctive high/receding hairline, very short light brown/dark blond hair, blue-gray eyes, pale eyebrows, expressive horizontal forehead lines, slightly long straight nose, fair skin, blond mustache with short closely trimmed blond beard/stubble and lighter chin. Age around late 30s/early40s as in photos, approachable natural athletic-average build; not a generic handsome hero, not aged to elderly, no beautification that loses likeness. Lock SAME short facial hair and haircut in EVERY view. Style: confident crisp black ink contours, finely hatched shadows, restrained halftone, detailed expressive faces, grounded proportions, muted warm cinematic colors matching image5, clearly drawn comic art NOT photography or painted realism. Large landscape clean reference sheet on warm light gray blank background. Layout: LEFT one complete standing full-body view from head to shoes, CENTER two head-and-shoulders views front and true side profile, RIGHT a 2 by 2 grid of head studies: warm crooked smile; dry skeptical raised eyebrow; startled wide eyes and slightly open mouth; anxious trying-too-hard polite smile. Every head fully visible, spaced cleanly, same identity and proportions. Outfit provisional practical PNW roadtrip: open charcoal lightweight rain jacket over plain muted blue crew-neck shirt, dark straight jeans, worn gray casual walking shoes. No hats, sunglasses, logos, delivery vest, guitar, scenery, text, captions or watermarks. Hands out of pockets in full-body view, natural relaxed stance, two hands only. Facial likeness is highest priority, carefully compare photos instead of borrowing previous protagonist appearance.",
+  "sourcePhotos": [
+    "baughbr25.jpg",
+    "baughbr31.jpg",
+    "baughbr10.jpg",
+    "baughbr42.jpg"
+  ],
+  "sourceFolder": "/Users/brendanbaughn/Desktop/kohya/baughbr",
+  "status": "First-pass character design, wardrobe provisional; existing protagonist assets not overwritten."
+}

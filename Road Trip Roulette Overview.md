@@ -13332,6 +13332,136 @@ not become sterile rights-clearance exposition. Every comic dialogue beat should
 alter leverage/relationship, make a decision playable, or pay off an earlier joke. Default to
 5–10-word balloons and do not exceed 20–25 words without a deliberately approved exception.
 
+### 18.5J Story branch — Brendan’s reunion road trip (2026-11-06)
+
+**Separate development branch, requested by the owner.** Develop this direction independently
+of the earlier Rain Check / father’s signatures plot. Preserve that plot, dialogue, playtests
+and art as the prior branch; nothing here automatically rewrites production game code. The owner
+prioritizes a compelling, funny, addictive and relatable story over preserving previous work.
+
+**Owner direction / accepted foundation**
+
+- Brendan is the main character, using the owner’s likeness. Working premise: a 38-year-old
+  struggling musician/gig driver heads back to Spokane for his twentieth high-school reunion.
+  Spokane is this branch’s proposed destination; the production Seattle–Pullman route has not
+  been changed. Exact age/year arithmetic and trip duration remain to be settled.
+- A tourist road trip: scenic landmarks and photo opportunities initially help Brendan make
+  his life look impressive online. Actually going outside, having experiences and meeting
+  people starts making his life better. Social posts are part of the premise, not a sincere
+  rule that popularity alone equals a successful life.
+- Route choices should bring different encounters and opportunities. Owner examples, still
+  candidates rather than a verified itinerary: Issaquah trolls versus Poo Poo Point; Twin Peaks
+  locations versus Rattlesnake Lake; Palouse Falls versus the Magic Bus (exact bus/location TBD).
+  Verify geography, access and travel times before locking route placement.
+- Small opportunities becoming larger commitments is an explicit owner priority. A minor
+  encounter can lead to a performance, collaborator, booking or further dilemma. These chains
+  should give players reasons to want one more stop; exact encounters are unwritten.
+- Mom loves the unimpressive Brendan; he keeps trying to impress Dad. Mom can offer to pay for
+  windshield replacement if he actually texts her back on time. Exact timing/reward mechanics
+  are not yet designed. Both parents should be developed as people, not just meters.
+- Brendan can genuinely improve and impress former classmates. One possible outcome: something
+  an old crush says shortly before his performance makes him choke. This is a possible branch,
+  not a mandatory failure ending or a judgment that the journey was worthless.
+- Sarah, Shelby and Katie are Brendan’s high-school crushes. Their present-day comic reference
+  sheets are saved below. Their personalities, availability, relationships and final roles are
+  not established by the photographs. Do not invent biographical claims about the real people.
+
+**Proposals discussed, NOT locked**
+
+- The accidental touring-success lie: “on the road constantly” actually means deliveries;
+  classmates assume a touring career, and the organizer asks Brendan to perform.
+- Sarah, Shelby and Katie attend one shared reunion setting, with occasional messages during
+  the trip. Journey choices change conversations and possible reconnections instead of requiring
+  three separate full road-trip campaigns. The owner is considering relationship endings but
+  has not decided that every route must end with one of these women.
+- Other possible outcomes include choosing someone met on the road, friendship, performing
+  with a collaborator, or recovering from stage fright. None is yet a final ending specification.
+- A jingle the audience recognizes could become an unexpected payoff. Exact song, trigger and
+  ending remain open. Prior Rain Check signatures, rewards and ending dialogue do not carry
+  into this branch by default.
+
+**Saved character assets — first-pass designs**
+
+| Character | Full-resolution master | Lightweight reference export |
+| --- | --- | --- |
+| Brendan | `art-source/shared/brendan_2026_11_06/brendan_character_reference_v1.png` | `public/assets/storylines/shared/characters/brendan_reference_sheet_v1.webp` |
+| Sarah | `art-source/shared/sarah_2026_11_06/sarah_character_reference_v1.png` | `public/assets/storylines/shared/characters/sarah_reference_sheet_v1.webp` |
+| Shelby | `art-source/shared/shelby_2026_11_06/shelby_character_reference_v1.png` | `public/assets/storylines/shared/characters/shelby_reference_sheet_v1.webp` |
+| Katie | `art-source/shared/katie_2026_11_06/katie_character_reference_v1.png` | `public/assets/storylines/shared/characters/katie_reference_sheet_v1.webp` |
+| Dan | `art-source/shared/dan_2026_11_06/dan_character_reference_v1.png` | `public/assets/storylines/shared/characters/dan_reference_sheet_v1.webp` |
+| Andrew | `art-source/shared/andrew_2026_11_06/andrew_character_reference_v1.png` | `public/assets/storylines/shared/characters/andrew_reference_sheet_v1.webp` |
+| Jay | `art-source/shared/jay_2026_11_06/jay_character_reference_v1.png` | `public/assets/storylines/shared/characters/jay_reference_sheet_v1.webp` |
+| Yusen | `art-source/shared/yusen_2026_11_06/yusen_character_reference_v1.png` | `public/assets/storylines/shared/characters/yusen_reference_sheet_v1.webp` |
+
+Yusen is Brendan’s friend and former college roommate. Owner describes him as quite kooky.
+His reference uses expressive facial acting and a provisional hiking outfit inspired by the
+photos. His specific encounters, dialogue and story function remain unwritten. Preserve the
+photo likeness, short black hair and sparse chin/jaw facial hair consistently.
+
+**Owner wardrobe direction:** Andrew should generally dress up more than his first-pass red
+hoodie reference; choose clothing by scene. His face reference remains useful, but the hoodie is
+not his locked default wardrobe. Jay is also Brendan’s friend and likes fashionable activewear:
+polished technical layers, tapered pants and clean sneakers. Keep his likeness and natural
+proportions from the photos; do not invent a muscular build. Jay’s story role beyond friendship
+remains undecided.
+
+Andrew is Brendan’s friend. His current adult reference uses the recent photos and natural
+average-to-stocky proportions, short dark hair and short dark beard. Outfit is provisional;
+personality and further narrative role are unassigned. Owner feedback on Dan: the v1 shoulders
+and arms were too muscular. Dan v1 needs a natural average-build correction before final use.
+Do not carry that exaggerated muscularity into Andrew or subsequent cast designs.
+
+Dan’s present-day reference is around age 40, based primarily on the adult photographs;
+older high-school/college photos inform facial continuity. Preserve short dark hair, gray
+temples and the distinctive white chin area within his dark full beard. His personality and
+narrative role are not yet assigned. Outfit is provisional.
+
+Each master folder also has `generation-spec.json` with the built-in image-generation prompt.
+Brendan was described by the owner as essentially perfect. Preserve this detailed ink,
+crosshatching and restrained halftone style across the cast. Sarah is 5′9″ with an athletic build.
+Women’s present-day reunion-age treatment and outfits are provisional. Original photographs
+remain in their source locations; this task saves generated character assets, not a new photo
+archive. Existing Ralphy references are preserved, not overwritten.
+
+**Next story decisions:** establish the opening incident and reunion deadline; choose the
+actual destination/route and landmark branches; define Brendan’s relationship with each parent;
+then build the first opportunity chain. Do not write a whole itinerary or romance tree as canon
+before those choices are made.
+
+**Dialogue 2 authoring site — 2026-11-06:** owner requested a separate `/dialogue2` page like
+`/dialogue`, starting the reunion branch. Source: `art-source/reunion-playtest/story.mjs` and
+`build.mjs`; build with `node art-source/reunion-playtest/build.mjs`. Outputs:
+`website/dialogue2/index.html` and `Story Playtest 2/Road Trip Roulette Reunion Playtest.html`.
+Four draft chapters (notification, crew, Mom, first detour) plus all eight character sheets;
+27 scene nodes, 21 chapter routes. All new dialogue is provisional authoring, not approved canon
+or production game integration. First detour’s exact landmark remains undecided.
+
+The site reuses the existing editor with a distinct `rtr.dialogue2` save namespace: line edits,
+removals, added dialogue/branches, per-chapter export/import and clickable path map. Saved
+chapter progress is independent of the earlier playtest. Browser checks covered choices,
+chapter navigation, map jumps, edit persistence/undo and the character-sheet viewer.
+Existing character art is reused; the owner asks that any new art be quick, simple sketches
+with low credit/time usage. No new image-generation calls were needed for this site.
+
+**Voice research, limited sample rather than a complete message archive:** owner authorized
+reading Andrew Grinaker, Dan Poss, Grant Yusen Lin, Jay Erickson and DanDrewAaronJ. Sampled those
+five named conversations in Messages via read-only UI navigation. Working observations, not
+fixed personality diagnoses: Dan often has a short dry reply; Andrew combines practical
+questions/help with easy banter; Jay uses casual enthusiastic reactions and sports/music
+conversation; Yusen mixes playful dry comments with concrete plans and useful feedback.
+Brendan often stretches ordinary topics into absurd premises; group replies build on them
+quickly. These inform original fictional dialogue. Raw transcripts, contact details and private
+personal/financial information were not copied into the site or source. No messages were sent.
+
+**Publication pending explicit approval:** automatic approval review rejected the production
+Cloudflare Pages deployment because it uploads a complete staged website folder and can replace
+live files. No deployment ran. The staged folder `/tmp/rtr-dialogue2-publish-live` was populated
+from live production responses, including clean-URL HTML, and only `/dialogue2/index.html` is
+new. See `output/dialogue2-publish-check.json`. 1,972 existing files matched local bytes; three
+HTML pages were preserved using current live bytes; 416 absent asset URLs returning the root
+HTML fallback were omitted rather than published as bogus binary files. The full production
+update still needs owner approval; revalidate the live baseline if deployment occurs later.
+
 ### 18.6 Featured Story A — Hip-Hop: Malik's Phone
 
 This story may be pursued on a later run if Country is chosen first, or Hip-Hop may be purchased
