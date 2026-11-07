@@ -4,6 +4,8 @@
 const L=(speaker,text)=>({speaker,text});
 const N=text=>L('Scene',text);
 const C=(id,label,to)=>({id,label,to});
+// extra.artDesc: optional artwork description for this panel (owner's to write; the page shows
+// an editable placeholder until it is set).
 const node=(title,beats,extra={})=>({title,beats,...extra});
 export const version='2026-11-06-reunion-1';
 export const cast=[
