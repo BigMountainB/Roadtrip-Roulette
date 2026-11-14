@@ -13341,10 +13341,13 @@ prioritizes a compelling, funny, addictive and relatable story over preserving p
 
 **Owner direction / accepted foundation**
 
-- Brendan is the main character, using the owner’s likeness. Working premise: a 38-year-old
-  struggling musician/gig driver heads back to Spokane for his twentieth high-school reunion.
-  Spokane is this branch’s proposed destination; the production Seattle–Pullman route has not
-  been changed. Exact age/year arithmetic and trip duration remain to be settled.
+- Brendan is the main character, using the owner’s likeness. Struggling musician/gig driver
+  headed to his **25-year high-school reunion party in Pullman** (owner 2026-11-14: “Everything
+  should be Pullman”; it replaces the earlier Spokane / twentieth-reunion premise). Why Pullman:
+  Andrew (ASB president, organizing it) had AI book the venue; it saw the Cougar mascot, assumed
+  WSU alumni, and booked Pullman — Andrew asks Brendan to keep that quiet. This lines up with the
+  production Seattle–Pullman route. Brendan’s exact age and the trip duration are still open
+  (a 25-year reunion puts him in his early 40s).
 - A tourist road trip: scenic landmarks and photo opportunities initially help Brendan make
   his life look impressive online. Actually going outside, having experiences and meeting
   people starts making his life better. Social posts are part of the premise, not a sincere
