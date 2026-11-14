@@ -7,7 +7,7 @@ const C=(id,label,to)=>({id,label,to});
 // extra.artDesc: optional artwork description for this panel (owner's to write; the page shows
 // an editable placeholder until it is set).
 const node=(title,beats,extra={})=>({title,beats,...extra});
-export const version='2026-11-06-reunion-1';
+export const version='2026-11-14-reunion-2';
 export const cast=[
  {id:'brendan',name:'Brendan',role:'The driver',note:'A musician with a delivery route and a very selectively worded life update.'},
  {id:'sarah',name:'Sarah',role:'An old crush',note:'An encouraging message can be much more dangerous than an insult. Her role is still open.'},
@@ -20,7 +20,11 @@ export const cast=[
 ];
 export const chapters=[
  {id:'opening',title:'The notification',sub:'One delivery. Twenty years.',start:'doorstep',nodes:{
- doorstep:node('Leave at door',[N('Seattle. Brendan is finishing a food delivery. His guitar is in the car. The delivery app has an opinion about how long this should take.'),L('Delivery instructions','Please don’t ring. Dog thinks he owns the house.'),L('Reunion group','Twenty years! Who’s coming back to Spokane?')],{art:'brendan',next:'sarah'}),
+ // Owner edits 2026-11-14 (exported from /dialogue2): Andrew texts, lunch at Toshi's, the Pullman venue mix-up.
+ doorstep:node('Leave at door',[N("Seattle. Brendan is finishing a food delivery. His guitar is in the car. The delivery app has an opinion about how long this should take. And he gets a text from his friend..."),L('Andrew (3BC)',"Yo! I'm swinging through Seattle. Let's meet for lunch so I can get you your wallet back."),L('Brendan',"Just finishing up here at the office, Toshi's on Rainier?")],{art:'brendan',artDesc:"Brendan is looking at his phone, delivering a bag of food that he carelessly sets on the edge of the porch, where it visibly starts to fall off.",next:'toshis'}),
+ toshis:node("Toshi's on Rainier",[L('Andrew (3BC)',"Not sure if you saw yet, but I just posted the High School Reunion info."),L('Brendan',"No, not online too much. I know it's next weekend, but anything noteworthy?"),L('Andrew (3BC)',"Yeah, don’t spread this, but I had AI book the venue, and after mentioning our Cougar mascot, it assumed we're WSU alumni and... well, we'll all be meeting up in Pullman.")],{art:'andrew',artDesc:"Andrew and Brendan are at a Teriyaki restaurant (Toshi's), chatting over chicken and beef.",choices:[C('blunder',"That's a pretty epic blunder. Can they remove you as ASB President 25 years after the part?",'notRemoved'),C('tour',"That's uhh.. Sure. Sealed lips. I was actually planning to tour this week anyway so, it works out.",'noBand')]}),
+ notRemoved:node('Still president',[L('Andrew',"Thankfully not.")],{art:'andrew',end:'Scene ends.',nextChapter:'crew'}),
+ noBand:node('No band yet',[L('Andrew',"Oh awesome man! I'm excited you're finally doing that. You know, we haven't locked in a band yet...")],{art:'andrew',next:'sarah'}),
  sarah:node('A familiar name',[L('Sarah','Brendan! Are you still doing music?'),N('He looks at the food bag. Then back at her name.')],{art:'sarah',choices:[C('road','Yeah. On the road constantly.','touring'),C('commercial','Mostly commercial work. Very exclusive audience.','commercial'),C('honest','A little. The jingle finally pays royalties.','honest')]}),
  touring:node('Selective accuracy',[L('Sarah','I knew you’d make it.'),N('For a moment he stands a little straighter.')],{art:'brendan',next:'booking'}),
  commercial:node('The audience',[L('Sarah','Wait, you’re doing this professionally?'),L('Brendan','People have paid. I’m comfortable ending the sentence there.')],{art:'brendan',next:'booking'}),
