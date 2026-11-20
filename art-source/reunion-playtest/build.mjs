@@ -21,7 +21,9 @@ function remember(){try{localStorage.setItem(KEY,JSON.stringify(history));}catch
 // One artwork description per panel (owner 2026-11-07). Rendered as a beat so the ✎ editor can
 // rewrite and export it; the default names the panel so each panel's edit stays its own.
 const artDesc=n=>'<div class="beat artdesc"><span class="who">Artwork</span><p>'+esc(n.artDesc||('[ARTWORK — '+n.title+': describe this panel]'))+'</p></div>';
-const beats=n=>n.beats.map(b=>'<div class="beat '+(b.speaker==='Scene'?'scene':'')+'"><span class="who">'+esc(b.speaker)+'</span><p>'+esc(b.text)+'</p></div>').join('');
+// *word* in a line renders in italics (owner 2026-11-20).
+const fmt=t=>esc(t).replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
+const beats=n=>n.beats.map(b=>'<div class="beat '+(b.speaker==='Scene'?'scene':'')+'"><span class="who">'+esc(b.speaker)+'</span><p>'+fmt(b.text)+'</p></div>').join('');
 function render(){resolve();const n=D.chapter.nodes[nodeId];
 let h='<div class="intro">'+(n.art?'<img class="portrait" alt="'+esc(n.art)+' character reference" src="'+D.portraits[n.art]+'">':'')+'<span class="draft">First draft · fictional scene</span><h2>'+esc(n.title)+'</h2><div class="muted">'+esc(D.chapter.sub)+'</div></div>'+artDesc(n)+'<div class="card">'+beats(n)+'</div>';
 if(n.choices)h+='<div class="choices">'+n.choices.map(c=>'<button data-choice="'+esc(c.id)+'">'+esc(c.label)+'</button>').join('')+'</div>';
