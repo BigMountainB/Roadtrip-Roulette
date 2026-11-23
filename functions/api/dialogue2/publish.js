@@ -34,8 +34,9 @@ function base64(text) {
 }
 
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
-function countChanges(edits, adds) {
+function countChanges(edits, adds, layout) {
   let n = 0;
+  for (const c of Object.values(layout)) if (isObj(c)) n += Object.keys(c).length;   // panels laid out
   for (const m of Object.values(edits)) if (isObj(m)) n += Object.keys(m).length;
   for (const l of Object.values(adds)) if (Array.isArray(l)) n += l.length;
   return n;
@@ -47,12 +48,12 @@ export async function onRequestPost({ request, env }) {
   let body;
   try { body = await request.json(); } catch { return reply({ ok: false, error: 'Not a valid request.' }, 400); }
   if (!isObj(body) || !(await same(body.passcode ?? '', env.DIALOGUE_PASSCODE))) return reply({ ok: false, error: 'Wrong passcode.' }, 401);
-  const edits = isObj(body.edits) ? body.edits : {}, adds = isObj(body.adds) ? body.adds : {};
-  const changes = countChanges(edits, adds);
+  const edits = isObj(body.edits) ? body.edits : {}, adds = isObj(body.adds) ? body.adds : {}, layout = isObj(body.layout) ? body.layout : {};
+  const changes = countChanges(edits, adds, layout);
   if (!changes) return reply({ ok: false, error: 'No edits to publish.' }, 400);
 
   const sentAt = new Date().toISOString();
-  const file = JSON.stringify({ version: String(body.version ?? ''), sentAt, edits, adds }, null, 1) + '\n';
+  const file = JSON.stringify({ version: String(body.version ?? ''), sentAt, edits, adds, layout }, null, 1) + '\n';
   if (file.length > MAX_BYTES) return reply({ ok: false, error: 'Too many edits in one go.' }, 413);
   const name = sentAt.replace(/[:.]/g, '-') + '-' + crypto.randomUUID().slice(0, 8) + '.json';
   const path = INBOX + '/' + name;
