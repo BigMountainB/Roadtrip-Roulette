@@ -10,6 +10,13 @@
   const EDITABLE = '.seattle-beat p,.beat p,.bubble,.seattle-option-text,.seattle-transcript p,#transcript p,button[data-choice]';
   const SKIP = '.who,.seattle-speaker,small,summary,.from,.draftTag,.rtr-pen,strong,.text-small';
   const norm = s => String(s).replace(/\s+/g, ' ').trim();
+  // Word styling (owner 2026-11-23, /dialogue2 only — the page sets window.RTR_FORMAT): **bold**,
+  // *italic*, [+bigger+], [-smaller-]. Lines are still keyed by their plain text.
+  const FX = () => !!window.RTR_FORMAT;
+  const strip = t => String(t ?? '').replace(/\*\*([^*\n]+)\*\*/g, '$1').replace(/\*([^*\n]+)\*/g, '$1').replace(/\[\+([^\]\n]+?)\+\]/g, '$1').replace(/\[-([^\]\n]+?)-\]/g, '$1');
+  const hasFx = t => strip(t) !== String(t ?? '');
+  const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmtH = t => escH(t).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/\*([^*\n]+)\*/g, '<em>$1</em>').replace(/\[\+([^\]\n]+?)\+\]/g, '<span class="fx-big">$1</span>').replace(/\[-([^\]\n]+?)-\]/g, '<span class="fx-sm">$1</span>');
   let edits = {}, adds = {}, memoryOnly = false, editing = false, activeDoc = null;
   try { edits = JSON.parse(localStorage.getItem(KEY) || '{}'); adds = JSON.parse(localStorage.getItem(ADDS_KEY) || '{}'); } catch { memoryOnly = true; }
   const frames = [];
@@ -36,7 +43,7 @@
   const addedLine = (d, item) => {
     const box = d.createElement('div'); box.className = 'rtr-added';
     const who = d.createElement('span'); who.className = 'rtr-who'; who.textContent = item.speaker + ' · added';
-    const p = d.createElement('p'); p.textContent = item.text; p.appendChild(makePen(d, item.id));
+    const p = d.createElement('p'); if (FX() && hasFx(item.text)) p.innerHTML = fmtH(item.text); else p.textContent = item.text; p.appendChild(makePen(d, item.id));
     box.append(who, p); return box;
   };
   const addedChoice = (d, item, like) => {
@@ -60,11 +67,14 @@
       if (!el.dataset.rtrOrig || current !== el.dataset.rtrShown) el.dataset.rtrOrig = current;
       const orig = el.dataset.rtrOrig, edit = map[orig];
       const shown = edit && !edit.deleted ? edit.text : orig;
-      if (shown !== current) {
-        if (el.matches('.seattle-option-text')) el.textContent = shown;
+      const fx = FX() && el.matches('.beat p') && hasFx(shown), display = fx ? norm(strip(shown)) : shown;
+      if (display !== current || (fx && el.dataset.rtrFx !== shown)) {
+        if (fx) el.innerHTML = fmtH(shown);
+        else if (el.matches('.seattle-option-text')) el.textContent = shown;
         else nodes.forEach((n, i) => { n.nodeValue = i ? '' : (/^\s/.test(n.nodeValue) ? ' ' : '') + shown; });
       }
-      el.dataset.rtrShown = shown;
+      el.dataset.rtrFx = fx ? shown : '';
+      el.dataset.rtrShown = display;
       const inTranscript = !!el.closest('.seattle-transcript,#transcript');
       const holder = inTranscript ? el : el.closest('button') || el.closest('.beat,.seattle-beat') || el;
       holder.classList.toggle('rtr-removed', !!edit?.deleted);
@@ -211,7 +221,7 @@
 .rtr-tools button[aria-pressed="true"],.rtr-modal button.primary{background:#2d6cdf;border-color:#2d6cdf;color:#fff}.rtr-modal button:disabled{opacity:.45;cursor:not-allowed}
 .rtr-back{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto}
 .rtr-modal{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:16px;width:100%;max-width:600px}
-.rtr-modal h2{font-size:1.05rem;margin:0 0 8px}.rtr-modal label{display:block;font-size:.85rem;font-weight:600;margin:10px 0 4px}.rtr-modal textarea,.rtr-modal input[type=text]{display:block;width:100%;box-sizing:border-box;font:16px/1.4 -apple-system,Arial,sans-serif;color:var(--fg);background:var(--chip);border:1px solid var(--line);border-radius:10px;padding:8px}
+.rtr-modal h2{font-size:1.05rem;margin:0 0 8px}.rtr-fx{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}.rtr-modal .rtr-fx button{min-width:40px;padding:4px 10px}.rtr-fxprev{margin:6px 0 0;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;white-space:pre-wrap}.fx-big{font-size:1.3em;line-height:1}.fx-sm{font-size:.8em}.rtr-modal label{display:block;font-size:.85rem;font-weight:600;margin:10px 0 4px}.rtr-modal textarea,.rtr-modal input[type=text]{display:block;width:100%;box-sizing:border-box;font:16px/1.4 -apple-system,Arial,sans-serif;color:var(--fg);background:var(--chip);border:1px solid var(--line);border-radius:10px;padding:8px}
 .rtr-modal .orig,.rtr-modal .hint{color:var(--muted);font-size:.9rem;margin:0}.rtr-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.rtr-item{border-top:1px solid var(--line);padding:8px 0;font-size:.9rem}.rtr-item p{margin:2px 0}.rtr-warn{color:#a5560f;font-size:.85rem;margin:6px 0 0}.rtr-block{border:1px dashed var(--line);border-radius:10px;padding:0 10px 10px;margin-top:10px}
 .rtr-map{position:fixed;top:0;right:0;bottom:0;z-index:15;width:min(400px,100vw);background:var(--bg);color:var(--fg);border-left:1px solid var(--line);box-shadow:-6px 0 20px rgba(0,0,0,.15);overflow:auto;padding:0 16px 40px}.rtr-map[hidden]{display:none}
 .rtr-map-top{position:sticky;top:0;background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 0 8px;border-bottom:1px solid var(--line);margin-bottom:6px}.rtr-map h2{font-size:1rem;margin:0}.rtr-map h3{font-size:.9rem;margin:14px 0 4px}
@@ -244,6 +254,34 @@
     return { back, box };
   }
   const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+  // B / I / A+ / A− buttons under a line's text box: select words, tap a button to wrap them (tap again
+  // to unwrap). A preview shows the line as it will read.
+  function fxBar(ta) {
+    if (!FX()) return [];
+    const preview = el('p', { className: 'rtr-fxprev' });
+    const show = () => { preview.innerHTML = ta.value.trim() ? fmtH(ta.value) : ''; preview.hidden = !hasFx(ta.value); };
+    const wrap = (a, z) => {
+      let s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+      while (s < e && v[s] === ' ') s++; while (e > s && v[e - 1] === ' ') e--;
+      if (v.slice(s - a.length, s) === a && v.slice(e, e + z.length) === z && !(a === '*' && (v[s - 2] === '*' || v[e + 1] === '*'))) {
+        ta.value = v.slice(0, s - a.length) + v.slice(s, e) + v.slice(e + z.length); ta.setSelectionRange(s - a.length, e - a.length);
+      } else if (s === e) { ta.value = v.slice(0, s) + a + z + v.slice(s); ta.setSelectionRange(s + a.length, s + a.length); }
+      else { ta.value = v.slice(0, s) + a + v.slice(s, e) + z + v.slice(e); ta.setSelectionRange(s + a.length, e + a.length); }
+      ta.focus(); show();
+    };
+    const b = (label, title, a, z, style) => el('button', { type: 'button', innerHTML: label, title, style, onmousedown: e => e.preventDefault(), onclick: () => wrap(a, z) });
+    ta.addEventListener('input', show); setTimeout(show);
+    return [el('div', { className: 'rtr-fx' },
+      b('<b>B</b>', 'Bold the selected words', '**', '**'), b('<i>I</i>', 'Italicize the selected words', '*', '*'),
+      b('A+', 'Make the selected words bigger', '[+', '+]', 'font-size:1.05rem'), b('A−', 'Make the selected words smaller', '[-', '-]', 'font-size:.8rem'),
+      el('span', { className: 'hint', textContent: 'Select words, then tap a button' })), preview];
+  }
+  // The script shows lines without their marks; start the editor from the line as written.
+  const rawOf = orig => {
+    if (!FX()) return orig;
+    try { for (const n of Object.values(activeDoc?.defaultView?.D?.chapter?.nodes || {})) for (const b of n.beats || []) if (norm(strip(b.text)) === orig) return b.text; } catch {}
+    return orig;
+  };
   const dropEdit = (id, orig) => { if (edits[id]) { delete edits[id][orig]; if (!Object.keys(edits[id]).length) delete edits[id]; } };
   const dropAdd = (id, addId) => { if (adds[id]) { adds[id] = adds[id].filter(a => a.id !== addId); if (!adds[id].length) delete adds[id]; } };
   // Inserts after a sibling added item when given, so new material lands where it was asked for.
@@ -261,12 +299,12 @@
   function openEditor(chapter, orig, speaker, isChoice, lastChoice) {
     const { back, box } = modal();
     const cur = edits[chapter.id]?.[orig];
-    const text = el('textarea', { rows: 4, value: cur && !cur.deleted ? cur.text : orig });
+    const text = el('textarea', { rows: 4, value: cur && !cur.deleted ? cur.text : rawOf(orig) });
     const note = el('textarea', { rows: 2, value: cur?.note || '', placeholder: 'Optional note about this line' });
     const meta = () => ({ speaker, title: chapter.title, at: new Date().toISOString() });
     const save = el('button', { className: 'primary', textContent: 'Save', onclick: () => {
       const t = norm(text.value), n = note.value.trim();
-      if (!t || (t === orig && !n)) dropEdit(chapter.id, orig);
+      if (!t || ((t === orig || t === norm(rawOf(orig))) && !n)) dropEdit(chapter.id, orig);
       else (edits[chapter.id] ??= {})[orig] = { text: t, note: n, ...meta() };
       persist(); back.remove();
     } });
@@ -278,7 +316,7 @@
     } });
     box.append(el('h2', { textContent: chapter.title + ' · ' + speaker }),
       el('p', { className: 'hint', textContent: 'Original:' }), el('p', { className: 'orig', textContent: orig }),
-      el('label', { textContent: 'New line' }), text, el('label', { textContent: 'Note' }), note,
+      el('label', { textContent: 'New line' }), text, ...fxBar(text), el('label', { textContent: 'Note' }), note,
       el('div', { className: 'rtr-row' }, save, remove,
         el('button', { textContent: 'Restore original', onclick: () => { dropEdit(chapter.id, orig); persist(); back.remove(); } }),
         el('button', { textContent: 'Cancel', onclick: () => back.remove() })),
@@ -295,7 +333,7 @@
     const who = el('input', { type: 'text', value: speaker === 'Narration' ? '' : speaker, placeholder: 'Leave blank for narration' });
     const text = el('textarea', { rows: 3, placeholder: 'What they say' });
     box.append(el('h2', { textContent: 'Add a line' }), el('p', { className: 'hint', textContent: 'After: ' + anchor }),
-      el('label', { textContent: 'Who says it' }), who, el('label', { textContent: 'Line' }), text,
+      el('label', { textContent: 'Who says it' }), who, el('label', { textContent: 'Line' }), text, ...fxBar(text),
       el('div', { className: 'rtr-row' }, el('button', { className: 'primary', textContent: 'Add line', onclick: () => {
         const t = norm(text.value); if (!t) return text.focus();
         pushAdds(chapter, [{ id: newId(), kind: 'line', onChoice: !!onChoice, anchor, speaker: norm(who.value) || 'Narration', text: t, title: chapter.title, at: new Date().toISOString() }], afterId);
@@ -363,7 +401,7 @@
     } else {
       const who = el('input', { type: 'text', value: item.speaker === 'Narration' ? '' : item.speaker, placeholder: 'Leave blank for narration' });
       const text = el('textarea', { rows: 3, value: item.text });
-      box.append(el('h2', { textContent: 'Added line' }), el('label', { textContent: 'Who says it' }), who, el('label', { textContent: 'Line' }), text, el('div', { className: 'rtr-row' },
+      box.append(el('h2', { textContent: 'Added line' }), el('label', { textContent: 'Who says it' }), who, el('label', { textContent: 'Line' }), text, ...fxBar(text), el('div', { className: 'rtr-row' },
         el('button', { className: 'primary', textContent: 'Save', onclick: () => { const t = norm(text.value); if (!t) return text.focus(); item.text = t; item.speaker = norm(who.value) || 'Narration'; persist(); back.remove(); } }), remove, cancel), more);
     }
   }

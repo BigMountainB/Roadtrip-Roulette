@@ -16,7 +16,7 @@ import fs from 'node:fs';
 
 const STORY = new URL('./story.json', import.meta.url);
 const norm = s => String(s ?? '').replace(/\s+/g, ' ').trim();
-const shown = t => norm(String(t ?? '').replace(/\*([^*\n]+)\*/g, '$1'));
+const shown = t => norm(String(t ?? '').replace(/\*\*([^*\n]+)\*\*/g, '$1').replace(/\*([^*\n]+)\*/g, '$1').replace(/\[\+([^\]\n]+?)\+\]/g, '$1').replace(/\[-([^\]\n]+?)-\]/g, '$1'));
 const artText = n => n.artDesc || ('[ARTWORK — ' + n.title + ': describe this panel]');
 const cleanArt = t => norm(String(t).replace(/^\s*\[ARTWORK\s*[\]}]\s*/i, ''));
 const speakerOf = s => (!s || s === 'Narration' ? 'Scene' : s);
@@ -28,6 +28,7 @@ function cleanStyle(st, withTail = true) {
   if (st.kind === 'text' || st.kind === 'voice') out.kind = st.kind;
   if (['blue', 'green', 'white', 'cream', 'yellow'].includes(st.color)) out.color = st.color;
   if (['normal', 'shout', 'whisper', 'thought', 'radio'].includes(st.border)) out.border = st.border;
+  if (['s', 'l', 'xl'].includes(st.size)) out.size = st.size;
   if (withTail) {
     const t = Math.round(+st.tail * 2) / 2; if (t >= 0 && t <= 12.5) out.tail = t;
     const l = Math.round(+st.tlen); if (l >= 8 && l <= 80) out.tlen = l;

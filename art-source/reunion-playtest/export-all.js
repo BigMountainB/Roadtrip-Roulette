@@ -9,7 +9,7 @@
   if (!S) return;
   const norm = s => String(s).replace(/\s+/g, ' ').trim();
   // Saved edits are keyed by a line's text as shown on screen: *italics* show without asterisks.
-  const shown = t => norm(String(t).replace(/\*([^*\n]+)\*/g, '$1'));
+  const shown = t => norm(String(t ?? '').replace(/\*\*([^*\n]+)\*\*/g, '$1').replace(/\*([^*\n]+)\*/g, '$1').replace(/\[\+([^\]\n]+?)\+\]/g, '$1').replace(/\[-([^\]\n]+?)-\]/g, '$1'));
   const artText = n => n.artDesc || ('[ARTWORK — ' + n.title + ': describe this panel]');
   const load = () => {
     try { return { edits: JSON.parse(localStorage.getItem(KEY) || '{}'), adds: JSON.parse(localStorage.getItem(ADDS_KEY) || '{}'), layout: JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}') }; }

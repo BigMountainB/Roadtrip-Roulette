@@ -20,13 +20,14 @@
 (() => {
   const LKEY = 'rtr.dialogue2.layout.v1', EKEY = 'rtr.dialogue2.edits.v1', AKEY = EKEY + '.adds', PASS_KEY = 'rtr.dialogue2.passcode';
   const norm = s => String(s ?? '').replace(/\s+/g, ' ').trim();
-  const shown = t => norm(String(t ?? '').replace(/\*([^*\n]+)\*/g, '$1'));
+  const shown = t => norm(String(t ?? '').replace(/\*\*([^*\n]+)\*\*/g, '$1').replace(/\*([^*\n]+)\*/g, '$1').replace(/\[\+([^\]\n]+?)\+\]/g, '$1').replace(/\[-([^\]\n]+?)-\]/g, '$1'));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const fmt = t => esc(t).replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  const fmt = t => esc(t).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/\*([^*\n]+)\*/g, '<em>$1</em>').replace(/\[\+([^\]\n]+?)\+\]/g, '<span class="fx-big">$1</span>').replace(/\[-([^\]\n]+?)-\]/g, '<span class="fx-sm">$1</span>');
   const read = k => { try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch { return {}; } };
   const ch = D.chapter.id;
   const TEXT_COLORS = { blue: 'Blue', green: 'Green', white: 'White' };
   const VOICE_COLORS = { white: 'White', cream: 'Cream', yellow: 'Yellow' };
+  const SIZES = { s: ['S', .8], m: ['M', 1], l: ['L', 1.2], xl: ['XL', 1.45] };
   const BORDERS = { normal: 'Normal', shout: 'Shout', whisper: 'Whisper', thought: 'Thought', radio: 'Phone / radio' };
   let mode = false, nodeId = null, host = null, selected = null, lastTap = { key: null, at: 0 };
   try { mode = !!parent.RTR_LAYOUT_ON; } catch {}
@@ -70,13 +71,14 @@
   const speakerStyles = () => ({ ...(D.speakerStyles || {}), ...(allLayout()._speakers || {}) });
   const panelStyle = nid => (saved()[nid] || {}).style ?? D.chapter.nodes[nid].style;
   function styleOf(own, speaker, nid) {
-    if (speaker === 'Scene') return { kind: 'caption', tail: 0 };
     const s = { ...(speakerStyles()[speaker] || {}), ...(panelStyle(nid) || {}), ...(own || {}) };
+    const size = SIZES[s.size] ? s.size : 'm';
+    if (speaker === 'Scene') return { kind: 'caption', tail: 0, size: SIZES[(own || {}).size] ? own.size : 'm' };
     const kind = s.kind === 'text' ? 'text' : 'voice';
     const tail = +s.tail > 0 && +s.tail <= 12.5 ? Math.round(+s.tail * 2) / 2 : 0;
     const tlen = Math.max(8, Math.min(80, Math.round(+s.tlen || 18)));
-    if (kind === 'text') return { kind, color: TEXT_COLORS[s.color] ? s.color : 'blue', tail, tlen };
-    return { kind, color: VOICE_COLORS[s.color] ? s.color : 'white', border: BORDERS[s.border] ? s.border : 'normal', tail, tlen };
+    if (kind === 'text') return { kind, color: TEXT_COLORS[s.color] ? s.color : 'blue', tail, tlen, size };
+    return { kind, color: VOICE_COLORS[s.color] ? s.color : 'white', border: BORDERS[s.border] ? s.border : 'normal', tail, tlen, size };
   }
   const classes = st => st.kind === 'caption' ? 'bub cap' : st.kind === 'text' ? 'bub txt t-' + st.color : 'bub v-' + st.color + ' b-' + st.border;
 
@@ -97,7 +99,7 @@
       + L.map(l => {
         const st = styleOf(placed[l.key]?.style, l.speaker, nid);
         const name = st.kind === 'caption' || (st.kind === 'text' && st.color !== 'white') ? '' : '<b>' + esc(l.speaker) + '</b>';
-        return '<div class="' + classes(st) + (selected === l.key ? ' sel' : '') + '" data-k="' + esc(l.key) + '" data-sp="' + esc(l.speaker) + '" data-tail="' + st.tail + '" data-tlen="' + st.tlen + '">' + name + '<span>' + fmt(l.text) + '</span>'
+        return '<div class="' + classes(st) + (selected === l.key ? ' sel' : '') + '" data-k="' + esc(l.key) + '" data-sp="' + esc(l.speaker) + '" data-tail="' + st.tail + '" data-tlen="' + st.tlen + '">' + name + '<span' + (st.size !== 'm' ? ' style="font-size:' + SIZES[st.size][1] + 'em"' : '') + '>' + fmt(l.text) + '</span>'
           + (mode ? '<i class="grip" title="Drag to resize"></i>' : '') + '</div>';
       }).join('');
     const place = () => {
@@ -164,14 +166,23 @@
   }
   // "Use for all of X's lines" / "Use for every line in this panel": copy this bubble's look (not its
   // tail, which belongs to one bubble's position) and drop the per-bubble overrides that would hide it.
-  const lookOf = st => st.kind === 'text' ? { kind: 'text', color: st.color } : { kind: 'voice', color: st.color, border: st.border };
+  const lookOf = st => ({ ...(st.kind === 'text' ? { kind: 'text', color: st.color } : { kind: 'voice', color: st.color, border: st.border }), ...(st.size !== 'm' ? { size: st.size } : {}) });
   function makeDefault(scope) {
     const b = bubbleEl(selected); if (!b) return;
     const st = styleOf(placedFor(nodeId)[selected]?.style, b.dataset.sp, nodeId), look = lookOf(st), speaker = b.dataset.sp;
     save(all => {
       if (scope === 'speaker') (all._speakers ||= {})[speaker] = look; else ((all[ch] ||= {})[nodeId] ||= {}).style = look;
-      for (const [c, nodes] of Object.entries(all)) if (c !== '_speakers') for (const p of Object.values(nodes || {})) for (const v of Object.values(p.bubbles || {})) {
-        if (v.style) { delete v.style.kind; delete v.style.color; delete v.style.border; if (!Object.keys(v.style).length) delete v.style; }
+      // Clear the per-bubble looks this default should replace: every bubble in this panel, or this
+      // speaker's bubbles in this chapter (other chapters keep any look set there on purpose).
+      const nodes = all[ch] || {};
+      for (const [nid, p] of Object.entries(nodes)) {
+        if (scope === 'panel' && nid !== nodeId) continue;
+        if (!D.chapter.nodes[nid]) continue;
+        const who = Object.fromEntries(lines(nid).map(l => [l.key, l.speaker]));
+        for (const [k, v] of Object.entries(p.bubbles || {})) {
+          if (!v.style || (scope === 'speaker' && who[k] !== speaker)) continue;
+          delete v.style.kind; delete v.style.color; delete v.style.border; delete v.style.size; if (!Object.keys(v.style).length) delete v.style;
+        }
       }
     });
     refresh();
@@ -183,12 +194,14 @@
     const p = document.createElement('div'); p.className = 'cstyle';
     const opt = (group, val, label, on) => '<button data-cs="' + group + '" data-v="' + val + '"' + (on ? ' aria-pressed="true"' : '') + '>' + label + '</button>';
     let h = '<div class="csh"><b>Bubble style</b><button data-cs="close" aria-label="Close">✕</button></div>';
-    if (st.kind === 'caption') h += '<p class="muted">Narration is a caption box. Move or resize it; double-tap to edit its words.</p>';
+    const sizeRow = '<label>Text size</label><div class="csr">' + Object.entries(SIZES).map(([v, [l]]) => opt('size', v, l, st.size === v)).join('') + '</div>';
+    if (st.kind === 'caption') h += sizeRow + '<p class="muted">Narration is a caption box. Move or resize it; double-tap to edit its words.</p>';
     else {
       h += '<div class="csr">' + opt('kind', 'text', '📱 Text', st.kind === 'text') + opt('kind', 'voice', '🗣 Voice', st.kind === 'voice') + '</div>';
       const colors = st.kind === 'text' ? TEXT_COLORS : VOICE_COLORS;
       h += '<label>Color</label><div class="csr">' + Object.entries(colors).map(([v, l]) => opt('color', v, '<i class="sw ' + (st.kind === 'text' ? 't-' : 'v-') + v + '"></i>' + l, st.color === v)).join('') + '</div>';
       if (st.kind === 'voice') h += '<label>Border</label><div class="csr">' + Object.entries(BORDERS).map(([v, l]) => opt('border', v, l, st.border === v)).join('') + '</div>';
+      h += sizeRow;
       h += '<label>Tail — the time the tail points to</label><div class="clock">' + Array.from({ length: 24 }, (_, i) => {
         const hr = (i + 1) / 2, a = hr * 30 * Math.PI / 180, whole = Number.isInteger(hr), r = whole ? 56 : 36;
         return '<button data-cs="tail" data-v="' + hr + '" class="' + (whole ? 'hr' : 'half') + '" title="' + (whole ? hr + ':00' : Math.floor(hr) + ':30') + '" style="left:calc(50% + ' + (Math.sin(a) * r).toFixed(1) + 'px);top:calc(50% - ' + (Math.cos(a) * r).toFixed(1) + 'px)"' + (st.tail === hr ? ' aria-pressed="true"' : '') + '>' + (whole ? hr : '') + '</button>';
@@ -215,6 +228,7 @@
     else if (g === 'kind') setStyle(selected, { kind: v, color: v === 'text' ? 'blue' : 'white' });
     else if (g === 'color') setStyle(selected, { color: v });
     else if (g === 'border') setStyle(selected, { border: v });
+    else if (g === 'size') setStyle(selected, { size: v });
     else if (g === 'tail') setStyle(selected, { tail: +v });
     else if (g === 'default') {
       if (v === 'clear') { const old = placedFor(nodeId)[selected]; if (old) panelSave(p => { const keep = { ...old }; delete keep.style; (p.bubbles ||= {})[selected] = keep; }); refresh(); }
