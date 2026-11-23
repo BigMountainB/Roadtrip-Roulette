@@ -121,6 +121,18 @@ export function applyEdits(story, files) {
         for (const [key, p] of Object.entries(lay.bubbles || {})) {
           if (!p || typeof p !== 'object') continue;
           const pos = { img: Math.max(0, Math.round(+p.img || 0)), x: +(+p.x || 0).toFixed(1), y: +(+p.y || 0).toFixed(1), w: +(+p.w || 44).toFixed(1) };
+          // Bubble style from the Layout style panel (Text: color; Voice: color, border, tail hour 0–12).
+          const st = p.style;
+          if (st && typeof st === 'object') {
+            const kind = st.kind === 'text' ? 'text' : 'voice', out = { kind };
+            if (kind === 'text') { if (['blue', 'green', 'white'].includes(st.color)) out.color = st.color; }
+            else {
+              if (['white', 'cream', 'yellow'].includes(st.color)) out.color = st.color;
+              if (['normal', 'shout', 'whisper', 'thought', 'radio'].includes(st.border)) out.border = st.border;
+              const t = Math.round(+st.tail); if (t >= 0 && t <= 12) out.tail = t;
+            }
+            pos.style = out;
+          }
           const edited = file.edits?.[cid]?.[key];
           const k = edited && !edited.deleted && typeof edited.text === 'string' ? shown(edited.text) : key;
           if (!n.beats.some(b => shown(b.text) === k)) { report.skipped.push({ chapter: cid, why: 'bubble for a line no longer in that panel', panel: n.title, line: key }); continue; }
