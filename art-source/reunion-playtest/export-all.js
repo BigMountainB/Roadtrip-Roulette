@@ -56,6 +56,8 @@
       }
       return [pad + '- ➕ ' + (a.speaker === 'Narration' ? '_' + a.text + '_' : '**' + a.speaker + ':** ' + a.text)];
     };
+    const sp = layout._speakers || {};
+    if (Object.keys(sp).length) out.push('## Bubble defaults (mine)', '', ...Object.entries(sp).map(([k, v]) => '- **' + k + ':** ' + [v.kind, v.color, v.border].filter(Boolean).join(' · ')), '');
     for (const ch of S.chapters) {
       out.push('## ' + ch.title + ' — ' + ch.sub, '');
       // Panels in reading order: start, then breadth-first through next/choices.
@@ -126,7 +128,7 @@
   const PASS_KEY = 'rtr.dialogue2.passcode', FLASH_KEY = 'rtr.dialogue2.flash';
   // 🖼 Layout (owner 2026-11-23): drag bubbles, resize them, swap/add/remove images on every panel.
   const lay = Object.assign(document.createElement('button'), { id: 'rtrLayout', textContent: '🖼 Layout' });
-  const layoutCount = () => Object.values(load().layout).reduce((t, c) => t + Object.keys(c || {}).length, 0);
+  const layoutCount = () => Object.entries(load().layout).reduce((t, [k, c]) => t + Object.keys(c || {}).length, 0);
   const paintLayout = () => { lay.textContent = window.RTR_LAYOUT_ON ? '🖼 Layout: drag bubbles · tap again when done' : '🖼 Layout' + (layoutCount() ? ' (' + layoutCount() + ')' : ''); lay.setAttribute('aria-pressed', !!window.RTR_LAYOUT_ON); };
   window.RTR_LAYOUT_CHANGED = paintLayout;
   lay.onclick = () => { window.RTR_LAYOUT_ON = !window.RTR_LAYOUT_ON; document.querySelectorAll('iframe').forEach(f => { try { f.contentWindow.RTR_COMIC?.setMode(window.RTR_LAYOUT_ON); } catch {} }); paintLayout(); };
@@ -158,7 +160,33 @@
     } catch { status('Couldn’t reach the site. Check your connection; your edits are still saved here.'); }
     finally { pub.disabled = false; }
   };
-  tools.append(lay, pub, btn, copy, msg);
+  // ── Undo / Redo (owner 2026-11-23): every change to text edits, added lines and layout, this visit ──
+  const KEYS = [KEY, ADDS_KEY, LAYOUT_KEY], undo = [], redo = [];
+  const snap = () => KEYS.map(k => { try { return localStorage.getItem(k); } catch { return null; } });
+  const same = (a, b) => a.every((v, i) => v === b[i]);
+  let last = snap();
+  const undoBtn = Object.assign(document.createElement('button'), { id: 'rtrUndo', textContent: '↶ Undo', title: 'Undo (⌘Z / Ctrl+Z)' });
+  const redoBtn = Object.assign(document.createElement('button'), { id: 'rtrRedo', textContent: '↷ Redo', title: 'Redo (⇧⌘Z / Ctrl+Shift+Z)' });
+  const paintUndo = () => { undoBtn.disabled = !undo.length; redoBtn.disabled = !redo.length; };
+  const watch = () => { const now = snap(); if (!same(now, last)) { undo.push(last); if (undo.length > 200) undo.shift(); redo.length = 0; last = now; paintUndo(); } };
+  setInterval(watch, 300);
+  window.RTR_UNDO_MARK = watch;      // called just before a layout change, so it is its own step
+  const restore = state => {
+    KEYS.forEach((k, i) => { try { state[i] == null ? localStorage.removeItem(k) : localStorage.setItem(k, state[i]); } catch {} });
+    last = state;
+    window.RTR_EDITS_RELOAD?.();
+    document.querySelectorAll('iframe').forEach(f => { try { f.contentWindow.RTR_COMIC?.refresh(); } catch {} });
+    paintLayout(); paintUndo();
+  };
+  window.RTR_UNDO = () => { watch(); if (!undo.length) return status('Nothing to undo.'); redo.push(snap()); restore(undo.pop()); status('Undone.'); };
+  window.RTR_REDO = () => { watch(); if (!redo.length) return status('Nothing to redo.'); undo.push(snap()); restore(redo.pop()); status('Redone.'); };
+  undoBtn.onclick = () => window.RTR_UNDO(); redoBtn.onclick = () => window.RTR_REDO();
+  document.addEventListener('keydown', e => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.target.closest?.('input,textarea,[contenteditable]')) return;
+    e.preventDefault(); e.shiftKey ? window.RTR_REDO() : window.RTR_UNDO();
+  });
+  paintUndo();
+  tools.append(undoBtn, redoBtn, lay, pub, btn, copy, msg);
   try { const f = sessionStorage.getItem(FLASH_KEY); if (f) { sessionStorage.removeItem(FLASH_KEY); msg.textContent = f; } } catch {}
   window.RTR_EXPORT_ALL = build;   // for checks
 })();

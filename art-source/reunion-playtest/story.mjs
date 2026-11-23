@@ -5,3 +5,4 @@
 import fs from 'node:fs';
 const data = JSON.parse(fs.readFileSync(new URL('./story.json', import.meta.url), 'utf8'));
 export const { version, cast, chapters } = data;
+export const speakerStyles = data.speakerStyles || {};   // per-speaker bubble defaults (Layout tool)

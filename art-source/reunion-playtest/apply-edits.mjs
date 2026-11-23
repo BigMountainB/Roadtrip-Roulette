@@ -20,12 +20,31 @@ const shown = t => norm(String(t ?? '').replace(/\*([^*\n]+)\*/g, '$1'));
 const artText = n => n.artDesc || ('[ARTWORK — ' + n.title + ': describe this panel]');
 const cleanArt = t => norm(String(t).replace(/^\s*\[ARTWORK\s*[\]}]\s*/i, ''));
 const speakerOf = s => (!s || s === 'Narration' ? 'Scene' : s);
+// Bubble style from the Layout tool, keeping only known values. Tail: hour on a clock face in half-hour
+// steps (0 = none); tlen: tail length in px.
+function cleanStyle(st, withTail = true) {
+  if (!st || typeof st !== 'object') return null;
+  const out = {};
+  if (st.kind === 'text' || st.kind === 'voice') out.kind = st.kind;
+  if (['blue', 'green', 'white', 'cream', 'yellow'].includes(st.color)) out.color = st.color;
+  if (['normal', 'shout', 'whisper', 'thought', 'radio'].includes(st.border)) out.border = st.border;
+  if (withTail) {
+    const t = Math.round(+st.tail * 2) / 2; if (t >= 0 && t <= 12.5) out.tail = t;
+    const l = Math.round(+st.tlen); if (l >= 8 && l <= 80) out.tlen = l;
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 export function applyEdits(story, files) {
   const report = { applied: [], skipped: [], notes: [] };
   const chapterIndex = Object.fromEntries(story.chapters.map((c, i) => [c.id, i]));
+  // Speaker defaults ("all of Andrew's lines") apply across chapters.
+  for (const file of files) for (const [who, st] of Object.entries(file.layout?._speakers || {})) {
+    const look = cleanStyle(st, false);
+    if (look) { (story.speakerStyles ||= {})[who] = look; report.applied.push({ speakerDefault: who, style: look }); }
+  }
   for (const file of files) {
-    for (const cid of new Set([...Object.keys(file.edits || {}), ...Object.keys(file.adds || {}), ...Object.keys(file.layout || {})])) {
+    for (const cid of new Set([...Object.keys(file.edits || {}), ...Object.keys(file.adds || {}), ...Object.keys(file.layout || {}).filter(k => k !== '_speakers')])) {
       const ch = story.chapters[chapterIndex[cid]];
       if (!ch) { report.skipped.push({ chapter: cid, why: 'no such chapter' }); continue; }
       const nextChapter = story.chapters[chapterIndex[cid] + 1]?.id ?? null;
@@ -72,6 +91,7 @@ export function applyEdits(story, files) {
 
       // 1) Additions first: they are anchored to lines' ORIGINAL text.
       const after = new Map();   // node beats array position bookkeeping per anchor
+      const addedKey = {};       // "add:<id>" bubble keys → the added line's text
       for (const item of file.adds?.[cid] || []) {
         const hits = find(shown(item.anchor));
         if (!hits.length) { report.skipped.push({ chapter: cid, why: 'anchor no longer in script', anchor: item.anchor, text: item.text }); continue; }
@@ -89,7 +109,7 @@ export function applyEdits(story, files) {
         else { node = h.n; pos = 0; }                                             // after the artwork line
         const k = node.title + '|' + item.anchor;
         if (after.has(k)) pos = after.get(k);
-        node.beats.splice(pos, 0, line); after.set(k, pos + 1);
+        node.beats.splice(pos, 0, line); after.set(k, pos + 1); addedKey['add:' + item.id] = shown(line.text);
         report.applied.push({ chapter: cid, added: 'line', speaker: line.speaker, text: line.text, panel: node.title });
       }
       // 2) Edits to existing lines, choices and artwork.
@@ -118,21 +138,13 @@ export function applyEdits(story, files) {
         const n = ch.nodes[nid];
         if (!n || !lay || typeof lay !== 'object') { report.skipped.push({ chapter: cid, why: 'layout for a panel no longer in script', panel: nid }); continue; }
         if (Array.isArray(lay.images)) n.images = lay.images.map(String);
-        for (const [key, p] of Object.entries(lay.bubbles || {})) {
+        if (lay.style) { const look = cleanStyle(lay.style, false); if (look) n.style = look; }
+        for (const [rawKey, p] of Object.entries(lay.bubbles || {})) {
+          const key = rawKey.startsWith('add:') ? addedKey[rawKey] : rawKey;
+          if (!key) { report.skipped.push({ chapter: cid, why: 'bubble for an added line that was not added', panel: n.title }); continue; }
           if (!p || typeof p !== 'object') continue;
           const pos = { img: Math.max(0, Math.round(+p.img || 0)), x: +(+p.x || 0).toFixed(1), y: +(+p.y || 0).toFixed(1), w: +(+p.w || 44).toFixed(1) };
-          // Bubble style from the Layout style panel (Text: color; Voice: color, border, tail hour 0–12).
-          const st = p.style;
-          if (st && typeof st === 'object') {
-            const kind = st.kind === 'text' ? 'text' : 'voice', out = { kind };
-            if (kind === 'text') { if (['blue', 'green', 'white'].includes(st.color)) out.color = st.color; }
-            else {
-              if (['white', 'cream', 'yellow'].includes(st.color)) out.color = st.color;
-              if (['normal', 'shout', 'whisper', 'thought', 'radio'].includes(st.border)) out.border = st.border;
-              const t = Math.round(+st.tail); if (t >= 0 && t <= 12) out.tail = t;
-            }
-            pos.style = out;
-          }
+          const st = cleanStyle(p.style); if (st) pos.style = st;
           const edited = file.edits?.[cid]?.[key];
           const k = edited && !edited.deleted && typeof edited.text === 'string' ? shown(edited.text) : key;
           if (!n.beats.some(b => shown(b.text) === k)) { report.skipped.push({ chapter: cid, why: 'bubble for a line no longer in that panel', panel: n.title, line: key }); continue; }

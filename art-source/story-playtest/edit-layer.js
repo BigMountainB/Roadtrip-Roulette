@@ -535,5 +535,10 @@
         undo(() => dropAdd(id, a.id))));
     }
   }
+  // /dialogue2 Undo/Redo (owner 2026-11-23): re-read saved edits after Undo restores them.
+  window.RTR_EDITS_RELOAD = () => {
+    try { edits = JSON.parse(localStorage.getItem(KEY) || '{}'); adds = JSON.parse(localStorage.getItem(ADDS_KEY) || '{}'); } catch {}
+    refreshAll();
+  };
   updateBar();
 })();
