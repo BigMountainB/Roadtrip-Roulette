@@ -1,0 +1,13 @@
+{
+ "version": "pipeline-test",
+ "sentAt": "2026-11-23T00:30:29.436Z",
+ "edits": {
+  "opening": {
+   "PIPELINE TEST (Claude, 2026-11-23): no such line, nothing should change": {
+    "text": "ignored",
+    "speaker": "Test"
+   }
+  }
+ },
+ "adds": {}
+}
