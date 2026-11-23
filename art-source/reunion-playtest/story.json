@@ -1,0 +1,679 @@
+{
+ "_about": "Reunion branch (/dialogue2) script. Edited by Claude and by the page's Publish my edits button (apply-edits.mjs). Fictional draft for owner review.",
+ "version": "2026-11-22-reunion-4",
+ "cast": [
+  {
+   "id": "brendan",
+   "name": "Brendan",
+   "role": "The driver",
+   "note": "A musician with a delivery route and a very selectively worded life update."
+  },
+  {
+   "id": "sarah",
+   "name": "Sarah",
+   "role": "An old crush",
+   "note": "An encouraging message can be much more dangerous than an insult. Her role is still open."
+  },
+  {
+   "id": "shelby",
+   "name": "Shelby",
+   "role": "An old crush",
+   "note": "A familiar face at the reunion. Her personality and relationship route are still to be written."
+  },
+  {
+   "id": "katie",
+   "name": "Katie",
+   "role": "An old crush",
+   "note": "Another connection from school. Her role and reunion scenes are still to be written."
+  },
+  {
+   "id": "andrew",
+   "name": "Andrew",
+   "role": "The friend who asks the useful question",
+   "note": "Practical, direct, helpful. Lets Brendan take an absurd thought much further than necessary."
+  },
+  {
+   "id": "dan",
+   "name": "Dan",
+   "role": "The short reply",
+   "note": "Dry observations, quick teasing, and very little ceremony."
+  },
+  {
+   "id": "jay",
+   "name": "Jay",
+   "role": "The friend with presentation standards",
+   "note": "Easy banter and enthusiasm. Fashionable activewear; outfits can change by scene."
+  },
+  {
+   "id": "yusen",
+   "name": "Yusen",
+   "role": "The former college roommate",
+   "note": "Playful, curious, and actually willing to make plans. His detour may turn into an afternoon."
+  }
+ ],
+ "chapters": [
+  {
+   "id": "opening",
+   "title": "The notification",
+   "sub": "One delivery. Twenty-five years.",
+   "start": "doorstep",
+   "nodes": {
+    "doorstep": {
+     "title": "Leave at door",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Alki Beach, Seattle. Brendan is finishing a food delivery. His guitar is in the car. The delivery app has an opinion about how long this should take. And he gets a text from his friend..."
+      },
+      {
+       "speaker": "Andrew (3BC)",
+       "text": "Yo! I'm swinging through Seattle. Let's meet for lunch so I can get you your wallet back."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Just finishing up here at the office, Spud on Alki? I could go for a basket."
+      }
+     ],
+     "art": "brendan",
+     "artDesc": "Brendan is looking at his phone, delivering a bag of food that he carelessly sets on the edge of the porch, where it visibly starts to fall off.",
+     "next": "spud"
+    },
+    "spud": {
+     "title": "Spud on Alki",
+     "beats": [
+      {
+       "speaker": "Andrew (3BC)",
+       "text": "Not sure if you saw yet, but I just posted the High School Reunion info."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "No, not online too much. I know it's next weekend, but anything noteworthy?"
+      },
+      {
+       "speaker": "Andrew (3BC)",
+       "text": "Yeah, don’t spread this, but I had AI book the venue, and after mentioning our Cougar mascot, it assumed we're WSU alumni and... well, we'll all be meeting up in Pullman."
+      }
+     ],
+     "art": "andrew",
+     "artDesc": "Andrew and Brendan are at Spud Fish & Chips on Alki, chatting over baskets of fish and chips.",
+     "choices": [
+      {
+       "id": "blunder",
+       "label": "That's a pretty epic blunder. Can they remove you as ASB President 25 years after the party?",
+       "to": "notRemoved"
+      },
+      {
+       "id": "tour",
+       "label": "That's uhh.. Sure. Sealed lips. I was actually planning to tour this week anyway so, it works out.",
+       "to": "noBand"
+      }
+     ]
+    },
+    "notRemoved": {
+     "title": "Still president",
+     "beats": [
+      {
+       "speaker": "Andrew",
+       "text": "Ha. No one wants to be ASB President *after* high school."
+      }
+     ],
+     "art": "andrew",
+     "end": "Scene ends.",
+     "nextChapter": "crew"
+    },
+    "noBand": {
+     "title": "No band yet",
+     "beats": [
+      {
+       "speaker": "Andrew",
+       "text": "Perfect! You should bring your guitar. Also don’t mention: I haven't locked down a band yet..."
+      }
+     ],
+     "art": "andrew",
+     "artDesc": "Close up of Andrew in a smaller panel. His face expresses that he is hiding something. Maybe this is two smaller panels that show the change in his expression — excited to potentially have found his entertainment, but scared that others will find out how last minute he was.",
+     "next": "sarah"
+    },
+    "sarah": {
+     "title": "A familiar name",
+     "beats": [
+      {
+       "speaker": "Sarah",
+       "text": "Brendan! Are you still doing music?"
+      },
+      {
+       "speaker": "Scene",
+       "text": "He looks at the food bag. Then back at her name."
+      }
+     ],
+     "art": "sarah",
+     "choices": [
+      {
+       "id": "road",
+       "label": "Yeah. On the road constantly.",
+       "to": "touring"
+      },
+      {
+       "id": "commercial",
+       "label": "Mostly commercial work. Very exclusive audience.",
+       "to": "commercial"
+      },
+      {
+       "id": "honest",
+       "label": "A little. The jingle finally pays royalties.",
+       "to": "honest"
+      }
+     ]
+    },
+    "touring": {
+     "title": "Selective accuracy",
+     "beats": [
+      {
+       "speaker": "Sarah",
+       "text": "I knew you’d make it."
+      },
+      {
+       "speaker": "Scene",
+       "text": "For a moment he stands a little straighter."
+      }
+     ],
+     "art": "brendan",
+     "next": "booking"
+    },
+    "commercial": {
+     "title": "The audience",
+     "beats": [
+      {
+       "speaker": "Sarah",
+       "text": "Wait, you’re doing this professionally?"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "People have paid. I’m comfortable ending the sentence there."
+      }
+     ],
+     "art": "brendan",
+     "next": "booking"
+    },
+    "honest": {
+     "title": "An actual achievement",
+     "beats": [
+      {
+       "speaker": "Sarah",
+       "text": "You got something picked up? That’s brilliant."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Twelve seconds. I’m trying not to let it change me."
+      }
+     ],
+     "art": "brendan",
+     "next": "booking"
+    },
+    "booking": {
+     "title": "An opening appears",
+     "beats": [
+      {
+       "speaker": "Organizer",
+       "text": "We still need someone to play on Saturday."
+      },
+      {
+       "speaker": "Sarah",
+       "text": "You should do it!"
+      }
+     ],
+     "art": "sarah",
+     "choices": [
+      {
+       "id": "yes",
+       "label": "I could put something together.",
+       "to": "poster"
+      },
+      {
+       "id": "dj",
+       "label": "What happened to the DJ?",
+       "to": "dj"
+      },
+      {
+       "id": "number",
+       "label": "How many people are we talking?",
+       "to": "number"
+      }
+     ]
+    },
+    "dj": {
+     "title": "The entertainment budget",
+     "beats": [
+      {
+       "speaker": "Organizer",
+       "text": "He backed out. Apparently we bullied him."
+      },
+      {
+       "speaker": "Sarah",
+       "text": "We were awful to everybody."
+      },
+      {
+       "speaker": "Organizer",
+       "text": "Yes, but he has equipment now."
+      }
+     ],
+     "art": "sarah",
+     "next": "poster"
+    },
+    "number": {
+     "title": "An unhelpful estimate",
+     "beats": [
+      {
+       "speaker": "Organizer",
+       "text": "Depends how many people’s second marriages survive until Saturday."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Could you express that in chairs?"
+      }
+     ],
+     "art": "brendan",
+     "next": "poster"
+    },
+    "poster": {
+     "title": "Pending confirmation",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "A new preview appears in the group: LIVE SATURDAY — BRENDAN. The photo is old enough to need its own reunion."
+      },
+      {
+       "speaker": "Organizer",
+       "text": "Just a mockup. Tell me if you’re in."
+      },
+      {
+       "speaker": "Scene",
+       "text": "He saves the image before answering."
+      }
+     ],
+     "art": "brendan",
+     "end": "A booking is possible. So is pretending he never saw this.",
+     "nextChapter": "crew"
+    }
+   }
+  },
+  {
+   "id": "crew",
+   "title": "The crew",
+   "sub": "Support, technically.",
+   "start": "chat",
+   "nodes": {
+    "chat": {
+     "title": "The group chat",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Brendan shares the reunion poster with his friends."
+      },
+      {
+       "speaker": "Andrew",
+       "text": "Brendan said he was going to strum up some memories next weekend! You boys better be there."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "I don’t recall committing to anything. I’m still rusty."
+      },
+      {
+       "speaker": "Dan",
+       "text": "Forget rust, your skills have corroded by now. The royalties from that jingle got your brain jumbled."
+      },
+      {
+       "speaker": "Aaron",
+       "text": "Oh boy, this might actually worth flying back for."
+      },
+      {
+       "speaker": "Jay",
+       "text": "Does this mean you’ll finally pay someone for a haircut?"
+      }
+     ],
+     "art": "dan",
+     "artDesc": "Player’s phone will be in player’s hand while text bubbles pop up one by one. Maybe smaller text bubble images need to be made to lay over main image.",
+     "choices": [
+      {
+       "id": "headliner",
+       "label": "I’m taking this all in as \"support.\"",
+       "to": "support"
+      },
+      {
+       "id": "equipment",
+       "label": "We’ll see how the next week plays out.",
+       "to": "equipment"
+      },
+      {
+       "id": "panic",
+       "label": "I never agreed, but this thread's got me leaning towards: No",
+       "to": "panic"
+      }
+     ]
+    },
+    "support": {
+     "title": "A generous interpretation",
+     "beats": [
+      {
+       "speaker": "Dan",
+       "text": "Sure. Don’t get used to it."
+      },
+      {
+       "speaker": "Andrew",
+       "text": "Seriously. Ask about the equipment."
+      },
+      {
+       "speaker": "Jay",
+       "text": "Update your profile photo. You look like you sell skateboards."
+      }
+     ],
+     "art": "andrew",
+     "artDesc": "(…continued) Player’s phone will be in player’s hand while text bubbles pop up one by one. Maybe smaller text bubble images need to be made to lay over main image.",
+     "next": "help"
+    },
+    "equipment": {
+     "title": "Load-in",
+     "beats": [
+      {
+       "speaker": "Andrew",
+       "text": "Good. Bring the guitar."
+      },
+      {
+       "speaker": "Dan",
+       "text": "Leave a few opinions at home. Save on gas."
+      },
+      {
+       "speaker": "Jay",
+       "text": "I have ideas on the poster. Daylight. Decent shirt. No bathroom mirror."
+      }
+     ],
+     "art": "jay",
+     "next": "help"
+    },
+    "panic": {
+     "title": "The comfortable option",
+     "beats": [
+      {
+       "speaker": "Dan",
+       "text": "Good. We were worried you’d actually have to rehearse."
+      },
+      {
+       "speaker": "Andrew",
+       "text": "Say yes if you want to play. We’ll figure out the rest."
+      },
+      {
+       "speaker": "Jay",
+       "text": "There. Emotional support. Screenshot it."
+      }
+     ],
+     "art": "andrew",
+     "next": "help"
+    },
+    "help": {
+     "title": "A separate message",
+     "beats": [
+      {
+       "speaker": "Yusen",
+       "text": "You’re driving all that way? Stop somewhere. Do something."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "I’m trying to look like I do things."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Doing one might help."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Bring shoes you can walk in."
+      }
+     ],
+     "art": "yusen",
+     "end": "He has people in his corner. Some of them are making it difficult to hide.",
+     "nextChapter": "mom"
+    }
+   }
+  },
+  {
+   "id": "mom",
+   "title": "Mom calls",
+   "sub": "The person who already likes him.",
+   "start": "call",
+   "nodes": {
+    "call": {
+     "title": "Incoming: Mom",
+     "beats": [
+      {
+       "speaker": "Mom",
+       "text": "I heard you might play at your reunion. Is it going to be at McMiniman’s? That would be fun."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "How did you…? No. For future potential contract obligations I can't get into details, but it’s in Spokane."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "I'm going to roadtrip it out there and maybe pick up some gigs along the way."
+      },
+      {
+       "speaker": "Mom",
+       "text": "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it."
+      }
+     ],
+     "art": "brendan",
+     "artDesc": "Text message with friends artwork ends with a pop up call from Mom. That next panel will be driver, taking the Seattle exit while talking to his mom, on speakerphone. Phone is on the dash, just like the menu image. A second panel will show mom at a location that is ironic for a mom to be, talking on the phone, with Brendan’s [player’s] text bubbles coming through the phone.",
+     "choices": [
+      {
+       "id": "worry",
+       "label": "I will, you worry wart. Thank you. (+3)",
+       "to": "driveSafe"
+      },
+      {
+       "id": "fine",
+       "label": "It’s fine, mom! I don’t even notice it anymore. (-3)",
+       "to": "offered"
+      }
+     ]
+    },
+    "driveSafe": {
+     "title": "Drive safe",
+     "beats": [
+      {
+       "speaker": "Mom",
+       "text": "And drive safe!"
+      }
+     ],
+     "art": "brendan",
+     "end": "Scene ends.",
+     "nextChapter": "detour"
+    },
+    "offered": {
+     "title": "Just thought I’d offer",
+     "beats": [
+      {
+       "speaker": "Mom",
+       "text": "Okay, honey. Just thought I’d offer"
+      }
+     ],
+     "art": "brendan",
+     "end": "Scene ends.",
+     "nextChapter": "detour"
+    }
+   }
+  },
+  {
+   "id": "detour",
+   "title": "The first detour",
+   "sub": "A photo becomes a plan.",
+   "start": "fork",
+   "nodes": {
+    "fork": {
+     "title": "Take the scenic route",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Brendan checks two saved photo spots. One promises a quick stop. The other involves walking."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Hey, man! It's been a while. Do you have time for a little hike or would you rather grab a quick view from the trestle?"
+      }
+     ],
+     "art": "yusen",
+     "artDesc": "Brendan and Grant stand talking to each other in Bellevue city park, while a red shiba and blonde corgski play with each other in the foreground.",
+     "choices": [
+      {
+       "id": "quick",
+       "label": "The trestle sounds right up my alley today. Got some steps in at work today.",
+       "to": "quick"
+      },
+      {
+       "id": "walk",
+       "label": "Let's take the scenic route. I could use some clarity. Where do you have in mind?",
+       "to": "walk"
+      }
+     ]
+    },
+    "quick": {
+     "title": "The recognizable spot",
+     "beats": [
+      {
+       "speaker": "Yusen",
+       "text": "You're done working for the day? It's barely 1 PM."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Blessings of being your own boss."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Isn't Jeff your boss?"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Not today"
+      },
+      {
+       "speaker": "Scene",
+       "text": "Brendan looks through his camera lens as he takes a photo of the trestle with Bellevue in the background"
+      }
+     ],
+     "art": "yusen",
+     "artDesc": "Yusen and Brendan stand on one end of the Wilburton trestle overlooking downtown Bellevue on a sunny winter day.",
+     "next": "offer"
+    },
+    "walk": {
+     "title": "Out of frame",
+     "beats": [
+      {
+       "speaker": "Yusen",
+       "text": "Cougar Falls. It's an easy hike so bring your guitar and let's get a quick lick in."
+      },
+      {
+       "speaker": "Scene",
+       "text": "Brendan and Yusen are standing near the creek below Cougar Falls, Brendan, playing the guitar, and Yusen playing a keyboard on a stand that he packed in. Their luggage is off to the side and a couple other hikers are walking by. Two in particular seem to be enjoying the music."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Looks like we've got a fanbase building up."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "I’m enjoying something. Don’t ruin it for me."
+      },
+      {
+       "speaker": "Scene",
+       "text": "At the trailhead, they start talking with someone heading to an open mic that evening."
+      }
+     ],
+     "art": "yusen",
+     "next": "offer"
+    },
+    "offer": {
+     "title": "A small opportunity",
+     "beats": [
+      {
+       "speaker": "Stranger",
+       "text": "One song. Nothing fancy."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "That’s the name of my current tour."
+      }
+     ],
+     "art": "brendan",
+     "choices": [
+      {
+       "id": "play",
+       "label": "Put me down for one. I could use the rehearsal.",
+       "to": "play"
+      },
+      {
+       "id": "ask",
+       "label": "Can I come listen first?",
+       "to": "listen"
+      },
+      {
+       "id": "photo",
+       "label": "I really just came for a picture.",
+       "to": "photo"
+      }
+     ]
+    },
+    "play": {
+     "title": "A real booking",
+     "beats": [
+      {
+       "speaker": "Yusen",
+       "text": "Now you’re on the road doing music."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Don’t say it like that. It makes the sandwiches sound dishonest."
+      }
+     ],
+     "art": "brendan",
+     "end": "Next draft: the open mic. A small set can become a collaborator, a better booking, or a spectacular misunderstanding."
+    },
+    "listen": {
+     "title": "An open door",
+     "beats": [
+      {
+       "speaker": "Stranger",
+       "text": "Sure. Bring the guitar anyway."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Very subtle."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "I respect a trap with parking."
+      }
+     ],
+     "art": "yusen",
+     "end": "Next draft: watching the open mic, with an opportunity to change his mind."
+    },
+    "photo": {
+     "title": "Proof of attendance",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "He has the picture he came for. The invitation is still on his phone."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Want another one?"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "No. I think I’ve documented enough personal growth for one morning."
+      }
+     ],
+     "art": "brendan",
+     "end": "Next draft: back on the road. Another opportunity can arrive through a different stop."
+    }
+   }
+  }
+ ]
+}

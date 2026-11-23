@@ -1,0 +1,99 @@
+name: Publish dialogue2 edits
+
+# The /dialogue2 "Publish my edits" button (owner 2026-11-22). The Pages function
+# functions/api/dialogue2/publish.js (on claude/dialogue-only) commits the browser's edits as a
+# JSON file into art-source/reunion-playtest/inbox/ on this branch. This workflow then:
+#   1. writes them into story.json (apply-edits.mjs — mechanical, no rewording),
+#   2. rebuilds website/dialogue2/index.html and commits the result here,
+#   3. copies the page onto claude/dialogue-only and deploys THAT branch exactly as its own
+#      Pages workflow does, so only /dialogue2 changes (the live game, /dialogue and the landing
+#      pages are rebuilt from the same commit that is live).
+# Pushes made here with GITHUB_TOKEN do not start other workflows, so nothing loops.
+
+on:
+  push:
+    branches: [claude/lucid-fermi-21ue13]
+    paths: ['art-source/reunion-playtest/inbox/*.json']
+  workflow_dispatch:
+
+concurrency:
+  group: dialogue2-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/lucid-fermi-21ue13
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Find edits waiting in the inbox
+        id: inbox
+        run: |
+          shopt -s nullglob
+          files=(art-source/reunion-playtest/inbox/*.json)
+          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          echo "Waiting: ${#files[@]}"
+
+      - name: Install dependencies (sharp builds the portraits)
+        if: steps.inbox.outputs.count != '0'
+        run: |
+          npm ci
+          npm install --no-save --os=linux --cpu=x64 sharp
+
+      - name: Apply the edits and rebuild /dialogue2
+        if: steps.inbox.outputs.count != '0'
+        run: |
+          shopt -s nullglob
+          files=(art-source/reunion-playtest/inbox/*.json)
+          node art-source/reunion-playtest/apply-edits.mjs "${files[@]}" > "$RUNNER_TEMP/report.json"
+          cat "$RUNNER_TEMP/report.json"
+          mkdir -p art-source/reunion-playtest/inbox/applied
+          for f in "${files[@]}"; do git mv "$f" art-source/reunion-playtest/inbox/applied/; done
+          cp "$RUNNER_TEMP/report.json" "art-source/reunion-playtest/inbox/applied/$(basename "${files[0]}" .json).report.json"
+          node art-source/reunion-playtest/build.mjs
+          node -e '
+            const r = require(process.env.RUNNER_TEMP + "/report.json");
+            const lines = ["Publish my edits: " + r.applied.length + " applied" + (r.skipped.length ? ", " + r.skipped.length + " skipped" : "") + " (dialogue2)", ""];
+            for (const s of r.skipped) lines.push("Skipped (" + s.why + "): " + (s.was || s.anchor || s.chapter));
+            for (const n of r.notes) lines.push("Note: " + (n.note || (n.dropped ? "dropped unreachable panel " + n.dropped : "")));
+            require("fs").writeFileSync(process.env.RUNNER_TEMP + "/message.txt", lines.join("\n") + "\n");'
+          git config user.name "dialogue2-publish[bot]"
+          git config user.email "dialogue2-publish@users.noreply.github.com"
+          git add -A art-source/reunion-playtest website/dialogue2 "Story Playtest 2"
+          git commit -q -F "$RUNNER_TEMP/message.txt"
+          git pull -q --rebase origin claude/lucid-fermi-21ue13   # another publish may have landed meanwhile
+          git push origin HEAD:claude/lucid-fermi-21ue13
+
+      - name: Put the page on claude/dialogue-only
+        if: steps.inbox.outputs.count != '0'
+        run: |
+          git fetch -q origin claude/dialogue-only
+          git worktree add -q "$RUNNER_TEMP/pub" -B claude/dialogue-only origin/claude/dialogue-only
+          cp website/dialogue2/index.html "$RUNNER_TEMP/pub/website/dialogue2/index.html"
+          cd "$RUNNER_TEMP/pub"
+          git add website/dialogue2/index.html
+          git diff --cached --quiet || git commit -q -m "Publish /dialogue2 (Publish my edits)"
+          git pull -q --rebase origin claude/dialogue-only
+          git push origin HEAD:claude/dialogue-only
+
+      - name: Build the live site from claude/dialogue-only and deploy
+        if: steps.inbox.outputs.count != '0'
+        working-directory: ${{ runner.temp }}/pub
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_PAGES_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          npm ci
+          sh website/build-demo.sh
+          sh website/build-fully.sh
+          npx --yes wrangler@3 pages deploy website --project-name=roadtrip-roulette --branch=main --commit-dirty=true
