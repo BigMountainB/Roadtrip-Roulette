@@ -660,7 +660,40 @@
   const status = t => { msg.textContent = t; clearTimeout(status.t); status.t = setTimeout(() => (msg.textContent = ''), 6000); };
   btn.onclick = () => exportAll(status);
   copy.onclick = async () => { try { await navigator.clipboard.writeText(build()); status('Copied the full script. Paste it into your chat.'); } catch { status('Copy was blocked; use Export all.'); } };
-  tools.append(btn, copy, msg);
+  // ── Publish my edits (owner 2026-11-22) ────────────────────────────────────────────────────
+  // Sends this browser's edits to /api/dialogue2/publish (a Cloudflare Pages function holding the
+  // GitHub key). A GitHub Action writes them into the script and redeploys /dialogue2 in a few
+  // minutes. Mechanical: lines go live exactly as typed. The passcode is asked once per browser.
+  const PASS_KEY = 'rtr.dialogue2.passcode', FLASH_KEY = 'rtr.dialogue2.flash';
+  const pub = Object.assign(document.createElement('button'), { id: 'rtrPublish', textContent: '⇪ Publish my edits' });
+  pub.style.cssText = 'background:#2d6cdf;border-color:#2d6cdf;color:#fff';
+  pub.onclick = async () => {
+    const { edits, adds } = load();
+    const n = Object.values(edits).reduce((t, m) => t + Object.keys(m || {}).length, 0) + Object.values(adds).reduce((t, l) => t + (l || []).length, 0);
+    if (!n) return status('No edits to publish yet. Use ✎ Edit text first.');
+    if (!confirm('Publish ' + n + ' change' + (n === 1 ? '' : 's') + ' to the live /dialogue2?\n\nThey go into the script exactly as typed and show for everyone in about 4 minutes.')) return;
+    let pass = ''; try { pass = localStorage.getItem(PASS_KEY) || ''; } catch {}
+    if (!pass) { pass = prompt('Publishing passcode:') || ''; if (!pass) return status('Cancelled.'); }
+    pub.disabled = true; status('Publishing…');
+    try {
+      const r = await fetch('/api/dialogue2/publish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ passcode: pass, version: S.version, edits, adds }) });
+      const out = await r.json().catch(() => ({}));
+      if (r.status === 401) { try { localStorage.removeItem(PASS_KEY); } catch {} return status('Wrong passcode. Nothing was published.'); }
+      if (!r.ok || !out.ok) return status((out.error || 'Publishing failed (' + r.status + ').') + ' Your edits are still saved here.');
+      // Sent: keep a backup, clear the live copy (it is now in the script), and reload so the editor
+      // doesn't write the published edits back.
+      try {
+        localStorage.setItem(PASS_KEY, pass);
+        localStorage.setItem('rtr.dialogue2.published.' + Date.now(), JSON.stringify({ edits, adds }));
+        localStorage.removeItem(KEY); localStorage.removeItem(ADDS_KEY);
+        sessionStorage.setItem(FLASH_KEY, 'Published ' + out.changes + ' change' + (out.changes === 1 ? '' : 's') + '. They go live in about 4 minutes — reload then to see them. (A backup is kept in this browser.)');
+      } catch {}
+      location.reload();
+    } catch { status('Couldn’t reach the site. Check your connection; your edits are still saved here.'); }
+    finally { pub.disabled = false; }
+  };
+  tools.append(pub, btn, copy, msg);
+  try { const f = sessionStorage.getItem(FLASH_KEY); if (f) { sessionStorage.removeItem(FLASH_KEY); msg.textContent = f; } } catch {}
   window.RTR_EXPORT_ALL = build;   // for checks
 })();
 </script><script>
