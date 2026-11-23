@@ -13477,6 +13477,21 @@ deploy the live site was rechecked against the branch (dialogue, b23 game, eight
 To publish a dialogue page change later: commit the rebuilt page onto `claude/dialogue-only` and
 push. Never `npm run deploy` for this; it ships unrelated game changes.
 
+**Publish my edits (owner 2026-11-22):** `/dialogue2` has a **⇪ Publish my edits** button that
+puts the owner's ✎ edits live without Claude. Chain: page → `/api/dialogue2/publish` (Cloudflare Pages
+function `functions/api/dialogue2/publish.js` on `claude/dialogue-only`; checks the passcode, holds the
+GitHub token) → commits the edits as JSON to `art-source/reunion-playtest/inbox/` on
+`claude/lucid-fermi-21ue13` → Action `.github/workflows/dialogue2-apply.yml` runs `apply-edits.mjs`
+(mechanical: lines go in exactly as typed; stale edits skipped and listed in the commit message;
+unreachable panels dropped), rebuilds, copies the page onto `claude/dialogue-only` and deploys (only
+/dialogue2 changes; ~4 minutes). Applied inbox files + reports are kept in `inbox/applied/`. The script
+is `art-source/reunion-playtest/story.json` (moved from story.mjs so it can be edited mechanically).
+Setup lives in GitHub repository secrets (Settings → Secrets and variables → Actions):
+`DIALOGUE_GH_TOKEN` (fine-grained token, this repo only, Contents read/write) and `DIALOGUE_PASSCODE`;
+the deploy workflow passes them to Cloudflare. **Passcode hint: the high-school mascot.** (This repo is
+public, so the passcode itself is never written here.) Forgot it? Update `DIALOGUE_PASSCODE` in the
+secrets and redeploy. The browser remembers the passcode per device after the first publish.
+
 **Artwork descriptions (owner 2026-11-07):** every panel (scene node) on `/dialogue2` has one
 editable **Artwork** line above its dialogue, using the same ✎ editor (edit, undo, export as
 “Artwork · Was / Now”). Source: node `extra.artDesc` in `story.mjs`; until it is set the page shows
