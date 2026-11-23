@@ -5,8 +5,8 @@
 //
 // Lettering follows the "RTR Comic Book V2" spec (owner decisions 2026-09-09): Patrick Hand for spoken
 // lines, Comic Neue bold caps for captions. Style picker (owner 2026-11-23): tap a bubble in Layout →
-// Text (Blue / Green / White) or Voice (Color → Border → Tail). Tails are off unless added: 24 angles
-// (every half hour on a clock face) and a length.
+// Text (Blue / Green / White) or Voice (Color → Border). Tails are off unless added; then the tip is
+// dragged to where it points, and a clock picks where it leaves the bubble (or Auto).
 //
 // Which style a bubble gets, first match wins:
 //   1. its own style                       layout bubbles[key].style  / node.bubbles[key].style
@@ -16,7 +16,8 @@
 //
 // Saved layout (this browser, until published):  rtr.dialogue2.layout.v1
 //   { _speakers?: {[speaker]: style}, [chapterId]: { [nodeId]: { images?, style?, bubbles?: {[key]: {img,x,y,w,style?}} } } }
-// Bubble keys: a line's text as shown (*italics* without asterisks), or "add:<id>" for a line added with ✎.
+// Bubble keys: a line's text as shown (*italics* without asterisks), "add:<id>" for a line added with ✎,
+// or "choice:<from panel>:<choice id>" for the choice the player picked to reach the panel.
 (() => {
   const LKEY = 'rtr.dialogue2.layout.v1', EKEY = 'rtr.dialogue2.edits.v1', AKEY = EKEY + '.adds', PASS_KEY = 'rtr.dialogue2.passcode';
   const norm = s => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -54,8 +55,13 @@
   const placedFor = nid => ({ ...(D.chapter.nodes[nid].bubbles || {}), ...((saved()[nid] || {}).bubbles || {}) });
   // Lines as they read now: the script, this browser's ✎ edits (removed lines get no bubble), and lines
   // added with ✎ right after the line they follow.
+  // The choice the player picked to get here shows as Brendan's first bubble on this panel (owner
+  // 2026-11-23). Key "choice:<from panel>:<choice id>", so its place and look survive rewording.
+  let via = null;
   function lines(nid) {
     const n = D.chapter.nodes[nid], edits = read(EKEY)[ch] || {}, adds = (read(AKEY)[ch] || []).filter(a => a.kind === 'line' && !a.onChoice), out = [];
+    const c = via && D.chapter.nodes[via.from]?.choices?.find(c => c.id === via.id);
+    if (c && c.to === nid) { const e = edits[shown(c.label)]; if (!e?.deleted) out.push({ key: 'choice:' + via.from + ':' + c.id, speaker: 'Brendan', text: (e && typeof e.text === 'string' ? e.text : c.label).replace(/\s*\([+-]\d+\)\s*$/, ''), choice: true }); }   // no score marks like (+3)
     for (const b of n.beats) {
       const key = shown(b.text), e = edits[key];
       if (!e?.deleted) out.push({ key, speaker: b.speaker, text: e && typeof e.text === 'string' ? e.text : b.text });
@@ -76,14 +82,16 @@
     if (speaker === 'Scene') return { kind: 'caption', tail: 0, size: SIZES[(own || {}).size] ? own.size : 'm' };
     const kind = s.kind === 'text' ? 'text' : 'voice';
     const tail = +s.tail > 0 && +s.tail <= 12.5 ? Math.round(+s.tail * 2) / 2 : 0;
-    const tlen = Math.max(8, Math.min(80, Math.round(+s.tlen || 18)));
-    if (kind === 'text') return { kind, color: TEXT_COLORS[s.color] ? s.color : 'blue', tail, tlen, size };
-    return { kind, color: VOICE_COLORS[s.color] ? s.color : 'white', border: BORDERS[s.border] ? s.border : 'normal', tail, tlen, size };
+    const tlen = Math.max(8, Math.min(500, Math.round(+s.tlen || 18)));
+    const tbase = +s.tbase > 0 && +s.tbase <= 12 ? Math.round(+s.tbase * 2) / 2 : 0;
+    if (kind === 'text') return { kind, color: TEXT_COLORS[s.color] ? s.color : 'blue', tail, tlen, tbase, size };
+    return { kind, color: VOICE_COLORS[s.color] ? s.color : 'white', border: BORDERS[s.border] ? s.border : 'normal', tail, tlen, tbase, size };
   }
   const classes = st => st.kind === 'caption' ? 'bub cap' : st.kind === 'text' ? 'bub txt t-' + st.color : 'bub v-' + st.color + ' b-' + st.border;
 
   let ro = null, sig = '';
-  function render(nid, el) {
+  function render(nid, el, v) {
+    if (arguments.length > 2) via = v || null;
     nodeId = nid; host = el;
     const imgs = imagesFor(nid), placed = placedFor(nid);
     el.classList.toggle('layout', mode);
@@ -99,7 +107,7 @@
       + L.map(l => {
         const st = styleOf(placed[l.key]?.style, l.speaker, nid);
         const name = st.kind === 'caption' ? '' : '<b>' + esc(l.speaker) + '</b>';
-        return '<div class="' + classes(st) + (selected === l.key ? ' sel' : '') + '" data-k="' + esc(l.key) + '" data-sp="' + esc(l.speaker) + '" data-tail="' + st.tail + '" data-tlen="' + st.tlen + '">' + name + '<span' + (st.size !== 'm' ? ' style="font-size:' + SIZES[st.size][1] + 'em"' : '') + '>' + fmt(l.text) + '</span>'
+        return '<div class="' + classes(st) + (selected === l.key ? ' sel' : '') + '" data-k="' + esc(l.key) + '" data-sp="' + esc(l.speaker) + '" data-tail="' + st.tail + '" data-tlen="' + st.tlen + '" data-tbase="' + (st.tbase || 0) + '">' + name + '<span' + (st.size !== 'm' ? ' style="font-size:' + SIZES[st.size][1] + 'em"' : '') + '>' + fmt(l.text) + '</span>'
           + (mode ? '<i class="grip" title="Drag to resize"></i>' : '') + '</div>';
       }).join('');
     const place = () => {
@@ -110,8 +118,11 @@
         b.style.left = p.x + '%'; b.style.width = p.w + '%';
         b.style.top = (box.offsetTop + box.offsetHeight * p.y / 100) + 'px';
         b.classList.toggle('placed', !!placed[b.dataset.k]);
+        b._tip = tipOf(b, placed[b.dataset.k]);
         tail(b);
       });
+      el.querySelectorAll('.tiph').forEach(t => t.remove());
+      if (mode) el.querySelectorAll('.bub').forEach(b => { if (b._tip) el.append(handle(b)); });
       if (mode && selected) panel();
       parent.postMessage({ fit: 1 }, '*');
     };
@@ -126,28 +137,56 @@
 
   // Tail: a triangle (or, for thought, shrinking dots) leaving the bubble's edge toward an hour on a clock
   // face (half hours allowed), `tlen` px long. Ellipse edge for oval bubbles, rectangle edge for boxy ones.
+  // ── Tails (owner 2026-11-23): a wedge that narrows evenly from the bubble's edge to a tip. The tip
+  // is a point on the panel (bubbles[key].tip, x/y as % of the panel's width), aimed by dragging the
+  // orange dot in Layout, so it stays on the speaker when the bubble moves. Where it leaves the
+  // bubble: toward the tip (auto) or a clock position (style.tbase). Thought bubbles trail dots.
+  // Older saves (style.tail = clock hour, style.tlen = px) still draw.
+  const oval = b => !(b.classList.contains('txt') || b.classList.contains('b-radio') || b.classList.contains('cap'));
+  function edge(b, dx, dy) {
+    const a = b.offsetWidth / 2, c = b.offsetHeight / 2, n = Math.hypot(dx, dy) || 1; dx /= n; dy /= n;
+    const t = oval(b) ? 1 / Math.sqrt((dx / a) ** 2 + (dy / c) ** 2) : Math.min(Math.abs(a / (dx || 1e-9)), Math.abs(c / (dy || 1e-9)));
+    return [a + dx * t, c + dy * t];
+  }
+  function tipOf(b, pl) {
+    if (b.classList.contains('cap')) return null;
+    const W = host.offsetWidth || 1;
+    if (pl?.tip && isFinite(pl.tip.x) && isFinite(pl.tip.y)) return [pl.tip.x / 100 * W, pl.tip.y / 100 * W];
+    const h = +b.dataset.tail; if (!h) return null;
+    const th = h * Math.PI / 6, dx = Math.sin(th), dy = -Math.cos(th), [ex, ey] = edge(b, dx, dy), len = +b.dataset.tlen || 18;
+    return [b.offsetLeft + ex + dx * len, b.offsetTop + ey + dy * len];
+  }
+  const P = (x, y) => x.toFixed(1) + ' ' + y.toFixed(1);
   function tail(b) {
     b.querySelectorAll('.tail').forEach(t => t.remove());
-    const h = +b.dataset.tail, len = +b.dataset.tlen || 18; if (!h || b.classList.contains('cap')) return;
-    const w = b.offsetWidth, ht = b.offsetHeight, th = h * 30 * Math.PI / 180, dx = Math.sin(th), dy = -Math.cos(th);
-    const oval = b.classList.contains('b-normal') || b.classList.contains('b-whisper') || b.classList.contains('b-thought');
-    const t = oval ? 1 / Math.sqrt((dx / (w / 2)) ** 2 + (dy / (ht / 2)) ** 2) : Math.min(Math.abs(w / 2 / (dx || 1e-9)), Math.abs(ht / 2 / (dy || 1e-9)));
-    const x = w / 2 + dx * t, y = ht / 2 + dy * t;
+    const tip = b._tip; if (!tip) return;
+    const w = b.offsetWidth, h = b.offsetHeight, cx = w / 2, cy = h / 2, tx = tip[0] - b.offsetLeft, ty = tip[1] - b.offsetTop;
+    const hb = +b.dataset.tbase || 0;
+    const [dx, dy] = hb ? [Math.sin(hb * Math.PI / 6), -Math.cos(hb * Math.PI / 6)] : [tx - cx, ty - cy];
+    const [bx, by] = edge(b, dx, dy), L = Math.hypot(tx - bx, ty - by);
+    if (L < 6 || (!hb && Math.hypot(tx - cx, ty - cy) <= Math.hypot(bx - cx, by - cy) + 2)) return;   // tip inside the bubble
+    const ux = (tx - bx) / L, uy = (ty - by) / L, px = -uy, py = ux;
+    const hw = Math.max(6, Math.min(16, Math.min(w, h) * .16, L * .45));
     if (b.classList.contains('b-thought')) {
-      [0.35, 0.7, 1].forEach((f, i) => {
-        const r = 7 - i * 2, d = 6 + len * f, dot = document.createElement('i'); dot.className = 'tail dot';
-        Object.assign(dot.style, { width: r * 2 + 'px', height: r * 2 + 'px', left: x + dx * d - r + 'px', top: y + dy * d - r + 'px' });
+      [.28, .6, .92].forEach((f, i) => {
+        const r = Math.max(2.5, hw * (.85 - i * .25)), dot = document.createElement('i'); dot.className = 'tail dot';
+        Object.assign(dot.style, { width: r * 2 + 'px', height: r * 2 + 'px', left: bx + (tx - bx) * f - r + 'px', top: by + (ty - by) * f - r + 'px' });
         b.append(dot);
       });
       return;
     }
+    const [lx, ly] = edge(b, bx + px * hw - cx, by + py * hw - cy), [rx, ry] = edge(b, bx - px * hw - cx, by - py * hw - cy);
+    const inn = (x, y) => { const d = Math.hypot(cx - x, cy - y) || 1, k = Math.min(9, d * .5) / d; return [x + (cx - x) * k, y + (cy - y) * k]; };
+    const [lix, liy] = inn(lx, ly), [rix, riy] = inn(rx, ry);
     const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    s.setAttribute('class', 'tail'); s.setAttribute('viewBox', '0 0 22 ' + (len + 2)); s.setAttribute('width', '22'); s.setAttribute('height', String(len + 2));
-    s.innerHTML = b.classList.contains('b-radio')
-      ? '<path d="M3 0 L11 ' + (len * .38).toFixed(1) + ' L7 ' + (len * .48).toFixed(1) + ' L15 ' + (len + 1) + ' L9 ' + (len * .48).toFixed(1) + ' L13 ' + (len * .38).toFixed(1) + ' L19 0"/>'
-      : '<path d="M3 0 L11 ' + (len + 1) + ' L19 0"/>';
-    Object.assign(s.style, { left: x - 11 - dx * 2 + 'px', top: y - dy * 2 + 'px', transformOrigin: '11px 0', transform: 'rotate(' + (h * 30 + 180) + 'deg)' });
+    s.setAttribute('class', 'tail'); s.setAttribute('width', '1'); s.setAttribute('height', '1');
+    s.innerHTML = '<path class="f" d="M' + P(lix, liy) + ' L' + P(lx, ly) + ' L' + P(tx, ty) + ' L' + P(rx, ry) + ' L' + P(rix, riy) + 'Z"/><path class="s" d="M' + P(lx, ly) + ' L' + P(tx, ty) + ' L' + P(rx, ry) + '"/>';
     b.append(s);
+  }
+  function handle(b) {
+    const t = document.createElement('i'); t.className = 'tiph'; t.dataset.k = b.dataset.k; t.title = 'Drag to aim the tail';
+    t.style.left = b._tip[0] + 'px'; t.style.top = b._tip[1] + 'px';
+    return t;
   }
 
   // ── Style panel (Layout mode, tap a bubble) ──────────────────────────────────────────────────
@@ -163,6 +202,11 @@
     const old = placedFor(nodeId)[key];
     panelSave(p => { (p.bubbles ||= {})[key] = { ...(old || current(b)), style: { ...(old?.style || {}), ...patch } }; });
     refresh();
+  }
+  function bubbleSave(key, fn) {
+    const b = bubbleEl(key); if (!b) return;
+    const old = placedFor(nodeId)[key];
+    panelSave(p => { const v = { ...(old || current(b)) }; if (old?.style) v.style = { ...old.style }; fn(v); if (v.style && !Object.keys(v.style).length) delete v.style; (p.bubbles ||= {})[key] = v; });
   }
   // "Use for all of X's lines" / "Use for every line in this panel": copy this bubble's look (not its
   // tail, which belongs to one bubble's position) and drop the per-bubble overrides that would hide it.
@@ -202,22 +246,17 @@
       h += '<label>Color</label><div class="csr">' + Object.entries(colors).map(([v, l]) => opt('color', v, '<i class="sw ' + (st.kind === 'text' ? 't-' : 'v-') + v + '"></i>' + l, st.color === v)).join('') + '</div>';
       if (st.kind === 'voice') h += '<label>Border</label><div class="csr">' + Object.entries(BORDERS).map(([v, l]) => opt('border', v, l, st.border === v)).join('') + '</div>';
       h += sizeRow;
-      h += '<label>Tail — the time the tail points to</label><div class="clock">' + Array.from({ length: 24 }, (_, i) => {
+      h += '<label>Tail</label><div class="csr">' + (b._tip ? opt('tailoff', '1', 'Remove tail') : opt('tailon', '1', '+ Add tail')) + '</div>';
+      if (b._tip) h += '<p class="muted">Drag the orange dot to aim the tail (at the speaker’s mouth, say). It stays aimed there when you move the bubble.</p><label>Where it leaves the bubble</label><div class="clock">' + Array.from({ length: 24 }, (_, i) => {
         const hr = (i + 1) / 2, a = hr * 30 * Math.PI / 180, whole = Number.isInteger(hr), r = whole ? 56 : 36;
-        return '<button data-cs="tail" data-v="' + hr + '" class="' + (whole ? 'hr' : 'half') + '" title="' + (whole ? hr + ':00' : Math.floor(hr) + ':30') + '" style="left:calc(50% + ' + (Math.sin(a) * r).toFixed(1) + 'px);top:calc(50% - ' + (Math.cos(a) * r).toFixed(1) + 'px)"' + (st.tail === hr ? ' aria-pressed="true"' : '') + '>' + (whole ? hr : '') + '</button>';
-      }).join('') + '<button data-cs="tail" data-v="0" class="none"' + (!st.tail ? ' aria-pressed="true"' : '') + ' title="No tail">✕</button></div>';
-      if (st.tail) h += '<label>Tail length <output>' + st.tlen + 'px</output></label><input type="range" min="8" max="80" step="1" value="' + st.tlen + '" data-cs="tlen">';
+        return '<button data-cs="tbase" data-v="' + hr + '" class="' + (whole ? 'hr' : 'half') + '" title="' + (whole ? hr + ':00' : Math.floor(hr) + ':30') + '" style="left:calc(50% + ' + (Math.sin(a) * r).toFixed(1) + 'px);top:calc(50% - ' + (Math.cos(a) * r).toFixed(1) + 'px)"' + (st.tbase === hr ? ' aria-pressed="true"' : '') + '>' + (whole ? hr : '') + '</button>';
+      }).join('') + '<button data-cs="tbase" data-v="0" class="none"' + (!st.tbase ? ' aria-pressed="true"' : '') + ' title="Leave from the side nearest the tip">Auto</button></div>';
       h += '<label>Make this the default</label><div class="csr">' + opt('default', 'speaker', 'All of ' + esc(sp) + '’s lines') + opt('default', 'panel', 'Every line in this panel') + opt('default', 'clear', 'Reset this bubble') + '</div>';
     }
     p.innerHTML = h;
     p.style.top = Math.min(b.offsetTop + b.offsetHeight + 10, Math.max(0, host.offsetHeight - 40)) + 'px';
     p.style.left = Math.max(0, Math.min(b.offsetLeft, host.offsetWidth - 310)) + 'px';
     host.append(p);
-    const range = p.querySelector('input[data-cs="tlen"]');
-    if (range) {
-      range.addEventListener('input', () => { range.previousElementSibling.querySelector('output').textContent = range.value + 'px'; b.dataset.tlen = range.value; tail(b); });
-      range.addEventListener('change', () => setStyle(selected, { tlen: +range.value }));
-    }
     parent.postMessage({ fit: 1 }, '*');
   }
   document.addEventListener('click', e => {
@@ -229,7 +268,11 @@
     else if (g === 'color') setStyle(selected, { color: v });
     else if (g === 'border') setStyle(selected, { border: v });
     else if (g === 'size') setStyle(selected, { size: v });
-    else if (g === 'tail') setStyle(selected, { tail: +v });
+    else if (g === 'tbase') setStyle(selected, { tbase: +v });
+    else if (g === 'tailon') { const b = bubbleEl(selected), W = host.offsetWidth || 1; if (!b) return;
+      const x = b.offsetLeft + b.offsetWidth * .35, y = b.offsetTop + b.offsetHeight + Math.max(34, b.offsetHeight * .5);
+      bubbleSave(selected, v => { v.tip = { x: +(x / W * 100).toFixed(1), y: +(y / W * 100).toFixed(1) }; }); refresh(); }
+    else if (g === 'tailoff') { bubbleSave(selected, v => { delete v.tip; if (v.style) { delete v.style.tail; delete v.style.tlen; delete v.style.tbase; } }); refresh(); }
     else if (g === 'default') {
       if (v === 'clear') { const old = placedFor(nodeId)[selected]; if (old) panelSave(p => { const keep = { ...old }; delete keep.style; (p.bubbles ||= {})[selected] = keep; }); refresh(); }
       else makeDefault(v);
@@ -247,7 +290,15 @@
 
   // ── Layout mode: drag to move, grip to resize, tap to style, double-tap to edit; image tools ───
   let drag = null;
+  let aim = null;
   document.addEventListener('pointerdown', e => {
+    const th = mode && e.target.closest('.tiph');
+    if (th && host?.contains(th)) {
+      e.preventDefault(); th.setPointerCapture(e.pointerId);
+      const hr = host.getBoundingClientRect();
+      aim = { t: th, b: bubbleEl(th.dataset.k), dx: e.clientX - hr.left - th.offsetLeft, dy: e.clientY - hr.top - th.offsetTop };
+      host.querySelector('.cstyle')?.remove(); return;
+    }
     if (!mode || e.target.closest('.cstyle')) return;
     const b = e.target.closest('.bub'); if (!b || !host?.contains(b)) return;
     e.preventDefault(); b.setPointerCapture(e.pointerId);
@@ -256,6 +307,10 @@
     b.classList.add('dragging');
   });
   document.addEventListener('pointermove', e => {
+    if (aim) {
+      const hr = host.getBoundingClientRect(), x = e.clientX - hr.left - aim.dx, y = e.clientY - hr.top - aim.dy;
+      aim.t.style.left = x + 'px'; aim.t.style.top = y + 'px'; if (aim.b) { aim.b._tip = [x, y]; tail(aim.b); } return;
+    }
     if (!drag) return;
     const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
     if (!drag.moved && Math.hypot(dx, dy) < 5) return;
@@ -265,6 +320,11 @@
     tail(drag.b);
   });
   document.addEventListener('pointerup', () => {
+    if (aim) {
+      const { t, b } = aim, W = host.offsetWidth || 1; aim = null;
+      if (b) { bubbleSave(t.dataset.k, v => { v.tip = { x: +(t.offsetLeft / W * 100).toFixed(1), y: +(t.offsetTop / W * 100).toFixed(1) }; if (v.style) { delete v.style.tail; delete v.style.tlen; } }); refresh(); }
+      return;
+    }
     if (!drag) return;
     const { b, moved } = drag; drag = null; b.classList.remove('dragging');
     const key = b.dataset.k;
@@ -275,7 +335,7 @@
       selected = key; refresh(); return;                         // tap: style panel
     }
     const pos = current(b), old = placedFor(nodeId)[key];
-    panelSave(p => { (p.bubbles ||= {})[key] = { ...pos, ...(old?.style ? { style: old.style } : {}) }; });
+    panelSave(p => { (p.bubbles ||= {})[key] = { ...(old || {}), ...pos }; });
     b.classList.add('placed');
   });
 

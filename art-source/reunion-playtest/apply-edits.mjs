@@ -31,9 +31,17 @@ function cleanStyle(st, withTail = true) {
   if (['s', 'l', 'xl'].includes(st.size)) out.size = st.size;
   if (withTail) {
     const t = Math.round(+st.tail * 2) / 2; if (t >= 0 && t <= 12.5) out.tail = t;
-    const l = Math.round(+st.tlen); if (l >= 8 && l <= 80) out.tlen = l;
+    const l = Math.round(+st.tlen); if (l >= 8 && l <= 500) out.tlen = l;
+    const tb = Math.round(+st.tbase * 2) / 2; if (tb > 0 && tb <= 12) out.tbase = tb;
   }
   return Object.keys(out).length ? out : null;
+}
+
+function bubblePos(p) {
+  const pos = { img: Math.max(0, Math.round(+p.img || 0)), x: +(+p.x || 0).toFixed(1), y: +(+p.y || 0).toFixed(1), w: +(+p.w || 44).toFixed(1) };
+  if (p.tip && isFinite(+p.tip.x) && isFinite(+p.tip.y)) pos.tip = { x: +(+p.tip.x).toFixed(1), y: +(+p.tip.y).toFixed(1) };
+  const st = cleanStyle(p.style); if (st) pos.style = st;
+  return pos;
 }
 
 export function applyEdits(story, files) {
@@ -141,11 +149,17 @@ export function applyEdits(story, files) {
         if (Array.isArray(lay.images)) n.images = lay.images.map(String);
         if (lay.style) { const look = cleanStyle(lay.style, false); if (look) n.style = look; }
         for (const [rawKey, p] of Object.entries(lay.bubbles || {})) {
+          // A picked choice's bubble on the panel it leads to: "choice:<from panel>:<choice id>".
+          const cm = rawKey.match(/^choice:([^:]+):(.+)$/);
+          if (cm) {
+            const c = ch.nodes[cm[1]]?.choices?.find(c => c.id === cm[2]);
+            if (!c || c.to !== nid || !p || typeof p !== 'object') { report.skipped.push({ chapter: cid, why: 'bubble for a choice that no longer leads here', panel: n.title }); continue; }
+            (n.bubbles ||= {})[rawKey] = bubblePos(p); continue;
+          }
           const key = rawKey.startsWith('add:') ? addedKey[rawKey] : rawKey;
           if (!key) { report.skipped.push({ chapter: cid, why: 'bubble for an added line that was not added', panel: n.title }); continue; }
           if (!p || typeof p !== 'object') continue;
-          const pos = { img: Math.max(0, Math.round(+p.img || 0)), x: +(+p.x || 0).toFixed(1), y: +(+p.y || 0).toFixed(1), w: +(+p.w || 44).toFixed(1) };
-          const st = cleanStyle(p.style); if (st) pos.style = st;
+          const pos = bubblePos(p);
           const edited = file.edits?.[cid]?.[key];
           const k = edited && !edited.deleted && typeof edited.text === 'string' ? shown(edited.text) : key;
           if (!n.beats.some(b => shown(b.text) === k)) { report.skipped.push({ chapter: cid, why: 'bubble for a line no longer in that panel', panel: n.title, line: key }); continue; }
