@@ -1,6 +1,6 @@
 {
  "_about": "Reunion branch (/dialogue2) script. Edited by Claude and by the page's Publish my edits button (apply-edits.mjs). Fictional draft for owner review.",
- "version": "2026-11-23-published-mwtvwl83",
+ "version": "2026-11-23-published-mwtwbsj1",
  "cast": [
   {
    "id": "brendan",
@@ -63,7 +63,7 @@
      "beats": [
       {
        "speaker": "Scene",
-       "text": "Alki Beach, Seattle. Brendan is finishing a food delivery. His guitar is in the car. The delivery app has an opinion about how long this should take. And he gets a text from his friend..."
+       "text": "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket..."
       },
       {
        "speaker": "Andrew (3BC)",
@@ -71,12 +71,39 @@
       },
       {
        "speaker": "Brendan",
-       "text": "Just finishing up here at the office, Spud on Alki? I could go for a basket."
+       "text": "Just finishing up here at the office, Spud on Alki? I could do a basket."
       }
      ],
      "art": "brendan",
      "artDesc": "Brendan is looking at his phone, delivering a bag of food that he carelessly sets on the edge of the porch, where it visibly starts to fall off.",
-     "next": "spud"
+     "next": "spud",
+     "style": {
+      "kind": "text",
+      "color": "blue"
+     },
+     "bubbles": {
+      "Yo! I'm swinging through Seattle. Let's meet for lunch so I can get you your wallet back.": {
+       "img": 0,
+       "x": 14.8,
+       "y": 59.6,
+       "w": 36.1
+      },
+      "Just finishing up here at the office, Spud on Alki? I could do a basket.": {
+       "img": 1,
+       "x": 16.8,
+       "y": 62.6,
+       "w": 27.7,
+       "style": {
+        "color": "white"
+       }
+      },
+      "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket...": {
+       "img": 0,
+       "x": 15.1,
+       "y": 3.8,
+       "w": 22
+      }
+     }
     },
     "spud": {
      "title": "Spud on Alki",
@@ -641,16 +668,31 @@
      "bubbles": {
       "And drive safe!": {
        "img": 0,
-       "x": 28,
-       "y": 36.1,
-       "w": 21.7,
+       "x": 31.3,
+       "y": 7.9,
+       "w": 19,
+       "tip": {
+        "x": 55.6,
+        "y": 11.1
+       },
+       "style": {
+        "tbase": 4
+       }
+      },
+      "choice:call:worry": {
+       "img": 0,
+       "x": 33.5,
+       "y": 38.8,
+       "w": 15.1,
+       "tip": {
+        "x": 54.4,
+        "y": 19.4
+       },
        "style": {
         "kind": "voice",
-        "color": "white",
-        "border": "normal",
-        "size": "l",
-        "tail": 2,
-        "tlen": 39
+        "color": "cream",
+        "border": "radio",
+        "tbase": 3
        }
       }
      }
