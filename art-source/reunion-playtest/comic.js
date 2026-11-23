@@ -84,8 +84,11 @@
     const tail = +s.tail > 0 && +s.tail <= 12.5 ? Math.round(+s.tail * 2) / 2 : 0;
     const tlen = Math.max(8, Math.min(500, Math.round(+s.tlen || 18)));
     const tbase = +s.tbase > 0 && +s.tbase <= 12 ? Math.round(+s.tbase * 2) / 2 : 0;
-    if (kind === 'text') return { kind, color: TEXT_COLORS[s.color] ? s.color : 'blue', tail, tlen, tbase, size };
-    return { kind, color: VOICE_COLORS[s.color] ? s.color : 'white', border: BORDERS[s.border] ? s.border : 'normal', tail, tlen, tbase, size };
+    const tshape = s.tshape === 'bolt' || s.tshape === 'straight' ? s.tshape : '';            // '' = by border
+    const tcurve = Math.max(-100, Math.min(100, Math.round(+s.tcurve || 0)));
+    const twidth = +s.twidth >= 4 && +s.twidth <= 80 ? Math.round(+s.twidth) : 0;             // 0 = auto
+    if (kind === 'text') return { kind, color: TEXT_COLORS[s.color] ? s.color : 'blue', tail, tlen, tbase, tshape, tcurve, twidth, size };
+    return { kind, color: VOICE_COLORS[s.color] ? s.color : 'white', border: BORDERS[s.border] ? s.border : 'normal', tail, tlen, tbase, tshape, tcurve, twidth, size };
   }
   const classes = st => st.kind === 'caption' ? 'bub cap' : st.kind === 'text' ? 'bub txt t-' + st.color : 'bub v-' + st.color + ' b-' + st.border;
 
@@ -107,7 +110,7 @@
       + L.map(l => {
         const st = styleOf(placed[l.key]?.style, l.speaker, nid);
         const name = st.kind === 'caption' ? '' : '<b>' + esc(l.speaker) + '</b>';
-        return '<div class="' + classes(st) + (selected === l.key ? ' sel' : '') + '" data-k="' + esc(l.key) + '" data-sp="' + esc(l.speaker) + '" data-tail="' + st.tail + '" data-tlen="' + st.tlen + '" data-tbase="' + (st.tbase || 0) + '">' + name + '<span' + (st.size !== 'm' ? ' style="font-size:' + SIZES[st.size][1] + 'em"' : '') + '>' + fmt(l.text) + '</span>'
+        return '<div class="' + classes(st) + (selected === l.key ? ' sel' : '') + '" data-k="' + esc(l.key) + '" data-sp="' + esc(l.speaker) + '" data-tail="' + st.tail + '" data-tlen="' + st.tlen + '" data-tbase="' + (st.tbase || 0) + '" data-tshape="' + (st.tshape || '') + '" data-tcurve="' + (st.tcurve || 0) + '" data-twidth="' + (st.twidth || 0) + '">' + name + '<span' + (st.size !== 'm' ? ' style="font-size:' + SIZES[st.size][1] + 'em"' : '') + '>' + fmt(l.text) + '</span>'
           + (mode ? '<i class="grip" title="Drag to resize"></i>' : '') + '</div>';
       }).join('');
     const place = () => {
@@ -166,21 +169,32 @@
     const [bx, by] = edge(b, dx, dy), L = Math.hypot(tx - bx, ty - by);
     if (L < 6 || (!hb && Math.hypot(tx - cx, ty - cy) <= Math.hypot(bx - cx, by - cy) + 2)) return;   // tip inside the bubble
     const ux = (tx - bx) / L, uy = (ty - by) / L, px = -uy, py = ux;
-    const hw = Math.max(6, Math.min(16, Math.min(w, h) * .16, L * .45));
+    const tw = +b.dataset.twidth || 0, hw = tw ? tw / 2 : Math.max(6, Math.min(16, Math.min(w, h) * .16, L * .45));
+    // Centre line: a curve from the edge to the tip (Curve bends it to one side), optionally zig-zagged.
+    const bend = (+b.dataset.tcurve || 0) / 100 * L * .5, qx = (bx + tx) / 2 + px * bend, qy = (by + ty) / 2 + py * bend;
+    const at = t => [(1 - t) ** 2 * bx + 2 * (1 - t) * t * qx + t * t * tx, (1 - t) ** 2 * by + 2 * (1 - t) * t * qy + t * t * ty];
     if (b.classList.contains('b-thought')) {
       [.28, .6, .92].forEach((f, i) => {
-        const r = Math.max(2.5, hw * (.85 - i * .25)), dot = document.createElement('i'); dot.className = 'tail dot';
-        Object.assign(dot.style, { width: r * 2 + 'px', height: r * 2 + 'px', left: bx + (tx - bx) * f - r + 'px', top: by + (ty - by) * f - r + 'px' });
+        const r = Math.max(2.5, hw * (.85 - i * .25)), [x, y] = at(f), dot = document.createElement('i'); dot.className = 'tail dot';
+        Object.assign(dot.style, { width: r * 2 + 'px', height: r * 2 + 'px', left: x - r + 'px', top: y - r + 'px' });
         b.append(dot);
       });
       return;
     }
-    const [lx, ly] = edge(b, bx + px * hw - cx, by + py * hw - cy), [rx, ry] = edge(b, bx - px * hw - cx, by - py * hw - cy);
+    // Phone / radio gets a lightning bolt unless set otherwise: two sharp zags, still narrowing evenly.
+    const bolt = b.dataset.tshape === 'bolt' || (!b.dataset.tshape && b.classList.contains('b-radio'));
+    const ts = bolt ? [0, .36, .52, .74, 1] : Array.from({ length: 15 }, (_, i) => i / 14);
+    const zig = Math.max(hw * 1.3, L * .09), off = bolt ? [0, zig, -zig, zig * .6, 0] : ts.map(() => 0);
+    const pts = ts.map((t, i) => { const [x, y] = at(t), [x1, y1] = at(Math.min(1, t + .01)), [x0, y0] = at(Math.max(0, t - .01)), d = Math.hypot(x1 - x0, y1 - y0) || 1; const nx = -(y1 - y0) / d, ny = (x1 - x0) / d; return { x: x + nx * off[i], y: y + ny * off[i], nx, ny, t }; });
+    if (bolt) pts.forEach((q, i) => { if (i && i < pts.length - 1) { const a = pts[i - 1], c = pts[i + 1], d = Math.hypot(c.x - a.x, c.y - a.y) || 1; q.nx = -(c.y - a.y) / d; q.ny = (c.x - a.x) / d; } });
+    const side = sgn => pts.slice(1, -1).map(q => P(q.x + sgn * q.nx * hw * (1 - q.t), q.y + sgn * q.ny * hw * (1 - q.t)));
+    const n0 = pts[0], [lx, ly] = edge(b, bx + n0.nx * hw - cx, by + n0.ny * hw - cy), [rx, ry] = edge(b, bx - n0.nx * hw - cx, by - n0.ny * hw - cy);
     const inn = (x, y) => { const d = Math.hypot(cx - x, cy - y) || 1, k = Math.min(9, d * .5) / d; return [x + (cx - x) * k, y + (cy - y) * k]; };
     const [lix, liy] = inn(lx, ly), [rix, riy] = inn(rx, ry);
+    const left = side(1), right = side(-1).reverse(), outline = 'M' + P(lx, ly) + [...left, P(tx, ty), ...right].map(q => ' L' + q).join('') + ' L' + P(rx, ry);
     const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     s.setAttribute('class', 'tail'); s.setAttribute('width', '1'); s.setAttribute('height', '1');
-    s.innerHTML = '<path class="f" d="M' + P(lix, liy) + ' L' + P(lx, ly) + ' L' + P(tx, ty) + ' L' + P(rx, ry) + ' L' + P(rix, riy) + 'Z"/><path class="s" d="M' + P(lx, ly) + ' L' + P(tx, ty) + ' L' + P(rx, ry) + '"/>';
+    s.innerHTML = '<path class="f" d="M' + P(lix, liy) + ' L' + outline.slice(1) + ' L' + P(rix, riy) + 'Z"/><path class="s" d="' + outline + '"/>';
     b.append(s);
   }
   function handle(b) {
@@ -251,12 +265,25 @@
         const hr = (i + 1) / 2, a = hr * 30 * Math.PI / 180, whole = Number.isInteger(hr), r = whole ? 56 : 36;
         return '<button data-cs="tbase" data-v="' + hr + '" class="' + (whole ? 'hr' : 'half') + '" title="' + (whole ? hr + ':00' : Math.floor(hr) + ':30') + '" style="left:calc(50% + ' + (Math.sin(a) * r).toFixed(1) + 'px);top:calc(50% - ' + (Math.cos(a) * r).toFixed(1) + 'px)"' + (st.tbase === hr ? ' aria-pressed="true"' : '') + '>' + (whole ? hr : '') + '</button>';
       }).join('') + '<button data-cs="tbase" data-v="0" class="none"' + (!st.tbase ? ' aria-pressed="true"' : '') + ' title="Leave from the side nearest the tip">Auto</button></div>';
+      if (b._tip) {
+        const bolt = st.tshape === 'bolt' || (!st.tshape && st.border === 'radio');
+        if (st.border !== 'thought') h += '<label>Tail shape</label><div class="csr">' + opt('tshape', 'straight', 'Straight', !bolt) + opt('tshape', 'bolt', '⚡ Bolt', bolt) + '</div>';
+        h += '<label>Tail width <output>' + (st.twidth ? st.twidth + 'px' : 'Auto') + '</output></label><input type="range" min="2" max="80" step="1" value="' + (st.twidth || 2) + '" data-cs="twidth">'
+          + '<label>Tail curve <output>' + (st.tcurve ? (st.tcurve < 0 ? '◀ ' : '') + Math.abs(st.tcurve) + (st.tcurve > 0 ? ' ▶' : '') : 'Straight') + '</output></label><input type="range" min="-100" max="100" step="5" value="' + st.tcurve + '" data-cs="tcurve">';
+      }
       h += '<label>Make this the default</label><div class="csr">' + opt('default', 'speaker', 'All of ' + esc(sp) + '’s lines') + opt('default', 'panel', 'Every line in this panel') + opt('default', 'clear', 'Reset this bubble') + '</div>';
     }
     p.innerHTML = h;
     p.style.top = Math.min(b.offsetTop + b.offsetHeight + 10, Math.max(0, host.offsetHeight - 40)) + 'px';
     p.style.left = Math.max(0, Math.min(b.offsetLeft, host.offsetWidth - 310)) + 'px';
     host.append(p);
+    // Width (far left = Auto) and curve sliders: redraw while dragging, save when let go.
+    p.querySelectorAll('input[type=range]').forEach(r => {
+      const val = () => r.dataset.cs === 'twidth' ? (+r.value < 4 ? 0 : +r.value) : +r.value;
+      const label = v => r.dataset.cs === 'twidth' ? (v ? v + 'px' : 'Auto') : v ? (v < 0 ? '◀ ' : '') + Math.abs(v) + (v > 0 ? ' ▶' : '') : 'Straight';
+      r.addEventListener('input', () => { const v = val(); r.previousElementSibling.querySelector('output').textContent = label(v); b.dataset[r.dataset.cs] = v; tail(b); });
+      r.addEventListener('change', () => setStyle(selected, { [r.dataset.cs]: val() }));
+    });
     parent.postMessage({ fit: 1 }, '*');
   }
   document.addEventListener('click', e => {
@@ -269,10 +296,11 @@
     else if (g === 'border') setStyle(selected, { border: v });
     else if (g === 'size') setStyle(selected, { size: v });
     else if (g === 'tbase') setStyle(selected, { tbase: +v });
+    else if (g === 'tshape') setStyle(selected, { tshape: v });
     else if (g === 'tailon') { const b = bubbleEl(selected), W = host.offsetWidth || 1; if (!b) return;
       const x = b.offsetLeft + b.offsetWidth * .35, y = b.offsetTop + b.offsetHeight + Math.max(34, b.offsetHeight * .5);
       bubbleSave(selected, v => { v.tip = { x: +(x / W * 100).toFixed(1), y: +(y / W * 100).toFixed(1) }; }); refresh(); }
-    else if (g === 'tailoff') { bubbleSave(selected, v => { delete v.tip; if (v.style) { delete v.style.tail; delete v.style.tlen; delete v.style.tbase; } }); refresh(); }
+    else if (g === 'tailoff') { bubbleSave(selected, v => { delete v.tip; if (v.style) { for (const k of ['tail', 'tlen', 'tbase', 'tshape', 'tcurve', 'twidth']) delete v.style[k]; } }); refresh(); }
     else if (g === 'default') {
       if (v === 'clear') { const old = placedFor(nodeId)[selected]; if (old) panelSave(p => { const keep = { ...old }; delete keep.style; (p.bubbles ||= {})[selected] = keep; }); refresh(); }
       else makeDefault(v);

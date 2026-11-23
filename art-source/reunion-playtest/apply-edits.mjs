@@ -33,6 +33,9 @@ function cleanStyle(st, withTail = true) {
     const t = Math.round(+st.tail * 2) / 2; if (t >= 0 && t <= 12.5) out.tail = t;
     const l = Math.round(+st.tlen); if (l >= 8 && l <= 500) out.tlen = l;
     const tb = Math.round(+st.tbase * 2) / 2; if (tb > 0 && tb <= 12) out.tbase = tb;
+    if (st.tshape === 'bolt' || st.tshape === 'straight') out.tshape = st.tshape;
+    const tc = Math.round(+st.tcurve); if (tc && tc >= -100 && tc <= 100) out.tcurve = tc;
+    const tw = Math.round(+st.twidth); if (tw >= 4 && tw <= 80) out.twidth = tw;
   }
   return Object.keys(out).length ? out : null;
 }
