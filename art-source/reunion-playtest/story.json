@@ -1,6 +1,6 @@
 {
  "_about": "Reunion branch (/dialogue2) script. Edited by Claude and by the page's Publish my edits button (apply-edits.mjs). Fictional draft for owner review.",
- "version": "2026-11-23-published-mwsj692m",
+ "version": "2026-11-23-published-mwtwbsj1",
  "cast": [
   {
    "id": "brendan",
@@ -63,7 +63,7 @@
      "beats": [
       {
        "speaker": "Scene",
-       "text": "Alki Beach, Seattle. Brendan is finishing a food delivery. His guitar is in the car. The delivery app has an opinion about how long this should take. And he gets a text from his friend..."
+       "text": "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket..."
       },
       {
        "speaker": "Andrew (3BC)",
@@ -71,12 +71,39 @@
       },
       {
        "speaker": "Brendan",
-       "text": "Just finishing up here at the office, Spud on Alki? I could go for a basket."
+       "text": "Just finishing up here at the office, Spud on Alki? I could do a basket."
       }
      ],
      "art": "brendan",
      "artDesc": "Brendan is looking at his phone, delivering a bag of food that he carelessly sets on the edge of the porch, where it visibly starts to fall off.",
-     "next": "spud"
+     "next": "spud",
+     "style": {
+      "kind": "text",
+      "color": "blue"
+     },
+     "bubbles": {
+      "Yo! I'm swinging through Seattle. Let's meet for lunch so I can get you your wallet back.": {
+       "img": 0,
+       "x": 14.8,
+       "y": 59.6,
+       "w": 36.1
+      },
+      "Just finishing up here at the office, Spud on Alki? I could do a basket.": {
+       "img": 1,
+       "x": 16.8,
+       "y": 62.6,
+       "w": 27.7,
+       "style": {
+        "color": "white"
+       }
+      },
+      "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket...": {
+       "img": 0,
+       "x": 15.1,
+       "y": 3.8,
+       "w": 22
+      }
+     }
     },
     "spud": {
      "title": "Spud on Alki",
@@ -311,11 +338,11 @@
       },
       {
        "speaker": "Andrew",
-       "text": "Brendan said he was going to strum up some memories next weekend! You boys better be there."
+       "text": "Brendan said he was going to strum up some memories as the reunion entertainer."
       },
       {
        "speaker": "Brendan",
-       "text": "I don’t recall committing to anything. I’m still rusty."
+       "text": "I don’t recall committing to anything. I still have some rust to shake off."
       },
       {
        "speaker": "Dan",
@@ -352,6 +379,56 @@
      "style": {
       "kind": "text",
       "color": "white"
+     },
+     "bubbles": {
+      "Brendan said he was going to strum up some memories as the reunion entertainer.": {
+       "img": 0,
+       "x": 8.4,
+       "y": 18.6,
+       "w": 42,
+       "style": {
+        "kind": "text",
+        "size": "s"
+       }
+      },
+      "Forget rust, your skills have corroded by now. The royalties from that jingle got your brain jumbled.": {
+       "img": 0,
+       "x": 8.8,
+       "y": 45.4,
+       "w": 42,
+       "style": {
+        "kind": "text",
+        "size": "s"
+       }
+      },
+      "Oh boy, this might actually worth flying back for.": {
+       "img": 0,
+       "x": 8.9,
+       "y": 64.2,
+       "w": 42,
+       "style": {
+        "kind": "text",
+        "color": "yellow",
+        "size": "s",
+        "tail": 0
+       }
+      },
+      "I don’t recall committing to anything. I still have some rust to shake off.": {
+       "img": 0,
+       "x": 51.6,
+       "y": 30.6,
+       "w": 32.3
+      },
+      "Does this mean you’ll finally pay someone for a haircut?": {
+       "img": 0,
+       "x": 8.5,
+       "y": 77.6,
+       "w": 43,
+       "style": {
+        "kind": "text",
+        "size": "s"
+       }
+      }
      }
     },
     "support": {
@@ -363,7 +440,7 @@
       },
       {
        "speaker": "Andrew",
-       "text": "Seriously. Ask about the equipment."
+       "text": "Seriously. Give me a \"yes\" and you're on the stage."
       },
       {
        "speaker": "Jay",
@@ -375,7 +452,28 @@
      "next": "help",
      "style": {
       "kind": "text",
-      "color": "white"
+      "color": "blue",
+      "size": "s"
+     },
+     "bubbles": {
+      "Sure. Don’t get used to it.": {
+       "img": 0,
+       "x": 28.6,
+       "y": 27.9,
+       "w": 24.2
+      },
+      "Seriously. Give me a \"yes\" and you're on the stage.": {
+       "img": 0,
+       "x": 28.6,
+       "y": 40.4,
+       "w": 44
+      },
+      "Update your profile photo. You look like you sell skateboards.": {
+       "img": 0,
+       "x": 29,
+       "y": 52.2,
+       "w": 44
+      }
      }
     },
     "equipment": {
@@ -428,16 +526,20 @@
      "title": "A separate message",
      "beats": [
       {
+       "speaker": "Brendan",
+       "text": "Hey! I'm driving through Bellevue on my way to Pullman if you wanna meet up."
+      },
+      {
        "speaker": "Yusen",
-       "text": "You’re driving all that way? Stop somewhere. Do something."
+       "text": "That's a long drive! Do you have planned stops along the way?"
       },
       {
        "speaker": "Brendan",
-       "text": "I’m trying to look like I do things."
+       "text": "A few things in mind, but I'll also go with the flow."
       },
       {
        "speaker": "Yusen",
-       "text": "Doing one might help."
+       "text": "Sweet. Let's talk about it more when you get here."
       },
       {
        "speaker": "Yusen",
@@ -446,7 +548,33 @@
      ],
      "art": "yusen",
      "end": "He has people in his corner. Some of them are making it difficult to hide.",
-     "nextChapter": "mom"
+     "nextChapter": "mom",
+     "bubbles": {
+      "That's a long drive! Do you have planned stops along the way?": {
+       "img": 0,
+       "x": 7.1,
+       "y": 16.1,
+       "w": 29.9
+      },
+      "A few things in mind, but I'll also go with the flow.": {
+       "img": 0,
+       "x": 40.7,
+       "y": 30.1,
+       "w": 23.5
+      },
+      "Sweet. Let's talk about it more when you get here.": {
+       "img": 0,
+       "x": 7.1,
+       "y": 48.9,
+       "w": 30.1
+      },
+      "Bring shoes you can walk in.": {
+       "img": 0,
+       "x": 6.7,
+       "y": 66.4,
+       "w": 30.4
+      }
+     }
     }
    }
   },
@@ -473,7 +601,7 @@
       },
       {
        "speaker": "Mom",
-       "text": "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it."
+       "text": "Oh gosh! That’s a drive. Will you *please* get your windshield fixed before you leave?? I’ll pay for it."
       }
      ],
      "art": "brendan",
@@ -489,7 +617,42 @@
        "label": "It’s fine, mom! I don’t even notice it anymore. (-3)",
        "to": "offered"
       }
-     ]
+     ],
+     "bubbles": {
+      "I heard you might play at your reunion. Is it going to be at McMiniman’s? That would be fun.": {
+       "img": 0,
+       "x": 3,
+       "y": 4.1,
+       "w": 44,
+       "style": {
+        "tail": 4,
+        "tlen": 80
+       }
+      },
+      "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it.": {
+       "img": 1,
+       "x": 51,
+       "y": 2.7,
+       "w": 45.5,
+       "style": {
+        "tail": 6,
+        "tlen": 50
+       }
+      },
+      "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
+       "img": 1,
+       "x": 3,
+       "y": 1.4,
+       "w": 44,
+       "style": {
+        "kind": "voice",
+        "color": "white",
+        "border": "shout",
+        "tail": 7,
+        "tlen": 48
+       }
+      }
+     }
     },
     "driveSafe": {
      "title": "Drive safe",
@@ -501,7 +664,38 @@
      ],
      "art": "brendan",
      "end": "Scene ends.",
-     "nextChapter": "detour"
+     "nextChapter": "detour",
+     "bubbles": {
+      "And drive safe!": {
+       "img": 0,
+       "x": 31.3,
+       "y": 7.9,
+       "w": 19,
+       "tip": {
+        "x": 55.6,
+        "y": 11.1
+       },
+       "style": {
+        "tbase": 4
+       }
+      },
+      "choice:call:worry": {
+       "img": 0,
+       "x": 33.5,
+       "y": 38.8,
+       "w": 15.1,
+       "tip": {
+        "x": 54.4,
+        "y": 19.4
+       },
+       "style": {
+        "kind": "voice",
+        "color": "cream",
+        "border": "radio",
+        "tbase": 3
+       }
+      }
+     }
     },
     "offered": {
      "title": "Just thought I’d offer",
@@ -691,5 +885,22 @@
     }
    }
   }
- ]
+ ],
+ "speakerStyles": {
+  "Yusen": {
+   "kind": "text",
+   "color": "blue",
+   "size": "s"
+  },
+  "Brendan": {
+   "kind": "text",
+   "color": "white",
+   "size": "s"
+  },
+  "Mom": {
+   "kind": "voice",
+   "color": "cream",
+   "border": "radio"
+  }
+ }
 }

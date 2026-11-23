@@ -1,0 +1,373 @@
+{
+ "version": "2026-11-23-published-mwsj692m",
+ "sentAt": "2026-11-23T23:14:36.390Z",
+ "edits": {
+  "opening": {
+   "Seattle. Brendan is finishing a food delivery. His guitar is in the car. The delivery app has an opinion about how long this should take.": {
+    "text": "Seattle. Brendan is finishing a food delivery. His guitar is in the car. The delivery app has an opinion about how long this should take. And he gets a text from his friend...",
+    "note": "Brendan is looking at his phone, delivering a bag off food that his carlessly sets on the edge of the porch, where it visibly starts to fall off. The next scene Andrew and Brendan are at a Teriyaki restaurant (Toshi's), chatting over chicken and beef.",
+    "speaker": "Scene",
+    "title": "The notification",
+    "at": "2026-11-14T18:29:07.077Z"
+   },
+   "Please don’t ring. Dog thinks he owns the house.": {
+    "text": "Please don’t ring. Dog thinks he owns the house.",
+    "deleted": true,
+    "note": "",
+    "speaker": "Delivery instructions",
+    "title": "The notification",
+    "at": "2026-11-14T18:15:30.555Z"
+   },
+   "Twenty years! Who’s coming back to Spokane?": {
+    "text": "Twenty years! Who’s coming back to Spokane?",
+    "deleted": true,
+    "note": "",
+    "speaker": "Reunion group",
+    "title": "The notification",
+    "at": "2026-11-14T18:17:41.414Z"
+   }
+  },
+  "crew": {
+   "Brendan said he was going to strum up some memories next weekend! You boys better be there.": {
+    "text": "Brendan said he was going to strum up some memories as the reunion entertainer.",
+    "note": "",
+    "speaker": "Andrew",
+    "title": "The crew",
+    "at": "2026-11-23T19:29:34.360Z"
+   },
+   "I don’t recall committing to anything. I’m still rusty.": {
+    "text": "I don’t recall committing to anything. I still have some rust to shake off.",
+    "note": "",
+    "speaker": "Brendan",
+    "title": "The crew",
+    "at": "2026-11-23T19:53:00.221Z"
+   },
+   "Seriously. Ask about the equipment.": {
+    "text": "Seriously. Give me a \"yes\" and you're on the stage.",
+    "note": "",
+    "speaker": "Andrew",
+    "title": "The crew",
+    "at": "2026-11-23T19:58:34.186Z"
+   },
+   "You’re driving all that way? Stop somewhere. Do something.": {
+    "text": "That's a long drive! Do you have planned stops along the way?",
+    "note": "",
+    "speaker": "Yusen",
+    "title": "The crew",
+    "at": "2026-11-23T20:02:37.266Z"
+   },
+   "I’m trying to look like I do things.": {
+    "text": "A few things in mind, but I'll also go with the flow.",
+    "note": "",
+    "speaker": "Brendan",
+    "title": "The crew",
+    "at": "2026-11-23T20:02:59.708Z"
+   },
+   "Doing one might help.": {
+    "text": "Sweet. Let's talk about it more when you get here.",
+    "note": "",
+    "speaker": "Yusen",
+    "title": "The crew",
+    "at": "2026-11-23T20:03:13.876Z"
+   }
+  },
+  "mom": {
+   "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it.": {
+    "text": "Oh gosh! That’s a drive. Will you *please* get your windshield fixed before you leave?? I’ll pay for it.",
+    "note": "",
+    "speaker": "Mom",
+    "title": "Mom calls",
+    "at": "2026-11-23T20:05:49.194Z"
+   }
+  }
+ },
+ "adds": {
+  "opening": [
+   {
+    "id": "mwgqa9dfqp3wy",
+    "kind": "line",
+    "onChoice": false,
+    "anchor": "Please don’t ring. Dog thinks he owns the house.",
+    "speaker": "Andrew (3BC)",
+    "text": "Yo! I'm down in Alki. Let's meet for lunch so I can get you your wallet back.",
+    "title": "The notification",
+    "at": "2026-11-14T18:17:32.404Z"
+   },
+   {
+    "id": "mwgqcwc2mjsx2",
+    "kind": "line",
+    "onChoice": false,
+    "anchor": "Please don’t ring. Dog thinks he owns the house.",
+    "speaker": "Brendan",
+    "text": "Just finishing up here at the office. I'm down for some Spud.",
+    "title": "The notification",
+    "at": "2026-11-14T18:19:35.474Z"
+   },
+   {
+    "id": "mwgqfia76l23s",
+    "kind": "line",
+    "onChoice": false,
+    "anchor": "Please don’t ring. Dog thinks he owns the house.",
+    "speaker": "Andrew (3BC)",
+    "text": "Not sure if you saw yet, but I just posted the High School Reunion info.",
+    "title": "The notification",
+    "at": "2026-11-14T18:21:37.231Z"
+   },
+   {
+    "id": "mwgqhagmeed0i",
+    "kind": "line",
+    "onChoice": false,
+    "anchor": "Please don’t ring. Dog thinks he owns the house.",
+    "speaker": "Brendan",
+    "text": "No, not online too much. I know it's next weekend, but anything noteworthy?",
+    "title": "The notification",
+    "at": "2026-11-14T18:23:00.406Z"
+   },
+   {
+    "id": "mwgqm4hjw9d6w",
+    "kind": "line",
+    "onChoice": false,
+    "anchor": "Please don’t ring. Dog thinks he owns the house.",
+    "speaker": "Andrew (3BC)",
+    "text": "Yeah, don’t sperad this, but I had AI book the venue, and after mentioning our Cougar mascot, it assumed we're WSU alumni and... well, we'll all be meeting up in Pullman.",
+    "title": "The notification",
+    "at": "2026-11-14T18:26:45.944Z"
+   },
+   {
+    "id": "mwgr0adegxpem",
+    "kind": "choice",
+    "onChoice": false,
+    "anchor": "Please don’t ring. Dog thinks he owns the house.",
+    "speaker": "Player",
+    "title": "The notification",
+    "at": "2026-11-14T18:37:46.754Z",
+    "children": [],
+    "text": "That's a pretty epic blunder. Can they remove you as ASB President 25 years after the part?",
+    "replies": [
+     {
+      "speaker": "Andrew",
+      "text": "Thankfully not."
+     }
+    ],
+    "goto": "__end",
+    "next": ""
+   },
+   {
+    "id": "mwgr0adflukai",
+    "kind": "choice",
+    "onChoice": false,
+    "anchor": "Please don’t ring. Dog thinks he owns the house.",
+    "speaker": "Player",
+    "title": "The notification",
+    "at": "2026-11-14T18:37:46.755Z",
+    "children": [],
+    "text": "That's uhh.. Sure. Sealed lips. I was actually planning to tour this week anyway so, it works out.",
+    "replies": [
+     {
+      "speaker": "Andrew",
+      "text": "Oh awesome man! I'm excited you're finally doing that. You know, we haven't locked in a band yet..."
+     }
+    ],
+    "goto": "",
+    "next": ""
+   }
+  ],
+  "crew": [
+   {
+    "id": "mwtoyh7c2ygeb",
+    "kind": "line",
+    "onChoice": false,
+    "anchor": "[ARTWORK — A separate message: describe this panel]",
+    "speaker": "Brendan",
+    "text": "Hey! I'm driving through Bellevue on my way to Pullman if you wanna meet up.",
+    "title": "The crew",
+    "at": "2026-11-23T20:01:23.352Z"
+   }
+  ]
+ },
+ "layout": {
+  "crew": {
+   "chat": {
+    "bubbles": {
+     "Brendan said he was going to strum up some memories next weekend! You boys better be there.": {
+      "img": 0,
+      "x": 8.4,
+      "y": 18.6,
+      "w": 42,
+      "style": {
+       "kind": "text",
+       "size": "s"
+      }
+     },
+     "Forget rust, your skills have corroded by now. The royalties from that jingle got your brain jumbled.": {
+      "img": 0,
+      "x": 8.8,
+      "y": 45.4,
+      "w": 42,
+      "style": {
+       "kind": "text",
+       "size": "s"
+      }
+     },
+     "Oh boy, this might actually worth flying back for.": {
+      "img": 0,
+      "x": 8.9,
+      "y": 64.2,
+      "w": 42,
+      "style": {
+       "color": "yellow",
+       "kind": "text",
+       "tail": 0,
+       "size": "s"
+      }
+     },
+     "I don’t recall committing to anything. I’m still rusty.": {
+      "img": 0,
+      "x": 51.6,
+      "y": 30.6,
+      "w": 32.3
+     },
+     "Does this mean you’ll finally pay someone for a haircut?": {
+      "img": 0,
+      "x": 8.5,
+      "y": 77.6,
+      "w": 43,
+      "style": {
+       "kind": "text",
+       "size": "s"
+      }
+     }
+    }
+   },
+   "support": {
+    "bubbles": {
+     "Sure. Don’t get used to it.": {
+      "img": 0,
+      "x": 28.6,
+      "y": 27.9,
+      "w": 24.2
+     },
+     "Seriously. Ask about the equipment.": {
+      "img": 0,
+      "x": 28.6,
+      "y": 40.4,
+      "w": 44
+     },
+     "Update your profile photo. You look like you sell skateboards.": {
+      "img": 0,
+      "x": 29,
+      "y": 52.2,
+      "w": 44
+     }
+    },
+    "style": {
+     "kind": "text",
+     "color": "blue",
+     "size": "s"
+    }
+   },
+   "help": {
+    "bubbles": {
+     "You’re driving all that way? Stop somewhere. Do something.": {
+      "img": 0,
+      "x": 7.1,
+      "y": 16.1,
+      "w": 29.9
+     },
+     "I’m trying to look like I do things.": {
+      "img": 0,
+      "x": 40.7,
+      "y": 30.1,
+      "w": 23.5
+     },
+     "Doing one might help.": {
+      "img": 0,
+      "x": 7.1,
+      "y": 48.9,
+      "w": 30.1
+     },
+     "Bring shoes you can walk in.": {
+      "img": 0,
+      "x": 6.7,
+      "y": 66.4,
+      "w": 30.4
+     }
+    }
+   }
+  },
+  "_speakers": {
+   "Yusen": {
+    "kind": "text",
+    "color": "blue",
+    "size": "s"
+   },
+   "Brendan": {
+    "kind": "text",
+    "color": "white",
+    "size": "s"
+   },
+   "Mom": {
+    "kind": "voice",
+    "color": "cream",
+    "border": "radio"
+   }
+  },
+  "mom": {
+   "call": {
+    "bubbles": {
+     "I heard you might play at your reunion. Is it going to be at McMiniman’s? That would be fun.": {
+      "img": 0,
+      "x": 3,
+      "y": 4.1,
+      "w": 44,
+      "style": {
+       "tail": 4,
+       "tlen": 80
+      }
+     },
+     "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it.": {
+      "img": 1,
+      "x": 51,
+      "y": 2.7,
+      "w": 45.5,
+      "style": {
+       "tail": 6,
+       "tlen": 50
+      }
+     },
+     "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
+      "img": 1,
+      "x": 3,
+      "y": 1.4,
+      "w": 44,
+      "style": {
+       "tail": 7,
+       "tlen": 48,
+       "kind": "voice",
+       "color": "white",
+       "border": "shout"
+      }
+     }
+    }
+   },
+   "driveSafe": {
+    "bubbles": {
+     "And drive safe!": {
+      "img": 0,
+      "x": 28,
+      "y": 36.1,
+      "w": 21.7,
+      "style": {
+       "kind": "voice",
+       "color": "white",
+       "border": "normal",
+       "tail": 2,
+       "tlen": 39,
+       "size": "l"
+      }
+     }
+    }
+   }
+  }
+ }
+}
