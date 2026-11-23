@@ -78,9 +78,10 @@ jobs:
         run: |
           git fetch -q origin claude/dialogue-only
           git worktree add -q "$RUNNER_TEMP/pub" -B claude/dialogue-only origin/claude/dialogue-only
-          cp website/dialogue2/index.html "$RUNNER_TEMP/pub/website/dialogue2/index.html"
+          # The page and its art folder (website/dialogue2/art/*.webp), mirrored exactly.
+          rsync -a --delete website/dialogue2/ "$RUNNER_TEMP/pub/website/dialogue2/"
           cd "$RUNNER_TEMP/pub"
-          git add website/dialogue2/index.html
+          git add -A website/dialogue2
           git diff --cached --quiet || git commit -q -m "Publish /dialogue2 (Publish my edits)"
           git pull -q --rebase origin claude/dialogue-only
           git push origin HEAD:claude/dialogue-only

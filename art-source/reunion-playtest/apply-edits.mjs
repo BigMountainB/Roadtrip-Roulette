@@ -6,7 +6,8 @@
 // An edits file is what the page's Publish button sends (and what Export all embeds):
 //   { version, edits: { [chapterId]: { [shownText]: {text, deleted?, note?, speaker} } },
 //              adds:  { [chapterId]: [ {id, kind:'line'|'choice', anchor, onChoice, speaker, text,
-//                                        replies?, children?, goto?, next?} ] } }
+//                                        replies?, children?, goto?, next?} ] } },
+//     layout: { [chapterId]: { [nodeId]: { images?: [name…], bubbles?: { [shownText]: {img,x,y,w} } } } } }
 // Edits are keyed by a line's text AS SHOWN on the page (*italics* without asterisks, whitespace
 // collapsed), exactly as the page's editor stores them; "changes apply everywhere this line appears
 // in this chapter". Purely mechanical: no judgment, no rewording. Anything that no longer matches the
@@ -24,7 +25,7 @@ export function applyEdits(story, files) {
   const report = { applied: [], skipped: [], notes: [] };
   const chapterIndex = Object.fromEntries(story.chapters.map((c, i) => [c.id, i]));
   for (const file of files) {
-    for (const cid of new Set([...Object.keys(file.edits || {}), ...Object.keys(file.adds || {})])) {
+    for (const cid of new Set([...Object.keys(file.edits || {}), ...Object.keys(file.adds || {}), ...Object.keys(file.layout || {})])) {
       const ch = story.chapters[chapterIndex[cid]];
       if (!ch) { report.skipped.push({ chapter: cid, why: 'no such chapter' }); continue; }
       const nextChapter = story.chapters[chapterIndex[cid] + 1]?.id ?? null;
@@ -98,7 +99,11 @@ export function applyEdits(story, files) {
         if (!hits.length) { report.skipped.push({ chapter: cid, why: 'line no longer in script', was: key, now: e.deleted ? '(removed)' : e.text }); continue; }
         for (const h of hits) {
           if (h.kind === 'art') { if (e.deleted) delete h.n.artDesc; else if (!/^\[ARTWORK — .*: describe this panel\]$/.test(norm(e.text))) h.n.artDesc = cleanArt(e.text); }
-          else if (h.kind === 'beat') { if (e.deleted) h.n.beats.splice(h.n.beats.indexOf(h.b), 1); else h.b.text = norm(e.text); }
+          else if (h.kind === 'beat') {
+            const old = shown(h.b.text), pos = h.n.bubbles?.[old];
+            if (e.deleted) h.n.beats.splice(h.n.beats.indexOf(h.b), 1); else h.b.text = norm(e.text);
+            if (pos) { delete h.n.bubbles[old]; if (!e.deleted) h.n.bubbles[shown(h.b.text)] = pos; }   // the bubble keeps its place
+          }
           else if (h.kind === 'choice') {
             if (!e.deleted) h.c.label = norm(e.text);
             else { h.n.choices.splice(h.n.choices.indexOf(h.c), 1); if (!h.n.choices.length) { delete h.n.choices; if (!h.n.next) h.n.end = 'Scene ends.'; } }
@@ -106,6 +111,22 @@ export function applyEdits(story, files) {
         }
         if (norm(e.note)) report.notes.push({ chapter: cid, line: key, note: norm(e.note) });
         report.applied.push({ chapter: cid, [e.deleted ? 'removed' : 'changed']: key, ...(e.deleted ? {} : { now: norm(e.text) }) });
+      }
+      // 3) Layout from the 🖼 Layout tool: images per panel and bubble positions (keyed by the line's
+      //    text as shown — after the edits above, so a reworded line's new position lands on it).
+      for (const [nid, lay] of Object.entries(file.layout?.[cid] || {})) {
+        const n = ch.nodes[nid];
+        if (!n || !lay || typeof lay !== 'object') { report.skipped.push({ chapter: cid, why: 'layout for a panel no longer in script', panel: nid }); continue; }
+        if (Array.isArray(lay.images)) n.images = lay.images.map(String);
+        for (const [key, p] of Object.entries(lay.bubbles || {})) {
+          if (!p || typeof p !== 'object') continue;
+          const pos = { img: Math.max(0, Math.round(+p.img || 0)), x: +(+p.x || 0).toFixed(1), y: +(+p.y || 0).toFixed(1), w: +(+p.w || 44).toFixed(1) };
+          const edited = file.edits?.[cid]?.[key];
+          const k = edited && !edited.deleted && typeof edited.text === 'string' ? shown(edited.text) : key;
+          if (!n.beats.some(b => shown(b.text) === k)) { report.skipped.push({ chapter: cid, why: 'bubble for a line no longer in that panel', panel: n.title, line: key }); continue; }
+          (n.bubbles ||= {})[k] = pos;
+        }
+        report.applied.push({ chapter: cid, layout: n.title, images: n.images, bubbles: Object.keys(lay.bubbles || {}).length });
       }
       // Panels no player can reach any more (their only way in was removed) are left out.
       const seen = new Set(), q = [ch.start];

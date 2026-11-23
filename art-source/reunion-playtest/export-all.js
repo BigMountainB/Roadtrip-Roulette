@@ -4,7 +4,7 @@
 // after the edit layer; reads the same localStorage keys. The script itself arrives as
 // window.RTR_SCRIPT ({version, chapters:[{id,title,sub,start,nodes}]}).
 (() => {
-  const KEY = 'rtr.dialogue2.edits.v1', ADDS_KEY = KEY + '.adds';
+  const KEY = 'rtr.dialogue2.edits.v1', ADDS_KEY = KEY + '.adds', LAYOUT_KEY = 'rtr.dialogue2.layout.v1';
   const S = window.RTR_SCRIPT;
   if (!S) return;
   const norm = s => String(s).replace(/\s+/g, ' ').trim();
@@ -12,12 +12,12 @@
   const shown = t => norm(String(t).replace(/\*([^*\n]+)\*/g, '$1'));
   const artText = n => n.artDesc || ('[ARTWORK — ' + n.title + ': describe this panel]');
   const load = () => {
-    try { return { edits: JSON.parse(localStorage.getItem(KEY) || '{}'), adds: JSON.parse(localStorage.getItem(ADDS_KEY) || '{}') }; }
-    catch { return { edits: {}, adds: {} }; }
+    try { return { edits: JSON.parse(localStorage.getItem(KEY) || '{}'), adds: JSON.parse(localStorage.getItem(ADDS_KEY) || '{}'), layout: JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}') }; }
+    catch { return { edits: {}, adds: {}, layout: {} }; }
   };
 
   function build() {
-    const { edits, adds } = load();
+    const { edits, adds, layout } = load();
     const out = [], stamp = new Date();
     let total = 0;
     const counts = S.chapters.map(c => {
@@ -65,6 +65,8 @@
       for (const id of order) {
         const n = ch.nodes[id];
         out.push('### ' + n.title, '');
+        const lay = layout[ch.id]?.[id];
+        if (lay) out.push('- 🖼 **Layout (mine):** ' + [lay.images ? 'images: ' + lay.images.join(', ') : null, lay.bubbles ? Object.keys(lay.bubbles).length + ' bubble' + (Object.keys(lay.bubbles).length === 1 ? '' : 's') + ' placed' : null].filter(Boolean).join(' · '));
         out.push(...line(ch.id, 'Artwork', artText(n)).map(l => l.replace('- **Artwork:** ', '- 🎨 **Artwork:** ')));
         for (const b of n.beats) out.push(...line(ch.id, b.speaker, b.text));
         for (const c of n.choices || []) {
@@ -85,7 +87,7 @@
         out.push('');
       }
     }
-    out.push('<!-- rtr-dialogue2-all-edits', JSON.stringify({ version: S.version, exported: stamp.toISOString(), edits, adds }), '-->', '');
+    out.push('<!-- rtr-dialogue2-all-edits', JSON.stringify({ version: S.version, exported: stamp.toISOString(), edits, adds, layout }), '-->', '');
     return out.join('\n');
   }
 
@@ -122,18 +124,25 @@
   // GitHub key). A GitHub Action writes them into the script and redeploys /dialogue2 in a few
   // minutes. Mechanical: lines go live exactly as typed. The passcode is asked once per browser.
   const PASS_KEY = 'rtr.dialogue2.passcode', FLASH_KEY = 'rtr.dialogue2.flash';
+  // 🖼 Layout (owner 2026-11-23): drag bubbles, resize them, swap/add/remove images on every panel.
+  const lay = Object.assign(document.createElement('button'), { id: 'rtrLayout', textContent: '🖼 Layout' });
+  const layoutCount = () => Object.values(load().layout).reduce((t, c) => t + Object.keys(c || {}).length, 0);
+  const paintLayout = () => { lay.textContent = window.RTR_LAYOUT_ON ? '🖼 Layout: drag bubbles · tap again when done' : '🖼 Layout' + (layoutCount() ? ' (' + layoutCount() + ')' : ''); lay.setAttribute('aria-pressed', !!window.RTR_LAYOUT_ON); };
+  window.RTR_LAYOUT_CHANGED = paintLayout;
+  lay.onclick = () => { window.RTR_LAYOUT_ON = !window.RTR_LAYOUT_ON; document.querySelectorAll('iframe').forEach(f => { try { f.contentWindow.RTR_COMIC?.setMode(window.RTR_LAYOUT_ON); } catch {} }); paintLayout(); };
+  paintLayout();
   const pub = Object.assign(document.createElement('button'), { id: 'rtrPublish', textContent: '⇪ Publish my edits' });
   pub.style.cssText = 'background:#2d6cdf;border-color:#2d6cdf;color:#fff';
   pub.onclick = async () => {
-    const { edits, adds } = load();
-    const n = Object.values(edits).reduce((t, m) => t + Object.keys(m || {}).length, 0) + Object.values(adds).reduce((t, l) => t + (l || []).length, 0);
-    if (!n) return status('No edits to publish yet. Use ✎ Edit text first.');
+    const { edits, adds, layout } = load();
+    const n = Object.values(edits).reduce((t, m) => t + Object.keys(m || {}).length, 0) + Object.values(adds).reduce((t, l) => t + (l || []).length, 0) + layoutCount();
+    if (!n) return status('No edits to publish yet. Use ✎ Edit text or 🖼 Layout first.');
     if (!confirm('Publish ' + n + ' change' + (n === 1 ? '' : 's') + ' to the live /dialogue2?\n\nThey go into the script exactly as typed and show for everyone in about 4 minutes.')) return;
     let pass = ''; try { pass = localStorage.getItem(PASS_KEY) || ''; } catch {}
     if (!pass) { pass = prompt('Publishing passcode:') || ''; if (!pass) return status('Cancelled.'); }
     pub.disabled = true; status('Publishing…');
     try {
-      const r = await fetch('/api/dialogue2/publish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ passcode: pass, version: S.version, edits, adds }) });
+      const r = await fetch('/api/dialogue2/publish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ passcode: pass, version: S.version, edits, adds, layout }) });
       const out = await r.json().catch(() => ({}));
       if (r.status === 401) { try { localStorage.removeItem(PASS_KEY); } catch {} return status('Wrong passcode. Nothing was published.'); }
       if (!r.ok || !out.ok) return status((out.error || 'Publishing failed (' + r.status + ').') + ' Your edits are still saved here.');
@@ -141,15 +150,15 @@
       // doesn't write the published edits back.
       try {
         localStorage.setItem(PASS_KEY, pass);
-        localStorage.setItem('rtr.dialogue2.published.' + Date.now(), JSON.stringify({ edits, adds }));
-        localStorage.removeItem(KEY); localStorage.removeItem(ADDS_KEY);
+        localStorage.setItem('rtr.dialogue2.published.' + Date.now(), JSON.stringify({ edits, adds, layout }));
+        localStorage.removeItem(KEY); localStorage.removeItem(ADDS_KEY); localStorage.removeItem(LAYOUT_KEY);
         sessionStorage.setItem(FLASH_KEY, 'Published ' + out.changes + ' change' + (out.changes === 1 ? '' : 's') + '. They go live in about 4 minutes — reload then to see them. (A backup is kept in this browser.)');
       } catch {}
       location.reload();
     } catch { status('Couldn’t reach the site. Check your connection; your edits are still saved here.'); }
     finally { pub.disabled = false; }
   };
-  tools.append(pub, btn, copy, msg);
+  tools.append(lay, pub, btn, copy, msg);
   try { const f = sessionStorage.getItem(FLASH_KEY); if (f) { sessionStorage.removeItem(FLASH_KEY); msg.textContent = f; } } catch {}
   window.RTR_EXPORT_ALL = build;   // for checks
 })();
