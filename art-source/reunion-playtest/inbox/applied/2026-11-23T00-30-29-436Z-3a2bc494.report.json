@@ -1,0 +1,13 @@
+{
+ "version": "2026-11-23-published-mwsj692m",
+ "applied": [],
+ "skipped": [
+  {
+   "chapter": "opening",
+   "why": "line no longer in script",
+   "was": "PIPELINE TEST (Claude, 2026-11-23): no such line, nothing should change",
+   "now": "ignored"
+  }
+ ],
+ "notes": []
+}
