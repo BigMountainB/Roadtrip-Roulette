@@ -98,7 +98,7 @@
       + (mode ? '<div class="crow"><button data-cadd="1">+ Add image</button><button data-creset="1">Reset this panel</button><span class="muted">Drag a bubble to move it · tap to style · double-tap to edit its words</span></div>' : '')
       + L.map(l => {
         const st = styleOf(placed[l.key]?.style, l.speaker, nid);
-        const name = st.kind === 'caption' || (st.kind === 'text' && st.color !== 'white') ? '' : '<b>' + esc(l.speaker) + '</b>';
+        const name = st.kind === 'caption' ? '' : '<b>' + esc(l.speaker) + '</b>';
         return '<div class="' + classes(st) + (selected === l.key ? ' sel' : '') + '" data-k="' + esc(l.key) + '" data-sp="' + esc(l.speaker) + '" data-tail="' + st.tail + '" data-tlen="' + st.tlen + '">' + name + '<span' + (st.size !== 'm' ? ' style="font-size:' + SIZES[st.size][1] + 'em"' : '') + '>' + fmt(l.text) + '</span>'
           + (mode ? '<i class="grip" title="Drag to resize"></i>' : '') + '</div>';
       }).join('');

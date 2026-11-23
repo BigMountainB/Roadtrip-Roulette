@@ -348,7 +348,11 @@
        "label": "I never agreed, but this thread's got me leaning towards: No",
        "to": "panic"
       }
-     ]
+     ],
+     "style": {
+      "kind": "text",
+      "color": "white"
+     }
     },
     "support": {
      "title": "A generous interpretation",
@@ -368,7 +372,11 @@
      ],
      "art": "andrew",
      "artDesc": "(…continued) Player’s phone will be in player’s hand while text bubbles pop up one by one. Maybe smaller text bubble images need to be made to lay over main image.",
-     "next": "help"
+     "next": "help",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     }
     },
     "equipment": {
      "title": "Load-in",
@@ -387,7 +395,11 @@
       }
      ],
      "art": "jay",
-     "next": "help"
+     "next": "help",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     }
     },
     "panic": {
      "title": "The comfortable option",
@@ -406,7 +418,11 @@
       }
      ],
      "art": "andrew",
-     "next": "help"
+     "next": "help",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     }
     },
     "help": {
      "title": "A separate message",
