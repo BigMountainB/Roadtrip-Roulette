@@ -115,7 +115,7 @@ export function applyEdits(story, files) {
       };
 
       // 1) Additions first: they are anchored to lines' ORIGINAL text.
-      const after = new Map();   // node beats array position bookkeeping per anchor
+      const after = new Map();   // last line placed at each spot (per panel + anchor, before/after)
       const addedKey = {};       // "add:<id>" bubble keys → the added line's text
       for (const item of file.adds?.[cid] || []) {
         const hits = find(shown(item.anchor));
@@ -129,12 +129,14 @@ export function applyEdits(story, files) {
         }
         const line = { speaker: speakerOf(item.speaker), text: item.text };
         let node, pos;
-        if (h.kind === 'beat') { node = h.n; pos = node.beats.indexOf(h.b) + 1; }
+        const before = item.before === true && h.kind === 'beat';
+        if (h.kind === 'beat') { node = h.n; pos = node.beats.indexOf(h.b) + (before ? 0 : 1); }
         else if (h.kind === 'choice') { node = ch.nodes[h.c.to]; pos = 0; }      // said right after the player's choice
         else { node = h.n; pos = 0; }                                             // after the artwork line
-        const k = node.title + '|' + item.anchor;
-        if (after.has(k)) pos = after.get(k);
-        node.beats.splice(pos, 0, line); after.set(k, pos + 1); addedKey['add:' + item.id] = shown(line.text);
+        // Several lines added at one spot keep their order: each goes right after the last one placed there.
+        const k = node.title + '|' + item.anchor + (before ? '|before' : ''), last = after.get(k);
+        if (last && node.beats.includes(last)) pos = node.beats.indexOf(last) + 1;
+        node.beats.splice(pos, 0, line); after.set(k, line); addedKey['add:' + item.id] = shown(line.text);
         report.applied.push({ chapter: cid, added: 'line', speaker: line.speaker, text: line.text, panel: node.title });
       }
       // 2) Edits to existing lines, choices and artwork.

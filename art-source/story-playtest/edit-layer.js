@@ -87,8 +87,10 @@
         branch.textContent = '+ Branch'; branch.setAttribute('aria-label', 'Add choices after this line');
         el.appendChild(branch);
       }
+      // Lines added BEFORE this one (owner 2026-11-24) go ahead of it, in saved order.
+      if (!isButton) for (const item of list.filter(a => a.anchor === orig && a.before && a.kind === 'line')) holder.before(addedLine(d, item));
       // Added material follows its anchor, in saved order.
-      const here = list.filter(a => a.anchor === orig);
+      const here = list.filter(a => a.anchor === orig && !a.before);
       let after = holder;
       for (const item of here) {
         // A choice's text also echoes as a spoken line once picked. New choices beside a choice
@@ -321,6 +323,7 @@
         el('button', { textContent: 'Restore original', onclick: () => { dropEdit(chapter.id, orig); persist(); back.remove(); } }),
         el('button', { textContent: 'Cancel', onclick: () => back.remove() })),
       el('div', { className: 'rtr-row' },
+        ...(isChoice ? [] : [el('button', { textContent: '+ Add a line before this', onclick: () => { back.remove(); openAddLine(chapter, orig, speaker, null, false, true); } })]),
         el('button', { textContent: '+ Add a line after this', onclick: () => { back.remove(); openAddLine(chapter, orig, isChoice ? 'Player' : speaker, null, isChoice); } }),
         el('button', { textContent: isChoice ? '+ Add another choice' : '+ Add choices after this', onclick: () => { back.remove(); openAddChoices(chapter, orig, null, isChoice); } })),
       ...(!removed && lastChoice ? [el('p', { className: 'rtr-warn', textContent: 'This is the only choice left here, so removing it would leave the scene stuck. Add or keep another choice first.' })] : []),
@@ -328,15 +331,15 @@
     text.focus();
   }
 
-  function openAddLine(chapter, anchor, speaker, afterId, onChoice) {
+  function openAddLine(chapter, anchor, speaker, afterId, onChoice, before) {
     const { back, box } = modal();
     const who = el('input', { type: 'text', value: speaker === 'Narration' ? '' : speaker, placeholder: 'Leave blank for narration' });
     const text = el('textarea', { rows: 3, placeholder: 'What they say' });
-    box.append(el('h2', { textContent: 'Add a line' }), el('p', { className: 'hint', textContent: 'After: ' + anchor }),
+    box.append(el('h2', { textContent: before ? 'Add a line before' : 'Add a line' }), el('p', { className: 'hint', textContent: (before ? 'Before: ' : 'After: ') + anchor }),
       el('label', { textContent: 'Who says it' }), who, el('label', { textContent: 'Line' }), text, ...fxBar(text),
       el('div', { className: 'rtr-row' }, el('button', { className: 'primary', textContent: 'Add line', onclick: () => {
         const t = norm(text.value); if (!t) return text.focus();
-        pushAdds(chapter, [{ id: newId(), kind: 'line', onChoice: !!onChoice, anchor, speaker: norm(who.value) || 'Narration', text: t, title: chapter.title, at: new Date().toISOString() }], afterId);
+        pushAdds(chapter, [{ id: newId(), kind: 'line', onChoice: !!onChoice, ...(before ? { before: true } : {}), anchor, speaker: norm(who.value) || 'Narration', text: t, title: chapter.title, at: new Date().toISOString() }], afterId);
         persist(); back.remove();
       } }), el('button', { textContent: 'Cancel', onclick: () => back.remove() })));
     text.focus();
@@ -392,7 +395,7 @@
     const remove = el('button', { textContent: item.kind === 'choice' ? 'Remove this choice' : 'Remove this line', onclick: () => { dropAdd(chapter.id, addId); persist(); back.remove(); } });
     const cancel = el('button', { textContent: 'Cancel', onclick: () => back.remove() });
     const more = el('div', { className: 'rtr-row' },
-      el('button', { textContent: '+ Add a line after this', onclick: () => { back.remove(); openAddLine(chapter, item.anchor, item.speaker, addId, item.onChoice); } }),
+      el('button', { textContent: '+ Add a line after this', onclick: () => { back.remove(); openAddLine(chapter, item.anchor, item.speaker, addId, item.onChoice, item.before); } }),
       el('button', { textContent: '+ Add choices after this', onclick: () => { back.remove(); openAddChoices(chapter, item.anchor, addId, item.onChoice); } }));
     if (item.kind === 'choice') {
       const b = choiceBlock(item);
@@ -519,7 +522,7 @@
           for (const c of n.children || []) emit(c, pad + '  ');
         };
         emit(a, '');
-      } else lines.push('**New line: ' + a.speaker + '**', '- After: ' + a.anchor, '- Line: ' + a.text);
+      } else lines.push('**New line: ' + a.speaker + '**', (a.before ? '- Before: ' : '- After: ') + a.anchor, '- Line: ' + a.text);
       lines.push('');
     }
     const data = { edits: edits[id] ? { [id]: edits[id] } : {}, adds: adds[id] ? { [id]: adds[id] } : {} };
@@ -567,7 +570,7 @@
         undo(() => dropEdit(id, orig))));
       for (const a of list) box.append(el('div', { className: 'rtr-item' },
         el('p', {}, el('strong', { textContent: a.kind === 'choice' ? 'New choice' : 'New line: ' + a.speaker })),
-        el('p', { className: 'hint', textContent: 'After: ' + a.anchor }), el('p', { textContent: a.text }),
+        el('p', { className: 'hint', textContent: (a.before ? 'Before: ' : 'After: ') + a.anchor }), el('p', { textContent: a.text }),
         ...(a.replies || []).map(r => el('p', { className: 'hint', textContent: r.speaker + ': ' + r.text })),
         ...(a.children?.length ? [el('p', { className: 'hint', textContent: 'Follow-up choices: ' + a.children.length })] : []),
         undo(() => dropAdd(id, a.id))));

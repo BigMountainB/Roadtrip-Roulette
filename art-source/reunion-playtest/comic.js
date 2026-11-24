@@ -68,9 +68,10 @@
     const c = via && D.chapter.nodes[via.from]?.choices?.find(c => c.id === via.id);
     if (c && c.to === nid) { const e = edits[shown(c.label)]; if (!e?.deleted) out.push({ key: 'choice:' + via.from + ':' + c.id, speaker: 'Brendan', text: (e && typeof e.text === 'string' ? e.text : c.label).replace(/\s*\([+-]\d+\)\s*$/, ''), choice: true }); }   // no score marks like (+3)
     for (const b of n.beats) {
-      const key = shown(b.text), e = edits[key];
+      const key = shown(b.text), e = edits[key], add = a => out.push({ key: 'add:' + a.id, speaker: a.speaker === 'Narration' ? 'Scene' : a.speaker, text: a.text, added: true });
+      adds.filter(a => a.anchor === key && a.before).forEach(add);
       if (!e?.deleted) out.push({ key, speaker: b.speaker, text: e && typeof e.text === 'string' ? e.text : b.text });
-      for (const a of adds.filter(a => a.anchor === key)) out.push({ key: 'add:' + a.id, speaker: a.speaker === 'Narration' ? 'Scene' : a.speaker, text: a.text, added: true });
+      adds.filter(a => a.anchor === key && !a.before).forEach(add);
     }
     return out;
   }

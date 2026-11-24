@@ -38,9 +38,11 @@
       if (e?.deleted) row = who + '~~' + text + '~~ (removed)';
       else if (e && norm(e.text) !== key) row = who + '~~' + text + '~~ → **' + e.text + '**';
       else row = who + (speaker === 'Scene' && !opts.choice ? '_' + text + '_' : text);
-      const lines = ['- ' + row];
+      const lines = [];
+      for (const a of (adds[cid] || []).filter(a => a.anchor === key && a.before)) { (usedAdd[cid] ??= new Set()).add(a.id); lines.push(...added(a, '')); }
+      lines.push('- ' + row);
       if (e?.note) lines.push('  - ✎ note: ' + e.note);
-      for (const a of (adds[cid] || []).filter(a => a.anchor === key)) {
+      for (const a of (adds[cid] || []).filter(a => a.anchor === key && !a.before)) {
         (usedAdd[cid] ??= new Set()).add(a.id);
         lines.push(...added(a, '  '));
       }
@@ -85,7 +87,7 @@
       if (stale.length || loose.length) {
         out.push('#### Edits that no longer match a line', '');
         for (const [k, e] of stale) out.push('- ' + (e.deleted ? 'REMOVE ' : '') + '**' + (e.speaker || '?') + ':** ~~' + k + '~~' + (e.deleted ? '' : ' → **' + e.text + '**') + (e.note ? ' (✎ ' + e.note + ')' : ''));
-        for (const a of loose) out.push(...added(a, '').map(r => r + (r.startsWith('- ➕') ? '  (after: “' + a.anchor + '”)' : '')));
+        for (const a of loose) out.push(...added(a, '').map(r => r + (r.startsWith('- ➕') ? '  (' + (a.before ? 'before' : 'after') + ': “' + a.anchor + '”)' : '')));
         out.push('');
       }
     }
