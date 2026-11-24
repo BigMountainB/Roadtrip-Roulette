@@ -43,6 +43,15 @@ function cleanStyle(st, withTail = true) {
   return Object.keys(out).length ? out : null;
 }
 
+// Dice similarity of letter pairs, 0..1 — enough to tell a lightly reworded line from a different one.
+function similar(a, b) {
+  const pairs = s => { const m = new Map(); s = s.toLowerCase(); for (let i = 0; i < s.length - 1; i++) { const p = s.slice(i, i + 2); m.set(p, (m.get(p) || 0) + 1); } return m; };
+  const A = pairs(a), B = pairs(b); let hit = 0, n = 0;
+  for (const v of A.values()) n += v; for (const v of B.values()) n += v;
+  for (const [p, v] of A) hit += Math.min(v, B.get(p) || 0);
+  return n ? 2 * hit / n : 0;
+}
+
 function bubblePos(p) {
   const pos = { img: Math.max(0, Math.round(+p.img || 0)), x: +(+p.x || 0).toFixed(1), y: +(+p.y || 0).toFixed(1), w: +(+p.w || 44).toFixed(1) };
   if (p.tip && isFinite(+p.tip.x) && isFinite(+p.tip.y)) pos.tip = { x: +(+p.tip.x).toFixed(1), y: +(+p.tip.y).toFixed(1) };
@@ -169,8 +178,15 @@ export function applyEdits(story, files) {
           const pos = bubblePos(p);
           const edited = file.edits?.[cid]?.[key];
           const k = edited && !edited.deleted && typeof edited.text === 'string' ? shown(edited.text) : key;
-          if (!n.beats.some(b => shown(b.text) === k)) { report.skipped.push({ chapter: cid, why: 'bubble for a line no longer in that panel', panel: n.title, line: key }); continue; }
-          (n.bubbles ||= {})[k] = pos;
+          let target = n.beats.some(b => shown(b.text) === k) ? k : null;
+          // Placed on a page that still showed older wording (it hadn't refreshed after an earlier
+          // publish): match the most similar line in the same panel, if it's clearly the same line.
+          if (!target) {
+            const best = n.beats.map(b => [shown(b.text), similar(shown(b.text), k)]).sort((a, b) => b[1] - a[1])[0];
+            if (best && best[1] >= .6) { target = best[0]; report.notes.push({ chapter: cid, note: 'bubble placed on older wording matched to "' + target + '"' }); }
+          }
+          if (!target) { report.skipped.push({ chapter: cid, why: 'bubble for a line no longer in that panel', panel: n.title, line: key }); continue; }
+          (n.bubbles ||= {})[target] = pos;
         }
         report.applied.push({ chapter: cid, layout: n.title, images: n.images, bubbles: Object.keys(lay.bubbles || {}).length });
       }

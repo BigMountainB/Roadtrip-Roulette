@@ -907,16 +907,15 @@
       },
       "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave??": {
        "img": 1,
-       "x": 46.4,
-       "y": 71.9,
+       "x": 51.4,
+       "y": 75.4,
        "w": 45.5,
        "tip": {
-        "x": 73.6,
-        "y": 76.4
+        "x": 72.7,
+        "y": 76.8
        },
        "style": {
-        "color": "yellow",
-        "bamt": 7,
+        "bamt": 15,
         "bstyle": "pointy"
        }
       },
