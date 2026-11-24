@@ -29,11 +29,14 @@ function cleanStyle(st, withTail = true) {
   if (['blue', 'green', 'white', 'cream', 'yellow'].includes(st.color)) out.color = st.color;
   if (['normal', 'shout', 'whisper', 'thought', 'radio'].includes(st.border)) out.border = st.border;
   if (['s', 'l', 'xl'].includes(st.size)) out.size = st.size;
+  const num = (k, lo, hi) => { if (st[k] === undefined) return; const v = Math.round(+st[k]); if (v >= lo && v <= hi) out[k] = v; };
+  num('bw', 0, 10); num('bamt', 1, 100); num('rad', 0, 50);
+  if (['solid', 'dashed', 'wavy', 'pointy'].includes(st.bstyle)) out.bstyle = st.bstyle;
   if (withTail) {
     const t = Math.round(+st.tail * 2) / 2; if (t >= 0 && t <= 12.5) out.tail = t;
     const l = Math.round(+st.tlen); if (l >= 8 && l <= 500) out.tlen = l;
     const tb = Math.round(+st.tbase * 2) / 2; if (tb > 0 && tb <= 12) out.tbase = tb;
-    if (st.tshape === 'bolt' || st.tshape === 'straight') out.tshape = st.tshape;
+    if (['bolt', 'straight', 'dots'].includes(st.tshape)) out.tshape = st.tshape;
     const tc = Math.round(+st.tcurve); if (tc && tc >= -100 && tc <= 100) out.tcurve = tc;
     const tw = Math.round(+st.twidth); if (tw >= 4 && tw <= 80) out.twidth = tw;
   }
@@ -43,6 +46,7 @@ function cleanStyle(st, withTail = true) {
 function bubblePos(p) {
   const pos = { img: Math.max(0, Math.round(+p.img || 0)), x: +(+p.x || 0).toFixed(1), y: +(+p.y || 0).toFixed(1), w: +(+p.w || 44).toFixed(1) };
   if (p.tip && isFinite(+p.tip.x) && isFinite(+p.tip.y)) pos.tip = { x: +(+p.tip.x).toFixed(1), y: +(+p.tip.y).toFixed(1) };
+  if (p.link === true) pos.link = true;
   const st = cleanStyle(p.style); if (st) pos.style = st;
   return pos;
 }
