@@ -1,0 +1,176 @@
+{
+ "version": "2026-11-24-published-mwu8i25s",
+ "sentAt": "2026-11-24T05:51:23.426Z",
+ "edits": {
+  "crew": {
+   "Brendan shares the reunion poster with his friends.": {
+    "text": "Time for the boys to weigh in…",
+    "note": "",
+    "speaker": "Scene",
+    "title": "The crew",
+    "at": "2026-11-24T05:42:18.167Z"
+   },
+   "I never agreed, but this thread's got me leaning towards: No": {
+    "text": "Y'all are hilarious. Here's what Andrew said… (snitch)",
+    "note": "",
+    "speaker": "Player",
+    "title": "The crew",
+    "at": "2026-11-24T05:44:48.083Z"
+   },
+   "Good. We were worried you’d actually have to rehearse.": {
+    "text": "Ouch. Someone caught slackin.",
+    "note": "",
+    "speaker": "Dan",
+    "title": "The crew",
+    "at": "2026-11-24T05:45:50.562Z"
+   },
+   "Say yes if you want to play. We’ll figure out the rest.": {
+    "text": "Not cool, Brendan. You're definitely not headlining.",
+    "note": "",
+    "speaker": "Andrew",
+    "title": "The crew",
+    "at": "2026-11-24T05:46:27.363Z"
+   },
+   "There. Emotional support. Screenshot it.": {
+    "text": "I'm here for this!",
+    "note": "",
+    "speaker": "Jay",
+    "title": "The crew",
+    "at": "2026-11-24T05:46:53.846Z"
+   }
+  }
+ },
+ "adds": {
+  "crew": [
+   {
+    "id": "mwu9w3m3xjph1",
+    "kind": "line",
+    "onChoice": false,
+    "anchor": "There. Emotional support. Screenshot it.",
+    "speaker": "Aaron",
+    "text": "Maybe this *isn't* worth the trip...",
+    "title": "The crew",
+    "at": "2026-11-24T05:47:24.363Z"
+   }
+  ]
+ },
+ "layout": {
+  "crew": {
+   "chat": {
+    "bubbles": {
+     "I don’t recall committing to anything. I still have some rust to shake off.": {
+      "img": 0,
+      "x": 51.6,
+      "y": 30.6,
+      "w": 32.3
+     },
+     "Brendan shares the reunion poster with his friends.": {
+      "img": 0,
+      "x": 3,
+      "y": 4.1,
+      "w": 34.2
+     },
+     "Brendan said he was going to strum up some memories as the reunion entertainer.": {
+      "img": 0,
+      "x": 8.9,
+      "y": 18.3,
+      "w": 41.3,
+      "style": {
+       "kind": "text",
+       "size": "s"
+      }
+     }
+    }
+   },
+   "panic": {
+    "bubbles": {
+     "choice:chat:panic": {
+      "img": 0,
+      "x": 13.5,
+      "y": 7.4,
+      "w": 36.4,
+      "style": {
+       "size": "m",
+       "color": "blue"
+      }
+     },
+     "Good. We were worried you’d actually have to rehearse.": {
+      "img": 0,
+      "x": 31.9,
+      "y": 29,
+      "w": 31.9
+     },
+     "Say yes if you want to play. We’ll figure out the rest.": {
+      "img": 0,
+      "x": 31.7,
+      "y": 43.7,
+      "w": 32.3
+     },
+     "There. Emotional support. Screenshot it.": {
+      "img": 0,
+      "x": 31.7,
+      "y": 63.4,
+      "w": 20.9
+     },
+     "add:mwu9w3m3xjph1": {
+      "img": 0,
+      "x": 31.6,
+      "y": 79.8,
+      "w": 32.6
+     }
+    },
+    "style": {
+     "kind": "text",
+     "color": "white",
+     "size": "s"
+    }
+   },
+   "help": {
+    "bubbles": {
+     "That's a long drive! Do you have planned stops along the way?": {
+      "img": 0,
+      "x": 27.6,
+      "y": 29.5,
+      "w": 28.7
+     },
+     "A few things in mind, but I'll also go with the flow.": {
+      "img": 0,
+      "x": 56.6,
+      "y": 44.5,
+      "w": 25.3
+     },
+     "Hey! I'm driving through Bellevue on my way to Pullman if you wanna meet up.": {
+      "img": 0,
+      "x": 56,
+      "y": 10.4,
+      "w": 30.2
+     },
+     "Sweet. Let's talk about it more when you get here.": {
+      "img": 0,
+      "x": 30.8,
+      "y": 57.4,
+      "w": 25.5
+     },
+     "Bring shoes you can walk in.": {
+      "img": 0,
+      "x": 30.2,
+      "y": 77.3,
+      "w": 25.7
+     }
+    }
+   }
+  },
+  "_speakers": {
+   "Brendan": {
+    "kind": "text",
+    "color": "green",
+    "size": "s"
+   },
+   "Yusen": {
+    "kind": "text",
+    "color": "white",
+    "size": "s"
+   }
+  }
+ }
+}
