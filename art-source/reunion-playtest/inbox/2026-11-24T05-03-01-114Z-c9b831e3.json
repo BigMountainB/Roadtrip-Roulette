@@ -1,0 +1,123 @@
+{
+ "version": "2026-11-24-published-mwu80ryk",
+ "sentAt": "2026-11-24T05:03:01.114Z",
+ "edits": {
+  "mom": {
+   "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it.": {
+    "text": "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave??",
+    "note": "",
+    "speaker": "Mom",
+    "title": "Mom calls",
+    "at": "2026-11-24T05:01:43.228Z"
+   }
+  }
+ },
+ "adds": {
+  "mom": [
+   {
+    "id": "mwu894kulfvpw",
+    "kind": "line",
+    "onChoice": false,
+    "anchor": "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it.",
+    "speaker": "Mom",
+    "text": "I'll pay for it.",
+    "title": "Mom calls",
+    "at": "2026-11-24T05:01:32.910Z"
+   }
+  ]
+ },
+ "layout": {
+  "mom": {
+   "call": {
+    "bubbles": {
+     "I heard you might play at your reunion. Is it going to be at McMiniman’s? That would be fun.": {
+      "img": 0,
+      "x": 3,
+      "y": 4.1,
+      "w": 44,
+      "style": {
+       "tbase": 4,
+       "twidth": 23,
+       "bstyle": "pointy",
+       "bamt": 7,
+       "color": "yellow"
+      },
+      "tip": {
+       "x": 57.4,
+       "y": 13.6
+      }
+     },
+     "How did you…? No. For future potential contract obligations I can't get into details, but it’s in Spokane.": {
+      "img": 0,
+      "x": 8.2,
+      "y": 64.2,
+      "w": 49.6,
+      "style": {
+       "kind": "voice",
+       "color": "white",
+       "rad": 25,
+       "tcurve": -60,
+       "tbase": 3,
+       "size": "m"
+      },
+      "tip": {
+       "x": 63.9,
+       "y": 42.9
+      }
+     },
+     "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
+      "img": 1,
+      "x": 9.9,
+      "y": 52.7,
+      "w": 33,
+      "style": {
+       "kind": "voice",
+       "color": "white",
+       "border": "shout",
+       "tbase": 2,
+       "tcurve": 75,
+       "bstyle": "solid",
+       "rad": 32
+      },
+      "tip": {
+       "x": 34.8,
+       "y": 67.3
+      }
+     },
+     "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it.": {
+      "img": 1,
+      "x": 46.4,
+      "y": 71.9,
+      "w": 45.5,
+      "tip": {
+       "x": 73.6,
+       "y": 76.4
+      },
+      "style": {
+       "bstyle": "pointy",
+       "bamt": 7,
+       "color": "yellow"
+      }
+     },
+     "add:mwu894kulfvpw": {
+      "img": 2,
+      "x": 71.6,
+      "y": 7.7,
+      "w": 22.8,
+      "style": {
+       "color": "cream",
+       "tbase": 7,
+       "tshape": "straight",
+       "twidth": 15,
+       "tcurve": -50
+      },
+      "tip": {
+       "x": 66.1,
+       "y": 113.3
+      }
+     }
+    }
+   }
+  }
+ }
+}
