@@ -161,12 +161,19 @@
   // and tails/links meet that same shape. Text bubbles (18px corners) and captions stay CSS.
   function basePoly(b) {
     const w = b.offsetWidth, h = b.offsetHeight;
-    let rx, ry;
+    let rx, ry, W = w, H = h, ox = 0, oy = 0;
     if (b.classList.contains('cap')) rx = ry = 0;
     else if (b.classList.contains('txt')) rx = ry = Math.min(18, w / 2, h / 2);
-    else { const R = (+b.dataset.rad || 0) / 100; rx = R * w; ry = R * h; }
+    else {
+      // Voice: the outline is built around the text, not squeezed into the box — rounder corners need
+      // more room to clear the text's corners, taken mostly as height (owner 2026-11-24). sx/sy are the
+      // smallest growth that keeps the text's corner points inside the corner curves, plus a margin.
+      const R = (+b.dataset.rad || 0) / 100, cs = getComputedStyle(b), px = parseFloat(cs.paddingLeft) || 0, py = parseFloat(cs.paddingTop) || 0, m = 5;
+      const w0 = Math.max(1, w - 2 * px), h0 = Math.max(1, h - 2 * py), sx = 1 / (1 - 2 * R + 2 * R * .85), sy = 1 / (1 - 2 * R + 2 * R * .527);
+      W = w0 * sx + 2 * m; H = h0 * sy + 2 * m; ox = (w - W) / 2; oy = (h - H) / 2; rx = R * W; ry = R * H;
+    }
     const pts = [], N = 24, Q = Math.PI / 2;
-    [[w - rx, ry, -Q], [w - rx, h - ry, 0], [rx, h - ry, Q], [rx, ry, 2 * Q]].forEach(([cx, cy, a0]) => {
+    [[ox + W - rx, oy + ry, -Q], [ox + W - rx, oy + H - ry, 0], [ox + rx, oy + H - ry, Q], [ox + rx, oy + ry, 2 * Q]].forEach(([cx, cy, a0]) => {
       for (let i = 0; i <= N; i++) { const a = a0 + i / N * Q, q = [cx + rx * Math.cos(a), cy + ry * Math.sin(a)], l = pts[pts.length - 1]; if (!l || Math.hypot(q[0] - l[0], q[1] - l[1]) > .05) pts.push(q); }
     });
     return pts;
