@@ -1,0 +1,115 @@
+{
+ "version": "2026-11-23-published-mwtwbsj1",
+ "sentAt": "2026-11-24T04:53:47.146Z",
+ "edits": {
+  "opening": {
+   "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket...": {
+    "text": "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food when his phone perks up.",
+    "note": "",
+    "speaker": "Scene",
+    "title": "The notification",
+    "at": "2026-11-24T04:49:38.703Z"
+   }
+  }
+ },
+ "adds": {},
+ "layout": {
+  "opening": {
+   "doorstep": {
+    "bubbles": {
+     "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket...": {
+      "img": 0,
+      "x": 7.7,
+      "y": 6,
+      "w": 37
+     },
+     "Yo! I'm swinging through Seattle. Let's meet for lunch so I can get you your wallet back.": {
+      "img": 0,
+      "x": 14.6,
+      "y": 54.4,
+      "w": 36.1
+     },
+     "Just finishing up here at the office, Spud on Alki? I could do a basket.": {
+      "img": 1,
+      "x": 17.7,
+      "y": 61.5,
+      "w": 30.5,
+      "style": {
+       "color": "white",
+       "size": "m"
+      }
+     }
+    }
+   },
+   "spud": {
+    "bubbles": {
+     "Not sure if you saw yet, but I just posted the High School Reunion info.": {
+      "img": 0,
+      "x": 3,
+      "y": 4.1,
+      "w": 44,
+      "tip": {
+       "x": 34.2,
+       "y": 19.5
+      },
+      "style": {
+       "tbase": 3.5,
+       "twidth": 18,
+       "tcurve": -90
+      }
+     },
+     "Yeah, don’t spread this, but I had AI book the venue, and after mentioning our Cougar mascot, it assumed we're WSU alumni and... well, we'll all be meeting up in Pullman.": {
+      "img": 0,
+      "x": 6.9,
+      "y": 68.3,
+      "w": 51.4,
+      "tip": {
+       "x": 33.7,
+       "y": 19.2
+      },
+      "style": {
+       "tbase": 1,
+       "twidth": 18,
+       "tcurve": 65,
+       "rad": 31
+      }
+     },
+     "No, not online too much. I know it's next weekend, but anything noteworthy?": {
+      "img": 0,
+      "x": 41.2,
+      "y": 27.6,
+      "w": 24.6,
+      "style": {
+       "color": "yellow",
+       "tbase": 2,
+       "twidth": 15,
+       "tcurve": -80
+      },
+      "tip": {
+       "x": 67.2,
+       "y": 17.2
+      }
+     }
+    },
+    "style": {
+     "kind": "voice",
+     "color": "white",
+     "bw": 2,
+     "bstyle": "solid",
+     "bamt": 40,
+     "rad": 50
+    }
+   }
+  },
+  "_speakers": {
+   "Andrew (3BC)": {
+    "kind": "voice",
+    "color": "white",
+    "bw": 2,
+    "bstyle": "solid",
+    "bamt": 40,
+    "rad": 50
+   }
+  }
+ }
+}

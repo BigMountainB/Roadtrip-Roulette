@@ -1,0 +1,70 @@
+{
+ "version": "2026-11-24-published-mwua2ttx",
+ "applied": [
+  {
+   "speakerDefault": "Brendan",
+   "style": {
+    "kind": "text",
+    "color": "green",
+    "size": "s"
+   }
+  },
+  {
+   "speakerDefault": "Yusen",
+   "style": {
+    "kind": "text",
+    "color": "white",
+    "size": "s"
+   }
+  },
+  {
+   "chapter": "crew",
+   "added": "line",
+   "speaker": "Aaron",
+   "text": "Maybe this *isn't* worth the trip...",
+   "panel": "The comfortable option"
+  },
+  {
+   "chapter": "crew",
+   "changed": "Brendan shares the reunion poster with his friends.",
+   "now": "Time for the boys to weigh in…"
+  },
+  {
+   "chapter": "crew",
+   "changed": "I never agreed, but this thread's got me leaning towards: No",
+   "now": "Y'all are hilarious. Here's what Andrew said… (snitch)"
+  },
+  {
+   "chapter": "crew",
+   "changed": "Good. We were worried you’d actually have to rehearse.",
+   "now": "Ouch. Someone caught slackin."
+  },
+  {
+   "chapter": "crew",
+   "changed": "Say yes if you want to play. We’ll figure out the rest.",
+   "now": "Not cool, Brendan. You're definitely not headlining."
+  },
+  {
+   "chapter": "crew",
+   "changed": "There. Emotional support. Screenshot it.",
+   "now": "I'm here for this!"
+  },
+  {
+   "chapter": "crew",
+   "layout": "The group chat",
+   "bubbles": 3
+  },
+  {
+   "chapter": "crew",
+   "layout": "The comfortable option",
+   "bubbles": 5
+  },
+  {
+   "chapter": "crew",
+   "layout": "A separate message",
+   "bubbles": 5
+  }
+ ],
+ "skipped": [],
+ "notes": []
+}

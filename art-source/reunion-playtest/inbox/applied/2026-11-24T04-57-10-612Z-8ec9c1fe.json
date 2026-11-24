@@ -1,0 +1,90 @@
+{
+ "version": "2026-11-24-published-mwu7u9o7",
+ "sentAt": "2026-11-24T04:57:10.612Z",
+ "edits": {},
+ "adds": {},
+ "layout": {
+  "crew": {
+   "chat": {
+    "bubbles": {
+     "I don’t recall committing to anything. I still have some rust to shake off.": {
+      "img": 0,
+      "x": 51.6,
+      "y": 30.6,
+      "w": 32.3,
+      "style": {
+       "color": "white",
+       "kind": "voice",
+       "bw": 1
+      }
+     },
+     "Oh boy, this might actually worth flying back for.": {
+      "img": 0,
+      "x": 8.9,
+      "y": 64.2,
+      "w": 42,
+      "style": {
+       "kind": "text",
+       "color": "white",
+       "size": "s",
+       "tail": 0
+      }
+     }
+    }
+   }
+  },
+  "mom": {
+   "call": {
+    "bubbles": {
+     "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
+      "img": 1,
+      "x": 3,
+      "y": 1.4,
+      "w": 44,
+      "style": {
+       "kind": "voice",
+       "color": "white",
+       "border": "shout"
+      },
+      "tip": {
+       "x": 34.5,
+       "y": 65.4
+      }
+     },
+     "How did you…? No. For future potential contract obligations I can't get into details, but it’s in Spokane.": {
+      "img": 0,
+      "x": 1,
+      "y": 41.5,
+      "w": 44,
+      "style": {
+       "kind": "voice",
+       "color": "white",
+       "tbase": 5,
+       "twidth": 25,
+       "tcurve": 70
+      },
+      "tip": {
+       "x": 53,
+       "y": 44.8
+      }
+     },
+     "I heard you might play at your reunion. Is it going to be at McMiniman’s? That would be fun.": {
+      "img": 0,
+      "x": 3,
+      "y": 4.1,
+      "w": 44,
+      "tip": {
+       "x": 58.1,
+       "y": 11.7
+      },
+      "style": {
+       "bstyle": "pointy",
+       "bamt": 20,
+       "rad": 42
+      }
+     }
+    }
+   }
+  }
+ }
+}

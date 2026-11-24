@@ -1,0 +1,34 @@
+{
+ "version": "2026-11-24-published-mwu8i25s",
+ "applied": [
+  {
+   "chapter": "crew",
+   "layout": "The group chat",
+   "bubbles": 1
+  },
+  {
+   "chapter": "opening",
+   "layout": "Leave at door",
+   "bubbles": 3
+  },
+  {
+   "chapter": "opening",
+   "layout": "Still president",
+   "bubbles": 1
+  },
+  {
+   "chapter": "mom",
+   "layout": "Incoming: Mom",
+   "bubbles": 2
+  }
+ ],
+ "skipped": [
+  {
+   "chapter": "mom",
+   "why": "bubble for a line no longer in that panel",
+   "panel": "Incoming: Mom",
+   "line": "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it."
+  }
+ ],
+ "notes": []
+}

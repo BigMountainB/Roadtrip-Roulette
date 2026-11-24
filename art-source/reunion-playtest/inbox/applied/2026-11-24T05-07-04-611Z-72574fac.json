@@ -1,0 +1,127 @@
+{
+ "version": "2026-11-24-published-mwu858na",
+ "sentAt": "2026-11-24T05:07:04.611Z",
+ "edits": {},
+ "adds": {},
+ "layout": {
+  "crew": {
+   "chat": {
+    "bubbles": {
+     "I don’t recall committing to anything. I still have some rust to shake off.": {
+      "img": 0,
+      "x": 51.6,
+      "y": 30.6,
+      "w": 32.3,
+      "style": {
+       "kind": "voice",
+       "color": "cream",
+       "bw": 3,
+       "bstyle": "dashed",
+       "rad": 29
+      },
+      "tip": {
+       "x": 0,
+       "y": 3400
+      }
+     }
+    }
+   }
+  },
+  "opening": {
+   "doorstep": {
+    "bubbles": {
+     "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food when his phone perks up.": {
+      "img": 0,
+      "x": 8.4,
+      "y": 5.2,
+      "w": 37
+     },
+     "Just finishing up here at the office, Spud on Alki? I could demo a basket.": {
+      "img": 1,
+      "x": 61,
+      "y": 13.9,
+      "w": 31,
+      "style": {
+       "color": "blue",
+       "size": "m"
+      }
+     },
+     "Yo! I'm swinging through Seattle. Let's meet for lunch so I can get you your wallet back.": {
+      "img": 0,
+      "x": 14.6,
+      "y": 54.4,
+      "w": 36.1,
+      "style": {
+       "color": "white"
+      }
+     }
+    }
+   },
+   "notRemoved": {
+    "bubbles": {
+     "choice:spud:blunder": {
+      "img": 0,
+      "x": 33.7,
+      "y": -1.9,
+      "w": 38.7,
+      "tip": {
+       "x": 64.1,
+       "y": 14.8
+      },
+      "style": {
+       "kind": "voice",
+       "color": "yellow",
+       "border": "whisper",
+       "tcurve": 45,
+       "twidth": 19,
+       "size": "m",
+       "bamt": 25,
+       "bw": 3,
+       "bstyle": "solid",
+       "rad": 40
+      }
+     }
+    }
+   }
+  },
+  "mom": {
+   "call": {
+    "bubbles": {
+     "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it.": {
+      "img": 1,
+      "x": 51.4,
+      "y": 75.4,
+      "w": 45.5,
+      "style": {
+       "bstyle": "pointy",
+       "bamt": 15
+      },
+      "tip": {
+       "x": 72.7,
+       "y": 76.8
+      }
+     },
+     "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
+      "img": 1,
+      "x": 6,
+      "y": 61.7,
+      "w": 31.6,
+      "tip": {
+       "x": 34.1,
+       "y": 68.7
+      },
+      "style": {
+       "kind": "voice",
+       "color": "white",
+       "border": "shout",
+       "bstyle": "solid",
+       "rad": 30,
+       "tbase": 2,
+       "tcurve": 70
+      }
+     }
+    }
+   }
+  }
+ }
+}

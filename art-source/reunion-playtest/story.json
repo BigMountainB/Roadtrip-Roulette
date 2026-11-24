@@ -1,6 +1,6 @@
 {
  "_about": "Reunion branch (/dialogue2) script. Edited by Claude and by the page's Publish my edits button (apply-edits.mjs). Fictional draft for owner review.",
- "version": "2026-11-23-published-mwtwbsj1",
+ "version": "2026-11-24-published-mwua2ttx",
  "cast": [
   {
    "id": "brendan",
@@ -63,7 +63,7 @@
      "beats": [
       {
        "speaker": "Scene",
-       "text": "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket..."
+       "text": "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food when his phone perks up."
       },
       {
        "speaker": "Andrew (3BC)",
@@ -71,7 +71,7 @@
       },
       {
        "speaker": "Brendan",
-       "text": "Just finishing up here at the office, Spud on Alki? I could do a basket."
+       "text": "Just finishing up here at the office, Spud on Alki? I could demo a basket."
       }
      ],
      "art": "brendan",
@@ -84,24 +84,27 @@
      "bubbles": {
       "Yo! I'm swinging through Seattle. Let's meet for lunch so I can get you your wallet back.": {
        "img": 0,
-       "x": 14.8,
-       "y": 59.6,
-       "w": 36.1
-      },
-      "Just finishing up here at the office, Spud on Alki? I could do a basket.": {
-       "img": 1,
-       "x": 16.8,
-       "y": 62.6,
-       "w": 27.7,
+       "x": 14.6,
+       "y": 54.4,
+       "w": 36.1,
        "style": {
         "color": "white"
        }
       },
-      "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket...": {
+      "Just finishing up here at the office, Spud on Alki? I could demo a basket.": {
+       "img": 1,
+       "x": 61,
+       "y": 13.9,
+       "w": 31,
+       "style": {
+        "color": "blue"
+       }
+      },
+      "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food when his phone perks up.": {
        "img": 0,
-       "x": 15.1,
-       "y": 3.8,
-       "w": 22
+       "x": 8.4,
+       "y": 5.2,
+       "w": 37
       }
      }
     },
@@ -134,7 +137,64 @@
        "label": "That's uhh.. Sure. Sealed lips. I was actually planning to tour this week anyway so, it works out.",
        "to": "noBand"
       }
-     ]
+     ],
+     "bubbles": {
+      "Not sure if you saw yet, but I just posted the High School Reunion info.": {
+       "img": 0,
+       "x": 3,
+       "y": 4.1,
+       "w": 44,
+       "tip": {
+        "x": 34.2,
+        "y": 19.5
+       },
+       "style": {
+        "tbase": 3.5,
+        "tcurve": -90,
+        "twidth": 18
+       }
+      },
+      "No, not online too much. I know it's next weekend, but anything noteworthy?": {
+       "img": 0,
+       "x": 41.2,
+       "y": 27.6,
+       "w": 24.6,
+       "tip": {
+        "x": 67.2,
+        "y": 17.2
+       },
+       "style": {
+        "color": "yellow",
+        "tbase": 2,
+        "tcurve": -80,
+        "twidth": 15
+       }
+      },
+      "Yeah, don’t spread this, but I had AI book the venue, and after mentioning our Cougar mascot, it assumed we're WSU alumni and... well, we'll all be meeting up in Pullman.": {
+       "img": 0,
+       "x": 6.9,
+       "y": 68.3,
+       "w": 51.4,
+       "tip": {
+        "x": 33.7,
+        "y": 19.2
+       },
+       "style": {
+        "rad": 31,
+        "tbase": 1,
+        "tcurve": 65,
+        "twidth": 18
+       }
+      }
+     },
+     "style": {
+      "kind": "voice",
+      "color": "white",
+      "bw": 2,
+      "bamt": 40,
+      "rad": 50,
+      "bstyle": "solid"
+     }
     },
     "notRemoved": {
      "title": "Still president",
@@ -146,30 +206,122 @@
      ],
      "art": "andrew",
      "end": "Scene ends.",
-     "nextChapter": "crew"
+     "nextChapter": "crew",
+     "bubbles": {
+      "choice:spud:blunder": {
+       "img": 0,
+       "x": 33.7,
+       "y": -1.9,
+       "w": 38.7,
+       "tip": {
+        "x": 64.1,
+        "y": 14.8
+       },
+       "style": {
+        "kind": "voice",
+        "color": "yellow",
+        "border": "whisper",
+        "bw": 3,
+        "bamt": 25,
+        "rad": 40,
+        "bstyle": "solid",
+        "tcurve": 45,
+        "twidth": 19
+       }
+      },
+      "Ha. No one wants to be ASB President after high school.": {
+       "img": 0,
+       "x": 29.5,
+       "y": 72.1,
+       "w": 29.8,
+       "tip": {
+        "x": 30.2,
+        "y": 22
+       },
+       "style": {
+        "size": "s",
+        "tcurve": 25,
+        "twidth": 17
+       }
+      }
+     }
     },
     "noBand": {
      "title": "No band yet",
      "beats": [
       {
        "speaker": "Andrew",
-       "text": "Perfect! You should bring your guitar. Also don’t mention: I haven't locked down a band yet..."
+       "text": "Perfect! Maybe bring your guitar. And don’t mention I haven't locked down a band yet..."
+      },
+      {
+       "speaker": "Andrew",
+       "text": "Here's your wallet. I checked and you got enough to cover us both. Thanks for that! That's not your ex is it? I'm out of here."
       }
      ],
      "art": "andrew",
      "artDesc": "Close up of Andrew in a smaller panel. His face expresses that he is hiding something. Maybe this is two smaller panels that show the change in his expression — excited to potentially have found his entertainment, but scared that others will find out how last minute he was.",
-     "next": "sarah"
+     "next": "sarah",
+     "bubbles": {
+      "choice:spud:tour": {
+       "img": 0,
+       "x": 65.8,
+       "y": 64.8,
+       "w": 30.9,
+       "tip": {
+        "x": 77.7,
+        "y": 28
+       },
+       "style": {
+        "kind": "voice",
+        "color": "yellow",
+        "tbase": 10,
+        "tcurve": -65,
+        "twidth": 19
+       }
+      },
+      "Perfect! Maybe bring your guitar. And don’t mention I haven't locked down a band yet...": {
+       "img": 1,
+       "x": 3.8,
+       "y": 21.3,
+       "w": 35,
+       "tip": {
+        "x": 44.5,
+        "y": 79
+       },
+       "style": {
+        "border": "whisper",
+        "tbase": 3,
+        "tcurve": 35,
+        "twidth": 20
+       }
+      },
+      "Here's your wallet. I checked and you got enough to cover us both. Thanks for that! That's not your ex is it? I'm out of here.": {
+       "img": 1,
+       "x": 1,
+       "y": 55.7,
+       "w": 44,
+       "tip": {
+        "x": 41.1,
+        "y": 80.6
+       },
+       "style": {
+        "tbase": 2,
+        "tcurve": -30,
+        "twidth": 18
+       }
+      }
+     }
     },
     "sarah": {
      "title": "A familiar name",
      "beats": [
       {
        "speaker": "Sarah",
-       "text": "Brendan! Are you still doing music?"
+       "text": "Brendan?! Oh. My. Lord. I thought that was you."
       },
       {
        "speaker": "Scene",
-       "text": "He looks at the food bag. Then back at her name."
+       "text": "Brendan focuses on his phone in attempts to avoid the awkward."
       }
      ],
      "art": "sarah",
@@ -189,7 +341,32 @@
        "label": "A little. The jingle finally pays royalties.",
        "to": "honest"
       }
-     ]
+     ],
+     "bubbles": {
+      "Brendan?! Oh. My. Lord. I thought that was you.": {
+       "img": 0,
+       "x": 7.4,
+       "y": 41.5,
+       "w": 29.3,
+       "tip": {
+        "x": 1.2,
+        "y": 18.4
+       },
+       "style": {
+        "size": "l",
+        "tbase": 10,
+        "tshape": "bolt",
+        "tcurve": 90,
+        "twidth": 20
+       }
+      },
+      "Brendan focuses on his phone in attempts to avoid the awkward.": {
+       "img": 0,
+       "x": 1.5,
+       "y": 3.3,
+       "w": 35.6
+      }
+     }
     },
     "touring": {
      "title": "Selective accuracy",
@@ -334,7 +511,7 @@
      "beats": [
       {
        "speaker": "Scene",
-       "text": "Brendan shares the reunion poster with his friends."
+       "text": "Time for the boys to weigh in…"
       },
       {
        "speaker": "Andrew",
@@ -372,7 +549,7 @@
       },
       {
        "id": "panic",
-       "label": "I never agreed, but this thread's got me leaning towards: No",
+       "label": "Y'all are hilarious. Here's what Andrew said… (snitch)",
        "to": "panic"
       }
      ],
@@ -383,9 +560,9 @@
      "bubbles": {
       "Brendan said he was going to strum up some memories as the reunion entertainer.": {
        "img": 0,
-       "x": 8.4,
-       "y": 18.6,
-       "w": 42,
+       "x": 8.9,
+       "y": 18.3,
+       "w": 41.3,
        "style": {
         "kind": "text",
         "size": "s"
@@ -408,7 +585,7 @@
        "w": 42,
        "style": {
         "kind": "text",
-        "color": "yellow",
+        "color": "white",
         "size": "s",
         "tail": 0
        }
@@ -428,6 +605,12 @@
         "kind": "text",
         "size": "s"
        }
+      },
+      "Time for the boys to weigh in…": {
+       "img": 0,
+       "x": 3,
+       "y": 4.1,
+       "w": 34.2
       }
      }
     },
@@ -504,22 +687,62 @@
      "beats": [
       {
        "speaker": "Dan",
-       "text": "Good. We were worried you’d actually have to rehearse."
+       "text": "Ouch. Someone caught slackin."
       },
       {
        "speaker": "Andrew",
-       "text": "Say yes if you want to play. We’ll figure out the rest."
+       "text": "Not cool, Brendan. You're definitely not headlining."
       },
       {
        "speaker": "Jay",
-       "text": "There. Emotional support. Screenshot it."
+       "text": "I'm here for this!"
+      },
+      {
+       "speaker": "Aaron",
+       "text": "Maybe this *isn't* worth the trip..."
       }
      ],
      "art": "andrew",
      "next": "help",
      "style": {
       "kind": "text",
-      "color": "white"
+      "color": "white",
+      "size": "s"
+     },
+     "bubbles": {
+      "choice:chat:panic": {
+       "img": 0,
+       "x": 13.5,
+       "y": 7.4,
+       "w": 36.4,
+       "style": {
+        "color": "blue"
+       }
+      },
+      "Ouch. Someone caught slackin.": {
+       "img": 0,
+       "x": 31.9,
+       "y": 29,
+       "w": 31.9
+      },
+      "Not cool, Brendan. You're definitely not headlining.": {
+       "img": 0,
+       "x": 31.7,
+       "y": 43.7,
+       "w": 32.3
+      },
+      "I'm here for this!": {
+       "img": 0,
+       "x": 31.7,
+       "y": 63.4,
+       "w": 20.9
+      },
+      "Maybe this isn't worth the trip...": {
+       "img": 0,
+       "x": 31.6,
+       "y": 79.8,
+       "w": 32.6
+      }
      }
     },
     "help": {
@@ -552,27 +775,33 @@
      "bubbles": {
       "That's a long drive! Do you have planned stops along the way?": {
        "img": 0,
-       "x": 7.1,
-       "y": 16.1,
-       "w": 29.9
+       "x": 27.6,
+       "y": 29.5,
+       "w": 28.7
       },
       "A few things in mind, but I'll also go with the flow.": {
        "img": 0,
-       "x": 40.7,
-       "y": 30.1,
-       "w": 23.5
+       "x": 56.6,
+       "y": 44.5,
+       "w": 25.3
       },
       "Sweet. Let's talk about it more when you get here.": {
        "img": 0,
-       "x": 7.1,
-       "y": 48.9,
-       "w": 30.1
+       "x": 30.8,
+       "y": 57.4,
+       "w": 25.5
       },
       "Bring shoes you can walk in.": {
        "img": 0,
-       "x": 6.7,
-       "y": 66.4,
-       "w": 30.4
+       "x": 30.2,
+       "y": 77.3,
+       "w": 25.7
+      },
+      "Hey! I'm driving through Bellevue on my way to Pullman if you wanna meet up.": {
+       "img": 0,
+       "x": 56,
+       "y": 10.4,
+       "w": 30.2
       }
      }
     }
@@ -601,7 +830,11 @@
       },
       {
        "speaker": "Mom",
-       "text": "Oh gosh! That’s a drive. Will you *please* get your windshield fixed before you leave?? I’ll pay for it."
+       "text": "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave??"
+      },
+      {
+       "speaker": "Mom",
+       "text": "I'll pay for it."
       }
      ],
      "art": "brendan",
@@ -624,32 +857,84 @@
        "x": 3,
        "y": 4.1,
        "w": 44,
+       "tip": {
+        "x": 57.4,
+        "y": 13.6
+       },
        "style": {
-        "tail": 4,
-        "tlen": 80
-       }
-      },
-      "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it.": {
-       "img": 1,
-       "x": 51,
-       "y": 2.7,
-       "w": 45.5,
-       "style": {
-        "tail": 6,
-        "tlen": 50
+        "color": "yellow",
+        "bamt": 7,
+        "bstyle": "pointy",
+        "tbase": 4,
+        "twidth": 23
        }
       },
       "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
        "img": 1,
-       "x": 3,
-       "y": 1.4,
-       "w": 44,
+       "x": 6,
+       "y": 61.7,
+       "w": 31.6,
+       "tip": {
+        "x": 34.1,
+        "y": 68.7
+       },
        "style": {
         "kind": "voice",
         "color": "white",
         "border": "shout",
-        "tail": 7,
-        "tlen": 48
+        "rad": 30,
+        "bstyle": "solid",
+        "tbase": 2,
+        "tcurve": 70
+       }
+      },
+      "How did you…? No. For future potential contract obligations I can't get into details, but it’s in Spokane.": {
+       "img": 0,
+       "x": 8.2,
+       "y": 64.2,
+       "w": 49.6,
+       "tip": {
+        "x": 63.9,
+        "y": 42.9
+       },
+       "style": {
+        "kind": "voice",
+        "color": "white",
+        "rad": 25,
+        "tbase": 3,
+        "tcurve": -60
+       }
+      },
+      "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave??": {
+       "img": 1,
+       "x": 46.4,
+       "y": 71.9,
+       "w": 45.5,
+       "tip": {
+        "x": 73.6,
+        "y": 76.4
+       },
+       "style": {
+        "color": "yellow",
+        "bamt": 7,
+        "bstyle": "pointy"
+       }
+      },
+      "I'll pay for it.": {
+       "img": 2,
+       "x": 71.6,
+       "y": 7.7,
+       "w": 22.8,
+       "tip": {
+        "x": 66.1,
+        "y": 113.3
+       },
+       "style": {
+        "color": "cream",
+        "tbase": 7,
+        "tshape": "straight",
+        "tcurve": -50,
+        "twidth": 15
        }
       }
      }
@@ -889,18 +1174,26 @@
  "speakerStyles": {
   "Yusen": {
    "kind": "text",
-   "color": "blue",
+   "color": "white",
    "size": "s"
   },
   "Brendan": {
    "kind": "text",
-   "color": "white",
+   "color": "green",
    "size": "s"
   },
   "Mom": {
    "kind": "voice",
    "color": "cream",
    "border": "radio"
+  },
+  "Andrew (3BC)": {
+   "kind": "voice",
+   "color": "white",
+   "bw": 2,
+   "bamt": 40,
+   "rad": 50,
+   "bstyle": "solid"
   }
  }
 }

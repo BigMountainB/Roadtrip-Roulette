@@ -1,0 +1,40 @@
+{
+ "version": "2026-11-24-published-mwu80ryk",
+ "applied": [
+  {
+   "speakerDefault": "Andrew (3BC)",
+   "style": {
+    "kind": "voice",
+    "color": "white",
+    "bw": 2,
+    "bamt": 40,
+    "rad": 50,
+    "bstyle": "solid"
+   }
+  },
+  {
+   "chapter": "opening",
+   "changed": "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket...",
+   "now": "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food when his phone perks up."
+  },
+  {
+   "chapter": "opening",
+   "layout": "Leave at door",
+   "bubbles": 3
+  },
+  {
+   "chapter": "opening",
+   "layout": "Spud on Alki",
+   "bubbles": 3
+  }
+ ],
+ "skipped": [
+  {
+   "chapter": "opening",
+   "why": "bubble for a line no longer in that panel",
+   "panel": "Leave at door",
+   "line": "Just finishing up here at the office, Spud on Alki? I could do a basket."
+  }
+ ],
+ "notes": []
+}
