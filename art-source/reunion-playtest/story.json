@@ -1,6 +1,6 @@
 {
  "_about": "Reunion branch (/dialogue2) script. Edited by Claude and by the page's Publish my edits button (apply-edits.mjs). Fictional draft for owner review.",
- "version": "2026-11-24-published-mwua2ttx",
+ "version": "2026-11-24-published-mwva1xvq",
  "cast": [
   {
    "id": "brendan",
@@ -149,6 +149,7 @@
         "y": 19.5
        },
        "style": {
+        "rad": 34,
         "tbase": 3.5,
         "tcurve": -90,
         "twidth": 18
@@ -210,8 +211,8 @@
      "bubbles": {
       "choice:spud:blunder": {
        "img": 0,
-       "x": 33.7,
-       "y": -1.9,
+       "x": 32.7,
+       "y": 2.5,
        "w": 38.7,
        "tip": {
         "x": 64.1,
@@ -231,15 +232,16 @@
       },
       "Ha. No one wants to be ASB President after high school.": {
        "img": 0,
-       "x": 29.5,
-       "y": 72.1,
-       "w": 29.8,
+       "x": 22.1,
+       "y": 60.4,
+       "w": 24,
        "tip": {
         "x": 30.2,
         "y": 22
        },
        "style": {
         "size": "s",
+        "rad": 44,
         "tcurve": 25,
         "twidth": 17
        }
@@ -781,9 +783,9 @@
       },
       "A few things in mind, but I'll also go with the flow.": {
        "img": 0,
-       "x": 56.6,
-       "y": 44.5,
-       "w": 25.3
+       "x": 72.7,
+       "y": 52.7,
+       "w": 23.5
       },
       "Sweet. Let's talk about it more when you get here.": {
        "img": 0,
@@ -799,9 +801,9 @@
       },
       "Hey! I'm driving through Bellevue on my way to Pullman if you wanna meet up.": {
        "img": 0,
-       "x": 56,
-       "y": 10.4,
-       "w": 30.2
+       "x": 49.2,
+       "y": 16.7,
+       "w": 44
       }
      }
     }
@@ -826,7 +828,7 @@
       },
       {
        "speaker": "Brendan",
-       "text": "I'm going to roadtrip it out there and maybe pick up some gigs along the way."
+       "text": "I'm going to roadtrip it out there and *maybe* pick up some gigs along the way."
       },
       {
        "speaker": "Mom",
@@ -869,25 +871,6 @@
         "twidth": 23
        }
       },
-      "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
-       "img": 1,
-       "x": 6,
-       "y": 61.7,
-       "w": 31.6,
-       "tip": {
-        "x": 34.1,
-        "y": 68.7
-       },
-       "style": {
-        "kind": "voice",
-        "color": "white",
-        "border": "shout",
-        "rad": 30,
-        "bstyle": "solid",
-        "tbase": 2,
-        "tcurve": 70
-       }
-      },
       "How did you…? No. For future potential contract obligations I can't get into details, but it’s in Spokane.": {
        "img": 0,
        "x": 8.2,
@@ -907,36 +890,66 @@
       },
       "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave??": {
        "img": 1,
-       "x": 51.4,
-       "y": 75.4,
-       "w": 45.5,
+       "x": 56.5,
+       "y": 74.3,
+       "w": 38.5,
        "tip": {
-        "x": 72.7,
-        "y": 76.8
+        "x": 76.1,
+        "y": 78.4
        },
        "style": {
-        "bamt": 15,
-        "bstyle": "pointy"
+        "bw": 2,
+        "bamt": 10,
+        "rad": 26,
+        "bstyle": "pointy",
+        "tshape": "bolt",
+        "twidth": 24
        }
       },
       "I'll pay for it.": {
        "img": 2,
-       "x": 71.6,
-       "y": 7.7,
+       "x": 22.1,
+       "y": 14.8,
        "w": 22.8,
        "tip": {
-        "x": 66.1,
-        "y": 113.3
+        "x": 54.7,
+        "y": 115
        },
        "style": {
         "color": "cream",
-        "tbase": 7,
+        "tbase": 4.5,
         "tshape": "straight",
-        "tcurve": -50,
+        "tcurve": 45,
         "twidth": 15
        }
+      },
+      "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
+       "img": 1,
+       "x": 11.7,
+       "y": 61.5,
+       "w": 24.5,
+       "tip": {
+        "x": 33.9,
+        "y": 68.5
+       },
+       "style": {
+        "kind": "voice",
+        "color": "white",
+        "border": "shout",
+        "bw": 2,
+        "rad": 32,
+        "bstyle": "solid",
+        "tbase": 2,
+        "tcurve": 100,
+        "twidth": 19
+       }
       }
-     }
+     },
+     "images": [
+      "mom-call-1",
+      "mom-call-2",
+      "mom-call-4"
+     ]
     },
     "driveSafe": {
      "title": "Drive safe",
@@ -951,35 +964,47 @@
      "nextChapter": "detour",
      "bubbles": {
       "And drive safe!": {
-       "img": 0,
+       "img": 1,
        "x": 31.3,
-       "y": 7.9,
-       "w": 19,
+       "y": 13.9,
+       "w": 16.9,
        "tip": {
-        "x": 55.6,
-        "y": 11.1
+        "x": 51.9,
+        "y": 64
        },
        "style": {
-        "tbase": 4
+        "kind": "voice",
+        "color": "white",
+        "rad": 22,
+        "tbase": 4,
+        "tshape": "straight",
+        "tcurve": 25
        }
       },
       "choice:call:worry": {
-       "img": 0,
-       "x": 33.5,
-       "y": 38.8,
-       "w": 15.1,
+       "img": 1,
+       "x": 27.2,
+       "y": 45.4,
+       "w": 17.3,
        "tip": {
-        "x": 54.4,
-        "y": 19.4
+        "x": 55.6,
+        "y": 67.4
        },
        "style": {
         "kind": "voice",
         "color": "cream",
         "border": "radio",
+        "bamt": 9,
+        "rad": 30,
+        "bstyle": "pointy",
         "tbase": 3
        }
       }
-     }
+     },
+     "images": [
+      "opening-honest",
+      "mom-drivesafe-1"
+     ]
     },
     "offered": {
      "title": "Just thought I’d offer",

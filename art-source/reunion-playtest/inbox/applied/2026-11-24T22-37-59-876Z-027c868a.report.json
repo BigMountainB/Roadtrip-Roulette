@@ -1,0 +1,46 @@
+{
+ "version": "2026-11-24-published-mwva1xvq",
+ "applied": [
+  {
+   "chapter": "mom",
+   "changed": "I'm going to roadtrip it out there and maybe pick up some gigs along the way.",
+   "now": "I'm going to roadtrip it out there and *maybe* pick up some gigs along the way."
+  },
+  {
+   "chapter": "mom",
+   "layout": "Incoming: Mom",
+   "images": [
+    "mom-call-1",
+    "mom-call-2",
+    "mom-call-4"
+   ],
+   "bubbles": 3
+  },
+  {
+   "chapter": "mom",
+   "layout": "Drive safe",
+   "images": [
+    "opening-honest",
+    "mom-drivesafe-1"
+   ],
+   "bubbles": 2
+  },
+  {
+   "chapter": "opening",
+   "layout": "Spud on Alki",
+   "bubbles": 1
+  },
+  {
+   "chapter": "opening",
+   "layout": "Still president",
+   "bubbles": 2
+  },
+  {
+   "chapter": "crew",
+   "layout": "A separate message",
+   "bubbles": 2
+  }
+ ],
+ "skipped": [],
+ "notes": []
+}
