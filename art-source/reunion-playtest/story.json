@@ -1,6 +1,6 @@
 {
  "_about": "Reunion branch (/dialogue2) script. Edited by Claude and by the page's Publish my edits button (apply-edits.mjs). Fictional draft for owner review.",
- "version": "2026-11-24-published-mwu8i25s",
+ "version": "2026-11-24-published-mwua2ttx",
  "cast": [
   {
    "id": "brendan",
@@ -511,7 +511,7 @@
      "beats": [
       {
        "speaker": "Scene",
-       "text": "Brendan shares the reunion poster with his friends."
+       "text": "Time for the boys to weigh in…"
       },
       {
        "speaker": "Andrew",
@@ -549,7 +549,7 @@
       },
       {
        "id": "panic",
-       "label": "I never agreed, but this thread's got me leaning towards: No",
+       "label": "Y'all are hilarious. Here's what Andrew said… (snitch)",
        "to": "panic"
       }
      ],
@@ -560,9 +560,9 @@
      "bubbles": {
       "Brendan said he was going to strum up some memories as the reunion entertainer.": {
        "img": 0,
-       "x": 8.4,
-       "y": 18.6,
-       "w": 42,
+       "x": 8.9,
+       "y": 18.3,
+       "w": 41.3,
        "style": {
         "kind": "text",
         "size": "s"
@@ -594,18 +594,7 @@
        "img": 0,
        "x": 51.6,
        "y": 30.6,
-       "w": 32.3,
-       "tip": {
-        "x": 0,
-        "y": 3400
-       },
-       "style": {
-        "kind": "voice",
-        "color": "cream",
-        "bw": 3,
-        "rad": 29,
-        "bstyle": "dashed"
-       }
+       "w": 32.3
       },
       "Does this mean you’ll finally pay someone for a haircut?": {
        "img": 0,
@@ -616,6 +605,12 @@
         "kind": "text",
         "size": "s"
        }
+      },
+      "Time for the boys to weigh in…": {
+       "img": 0,
+       "x": 3,
+       "y": 4.1,
+       "w": 34.2
       }
      }
     },
@@ -692,22 +687,62 @@
      "beats": [
       {
        "speaker": "Dan",
-       "text": "Good. We were worried you’d actually have to rehearse."
+       "text": "Ouch. Someone caught slackin."
       },
       {
        "speaker": "Andrew",
-       "text": "Say yes if you want to play. We’ll figure out the rest."
+       "text": "Not cool, Brendan. You're definitely not headlining."
       },
       {
        "speaker": "Jay",
-       "text": "There. Emotional support. Screenshot it."
+       "text": "I'm here for this!"
+      },
+      {
+       "speaker": "Aaron",
+       "text": "Maybe this *isn't* worth the trip..."
       }
      ],
      "art": "andrew",
      "next": "help",
      "style": {
       "kind": "text",
-      "color": "white"
+      "color": "white",
+      "size": "s"
+     },
+     "bubbles": {
+      "choice:chat:panic": {
+       "img": 0,
+       "x": 13.5,
+       "y": 7.4,
+       "w": 36.4,
+       "style": {
+        "color": "blue"
+       }
+      },
+      "Ouch. Someone caught slackin.": {
+       "img": 0,
+       "x": 31.9,
+       "y": 29,
+       "w": 31.9
+      },
+      "Not cool, Brendan. You're definitely not headlining.": {
+       "img": 0,
+       "x": 31.7,
+       "y": 43.7,
+       "w": 32.3
+      },
+      "I'm here for this!": {
+       "img": 0,
+       "x": 31.7,
+       "y": 63.4,
+       "w": 20.9
+      },
+      "Maybe this isn't worth the trip...": {
+       "img": 0,
+       "x": 31.6,
+       "y": 79.8,
+       "w": 32.6
+      }
      }
     },
     "help": {
@@ -740,27 +775,33 @@
      "bubbles": {
       "That's a long drive! Do you have planned stops along the way?": {
        "img": 0,
-       "x": 7.1,
-       "y": 16.1,
-       "w": 29.9
+       "x": 27.6,
+       "y": 29.5,
+       "w": 28.7
       },
       "A few things in mind, but I'll also go with the flow.": {
        "img": 0,
-       "x": 40.7,
-       "y": 30.1,
-       "w": 23.5
+       "x": 56.6,
+       "y": 44.5,
+       "w": 25.3
       },
       "Sweet. Let's talk about it more when you get here.": {
        "img": 0,
-       "x": 7.1,
-       "y": 48.9,
-       "w": 30.1
+       "x": 30.8,
+       "y": 57.4,
+       "w": 25.5
       },
       "Bring shoes you can walk in.": {
        "img": 0,
-       "x": 6.7,
-       "y": 66.4,
-       "w": 30.4
+       "x": 30.2,
+       "y": 77.3,
+       "w": 25.7
+      },
+      "Hey! I'm driving through Bellevue on my way to Pullman if you wanna meet up.": {
+       "img": 0,
+       "x": 56,
+       "y": 10.4,
+       "w": 30.2
       }
      }
     }
@@ -1133,12 +1174,12 @@
  "speakerStyles": {
   "Yusen": {
    "kind": "text",
-   "color": "blue",
+   "color": "white",
    "size": "s"
   },
   "Brendan": {
    "kind": "text",
-   "color": "white",
+   "color": "green",
    "size": "s"
   },
   "Mom": {
