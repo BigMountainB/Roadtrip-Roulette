@@ -1,0 +1,24 @@
+{
+ "version": "2026-11-24-published-mwu8ck7c",
+ "applied": [
+  {
+   "chapter": "mom",
+   "added": "line",
+   "speaker": "Mom",
+   "text": "I'll pay for it.",
+   "panel": "Incoming: Mom"
+  },
+  {
+   "chapter": "mom",
+   "changed": "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave?? I’ll pay for it.",
+   "now": "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave??"
+  },
+  {
+   "chapter": "mom",
+   "layout": "Incoming: Mom",
+   "bubbles": 5
+  }
+ ],
+ "skipped": [],
+ "notes": []
+}
