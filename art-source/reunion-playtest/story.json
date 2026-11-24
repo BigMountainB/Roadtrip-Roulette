@@ -1,6 +1,6 @@
 {
  "_about": "Reunion branch (/dialogue2) script. Edited by Claude and by the page's Publish my edits button (apply-edits.mjs). Fictional draft for owner review.",
- "version": "2026-11-24-published-mwu8ck7c",
+ "version": "2026-11-24-published-mwu8i25s",
  "cast": [
   {
    "id": "brendan",
@@ -86,7 +86,10 @@
        "img": 0,
        "x": 14.6,
        "y": 54.4,
-       "w": 36.1
+       "w": 36.1,
+       "style": {
+        "color": "white"
+       }
       },
       "Just finishing up here at the office, Spud on Alki? I could demo a basket.": {
        "img": 1,
@@ -99,8 +102,8 @@
       },
       "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food when his phone perks up.": {
        "img": 0,
-       "x": 7.7,
-       "y": 6,
+       "x": 8.4,
+       "y": 5.2,
        "w": 37
       }
      }
@@ -218,6 +221,10 @@
         "kind": "voice",
         "color": "yellow",
         "border": "whisper",
+        "bw": 3,
+        "bamt": 25,
+        "rad": 40,
+        "bstyle": "solid",
         "tcurve": 45,
         "twidth": 19
        }
@@ -588,10 +595,16 @@
        "x": 51.6,
        "y": 30.6,
        "w": 32.3,
+       "tip": {
+        "x": 0,
+        "y": 3400
+       },
        "style": {
         "kind": "voice",
-        "color": "white",
-        "bw": 1
+        "color": "cream",
+        "bw": 3,
+        "rad": 29,
+        "bstyle": "dashed"
        }
       },
       "Does this mean you’ll finally pay someone for a haircut?": {
@@ -817,21 +830,21 @@
       },
       "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
        "img": 1,
-       "x": 9.9,
-       "y": 52.7,
-       "w": 33,
+       "x": 6,
+       "y": 61.7,
+       "w": 31.6,
        "tip": {
-        "x": 34.8,
-        "y": 67.3
+        "x": 34.1,
+        "y": 68.7
        },
        "style": {
         "kind": "voice",
         "color": "white",
         "border": "shout",
-        "rad": 32,
+        "rad": 30,
         "bstyle": "solid",
         "tbase": 2,
-        "tcurve": 75
+        "tcurve": 70
        }
       },
       "How did you…? No. For future potential contract obligations I can't get into details, but it’s in Spokane.": {
