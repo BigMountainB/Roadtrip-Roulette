@@ -1,0 +1,213 @@
+{
+ "version": "2026-11-24-published-mwua2ttx",
+ "sentAt": "2026-11-24T22:37:59.876Z",
+ "edits": {
+  "mom": {
+   "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
+    "text": "I'm going to roadtrip it out there and *maybe* pick up some gigs along the way.",
+    "note": "",
+    "speaker": "Brendan",
+    "title": "Mom calls",
+    "at": "2026-11-24T22:35:22.448Z"
+   }
+  }
+ },
+ "adds": {},
+ "layout": {
+  "opening": {
+   "spud": {
+    "bubbles": {
+     "Not sure if you saw yet, but I just posted the High School Reunion info.": {
+      "img": 0,
+      "x": 3,
+      "y": 4.1,
+      "w": 44,
+      "tip": {
+       "x": 34.2,
+       "y": 19.5
+      },
+      "style": {
+       "tbase": 3.5,
+       "tcurve": -90,
+       "twidth": 18,
+       "rad": 34
+      }
+     }
+    }
+   },
+   "notRemoved": {
+    "bubbles": {
+     "choice:spud:blunder": {
+      "img": 0,
+      "x": 32.7,
+      "y": 2.5,
+      "w": 38.7,
+      "tip": {
+       "x": 64.1,
+       "y": 14.8
+      },
+      "style": {
+       "kind": "voice",
+       "color": "yellow",
+       "border": "whisper",
+       "bw": 3,
+       "bamt": 25,
+       "rad": 40,
+       "bstyle": "solid",
+       "tcurve": 45,
+       "twidth": 19
+      }
+     },
+     "Ha. No one wants to be ASB President after high school.": {
+      "img": 0,
+      "x": 22.1,
+      "y": 60.4,
+      "w": 24,
+      "tip": {
+       "x": 30.2,
+       "y": 22
+      },
+      "style": {
+       "size": "s",
+       "tcurve": 25,
+       "twidth": 17,
+       "rad": 44
+      }
+     }
+    }
+   }
+  },
+  "crew": {
+   "help": {
+    "bubbles": {
+     "Hey! I'm driving through Bellevue on my way to Pullman if you wanna meet up.": {
+      "img": 0,
+      "x": 49.2,
+      "y": 16.7,
+      "w": 44
+     },
+     "A few things in mind, but I'll also go with the flow.": {
+      "img": 0,
+      "x": 72.7,
+      "y": 52.7,
+      "w": 23.5
+     }
+    }
+   }
+  },
+  "mom": {
+   "call": {
+    "bubbles": {
+     "I'm going to roadtrip it out there and maybe pick up some gigs along the way.": {
+      "img": 1,
+      "x": 11.7,
+      "y": 61.5,
+      "w": 24.5,
+      "style": {
+       "kind": "voice",
+       "color": "white",
+       "border": "shout",
+       "bw": 2,
+       "bstyle": "solid",
+       "rad": 32,
+       "twidth": 19,
+       "tcurve": 100,
+       "tbase": 2,
+       "size": "m"
+      },
+      "tip": {
+       "x": 33.9,
+       "y": 68.5
+      }
+     },
+     "I'll pay for it.": {
+      "img": 2,
+      "x": 22.1,
+      "y": 14.8,
+      "w": 22.8,
+      "tip": {
+       "x": 54.7,
+       "y": 115
+      },
+      "style": {
+       "color": "cream",
+       "tbase": 4.5,
+       "tshape": "straight",
+       "tcurve": 45,
+       "twidth": 15
+      }
+     },
+     "Oh gosh! That’s a drive. Will you please get your windshield fixed before you leave??": {
+      "img": 1,
+      "x": 56.5,
+      "y": 74.3,
+      "w": 38.5,
+      "tip": {
+       "x": 76.1,
+       "y": 78.4
+      },
+      "style": {
+       "bamt": 10,
+       "bstyle": "pointy",
+       "rad": 26,
+       "tshape": "bolt",
+       "bw": 2,
+       "twidth": 24
+      }
+     }
+    },
+    "images": [
+     "mom-call-1",
+     "mom-call-2",
+     "mom-call-4"
+    ]
+   },
+   "driveSafe": {
+    "images": [
+     "opening-honest",
+     "mom-drivesafe-1"
+    ],
+    "bubbles": {
+     "And drive safe!": {
+      "img": 1,
+      "x": 31.3,
+      "y": 13.9,
+      "w": 16.9,
+      "tip": {
+       "x": 51.9,
+       "y": 64
+      },
+      "style": {
+       "tbase": 4,
+       "kind": "voice",
+       "color": "white",
+       "rad": 22,
+       "tshape": "straight",
+       "tcurve": 25
+      }
+     },
+     "choice:call:worry": {
+      "img": 1,
+      "x": 27.2,
+      "y": 45.4,
+      "w": 17.3,
+      "tip": {
+       "x": 55.6,
+       "y": 67.4
+      },
+      "style": {
+       "kind": "voice",
+       "color": "cream",
+       "border": "radio",
+       "tbase": 3,
+       "size": "m",
+       "bstyle": "pointy",
+       "bamt": 9,
+       "rad": 30
+      }
+     }
+    }
+   }
+  }
+ }
+}
