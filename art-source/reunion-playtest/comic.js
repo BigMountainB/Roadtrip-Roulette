@@ -26,6 +26,16 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = t => esc(t).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/\*([^*\n]+)\*/g, '<em>$1</em>').replace(/\[\+([^\]\n]+?)\+\]/g, '<span class="fx-big">$1</span>').replace(/\[-([^\]\n]+?)-\]/g, '<span class="fx-sm">$1</span>');
   const read = k => { try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch { return {}; } };
+  // Fresh uploads (owner 2026-11-24): until the site rebuilds with them (~5 min), show them straight
+  // from the repository so the panel and the image list have them at once. Dropped once built in.
+  const UKEY = 'rtr.dialogue2.uploads.v1';
+  const rawUrl = name => 'https://raw.githubusercontent.com/BigMountainB/Roadtrip-Roulette/refs/heads/claude/lucid-fermi-21ue13/Story%20Playtest%202/images/' + encodeURIComponent(name) + '.jpg';
+  const readUploads = () => read(UKEY);
+  {
+    const ups = readUploads(), keep = {};
+    for (const [name, url] of Object.entries(ups)) if (!D.allImages[name]) { D.allImages[name] = url; keep[name] = url; }
+    if (Object.keys(keep).length !== Object.keys(ups).length) try { localStorage.setItem(UKEY, JSON.stringify(keep)); } catch {}
+  }
   const ch = D.chapter.id;
   const TEXT_COLORS = { blue: 'Blue', green: 'Green', white: 'White' };
   const VOICE_COLORS = { white: 'White', cream: 'Cream', yellow: 'Yellow' };
@@ -514,8 +524,14 @@
     try { localStorage.setItem(PASS_KEY, pass); } catch {}
     return out.name;
   }
-  const nextName = () => { let i = 1; while (D.allImages[ch + '-' + nodeId + '-' + i] || (pending.includes(ch + '-' + nodeId + '-' + i))) i++; return ch + '-' + nodeId + '-' + i; };
-  const pending = [];
+  // Uploads are named "<chapter>-<panel>-upload-<n>" so they never attach to a panel by themselves
+  // (only "<chapter>-<panel>-<n>" art does); the picker puts them where they're wanted.
+  const nextName = () => { const base = (ch + '-' + nodeId + '-upload-').toLowerCase(); let i = 1; while (D.allImages[base + i]) i++; return base + i; };
+  function remember(name) {
+    const all = readUploads(); all[name] = rawUrl(name);
+    try { localStorage.setItem(UKEY, JSON.stringify(all)); } catch {}
+    D.allImages[name] = all[name];
+  }
   function picker(onPick) {
     const back = document.createElement('div'); back.className = 'cpick';
     back.innerHTML = '<div><p><b>Pick an image</b> <button data-cclose="1">Cancel</button> <label class="cup">⬆ Upload new image<input type="file" accept="image/*" hidden></label> <span class="muted cupmsg"></span></p><div class="cgrid">'
@@ -528,9 +544,9 @@
       const f = ev.target.files[0]; if (!f) return;
       const msg = back.querySelector('.cupmsg'); msg.textContent = 'Uploading…';
       try {
-        const name = await upload(f, nextName()); pending.push(name);
+        const name = await upload(f, nextName()); remember(name);
         back.remove(); onPick(name);
-        alert('Uploaded as ' + name + '. It’s on this panel and goes live in about 4 minutes — reload then to see it.');
+        alert('Uploaded as ' + name + '. It’s on this panel now and in the image list. Publish my edits to keep it on this panel for everyone.');
       } catch (err) { msg.textContent = err.message; }
     });
     document.body.append(back); parent.postMessage({ fit: 1 }, '*'); back.scrollIntoView({ block: 'start' });
