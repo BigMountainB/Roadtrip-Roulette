@@ -1,6 +1,6 @@
 {
  "_about": "Reunion branch (/dialogue2) script. Edited by Claude and by the page's Publish my edits button (apply-edits.mjs). Fictional draft for owner review.",
- "version": "2026-11-24-published-mwu7u9o7",
+ "version": "2026-11-24-published-mwu80ryk",
  "cast": [
   {
    "id": "brendan",
@@ -63,7 +63,7 @@
      "beats": [
       {
        "speaker": "Scene",
-       "text": "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket..."
+       "text": "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food when his phone perks up."
       },
       {
        "speaker": "Andrew (3BC)",
@@ -84,15 +84,9 @@
      "bubbles": {
       "Yo! I'm swinging through Seattle. Let's meet for lunch so I can get you your wallet back.": {
        "img": 0,
-       "x": 8.7,
-       "y": 43.4,
-       "w": 29
-      },
-      "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food, in exchanged for tokens of survival. He feels a buzz coming from his pocket...": {
-       "img": 0,
-       "x": 1.2,
-       "y": 2.7,
-       "w": 30.2
+       "x": 14.6,
+       "y": 54.4,
+       "w": 36.1
       },
       "Just finishing up here at the office, Spud on Alki? I could demo a basket.": {
        "img": 1,
@@ -102,6 +96,12 @@
        "style": {
         "color": "blue"
        }
+      },
+      "On an unseasonably warm winter day near Alki Beach, Brendan is delivering joy in the form of food when his phone perks up.": {
+       "img": 0,
+       "x": 7.7,
+       "y": 6,
+       "w": 37
       }
      }
     },
@@ -138,49 +138,59 @@
      "bubbles": {
       "Not sure if you saw yet, but I just posted the High School Reunion info.": {
        "img": 0,
-       "x": 15.5,
-       "y": -3,
-       "w": 32.7,
+       "x": 3,
+       "y": 4.1,
+       "w": 44,
        "tip": {
-        "x": 33.8,
-        "y": 17.2
+        "x": 34.2,
+        "y": 19.5
        },
        "style": {
-        "tbase": 4,
+        "tbase": 3.5,
         "tcurve": -90,
-        "twidth": 23
+        "twidth": 18
        }
       },
       "No, not online too much. I know it's next weekend, but anything noteworthy?": {
        "img": 0,
-       "x": 39.6,
-       "y": 23.8,
-       "w": 26,
+       "x": 41.2,
+       "y": 27.6,
+       "w": 24.6,
        "tip": {
-        "x": 68,
-        "y": 17.7
+        "x": 67.2,
+        "y": 17.2
        },
        "style": {
-        "kind": "voice",
         "color": "yellow",
-        "tbase": 3
+        "tbase": 2,
+        "tcurve": -80,
+        "twidth": 15
        }
       },
       "Yeah, don’t spread this, but I had AI book the venue, and after mentioning our Cougar mascot, it assumed we're WSU alumni and... well, we'll all be meeting up in Pullman.": {
        "img": 0,
-       "x": 8.1,
-       "y": 62.8,
-       "w": 46.8,
+       "x": 6.9,
+       "y": 68.3,
+       "w": 51.4,
        "tip": {
-        "x": 33.8,
-        "y": 20.9
+        "x": 33.7,
+        "y": 19.2
        },
        "style": {
-        "tbase": 2,
-        "tcurve": 85,
-        "twidth": 22
+        "rad": 31,
+        "tbase": 1,
+        "tcurve": 65,
+        "twidth": 18
        }
       }
+     },
+     "style": {
+      "kind": "voice",
+      "color": "white",
+      "bw": 2,
+      "bamt": 40,
+      "rad": 50,
+      "bstyle": "solid"
      }
     },
     "notRemoved": {
@@ -1065,8 +1075,10 @@
   "Andrew (3BC)": {
    "kind": "voice",
    "color": "white",
-   "border": "normal",
-   "size": "s"
+   "bw": 2,
+   "bamt": 40,
+   "rad": 50,
+   "bstyle": "solid"
   }
  }
 }
