@@ -1,0 +1,68 @@
+{
+ "version": "2026-11-24-published-mwu7u9o7",
+ "applied": [
+  {
+   "speakerDefault": "Andrew (3BC)",
+   "style": {
+    "kind": "voice",
+    "color": "white",
+    "border": "normal",
+    "size": "s"
+   }
+  },
+  {
+   "chapter": "opening",
+   "added": "line",
+   "speaker": "Andrew",
+   "text": "Here's your wallet. I checked and you got enough to cover us both. Thanks for that! That's not your ex is it? I'm out of here.",
+   "panel": "No band yet"
+  },
+  {
+   "chapter": "opening",
+   "changed": "Just finishing up here at the office, Spud on Alki? I could do a basket.",
+   "now": "Just finishing up here at the office, Spud on Alki? I could demo a basket."
+  },
+  {
+   "chapter": "opening",
+   "changed": "Perfect! You should bring your guitar. Also don’t mention: I haven't locked down a band yet...",
+   "now": "Perfect! Maybe bring your guitar. And don’t mention I haven't locked down a band yet..."
+  },
+  {
+   "chapter": "opening",
+   "changed": "He looks at the food bag. Then back at her name.",
+   "now": "Brendan focuses on his phone in attempts to avoid the awkward."
+  },
+  {
+   "chapter": "opening",
+   "changed": "Brendan! Are you still doing music?",
+   "now": "Brendan?! Oh. My. Lord. I thought that was you."
+  },
+  {
+   "chapter": "opening",
+   "layout": "Leave at door",
+   "bubbles": 3
+  },
+  {
+   "chapter": "opening",
+   "layout": "Spud on Alki",
+   "bubbles": 3
+  },
+  {
+   "chapter": "opening",
+   "layout": "Still president",
+   "bubbles": 2
+  },
+  {
+   "chapter": "opening",
+   "layout": "No band yet",
+   "bubbles": 3
+  },
+  {
+   "chapter": "opening",
+   "layout": "A familiar name",
+   "bubbles": 2
+  }
+ ],
+ "skipped": [],
+ "notes": []
+}
