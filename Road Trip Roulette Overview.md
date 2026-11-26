@@ -13383,6 +13383,16 @@ prioritizes a compelling, funny, addictive and relatable story over preserving p
   ending remain open. Prior Rain Check signatures, rewards and ending dialogue do not carry
   into this branch by default.
 
+**Draft chapters 5–8 (2026-11-26, Claude draft for owner revision)** — continue east on I-90 from the
+Bellevue detour, using the owner's candidate stops: 5 *Open mic* (Issaquah: stage name, set choice,
+offer to open in Ellensburg) → 6 *Trolls or the Point* (Issaquah morning: Mom's windshield offer
+paid/self-paid/skipped; troll sculpture vs Poo Poo Point; the post) → 7 *Pie or the ledge* (North Bend:
+Dad texts; Twin Peaks diner vs Rattlesnake Ledge, each ending in a possible wedding gig) → 8 *The opener*
+(Snoqualmie Pass → Ellensburg brewery set; a video goes around; Andrew fears the Pullman secret
+leaking). Ends point to Vantage next. Old crushes appear only as "liked your photo" notifications —
+nothing invented about the real people. Chapters don't share state yet (e.g. ch. 5's booking choice
+isn't remembered in ch. 8). Art names follow `<chapter>-<panel>` (e.g. `openmic-signup.png`).
+
 **Saved character assets — first-pass designs**
 
 | Character | Full-resolution master | Lightweight reference export |

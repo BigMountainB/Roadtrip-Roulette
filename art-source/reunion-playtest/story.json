@@ -1152,7 +1152,8 @@
       }
      ],
      "art": "brendan",
-     "end": "Next draft: the open mic. A small set can become a collaborator, a better booking, or a spectacular misunderstanding."
+     "end": "Tonight: one song in Issaquah.",
+     "nextChapter": "openmic"
     },
     "listen": {
      "title": "An open door",
@@ -1171,7 +1172,8 @@
       }
      ],
      "art": "yusen",
-     "end": "Next draft: watching the open mic, with an opportunity to change his mind."
+     "end": "Tonight: the open mic in Issaquah. The guitar is coming either way.",
+     "nextChapter": "openmic"
     },
     "photo": {
      "title": "Proof of attendance",
@@ -1190,7 +1192,1224 @@
       }
      ],
      "art": "brendan",
-     "end": "Next draft: back on the road. Another opportunity can arrive through a different stop."
+     "end": "He has his picture. The open mic is still tonight, in Issaquah.",
+     "nextChapter": "openmic"
+    }
+   }
+  },
+  {
+   "id": "openmic",
+   "title": "Open mic",
+   "sub": "One song. Nothing fancy.",
+   "start": "signup",
+   "nodes": {
+    "signup": {
+     "title": "The sign-up sheet",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Evening in a small Issaquah coffeehouse: string lights, mismatched chairs, a tiny corner stage. Brendan, guitar case in hand, leans over a chalkboard sign-up sheet where someone has already written “Guy from the trail.” The host (the stranger from the trailhead) grins beside him. Yusen hovers behind with a keyboard case.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Issaquah. The open mic is in a coffeehouse that smells like burnt sugar and ambition."
+      },
+      {
+       "speaker": "Host",
+       "text": "You came! I put you down as “Guy from the trail.” You can fix it."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "I brought the keyboard. It was already in the car. It’s always in the car."
+      }
+     ],
+     "choices": [
+      {
+       "id": "name",
+       "label": "Write “Brendan.” Just Brendan.",
+       "to": "realname"
+      },
+      {
+       "id": "jingle",
+       "label": "Write “The Jingle Guy.”",
+       "to": "jingle"
+      },
+      {
+       "id": "mystery",
+       "label": "Leave it. Mystery is a brand.",
+       "to": "mystery"
+      }
+     ]
+    },
+    "realname": {
+     "title": "No stage name",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Host",
+       "text": "Bold. No stage name."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "My stage name is also my legal name. It saves on paperwork."
+      }
+     ],
+     "next": "nerves"
+    },
+    "jingle": {
+     "title": "That jingle",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Host",
+       "text": "Which jingle?"
+      },
+      {
+       "speaker": "Scene",
+       "text": "Brendan hums four notes."
+      },
+      {
+       "speaker": "Host",
+       "text": "Oh no. That’s been in my head for five years."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "You’re welcome. And I’m sorry."
+      }
+     ],
+     "next": "nerves"
+    },
+    "mystery": {
+     "title": "Guy from the trail",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Host",
+       "text": "Guy from the trail, you’re up third."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "I’ve heard good things about him."
+      }
+     ],
+     "next": "nerves"
+    },
+    "nerves": {
+     "title": "Up third",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan waits in the narrow hallway by the restrooms, guitar strapped on, watching a twelve-year-old girl on the tiny stage perform slam poetry with total conviction. The crowd is rapt. His phone glows in his hand.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "The act before him is a twelve-year-old doing slam poetry about her stepdad’s electric car. She is devastating."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "You look like you’re about to give a eulogy."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "For my confidence. It was very young."
+      }
+     ],
+     "next": "livestream"
+    },
+    "livestream": {
+     "title": "The group chat weighs in",
+     "art": "dan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "artDesc": "Close-up of Brendan’s phone in the hallway light: the crew’s group chat with new messages popping up.",
+     "beats": [
+      {
+       "speaker": "Dan",
+       "text": "Heard you’re “touring.” Livestream or it didn’t happen."
+      },
+      {
+       "speaker": "Jay",
+       "text": "If you’re on camera, no hat. You have a hat face, but not a good one."
+      },
+      {
+       "speaker": "Host",
+       "text": "Guy from the trail! You’re up."
+      }
+     ],
+     "choices": [
+      {
+       "id": "jingle",
+       "label": "Play the jingle. Give them what they know.",
+       "to": "setJingle"
+      },
+      {
+       "id": "new",
+       "label": "Play the new song. The one nobody’s heard.",
+       "to": "setNew"
+      },
+      {
+       "id": "duo",
+       "label": "Wave Yusen up. Keys and guitar.",
+       "to": "setDuo"
+      }
+     ]
+    },
+    "setJingle": {
+     "title": "The singalong",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan on the tiny stage mid-strum. In the crowd, a man by the espresso machine sings along, eyes closed. The barista sings into a milk pitcher. Phones are up.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Four bars in, a man by the espresso machine starts singing along. By the chorus, so is the barista."
+      },
+      {
+       "speaker": "Host",
+       "text": "That was the most united this room has ever been."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Someone once called it a hate-singalong. I’ll take it."
+      }
+     ],
+     "next": "after"
+    },
+    "setNew": {
+     "title": "The one with no name",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan alone in a pool of light, playing quietly. Most of the room is half-listening, but a woman by the window has put her phone face-down and is watching him.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Nobody sings along, because nobody knows it. A woman by the window puts her phone down."
+      },
+      {
+       "speaker": "Woman",
+       "text": "What’s that song called?"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "It doesn’t have a name yet."
+      },
+      {
+       "speaker": "Woman",
+       "text": "Name it before someone else does."
+      }
+     ],
+     "next": "after"
+    },
+    "setDuo": {
+     "title": "An unplanned duo",
+     "art": "yusen",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan and Yusen crammed onto the tiny stage: Yusen hunched over a keyboard on a wobbly stand, playing with wild expression; Brendan laughing mid-chord. The host taps her watch.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Yusen plays like the keyboard owes him money. The set is loose, a little chaotic, and twice as long as allowed."
+      },
+      {
+       "speaker": "Host",
+       "text": "Do you two have a name?"
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Wilburton Trestle."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "We do not."
+      }
+     ],
+     "next": "after"
+    },
+    "after": {
+     "title": "A cousin in Ellensburg",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Outside the coffeehouse at night. Brendan loads his guitar into his car (the cracked windshield visible under a streetlight) while the host talks, holding up her phone.",
+     "beats": [
+      {
+       "speaker": "Host",
+       "text": "Hey. My cousin runs Friday nights at a brewery in Ellensburg. Her opener just bailed. Want me to text her?"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Ellensburg is… on the way, actually."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Everything is on the way if you believe in yourself."
+      }
+     ],
+     "choices": [
+      {
+       "id": "yes",
+       "label": "Yes. Text her.",
+       "to": "booked"
+      },
+      {
+       "id": "think",
+       "label": "Let me sleep on it.",
+       "to": "think"
+      }
+     ]
+    },
+    "booked": {
+     "title": "Booked",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Host",
+       "text": "Done. Her name’s Dee. She says don’t be late and don’t be sad before nine."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Those are my two specialties."
+      }
+     ],
+     "end": "He has a gig in Ellensburg on Friday. Technically two gigs, if you count the reunion.",
+     "nextChapter": "trolls"
+    },
+    "think": {
+     "title": "Sleeping on it",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Host",
+       "text": "I’ll send you her number. Decide before she finds someone with a better haircut."
+      },
+      {
+       "speaker": "Scene",
+       "text": "The number arrives before he’s out of the parking lot."
+      }
+     ],
+     "end": "Dee’s number sits in his phone, next to Andrew’s question.",
+     "nextChapter": "trolls"
+    }
+   }
+  },
+  {
+   "id": "trolls",
+   "title": "Trolls or the Point",
+   "sub": "A view, or a very big friend.",
+   "start": "glass",
+   "nodes": {
+    "glass": {
+     "title": "The crack grew",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Morning outside an auto-glass shop in Issaquah. Brendan holds a coffee and squints at his windshield; the crack has a new branch. A technician in a work jacket inspects it with professional pity.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Morning. The crack in the windshield has grown a new branch overnight, like it’s also on tour."
+      },
+      {
+       "speaker": "Tech",
+       "text": "I can do it in two hours. Or you can keep it and tell people it’s art."
+      }
+     ],
+     "choices": [
+      {
+       "id": "mom",
+       "label": "Fix it. Send Mom the bill, like she offered.",
+       "to": "fixed"
+      },
+      {
+       "id": "self",
+       "label": "Fix it. Pay for it myself.",
+       "to": "paidSelf"
+      },
+      {
+       "id": "crack",
+       "label": "Not today. It’s a character crack.",
+       "to": "crack"
+      }
+     ]
+    },
+    "fixed": {
+     "title": "Letting her help",
+     "art": "brendan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "artDesc": "Brendan’s phone: a text thread with Mom. A photo of the new windshield, then her replies.",
+     "beats": [
+      {
+       "speaker": "Mom",
+       "text": "Thank you for letting me help. ❤️"
+      },
+      {
+       "speaker": "Mom",
+       "text": "Did you eat breakfast?"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Define breakfast."
+      },
+      {
+       "speaker": "Mom",
+       "text": "Brendan."
+      }
+     ],
+     "next": "choose"
+    },
+    "paidSelf": {
+     "title": "Paid in full",
+     "art": "brendan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "artDesc": "Brendan’s phone: a text thread with Mom, a photo of the receipt.",
+     "beats": [
+      {
+       "speaker": "Mom",
+       "text": "Brendan. I said I’d pay."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "I know. I wanted to."
+      },
+      {
+       "speaker": "Mom",
+       "text": "Your dad’s going to hear about this."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Good or bad?"
+      },
+      {
+       "speaker": "Mom",
+       "text": "Yes."
+      }
+     ],
+     "next": "choose"
+    },
+    "crack": {
+     "title": "Character crack",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Tech",
+       "text": "It’ll make it over the pass. Probably."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "That’s my favorite kind of probably."
+      }
+     ],
+     "next": "choose"
+    },
+    "choose": {
+     "title": "Two pins on the map",
+     "art": "yusen",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "artDesc": "Close-up of Brendan’s phone: a map with two saved pins, “Troll” and “Poo Poo Point,” and a text from Yusen sliding in at the top.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Two saved pins on the map. One is a giant troll in the woods. The other is a mountain with an unfortunate name."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Two words: Poo. Poo. Point. Paragliders. Trust me."
+      },
+      {
+       "speaker": "Yusen",
+       "text": "Or the troll. The troll is also correct."
+      }
+     ],
+     "choices": [
+      {
+       "id": "troll",
+       "label": "Find the troll.",
+       "to": "troll"
+      },
+      {
+       "id": "point",
+       "label": "Hike Poo Poo Point.",
+       "to": "point"
+      }
+     ]
+    },
+    "troll": {
+     "title": "A very big friend",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "In a mossy forest, Brendan stands small beside an enormous troll sculpture made of reclaimed wood, its huge hand resting near him. A kid in a rain jacket tugs his sleeve; the kid’s parents hold out a phone.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "The troll is made of reclaimed wood and is roughly the size of his student loans."
+      },
+      {
+       "speaker": "Kid",
+       "text": "Are you famous?"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Regionally."
+      },
+      {
+       "speaker": "Kid",
+       "text": "Can you take a picture of me and the troll? Not you. Just us."
+      }
+     ],
+     "next": "post"
+    },
+    "point": {
+     "title": "Poo Poo Point",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan, red-faced and sweaty, at the grassy launch of Poo Poo Point; paragliders lift off over the green valley and Lake Sammamish. A pilot packing a wing waves at him.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Two thousand feet of elevation and one honest conversation with his calves."
+      },
+      {
+       "speaker": "Pilot",
+       "text": "Hey, you’re the open mic guy! You were good. Want to do a tandem?"
+      }
+     ],
+     "choices": [
+      {
+       "id": "fly",
+       "label": "Yes. Absolutely not. Okay, yes.",
+       "to": "fly"
+      },
+      {
+       "id": "ground",
+       "label": "I’ll stay down here and take your picture.",
+       "to": "ground"
+      }
+     ]
+    },
+    "fly": {
+     "title": "Three minutes",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan in a tandem paraglider harness high over the valley, mouth open somewhere between screaming and laughing; the pilot grins behind him.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "For three minutes he isn’t thinking about the reunion at all."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "I THINK I LEFT MY STOMACH AT THE TOP."
+      },
+      {
+       "speaker": "Pilot",
+       "text": "EVERYBODY DOES. WE MAIL THEM BACK."
+      }
+     ],
+     "next": "post"
+    },
+    "ground": {
+     "title": "The photographer",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "He gets a great shot of a stranger flying. It is, technically, the most adventurous photo on his phone."
+      },
+      {
+       "speaker": "Pilot",
+       "text": "Tag me!"
+      }
+     ],
+     "next": "post"
+    },
+    "post": {
+     "title": "The caption",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan sits on his car’s hood with the phone, thumbs hovering over a blank caption box. His photo of the morning is on screen.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "He posts the photo. The caption takes longer than the hike."
+      }
+     ],
+     "choices": [
+      {
+       "id": "road",
+       "label": "“On the road again.”",
+       "to": "postRoad"
+      },
+      {
+       "id": "friend",
+       "label": "“Made a friend.”",
+       "to": "postFriend"
+      },
+      {
+       "id": "none",
+       "label": "No caption. Let the photo talk.",
+       "to": "postNone"
+      }
+     ]
+    },
+    "postRoad": {
+     "title": "On the road again",
+     "art": "jay",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "beats": [
+      {
+       "speaker": "Jay",
+       "text": "Decent shirt. Finally."
+      },
+      {
+       "speaker": "Dan",
+       "text": "Willie Nelson’s lawyers have been notified."
+      },
+      {
+       "speaker": "Scene",
+       "text": "Sarah liked your photo."
+      }
+     ],
+     "end": "Next stop: North Bend. The post is doing better than he is.",
+     "nextChapter": "northbend"
+    },
+    "postFriend": {
+     "title": "Made a friend",
+     "art": "dan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "beats": [
+      {
+       "speaker": "Dan",
+       "text": "Is that a friend or your landlord?"
+      },
+      {
+       "speaker": "Andrew",
+       "text": "Bring him to the reunion. He has more presence than you."
+      },
+      {
+       "speaker": "Scene",
+       "text": "Sarah liked your photo."
+      }
+     ],
+     "end": "Next stop: North Bend. The post is doing better than he is.",
+     "nextChapter": "northbend"
+    },
+    "postNone": {
+     "title": "No caption",
+     "art": "andrew",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "beats": [
+      {
+       "speaker": "Andrew",
+       "text": "Mysterious. Is this a cry for help or a vibe?"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Yes."
+      },
+      {
+       "speaker": "Scene",
+       "text": "Sarah liked your photo."
+      }
+     ],
+     "end": "Next stop: North Bend. The post is doing better than he is.",
+     "nextChapter": "northbend"
+    }
+   }
+  },
+  {
+   "id": "northbend",
+   "title": "Pie or the ledge",
+   "sub": "North Bend wants its picture taken.",
+   "start": "exit",
+   "nodes": {
+    "exit": {
+     "title": "North Bend",
+     "art": "brendan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "artDesc": "Brendan’s car on the I-90 exit into North Bend, Mount Si looming huge and dark over the little town. Inset: his phone lights up with a text from Dad.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "North Bend. Mount Si looms over town like a dad reading a report card."
+      },
+      {
+       "speaker": "Dad",
+       "text": "Your mother says you’re playing music in coffee shops."
+      }
+     ],
+     "choices": [
+      {
+       "id": "lie",
+       "label": "“Paid gigs, Dad.”",
+       "to": "dadLie"
+      },
+      {
+       "id": "true",
+       "label": "“Just one. It went well.”",
+       "to": "dadTrue"
+      },
+      {
+       "id": "read",
+       "label": "Leave it on read.",
+       "to": "dadRead"
+      }
+     ]
+    },
+    "dadLie": {
+     "title": "Industry standard",
+     "art": "brendan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "beats": [
+      {
+       "speaker": "Dad",
+       "text": "How much?"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Industry standard."
+      },
+      {
+       "speaker": "Dad",
+       "text": "So nothing."
+      },
+      {
+       "speaker": "Dad",
+       "text": "Watch the pass. There’s snow tonight."
+      }
+     ],
+     "next": "where"
+    },
+    "dadTrue": {
+     "title": "Four times",
+     "art": "brendan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "beats": [
+      {
+       "speaker": "Dad",
+       "text": "Good. Proud of you."
+      },
+      {
+       "speaker": "Scene",
+       "text": "He reads it four times. Then a fifth, to be sure it’s not autocorrect."
+      }
+     ],
+     "next": "where"
+    },
+    "dadRead": {
+     "title": "On read",
+     "art": "brendan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "The read receipt sits there like a parking ticket."
+      },
+      {
+       "speaker": "Dad",
+       "text": "I can see that you read it."
+      }
+     ],
+     "next": "where"
+    },
+    "where": {
+     "title": "Pie or the ledge",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan at a gas pump in North Bend, looking between a sign for a classic retro diner (“World-famous cherry pie”) and the road toward Rattlesnake Lake and the mountains.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Two famous things within ten minutes: the diner from a cult TV show, and a cliff with a parking lot."
+      }
+     ],
+     "choices": [
+      {
+       "id": "diner",
+       "label": "The diner. Cherry pie and coffee.",
+       "to": "diner"
+      },
+      {
+       "id": "ledge",
+       "label": "Rattlesnake Ledge. Earn the view.",
+       "to": "ledge"
+      }
+     ]
+    },
+    "diner": {
+     "title": "The pie",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "A retro diner booth: Brendan photographs a slice of cherry pie and a cup of black coffee like it’s evidence. A waitress with a coffee pot watches, unimpressed. A trucker in the next booth leans over.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "The pie is exactly as good as the internet said, which never happens."
+      },
+      {
+       "speaker": "Waitress",
+       "text": "You’re the third guy today to photograph that pie like it’s a crime scene."
+      },
+      {
+       "speaker": "Trucker",
+       "text": "That your guitar in the car? My daughter’s getting married next month. The band quit."
+      }
+     ],
+     "choices": [
+      {
+       "id": "number",
+       "label": "Give me your number. No promises.",
+       "to": "dinerNumber"
+      },
+      {
+       "id": "busy",
+       "label": "I’m sort of booked through the weekend.",
+       "to": "dinerBusy"
+      }
+     ]
+    },
+    "dinerNumber": {
+     "title": "Father of the bride",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Trucker",
+       "text": "She likes the old stuff. And that one jingle, for some reason."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Everyone says “for some reason.”"
+      }
+     ],
+     "end": "A wedding gig, maybe. He’s collecting maybes like truck-stop magnets.",
+     "nextChapter": "ellensburg"
+    },
+    "dinerBusy": {
+     "title": "Booked",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Trucker",
+       "text": "Booked. Good for you."
+      },
+      {
+       "speaker": "Scene",
+       "text": "The trucker pays for his pie on the way out. He doesn’t find out until he asks for the check."
+      }
+     ],
+     "end": "Somebody bought a stranger pie because he looked like a working musician. He’ll take it.",
+     "nextChapter": "ellensburg"
+    },
+    "ledge": {
+     "title": "Rattlesnake Ledge",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Rattlesnake Ledge: a rocky cliff high above the bright blue-green Rattlesnake Lake. A young man hides a ring box behind his back and frantically whispers to Brendan, who has a guitar on his back.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "The ledge is a cliff with a view and a strong cell signal. Someone is about to propose."
+      },
+      {
+       "speaker": "Boyfriend",
+       "text": "Can you take our picture? I’m going to propose. Don’t make it weird."
+      }
+     ],
+     "choices": [
+      {
+       "id": "play",
+       "label": "Play something while he asks.",
+       "to": "ledgePlay"
+      },
+      {
+       "id": "photo",
+       "label": "Just take the picture.",
+       "to": "ledgePhoto"
+      }
+     ]
+    },
+    "ledgePlay": {
+     "title": "The soundtrack",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "On the ledge, the young man is down on one knee; his girlfriend has both hands over her mouth; Brendan plays guitar off to the side, the lake glittering far below.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "He plays the opening of the song with no name. She says yes before the chorus."
+      },
+      {
+       "speaker": "Fiancée",
+       "text": "Wait. You have to play our wedding. That song. I don’t care what it’s called."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "Neither do I, apparently."
+      }
+     ],
+     "end": "A wedding gig, maybe. The song with no name has its first fan.",
+     "nextChapter": "ellensburg"
+    },
+    "ledgePhoto": {
+     "title": "The photographer, again",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "He takes forty-one photos in burst mode. One is perfect. She says yes."
+      },
+      {
+       "speaker": "Fiancée",
+       "text": "Send me those! What’s your handle?"
+      }
+     ],
+     "end": "Two strangers will frame a photo he took. That has to count for something.",
+     "nextChapter": "ellensburg"
+    }
+   }
+  },
+  {
+   "id": "ellensburg",
+   "title": "The opener",
+   "sub": "Ellensburg books him. Sort of.",
+   "start": "pass",
+   "nodes": {
+    "pass": {
+     "title": "The pass",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan’s car crossing Snoqualmie Pass at dusk in light snow, headlights on, wipers mid-swipe. Through the windshield we see him singing to himself.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Snoqualmie Pass. Snow. The wipers keep time at ninety-two beats per minute."
+      },
+      {
+       "speaker": "Scene",
+       "text": "He writes a whole verse between Cle Elum and the Ellensburg exit. Most of it is about the wipers."
+      }
+     ],
+     "next": "dee"
+    },
+    "dee": {
+     "title": "Dee",
+     "art": "brendan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "artDesc": "Brendan’s phone propped on the dash in a gas-station lot in Ellensburg: a text thread with “Dee (brewery).”",
+     "beats": [
+      {
+       "speaker": "Dee",
+       "text": "You’re the opener? Thirty minutes. We pay in cash and beer. Mostly beer."
+      },
+      {
+       "speaker": "Dee",
+       "text": "Room’s half college kids, half ranchers. Read the room."
+      }
+     ],
+     "choices": [
+      {
+       "id": "in",
+       "label": "“I’m in. See you at 8.”",
+       "to": "brewery"
+      },
+      {
+       "id": "cash",
+       "label": "“What’s the cash-to-beer ratio?”",
+       "to": "ratio"
+      }
+     ]
+    },
+    "ratio": {
+     "title": "The ratio",
+     "art": "brendan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "beats": [
+      {
+       "speaker": "Dee",
+       "text": "Sixty bucks and a growler."
+      },
+      {
+       "speaker": "Brendan",
+       "text": "That’s more than my last three gigs combined."
+      },
+      {
+       "speaker": "Dee",
+       "text": "That’s sad. See you at 8."
+      }
+     ],
+     "next": "brewery"
+    },
+    "brewery": {
+     "title": "Read the room",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "A warm Ellensburg brewery taproom with a tiny stage: college students in hoodies at one table, ranchers in work jackets and cowboy hats at another. Dee, behind the bar, points Brendan to the stage.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "Half the room is college kids. The other half came in from a ranch and has opinions."
+      },
+      {
+       "speaker": "Dee",
+       "text": "Don’t play anything sad before nine."
+      },
+      {
+       "speaker": "Rancher",
+       "text": "You know any real songs?"
+      }
+     ],
+     "choices": [
+      {
+       "id": "jingle",
+       "label": "Open with the jingle.",
+       "to": "openJingle"
+      },
+      {
+       "id": "cover",
+       "label": "Open with a classic everyone knows.",
+       "to": "openCover"
+      },
+      {
+       "id": "new",
+       "label": "Open with the new song.",
+       "to": "openNew"
+      }
+     ]
+    },
+    "openJingle": {
+     "title": "Common ground",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "On stage, Brendan grins as the whole taproom sings: a college kid and a big rancher clink glasses mid-chorus.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "The college kids know it from their childhood. The ranchers know it from the radio. For one chorus, Ellensburg is united."
+      },
+      {
+       "speaker": "Rancher",
+       "text": "Dang it. That’s been stuck in my head since my divorce."
+      }
+     ],
+     "next": "video"
+    },
+    "openCover": {
+     "title": "A real song",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan on stage, eyes closed, playing an old classic; ranchers nod along, a rancher tips his hat.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "He plays an old song everyone’s dad loved. The ranchers nod. A college kid asks who wrote it."
+      },
+      {
+       "speaker": "Rancher",
+       "text": "Now that’s a real song."
+      }
+     ],
+     "next": "video"
+    },
+    "openNew": {
+     "title": "Before nine",
+     "art": "brendan",
+     "style": {
+      "kind": "voice"
+     },
+     "artDesc": "Brendan on stage mid-song; the clock above the bar reads 8:52. Dee shoots him a warning look; the room has gone quiet and listening.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "It’s sad, and it’s 8:52. Dee gives him a look. The room goes quiet anyway, the good kind of quiet."
+      },
+      {
+       "speaker": "Dee",
+       "text": "Eight minutes early. I’ll allow it."
+      }
+     ],
+     "next": "video"
+    },
+    "video": {
+     "title": "Someone posted it",
+     "art": "andrew",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "artDesc": "Late night: Brendan’s phone blowing up with the crew’s group chat; a shared video thumbnail shows him on the brewery stage.",
+     "beats": [
+      {
+       "speaker": "Scene",
+       "text": "A student posts a video of the set. By midnight it has more views than Ellensburg has people."
+      },
+      {
+       "speaker": "Andrew",
+       "text": "Is this you?? In ELLENSBURG??"
+      },
+      {
+       "speaker": "Andrew",
+       "text": "Please tell me nobody there knows where the reunion is."
+      },
+      {
+       "speaker": "Dan",
+       "text": "He’s an Ellensburg celebrity now. Ellensburg."
+      },
+      {
+       "speaker": "Jay",
+       "text": "The shirt is working. I’d like credit."
+      }
+     ],
+     "choices": [
+      {
+       "id": "secret",
+       "label": "“Your secret’s safe. Probably.”",
+       "to": "safe"
+      },
+      {
+       "id": "flex",
+       "label": "“Opening act. They want me back.”",
+       "to": "flex"
+      }
+     ]
+    },
+    "safe": {
+     "title": "Probably",
+     "art": "andrew",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "beats": [
+      {
+       "speaker": "Andrew",
+       "text": "PROBABLY??"
+      },
+      {
+       "speaker": "Brendan",
+       "text": "It’s my favorite kind."
+      }
+     ],
+     "end": "Sixty dollars, a growler, and a video he hasn’t watched yet. Next stop: Vantage."
+    },
+    "flex": {
+     "title": "They want him back",
+     "art": "dan",
+     "style": {
+      "kind": "text",
+      "color": "white"
+     },
+     "beats": [
+      {
+       "speaker": "Dee",
+       "text": "Same time next month? Bring the guy with the keyboard."
+      },
+      {
+       "speaker": "Dan",
+       "text": "Okay, that’s actually cool. I hate it."
+      }
+     ],
+     "end": "Sixty dollars, a growler, and a second booking. Next stop: Vantage."
     }
    }
   }
